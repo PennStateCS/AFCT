@@ -1,0 +1,188 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+enum Role {
+  ADMIN
+  FACULTY
+  TA
+  STUDENT
+}
+
+enum CourseRole {
+  ADMIN
+  FACULTY
+  TA
+  STUDENT
+}
+
+enum ProblemType {
+  PDA
+  RE
+  CFG
+  FA
+}
+
+model User {
+  id        String  @id @default(cuid())
+  email     String  @unique
+  firstName String?
+  lastName  String?
+  password  String
+  role      Role    @default(STUDENT) // Global role
+  avatar    String?
+  inactive  Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rosterEntries Roster[] // Per-course memberships with roles
+  submissions   Submission[]
+  activityLogs  ActivityLog[]
+}
+
+model Course {
+  id          String   @id @default(cuid())
+  name        String
+  code        String   @unique
+  regCode     String?  @unique
+  semester    String
+  credits     Int
+  startDate   DateTime
+  endDate     DateTime
+  isPublished Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  roster      Roster[] // Users in the course with roles
+  assignments Assignment[]
+  problems    Problem[]
+}
+
+model Roster {
+  id   String     @id @default(cuid())
+  role CourseRole // Role for the user in this course
+
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  courseId String
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  userId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  comments Comment[] // Comments by this roster member
+
+  @@unique([courseId, userId]) // Ensures one role per user per course
+}
+
+model Assignment {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  dueDate     DateTime
+  maxPoints   Float
+  isPublished Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  courseId String
+
+  problems AssignmentProblem[]
+  comments Comment[]
+}
+
+model Problem {
+  id               String       @id @default(cuid())
+  title            String
+  description      String?
+  fileName         String?
+  originalFileName String?
+  type             ProblemType?
+  maxStates        Int?
+  isDeterministic  Boolean?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  courseId String
+
+  assignments AssignmentProblem[]
+  comments    Comment[]
+}
+
+model AssignmentProblem {
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  assignmentId String
+  problem      Problem    @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  problemId    String
+
+  submissions Submission[]
+
+  @@id([assignmentId, problemId])
+}
+
+model Submission {
+  id          String   @id @default(cuid())
+  submittedAt DateTime @default(now())
+  grade       Float?
+  feedback    String?
+  correct     Boolean?
+
+  fileName         String?
+  originalFileName String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignmentProblem AssignmentProblem @relation(fields: [assignmentId, problemId], references: [assignmentId, problemId], onDelete: Restrict)
+  assignmentId      String
+  problemId         String
+
+  student   User   @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  studentId String
+
+  @@index([assignmentId])
+  @@index([studentId])
+  @@index([assignmentId, problemId, studentId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  createdAt DateTime @default(now())
+
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  assignmentId String
+
+  problem   Problem @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  problemId String
+
+  roster   Roster @relation(fields: [rosterId], references: [id], onDelete: Restrict)
+  rosterId String
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  userId    String
+  action    String
+  timestamp DateTime @default(now())
+  metadata  Json?
+
+  @@index([timestamp])
+}
+
+generator erd {
+  provider = "prisma-erd-generator"
+}
