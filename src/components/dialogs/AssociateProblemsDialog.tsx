@@ -85,7 +85,7 @@ export function AssociateProblemsDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-      <DialogContent className="!max-w-2xl">
+      <DialogContent className="bg-card !max-w-2xl">
         <DialogHeader>
           <DialogTitle>Add Existing Problems to Assignment</DialogTitle>
           <DialogDescription>

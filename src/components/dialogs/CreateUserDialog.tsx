@@ -147,7 +147,7 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
           </div>
         </div>
 
-        <DialogFooter className="mt-4">
+        <DialogFooter className="bg-card mt-4">
           <DialogClose asChild>
             <Button variant="secondary" type="button">
               Cancel

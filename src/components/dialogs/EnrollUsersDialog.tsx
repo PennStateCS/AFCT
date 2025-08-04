@@ -105,7 +105,7 @@ export function EnrollUserDialog({ open, setOpen, users, onEnroll }: EnrollUserD
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="bg-card max-w-lg">
         <DialogHeader>
           <DialogTitle>Enroll User</DialogTitle>
           <DialogDescription>Find and select a user to enroll in this course.</DialogDescription>

@@ -100,7 +100,7 @@ export function CreateAssignmentDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent>
+      <DialogContent className="bg-card">
         <DialogHeader>
           <DialogTitle>Create Assignment</DialogTitle>
           <DialogDescription>Fill in the assignment details and click Create.</DialogDescription>

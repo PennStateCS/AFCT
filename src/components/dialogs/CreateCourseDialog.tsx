@@ -106,7 +106,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
         if (!val) resetForm();
       }}
     >
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="bg-card max-w-2xl">
         <DialogHeader>
           <DialogTitle>Create New Course</DialogTitle>
         </DialogHeader>
