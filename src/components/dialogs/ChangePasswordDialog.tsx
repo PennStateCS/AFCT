@@ -76,7 +76,7 @@ export function ChangePasswordDialog({ open, setOpen, onChangePassword }: Props)
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent>
+      <DialogContent className="bg-card">
         <DialogHeader>
           <DialogTitle>Change Password</DialogTitle>
           <DialogDescription>Enter your old password and choose a new one.</DialogDescription>

@@ -96,7 +96,7 @@ export function CreateProblemDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="bg-card max-w-lg">
         <DialogHeader>
           <DialogTitle>Create Problem</DialogTitle>
           <DialogDescription>

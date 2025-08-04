@@ -76,7 +76,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent>
+      <DialogContent className="bg-card">
         <DialogHeader>
           <DialogTitle>Edit User</DialogTitle>
           <DialogDescription>Modify the user’s information and profile photo.</DialogDescription>

@@ -53,7 +53,7 @@ export function EditCourseDialog({ course, open, setOpen, onSave }: EditCourseDi
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent>
+      <DialogContent className="bg-card">
         <DialogHeader>
           <DialogTitle>Edit Course</DialogTitle>
           <DialogDescription>Update the course details and save your changes.</DialogDescription>
