@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
-import { ArrowUpDown, Pencil, Trash2, BookOpen } from 'lucide-react';
+import { Pencil, Trash2, BookOpen } from 'lucide-react';
 import { format } from 'date-fns';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -23,24 +23,17 @@ type CourseWithFaculty = Course & {
   faculty: { firstName: string | null; lastName: string | null }[];
 };
 
-/**
- * Returns columns for the DataTable with an onCourseUpdated callback.
- * The callback is triggered after a course is saved so the parent can update state.
- */
 export const columns = (
   onCourseUpdated: (updated: CourseWithFaculty) => void,
 ): ColumnDef<CourseWithFaculty>[] => [
   {
     accessorKey: 'name',
-    header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
-        Name <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
-    ),
+    meta: { priority: 1 },
+    header: 'Name',
     cell: ({ row }) => {
       const course = row.original;
       return (
-        <Link href={`/dashboard/courses/${course.id}`} className="text-blue-600 hover:underline">
+        <Link href={`/dashboard/courses/${course.id}`} className="text-blue-700 hover:underline">
           {course.name}
         </Link>
       );
@@ -48,27 +41,18 @@ export const columns = (
   },
   {
     accessorKey: 'code',
-    header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
-        Course Code <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
-    ),
+    meta: { priority: 3 },
+    header: 'Course Code',
   },
   {
     accessorKey: 'credits',
-    header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
-        Credits <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
-    ),
+    meta: { priority: 4 },
+    header: 'Credits',
   },
   {
     accessorKey: 'regCode',
-    header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
-        Registration Code <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
-    ),
+    meta: { priority: 2 },
+    header: 'Registration Code',
     cell: ({ row }) => {
       const raw = row.getValue<string>('regCode') || '';
       const upper = raw.toUpperCase();
@@ -78,19 +62,13 @@ export const columns = (
   },
   {
     accessorKey: 'semester',
-    header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
-        Semester <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
-    ),
+    meta: { priority: 3 },
+    header: 'Semester',
   },
   {
     accessorKey: 'startDate',
-    header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
-        Start Date <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
-    ),
+    meta: { priority: 4 },
+    header: 'Start Date',
     cell: ({ row }) => {
       const date = new Date(row.original.startDate);
       return format(date, "M/d/yyyy 'at' p");
@@ -98,11 +76,8 @@ export const columns = (
   },
   {
     accessorKey: 'endDate',
-    header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
-        End Date <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
-    ),
+    meta: { priority: 4 },
+    header: 'End Date',
     cell: ({ row }) => {
       const date = new Date(row.original.endDate);
       return format(date, "M/d/yyyy 'at' p");
@@ -110,11 +85,11 @@ export const columns = (
   },
   {
     id: 'faculty',
-    header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
-        Faculty <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
-    ),
+    accessorFn: (row) =>
+      row.faculty.map((f) => `${f.firstName ?? ''} ${f.lastName ?? ''}`.trim()).join(', '),
+    meta: { priority: 1 },
+    enableSorting: true,
+    header: 'Faculty',
     cell: ({ row }) => {
       const facultyList = row.original.faculty;
       if (!facultyList || facultyList.length === 0) {
@@ -126,6 +101,8 @@ export const columns = (
   {
     id: 'actions',
     header: '',
+    enableSorting: false,
+    meta: { priority: 1 },
     cell: ({ row }) => {
       const course = row.original;
       const [editOpen, setEditOpen] = useState(false);
@@ -137,7 +114,6 @@ export const columns = (
           if (!res.ok) throw new Error('Delete failed');
           toast.success('Course deleted');
           setConfirmOpen(false);
-          // parent can trigger a refetch of all courses if needed
         } catch (err) {
           toast.error('Failed to delete course');
         }
@@ -162,9 +138,7 @@ export const columns = (
                   r.json(),
                 );
 
-                // ✅ Tell parent to update table data
                 onCourseUpdated(refreshed);
-
                 toast.success('Course updated!');
               } catch (err) {
                 toast.error('Failed to save course');
@@ -185,7 +159,7 @@ export const columns = (
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="secondary">Manage</Button>
+              <Button variant="menu">Manage</Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel className="flex items-center gap-2">

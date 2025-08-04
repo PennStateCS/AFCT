@@ -20,6 +20,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from '@/components/ui/sidebar';
 import {
   DropdownMenu,
@@ -29,6 +30,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Book, User, UserRound, LogOut, LockKeyhole, UserPen, ChevronUp } from 'lucide-react';
 import { EditUserDialog } from './dialogs/EditUserDialog';
 
@@ -56,21 +58,13 @@ function getCoursesForUser(
 ) {
   switch (user.role) {
     case 'ADMIN':
-      // Admin sees all published courses
       return courses.filter((c) => c.isPublished);
-
     case 'FACULTY':
-      // Faculty sees all their courses (published & unpublished)
       return courses.filter((c) => c.faculty.some((f) => f.id === user.id));
-
     case 'TA':
-      // TA sees all their courses (published & unpublished)
       return courses.filter((c) => c.tas.some((t) => t.id === user.id));
-
     case 'STUDENT':
-      // Students see only published courses they are enrolled in
       return courses.filter((c) => c.isPublished && c.students.some((s) => s.id === user.id));
-
     default:
       return [];
   }
@@ -83,6 +77,10 @@ export default function DashboardSidebarMenu() {
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const router = useRouter();
   const [editProfileOpen, setEditProfileOpen] = useState(false);
+
+  // Read State
+  const { state } = useSidebar();
+  const collapsed = state === 'collapsed';
 
   useEffect(() => {
     const fetchCourses = async () => {
@@ -127,7 +125,6 @@ export default function DashboardSidebarMenu() {
     role: role?.toUpperCase?.() || 'STUDENT',
   };
 
-  // Fetch courses for user
   const filteredCourses = getCoursesForUser(user, courses);
 
   return (
@@ -142,19 +139,34 @@ export default function DashboardSidebarMenu() {
               <SidebarMenu>
                 {adminMenu.map(({ title, url, icon: Icon }) => (
                   <SidebarMenuItem key={url}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={pathname === url}
-                      className={cn(
-                        'hover:bg-secondary focus:bg-secondary text-sidebar-foreground',
-                        'data-[active=true]:bg-secondary',
-                      )}
-                    >
-                      <Link href={url}>
-                        <Icon className="h-4 w-4" />
-                        {title}
-                      </Link>
-                    </SidebarMenuButton>
+                    <TooltipProvider delayDuration={100}>
+                      <Tooltip open={collapsed ? undefined : false}>
+                        <TooltipTrigger asChild>
+                          <SidebarMenuButton
+                            asChild
+                            isActive={pathname === url}
+                            className={cn(
+                              'hover:bg-secondary focus:bg-secondary text-sidebar-foreground',
+                              'data-[active=true]:bg-secondary',
+                            )}
+                          >
+                            <Link href={url} className="flex min-w-0 items-center gap-2">
+                              <Icon className="h-4 w-4 shrink-0" />
+                              <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+                                {title}
+                              </span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </TooltipTrigger>
+                        <TooltipContent
+                          side="right"
+                          className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
+                          sideOffset={10}
+                        >
+                          {title}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </SidebarMenuItem>
                 ))}
               </SidebarMenu>
@@ -170,19 +182,37 @@ export default function DashboardSidebarMenu() {
             <SidebarMenu>
               {filteredCourses.map((course) => (
                 <SidebarMenuItem key={course.id}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={pathname.startsWith(`/dashboard/courses/${course.id}`)}
-                    className={cn(
-                      'hover:bg-secondary focus:bg-secondary text-sidebar-foreground',
-                      'data-[active=true]:bg-secondary',
-                    )}
-                  >
-                    <Link href={`/dashboard/courses/${course.id}`}>
-                      <Book className="h-4 w-4" />
-                      <span>{course.code}</span>
-                    </Link>
-                  </SidebarMenuButton>
+                  <TooltipProvider delayDuration={100}>
+                    <Tooltip open={collapsed ? undefined : false}>
+                      <TooltipTrigger asChild>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={pathname.startsWith(`/dashboard/courses/${course.id}`)}
+                          className={cn(
+                            'hover:bg-secondary focus:bg-secondary text-sidebar-foreground',
+                            'data-[active=true]:bg-secondary',
+                          )}
+                        >
+                          <Link
+                            href={`/dashboard/courses/${course.id}`}
+                            className="flex min-w-0 items-center gap-2"
+                          >
+                            <Book className="h-4 w-4 shrink-0" />
+                            <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+                              {course.code}
+                            </span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side="right"
+                        className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
+                        sideOffset={10}
+                      >
+                        {course.code}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>

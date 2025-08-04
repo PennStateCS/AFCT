@@ -27,7 +27,7 @@ export default function DashboardClient({ sessionUser, courses }: Props) {
     role === 'STUDENT' ? courses.filter((course) => course.isPublished) : courses;
 
   return (
-    <Card className="space-y-4">
+    <Card className="flex h-full space-y-4">
       <CardHeader>
         <CardTitle className="text-2xl font-semibold tracking-tight">Course List</CardTitle>
       </CardHeader>
@@ -39,7 +39,7 @@ export default function DashboardClient({ sessionUser, courses }: Props) {
 
             return (
               <Link key={course.id} href={`/dashboard/courses/${course.id}`} passHref>
-                <Card className="h-full cursor-pointer bg-gradient-to-b from-gray-50 via-white to-slate-200 shadow">
+                <Card className="v-full h-full cursor-pointer bg-gradient-to-b from-gray-50 via-white to-slate-200 shadow">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-x-2 text-lg font-semibold tracking-tight">
                       📘 {course.name}

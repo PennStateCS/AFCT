@@ -61,7 +61,7 @@ function ActionsCell({ user, onChange }: ActionsCellProps) {
 export const userColumns = (onChange: () => void): ColumnDef<User>[] => [
   {
     id: 'avatar',
-    header: 'Avatar',
+    header: '',
     cell: ({ row }) => {
       const user = row.original;
       const initials = `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase();
@@ -80,27 +80,15 @@ export const userColumns = (onChange: () => void): ColumnDef<User>[] => [
   },
   {
     accessorKey: 'firstName',
-    header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
-        First Name <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
-    ),
+    header: 'First Name',
   },
   {
     accessorKey: 'lastName',
-    header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
-        Last Name <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
-    ),
+    header: 'Last Name',
   },
   {
     accessorKey: 'email',
-    header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
-        Email <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
-    ),
+    header: 'Email',
     cell: ({ row }) => {
       const email = row.original.email;
       return (
@@ -112,16 +100,12 @@ export const userColumns = (onChange: () => void): ColumnDef<User>[] => [
   },
   {
     accessorKey: 'role',
-    header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
-        Role <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
-    ),
+    header: 'Role',
     cell: ({ row }) => <Badge role={row.original.role}>{row.original.role}</Badge>,
   },
   {
     id: 'actions',
-    header: 'Actions',
+    header: '',
     cell: ({ row }) => <ActionsCell user={row.original} onChange={onChange} />,
   },
 ];

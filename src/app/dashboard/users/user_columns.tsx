@@ -12,7 +12,7 @@ import { AdminResetPasswordDialog } from '@/components/dialogs/AdminResetPasswor
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Pencil, Trash2, Lock, User2, ArrowUpDown } from 'lucide-react';
+import { Pencil, Trash2, Lock, User2 } from 'lucide-react';
 
 import {
   DropdownMenu,
@@ -22,11 +22,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-
-// Dummy handler – replace with real logic
-const handleDelete = (userId: string) => {
-  console.log('Deleting user with ID:', userId);
-};
 
 export function getUserColumns(onUserUpdate: () => void): ColumnDef<User>[] {
   function formatRole(role: string): string {
@@ -43,10 +38,12 @@ export function getUserColumns(onUserUpdate: () => void): ColumnDef<User>[] {
         return role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
     }
   }
+
   return [
     {
       id: 'avatar',
       header: 'Avatar',
+      meta: { priority: 4 },
       cell: ({ row }) => {
         const user = row.original;
         const initials = `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase();
@@ -65,36 +62,18 @@ export function getUserColumns(onUserUpdate: () => void): ColumnDef<User>[] {
     },
     {
       accessorKey: 'firstName',
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-        >
-          First Name <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: 'First Name',
+      meta: { priority: 1 },
     },
     {
       accessorKey: 'lastName',
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-        >
-          Last Name <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: 'Last Name',
+      meta: { priority: 1 },
     },
     {
       accessorKey: 'email',
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-        >
-          Email <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: 'Email',
+      meta: { priority: 2 },
       cell: ({ row }) => {
         const email = row.getValue<string>('email');
         return (
@@ -106,26 +85,14 @@ export function getUserColumns(onUserUpdate: () => void): ColumnDef<User>[] {
     },
     {
       accessorKey: 'role',
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-        >
-          Role <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: 'Role',
+      meta: { priority: 3 },
       cell: ({ row }) => <Badge role={row.original.role}>{formatRole(row.original.role)}</Badge>,
     },
     {
       accessorKey: 'inactive',
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-        >
-          Active <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: 'Active',
+      meta: { priority: 4 },
       cell: ({ row }) => {
         const inactive = row.getValue<boolean>('inactive');
         return inactive ? 'No' : 'Yes';
@@ -133,14 +100,8 @@ export function getUserColumns(onUserUpdate: () => void): ColumnDef<User>[] {
     },
     {
       accessorKey: 'createdAt',
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-        >
-          Created At <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: 'Created At',
+      meta: { priority: 4 },
       cell: ({ row }) => {
         const date = new Date(row.original.createdAt);
         return format(date, "M/d/yyyy 'at' p");
@@ -149,11 +110,12 @@ export function getUserColumns(onUserUpdate: () => void): ColumnDef<User>[] {
     {
       id: 'actions',
       header: '',
+      meta: { priority: 1 },
       cell: ({ row }) => {
         const user = row.original;
         const [editOpen, setEditOpen] = useState(false);
         const [resetOpen, setResetOpen] = useState(false);
-        const [confirmOpen, setConfirmOpen] = useState(false); // <-- for delete dialog
+        const [confirmOpen, setConfirmOpen] = useState(false);
 
         async function handlePasswordReset(newPassword: string) {
           try {
@@ -179,7 +141,7 @@ export function getUserColumns(onUserUpdate: () => void): ColumnDef<User>[] {
 
             toast.success('User deleted successfully.');
             setConfirmOpen(false);
-            onUserUpdate(); // refresh user table
+            onUserUpdate();
           } catch {
             toast.error('Failed to delete user.');
           }
@@ -201,7 +163,7 @@ export function getUserColumns(onUserUpdate: () => void): ColumnDef<User>[] {
                   if (!res.ok) throw new Error();
                   toast.success('User updated successfully.');
                   setEditOpen(false);
-                  onUserUpdate(); // refresh user table
+                  onUserUpdate();
                 } catch {
                   toast.error('Failed to update user.');
                 }
@@ -227,7 +189,7 @@ export function getUserColumns(onUserUpdate: () => void): ColumnDef<User>[] {
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="secondary">Manage</Button>
+                <Button variant="menu">Manage</Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-50">
                 <DropdownMenuLabel className="flex items-center gap-2">
