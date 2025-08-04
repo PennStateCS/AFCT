@@ -7,6 +7,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { CreateCourseDialog } from '@/components/dialogs/CreateCourseDialog';
+import { BookPlus } from 'lucide-react';
 
 type UserSummary = {
   id: string;
@@ -22,12 +23,15 @@ type CourseWithRoster = Course & {
 
 export default function ViewCoursesPage() {
   const [courses, setCourses] = useState<CourseWithRoster[]>([]);
+  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
 
   const fetchCourses = async () => {
+    setLoading(true);
     const res = await fetch('/api/courses');
     const data: CourseWithRoster[] = await res.json();
     setCourses(data);
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -38,18 +42,20 @@ export default function ViewCoursesPage() {
     <Card className="p-4">
       <CardHeader className="flex flex-row items-center justify-between pb-4">
         <CardTitle className="text-2xl">Courses</CardTitle>
-        <Button onClick={() => setOpen(true)}>Create Course</Button>
+        <Button onClick={() => setOpen(true)}>
+          <BookPlus /> Create Course
+        </Button>
       </CardHeader>
 
       <CardContent>
         <DataTable
           columns={columns((refreshedCourse) => {
-            // Update the courses state in the parent
             setCourses((prev) =>
               prev.map((c) => (c.id === refreshedCourse.id ? refreshedCourse : c)),
             );
           })}
           data={courses}
+          loading={loading}
         />
       </CardContent>
 

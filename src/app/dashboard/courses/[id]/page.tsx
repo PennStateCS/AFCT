@@ -18,6 +18,7 @@ import { problemColumns } from './problem_columns';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
+import { EditIcon, Plus } from 'lucide-react';
 
 type FullCourse = Course & {
   faculty: User[];
@@ -228,7 +229,7 @@ export default function AdminCoursePage() {
       <Card>
         <CardHeader className="flex items-start justify-between">
           <div>
-            <CardTitle className="text-2xl font-bold">
+            <CardTitle className="text-2xl">
               {course.code}: {course.name}
             </CardTitle>
             <p className="text-muted-foreground mt-1 text-sm">
@@ -238,7 +239,7 @@ export default function AdminCoursePage() {
             </p>
           </div>
           <Button variant="default" onClick={() => setEditOpen(true)} className="shrink-0">
-            Edit Course
+            <EditIcon /> Edit Course
           </Button>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
@@ -322,7 +323,7 @@ export default function AdminCoursePage() {
         >
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Assignments</CardTitle>
+              <CardTitle className="text-2xl">Assignments</CardTitle>
               <Button
                 style={{
                   backgroundColor: 'var(--color-primary)',
@@ -330,7 +331,7 @@ export default function AdminCoursePage() {
                 }}
                 onClick={() => setCreateAssignmentOpen(true)}
               >
-                Create Assignment
+                <Plus /> Create Assignment
               </Button>
             </CardHeader>
             <CardContent className="overflow-x-auto">
@@ -349,9 +350,9 @@ export default function AdminCoursePage() {
         >
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Problems</CardTitle>
+              <CardTitle className="text-2xl">Problems</CardTitle>
               <Button variant="default" onClick={() => setProblemOpen(true)}>
-                Create Problem
+                <Plus /> Create Problem
               </Button>
             </CardHeader>
             <CardContent className="overflow-x-auto">
@@ -371,7 +372,7 @@ export default function AdminCoursePage() {
           <div className="space-y-6">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Course Roster</CardTitle>
+                <CardTitle className="text-2xl">Course Roster</CardTitle>
                 <Button variant="default" onClick={openEnrollDialog}>
                   Enroll User
                 </Button>
@@ -399,7 +400,7 @@ export default function AdminCoursePage() {
           <div className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Grades</CardTitle>
+                <CardTitle className="text-2xl">Grades</CardTitle>
               </CardHeader>
               <CardContent>To Do...</CardContent>
             </Card>
@@ -413,7 +414,7 @@ export default function AdminCoursePage() {
           <div className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Activity</CardTitle>
+                <CardTitle className="text-2xl">Activity</CardTitle>
               </CardHeader>
               <CardContent>To Do...</CardContent>
             </Card>

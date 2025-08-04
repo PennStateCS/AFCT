@@ -18,11 +18,7 @@ const typeLabels: Record<string, string> = {
 export const problemColumns = (handleDeleteClick: (id: string) => void): ColumnDef<Problem>[] => [
   {
     accessorKey: 'title',
-    header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}>
-        Title <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
-    ),
+    header: 'Title',
   },
   {
     accessorKey: 'type',
@@ -68,7 +64,7 @@ export const problemColumns = (handleDeleteClick: (id: string) => void): ColumnD
   },
   {
     id: 'actions',
-    header: 'Actions',
+    header: '',
     cell: ({ row }) => {
       const problem = row.original;
       return (

@@ -28,15 +28,7 @@ export function useAssignmentColumns(
   return [
     {
       accessorKey: 'title',
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          className={cn(headerClass, 'mx-auto')}
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-        >
-          Title <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: 'Title',
       cell: ({ row }) => (
         <div>
           <Link
@@ -50,55 +42,23 @@ export function useAssignmentColumns(
     },
     {
       accessorKey: 'dueDate',
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          className={cn(headerClass, 'mx-auto')}
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-        >
-          Due Date <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: 'Due Date',
       cell: ({ row }) => <div>{format(new Date(row.original.dueDate), "P 'at' p")}</div>,
     },
     {
       accessorKey: 'createdAt',
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          className={cn(headerClass, 'mx-auto')}
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-        >
-          Created At <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: 'Created At',
       cell: ({ row }) => <div>{format(new Date(row.original.createdAt), "P 'at' p")}</div>,
     },
     {
       accessorKey: 'maxPoints',
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          className={cn(headerClass, 'mx-auto')}
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-        >
-          Max Points <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: ({ column }) => 'Points',
       cell: ({ row }) => <div>{row.original.maxPoints}</div>,
     },
     {
       id: 'problemCount',
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          className={cn(headerClass, 'mx-auto')}
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-        >
-          Problems <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
-      accessorKey: 'problemCount', // ✅ match the field returned by API
+      header: 'Problems',
+      accessorKey: 'problemCount', // match the field returned by API
       cell: ({ row }) => {
         const count = row.original.problemCount ?? 0;
         return <div>{count}</div>;
@@ -107,15 +67,7 @@ export function useAssignmentColumns(
     },
     {
       accessorKey: 'isPublished',
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          className={cn(headerClass, 'mx-auto')}
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-        >
-          Published <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: 'Published',
       cell: ({ row }) =>
         row.original.isPublished ? (
           <span className="font-semibold text-green-600">Yes</span>
@@ -125,7 +77,7 @@ export function useAssignmentColumns(
     },
     {
       id: 'actions',
-      header: <span className={headerClass}>Actions</span>,
+      header: '',
       cell: ({ row }) => (
         <>
           <DropdownMenu>

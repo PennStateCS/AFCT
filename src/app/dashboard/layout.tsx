@@ -9,6 +9,8 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
+  const cookieStore = await cookies();
+  const defaultOpen = cookieStore.get('sidebar_state')?.value === 'true';
 
   if (!session || !session.user) {
     redirect('/login');
@@ -21,6 +23,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         '--sidebar-width-mobile': '10rem',
         '--sidebar-width-icon': '3rem',
       }}
+      defaultOpen={defaultOpen}
     >
       <div className="flex min-h-screen w-full">
         <DashboardSidebarShell />

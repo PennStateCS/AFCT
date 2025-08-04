@@ -8,6 +8,8 @@ import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { CreateUserDialog } from '@/components/dialogs/CreateUserDialog';
+import { UserRoundPlus } from 'lucide-react';
+import { Separator } from '@radix-ui/react-separator';
 
 export default function ViewUsersPage() {
   const searchParams = useSearchParams();
@@ -19,6 +21,7 @@ export default function ViewUsersPage() {
 
   const fetchUsers = async () => {
     try {
+      setLoading(true);
       const res = await fetch('/api/users');
       if (!res.ok) throw new Error('Failed to fetch users');
       const data: User[] = await res.json();
@@ -47,15 +50,14 @@ export default function ViewUsersPage() {
     <Card className="p-4">
       <CardHeader className="flex flex-row items-center justify-between pb-4">
         <CardTitle className="text-2xl">User Accounts</CardTitle>
-        <Button onClick={() => setOpen(true)}>Create User</Button>
+        <Button onClick={() => setOpen(true)}>
+          <UserRoundPlus />
+          Create User
+        </Button>
       </CardHeader>
 
       <CardContent>
-        {loading ? (
-          <p>Loading users...</p>
-        ) : (
-          <DataTable columns={getUserColumns(fetchUsers)} data={users} />
-        )}
+        <DataTable columns={getUserColumns(fetchUsers)} data={users} loading={loading} />
       </CardContent>
 
       <CreateUserDialog open={open} setOpen={handleDialogClose} onSuccess={fetchUsers} />

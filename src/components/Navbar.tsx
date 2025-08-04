@@ -91,7 +91,7 @@ const Navbar: React.FC = () => {
   const fullName = [firstName, lastName].filter(Boolean).join(' ') || 'User';
 
   return (
-    <nav className="bg-secondary mb-4 flex h-16 items-center justify-between rounded-lg border p-4 text-white shadow-sm">
+    <nav className="bg-secondary bordery mb-4 flex h-16 items-center justify-between rounded-lg p-4 text-white shadow-sm">
       <div className="flex items-center gap-4">
         <SidebarTrigger />
         <Breadcrumb>

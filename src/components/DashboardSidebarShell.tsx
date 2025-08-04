@@ -6,7 +6,7 @@ export default function DashboardSidebarShell() {
   return (
     <Sidebar collapsible="icon" className="h-full overflow-x-hidden">
       <DashboardSidebarHeader />
-      <SidebarSeparator />
+      <SidebarSeparator className="!mx-0 !mb-0" />
       <DashboardSidebarMenu />
     </Sidebar>
   );
