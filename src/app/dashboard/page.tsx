@@ -36,10 +36,17 @@ export default async function DashboardPage() {
   });
 
   // Map courses and attach the user's role in each
-  const courses = rosterEntries.map((entry) => ({
-    ...entry.course,
-    userRole: entry.role, // course-specific role
-  }));
+  const courses = rosterEntries.map((entry) => {
+    const { course } = entry;
+
+    return {
+      ...course,
+      userRole: entry.role,
+      students: course.roster.filter((r) => r.role === 'STUDENT').map((r) => r.user),
+      faculty: course.roster.filter((r) => r.role === 'FACULTY').map((r) => r.user),
+      tas: course.roster.filter((r) => r.role === 'TA').map((r) => r.user),
+    };
+  });
 
   const courseIds = courses.map((c) => c.id);
 
