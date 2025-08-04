@@ -27,7 +27,7 @@ export default function DashboardClient({ sessionUser, courses }: Props) {
     role === 'STUDENT' ? courses.filter((course) => course.isPublished) : courses;
 
   return (
-    <Card className="flex h-full space-y-4">
+    <Card className="flex h-full">
       <CardHeader>
         <CardTitle className="text-2xl font-semibold tracking-tight">Course List</CardTitle>
       </CardHeader>
@@ -38,47 +38,69 @@ export default function DashboardClient({ sessionUser, courses }: Props) {
             const isUpcoming = new Date(course.endDate) > now;
 
             return (
-              <Link key={course.id} href={`/dashboard/courses/${course.id}`} passHref>
-                <Card className="v-full h-full cursor-pointer bg-gradient-to-b from-gray-50 via-white to-slate-200 shadow">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-x-2 text-lg font-semibold tracking-tight">
-                      📘 {course.name}
-                    </CardTitle>
-                    <CardDescription className="ml-8 text-base">
-                      {course.code} • {course.semester} • {course.credits} credits
-                    </CardDescription>
-                    <div className="mt-1 ml-8">
+              <Link
+                key={course.id}
+                href={`/dashboard/courses/${course.id}`}
+                passHref
+                aria-label={`View course ${course.name}`}
+              >
+                <div
+                  role="link"
+                  className="group border-border bg-card flex h-full cursor-pointer overflow-hidden rounded-lg border shadow transition-all hover:bg-gray-50 hover:shadow-md"
+                >
+                  {/* Vertical colored bar */}
+                  <div
+                    className={`w-[15px] ${
+                      !course.isPublished
+                        ? 'bg-yellow-500'
+                        : isUpcoming
+                          ? 'bg-primary'
+                          : 'bg-gray-400'
+                    }`}
+                  />
+
+                  {/* Content area */}
+                  <div className="flex w-full flex-col px-4 py-4 sm:p-5">
+                    {/* Top Row: Title and Badge */}
+                    <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+                      <div className="text-md truncate font-semibold">
+                        {course.name}
+                        <div className="text-muted-foreground mb-2 text-sm">
+                          {course.code} • {course.semester} • {course.credits} credits
+                        </div>
+                      </div>
                       {course.isPublished ? (
-                        <Badge className="bg-green-200 text-sm font-semibold text-black shadow">
+                        <span className="inline-block rounded bg-green-700 px-2 py-1 text-sm text-white shadow-sm ring-1 ring-green-900/30">
                           Published
-                        </Badge>
+                        </span>
                       ) : (
-                        <Badge className="bg-yellow-200 text-sm font-semibold text-black shadow">
+                        <span className="inline-block rounded bg-yellow-700 px-2 py-1 text-sm text-white shadow-sm ring-1 ring-yellow-900/30">
                           Not Published
-                        </Badge>
+                        </span>
                       )}
                     </div>
-                  </CardHeader>
-                  <CardContent className="mt-2 ml-8 space-y-1">
-                    {isPrivileged && (
+
+                    <div className="space-y-1 text-sm">
+                      {isPrivileged && (
+                        <div>
+                          <span className="font-semibold">Enrollment:</span>{' '}
+                          {(course.students ?? []).length}
+                        </div>
+                      )}
                       <div>
-                        <span className="font-semibold">Enrollment:</span>{' '}
-                        {(course.students ?? []).length}
+                        <span className="font-semibold">Instructor:</span>{' '}
+                        {(course.faculty ?? [])
+                          .map((f) => `${f.firstName ?? ''} ${f.lastName ?? ''}`)
+                          .join(', ') || 'TBA'}
                       </div>
-                    )}
-                    <div>
-                      <span className="font-semibold">Dates:</span>{' '}
-                      {format(new Date(course.startDate), 'MMM d, yyyy')} to{' '}
-                      {format(new Date(course.endDate), 'MMM d, yyyy')}
+                      <div>
+                        <span className="font-semibold">Dates:</span>{' '}
+                        {format(new Date(course.startDate), 'M-d-yyyy p')} to{' '}
+                        {format(new Date(course.endDate), 'M-d-yyyy p')}
+                      </div>
                     </div>
-                    <div>
-                      <span className="font-semibold">Instructor(s):</span>{' '}
-                      {(course.faculty ?? [])
-                        .map((f) => `${f.firstName ?? ''} ${f.lastName ?? ''}`)
-                        .join(', ') || 'TBA'}
-                    </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               </Link>
             );
           })}
