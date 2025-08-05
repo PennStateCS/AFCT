@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { Moon, Sun } from 'lucide-react';
+import { Badge } from '@/components/ui/RoleBadge';
 
 // UI Components
 import { Button } from '@/components/ui/button';
@@ -26,21 +26,7 @@ import {
 } from '@/components/ui/breadcrumb';
 
 // Local
-import { SidebarTrigger } from './ui/sidebar';
-
-function getRoleBadgeStyle(role: string): string {
-  switch (role) {
-    case 'ADMIN':
-      return 'bg-red-600';
-    case 'FACULTY':
-      return 'bg-blue-600';
-    case 'TA':
-      return 'bg-yellow-600 text-black';
-    case 'STUDENT':
-    default:
-      return 'bg-green-600';
-  }
-}
+import { EnhancedSidebarTrigger } from './ui/EnhancedSidebarTrigger';
 
 const Navbar: React.FC = () => {
   const { setTheme } = useTheme();
@@ -93,9 +79,9 @@ const Navbar: React.FC = () => {
   return (
     <nav className="bg-secondary bordery mb-4 flex h-16 items-center justify-between rounded-lg p-4 text-white shadow-sm">
       <div className="flex items-center gap-4">
-        <SidebarTrigger />
+        <EnhancedSidebarTrigger />
         <Breadcrumb>
-          <BreadcrumbList>
+          <BreadcrumbList className="text-sm">
             {segments.map((segment, index) => {
               const isLast = index === segments.length - 1;
               const href = '/' + segments.slice(0, index + 1).join('/');
@@ -117,7 +103,10 @@ const Navbar: React.FC = () => {
                     {isLast ? (
                       <BreadcrumbPage className="text-white">{label}</BreadcrumbPage>
                     ) : (
-                      <BreadcrumbLink href={href} className="text-white hover:underline">
+                      <BreadcrumbLink
+                        href={href}
+                        className="text-secondary-foreground hover:text-secondary-foreground hover:underline"
+                      >
                         {label}
                       </BreadcrumbLink>
                     )}
@@ -133,13 +122,7 @@ const Navbar: React.FC = () => {
       <div className="flex items-center gap-4 text-right">
         <div className="flex flex-col items-end">
           <div className="font-medium">{fullName}</div>
-          <div
-            className={`rounded-full px-2 py-0.5 text-xs text-white ${getRoleBadgeStyle(
-              roleDisplay,
-            )}`}
-          >
-            {roleDisplay}
-          </div>
+          <Badge role={roleDisplay} className="text-xs" />
         </div>
 
         <Avatar className="h-11 w-11" aria-label="User avatar">
@@ -154,8 +137,7 @@ const Navbar: React.FC = () => {
           <DropdownMenuTrigger asChild>
             <Button
               variant="outline"
-              size="icon"
-              className="hover:text-secondary border text-black transition-colors"
+              className="hover:text-red hover:bg-background bg-card border text-black"
             >
               <Sun className="h-[1.2rem] w-[1.2rem] scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90" />
               <Moon className="absolute h-[1.2rem] w-[1.2rem] scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0" />
