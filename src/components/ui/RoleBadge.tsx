@@ -3,14 +3,14 @@ import React from 'react';
 
 export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   variant?: 'default' | 'destructive' | 'outline';
-  role?: 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT';
+  role?: 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT' | 'Admin' | 'Faculty' | 'Ta' | 'Student';
 }
 
 const roleStyles: Record<string, string> = {
-  ADMIN: 'bg-red-600 text-white',
-  FACULTY: 'bg-blue-600 text-white',
-  TA: 'bg-yellow-400 text-black',
-  STUDENT: 'bg-green-600 text-white',
+  ADMIN: 'bg-red-700 text-white',
+  FACULTY: 'bg-blue-700 text-white',
+  TA: 'bg-purple-700 text-white',
+  STUDENT: 'bg-green-700 text-white',
 };
 
 const badgeVariants: Record<string, string> = {
@@ -19,21 +19,29 @@ const badgeVariants: Record<string, string> = {
   outline: 'border border-gray-300 text-gray-700',
 };
 
+// Helper to normalize role input to match roleStyles keys
+function normalizeRole(role?: string): keyof typeof roleStyles | undefined {
+  if (!role) return undefined;
+  const upper = role.toUpperCase();
+  return upper in roleStyles ? (upper as keyof typeof roleStyles) : undefined;
+}
+
 export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
   ({ className, variant = 'default', role, children, ...props }, ref) => {
-    const variantClass = role ? roleStyles[role] : badgeVariants[variant];
+    const normalizedRole = normalizeRole(role);
+    const variantClass = normalizedRole ? roleStyles[normalizedRole] : badgeVariants[variant];
 
     return (
       <span
         ref={ref}
         className={cn(
-          'inline-flex w-20 items-center justify-center rounded-full px-2 py-0.5 text-sm font-semibold',
+          'inline-flex items-center justify-center rounded-full px-4 py-0.5 text-sm',
           variantClass,
           className,
         )}
         {...props}
       >
-        {children ?? role}
+        {children ?? role?.charAt(0).toUpperCase() + role?.slice(1).toLowerCase()}
       </span>
     );
   },

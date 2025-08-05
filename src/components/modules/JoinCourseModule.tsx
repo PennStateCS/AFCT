@@ -49,12 +49,12 @@ export function JoinCourseModule() {
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle className="text-xl font-semibold tracking-tight">Join a Course</CardTitle>
+        <CardTitle className="text-lg font-semibold">Join a Course</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="course-code" className="text-muted-foreground text-sm font-medium">
-            Course Code
+      <CardContent>
+        <div>
+          <Label htmlFor="course-code" className="mb-2 text-sm">
+            Enter a course code below:
           </Label>
 
           <InputOTP
@@ -63,6 +63,7 @@ export function JoinCourseModule() {
             onChange={setCode}
             pattern="[A-Z0-9a-z]"
             containerClassName="justify-start"
+            className="mb-2"
           >
             <InputOTPGroup>
               <InputOTPSlot index={0} />
@@ -77,7 +78,7 @@ export function JoinCourseModule() {
             </InputOTPGroup>
           </InputOTP>
         </div>
-        <div className="flex gap-2">
+        <div className="mt-4 flex gap-2">
           <Button onClick={handleJoin} disabled={loading || code.length !== 6}>
             {loading ? 'Joining...' : 'Join'}
           </Button>

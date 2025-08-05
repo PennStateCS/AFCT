@@ -25,7 +25,7 @@ export function DueDateModule({ assignments }: Props) {
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle className="text-xl font-semibold">Upcoming Assignments</CardTitle>
+        <CardTitle className="text-lg font-semibold">Upcoming Assignments</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {upcoming.length === 0 ? (
