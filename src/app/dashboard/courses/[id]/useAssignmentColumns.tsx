@@ -3,7 +3,7 @@
 import { ColumnDef } from '@tanstack/react-table';
 import { Assignment } from '@prisma/client';
 import { Button } from '@/components/ui/button';
-import { Pencil, Trash2, ArrowUpDown, Eye, BookOpen } from 'lucide-react';
+import { Pencil, Trash2, ChevronDown, Eye, BookOpen } from 'lucide-react';
 import { Badge } from '@/components/ui/RoleBadge';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -82,7 +82,10 @@ export function useAssignmentColumns(
         <>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="secondary">Manage</Button>
+              <Button variant="secondary">
+                <ChevronDown />
+                Manage
+              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel className="flex items-center gap-2">

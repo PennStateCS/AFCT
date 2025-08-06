@@ -18,7 +18,7 @@ import { problemColumns } from './problem_columns';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { EditIcon, Plus } from 'lucide-react';
+import { EditIcon, Plus, Pencil } from 'lucide-react';
 
 type FullCourse = Course & {
   faculty: User[];
@@ -239,7 +239,7 @@ export default function AdminCoursePage() {
             </p>
           </div>
           <Button variant="default" onClick={() => setEditOpen(true)} className="shrink-0">
-            <EditIcon /> Edit Course
+            <Pencil /> Edit Course
           </Button>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
@@ -374,7 +374,7 @@ export default function AdminCoursePage() {
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-2xl">Course Roster</CardTitle>
                 <Button variant="default" onClick={openEnrollDialog}>
-                  Enroll User
+                  <Plus /> Enroll User
                 </Button>
               </CardHeader>
               <CardContent>

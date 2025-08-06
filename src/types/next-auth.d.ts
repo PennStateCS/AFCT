@@ -1,5 +1,3 @@
-// types/next-auth.d.ts
-
 import { Role } from '@prisma/client';
 
 declare module 'next-auth' {
@@ -10,6 +8,8 @@ declare module 'next-auth' {
       firstName?: string;
       lastName?: string;
       avatar?: string;
+      ipAddress?: string;
+      userAgent?: string;
     } & DefaultSession['user'];
   }
 
@@ -30,6 +30,8 @@ declare module 'next-auth/jwt' {
     firstName?: string;
     lastName?: string;
     avatar?: string;
+    ipAddress?: string;
+    userAgent?: string;
   }
 }
 

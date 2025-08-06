@@ -181,6 +181,7 @@ model ActivityLog {
   metadata  Json?
 
   @@index([timestamp])
+  @@index([userId])
 }
 
 generator erd {

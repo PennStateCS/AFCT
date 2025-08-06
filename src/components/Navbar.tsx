@@ -111,7 +111,7 @@ const Navbar: React.FC = () => {
                       </BreadcrumbLink>
                     )}
                   </BreadcrumbItem>
-                  {!isLast && <BreadcrumbSeparator className="text-white" />}
+                  {!isLast && <BreadcrumbSeparator className="text-secondary-foreground" />}
                 </React.Fragment>
               );
             })}

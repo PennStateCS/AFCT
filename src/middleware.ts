@@ -1,25 +1,34 @@
 // middleware.ts
-import { getToken } from 'next-auth/jwt';
 import { NextResponse, type NextRequest } from 'next/server';
+import { getToken } from 'next-auth/jwt';
 
 export async function middleware(req: NextRequest) {
   const token = await getToken({ req });
-  const url = req.nextUrl;
-  const pathname = url.pathname;
+  const pathname = req.nextUrl.pathname;
 
   const isAuth = !!token;
 
-  // Allow only authenticated users to access protected routes
+  // Redirect unauthenticated users to /login
   if (!isAuth && pathname !== '/login') {
     return NextResponse.redirect(new URL('/login', req.url));
   }
 
-  // All authenticated users are allowed to access /dashboard
-  // No special logic needed for role checking
+  // Extract IP and User-Agent
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0] || req.ip || 'unknown';
+  const userAgent = req.headers.get('user-agent') || 'unknown';
 
-  return NextResponse.next();
+  // Forward IP and User-Agent to auth callbacks via headers
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set('x-user-ip', ip);
+  requestHeaders.set('x-user-agent', userAgent);
+
+  return NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/admin/:path*'], // use only if you plan to protect /admin
+  matcher: ['/dashboard/:path*', '/admin/:path*'],
 };
