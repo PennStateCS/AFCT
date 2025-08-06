@@ -1,17 +1,17 @@
+// /src/app/api/auth/signup
+
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
 
-const prisma = new PrismaClient();
-
-// Regex for email and password validation
+// Regex utilities for validating email and password
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const isStrongPassword = (pw: string) =>
   pw.length >= 8 &&
   /[A-Z]/.test(pw) &&
   /[a-z]/.test(pw) &&
   /\d/.test(pw) &&
-  /[^A-Za-z0-9]/.test(pw);
+  /[^A-Za-z0-9]/.test(pw); // Must contain a special character
 
 export async function POST(req: Request) {
   try {
@@ -48,9 +48,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Email already registered.' }, { status: 409 });
     }
 
-    // Hash password and create user
+    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Create new user in the database
     const newUser = await prisma.user.create({
       data: {
         email,
@@ -61,6 +62,26 @@ export async function POST(req: Request) {
       },
     });
 
+    // Get request IP address
+    const ip =
+      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      req.headers.get('x-real-ip') ||
+      'unknown';
+
+    // Log the signup event in ActivityLog
+    await prisma.activityLog.create({
+      data: {
+        userId: newUser.id,
+        action: 'USER_SIGNUP',
+        metadata: {
+          email,
+          role,
+          ipAddress: ip,
+        },
+      },
+    });
+
+    // Return success response
     return NextResponse.json({ message: 'User created', userId: newUser.id }, { status: 201 });
   } catch (err) {
     console.error('[SIGNUP_ERROR]', err);

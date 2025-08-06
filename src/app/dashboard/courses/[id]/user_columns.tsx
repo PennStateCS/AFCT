@@ -1,13 +1,21 @@
 'use client';
 
 import { ColumnDef } from '@tanstack/react-table';
-import { ArrowUpDown, Pencil, Trash2 } from 'lucide-react';
+import { Delete, Pencil, ChevronDown, BookOpen } from 'lucide-react';
 import { User } from '@prisma/client';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { EditUserDialog } from '@/components/dialogs/EditUserDialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/RoleBadge';
 import { useState } from 'react';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
 
 type ActionsCellProps = {
   user: User;
@@ -37,23 +45,37 @@ function ActionsCell({ user, onChange }: ActionsCellProps) {
     <div className="flex gap-2">
       <EditUserDialog user={user} open={open} setOpen={setOpen} onSave={handleSave} />
 
-      <Button
-        className="flex w-10 items-center justify-center"
-        variant="default"
-        onClick={() => setOpen(true)}
-        aria-label="Edit User"
-      >
-        <Pencil className="h-5 w-5" />
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="secondary">
+            <ChevronDown />
+            Manage
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuLabel className="flex items-center gap-2">
+            <BookOpen className="h-4 w-4" />
+            {user.firstName} {user.lastName}
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => setOpen(true)}
+            className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2"
+          >
+            <Pencil className="mr-2 h-4 w-4" />
+            Edit User
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
 
-      <Button
-        variant="destructive"
-        className="flex w-10 items-center justify-center"
-        onClick={handleDelete}
-        aria-label="Remove User"
-      >
-        <Trash2 className="h-5 w-5" />
-      </Button>
+          <DropdownMenuItem
+            onClick={handleDelete}
+            className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2 text-red-600"
+          >
+            <Delete className="mr-2 h-4 w-4" />
+            Drop User
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
@@ -101,7 +123,7 @@ export const userColumns = (onChange: () => void): ColumnDef<User>[] => [
   {
     accessorKey: 'role',
     header: 'Role',
-    cell: ({ row }) => <Badge role={row.original.role}>{row.original.role}</Badge>,
+    cell: ({ row }) => <Badge role={row.original.role} className="w-20" />,
   },
   {
     id: 'actions',

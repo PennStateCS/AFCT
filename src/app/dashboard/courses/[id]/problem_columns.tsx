@@ -1,8 +1,16 @@
 import { ColumnDef } from '@tanstack/react-table';
 import { Problem } from '@prisma/client';
-import { ArrowUpDown, Pencil, Trash2 } from 'lucide-react';
+import { ArrowUpDown, Pencil, Trash2, ChevronDown, Notebook } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
 
 const handleDelete = (problemId: string) => {
   console.log('Deleting problem with ID:', problemId);
@@ -65,28 +73,40 @@ export const problemColumns = (handleDeleteClick: (id: string) => void): ColumnD
   {
     id: 'actions',
     header: '',
-    cell: ({ row }) => {
-      const problem = row.original;
-      return (
-        <div className="flex gap-2">
-          {/* Edit Button */}
-          <Link href={`/dashboard/problems/${problem.id}/edit`}>
-            <Button variant="ghost" size="icon" aria-label="Edit Problem">
-              <Pencil className="h-4 w-4" />
+    cell: ({ row }) => (
+      <>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="secondary">
+              <ChevronDown />
+              Manage
             </Button>
-          </Link>
-          {/* Delete Button */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => handleDeleteClick(problem.id)}
-            className="text-red-600"
-            aria-label="Delete Problem"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      );
-    },
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuLabel className="flex items-center gap-2">
+              <Notebook className="h-4 w-4" />
+              {row.original.title}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => handleAssignmentEditClick(row.original)}
+              className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2"
+            >
+              <Pencil className="mr-2 h-4 w-4" />
+              Edit Problem
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+
+            <DropdownMenuItem
+              onClick={() => handleAssignmentDeleteClick(row.original.id)}
+              className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2 text-red-600"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete Problem
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </>
+    ),
   },
 ];

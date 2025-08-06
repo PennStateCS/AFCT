@@ -7,10 +7,10 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
 }
 
 const roleStyles: Record<string, string> = {
-  ADMIN: 'bg-red-700 text-white',
-  FACULTY: 'bg-blue-700 text-white',
-  TA: 'bg-purple-700 text-white',
-  STUDENT: 'bg-green-700 text-white',
+  ADMIN: 'bg-red-800 text-white',
+  FACULTY: 'bg-blue-800 text-white',
+  TA: 'bg-purple-800 text-white',
+  STUDENT: 'bg-green-800 text-white',
 };
 
 const badgeVariants: Record<string, string> = {
@@ -41,7 +41,10 @@ export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
         )}
         {...props}
       >
-        {children ?? role?.charAt(0).toUpperCase() + role?.slice(1).toLowerCase()}
+        {children ??
+          (normalizedRole === 'TA'
+            ? 'TA'
+            : normalizedRole?.charAt(0) + normalizedRole?.slice(1).toLowerCase())}{' '}
       </span>
     );
   },
