@@ -1,5 +1,4 @@
 // /src/app/api/users/[id]
-
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
@@ -9,25 +8,27 @@ import path from 'path';
 
 // PATCH: Update a user's profile
 export async function PATCH(req: NextRequest, context: { params: Promise<{ id: string }> }) {
-  try {
-    const { id } = await context.params;
-    const userId = id;
+  const { id } = await context.params;
+  const userId = id;
 
-    // Get the currently logged-in user
+  console.log(`[PATCH] Attempting to update user: ${userId}`);
+
+  try {
     const session = await getServerSession(authOptions);
     const currentUser = session?.user;
 
     if (!currentUser || !currentUser.id || !currentUser.role) {
+      console.warn('[PATCH] Unauthorized request');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Restrict students to only updating themselves
     const isAdmin = ['ADMIN', 'FACULTY', 'TA'].includes(currentUser.role);
     if (!isAdmin && currentUser.id !== userId) {
+      console.warn(`[PATCH] Forbidden: ${currentUser.id} tried to update user ${userId}`);
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Detect content type to support JSON and form-data
+    // Detect content type and prepare values
     const contentType = req.headers.get('content-type') || '';
     let firstName: string | undefined;
     let lastName: string | undefined;
@@ -49,7 +50,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       ({ firstName, lastName, role, inactive } = body);
     }
 
-    // Fetch current user to check for existing avatar
+    // Retrieve current user record
     const userRecord = await prisma.user.findUnique({
       where: { id: userId },
       select: { avatar: true },
@@ -57,27 +58,30 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
 
     let avatarFilename: string | null | undefined;
 
-    // Handle avatar upload and cleanup
+    // Save new avatar file and clean up the old one
     if (avatarFile && avatarFile.size > 0) {
       const bytes = Buffer.from(await avatarFile.arrayBuffer());
       avatarFilename = `${userId}-${Date.now()}-${avatarFile.name}`;
       const uploadPath = path.join(process.cwd(), 'public', 'uploads', avatarFilename);
       await writeFile(uploadPath, bytes);
+      console.log(`[PATCH] Uploaded new avatar: ${avatarFilename}`);
 
       if (userRecord?.avatar) {
         const oldPath = path.join(process.cwd(), 'public', 'uploads', userRecord.avatar);
-        await unlink(oldPath).catch(() => {}); // Ignore if already deleted
+        await unlink(oldPath).catch(() => {});
+        console.log(`[PATCH] Deleted old avatar: ${userRecord.avatar}`);
       }
     }
 
-    // Handle avatar deletion
+    // Delete avatar if requested
     if (deleteAvatar && userRecord?.avatar) {
       const oldPath = path.join(process.cwd(), 'public', 'uploads', userRecord.avatar);
       await unlink(oldPath).catch(() => {});
       avatarFilename = null;
+      console.log(`[PATCH] Avatar removed for user: ${userId}`);
     }
 
-    // Only admins can change role/inactive status
+    // Prepare data for update
     const dataToUpdate: any = {
       firstName: firstName ?? undefined,
       lastName: lastName ?? undefined,
@@ -88,6 +92,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       dataToUpdate.inactive = inactive ?? undefined;
     }
 
+    // Perform the update
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: dataToUpdate,
@@ -102,7 +107,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       },
     });
 
-    // Log the update
+    // Log activity
     const ip =
       req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
       req.headers.get('x-real-ip') ||
@@ -120,28 +125,31 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       },
     });
 
+    console.log(`[PATCH] User ${userId} updated by ${currentUser.id}`);
     return NextResponse.json(updatedUser);
   } catch (error) {
-    console.error('Error updating user:', error);
+    console.error('[PATCH] Error updating user:', error);
     return NextResponse.json({ error: 'Failed to update user' }, { status: 500 });
   }
 }
 
-// DELETE: Delete a user (admin/ta/faculty only)
+// DELETE: Delete a user
 export async function DELETE(req: NextRequest, context: { params: Promise<{ id: string }> }) {
-  try {
-    const { id } = await context.params;
-    const userId = id;
+  const { id } = await context.params;
+  const userId = id;
 
-    // Check session and role
+  console.log(`[DELETE] Attempting to delete user: ${userId}`);
+
+  try {
     const session = await getServerSession(authOptions);
     const currentUser = session?.user;
 
     if (!currentUser || !['ADMIN', 'FACULTY', 'TA'].includes(currentUser.role)) {
+      console.warn(`[DELETE] Forbidden: ${currentUser?.id} tried to delete user ${userId}`);
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Get avatar path if needed
+    // Delete avatar file if exists
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { avatar: true },
@@ -150,13 +158,15 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     if (user?.avatar) {
       const avatarPath = path.join(process.cwd(), 'public', 'uploads', user.avatar);
       await unlink(avatarPath).catch(() => {});
+      console.log(`[DELETE] Avatar file deleted: ${user.avatar}`);
     }
 
+    // Delete user from database
     await prisma.user.delete({
       where: { id: userId },
     });
 
-    // Log the deletion
+    // Log activity
     const ip =
       req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
       req.headers.get('x-real-ip') ||
@@ -173,9 +183,10 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
       },
     });
 
+    console.log(`[DELETE] User ${userId} deleted by ${currentUser.id}`);
     return NextResponse.json({ success: true, message: 'User deleted' });
   } catch (error) {
-    console.error('Error deleting user:', error);
+    console.error('[DELETE] Error deleting user:', error);
     return NextResponse.json({ error: 'Failed to delete user' }, { status: 500 });
   }
 }

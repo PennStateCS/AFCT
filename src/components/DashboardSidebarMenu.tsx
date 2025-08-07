@@ -1,15 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useSession, signOut } from 'next-auth/react';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
+
 import { cn } from '@/lib/utils';
-import { signOut } from 'next-auth/react';
+
 import { ChangePasswordDialog } from './dialogs/ChangePasswordDialog';
 import { EditProfileDialog } from './dialogs/EditProfileDialog';
-import { useRouter } from 'next/navigation';
-
-import { useEffect, useState } from 'react';
 
 import {
   SidebarContent,
@@ -22,6 +22,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from '@/components/ui/sidebar';
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,9 +31,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+
 import { Book, User, UserRound, LogOut, LockKeyhole, UserPen, ChevronUp } from 'lucide-react';
-import { EditUserDialog } from './dialogs/EditUserDialog';
 
 type Course = {
   id: string;
@@ -44,16 +46,15 @@ type Course = {
   students: { id: string }[];
 };
 
+// Static admin menu items
 const adminMenu = [
   { title: 'Courses', url: '/dashboard/courses', icon: Book },
   { title: 'User Accounts', url: '/dashboard/users', icon: User },
 ];
 
+// Filter courses based on user role
 function getCoursesForUser(
-  user: {
-    id: string;
-    role: 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT';
-  },
+  user: { id: string; role: 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT' },
   courses: Course[],
 ) {
   switch (user.role) {
@@ -75,13 +76,13 @@ export default function DashboardSidebarMenu() {
   const { data: session } = useSession();
   const [courses, setCourses] = useState<Course[]>([]);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
-  const router = useRouter();
   const [editProfileOpen, setEditProfileOpen] = useState(false);
 
-  // Read State
+  const router = useRouter();
   const { state } = useSidebar();
   const collapsed = state === 'collapsed';
 
+  // Fetch all courses (used for sidebar display)
   useEffect(() => {
     const fetchCourses = async () => {
       try {
@@ -90,6 +91,7 @@ export default function DashboardSidebarMenu() {
         const data = await res.json();
         setCourses(data);
       } catch (err) {
+        console.error('Sidebar fetch error:', err);
         setCourses([]);
       }
     };
@@ -108,13 +110,14 @@ export default function DashboardSidebarMenu() {
     role = 'STUDENT',
   } = session.user as any;
 
+  // Resolve display name and avatar
   const resolvedName =
     name ||
     [firstName, lastName].filter(Boolean).join(' ').trim() ||
     email?.split('@')[0] ||
     'User';
   const initials = (firstName?.[0] ?? '') + (lastName?.[0] ?? '') || resolvedName[0] || 'U';
-  const avatarUrl = avatar && avatar.trim() !== '' ? `/uploads/${avatar}` : '/default-avatar.png';
+  const avatarUrl = avatar?.trim() !== '' ? `/uploads/${avatar}` : '/default-avatar.png';
 
   const user = {
     id,
@@ -129,7 +132,9 @@ export default function DashboardSidebarMenu() {
 
   return (
     <>
+      {/* Sidebar navigation content */}
       <SidebarContent>
+        {/* Admin menu */}
         {(user.role === 'ADMIN' || user.role === 'FACULTY') && (
           <SidebarGroup>
             <SidebarGroupLabel className="text-sidebar-foreground text-sm">
@@ -174,6 +179,7 @@ export default function DashboardSidebarMenu() {
           </SidebarGroup>
         )}
 
+        {/* Courses menu */}
         <SidebarGroup>
           <SidebarGroupLabel className="text-sidebar-foreground text-sm">
             Current Courses
@@ -219,6 +225,8 @@ export default function DashboardSidebarMenu() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+
+      {/* Footer menu for user account actions */}
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
@@ -237,7 +245,7 @@ export default function DashboardSidebarMenu() {
                   </span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="hover:bg-secondary hover:text-secondary-foreground focus:bg-secondary focus:text-secondary-foreground">
+                <DropdownMenuItem>
                   <button
                     type="button"
                     className="flex w-full items-center gap-2 text-left"
@@ -247,7 +255,7 @@ export default function DashboardSidebarMenu() {
                     Edit Profile
                   </button>
                 </DropdownMenuItem>
-                <DropdownMenuItem className="hover:bg-secondary hover:text-secondary-foreground focus:bg-secondary focus:text-secondary-foreground">
+                <DropdownMenuItem>
                   <button
                     type="button"
                     className="flex w-full items-center gap-2 text-left"
@@ -258,7 +266,7 @@ export default function DashboardSidebarMenu() {
                   </button>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="hover:bg-secondary hover:text-secondary-foreground focus:bg-secondary focus:text-secondary-foreground">
+                <DropdownMenuItem>
                   <button
                     type="button"
                     className="flex w-full items-center gap-2 text-left"
@@ -273,6 +281,8 @@ export default function DashboardSidebarMenu() {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
+
+      {/* Modals */}
       <ChangePasswordDialog
         open={changePasswordOpen}
         setOpen={setChangePasswordOpen}
@@ -290,7 +300,6 @@ export default function DashboardSidebarMenu() {
           toast.success('Password changed!');
         }}
       />
-
       <EditProfileDialog open={editProfileOpen} setOpen={setEditProfileOpen} />
     </>
   );

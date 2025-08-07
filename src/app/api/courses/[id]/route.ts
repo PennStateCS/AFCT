@@ -1,6 +1,11 @@
+// /src/api/courses/[id]/route.ts
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
+// GET: Fetch a course by ID with full metadata
 export async function GET(_: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
 
@@ -14,7 +19,7 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
       include: {
         roster: {
           select: {
-            role: true, // include roster role
+            role: true,
             user: {
               select: {
                 id: true,
@@ -30,7 +35,7 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
         assignments: {
           include: {
             _count: {
-              select: { problems: true }, // problem count from AssignmentProblem
+              select: { problems: true },
             },
           },
         },
@@ -41,12 +46,12 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
-    // Separate faculty, TAs, students based on roster.role
+    // Group roster users by role
     const faculty = course.roster.filter((r) => r.role === 'FACULTY').map((r) => r.user);
     const tas = course.roster.filter((r) => r.role === 'TA').map((r) => r.user);
     const students = course.roster.filter((r) => r.role === 'STUDENT').map((r) => r.user);
 
-    // Add problemCount to assignments
+    // Attach problem counts to assignments
     const assignmentsWithProblemCount = course.assignments.map((assignment) => ({
       id: assignment.id,
       title: assignment.title,
@@ -79,20 +84,31 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
       assignments: assignmentsWithProblemCount,
     });
   } catch (error) {
-    console.error('API Error:', error);
+    console.error('GET /api/courses/[id] error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
+// PUT: Update a course (Faculty/Admin/TA only)
 export async function PUT(req: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  const body = await req.json();
 
   if (!id) {
     return NextResponse.json({ error: 'Missing course ID' }, { status: 400 });
   }
 
+  // Get authenticated user session
+  const session = await getServerSession(authOptions);
+  const user = session?.user;
+
+  if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  }
+
+  const body = await req.json();
+
   try {
+    // Update the course
     const updatedCourse = await prisma.course.update({
       where: { id },
       data: {
@@ -130,10 +146,12 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
       },
     });
 
+    // Group roster users by role
     const faculty = updatedCourse.roster.filter((r) => r.role === 'FACULTY').map((r) => r.user);
     const tas = updatedCourse.roster.filter((r) => r.role === 'TA').map((r) => r.user);
     const students = updatedCourse.roster.filter((r) => r.role === 'STUDENT').map((r) => r.user);
 
+    // Attach problem counts to assignments
     const assignmentsWithProblemCount = updatedCourse.assignments.map((assignment) => ({
       id: assignment.id,
       title: assignment.title,
@@ -146,6 +164,26 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
       courseId: assignment.courseId,
       problemCount: assignment._count.problems,
     }));
+
+    // Log the update action to ActivityLog
+    const ip =
+      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      req.headers.get('x-real-ip') ||
+      'unknown';
+    const userAgent = req.headers.get('user-agent') || 'unknown';
+
+    await prisma.activityLog.create({
+      data: {
+        userId: user.id,
+        action: 'UPDATE_COURSE',
+        metadata: {
+          courseId: updatedCourse.id,
+          ipAddress: ip,
+          userAgent: userAgent,
+          updatedFields: Object.keys(body),
+        },
+      },
+    });
 
     return NextResponse.json({
       id: updatedCourse.id,

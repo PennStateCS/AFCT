@@ -20,17 +20,20 @@ const isStrongPassword = (pw: string) =>
 // GET: Fetch all users (optionally filtered by role)
 export async function GET(req: Request) {
   try {
-    // Verify session and role
+    // 1. Verify session and role
     const session = await getServerSession(authOptions);
     if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+      console.warn('[USERS_GET] Unauthorized access attempt');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    // Get optional role filter from query string
+    // 2. Extract role filter from query parameters
     const { searchParams } = new URL(req.url);
     const role = searchParams.get('role');
 
-    // Fetch users, optionally filtered by role
+    console.log(`[USERS_GET] Fetching users${role ? ` with role: ${role}` : ''}`);
+
+    // 3. Query users from the database
     const users = await prisma.user.findMany({
       where: role ? { role } : undefined,
       orderBy: { createdAt: 'desc' },
@@ -47,7 +50,7 @@ export async function GET(req: Request) {
       },
     });
 
-    // Log the read access
+    // 4. Log the access
     const ip =
       req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
       req.headers.get('x-real-ip') ||
@@ -74,27 +77,29 @@ export async function GET(req: Request) {
 // POST: Create a new user
 export async function POST(req: Request) {
   try {
-    // Verify session and role
+    // 1. Verify session and role
     const session = await getServerSession(authOptions);
     if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+      console.warn('[USERS_POST] Unauthorized access attempt');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
+    // 2. Parse and validate request body
     const body = await req.json();
     const { email, firstName, lastName, password, role } = body;
 
-    // Validate required fields
     if (!email || !firstName || !lastName || !password || !role) {
+      console.warn('[USERS_POST] Missing required fields');
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Validate email format
     if (!isValidEmail(email)) {
+      console.warn(`[USERS_POST] Invalid email format: ${email}`);
       return NextResponse.json({ error: 'Invalid email format' }, { status: 400 });
     }
 
-    // Validate password strength
     if (!isStrongPassword(password)) {
+      console.warn('[USERS_POST] Weak password provided');
       return NextResponse.json(
         {
           error:
@@ -104,19 +109,16 @@ export async function POST(req: Request) {
       );
     }
 
-    // Prevent duplicate users by email
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    });
-
+    // 3. Prevent duplicate users
+    const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
+      console.warn(`[USERS_POST] Email already in use: ${email}`);
       return NextResponse.json({ error: 'Email already in use' }, { status: 409 });
     }
 
-    // Hash the password
+    // 4. Hash the password and create the user
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create new user
     const newUser = await prisma.user.create({
       data: {
         email,
@@ -132,10 +134,12 @@ export async function POST(req: Request) {
         lastName: true,
         role: true,
         createdAt: true,
-      }, // Do not return password hash
+      },
     });
 
-    // Log the user creation
+    console.log(`[USERS_POST] User created: ${newUser.id} (${newUser.email})`);
+
+    // 5. Log the creation
     const ip =
       req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
       req.headers.get('x-real-ip') ||

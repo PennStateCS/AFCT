@@ -1,32 +1,48 @@
+// /src/api/courses/[id]/[aid]/remove-problem/route.ts
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
 export async function POST(req: Request, context: { params: { id: string; aid: string } }) {
-  const { id: courseId, aid: assignmentId } = await context.params;
+  const { id: courseId, aid: assignmentId } = context.params;
+
+  // Get the user session and check for required roles
+  const session = await getServerSession(authOptions);
+  const user = session?.user;
+
+  if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  }
+
+  // Parse the problemId from the request body
   const { problemId } = await req.json();
 
   if (!problemId) {
     return NextResponse.json({ error: 'Missing problemId.' }, { status: 400 });
   }
 
-  // Safety: verify assignment belongs to the course
+  // Validate that the assignment exists and belongs to the specified course
   const assignment = await prisma.assignment.findFirst({
     where: { id: assignmentId, courseId },
   });
+
   if (!assignment) {
     return NextResponse.json({ error: 'Assignment not found.' }, { status: 404 });
   }
 
-  // Safety: verify problem belongs to the same course
+  // Validate that the problem belongs to the same course
   const problem = await prisma.problem.findFirst({
     where: { id: problemId, courseId },
   });
+
   if (!problem) {
     return NextResponse.json({ error: 'Problem not found in this course.' }, { status: 404 });
   }
 
   try {
-    // Remove the assignment-problem link
+    // Delete the link between the assignment and the problem
     await prisma.assignmentProblem.deleteMany({
       where: {
         assignmentId,
@@ -34,7 +50,7 @@ export async function POST(req: Request, context: { params: { id: string; aid: s
       },
     });
 
-    // Return updated problem list for this assignment
+    // Retrieve updated problem list for this assignment
     const updated = await prisma.assignment.findUnique({
       where: { id: assignmentId },
       include: {
@@ -46,6 +62,28 @@ export async function POST(req: Request, context: { params: { id: string; aid: s
 
     const problems = updated?.problems.map((ap) => ap.problem) || [];
 
+    // Log the removal action
+    const ip =
+      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      req.headers.get('x-real-ip') ||
+      'unknown';
+    const userAgent = req.headers.get('user-agent') || 'unknown';
+
+    await prisma.activityLog.create({
+      data: {
+        userId: user.id,
+        action: 'REMOVE_ASSIGNMENT_PROBLEM',
+        metadata: {
+          courseId,
+          assignmentId,
+          problemId,
+          ipAddress: ip,
+          userAgent,
+        },
+      },
+    });
+
+    // Return the updated list of problems
     return NextResponse.json({ success: true, problems });
   } catch (error) {
     console.error('Error removing problem from assignment:', error);
