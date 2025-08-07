@@ -1,13 +1,25 @@
+// /src/app/api/courses/[id]/problems/[pid]/route.ts
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import path from 'path';
 import { promises as fs } from 'fs';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
 export async function DELETE(req: Request, context: { params: { id: string; pid: string } }) {
   const { id: courseId, pid: problemId } = context.params;
 
   try {
-    // Verify the problem belongs to this course
+    // Step 1: Verify the user is authenticated and authorized (ADMIN, FACULTY, TA)
+    const session = await getServerSession(authOptions);
+    const user = session?.user;
+
+    if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
+    // Step 2: Verify that the problem exists and belongs to the specified course
     const problem = await prisma.problem.findFirst({
       where: { id: problemId, courseId },
     });
@@ -16,22 +28,22 @@ export async function DELETE(req: Request, context: { params: { id: string; pid:
       return NextResponse.json({ error: 'Problem not found.' }, { status: 404 });
     }
 
-    // Delete related submissions first
+    // Step 3: Delete all student submissions for this problem
     await prisma.submission.deleteMany({
-      where: { problemId: problemId },
+      where: { problemId },
     });
 
-    // Delete AssignmentProblem links
+    // Step 4: Delete all assignment-problem links
     await prisma.assignmentProblem.deleteMany({
-      where: { problemId: problemId },
+      where: { problemId },
     });
 
-    // Delete the problem itself
+    // Step 5: Delete the problem record itself
     await prisma.problem.delete({
       where: { id: problemId },
     });
 
-    // Remove the associated solution file if it exists
+    // Step 6: Attempt to delete the associated solution file (if it exists)
     if (problem.fileName) {
       const filePath = path.join(process.cwd(), 'public', 'uploads', 'solutions', problem.fileName);
       try {
@@ -43,6 +55,28 @@ export async function DELETE(req: Request, context: { params: { id: string; pid:
       }
     }
 
+    // Step 7: Log the delete action to ActivityLog
+    const ip =
+      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      req.headers.get('x-real-ip') ||
+      'unknown';
+    const userAgent = req.headers.get('user-agent') || 'unknown';
+
+    await prisma.activityLog.create({
+      data: {
+        userId: user.id,
+        action: 'DELETE_PROBLEM',
+        metadata: {
+          courseId,
+          problemId,
+          fileName: problem.fileName || null,
+          ipAddress: ip,
+          userAgent,
+        },
+      },
+    });
+
+    // Step 8: Return success response
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('API DELETE error:', error);

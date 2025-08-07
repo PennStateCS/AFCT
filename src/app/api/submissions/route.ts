@@ -1,3 +1,5 @@
+// /src/app/api/submissions/route.ts
+
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/app/utils/jwt';
@@ -5,15 +7,41 @@ import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
 
+// Helper to extract IP address from headers or fallback
+function getClientIp(req: NextRequest): string {
+  const forwarded = req.headers.get('x-forwarded-for');
+  if (forwarded) return forwarded.split(',')[0].trim();
+  return (req as any).ip || 'unknown';
+}
+
+// Helper to extract user-agent
+function getUserAgent(req: NextRequest): string {
+  return req.headers.get('user-agent') || 'unknown';
+}
+
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req);
+  const userAgent = getUserAgent(req);
+
+  // 1. Verify token
   const authHeader = req.headers.get('authorization');
   const token = authHeader?.split(' ')[1];
   const decoded = token ? verifyToken(token) : null;
 
   if (!decoded) {
+    console.warn('Unauthorized submission attempt');
+    await prisma.activityLog.create({
+      data: {
+        userId: null,
+        action: 'SUBMISSION_UNAUTHORIZED',
+        metadata: { ipAddress: ip, userAgent },
+      },
+    });
+
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // 2. Parse multipart form data
   const formData = await req.formData();
   const assignmentId = formData.get('assignmentId')?.toString();
   const problemId = formData.get('problemId')?.toString();
@@ -24,7 +52,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
-  // Ensure this problem is actually part of the assignment
+  // 3. Ensure the problem is linked to the assignment
   const link = await prisma.assignmentProblem.findUnique({
     where: {
       assignmentId_problemId: {
@@ -45,6 +73,7 @@ export async function POST(req: NextRequest) {
   let originalFileName: string | null = null;
 
   try {
+    // 4. Handle file upload
     if (file) {
       originalFileName = file.name;
       const fileExt = path.extname(originalFileName);
@@ -60,6 +89,7 @@ export async function POST(req: NextRequest) {
       fs.writeFileSync(filePath, buffer);
     }
 
+    // 5. Store the submission
     const submission = await prisma.submission.create({
       data: {
         assignmentId,
@@ -71,9 +101,39 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // 6. Log successful submission
+    await prisma.activityLog.create({
+      data: {
+        userId: decoded.userId,
+        action: 'SUBMISSION_CREATED',
+        metadata: {
+          assignmentId,
+          problemId,
+          fileName,
+          ipAddress: ip,
+          userAgent,
+        },
+      },
+    });
+
     return NextResponse.json(submission, { status: 201 });
   } catch (error) {
     console.error('Submission error:', error);
+
+    await prisma.activityLog.create({
+      data: {
+        userId: decoded.userId,
+        action: 'SUBMISSION_ERROR',
+        metadata: {
+          assignmentId,
+          problemId,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          ipAddress: ip,
+          userAgent,
+        },
+      },
+    });
+
     return NextResponse.json({ error: 'Failed to create submission' }, { status: 500 });
   }
 }

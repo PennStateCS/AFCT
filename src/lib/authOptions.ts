@@ -4,13 +4,14 @@ import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
 import type { NextAuthOptions } from 'next-auth';
 import { Role } from '@prisma/client';
+import type { User } from 'next-auth';
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   session: {
     strategy: 'jwt',
-    maxAge: 60 * 60,
-    updateAge: 0, // ensures immediate update on `update()`
+    maxAge: 60 * 60, // 1 hour
+    updateAge: 0, // ensure token is refreshed immediately on update
   },
   jwt: {
     maxAge: 60 * 60,
@@ -22,7 +23,8 @@ export const authOptions: NextAuthOptions = {
         email: { label: 'Email', type: 'text' },
         password: { label: 'Password', type: 'password' },
       },
-      async authorize(credentials) {
+
+      async authorize(credentials): Promise<User | null> {
         if (!credentials?.email || !credentials?.password) return null;
 
         const user = await prisma.user.findUnique({ where: { email: credentials.email } });
@@ -40,13 +42,13 @@ export const authOptions: NextAuthOptions = {
           avatar: user.avatar,
           name: `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim(),
           image: user.avatar,
-        };
+        } as User;
       },
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
-      // Add user info on initial sign-in
+    async jwt({ token, user, req }) {
+      // On initial sign-in, merge user fields into token
       if (user) {
         token.id = user.id;
         token.email = user.email;
@@ -57,15 +59,15 @@ export const authOptions: NextAuthOptions = {
         token.name = user.name;
         token.image = user.avatar;
 
-        // Initial expiration = now + 30 min
+        // Optionally add ip/userAgent if needed
+        const forwarded = req?.headers.get('x-forwarded-for');
+        token.ipAddress = forwarded?.split(',')[0]?.trim() || req?.headers.get('x-real-ip') || null;
+        token.userAgent = req?.headers.get('user-agent') || null;
+
         token.exp = Math.floor(Date.now() / 1000) + 60 * 30;
       }
 
-      // Ensure token.exp exists for later refreshes
-      if (!token.exp) {
-        token.exp = Math.floor(Date.now() / 1000) + 60 * 30;
-      }
-
+      // Always return the full token, keeping existing values!
       return token;
     },
     async session({ session, token }) {
@@ -78,9 +80,11 @@ export const authOptions: NextAuthOptions = {
         session.user.avatar = token.avatar as string;
         session.user.name = token.name as string;
         session.user.image = token.image as string;
+
+        session.ipAddress = token.ipAddress as string;
+        session.userAgent = token.userAgent as string;
       }
 
-      // Pass token.exp to client so SessionWatcher can use it
       if (token.exp) {
         session.expires = new Date(token.exp * 1000).toISOString();
       }

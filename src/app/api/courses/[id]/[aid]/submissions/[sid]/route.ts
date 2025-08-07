@@ -1,5 +1,9 @@
+// /src/api/courses/[id]/[aid]/submissions/[sid]/route.ts
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
 export async function GET(
   req: Request,
@@ -8,7 +12,15 @@ export async function GET(
   const { id: courseId, aid: assignmentId, sid: studentId } = await context.params;
 
   try {
-    // Verify assignment belongs to the course
+    // Get session and ensure user is authenticated
+    const session = await getServerSession(authOptions);
+    const user = session?.user;
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Verify that the assignment belongs to the given course
     const assignment = await prisma.assignment.findFirst({
       where: { id: assignmentId, courseId },
       select: { id: true },
@@ -18,7 +30,7 @@ export async function GET(
       return NextResponse.json({ error: 'Assignment not found for this course' }, { status: 404 });
     }
 
-    // Get problems linked to this assignment
+    // Get all problems linked to the assignment
     const assignmentProblems = await prisma.assignmentProblem.findMany({
       where: { assignmentId },
       include: {
@@ -40,7 +52,7 @@ export async function GET(
       return NextResponse.json({ error: 'No problems linked to this assignment' }, { status: 404 });
     }
 
-    // Fetch student submissions for this assignment
+    // Fetch all submissions for the student for this assignment
     const submissions = await prisma.submission.findMany({
       where: {
         assignmentId,
@@ -59,7 +71,7 @@ export async function GET(
       },
     });
 
-    // Map submissions by problemId
+    // Group submissions by problemId and attach related problem metadata
     const result: Record<
       string,
       {
@@ -100,8 +112,31 @@ export async function GET(
       };
     }
 
+    // Log access to assignment submissions
+    const ip =
+      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      req.headers.get('x-real-ip') ||
+      'unknown';
+    const userAgent = req.headers.get('user-agent') || 'unknown';
+
+    await prisma.activityLog.create({
+      data: {
+        userId: user.id,
+        action: 'VIEW_ASSIGNMENT_SUBMISSIONS',
+        metadata: {
+          courseId,
+          assignmentId,
+          viewedStudentId: studentId,
+          ipAddress: ip,
+          userAgent,
+        },
+      },
+    });
+
+    // Return structured submission data grouped by problem
     return NextResponse.json(result);
   } catch (err) {
+    // Catch unexpected errors
     console.error('Error fetching submissions:', err);
     return NextResponse.json({ error: 'Failed to fetch submissions' }, { status: 500 });
   }

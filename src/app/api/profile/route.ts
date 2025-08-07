@@ -1,8 +1,8 @@
-// src/app/api/profile/route.ts
+// /src/app/api/profile/route.ts
 
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'; // Ensure correct path
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import path from 'path';
 import { writeFile, unlink, mkdir } from 'fs/promises';
@@ -11,6 +11,7 @@ import { randomUUID } from 'crypto';
 
 const uploadDir = path.join(process.cwd(), 'public', 'uploads');
 
+// Utility to delete a file if it exists
 async function deleteFileIfExists(filename: string) {
   const filePath = path.join(uploadDir, filename);
   if (existsSync(filePath)) {
@@ -88,6 +89,20 @@ export async function POST(req: Request) {
       lastName: true,
       avatar: true,
       role: true,
+    },
+  });
+
+  // Log profile update
+  await prisma.activityLog.create({
+    data: {
+      userId: session.user.id,
+      action: 'PROFILE_UPDATED',
+      metadata: {
+        firstName,
+        lastName,
+        avatarUpdated: !!avatar,
+        avatarDeleted: deleteAvatar,
+      },
     },
   });
 
