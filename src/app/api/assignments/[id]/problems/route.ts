@@ -1,14 +1,17 @@
-// /src/app/api/assignments/[id]/problems
-
+// /src/app/api/assignments/[id]/problems/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/app/utils/jwt';
 
-export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const { id: assignmentId } = await context.params;
+export async function GET(req: NextRequest, context: any) {
+  // Await params if it is a Promise (some environments do this)
+  const params =
+    typeof context?.params?.then === 'function' ? await context.params : context.params;
+
+  const assignmentId = params?.id;
 
   try {
-    // Extract the Bearer token from the Authorization header
+    // ---- Auth header / token ----
     const authHeader = req.headers.get('authorization');
     const token = authHeader?.split(' ')[1];
 
@@ -16,16 +19,15 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       return NextResponse.json({ error: 'Missing token' }, { status: 401 });
     }
 
-    // Attempt to decode and verify the token
-    let decoded;
+    // ---- Verify token ----
+    let decoded: any;
     try {
       decoded = verifyToken(token);
-    } catch (err: any) {
-      console.error('Invalid or expired token:', err);
+    } catch {
       return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
     }
 
-    // Fetch the assignment to get courseId
+    // ---- Assignment lookup ----
     const assignment = await prisma.assignment.findUnique({
       where: { id: assignmentId },
       select: { courseId: true },
@@ -35,29 +37,24 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 
-    const userRole = decoded.role;
-    const userId = decoded.id;
-    const courseId = assignment.courseId;
-
-    // Role-based access control
-    if (userRole === 'STUDENT') {
-      // Students must be enrolled in the course
-      const enrollment = await prisma.studentCourses.findFirst({
-        where: {
-          courseId,
-          studentId: userId,
-        },
-      });
-
-      if (!enrollment) {
-        return NextResponse.json({ error: 'You are not enrolled in this course' }, { status: 403 });
-      }
-    } else if (!['FACULTY', 'TA', 'ADMIN'].includes(userRole)) {
-      // Deny access for other roles
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    // ---- UserId from token ----
+    const userId = decoded?.id ?? decoded?.userId;
+    if (!userId) {
+      return NextResponse.json({ error: 'Invalid token payload' }, { status: 401 });
     }
 
-    // Fetch all problems linked to the assignment
+    // ---- Enrollment check (any role) ----
+    const courseId = assignment.courseId;
+    const enrollment = await prisma.roster.findFirst({
+      where: { courseId, userId },
+      select: { id: true },
+    });
+
+    if (!enrollment) {
+      return NextResponse.json({ error: 'You are not enrolled in this course' }, { status: 403 });
+    }
+
+    // ---- Load problems ----
     const assignmentProblems = await prisma.assignmentProblem.findMany({
       where: { assignmentId },
       include: {
@@ -77,24 +74,24 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
 
     const problems = assignmentProblems.map((ap) => ap.problem);
 
-    // Extract IP address for logging
+    // ---- Activity log ----
     const ip =
       req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
       req.headers.get('x-real-ip') ||
       'unknown';
 
-    // Log the access to activity log
-    await prisma.activityLog.create({
-      data: {
-        userId,
-        action: 'VIEW_ASSIGNMENT_PROBLEMS',
-        metadata: {
-          assignmentId,
-          courseId,
-          ipAddress: ip,
+    try {
+      await prisma.activityLog.create({
+        data: {
+          userId,
+          action: 'VIEW_ASSIGNMENT_PROBLEMS',
+          metadata: { assignmentId, courseId, ipAddress: ip },
         },
-      },
-    });
+      });
+    } catch (logErr) {
+      console.error('[problems] activityLog.create failed:', logErr);
+      // do not fail the route on log issues
+    }
 
     return NextResponse.json(problems);
   } catch (error) {

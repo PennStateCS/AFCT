@@ -6,6 +6,8 @@ import { verifyToken } from '@/app/utils/jwt';
 import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
+import { execSync } from 'child_process';
+import os from 'os';
 
 // Helper to extract IP address from headers or fallback
 function getClientIp(req: NextRequest): string {
@@ -45,7 +47,6 @@ export async function POST(req: NextRequest) {
   const formData = await req.formData();
   const assignmentId = formData.get('assignmentId')?.toString();
   const problemId = formData.get('problemId')?.toString();
-  const content = formData.get('content')?.toString() || '';
   const file = formData.get('file') as File | null;
 
   if (!assignmentId || !problemId) {
@@ -71,6 +72,7 @@ export async function POST(req: NextRequest) {
 
   let fileName: string | null = null;
   let originalFileName: string | null = null;
+  let feedback: string | null = null;
 
   try {
     // 4. Handle file upload
@@ -87,6 +89,22 @@ export async function POST(req: NextRequest) {
       const filePath = path.join(uploadDir, fileName);
       const buffer = Buffer.from(await file.arrayBuffer());
       fs.writeFileSync(filePath, buffer);
+
+      // 4b. Run system command to analyze the uploaded file
+      try {
+        if (os.platform() === 'win32') {
+          const result = execSync(`powershell -Command "(Get-Content '${filePath}').Count"`, {
+            encoding: 'utf-8',
+          });
+          feedback = `File has ${result.trim()} lines (Windows).`;
+        } else {
+          const result = execSync(`wc -l < "${filePath}"`, { encoding: 'utf-8' });
+          feedback = `File has ${result.trim()} lines (Unix).`;
+        }
+      } catch (cmdErr) {
+        console.error('Command execution failed:', cmdErr);
+        feedback = 'ERROR: Failed to analyze file.';
+      }
     }
 
     // 5. Store the submission
@@ -94,10 +112,10 @@ export async function POST(req: NextRequest) {
       data: {
         assignmentId,
         problemId,
-        content,
         studentId: decoded.userId,
         fileName,
         originalFileName,
+        feedback,
       },
     });
 
