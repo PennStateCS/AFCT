@@ -1,16 +1,22 @@
-// /src/api/courses/[id]/assignments/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/app/utils/jwt';
 
 // GET: Fetch all published assignments for a course
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  // Extract the Bearer token from the Authorization header
+export async function GET(req: NextRequest, context: any) {
+  // Await params if it is a Promise
+  const params = typeof context.params?.then === 'function' ? await context.params : context.params;
+
+  const courseId = params.id;
+
+  // 1. Validate courseId
+  if (!courseId) {
+    return NextResponse.json({ error: 'Missing course ID' }, { status: 400 });
+  }
+
+  // 2. Extract and verify token
   const authHeader = req.headers.get('authorization');
   const token = authHeader?.split(' ')[1];
-
-  // Verify and decode the JWT
   const decoded = token ? verifyToken(token) : null;
 
   if (!decoded) {
@@ -18,9 +24,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 
   try {
-    // Step 1: Ensure the course exists
+    // 3. Ensure the course exists
     const course = await prisma.course.findUnique({
-      where: { id: params.id },
+      where: { id: courseId },
       select: { id: true },
     });
 
@@ -28,10 +34,10 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
-    // Step 2: Fetch all published assignments for this course
+    // 4. Fetch all published assignments
     const assignments = await prisma.assignment.findMany({
       where: {
-        courseId: params.id,
+        courseId,
         isPublished: true,
       },
       select: {
@@ -44,10 +50,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       },
     });
 
-    // Step 3: Return the assignments as a JSON response
     return NextResponse.json(assignments);
   } catch (error) {
-    // Catch and log any server-side errors
     console.error('API GET ASSIGNMENTS error:', error);
     return NextResponse.json({ error: 'Failed to fetch assignments.' }, { status: 500 });
   }

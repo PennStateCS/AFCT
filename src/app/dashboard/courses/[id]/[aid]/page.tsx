@@ -150,46 +150,38 @@ export default function AssignmentPage() {
       : 'None';
 
   return (
-    <div className="mx-auto w-full">
+    <div className="mx-auto w-full text-sm">
       {/* Assignment details */}
-      <div className="bg-card relative mb-8 w-full rounded-lg border p-6 shadow">
-        <h1 className="text-2xl font-bold">{assignment.title}</h1>
-        <p className="text-muted-foreground mt-2">{assignment.description || 'No description.'}</p>
-        <div className="mt-4 flex flex-wrap gap-8 text-sm">
-          <div>
-            <span className="font-semibold">Course:</span> {assignment.course?.name}{' '}
-            {assignment.course?.code && `(${assignment.course.code})`}
-          </div>
-          <div>
-            <span className="font-semibold">Faculty:</span>{' '}
-            <span className="text-muted-foreground">
-              {renderNames(assignment.course?.faculty ?? [])}
-            </span>
-          </div>
-          <div>
-            <span className="font-semibold">TAs:</span>{' '}
-            <span className="text-muted-foreground">
-              {renderNames(assignment.course?.tas ?? [])}
-            </span>
-          </div>
-        </div>
-        <div className="mt-4 flex flex-wrap gap-6 text-sm">
-          <span>
-            <strong>Due:</strong> {new Date(assignment.dueDate).toLocaleString()}
-          </span>
-          <span>
-            <strong>Max Points:</strong> {assignment.maxPoints}
-          </span>
-          <span>
-            <strong>Status:</strong>{' '}
+      <div className="bg-card relative mb-8 w-full space-y-6 rounded-lg border p-6 shadow">
+        <div>
+          <h1 className="text-2xl">
+            <span className="font-semibold">Assignment:</span> {assignment.title}
+          </h1>
+          <div className="text-muted-foreground mt-1 text-sm">
+            {assignment.course?.name} {assignment.course?.code && `(${assignment.course.code})`} •{' '}
             {assignment.isPublished ? (
               <span className="font-semibold text-green-600">Published</span>
             ) : (
               <span className="font-semibold text-yellow-500">Unpublished</span>
             )}
-          </span>
+          </div>
         </div>
-        <div className="flex gap-2 p-4">
+
+        <div>
+          <span className="font-semibold">Max Points:</span> {assignment.maxPoints}
+        </div>
+
+        <div>
+          <span className="font-semibold">Due:</span>{' '}
+          {new Date(assignment.dueDate).toLocaleString()}
+        </div>
+
+        <div>
+          <span className="font-semibold">Description:</span>
+          <br /> {assignment.description || 'No description.'}
+        </div>
+
+        <div className="mt-3 mb-3 flex gap-2">
           <Button variant="default" aria-label="Edit Assignment" onClick={handleEditAssignment}>
             Edit Assignment
           </Button>

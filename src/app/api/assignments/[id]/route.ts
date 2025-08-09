@@ -5,14 +5,12 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
-// Update an existing assignment (PUT /api/assignments/[id])
-export async function PUT(req: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const { id } = await context.params;
+// Update an existing assignment
+export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+  const { id } = params;
 
-  // Authenticate user
   const session = await getServerSession(authOptions);
 
-  // Allow only ADMIN, FACULTY, or TA
   if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
@@ -20,7 +18,6 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
   const data = await req.json();
 
   try {
-    // Update the assignment in the database
     const updated = await prisma.assignment.update({
       where: { id },
       data: {
@@ -32,13 +29,11 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
       },
     });
 
-    // Get IP address from headers
     const ip =
       req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
       req.headers.get('x-real-ip') ||
       'unknown';
 
-    // Log the update action
     await prisma.activityLog.create({
       data: {
         userId: session.user.id,
@@ -59,10 +54,8 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
 
 // Create a new assignment (POST /api/assignments/[id])
 export async function POST(req: NextRequest) {
-  // Authenticate user
   const session = await getServerSession(authOptions);
 
-  // Allow only ADMIN, FACULTY, or TA
   if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
@@ -70,12 +63,10 @@ export async function POST(req: NextRequest) {
   try {
     const data = await req.json();
 
-    // Validate required fields
     if (!data.title || !data.courseId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Create a new assignment in the database
     const created = await prisma.assignment.create({
       data: {
         title: data.title,
@@ -87,13 +78,11 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Get IP address from headers
     const ip =
       req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
       req.headers.get('x-real-ip') ||
       'unknown';
 
-    // Log the creation action
     await prisma.activityLog.create({
       data: {
         userId: session.user.id,
