@@ -21,16 +21,12 @@ import { useForm, Controller } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 
-import { AssignmentFormSchema, UpdateAssignmentSchema } from '@/schemas';
+import {
+  AssignmentFormSchema, // form-only schema (title, description, maxPoints, dueDate, courseId)
+  UpdateAssignmentSchema, // partial + id + publish rule
+} from '@/schemas/assignment';
 
-type EditAssignmentDialogProps = {
-  assignment: Assignment;
-  open: boolean;
-  setOpen: (open: boolean) => void;
-  onSave?: (updated: Assignment) => void;
-};
-
-// For initializing the datetime-local string
+// Convert Date → "YYYY-MM-DDTHH:MM" for <input type="datetime-local">
 function toDateTimeLocalString(date: Date | string): string {
   const d = new Date(date);
   if (Number.isNaN(d.getTime())) return '';
@@ -43,7 +39,14 @@ function toDateTimeLocalString(date: Date | string): string {
   return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
 }
 
-// RHF state BEFORE transforms (strings for datetime-local)
+type EditAssignmentDialogProps = {
+  assignment: Assignment;
+  open: boolean;
+  setOpen: (open: boolean) => void;
+  onSave?: (updated: Assignment) => void;
+};
+
+// RHF state BEFORE Zod transforms (string for datetime-local, etc.)
 type FormValues = z.input<typeof AssignmentFormSchema>;
 type ParsedFormValues = z.output<typeof AssignmentFormSchema>;
 
@@ -58,11 +61,8 @@ export function EditAssignmentDialog({
       title: assignment.title ?? '',
       description: assignment.description ?? '',
       maxPoints: assignment.maxPoints ?? 0,
-      // keep as string for input; schema will transform on submit
-      dueDate: toDateTimeLocalString(assignment.dueDate),
+      dueDate: toDateTimeLocalString(assignment.dueDate), // string for input
       courseId: assignment.courseId,
-      // NOTE: AssignmentFormSchema doesn't include isPublished;
-      // we keep it separate in the form with a Controller below if you want to edit it here.
     }),
     [assignment],
   );
@@ -72,7 +72,7 @@ export function EditAssignmentDialog({
     handleSubmit,
     reset,
     watch,
-    formState: { errors, isSubmitting, isDirty, isValid },
+    formState: { errors, isDirty, isValid, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(AssignmentFormSchema),
     defaultValues,
@@ -80,12 +80,10 @@ export function EditAssignmentDialog({
     reValidateMode: 'onChange',
   });
 
-  // Local field for isPublished (since form schema is form-only).
-  // If you prefer to keep it *inside* the form schema, you can switch the resolver
-  // to UpdateAssignmentSchema and include it; but then you'll also need to include id.
-  const isPublished = watch('_isPublished' as any) as boolean | undefined;
+  // Keep publish in RHF too (not part of AssignmentFormSchema, so we mark as any)
+  const isPublished = watch('isPublished' as any) as boolean | undefined;
 
-  // Reset values when dialog opens; also clear state on close
+  // Reset on open/close (prevents error/touched flicker)
   useEffect(() => {
     if (open) {
       reset(defaultValues, {
@@ -104,19 +102,24 @@ export function EditAssignmentDialog({
     }
   }, [open, defaultValues, reset]);
 
-  const onSubmit = async (raw: FormValues) => {
-    // Normalize & transform via form schema
-    const parsed: ParsedFormValues = AssignmentFormSchema.parse(raw);
+  const resetForm = () =>
+    reset(defaultValues, {
+      keepDirty: false,
+      keepTouched: false,
+      keepErrors: false,
+      keepValues: false,
+    });
 
-    // Compose update payload with id and isPublished flag
+  const onSubmit = async (raw: FormValues) => {
+    // 1) Normalize with form schema (Dates, numbers, trims)
+    const parsed: ParsedFormValues = AssignmentFormSchema.parse(raw);
+    // 2) Enforce update contract + publish rule
     const payload = UpdateAssignmentSchema.parse({
       id: assignment.id,
       ...parsed,
-      // if you're editing isPublished here, include it:
       isPublished: typeof isPublished === 'boolean' ? isPublished : assignment.isPublished,
     });
 
-    // Call your API
     const res = await fetch(`/api/assignments/${assignment.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -126,32 +129,17 @@ export function EditAssignmentDialog({
         dueDate: payload.dueDate.toISOString(),
       }),
     });
-
     if (!res.ok) {
       const msg = await safeMessage(res);
       throw new Error(msg ?? 'Failed to update assignment');
     }
 
     const updated = (await res.json()) as Assignment;
-
-    // reset before closing to avoid any flicker
-    reset(defaultValues, {
-      keepDirty: false,
-      keepTouched: false,
-      keepErrors: false,
-      keepValues: false,
-    });
+    // reset before closing to avoid any flash
+    resetForm();
     onSave?.(updated);
     setOpen(false);
   };
-
-  const resetForm = () =>
-    reset(defaultValues, {
-      keepDirty: false,
-      keepTouched: false,
-      keepErrors: false,
-      keepValues: false,
-    });
 
   return (
     <Dialog
@@ -176,15 +164,17 @@ export function EditAssignmentDialog({
             control={control}
             render={({ field }) => (
               <InputGroup
-                name="title"
                 label="Title"
+                name="title"
                 fieldProps={field}
                 error={errors.title?.message}
+                showStatus
+                isValid={!errors.title && !!field.value}
               />
             )}
           />
 
-          {/* Description */}
+          {/* Description (Textarea) */}
           <Controller
             name="description"
             control={control}
@@ -210,8 +200,8 @@ export function EditAssignmentDialog({
             control={control}
             render={({ field }) => (
               <InputGroup
-                name="dueDate"
                 label="Due Date & Time"
+                name="dueDate"
                 type="datetime-local"
                 fieldProps={{
                   ...field,
@@ -230,8 +220,8 @@ export function EditAssignmentDialog({
             control={control}
             render={({ field }) => (
               <InputGroup
-                name="maxPoints"
                 label="Max Points"
+                name="maxPoints"
                 type="number"
                 fieldProps={field}
                 min={0}
@@ -241,13 +231,11 @@ export function EditAssignmentDialog({
             )}
           />
 
-          {/* Publish switch (optional in edit) */}
+          {/* Published switch (kept outside the form schema) */}
           <div className="flex items-center justify-between">
             <Label htmlFor="isPublished">Published</Label>
             <Controller
-              // Use a faux field key to keep it alongside RHF for convenience
-              // (not part of AssignmentFormSchema)
-              name={'_isPublished' as any}
+              name={'isPublished' as any}
               control={control}
               defaultValue={assignment.isPublished}
               render={({ field }) => (
@@ -265,10 +253,7 @@ export function EditAssignmentDialog({
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => {
-                  // Clear touched/dirty/errors before closing to prevent red flash
-                  resetForm();
-                }}
+                onClick={resetForm} // clear touched/dirty/errors before closing
                 disabled={isSubmitting}
               >
                 Cancel

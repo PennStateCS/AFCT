@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { CreateProblemDialog } from '@/components/dialogs/CreateProblemDialog';
+import { EditProblemDialog } from '@/components/dialogs/EditProblemDialog';
 import { EditCourseDialog } from '@/components/dialogs/EditCourseDialog';
 import { EditAssignmentDialog } from '@/components/dialogs/EditAssignmentDialog';
 import { CreateAssignmentDialog } from '@/components/dialogs/CreateAssignmentDialog';
@@ -42,6 +43,8 @@ export default function AdminCoursePage() {
 
   // Problem dialog
   const [problemOpen, setProblemOpen] = useState(false);
+  const [editProblemOpen, setEditProblemOpen] = useState(false);
+  const [selectedProblem, setSelectedProblem] = useState<Problem | null>(null);
 
   // Assignment create/edit dialog state
   const [editAssignmentOpen, setEditAssignmentOpen] = useState(false);
@@ -120,6 +123,11 @@ export default function AdminCoursePage() {
   const handleProblemDeleteClick = useCallback((problemId: string) => {
     setPendingDelete({ id: problemId, type: 'problem' });
     setConfirmOpen(true);
+  }, []);
+
+  const handleProblemEditClick = useCallback((problem: Problem) => {
+    setSelectedProblem(problem);
+    setEditProblemOpen(true);
   }, []);
 
   // Actually delete assignment or problem and update UI
@@ -219,6 +227,11 @@ export default function AdminCoursePage() {
   const assignmentColumns = useAssignmentColumns(
     handleAssignmentDeleteClick,
     handleAssignmentEditClick,
+  );
+
+  const problemCols = useMemo(
+    () => problemColumns({ onEdit: handleProblemEditClick, onDelete: handleProblemDeleteClick }),
+    [handleProblemEditClick, handleProblemDeleteClick],
   );
 
   if (!course) return <div className="p-6">Loading course...</div>;
@@ -357,10 +370,7 @@ export default function AdminCoursePage() {
             </CardHeader>
             <CardContent className="overflow-x-auto">
               {course.problems.length ? (
-                <DataTable
-                  columns={problemColumns(handleProblemDeleteClick)}
-                  data={course.problems}
-                />
+                <DataTable columns={problemCols} data={course.problems} />
               ) : (
                 <p className="text-muted-foreground italic">No problems added.</p>
               )}
@@ -465,6 +475,30 @@ export default function AdminCoursePage() {
           open={editAssignmentOpen}
           setOpen={setEditAssignmentOpen}
           onSave={handleAssignmentSave}
+        />
+      )}
+
+      {selectedProblem && (
+        <EditProblemDialog
+          problem={selectedProblem}
+          open={editProblemOpen}
+          setOpen={(val) => {
+            setEditProblemOpen(val);
+            if (!val) setSelectedProblem(null); // clear selection on close
+          }}
+          onSaved={(updated) => {
+            if (updated) {
+              setCourse((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      problems: prev.problems.map((p) => (p.id === updated.id ? updated : p)),
+                    }
+                  : prev,
+              );
+              toast.success('Problem updated!');
+            }
+          }}
         />
       )}
 

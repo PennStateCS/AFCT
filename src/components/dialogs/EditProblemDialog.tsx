@@ -11,10 +11,10 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import InputGroup from '@/components/ui/InputGroup';
+import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 
 import { useEffect, useMemo } from 'react';
@@ -22,44 +22,43 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 
-import {
-  CreateProblemSchema,
-  ProblemTypeEnum,
-  type CreateProblemRaw,
-  type CreateProblemInput,
-} from '@/schemas/problem';
+import type { Problem } from '@prisma/client';
+import { ProblemFormSchema, UpdateProblemSchema, ProblemTypeEnum } from '@/schemas/problem';
 
-type CreateProblemDialogProps = {
+type EditProblemDialogProps = {
+  problem: Problem;
   open: boolean;
   setOpen: (open: boolean) => void;
-  courseId: string;
-  onCreated?: (created?: any) => void;
+  onSaved?: (updated?: Problem) => void;
 };
 
-// RHF state BEFORE transforms
-type FormValues = CreateProblemRaw;
-// Parsed AFTER Zod transforms
-type ParsedValues = CreateProblemInput;
+// RHF state BEFORE transforms (matches ProblemFormSchema input)
+type FormValues = z.input<typeof ProblemFormSchema>;
+type ParsedValues = z.output<typeof ProblemFormSchema>;
 
-// Default to FA + Unlimited, 100 states (disabled when unlimited)
-export function CreateProblemDialog({
-  open,
-  setOpen,
-  courseId,
-  onCreated,
-}: CreateProblemDialogProps) {
+// Helpers to adapt persisted values to the form model
+function deriveUnlimited(maxStates: number | null): boolean {
+  // Treat null or negative as unlimited
+  return maxStates == null || maxStates < 0;
+}
+function deriveMaxStates(maxStates: number | null): number {
+  // Use stored value if valid; otherwise a reasonable default for the input
+  return maxStates && maxStates > 0 ? maxStates : 100;
+}
+
+export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProblemDialogProps) {
   const defaults: FormValues = useMemo(
     () => ({
-      title: '',
-      description: '',
-      type: 'FA',
-      isUnlimited: true,
-      maxStates: 100,
-      isDeterministic: false,
-      file: undefined as any,
-      courseId,
+      title: problem.title ?? '',
+      description: problem.description ?? '',
+      type: problem.type as z.infer<typeof ProblemTypeEnum>,
+      isUnlimited: deriveUnlimited(problem.maxStates as any),
+      maxStates: deriveMaxStates(problem.maxStates as any),
+      isDeterministic: problem.type === 'FA' ? !!(problem as any).isDeterministic : false,
+      file: undefined as any, // optional in edit; user can choose a new file
+      courseId: problem.courseId,
     }),
-    [courseId],
+    [problem],
   );
 
   const {
@@ -67,24 +66,26 @@ export function CreateProblemDialog({
     handleSubmit,
     reset,
     watch,
-    formState: { errors, isSubmitting, isValid },
+    formState: { errors, isSubmitting, isDirty, isValid },
   } = useForm<FormValues>({
-    resolver: zodResolver(CreateProblemSchema),
+    resolver: zodResolver(ProblemFormSchema),
     defaultValues: defaults,
     mode: 'onBlur',
     reValidateMode: 'onChange',
   });
 
+  // Drive conditional UI
   const type = watch('type');
   const isUnlimited = watch('isUnlimited');
 
+  // Reset when opening/closing (prevents touched/error flicker)
   useEffect(() => {
     if (open) {
       reset(defaults, {
         keepDirty: false,
         keepTouched: false,
         keepErrors: false,
-        keepValues: false,
+        keepValues: true,
       });
     } else {
       reset(defaults, {
@@ -105,35 +106,52 @@ export function CreateProblemDialog({
     });
 
   const onSubmit = async (raw: FormValues) => {
-    const values: ParsedValues = CreateProblemSchema.parse(raw);
+    // 1) Normalize with form schema
+    const parsed: ParsedValues = ProblemFormSchema.parse(raw);
+    // 2) Enforce update contract with id (file stays optional)
+    const payload = UpdateProblemSchema.parse({
+      id: problem.id,
+      ...parsed,
+    });
 
     const formData = new FormData();
-    formData.append('title', values.title);
-    formData.append('description', values.description ?? '');
-    formData.append('type', values.type);
-    formData.append('courseId', values.courseId);
+    formData.append('title', payload.title);
+    formData.append('description', payload.description ?? '');
+    formData.append('type', payload.type);
+    formData.append('courseId', payload.courseId);
 
-    if (values.type === 'FA' || values.type === 'PDA') {
-      formData.append('maxStates', values.isUnlimited ? '-1' : String(values.maxStates ?? 0));
+    // FA/PDA maxStates normalization
+    if (payload.type === 'FA' || payload.type === 'PDA') {
+      const normalizedMax = payload.isUnlimited ? -1 : Number(payload.maxStates ?? 0);
+      formData.append('maxStates', String(normalizedMax));
     }
-    if (values.type === 'FA') {
-      formData.append('isDeterministic', String(!!values.isDeterministic));
+
+    // FA determinism toggle
+    if (payload.type === 'FA') {
+      formData.append('isDeterministic', String(!!payload.isDeterministic));
     }
 
-    formData.append('file', values.file);
+    // Include file ONLY if user selected a new one
+    if (payload.file instanceof File) {
+      formData.append('file', payload.file);
+    }
 
-    const res = await fetch('/api/problems', { method: 'POST', body: formData });
+    const res = await fetch(`/api/problems/${problem.id}`, {
+      method: 'PUT',
+      body: formData,
+    });
 
-    if (res.ok) {
-      const created = await res.json().catch(() => null);
-      toast.success('Problem created successfully');
-      onCreated?.(created);
-      resetForm();
-      setOpen(false);
-    } else {
+    if (!res.ok) {
       const msg = await safeMessage(res);
-      toast.error(msg ?? 'Failed to create problem.');
+      toast.error(msg ?? 'Failed to update problem.');
+      return;
     }
+
+    const updated = (await res.json().catch(() => null)) as Problem | null;
+    toast.success('Problem updated.');
+    resetForm(); // clear RHF state before closing
+    onSaved?.(updated ?? undefined);
+    setOpen(false);
   };
 
   return (
@@ -146,10 +164,8 @@ export function CreateProblemDialog({
     >
       <DialogContent className="bg-card max-w-lg">
         <DialogHeader>
-          <DialogTitle>Create Problem</DialogTitle>
-          <DialogDescription>
-            Fill in the problem details and upload the solution file.
-          </DialogDescription>
+          <DialogTitle>Edit Problem</DialogTitle>
+          <DialogDescription>Update the problem details and save your changes.</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -273,14 +289,14 @@ export function CreateProblemDialog({
             </div>
           )}
 
-          {/* File (avoid InputGroup; file inputs must be uncontrolled) */}
+          {/* File (optional in edit) */}
           <Controller
             control={control}
             name="file"
             render={({ field }) => (
               <div>
                 <Label htmlFor="answer-file" className="mb-2 block">
-                  Answer File
+                  Replace Answer File (optional)
                 </Label>
                 <Input
                   id="answer-file"
@@ -299,8 +315,18 @@ export function CreateProblemDialog({
                 Cancel
               </Button>
             </DialogClose>
-            <Button type="submit" disabled={!isValid || isSubmitting}>
-              {isSubmitting ? 'Creating…' : 'Create Problem'}
+            <Button
+              type="submit"
+              disabled={!isValid || !isDirty || isSubmitting}
+              title={
+                !isValid
+                  ? 'Fix validation errors to save'
+                  : !isDirty
+                    ? 'No changes to save'
+                    : undefined
+              }
+            >
+              {isSubmitting ? 'Saving…' : 'Save Changes'}
             </Button>
           </DialogFooter>
         </form>

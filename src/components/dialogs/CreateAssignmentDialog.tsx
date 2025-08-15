@@ -21,10 +21,11 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 
-import { CreateAssignmentSchema } from '@/schemas';
+// ✅ Import assignment schemas directly to avoid barrel/cycle issues
+import { CreateAssignmentSchema } from '@/schemas/assignment';
 
-type FormValues = z.input<typeof CreateAssignmentSchema>; // RHF state (strings for datetime-local)
-type ParsedValues = z.output<typeof CreateAssignmentSchema>; // parsed by Zod (Date, numbers)
+type FormValues = z.input<typeof CreateAssignmentSchema>; // strings for datetime-local
+type ParsedValues = z.output<typeof CreateAssignmentSchema>; // Dates, coerced numbers
 
 type CreateAssignmentDialogProps = {
   open: boolean;
@@ -33,13 +34,21 @@ type CreateAssignmentDialogProps = {
   onCreate?: (assignment: any) => void;
 };
 
-function defaultDueLocalString(): string {
-  const now = new Date();
-  // today at 23:59 local
-  now.setHours(23, 59, 0, 0);
+function nowLocalString(): string {
+  const d = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(
-    now.getMinutes(),
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
+    d.getMinutes(),
+  )}`;
+}
+
+// Default to “today at 23:59”
+function defaultDueLocalString(): string {
+  const d = new Date();
+  d.setHours(23, 59, 0, 0);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
+    d.getMinutes(),
   )}`;
 }
 
@@ -49,14 +58,15 @@ export function CreateAssignmentDialog({
   courseId,
   onCreate,
 }: CreateAssignmentDialogProps) {
+  // Form defaults (strings for datetime-local fields)
   const defaults: FormValues = useMemo(
     () => ({
       title: '',
       description: '',
       maxPoints: 100,
       dueDate: defaultDueLocalString(),
-      courseId,
       isPublished: false,
+      courseId,
     }),
     [courseId],
   );
@@ -66,7 +76,7 @@ export function CreateAssignmentDialog({
     handleSubmit,
     reset,
     watch,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isValid },
   } = useForm<FormValues>({
     resolver: zodResolver(CreateAssignmentSchema),
     defaultValues: defaults,
@@ -74,7 +84,7 @@ export function CreateAssignmentDialog({
     reValidateMode: 'onChange',
   });
 
-  // Reset when closed from outside, and refresh defaults when opened
+  // Refresh defaults on open; also clear state on close to avoid flicker
   useEffect(() => {
     if (open) {
       reset(
@@ -91,8 +101,17 @@ export function CreateAssignmentDialog({
     }
   }, [open, defaults, reset]);
 
+  const resetForm = () =>
+    reset(defaults, {
+      keepDirty: false,
+      keepTouched: false,
+      keepErrors: false,
+      keepValues: false,
+    });
+
   const onSubmit = async (raw: FormValues) => {
-    const values: ParsedValues = CreateAssignmentSchema.parse(raw); // normalize/transform
+    // Normalize & transform via Zod
+    const values: ParsedValues = CreateAssignmentSchema.parse(raw);
 
     const payload = {
       ...values,
@@ -110,13 +129,7 @@ export function CreateAssignmentDialog({
       const created = await res.json().catch(() => null);
       toast.success('Assignment created successfully');
       onCreate?.(created);
-      // reset before close to avoid any error flash
-      reset(defaults, {
-        keepDirty: false,
-        keepTouched: false,
-        keepErrors: false,
-        keepValues: false,
-      });
+      resetForm(); // clear RHF state before closing (prevents error flash)
       setOpen(false);
     } else {
       const msg = await safeMessage(res);
@@ -124,15 +137,6 @@ export function CreateAssignmentDialog({
     }
   };
 
-  const resetForm = () =>
-    reset(defaults, {
-      keepDirty: false,
-      keepTouched: false,
-      keepErrors: false,
-      keepValues: false,
-    });
-
-  // Watch fields if you want live constraints (e.g., min dueDate) — here just example:
   const dueStr = watch('dueDate');
 
   return (
@@ -160,6 +164,8 @@ export function CreateAssignmentDialog({
                 name="title"
                 fieldProps={field}
                 error={errors.title?.message}
+                showStatus
+                isValid={!errors.title && !!field.value}
               />
             )}
           />
@@ -199,8 +205,8 @@ export function CreateAssignmentDialog({
                   onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
                     field.onChange(e.target.value),
                 }}
-                // optional: prevent setting a past due
-                min={defaultDueLocalString().slice(0, 16)}
+                // Optional: prevent selecting a past time
+                min={nowLocalString()}
                 error={errors.dueDate?.message}
               />
             )}
@@ -244,17 +250,14 @@ export function CreateAssignmentDialog({
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => {
-                  // clear touched/dirty/errors before closing
-                  resetForm();
-                }}
+                onClick={resetForm} // clear touched/dirty/errors before closing
                 disabled={isSubmitting}
               >
                 Cancel
               </Button>
             </DialogClose>
 
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={!isValid || isSubmitting}>
               {isSubmitting ? 'Creating…' : 'Create Assignment'}
             </Button>
           </DialogFooter>
