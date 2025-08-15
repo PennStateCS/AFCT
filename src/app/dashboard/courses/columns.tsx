@@ -159,7 +159,7 @@ export const columns = (
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="menu">Manage</Button>
+              <Button variant="secondary">Manage</Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel className="flex items-center gap-2">
