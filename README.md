@@ -7,8 +7,15 @@ It serves as the **AFCT Dashboard** — a role-based course management platform 
 
 ## 🚀 Getting Started
 
-### 1️⃣ Install dependencies
+### 1️⃣ Install node.js
+1. Go to the download page for node.js: https://nodejs.org/en/download
+2. Scroll down to get a prebuilt Node.js
+3. Select your operating system with the appropriate architecture
+4. Click on one of the green boxes labled ```[operating system] Installer``` or ```Standalone Binary```
+5. Open installer or unzip files
 
+### 2️⃣ Install dependencies
+Run one of the following commands in the terminal for this repository (npm is recommended)
 ```bash
 npm install
 # or
@@ -19,7 +26,23 @@ pnpm install
 bun install
 ```
 
-### 2️⃣ Start the development server
+<br>
+
+_Possible Error:_
+
+If you recieve the following error:
+
+```
+ps1 cannot be loaded because running scripts is disabled on this system. For more informationm see about_Execution_Policies at http://go.microsoft.com/fwlink/?LinkID=135170.
+```
+
+Run the following in your terminal:
+
+```
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Unrestricted
+```
+
+### 3️⃣ Start the development server
 
 ```bash
 npm run dev
@@ -32,6 +55,17 @@ bun dev
 ```
 
 Your app will be running at **[http://localhost:3000](http://localhost:3000)**.
+
+<br>
+
+_Possible Error:_
+
+If the following is shown when accessing **[http://localhost:3000](http://localhost:3000)**:
+```
+@prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
+```
+
+Try ```npx prisma generate``` and then start the development server
 
 ---
 
