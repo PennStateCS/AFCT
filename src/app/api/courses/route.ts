@@ -1,6 +1,13 @@
-import { prisma } from '@/lib/prisma';
-import { NextResponse } from 'next/server';
+// /src/app/api/courses/route.ts
 
+import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { CreateCourseSchema } from '@/schemas';
+import { validationResponse } from '@/lib/zod-error';
+
+// ----------------------------------------
+// Utilities
+// ----------------------------------------
 async function generateUniqueCourseCode() {
   const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   const numbers = '0123456789';
@@ -29,23 +36,22 @@ async function generateUniqueCourseCode() {
   return code;
 }
 
+// ----------------------------------------
+// GET /api/courses
+// ----------------------------------------
 export async function GET() {
   try {
     const courses = await prisma.course.findMany({
       include: {
         roster: {
           include: {
-            user: {
-              select: { id: true, firstName: true, lastName: true, role: true },
-            },
+            user: { select: { id: true, firstName: true, lastName: true, role: true } },
           },
         },
         assignments: {
           include: {
             problems: {
-              include: {
-                problem: { select: { id: true } },
-              },
+              include: { problem: { select: { id: true } } },
             },
           },
         },
@@ -53,7 +59,7 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
     });
 
-    // Convert roster into grouped arrays
+    // Group roster by role
     const formatted = courses.map((c) => {
       const faculty = c.roster.filter((r) => r.role === 'FACULTY').map((r) => r.user);
       const tas = c.roster.filter((r) => r.role === 'TA').map((r) => r.user);
@@ -63,90 +69,106 @@ export async function GET() {
       return { ...rest, faculty, tas, students };
     });
 
-    return NextResponse.json(formatted);
+    return NextResponse.json(formatted, { status: 200 });
   } catch (error) {
     console.error('Failed to fetch courses:', error);
-    return new NextResponse('Internal Server Error', { status: 500 });
+    return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }
 }
 
+// ----------------------------------------
+// POST /api/courses
+// ----------------------------------------
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { name, code, semester, credits, startDate, endDate, isPublished, facultyIds } = body;
+    const json = await req.json();
 
-    if (
-      !name ||
-      !code ||
-      !semester ||
-      !credits ||
-      !startDate ||
-      !endDate ||
-      !Array.isArray(facultyIds)
-    ) {
-      return new NextResponse('Missing or invalid fields', { status: 400 });
+    // 1) Validate with the shared Zod schema (async supports future async refinements)
+    const data = await CreateCourseSchema.parseAsync(json);
+
+    // 2) Optional uniqueness check (code + semester)
+    const exists = await prisma.course.findFirst({
+      where: { code: data.code, semester: data.semester },
+      select: { id: true },
+    });
+    if (exists) {
+      return NextResponse.json(
+        { message: 'A course with that code and semester already exists.' },
+        { status: 409 },
+      );
     }
 
+    // 3) Generate a unique registration code
     const regCode = await generateUniqueCourseCode();
 
-    const course = await prisma.course.create({
-      data: {
-        name,
-        code,
-        regCode,
-        semester,
-        credits,
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
-        isPublished: isPublished ?? false,
-      },
-    });
-
-    if (facultyIds.length > 0) {
-      await prisma.roster.createMany({
-        data: facultyIds.map((userId: string) => ({
-          userId,
-          courseId: course.id,
-          role: 'FACULTY',
-        })),
+    // 4) Create course (and roster rows for faculty) in a transaction for consistency
+    const created = await prisma.$transaction(async (tx) => {
+      const course = await tx.course.create({
+        data: {
+          name: data.name,
+          code: data.code,
+          regCode,
+          semester: data.semester,
+          credits: data.credits,
+          startDate: data.startDate, // Date object is fine
+          endDate: data.endDate,
+          isPublished: data.isPublished ?? false,
+        },
       });
-    }
 
-    const createdCourse = await prisma.course.findUnique({
-      where: { id: course.id },
-      include: {
-        roster: {
-          include: {
-            user: { select: { id: true, firstName: true, lastName: true } },
+      if (data.facultyIds.length > 0) {
+        await tx.roster.createMany({
+          data: data.facultyIds.map((userId) => ({
+            userId,
+            courseId: course.id,
+            role: 'FACULTY',
+          })),
+        });
+      }
+
+      // Re-read with faculty populated for response
+      const withRoster = await tx.course.findUnique({
+        where: { id: course.id },
+        include: {
+          roster: {
+            include: {
+              user: { select: { id: true, firstName: true, lastName: true, role: true } },
+            },
           },
         },
-      },
-    });
+      });
 
-    const faculty =
-      createdCourse?.roster.filter((r) => r.role === 'FACULTY').map((r) => r.user) ?? [];
+      const faculty =
+        withRoster?.roster.filter((r) => r.role === 'FACULTY').map((r) => r.user) ?? [];
+
+      return { course, faculty };
+    });
 
     return NextResponse.json(
       {
         success: true,
         message: 'Course created successfully',
         course: {
-          id: course.id,
-          name: course.name,
-          code: course.code,
-          regCode: course.regCode,
-          semester: course.semester,
-          credits: course.credits,
-          startDate: course.startDate,
-          endDate: course.endDate,
-          isPublished: course.isPublished,
-          faculty,
+          id: created.course.id,
+          name: created.course.name,
+          code: created.course.code,
+          regCode: created.course.regCode,
+          semester: created.course.semester,
+          credits: created.course.credits,
+          startDate: created.course.startDate,
+          endDate: created.course.endDate,
+          isPublished: created.course.isPublished,
+          faculty: created.faculty,
         },
       },
       { status: 201 },
     );
-  } catch (error) {
-    console.error('Failed to create course:', error);
-    return new NextResponse('Internal Server Error', { status: 500 });
+  } catch (err) {
+    // If it’s a Zod error, send normalized validation issues
+    const resp = validationResponse(err);
+    if (resp.status === 400) return resp;
+
+    console.error('Failed to create course:', err);
+    return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }
 }
