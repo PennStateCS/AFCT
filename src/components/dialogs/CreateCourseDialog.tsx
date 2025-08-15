@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogClose,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -15,86 +16,116 @@ import { User } from '@prisma/client';
 import { toast } from 'sonner';
 import InputGroup from '@/components/ui/InputGroup';
 
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import {
+  CreateCourseSchema, // Zod schema (includes publish/faculty rule)
+} from '@/schemas/course';
+import { z } from 'zod';
+
+// RHF form state = Zod INPUT (strings for datetime-local)
+type FormValues = z.input<typeof CreateCourseSchema>;
+// Parsed values returned by Zod (Dates, normalized code, coerced credits)
+type ParsedValues = z.output<typeof CreateCourseSchema>;
+
 interface CreateCourseDialogProps {
   open: boolean;
   setOpen: (open: boolean) => void;
   onSuccess?: () => void;
 }
 
+// Helpers for min attribute etc.
+function toDateTimeLocalString(d?: Date | string): string {
+  if (!d) return '';
+  const date = new Date(d);
+  if (isNaN(date.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const tzOffsetMs = date.getTimezoneOffset() * 60000;
+  const local = new Date(date.getTime() - tzOffsetMs);
+  return `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())}T${pad(local.getHours())}:${pad(local.getMinutes())}`;
+}
+
 export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDialogProps) {
-  const [formData, setFormData] = useState({
-    name: '',
-    code: '',
-    semester: '',
-    credits: 3,
-    startDate: '',
-    endDate: '',
-    isPublished: false,
-    facultyIds: [] as string[],
-  });
-
-  const [facultyList, setFacultyList] = useState<User[]>([]);
-
-  useEffect(() => {
-    const fetchFaculty = async () => {
-      const res = await fetch('/api/users?role=FACULTY');
-      const data = await res.json();
-      setFacultyList(data);
-    };
-    if (open) fetchFaculty();
-  }, [open]);
-
-  const resetForm = () => {
-    setFormData({
+  // Default form values (strings for datetime-local)
+  const defaults: FormValues = useMemo(
+    () => ({
       name: '',
       code: '',
       semester: '',
       credits: 3,
-      startDate: '',
+      startDate: '', // <- strings for input type="datetime-local"
       endDate: '',
       isPublished: false,
       facultyIds: [],
+    }),
+    [],
+  );
+
+  const {
+    control,
+    handleSubmit,
+    reset,
+    watch,
+    formState: { errors, isSubmitting },
+  } = useForm<FormValues>({
+    resolver: zodResolver(CreateCourseSchema),
+    defaultValues: defaults,
+    mode: 'onBlur',
+    reValidateMode: 'onChange',
+  });
+
+  const isPublished = watch('isPublished');
+  const startDateStr = watch('startDate'); // string (YYYY-MM-DDTHH:MM)
+
+  // Fetch faculty list when dialog opens
+  const [facultyList, setFacultyList] = useState<User[]>([]);
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      try {
+        const res = await fetch('/api/users?role=FACULTY');
+        if (!res.ok) throw new Error('Failed to load faculty');
+        const data = await res.json();
+        setFacultyList(data);
+      } catch {
+        toast.error('Failed to load faculty list.');
+      }
+    })();
+  }, [open]);
+
+  const resetForm = () =>
+    reset(defaults, {
+      keepDirty: false,
+      keepTouched: false,
+      keepErrors: false,
+      keepValues: false,
     });
-  };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type, checked } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value,
-    }));
-  };
+  const onSubmit = async (raw: FormValues) => {
+    // Parse with Zod: code uppercased, credits coerced, dates transformed to Date
+    const values: ParsedValues = CreateCourseSchema.parse(raw);
 
-  const handleFacultySelect = (id: string) => {
-    setFormData((prev) => {
-      const alreadySelected = prev.facultyIds.includes(id);
-      return {
-        ...prev,
-        facultyIds: alreadySelected
-          ? prev.facultyIds.filter((fid) => fid !== id)
-          : [...prev.facultyIds, id],
-      };
-    });
-  };
+    const payload = {
+      ...values,
+      credits: Number(values.credits),
+      startDate: values.startDate?.toISOString(),
+      endDate: values.endDate?.toISOString(),
+    };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
     const res = await fetch('/api/courses', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...formData,
-        credits: Number(formData.credits),
-      }),
+      body: JSON.stringify(payload),
     });
 
     if (res.ok) {
       toast.success('Course created successfully');
-      setOpen(false);
       resetForm();
+      setOpen(false);
       onSuccess?.();
     } else {
-      toast.error('Failed to create course');
+      const msg = await safeMessage(res);
+      toast.error(msg ?? 'Failed to create course');
     }
   };
 
@@ -103,93 +134,203 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
       open={open}
       onOpenChange={(val) => {
         setOpen(val);
-        if (!val) resetForm();
+        if (!val) resetForm(); // also reset when closed from outside
       }}
     >
       <DialogContent className="bg-card max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Create New Course</DialogTitle>
+          <DialogTitle>Create Course</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <InputGroup
-            label="Course Name"
+
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {/* NAME */}
+          <Controller
+            control={control}
             name="name"
-            value={formData.name}
-            setValue={(val) => setFormData((prev) => ({ ...prev, name: val }))}
+            render={({ field }) => (
+              <InputGroup
+                label="Course Name"
+                name="name"
+                fieldProps={field}
+                error={errors.name?.message}
+              />
+            )}
           />
 
-          <InputGroup
-            label="Course Code"
+          {/* CODE */}
+          <Controller
+            control={control}
             name="code"
-            value={formData.code}
-            setValue={(val) => setFormData((prev) => ({ ...prev, code: val }))}
+            render={({ field }) => (
+              <InputGroup
+                label="Course Code"
+                name="code"
+                fieldProps={field}
+                placeholder="e.g., CMPSC 221"
+                error={errors.code?.message}
+                showStatus
+                isValid={!errors.code && !!field.value}
+              />
+            )}
           />
 
-          <InputGroup
-            label="Semester"
+          {/* SEMESTER */}
+          <Controller
+            control={control}
             name="semester"
-            value={formData.semester}
-            setValue={(val) => setFormData((prev) => ({ ...prev, semester: val }))}
+            render={({ field }) => (
+              <InputGroup
+                label="Semester"
+                name="semester"
+                fieldProps={field}
+                placeholder="Fall 2025"
+                error={errors.semester?.message}
+              />
+            )}
           />
 
-          <InputGroup
-            label="Credits"
+          {/* CREDITS */}
+          <Controller
+            control={control}
             name="credits"
-            type="number"
-            value={formData.credits.toString()}
-            setValue={(val) => setFormData((prev) => ({ ...prev, credits: Number(val) }))}
+            render={({ field }) => (
+              <InputGroup
+                label="Credits"
+                name="credits"
+                type="number"
+                fieldProps={field}
+                min={1}
+                max={6}
+                step={1}
+                error={errors.credits?.message}
+              />
+            )}
           />
 
-          <InputGroup
-            label="Start Date"
+          {/* START datetime-local (string) */}
+          <Controller
+            control={control}
             name="startDate"
-            type="date"
-            value={formData.startDate}
-            setValue={(val) => setFormData((prev) => ({ ...prev, startDate: val }))}
+            render={({ field }) => (
+              <InputGroup
+                label="Start Date & Time"
+                name="startDate"
+                type="datetime-local"
+                fieldProps={{
+                  ...field,
+                  value: field.value ?? '', // expect a string for datetime-local
+                  onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                    field.onChange(e.target.value),
+                }}
+                error={errors.startDate?.message}
+              />
+            )}
           />
 
-          <InputGroup
-            label="End Date"
+          {/* END datetime-local (string) */}
+          <Controller
+            control={control}
             name="endDate"
-            type="date"
-            value={formData.endDate}
-            setValue={(val) => setFormData((prev) => ({ ...prev, endDate: val }))}
+            render={({ field }) => (
+              <InputGroup
+                label="End Date & Time"
+                name="endDate"
+                type="datetime-local"
+                fieldProps={{
+                  ...field,
+                  value: field.value ?? '',
+                  onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                    field.onChange(e.target.value),
+                }}
+                error={errors.endDate?.message}
+                min={startDateStr || undefined} // prevent picking an end earlier than start
+              />
+            )}
           />
 
+          {/* PUBLISH SWITCH */}
           <div className="flex items-center justify-between">
             <Label htmlFor="isPublished">Publish Now</Label>
-            <Switch
-              id="isPublished"
-              checked={formData.isPublished}
-              onCheckedChange={(checked) =>
-                setFormData((prev) => ({ ...prev, isPublished: !!checked }))
-              }
+            <Controller
+              control={control}
+              name="isPublished"
+              render={({ field }) => (
+                <Switch
+                  id="isPublished"
+                  checked={!!field.value}
+                  onCheckedChange={(checked) => field.onChange(!!checked)}
+                />
+              )}
             />
           </div>
 
+          {/* FACULTY PICKER */}
           <div>
             <Label>Assign Faculty</Label>
             <div className="mt-1 max-h-40 space-y-1 overflow-y-auto rounded border p-2">
-              {facultyList.map((faculty) => (
-                <label key={faculty.id} className="flex items-center space-x-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={formData.facultyIds.includes(faculty.id)}
-                    onChange={() => handleFacultySelect(faculty.id)}
-                  />
-                  <span>
-                    {faculty.firstName} {faculty.lastName}
-                  </span>
-                </label>
-              ))}
+              <Controller
+                control={control}
+                name="facultyIds"
+                render={({ field }) => (
+                  <>
+                    {facultyList.map((faculty) => {
+                      const checked = (field.value ?? []).includes(faculty.id);
+                      return (
+                        <label key={faculty.id} className="flex items-center space-x-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              const set = new Set(field.value ?? []);
+                              if (set.has(faculty.id)) set.delete(faculty.id);
+                              else set.add(faculty.id);
+                              field.onChange(Array.from(set));
+                            }}
+                          />
+                          <span>
+                            {faculty.firstName} {faculty.lastName}
+                          </span>
+                        </label>
+                      );
+                    })}
+                    {errors.facultyIds && isPublished ? (
+                      <p className="mt-1 text-xs text-red-600">{errors.facultyIds.message}</p>
+                    ) : null}
+                  </>
+                )}
+              />
             </div>
           </div>
 
           <DialogFooter>
-            <Button type="submit">Create Course</Button>
+            <DialogClose asChild>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  // Clear touched/dirty/errors to avoid red flash on close
+                  resetForm();
+                }}
+              >
+                Cancel
+              </Button>
+            </DialogClose>
+
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? 'Creating…' : 'Create Course'}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
   );
+}
+
+async function safeMessage(res: Response) {
+  try {
+    const data = await res.json();
+    return data?.message ?? null;
+  } catch {
+    return null;
+  }
 }

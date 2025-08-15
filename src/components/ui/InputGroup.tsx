@@ -1,98 +1,228 @@
 'use client';
 
+import * as React from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { CheckCircle, XCircle, Eye, EyeOff } from 'lucide-react';
-import React from 'react';
+import { cn } from '@/lib/utils';
 
-interface InputGroupProps {
+type RHFFieldProps =
+  | Pick<
+      React.InputHTMLAttributes<HTMLInputElement>,
+      'name' | 'onChange' | 'onBlur' | 'value' | 'ref'
+    >
+  | Record<string, never>; // allow not using RHF
+
+interface InputGroupProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> {
+  /** Visible label text */
   label: string;
-  value: string;
-  setValue: (val: string) => void;
-  type?: string;
+  /** Field name (use the same as RHF schema key) */
+  name: string;
+
+  /** RHF field props: pass `{...field}` from Controller or `{...register('name')}` */
+  fieldProps?: RHFFieldProps;
+
+  /** Validation error message (from Zod/RHF) */
+  error?: string;
+  /** Optional helper/description under the field */
+  description?: string;
+
+  /** Show async/valid/invalid status area on the right */
   showStatus?: boolean;
+  /** Current validity when showStatus is enabled */
   isValid?: boolean;
+  /** Async checking indicator text or boolean */
+  isChecking?: boolean | string;
+
+  /** Show an eye to toggle password visibility */
   showEye?: boolean;
-  isPasswordVisible?: boolean;
-  togglePasswordVisibility?: () => void;
-  isChecking?: boolean;
-  onBlur?: () => void;
+
+  /** Force required markup/ARIA; leave undefined to control via schema */
+  requiredMark?: boolean;
+
+  /** Extra className for wrapper */
+  className?: string;
+
+  /** For controlled usage without RHF */
+  setValue?: (val: string) => void;
+
+  /** Override input type; defaults to 'text' */
+  type?: string;
 }
 
-export default function InputGroup({
-  label,
-  value,
-  setValue,
-  type = 'text',
-  showStatus,
-  isValid,
-  showEye,
-  isPasswordVisible,
-  togglePasswordVisibility,
-  isChecking,
-  onBlur,
-}: InputGroupProps) {
-  const inputClassName = showEye && showStatus ? 'pr-16' : showEye || showStatus ? 'pr-10' : '';
+/**
+ * InputGroup
+ * - Works with RHF (pass fieldProps={...field} and error from formState.errors)
+ * - Works without RHF (pass value + setValue)
+ * - Shows status icons/eye toggle and error/description text
+ */
+const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function InputGroup(
+  {
+    label,
+    name,
+    fieldProps,
+    error,
+    description,
+    showStatus,
+    isValid,
+    isChecking,
+    showEye,
+    requiredMark,
+    className,
+    setValue,
+    type = 'text',
+    id,
+    value,
+    onBlur,
+    placeholder,
+    disabled,
+    ...rest
+  },
+  _ref,
+) {
+  const inputId = id ?? name;
+  const describedByIds = [error ? `${inputId}-error` : null, description ? `${inputId}-desc` : null]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
+  // Merge RHF field props if provided
+  const rhfName = (fieldProps as any)?.name as string | undefined;
+  const rhfValue = (fieldProps as any)?.value as any;
+  const rhfOnChange = (fieldProps as any)?.onChange as ((e: any) => void) | undefined;
+  const rhfOnBlur = (fieldProps as any)?.onBlur as ((e: any) => void) | undefined;
+  const rhfRef = (fieldProps as any)?.ref as React.Ref<HTMLInputElement> | undefined;
+
+  // Internal password visibility (only if showEye)
+  const [pwdVisible, setPwdVisible] = React.useState(false);
+  const isPasswordType = type === 'password';
+  const effectiveType = showEye && isPasswordType ? (pwdVisible ? 'text' : 'password') : type;
+
+  // Decide right padding based on adornments
+  const hasStatus = !!showStatus;
+  const hasEye = !!showEye && isPasswordType;
+  const inputPaddingRight = hasStatus && hasEye ? 'pr-16' : hasStatus || hasEye ? 'pr-10' : '';
+
+  // Unified change/blur handlers: prefer RHF, then controlled, then noop
+  const handleChange = (evt: React.ChangeEvent<HTMLInputElement>) => {
+    if (rhfOnChange) return rhfOnChange(evt);
+    if (setValue) return setValue(evt.target.value);
+  };
+  const handleBlur = (evt: React.FocusEvent<HTMLInputElement>) => {
+    if (rhfOnBlur) return rhfOnBlur(evt);
+    if (onBlur) return onBlur(evt);
+  };
+
+  // Determine current value: prefer RHF, then controlled prop `value`
+  const currValue = rhfValue ?? value ?? '';
 
   return (
-    <div className="flex flex-col">
-      <Label className="pb-2">{label}</Label>
+    <div className={cn('flex flex-col', className)}>
+      <Label className="pb-2" htmlFor={inputId}>
+        {label}
+        {requiredMark ? <span className="text-red-600"> *</span> : null}
+      </Label>
+
       <div className="relative">
         <Input
-          type={type}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onBlur={onBlur}
-          required
-          className={inputClassName}
+          id={inputId}
+          name={rhfName ?? name}
+          ref={rhfRef as any}
+          type={effectiveType}
+          value={currValue}
+          onChange={handleChange}
+          onBlur={handleBlur}
+          placeholder={placeholder}
+          disabled={disabled}
+          aria-invalid={!!error || undefined}
+          aria-describedby={describedByIds || undefined}
+          className={cn(inputPaddingRight)}
+          {...rest}
         />
 
-        {/* Case: both status and eye icon */}
-        {showStatus && showEye && (
+        {/* STATUS + EYE together */}
+        {hasStatus && hasEye && (
           <>
             <div className="absolute inset-y-0 right-10 flex items-center pr-1">
-              {isChecking ? (
-                <span className="text-muted-foreground text-xs italic">Checking...</span>
-              ) : value.length > 0 && isValid !== undefined ? (
-                isValid ? (
-                  <CheckCircle size={18} className="text-green-600" />
-                ) : (
-                  <XCircle size={18} className="text-red-500" />
-                )
-              ) : null}
+              <StatusAdornment
+                isChecking={isChecking}
+                isValid={isValid}
+                hasValue={String(currValue).length > 0}
+              />
             </div>
             <div className="absolute inset-y-0 right-3 flex items-center">
-              <button type="button" onClick={togglePasswordVisibility}>
-                {isPasswordVisible ? <EyeOff size={18} /> : <Eye size={18} />}
+              <button
+                type="button"
+                onClick={() => setPwdVisible((s) => !s)}
+                aria-label={pwdVisible ? 'Hide password' : 'Show password'}
+                className="text-muted-foreground transition-opacity hover:opacity-80"
+              >
+                {pwdVisible ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
           </>
         )}
 
-        {/* Case: only status icon */}
-        {showStatus && !showEye && (
+        {/* STATUS only */}
+        {hasStatus && !hasEye && (
           <div className="absolute inset-y-0 right-3 flex items-center">
-            {isChecking ? (
-              <span className="text-muted-foreground text-xs italic">Checking...</span>
-            ) : value.length > 0 && isValid !== undefined ? (
-              isValid ? (
-                <CheckCircle size={18} className="text-green-600" />
-              ) : (
-                <XCircle size={18} className="text-red-500" />
-              )
-            ) : null}
+            <StatusAdornment
+              isChecking={isChecking}
+              isValid={isValid}
+              hasValue={String(currValue).length > 0}
+            />
           </div>
         )}
 
-        {/* Case: only eye icon */}
-        {!showStatus && showEye && (
+        {/* EYE only */}
+        {!hasStatus && hasEye && (
           <div className="absolute inset-y-0 right-3 flex items-center">
-            <button type="button" onClick={togglePasswordVisibility}>
-              {isPasswordVisible ? <EyeOff size={18} /> : <Eye size={18} />}
+            <button
+              type="button"
+              onClick={() => setPwdVisible((s) => !s)}
+              aria-label={pwdVisible ? 'Hide password' : 'Show password'}
+              className="text-muted-foreground transition-opacity hover:opacity-80"
+            >
+              {pwdVisible ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           </div>
         )}
       </div>
+
+      {/* Description / Error */}
+      {description ? (
+        <p id={`${inputId}-desc`} className="text-muted-foreground mt-1 text-xs">
+          {description}
+        </p>
+      ) : null}
+      {error ? (
+        <p id={`${inputId}-error`} className="mt-1 text-xs text-red-600">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
+});
+
+function StatusAdornment({
+  isChecking,
+  isValid,
+  hasValue,
+}: {
+  isChecking?: boolean | string;
+  isValid?: boolean;
+  hasValue: boolean;
+}) {
+  if (isChecking) {
+    const text = typeof isChecking === 'string' ? isChecking : 'Checking...';
+    return <span className="text-muted-foreground text-xs italic">{text}</span>;
+  }
+  if (!hasValue || isValid === undefined) return null;
+  return isValid ? (
+    <CheckCircle size={18} className="text-green-600" aria-label="Valid" />
+  ) : (
+    <XCircle size={18} className="text-red-500" aria-label="Invalid" />
+  );
 }
+
+export default InputGroup;
