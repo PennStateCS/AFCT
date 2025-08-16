@@ -1,3 +1,5 @@
+// prisma/seed.ts
+
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 
@@ -88,7 +90,12 @@ async function main() {
   // Create Sample Students
   const students = [];
   const studentData = [
-    { email: 'student@example.com', firstName: 'Oliver', lastName: 'Green', avatar: 'cmdc7t2xq0007lvu0v3e504di_1753582590136_a9b637f5-e376-4e56-80c9-4f5f94ae795c.avif' },
+    {
+      email: 'student@example.com',
+      firstName: 'Oliver',
+      lastName: 'Green',
+      avatar: 'cmdc7t2xq0007lvu0v3e504di_1753582590136_a9b637f5-e376-4e56-80c9-4f5f94ae795c.avif',
+    },
     { email: 'student1@example.com', firstName: 'Peter', lastName: 'Parker' },
     { email: 'student2@example.com', firstName: 'Tony', lastName: 'Stark' },
     { email: 'student3@example.com', firstName: 'Steve', lastName: 'Rogers' },
@@ -103,16 +110,31 @@ async function main() {
     { email: 'student12@example.com', firstName: 'Hope', lastName: 'Van Dyne' },
     { email: 'student13@example.com', firstName: 'Carol', lastName: 'Danvers' },
     { email: 'student14@example.com', firstName: 'Stephen', lastName: 'Strange' },
-    { email: 'student15@example.com', firstName: 'T\'Challa', lastName: 'Wakanda' },
+    { email: 'student15@example.com', firstName: "T'Challa", lastName: 'Wakanda' },
     { email: 'student16@example.com', firstName: 'Shuri', lastName: 'Wakanda' },
     { email: 'student17@example.com', firstName: 'Kurt', lastName: 'Wagner' },
-    { email: 'student18@example.com', firstName: 'Jean', lastName: 'Gray', avatar: 'cmdc7t2xu000glvu06d3gotwx_1753583314285_c9b3ca75-5fcc-4fea-9e18-def9e438024c.jpg' },
+    {
+      email: 'student18@example.com',
+      firstName: 'Jean',
+      lastName: 'Gray',
+      avatar: 'cmdc7t2xu000glvu06d3gotwx_1753583314285_c9b3ca75-5fcc-4fea-9e18-def9e438024c.jpg',
+    },
     { email: 'student19@example.com', firstName: 'Logan', lastName: 'Howlett' },
     { email: 'student20@example.com', firstName: 'Ororo', lastName: 'Monroe' },
     { email: 'student21@example.com', firstName: 'Remy', lastName: 'LeBeau' },
-    { email: 'student22@example.com', firstName: 'Bruce', lastName: 'Banner', avatar: 'cmdc7t2y0000rlvu0j92i2qx1_1753583537015_57f649b2-6363-4eae-a809-8c8307717e02.jpg' },
+    {
+      email: 'student22@example.com',
+      firstName: 'Bruce',
+      lastName: 'Banner',
+      avatar: 'cmdc7t2y0000rlvu0j92i2qx1_1753583537015_57f649b2-6363-4eae-a809-8c8307717e02.jpg',
+    },
     { email: 'student23@example.com', firstName: 'Hank', lastName: 'McCoy' },
-    { email: 'student24@example.com', firstName: 'Miles', lastName: 'Morales', avatar: 'cmdc7t2y9000tlvu0hdcfufh2_1753583866075_43e50ce3-e083-43f1-9a14-a0ff19198e73.jpg' },
+    {
+      email: 'student24@example.com',
+      firstName: 'Miles',
+      lastName: 'Morales',
+      avatar: 'cmdc7t2y9000tlvu0hdcfufh2_1753583866075_43e50ce3-e083-43f1-9a14-a0ff19198e73.jpg',
+    },
     { email: 'student25@example.com', firstName: 'Gwen', lastName: 'Stacy' },
   ];
 
@@ -290,7 +312,8 @@ async function main() {
     create: {
       id: 'cmdnwyb8k0000lvjcjctu5em3',
       title: 'Chapter 1',
-      description: 'For this Chapter 1 homework, you will review the key concepts introduced in the first chapter, including basic terminology and foundational principles. The assignment consists of a mix problems. No submissions will be accepted late.',
+      description:
+        'For this Chapter 1 homework, you will review the key concepts introduced in the first chapter, including basic terminology and foundational principles. The assignment consists of a mix problems. No submissions will be accepted late.',
       dueDate: new Date('2026-06-29T03:59:00.000Z'),
       maxPoints: 100,
       isPublished: true,
