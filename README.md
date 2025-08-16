@@ -9,7 +9,49 @@ A modern **Next.js 15** application serving as a role-based course management pl
 - 💬 **Comments system** with student-specific filtering
 - 📊 **Grade tracking** and submission management
 - 🎨 **Modern UI** with Tailwind CSS and shadcn/ui
-- 🗄️ **Database flexibility** (SQLite for development, PostgreSQL for production)
+- 🗄️ **Database flexibility** (SQLite for development, PostgreSQL for ## 🔧 Troubleshooting
+
+### Automated Troubleshooting Tools
+
+**🆕 NEW**: The setup wizard now includes comprehensive troubleshooting tools!
+
+```bash
+# Run the setup wizard
+./scripts/setup-wizard.sh
+
+# Choose from new troubleshooting options:
+# 12) System Health Check    - Check system requirements and status
+# 13) View System Status     - Show installed components and versions  
+# 14) Database Troubleshooting - Diagnose and fix database issues
+```
+
+### Database Connection Testing
+
+**Test your database connections easily:**
+
+```bash
+# Test development database (SQLite)
+npm run db:test
+
+# Test production database (PostgreSQL)  
+npm run db:test:prod
+```
+
+### ERD Generation Issues
+
+**Fixed common ERD generation problems:**
+
+```bash
+# Safe generation without ERD (always works)
+npm run db:generate:safe
+
+# Generation with ERD (requires Chrome/Chromium)
+npm run db:generate:with-erd
+
+# The wizard now detects Chrome compatibility automatically!
+```
+
+### Common Issuesduction)
 - 🚀 **Cross-platform** development and deployment
 
 ## 🛠️ Tech Stack
@@ -625,10 +667,28 @@ npx prisma migrate dev
 
 #### Database Connection Issues
 
+**🆕 Use automated testing first:**
+
+```bash
+# Quick database connection test
+npm run db:test              # Development (SQLite)  
+npm run db:test:prod         # Production (PostgreSQL)
+
+# Or use the troubleshooting wizard
+./scripts/setup-wizard.sh    # Choose option 14
+```
+
+**Manual troubleshooting:**
+
 ```bash
 # Check your DATABASE_URL in .env.local
 # Ensure database server is running
 # Verify credentials and network access
+
+# For PostgreSQL specifically:
+sudo systemctl status postgresql  # Check service status
+sudo -u postgres psql -l          # List databases  
+sudo -u postgres psql -c "\du"    # List users
 ```
 
 #### Build Errors
