@@ -9,8 +9,8 @@
     "start": "cross-env NODE_ENV=production next start",
     "start:prod": "cross-env NODE_ENV=production dotenv -e .env.production -- next start",
     "lint": "next lint",
-    "seed": "ts-node prisma/seed.ts",
-    "seed:prod": "cross-env NODE_ENV=production dotenv -e .env.production -- ts-node prisma/seed.ts",
+    "seed": "prisma db seed",
+    "seed:prod": "cross-env NODE_ENV=production dotenv -e .env.production -- prisma db seed",
     "seed:simple": "node scripts/simple-seed.js",
     "db:generate": "prisma generate",
     "db:generate:prod": "cross-env NODE_ENV=production dotenv -e .env.production -- prisma generate --schema=prisma/schema.production.prisma",
@@ -27,6 +27,9 @@
     "db:test": "node scripts/test-db.js",
     "db:test:prod": "node scripts/test-db.js .env.production",
     "db:reset:prod": "echo 'Use setup wizard option 11 for safe production reset'"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.1",
@@ -71,6 +74,7 @@
     "sonner": "^2.0.6",
     "sql-formatter": "^15.6.6",
     "tailwind-merge": "^3.3.1",
+    "tsx": "^4.19.0",
     "zod": "^4.0.17"
   },
   "devDependencies": {
