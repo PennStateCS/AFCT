@@ -12,11 +12,11 @@ console.log('🚀 Starting production deployment...');
 try {
   // Set environment to production
   process.env.NODE_ENV = 'production';
-  
+
   // Copy production environment file if it exists
   const prodEnvPath = path.join(__dirname, '..', '.env.production');
   const envPath = path.join(__dirname, '..', '.env');
-  
+
   if (fs.existsSync(prodEnvPath)) {
     console.log('📄 Copying production environment file...');
     fs.copyFileSync(prodEnvPath, envPath);
@@ -35,8 +35,7 @@ try {
   execSync('npm run build:prod', { stdio: 'inherit' });
 
   console.log('✅ Production deployment complete!');
-  console.log('You can now run \'npm start\' to start the production server');
-
+  console.log("You can now run 'npm start' to start the production server");
 } catch (error) {
   console.error('❌ Deployment failed:', error.message);
   process.exit(1);
