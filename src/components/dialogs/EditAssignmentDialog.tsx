@@ -16,7 +16,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import InputGroup from '@/components/ui/InputGroup';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -47,8 +47,7 @@ type EditAssignmentDialogProps = {
 };
 
 // RHF state BEFORE Zod transforms (string for datetime-local, etc.)
-type FormValues = z.input<typeof AssignmentFormSchema>;
-type ParsedFormValues = z.output<typeof AssignmentFormSchema>;
+type FormValues = z.infer<typeof AssignmentFormSchema>;
 
 export function EditAssignmentDialog({
   assignment,
@@ -60,7 +59,7 @@ export function EditAssignmentDialog({
     () => ({
       title: assignment.title ?? '',
       description: assignment.description ?? '',
-      maxPoints: assignment.maxPoints ?? 0,
+      maxPoints: String(assignment.maxPoints ?? 100),
       dueDate: toDateTimeLocalString(assignment.dueDate), // string for input
       courseId: assignment.courseId,
     }),
@@ -71,7 +70,6 @@ export function EditAssignmentDialog({
     control,
     handleSubmit,
     reset,
-    watch,
     formState: { errors, isDirty, isValid, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(AssignmentFormSchema),
@@ -80,8 +78,8 @@ export function EditAssignmentDialog({
     reValidateMode: 'onChange',
   });
 
-  // Keep publish in RHF too (not part of AssignmentFormSchema, so we watch the extended field)
-  const isPublished = watch('isPublished' as keyof typeof defaultValues) as boolean | undefined;
+  // Keep publish state separate since it's not part of form schema
+  const [isPublished, setIsPublished] = useState(assignment.isPublished);
 
   // Reset on open/close (prevents error/touched flicker)
   useEffect(() => {
@@ -92,6 +90,7 @@ export function EditAssignmentDialog({
         keepErrors: false,
         keepValues: true,
       });
+      setIsPublished(assignment.isPublished);
     } else {
       reset(defaultValues, {
         keepDirty: false,
@@ -99,24 +98,31 @@ export function EditAssignmentDialog({
         keepErrors: false,
         keepValues: false,
       });
+      setIsPublished(assignment.isPublished);
     }
-  }, [open, defaultValues, reset]);
+  }, [open, defaultValues, reset, assignment.isPublished]);
 
-  const resetForm = () =>
+  const resetForm = () => {
     reset(defaultValues, {
       keepDirty: false,
       keepTouched: false,
       keepErrors: false,
       keepValues: false,
     });
+    setIsPublished(assignment.isPublished);
+  };
 
   const onSubmit = async (raw: FormValues) => {
-    // 1) Normalize with form schema (Dates, numbers, trims)
-    const parsed: ParsedFormValues = AssignmentFormSchema.parse(raw);
-    // 2) Enforce update contract + publish rule
+    // Convert form values to the format expected by the API
+    const formData = {
+      ...raw,
+      maxPoints: Number(raw.maxPoints), // Convert string to number
+    };
+    
+    // Use the update schema with transformations for API
     const payload = UpdateAssignmentSchema.parse({
       id: assignment.id,
-      ...parsed,
+      ...formData,
       isPublished: typeof isPublished === 'boolean' ? isPublished : assignment.isPublished,
     });
 
@@ -126,7 +132,7 @@ export function EditAssignmentDialog({
       body: JSON.stringify({
         ...payload,
         maxPoints: Number(payload.maxPoints),
-        dueDate: payload.dueDate.toISOString(),
+        dueDate: payload.dueDate?.toISOString(),
       }),
     });
     if (!res.ok) {
@@ -139,6 +145,11 @@ export function EditAssignmentDialog({
     resetForm();
     onSave?.(updated);
     setOpen(false);
+  };
+
+  const onSubmitWrapper = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    handleSubmit((data) => onSubmit(data as unknown as FormValues))(e);
   };
 
   return (
@@ -157,7 +168,7 @@ export function EditAssignmentDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
+        <form className="space-y-4" onSubmit={onSubmitWrapper}>
           {/* Title */}
           <Controller
             name="title"
@@ -234,17 +245,10 @@ export function EditAssignmentDialog({
           {/* Published switch (kept outside the form schema) */}
           <div className="flex items-center justify-between">
             <Label htmlFor="isPublished">Published</Label>
-            <Controller
-              name={'isPublished' as keyof typeof defaultValues}
-              control={control}
-              defaultValue={assignment.isPublished}
-              render={({ field }) => (
-                <Switch
-                  id="isPublished"
-                  checked={!!field.value}
-                  onCheckedChange={(checked) => field.onChange(!!checked)}
-                />
-              )}
+            <Switch
+              id="isPublished"
+              checked={isPublished}
+              onCheckedChange={setIsPublished}
             />
           </div>
 

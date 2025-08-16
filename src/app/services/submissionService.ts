@@ -1,98 +1,193 @@
 import { prisma } from '@/lib/prisma';
+import { Submission, User, AssignmentProblem } from '@prisma/client';
 
-export type CreateSubmissionInput = {
-  userId: string;
-  assignmentId: string;
-  problemId: string;
-  content: string;
+export type SubmissionWithRelations = Submission & {
+  student: Pick<User, 'id' | 'firstName' | 'lastName' | 'email'>;
+  assignmentProblem: AssignmentProblem;
 };
 
-/**
- * Create a new submission for a problem within an assignment.
- */
-export async function createSubmission(data: CreateSubmissionInput) {
-  // Get the next attempt number for this user/problem
-  const last = await prisma.submission.findFirst({
-    where: {
-      userId: data.userId,
-      assignmentId: data.assignmentId,
-      problemId: data.problemId,
-    },
-    orderBy: { attempt: 'desc' },
-  });
-
-  const attempt = last ? last.attempt + 1 : 1;
-
-  return prisma.submission.create({
-    data: {
-      content: data.content,
-      assignmentId: data.assignmentId,
-      problemId: data.problemId,
-      userId: data.userId,
-      attempt,
-    },
-    select: {
-      id: true,
-      content: true,
-      attempt: true,
-      submittedAt: true,
-      grade: true,
-      feedback: true,
-    },
-  });
+export async function getSubmissionById(id: string): Promise<SubmissionWithRelations | null> {
+  try {
+    return await prisma.submission.findUnique({
+      where: { id },
+      include: {
+        student: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+        assignmentProblem: true,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching submission:', error);
+    return null;
+  }
 }
 
-/**
- * Get all submissions for a student for a specific assignment.
- */
-export async function getSubmissionsForAssignment(userId: string, assignmentId: string) {
-  const submissions = await prisma.submission.findMany({
-    where: {
-      userId,
-      assignmentId,
-    },
-    orderBy: [{ problemId: 'asc' }, { attempt: 'asc' }],
-    select: {
-      id: true,
-      content: true,
-      attempt: true,
-      submittedAt: true,
-      grade: true,
-      feedback: true,
-      problemId: true,
-    },
-  });
-
-  // Group by problemId into a dictionary { problemId: Submission[] }
-  return submissions.reduce<Record<string, typeof submissions>>((acc, s) => {
-    if (!acc[s.problemId]) acc[s.problemId] = [];
-    acc[s.problemId].push(s);
-    return acc;
-  }, {});
+export async function getSubmissionsByAssignment(
+  assignmentId: string,
+): Promise<SubmissionWithRelations[]> {
+  try {
+    return await prisma.submission.findMany({
+      where: { assignmentId },
+      include: {
+        student: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+        assignmentProblem: true,
+      },
+      orderBy: { submittedAt: 'desc' },
+    });
+  } catch (error) {
+    console.error('Error fetching submissions by assignment:', error);
+    return [];
+  }
 }
 
-/**
- * Get all submissions for a specific problem for a student.
- */
-export async function getSubmissionsForProblem(
-  userId: string,
+export async function getSubmissionsByStudent(
+  studentId: string,
+): Promise<SubmissionWithRelations[]> {
+  try {
+    return await prisma.submission.findMany({
+      where: { studentId },
+      include: {
+        student: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+        assignmentProblem: true,
+      },
+      orderBy: { submittedAt: 'desc' },
+    });
+  } catch (error) {
+    console.error('Error fetching submissions by student:', error);
+    return [];
+  }
+}
+
+export async function getSubmissionsByAssignmentAndProblem(
   assignmentId: string,
   problemId: string,
-) {
-  return prisma.submission.findMany({
-    where: {
-      userId,
-      assignmentId,
-      problemId,
-    },
-    orderBy: { attempt: 'asc' },
-    select: {
-      id: true,
-      content: true,
-      attempt: true,
-      submittedAt: true,
-      grade: true,
-      feedback: true,
-    },
-  });
+): Promise<SubmissionWithRelations[]> {
+  try {
+    return await prisma.submission.findMany({
+      where: {
+        assignmentId,
+        problemId,
+      },
+      include: {
+        student: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+        assignmentProblem: true,
+      },
+      orderBy: { submittedAt: 'desc' },
+    });
+  } catch (error) {
+    console.error('Error fetching submissions by assignment and problem:', error);
+    return [];
+  }
+}
+
+export async function createSubmission(data: {
+  studentId: string;
+  assignmentId: string;
+  problemId: string;
+  fileName?: string;
+  originalFileName?: string;
+}): Promise<Submission | null> {
+  try {
+    return await prisma.submission.create({
+      data: {
+        studentId: data.studentId,
+        assignmentId: data.assignmentId,
+        problemId: data.problemId,
+        fileName: data.fileName,
+        originalFileName: data.originalFileName,
+      },
+    });
+  } catch (error) {
+    console.error('Error creating submission:', error);
+    return null;
+  }
+}
+
+export async function updateSubmission(
+  id: string,
+  data: {
+    grade?: number;
+    feedback?: string;
+    correct?: boolean;
+  },
+): Promise<Submission | null> {
+  try {
+    return await prisma.submission.update({
+      where: { id },
+      data,
+    });
+  } catch (error) {
+    console.error('Error updating submission:', error);
+    return null;
+  }
+}
+
+export async function deleteSubmission(id: string): Promise<boolean> {
+  try {
+    await prisma.submission.delete({
+      where: { id },
+    });
+    return true;
+  } catch (error) {
+    console.error('Error deleting submission:', error);
+    return false;
+  }
+}
+
+export async function getStudentSubmissionForProblem(
+  studentId: string,
+  assignmentId: string,
+  problemId: string,
+): Promise<SubmissionWithRelations | null> {
+  try {
+    return await prisma.submission.findFirst({
+      where: {
+        studentId,
+        assignmentId,
+        problemId,
+      },
+      include: {
+        student: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+        assignmentProblem: true,
+      },
+      orderBy: { submittedAt: 'desc' },
+    });
+  } catch (error) {
+    console.error('Error fetching student submission for problem:', error);
+    return null;
+  }
 }

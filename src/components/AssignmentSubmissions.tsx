@@ -5,8 +5,9 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from './ui/button';
 import { DataTable } from './ui/data-table';
 import { Textarea } from './ui/textarea';
+import { Submission, User } from '@prisma/client';
 
-type Person = { firstName?: string; lastName?: string; id: string };
+type Person = Pick<User, 'firstName' | 'lastName' | 'id'>;
 
 type Problem = {
   id: string;
@@ -21,16 +22,6 @@ type Props = {
   courseId: string;
   assignmentId: string;
   problems: Problem[];
-};
-
-type Submission = {
-  content: string;
-  submittedAt: string;
-  grade?: string;
-  fileName?: string;
-  feedback?: string;
-  attempt: number;
-  origionalFilename?: string;
 };
 
 const problemTypeLabels: Record<string, string> = {
@@ -63,7 +54,7 @@ export default function AssignmentSubmissions({ courseId, assignmentId, problems
       .then((res) => res.json())
       .then((data: Record<string, Submission[]>) => setSubmissions(data))
       .catch(() => setSubmissions({}));
-  }, [courseId, assignmentId, selectedStudent?.id]);
+  }, [courseId, assignmentId, selectedStudent]);
 
   const handleSelectChange = (id: string) => {
     const index = students.findIndex((s) => s.id === id);

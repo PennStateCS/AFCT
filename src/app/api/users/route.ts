@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
+import { Role } from '@prisma/client';
 
 // Utility to validate email format
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -35,7 +36,7 @@ export async function GET(req: Request) {
 
     // 3. Query users from the database
     const users = await prisma.user.findMany({
-      where: role ? { role } : undefined,
+      where: role ? { role: role as Role } : undefined,
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,

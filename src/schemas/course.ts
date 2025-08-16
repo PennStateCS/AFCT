@@ -29,6 +29,23 @@ const DateTimeLocal = z
   .transform((val) => new Date(val));
 
 /**
+ * Form-only datetime validation (no transformation)
+ */
+const DateTimeLocalForm = z
+  .string()
+  .min(1, 'This field is required.')
+  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, 'Use a valid date & time (YYYY-MM-DDTHH:MM).')
+  .superRefine((val, ctx) => {
+    const d = new Date(val);
+    if (Number.isNaN(d.getTime())) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Invalid date/time.',
+      });
+    }
+  });
+
+/**
  * Normalize helpers
  */
 const normalizeCode = (v: string) => v.trim().replace(/\s+/g, ' ').toUpperCase();
@@ -59,11 +76,74 @@ const BaseCourseSchema = z
   .strict();
 
 /**
+ * Form-only schema (no date transformation)
+ */
+const BaseCourseFormSchema = z
+  .object({
+    name: z.string().trim().min(3, 'Course name must be at least 3 characters.'),
+    code: z.string().trim().min(2, 'Course code is required.'),
+    semester: z.string().trim().min(1, 'Semester is required.'),
+    credits: z.string().min(1, 'Credits are required.'),
+    startDate: DateTimeLocalForm,
+    endDate: DateTimeLocalForm,
+  })
+  .superRefine((d, ctx) => {
+    // Validate course code format
+    const normalizedCode = normalizeCode(d.code);
+    if (!courseCodeRegex.test(normalizedCode)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['code'],
+        message: 'Use a code like "CMPSC 221" or "MATH220".',
+      });
+    }
+
+    // Validate credits
+    const credits = Number(d.credits);
+    if (isNaN(credits) || !Number.isInteger(credits) || credits < 1 || credits > 6) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['credits'],
+        message: 'Credits must be an integer between 1 and 6.',
+      });
+    }
+
+    // Validate date range
+    const startDate = new Date(d.startDate);
+    const endDate = new Date(d.endDate);
+    if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime()) && startDate > endDate) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['endDate'],
+        message: 'End date/time must be on or after the start date/time.',
+      });
+    }
+  })
+  .strict();
+
+/**
  * Create schema — includes publish+faculty selection.
  */
 export const CreateCourseSchema = BaseCourseSchema.extend({
   isPublished: z.boolean().default(false),
   facultyIds: z.array(z.string()).default([]),
+}).superRefine((d, ctx) => {
+  if (d.isPublished && d.facultyIds.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['facultyIds'],
+      message: 'Pick at least one faculty member if publishing now.',
+    });
+  }
+});
+
+/**
+ * Create form schema — includes publish+faculty selection.
+ * Uses form-only validation (no transformations)
+ */
+export const CreateCourseFormSchema = BaseCourseFormSchema.extend({
+  isPublished: z.boolean(),
+  facultyIds: z.array(z.string()),
 }).superRefine((d, ctx) => {
   if (d.isPublished && d.facultyIds.length === 0) {
     ctx.addIssue({
@@ -84,7 +164,7 @@ export const UpdateCourseSchema = CreateCourseSchema.partial().extend({
 /**
  * Export form-only schema for use in Add/Edit forms.
  */
-export const CourseFormSchema = BaseCourseSchema;
+export const CourseFormSchema = BaseCourseFormSchema;
 
 /** Types */
 export type CreateCourseInput = z.infer<typeof CreateCourseSchema>;

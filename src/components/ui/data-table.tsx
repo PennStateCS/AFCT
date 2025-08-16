@@ -28,6 +28,14 @@ interface ColumnMeta {
   priority?: number;
 }
 
+// Extend @tanstack/react-table types
+declare module '@tanstack/react-table' {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface ColumnMeta<TData, TValue> {
+    priority?: number;
+  }
+}
+
 import {
   DropdownMenu,
   DropdownMenuTrigger,

@@ -22,7 +22,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         '--sidebar-width': '18rem',
         '--sidebar-width-mobile': '10rem',
         '--sidebar-width-icon': '3rem',
-      }}
+      } as React.CSSProperties}
       defaultOpen={defaultOpen}
     >
       <div className="flex min-h-screen w-full">

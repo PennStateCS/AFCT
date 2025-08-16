@@ -21,6 +21,10 @@ type CourseWithRoster = Course & {
   students: UserSummary[];
 };
 
+type CourseWithFaculty = Course & {
+  faculty: { firstName: string | null; lastName: string | null }[];
+};
+
 export default function ViewCoursesPage() {
   const [courses, setCourses] = useState<CourseWithRoster[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,9 +53,9 @@ export default function ViewCoursesPage() {
 
       <CardContent>
         <DataTable
-          columns={columns((refreshedCourse) => {
+          columns={columns((refreshedCourse: CourseWithFaculty) => {
             setCourses((prev) =>
-              prev.map((c) => (c.id === refreshedCourse.id ? refreshedCourse : c)),
+              prev.map((c) => (c.id === refreshedCourse.id ? { ...c, ...refreshedCourse, faculty: c.faculty } : c)),
             );
           })}
           data={courses}

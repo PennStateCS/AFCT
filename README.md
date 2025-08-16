@@ -8,14 +8,17 @@ It serves as the **AFCT Dashboard** — a role-based course management platform 
 ## 🚀 Getting Started
 
 ### 1️⃣ Install node.js
+
 1. Go to the download page for node.js: https://nodejs.org/en/download
 2. Scroll down to get a prebuilt Node.js
 3. Select your operating system with the appropriate architecture
-4. Click on one of the green boxes labled ```[operating system] Installer``` or ```Standalone Binary```
+4. Click on one of the green boxes labled `[operating system] Installer` or `Standalone Binary`
 5. Open installer or unzip files
 
 ### 2️⃣ Install dependencies
+
 Run one of the following commands in the terminal for this repository (npm is recommended)
+
 ```bash
 npm install
 # or
@@ -61,11 +64,12 @@ Your app will be running at **[http://localhost:3000](http://localhost:3000)**.
 _Possible Error:_
 
 If the following is shown when accessing **[http://localhost:3000](http://localhost:3000)**:
+
 ```
 @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
 ```
 
-Try ```npx prisma generate``` and then start the development server
+Try `npx prisma generate` and then start the development server
 
 ---
 
@@ -114,11 +118,13 @@ src/
 ### Initial Database Setup
 
 1. **Generate Prisma Client** (required for first setup):
+
    ```bash
    npx prisma generate
    ```
 
 2. **Apply database migrations**:
+
    ```bash
    npx prisma migrate dev
    ```
@@ -133,25 +139,32 @@ src/
 ### Database Management Commands
 
 **Reset Database & Reseed** (useful during development):
+
 ```bash
 npx prisma migrate reset
 ```
+
 This will:
+
 - Drop the database
 - Recreate it
 - Apply all migrations
 - Run the seed script automatically
 
 **Manual Seeding** (if you want to add sample data without reset):
+
 ```bash
 npm run seed
 ```
 
 **View Database in Browser** (Prisma Studio):
+
 ```bash
 npx prisma studio
 ```
+
 This opens a web interface at `http://localhost:5555` where you can:
+
 - Browse all database tables and records
 - Edit data directly in the browser
 - View relationships between tables
@@ -159,6 +172,7 @@ This opens a web interface at `http://localhost:5555` where you can:
 - Export data in various formats
 
 **Prisma Studio Tips**:
+
 - Use filters to find specific users, courses, or assignments
 - Click on related records to navigate relationships
 - Perfect for debugging database issues during development
@@ -167,12 +181,13 @@ This opens a web interface at `http://localhost:5555` where you can:
 ### Sample Data Included
 
 The seed file creates:
-- **1 Admin user** (`admin@example.com`)
-- **3 Faculty users** (including Jeffrey Chiampi)
-- **2 TA users** (Diana Prince, Hal Jordan)
-- **26 Student users** (Marvel/DC characters)
-- **2 Sample courses** (CMPSC 131, CS 101)
-- **Problems and assignments** with proper linkages
+
+- **1 Admin user**
+- **3 Faculty users**
+- **2 TA users**
+- **26 Student users**
+- **2 Sample courses**
+- **Problems and assignments**
 - **Course roster memberships**
 
 **Default password for all users**: `password123`
@@ -180,18 +195,21 @@ The seed file creates:
 ### Database Troubleshooting
 
 **If you encounter Prisma client errors**:
+
 ```bash
 npx prisma generate
 npm run dev
 ```
 
 **If migrations are out of sync**:
+
 ```bash
 npx prisma migrate reset
 # This will reset and reseed automatically
 ```
 
 **If you need to start fresh**:
+
 ```bash
 # Delete the database file (SQLite)
 rm prisma/dev.db

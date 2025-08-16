@@ -115,10 +115,10 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
     });
 
     const formData = new FormData();
-    formData.append('title', payload.title);
+    formData.append('title', payload.title ?? '');
     formData.append('description', payload.description ?? '');
-    formData.append('type', payload.type);
-    formData.append('courseId', payload.courseId);
+    formData.append('type', payload.type ?? '');
+    formData.append('courseId', payload.courseId ?? '');
 
     // FA/PDA maxStates normalization
     if (payload.type === 'FA' || payload.type === 'PDA') {

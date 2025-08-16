@@ -36,7 +36,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     }
 
     // ---- UserId from token ----
-    const userId = decoded?.id ?? decoded?.userId;
+    const userId = decoded?.userId;
     if (!userId) {
       return NextResponse.json({ error: 'Invalid token payload' }, { status: 401 });
     }
