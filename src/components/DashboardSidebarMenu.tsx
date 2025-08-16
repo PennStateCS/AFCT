@@ -108,7 +108,7 @@ export default function DashboardSidebarMenu() {
     lastName = '',
     avatar = '',
     role = 'STUDENT',
-  } = session.user as any;
+  } = session.user;
 
   // Resolve display name and avatar
   const resolvedName =

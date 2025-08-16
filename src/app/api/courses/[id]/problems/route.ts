@@ -6,7 +6,8 @@ import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/authOptions';
+import { ProblemType } from '@prisma/client';
 
 // Create solution upload directory if it doesn't exist
 async function ensureDirExists(dir: string) {
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       data: {
         title,
         description,
-        type: type as any,
+        type: type as ProblemType,
         fileName,
         originalFileName,
         courseId,

@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import path from 'path';
 import { promises as fs } from 'fs';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/authOptions';
 
 export async function DELETE(req: Request, context: { params: { id: string; pid: string } }) {
   const { id: courseId, pid: problemId } = context.params;
@@ -48,8 +48,10 @@ export async function DELETE(req: Request, context: { params: { id: string; pid:
       const filePath = path.join(process.cwd(), 'public', 'uploads', 'solutions', problem.fileName);
       try {
         await fs.unlink(filePath);
-      } catch (fsErr: any) {
-        if (fsErr.code !== 'ENOENT') {
+      } catch (fsErr: unknown) {
+        if (fsErr instanceof Error && 'code' in fsErr && fsErr.code === 'ENOENT') {
+          // File not found, ignore
+        } else {
           console.error('Error deleting solution file:', fsErr);
         }
       }

@@ -6,7 +6,7 @@ export function signToken(payload: object, expiresIn = '15m') {
   return jwt.sign(payload, JWT_SECRET, { expiresIn, algorithm: 'HS256' });
 }
 
-interface JwtPayload {
+export interface JwtPayload {
   userId: string;
   iat: number;
   exp: number;

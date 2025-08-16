@@ -105,95 +105,106 @@ export const columns = (
     meta: { priority: 1 },
     cell: ({ row }) => {
       const course = row.original;
-      const [editOpen, setEditOpen] = useState(false);
-      const [confirmOpen, setConfirmOpen] = useState(false);
-
-      const handleDelete = async () => {
-        try {
-          const res = await fetch(`/api/courses/${course.id}`, { method: 'DELETE' });
-          if (!res.ok) throw new Error('Delete failed');
-          toast.success('Course deleted');
-          setConfirmOpen(false);
-        } catch (err) {
-          toast.error('Failed to delete course');
-        }
-      };
-
-      return (
-        <>
-          <EditCourseDialog
-            course={course}
-            open={editOpen}
-            setOpen={setEditOpen}
-            onSave={async (updatedCourse) => {
-              try {
-                const res = await fetch(`/api/courses/${updatedCourse.id}`, {
-                  method: 'PUT',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(updatedCourse),
-                });
-                if (!res.ok) throw new Error('Failed to save course');
-
-                const refreshed = await fetch(`/api/courses/${updatedCourse.id}`).then((r) =>
-                  r.json(),
-                );
-
-                onCourseUpdated(refreshed);
-                toast.success('Course updated!');
-              } catch (err) {
-                toast.error('Failed to save course');
-              } finally {
-                setEditOpen(false);
-              }
-            }}
-          />
-
-          <ConfirmDialog
-            open={confirmOpen}
-            onCancel={() => setConfirmOpen(false)}
-            onConfirm={handleDelete}
-            title="Delete Course"
-            description={`Are you sure you want to delete "${course.name}"? This action cannot be undone.`}
-            confirmText="Delete"
-          />
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="secondary">
-                <ChevronDown /> Manage
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel className="flex items-center gap-2">
-                <BookOpen className="h-4 w-4" />
-                {course.name}
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <Link href={`/dashboard/courses/${course.id}`} passHref>
-                <DropdownMenuItem className="hover:bg-secondary focus:bg-secondary flex items-center gap-2">
-                  <BookOpen className="mr-2 h-4 w-4" />
-                  View Course
-                </DropdownMenuItem>
-              </Link>
-              <DropdownMenuItem
-                onClick={() => setEditOpen(true)}
-                className="hover:bg-secondary focus:bg-secondary flex items-center gap-2"
-              >
-                <Pencil className="mr-2 h-4 w-4" />
-                Edit Course
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => setConfirmOpen(true)}
-                className="hover:bg-secondary focus:bg-secondary flex items-center gap-2 text-red-600"
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete Course
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </>
-      );
+      return <CourseActionsCell course={course} onCourseUpdated={onCourseUpdated} />;
     },
   },
 ];
+
+// Extract the cell component to fix React hooks violation
+function CourseActionsCell({ 
+  course, 
+  onCourseUpdated 
+}: { 
+  course: CourseWithFaculty; 
+  onCourseUpdated: (updated: CourseWithFaculty) => void;
+}) {
+  const [editOpen, setEditOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const handleDelete = async () => {
+    try {
+      const res = await fetch(`/api/courses/${course.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Delete failed');
+      toast.success('Course deleted');
+      setConfirmOpen(false);
+    } catch {
+      toast.error('Failed to delete course');
+    }
+  };
+
+  return (
+    <>
+      <EditCourseDialog
+        course={course}
+        open={editOpen}
+        setOpen={setEditOpen}
+        onSave={async (updatedCourse) => {
+          try {
+            const res = await fetch(`/api/courses/${updatedCourse.id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(updatedCourse),
+            });
+            if (!res.ok) throw new Error('Failed to save course');
+
+            const refreshed = await fetch(`/api/courses/${updatedCourse.id}`).then((r) =>
+              r.json(),
+            );
+
+            onCourseUpdated(refreshed);
+            toast.success('Course updated!');
+          } catch {
+            toast.error('Failed to save course');
+          } finally {
+            setEditOpen(false);
+          }
+        }}
+      />
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={handleDelete}
+        title="Delete Course"
+        description={`Are you sure you want to delete "${course.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+      />
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="secondary">
+            <ChevronDown /> Manage
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuLabel className="flex items-center gap-2">
+            <BookOpen className="h-4 w-4" />
+            {course.name}
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <Link href={`/dashboard/courses/${course.id}`} passHref>
+            <DropdownMenuItem className="hover:bg-secondary focus:bg-secondary flex items-center gap-2">
+              <BookOpen className="mr-2 h-4 w-4" />
+              View Course
+            </DropdownMenuItem>
+          </Link>
+          <DropdownMenuItem
+            onClick={() => setEditOpen(true)}
+            className="hover:bg-secondary focus:bg-secondary flex items-center gap-2"
+          >
+            <Pencil className="mr-2 h-4 w-4" />
+            Edit Course
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => setConfirmOpen(true)}
+            className="hover:bg-secondary focus:bg-secondary flex items-center gap-2 text-red-600"
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            Delete Course
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
+  );
+}
