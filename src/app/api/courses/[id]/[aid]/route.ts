@@ -44,41 +44,38 @@ export async function GET(_: Request, context: { params: Promise<{ id: string; a
       return NextResponse.json({ error: 'Assignment not found.' }, { status: 404 });
     }
 
-    // Map and clean up problem details from AssignmentProblem
-    const problems = assignment.problems.map((ap) => ({
-      id: ap.problem.id,
-      title: ap.problem.title,
-      description: ap.problem.description,
-      type: ap.problem.type,
-      maxStates: ap.problem.maxStates,
-      isDeterministic: ap.problem.isDeterministic,
-      originalFileName: ap.problem.originalFileName,
+    // Keep problems in the structure that the frontend expects
+    const problemsWithRelation = assignment.problems.map((ap) => ({
+      problem: {
+        id: ap.problem.id,
+        title: ap.problem.title,
+        description: ap.problem.description,
+        type: ap.problem.type,
+        maxStates: ap.problem.maxStates,
+        isDeterministic: ap.problem.isDeterministic,
+        originalFileName: ap.problem.originalFileName,
+      },
     }));
 
-    // Extract the course roster and split by role
+    // Extract the course roster and keep in the structure that the frontend expects
     const roster = assignment.course.roster || [];
-
-    const faculty = roster.filter((r) => r.role === 'FACULTY').map((r) => r.user);
-
-    const tas = roster.filter((r) => r.role === 'TA').map((r) => r.user);
-
-    const students = roster.filter((r) => r.role === 'STUDENT').map((r) => r.user);
 
     // Remove joined fields to avoid duplication in the response
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { problems: _problems, course, ...assignmentData } = assignment;
 
-    // Return structured assignment + course + role-separated roster
+    // Return structured assignment matching the frontend's expected format
     return NextResponse.json({
       ...assignmentData,
-      problems,
+      problems: problemsWithRelation,
       course: {
         id: courseId,
         name: course.name,
         code: course.code,
-        faculty: faculty || [],
-        tas: tas || [],
-        students: students || [],
+        roster: roster.map((r) => ({
+          user: r.user,
+          role: r.role,
+        })),
       },
     });
   } catch (error) {

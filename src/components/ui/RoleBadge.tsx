@@ -44,7 +44,9 @@ export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
         {children ??
           (normalizedRole === 'TA'
             ? 'TA'
-            : normalizedRole ? normalizedRole.charAt(0) + normalizedRole.slice(1).toLowerCase() : '')}{' '}
+            : normalizedRole
+              ? normalizedRole.charAt(0) + normalizedRole.slice(1).toLowerCase()
+              : '')}{' '}
       </span>
     );
   },

@@ -27,11 +27,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 import type { User } from '@prisma/client';
-import {
-  UpdateUserSchema,
-  type UpdateUserRaw,
-  type UpdateUserInput,
-} from '@/schemas/user';
+import { UpdateUserSchema, type UpdateUserRaw, type UpdateUserInput } from '@/schemas/user';
 
 type EditUserDialogProps = {
   user: User;
@@ -265,10 +261,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
             render={({ field }) => (
               <div>
                 <label className="mb-2 block text-sm font-medium">Role</label>
-                <Select
-                  value={field.value ?? ''}
-                  onValueChange={(v) => field.onChange(v)}
-                >
+                <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v)}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select a role" />
                   </SelectTrigger>

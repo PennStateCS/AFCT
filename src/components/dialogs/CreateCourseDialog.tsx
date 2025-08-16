@@ -20,7 +20,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   CreateCourseFormSchema, // Form schema (no transformations)
-  CreateCourseSchema,     // API schema (with transformations)
+  CreateCourseSchema, // API schema (with transformations)
 } from '@/schemas/course';
 import { z } from 'zod';
 
@@ -98,7 +98,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
       credits: Number(raw.credits), // Convert string to number for API schema
       // Date strings remain as-is for API schema to transform
     };
-    
+
     // Parse with Zod: code uppercased, credits coerced, dates transformed to Date
     const values: ParsedValues = CreateCourseSchema.parse(formData);
 

@@ -44,6 +44,7 @@ model User {
   rosterEntries Roster[] // Per-course memberships with roles
   submissions   Submission[]
   activityLogs  ActivityLog[]
+  commentsAbout Comment[] @relation("CommentsAboutStudent") // Comments about this student's work
 }
 
 model Course {
@@ -170,6 +171,10 @@ model Comment {
 
   roster   Roster @relation(fields: [rosterId], references: [id], onDelete: Restrict)
   rosterId String
+
+  // The student whose work this comment is about (optional for general comments)
+  aboutStudent   User?   @relation("CommentsAboutStudent", fields: [aboutStudentId], references: [id], onDelete: Restrict)
+  aboutStudentId String?
 }
 
 model ActivityLog {

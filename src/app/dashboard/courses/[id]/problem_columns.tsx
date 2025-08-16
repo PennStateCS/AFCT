@@ -30,8 +30,8 @@ export const problemColumns = ({
   {
     accessorKey: 'type',
     header: 'Type',
-    cell: ({ row }) => 
-      row.original.type ? (typeLabels[row.original.type] || row.original.type) : 'Unknown',
+    cell: ({ row }) =>
+      row.original.type ? typeLabels[row.original.type] || row.original.type : 'Unknown',
   },
   {
     accessorKey: 'originalFileName',

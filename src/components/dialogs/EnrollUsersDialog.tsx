@@ -127,7 +127,9 @@ export function EnrollUserDialog({ open, setOpen, users, onEnroll }: EnrollUserD
                 {filteredUsers.slice(0, 50).map((user, idx) => (
                   <li
                     key={user.id}
-                    ref={(el) => { itemRefs.current[idx] = el; }}
+                    ref={(el) => {
+                      itemRefs.current[idx] = el;
+                    }}
                     className={`hover:bg-primary/10 flex cursor-pointer items-center gap-2 rounded px-3 py-2 ${
                       selectedIdx === idx ? 'bg-primary/10' : ''
                     }`}

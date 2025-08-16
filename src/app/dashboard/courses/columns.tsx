@@ -111,11 +111,11 @@ export const columns = (
 ];
 
 // Extract the cell component to fix React hooks violation
-function CourseActionsCell({ 
-  course, 
-  onCourseUpdated 
-}: { 
-  course: CourseWithFaculty; 
+function CourseActionsCell({
+  course,
+  onCourseUpdated,
+}: {
+  course: CourseWithFaculty;
   onCourseUpdated: (updated: CourseWithFaculty) => void;
 }) {
   const [editOpen, setEditOpen] = useState(false);
@@ -147,9 +147,7 @@ function CourseActionsCell({
             });
             if (!res.ok) throw new Error('Failed to save course');
 
-            const refreshed = await fetch(`/api/courses/${updatedCourse.id}`).then((r) =>
-              r.json(),
-            );
+            const refreshed = await fetch(`/api/courses/${updatedCourse.id}`).then((r) => r.json());
 
             onCourseUpdated(refreshed);
             toast.success('Course updated!');

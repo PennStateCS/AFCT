@@ -79,7 +79,7 @@ export function EditCourseDialog({ course, open, setOpen, onSave }: EditCourseDi
       credits: Number(raw.credits), // Convert string to number
       code: raw.code.trim().replace(/\s+/g, ' ').toUpperCase(), // Normalize code
     };
-    
+
     const payload = UpdateCourseSchema.parse({ id: course.id, ...formData });
 
     onSave?.({
