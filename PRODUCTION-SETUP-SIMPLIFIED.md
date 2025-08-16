@@ -7,6 +7,7 @@ This guide provides simplified steps for setting up AFCT Dashboard in production
 ### Option 1: Using the Setup Wizard (Recommended)
 
 1. **Run the setup wizard:**
+
    ```bash
    ./scripts/setup-wizard.sh
    ```
@@ -23,12 +24,14 @@ This guide provides simplified steps for setting up AFCT Dashboard in production
 ### Option 2: Manual Setup
 
 1. **Install PostgreSQL** (if not already installed):
+
    ```bash
    sudo apt update
    sudo apt install postgresql postgresql-contrib
    ```
 
 2. **Create database and user:**
+
    ```bash
    sudo -u postgres psql
    CREATE USER afct_user WITH PASSWORD 'your_password';
@@ -38,11 +41,13 @@ This guide provides simplified steps for setting up AFCT Dashboard in production
    ```
 
 3. **Create production environment file:**
+
    ```bash
    cp .env.example .env.production
    ```
-   
+
    Edit `.env.production`:
+
    ```env
    DATABASE_URL="postgresql://afct_user:your_password@localhost:5432/afct_production"
    NODE_ENV="production"
@@ -51,12 +56,14 @@ This guide provides simplified steps for setting up AFCT Dashboard in production
    ```
 
 4. **Synchronize database schema:**
+
    ```bash
    npm run db:generate:prod
    npx prisma db push --schema=prisma/schema.production.prisma
    ```
 
 5. **Seed the database:**
+
    ```bash
    npm run seed:simple
    ```
@@ -88,7 +95,7 @@ This guide provides simplified steps for setting up AFCT Dashboard in production
 Run `./scripts/setup-wizard.sh` and use these options:
 
 - **Option 14:** Check Migration Issues
-- **Option 15:** Validate Production Environment  
+- **Option 15:** Validate Production Environment
 - **Option 16:** Database Troubleshooting
 
 ## Default Users (After Seeding)
