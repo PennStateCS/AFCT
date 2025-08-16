@@ -45,6 +45,12 @@ print_header() {
     echo -e "==============================================\033[0m"
 }
 
+# Mask a PostgreSQL DATABASE_URL password when printing
+mask_db_url() {
+    local url="$1"
+    echo "$url" | sed -E 's#(postgresql://[^:]+):[^@]+@#\1:****@#'
+}
+
 # Default configuration
 DB_NAME_DEV="dev.db"
 DB_NAME_PROD="afct_production"
@@ -517,6 +523,20 @@ setup_production_database() {
     prompt_input "Database name" DB_NAME_PROD "$DB_NAME_PROD"
     prompt_input "Database user" DB_USER_PROD "$DB_USER_PROD"
     prompt_password "Enter password for database user ($DB_USER_PROD)" DB_PASSWORD_PROD
+    prompt_input "Database host" DB_HOST_PROD "localhost"
+    prompt_input "Database port" DB_PORT_PROD "5432"
+    
+    # Validate port is numeric
+    if ! [[ "$DB_PORT_PROD" =~ ^[0-9]+$ ]]; then
+        print_error "Invalid port. Must be a number."
+        return 1
+    fi
+    
+    # URL-encode password to avoid breaking the connection string
+    ENCODED_DB_PASSWORD_PROD=$(node -e "console.log(encodeURIComponent(process.argv[1]))" "$DB_PASSWORD_PROD" 2>/dev/null)
+    if [[ -z "$ENCODED_DB_PASSWORD_PROD" ]]; then
+        ENCODED_DB_PASSWORD_PROD="$DB_PASSWORD_PROD"
+    fi
     
     # Optionally set postgres superuser password (safer for existing setups)
     prompt_input "Would you like to set/change the PostgreSQL superuser (postgres) password now? (y/N)" SET_PG_SUPER "n"
@@ -565,9 +585,9 @@ setup_production_database() {
     # Wait a moment for service to be ready
     sleep 2
     
-    # Create production environment file
+    # Create production environment file with URL-encoded password
     print_step "Creating production environment file..."
-    DB_CONNECTION_STRING="postgresql://$DB_USER_PROD:$DB_PASSWORD_PROD@localhost:5432/$DB_NAME_PROD"
+    DB_CONNECTION_STRING="postgresql://$DB_USER_PROD:$ENCODED_DB_PASSWORD_PROD@$DB_HOST_PROD:$DB_PORT_PROD/$DB_NAME_PROD"
     JWT_SECRET=$(openssl rand -base64 32)
     
     cat > .env.production << EOF
@@ -591,6 +611,7 @@ MAX_FILE_SIZE="10485760"
 EOF
     
     print_success "Production environment file created"
+    print_info "Saved DATABASE_URL: $(mask_db_url "$DB_CONNECTION_STRING")"
     
     # Ensure production schema exists
     if [[ ! -f "prisma/schema.production.prisma" ]]; then
@@ -611,9 +632,9 @@ EOF
     # Set environment for all operations
     export DATABASE_URL="$DB_CONNECTION_STRING"
     
-    # Test connection first
+    # Test connection first (psql)
     print_step "Testing database connection..."
-    if PGPASSWORD="$DB_PASSWORD_PROD" psql -h localhost -U "$DB_USER_PROD" -d "$DB_NAME_PROD" -c "SELECT 'Connection successful!' as status;" &> /dev/null; then
+    if PGPASSWORD="$DB_PASSWORD_PROD" psql -h "$DB_HOST_PROD" -p "$DB_PORT_PROD" -U "$DB_USER_PROD" -d "$DB_NAME_PROD" -c "SELECT 'Connection successful!' as status;" &> /dev/null; then
         print_success "Database connection test passed"
     else
         print_error "Database connection test failed"
@@ -673,7 +694,7 @@ EOF
     fi
     
     print_success "Production database setup complete!"
-    print_info "Connection string: $DB_CONNECTION_STRING"
+    print_info "Connection string: $(mask_db_url "$DB_CONNECTION_STRING")"
     print_info "Application ready to start with: npm run start:prod"
     pause
 }
@@ -1166,7 +1187,7 @@ reset_production_database() {
         print_warning "Database seeding failed - you can run: node scripts/simple-seed.js after fixing issues"
     fi
     
-    print_success "Production database reset complete!"
+    print_success "Production database setup complete!"
     print_info "Database: $DB_NAME is ready for use"
     pause
 }
