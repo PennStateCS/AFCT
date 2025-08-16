@@ -47,8 +47,8 @@ export const authOptions: NextAuthOptions = {
             userId: token.sub,
             action: 'USER_SIGNOUT',
             metadata: {
-              ipAddress: token?.ipAddress ?? null, // Optional
-              userAgent: token?.userAgent ?? null, // Optional
+              ipAddress: token?.ipAddress ?? null,
+              userAgent: token?.userAgent ?? null,
             },
           },
         });
