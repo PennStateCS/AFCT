@@ -5,6 +5,7 @@ A comprehensive guide for developers working on the AFCT Dashboard project.
 ## 🏗️ Architecture Overview
 
 ### Technology Stack
+
 - **Frontend**: Next.js 15 with TypeScript
 - **Backend**: Next.js API Routes
 - **Database**: Prisma ORM (SQLite for dev, PostgreSQL for prod)
@@ -12,6 +13,7 @@ A comprehensive guide for developers working on the AFCT Dashboard project.
 - **Authentication**: JWT-based auth system
 
 ### Project Structure
+
 ```
 src/
 ├── app/                    # Next.js App Router
@@ -28,6 +30,7 @@ src/
 ## 🚀 Getting Started
 
 ### Quick Setup
+
 ```bash
 git clone <repository>
 cd afct
@@ -40,6 +43,7 @@ npm run dev
 ```
 
 ### Development Workflow
+
 1. Create feature branch from `main`
 2. Make changes and test locally
 3. Run linting and type checking
@@ -49,10 +53,27 @@ npm run dev
 ## 🗄️ Database Development
 
 ### Schema Management
+
 - **Development**: Uses `prisma/schema.prisma` (SQLite)
 - **Production**: Uses `prisma/schema.production.prisma` (PostgreSQL)
 
+### PostgreSQL Setup for Testing
+
+For testing with PostgreSQL during development:
+
+```bash
+# Quick PostgreSQL setup
+sudo ./scripts/quick-postgresql-setup.sh
+
+# Test database connection
+./scripts/test-db-connection.sh
+
+# Complete setup with all features
+sudo ./scripts/setup-postgresql.sh
+```
+
 ### Common Commands
+
 ```bash
 # Create new migration
 npx prisma migrate dev --name feature_name
@@ -68,6 +89,7 @@ npx prisma generate
 ```
 
 ### Schema Changes Workflow
+
 1. Edit `prisma/schema.prisma`
 2. Create migration: `npx prisma migrate dev --name change_description`
 3. Update `prisma/schema.production.prisma` accordingly
@@ -77,6 +99,7 @@ npx prisma generate
 ## 🔧 API Development
 
 ### API Route Structure
+
 ```
 src/app/api/
 ├── auth/                  # Authentication endpoints
@@ -90,6 +113,7 @@ src/app/api/
 ### API Development Guidelines
 
 #### 1. Route Handler Pattern
+
 ```typescript
 // src/app/api/example/route.ts
 import { NextRequest, NextResponse } from 'next/server';
@@ -111,25 +135,23 @@ export async function GET(request: NextRequest) {
 
     // 3. Process request
     const data = await prisma.model.findMany({
-      where: { userId: user.id }
+      where: { userId: user.id },
     });
 
     // 4. Return response
     return NextResponse.json(data);
   } catch (error) {
     console.error('API Error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 ```
 
 #### 2. Error Handling
+
 ```typescript
 // Consistent error responses
-const errorResponse = (message: string, status: number) => 
+const errorResponse = (message: string, status: number) =>
   NextResponse.json({ error: message }, { status });
 
 // Usage
@@ -138,13 +160,14 @@ if (!data) return errorResponse('Not found', 404);
 ```
 
 #### 3. Type Safety
+
 ```typescript
 // Use Prisma generated types
 import type { User, Course, Prisma } from '@prisma/client';
 
 // Define API response types
 type UserWithCourses = Prisma.UserGetPayload<{
-  include: { courses: true }
+  include: { courses: true };
 }>;
 ```
 
@@ -153,6 +176,7 @@ type UserWithCourses = Prisma.UserGetPayload<{
 ### Component Guidelines
 
 #### 1. Component Structure
+
 ```typescript
 // components/ExampleComponent.tsx
 import { useState } from 'react';
@@ -164,10 +188,10 @@ interface ExampleComponentProps {
   className?: string;
 }
 
-export function ExampleComponent({ 
-  title, 
-  onAction, 
-  className 
+export function ExampleComponent({
+  title,
+  onAction,
+  className
 }: ExampleComponentProps) {
   const [state, setState] = useState('');
 
@@ -181,6 +205,7 @@ export function ExampleComponent({
 ```
 
 #### 2. Using shadcn/ui Components
+
 ```typescript
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -193,6 +218,7 @@ import { Dialog, DialogContent, DialogHeader } from '@/components/ui/dialog';
 ```
 
 #### 3. Form Handling
+
 ```typescript
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -225,13 +251,14 @@ export function ExampleForm() {
 ## 🔐 Authentication & Authorization
 
 ### Role-Based Access Control
+
 ```typescript
 // lib/auth.ts
 export enum Role {
   ADMIN = 'ADMIN',
   FACULTY = 'FACULTY',
   TA = 'TA',
-  STUDENT = 'STUDENT'
+  STUDENT = 'STUDENT',
 }
 
 export function hasPermission(userRole: Role, requiredRole: Role): boolean {
@@ -239,14 +266,15 @@ export function hasPermission(userRole: Role, requiredRole: Role): boolean {
     [Role.ADMIN]: 4,
     [Role.FACULTY]: 3,
     [Role.TA]: 2,
-    [Role.STUDENT]: 1
+    [Role.STUDENT]: 1,
   };
-  
+
   return hierarchy[userRole] >= hierarchy[requiredRole];
 }
 ```
 
 ### Protected Routes
+
 ```typescript
 // middleware.ts
 import { NextResponse } from 'next/server';
@@ -257,12 +285,12 @@ export async function middleware(request: NextRequest) {
   // Check authentication for protected routes
   if (request.nextUrl.pathname.startsWith('/dashboard')) {
     const user = await verifyToken(request);
-    
+
     if (!user) {
       return NextResponse.redirect(new URL('/login', request.url));
     }
   }
-  
+
   return NextResponse.next();
 }
 ```
@@ -270,6 +298,7 @@ export async function middleware(request: NextRequest) {
 ## 🧪 Testing Guidelines
 
 ### Running Tests
+
 ```bash
 # Lint code
 npm run lint
@@ -282,6 +311,7 @@ npm run build
 ```
 
 ### Writing Tests
+
 ```typescript
 // __tests__/api/users.test.ts
 import { createMocks } from 'node-mocks-http';
@@ -292,12 +322,12 @@ describe('/api/users', () => {
     const { req, res } = createMocks({
       method: 'GET',
       headers: {
-        authorization: 'Bearer valid-token'
-      }
+        authorization: 'Bearer valid-token',
+      },
     });
 
     await handler(req, res);
-    
+
     expect(res._getStatusCode()).toBe(200);
   });
 });
@@ -306,6 +336,7 @@ describe('/api/users', () => {
 ## 📝 Code Style Guidelines
 
 ### TypeScript Best Practices
+
 ```typescript
 // Use explicit types for function parameters and returns
 function processUser(user: User): Promise<ProcessedUser> {
@@ -324,6 +355,7 @@ interface ApiResponse<T> {
 ```
 
 ### Naming Conventions
+
 - **Files**: `kebab-case` for files, `PascalCase` for components
 - **Variables**: `camelCase`
 - **Constants**: `UPPER_SNAKE_CASE`
@@ -331,6 +363,7 @@ interface ApiResponse<T> {
 - **Database Models**: `PascalCase`
 
 ### Import Organization
+
 ```typescript
 // 1. Node modules
 import React from 'react';
@@ -353,16 +386,49 @@ import type { ApiResponse } from '@/types';
 
 ### Common Issues and Solutions
 
+#### Database Connection Issues
+
+```bash
+# Use the comprehensive database test script
+./scripts/test-db-connection.sh
+
+# This script will test:
+# - PostgreSQL service status
+# - Port connectivity
+# - Authentication
+# - Prisma compatibility
+# - Special character handling
+```
+
 #### Prisma Client Issues
+
 ```bash
 # Regenerate client
 npx prisma generate
 
-# Check database connection
+# Check database connection (manual)
 npx prisma db pull
+
+# Switch between development and production schemas
+cp prisma/schema.production.prisma prisma/schema.prisma  # For PostgreSQL
+cp prisma/schema.sqlite.backup prisma/schema.prisma     # Back to SQLite
+```
+
+#### PostgreSQL Setup Issues
+
+```bash
+# Quick PostgreSQL setup
+sudo ./scripts/quick-postgresql-setup.sh
+
+# Complete PostgreSQL setup
+sudo ./scripts/setup-postgresql.sh
+
+# Test existing PostgreSQL connection
+./scripts/test-db-connection.sh
 ```
 
 #### Next.js Build Issues
+
 ```bash
 # Clear cache
 rm -rf .next
@@ -372,6 +438,7 @@ npx tsc --noEmit
 ```
 
 #### Development Database Issues
+
 ```bash
 # Reset development database
 npx prisma migrate reset
@@ -381,6 +448,7 @@ npx prisma migrate status
 ```
 
 ### Debugging Tools
+
 - **Database**: Prisma Studio (`npx prisma studio`)
 - **Network**: Browser DevTools Network tab
 - **Server**: Console logs and Next.js debug output
@@ -389,6 +457,7 @@ npx prisma migrate status
 ## 📦 Dependency Management
 
 ### Adding New Dependencies
+
 ```bash
 # Production dependency
 npm install package-name
@@ -400,6 +469,7 @@ npm install -D package-name
 ```
 
 ### Keeping Dependencies Updated
+
 ```bash
 # Check for outdated packages
 npm outdated
@@ -414,25 +484,27 @@ npm install package-name@latest
 ## 🚀 Performance Optimization
 
 ### Database Optimization
+
 ```typescript
 // Use selective includes
 const user = await prisma.user.findUnique({
   where: { id },
   include: {
     courses: {
-      select: { id: true, name: true }
-    }
-  }
+      select: { id: true, name: true },
+    },
+  },
 });
 
 // Use pagination
 const users = await prisma.user.findMany({
   skip: (page - 1) * limit,
-  take: limit
+  take: limit,
 });
 ```
 
 ### Next.js Performance
+
 ```typescript
 // Use dynamic imports for large components
 const HeavyComponent = dynamic(() => import('./HeavyComponent'), {
@@ -447,6 +519,7 @@ import Image from 'next/image';
 ## 🔧 Environment Configuration
 
 ### Development Environment
+
 ```env
 # .env.local
 DATABASE_URL="file:./dev.db"
@@ -455,6 +528,7 @@ NODE_ENV="development"
 ```
 
 ### Production Environment
+
 ```env
 # .env.production
 DATABASE_URL="postgresql://user:pass@host:port/db"
@@ -479,6 +553,7 @@ Before submitting a pull request:
 ## 🤝 Contributing Workflow
 
 1. **Create Feature Branch**
+
    ```bash
    git checkout -b feature/your-feature-name
    ```
@@ -489,6 +564,7 @@ Before submitting a pull request:
    - Update documentation
 
 3. **Test Changes**
+
    ```bash
    npm run lint
    npm run type-check
@@ -496,6 +572,7 @@ Before submitting a pull request:
    ```
 
 4. **Commit Changes**
+
    ```bash
    git add .
    git commit -m "feat: add new feature description"
@@ -515,4 +592,4 @@ Before submitting a pull request:
 
 ---
 
-*This guide is living documentation. Update it as the project evolves.*
+_This guide is living documentation. Update it as the project evolves._

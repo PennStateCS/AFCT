@@ -28,6 +28,7 @@ A modern **Next.js 15** application serving as a role-based course management pl
 
 - **Node.js 18+** - [Download here](https://nodejs.org/en/download)
 - **Git** - [Download here](https://git-scm.com/downloads)
+- **PostgreSQL** (for production) - Use our automated scripts below
 
 ### 1️⃣ Clone and Install
 
@@ -49,8 +50,45 @@ Copy-Item .env.example .env.local
 cp .env.example .env.local
 ```
 
-### 3️⃣ Database Setup
+### 3️⃣ PostgreSQL Setup (Production)
 
+For production deployment, use our automated PostgreSQL setup scripts:
+
+#### Option A: Complete Setup (Recommended)
+```bash
+# Make scripts executable
+chmod +x scripts/*.sh
+
+# Run comprehensive PostgreSQL setup
+sudo ./scripts/setup-postgresql.sh
+```
+
+This script will:
+- ✅ Install PostgreSQL and dependencies
+- ✅ Configure security settings
+- ✅ Create application database and user
+- ✅ Set up automated backups
+- ✅ Configure firewall
+- ✅ Install Node.js and PM2
+- ✅ Create production environment file
+
+#### Option B: Quick Setup
+```bash
+# For faster, streamlined setup
+sudo ./scripts/quick-postgresql-setup.sh
+```
+
+#### Option C: Connection Testing
+```bash
+# If you have issues with database connections
+./scripts/test-db-connection.sh
+```
+
+See [PostgreSQL Setup Guide](docs/postgresql-ubuntu-setup.md) for detailed manual installation.
+
+### 4️⃣ Database Setup
+
+#### For Development (SQLite)
 ```bash
 # Generate Prisma client
 npx prisma generate
@@ -62,7 +100,24 @@ npx prisma migrate dev
 npm run seed
 ```
 
-### 4️⃣ Start Development Server
+#### For Production (PostgreSQL)
+If you used the automated PostgreSQL setup scripts, the database is already configured. Just run:
+
+```bash
+# Switch to production schema
+cp prisma/schema.production.prisma prisma/schema.prisma
+
+# Generate Prisma client for PostgreSQL
+npx prisma generate
+
+# Apply migrations to production database
+npx prisma migrate deploy
+
+# Seed production database (optional)
+npm run seed
+```
+
+### 5️⃣ Start Development Server
 
 ```bash
 npm run dev
@@ -180,33 +235,104 @@ npm run build
 
 ---
 
-## � Deployment
+## 🚀 Deployment
 
-### Production Database Setup
+### PostgreSQL Production Setup
 
-#### Option 1: PostgreSQL (Recommended for Production)
+#### Option 1: Automated Setup (Recommended)
 
-1. **Set up PostgreSQL database** (e.g., on DigitalOcean, AWS RDS, or local)
+Use our comprehensive PostgreSQL setup script:
 
-2. **Configure production environment**:
+```bash
+# On your production Ubuntu server
+git clone <repository-url>
+cd afct
+chmod +x scripts/*.sh
 
-   ```bash
-   # Create .env.production
-   echo 'DATABASE_URL="postgresql://username:password@host:port/database"' > .env.production
-   echo 'JWT_SECRET="your-production-jwt-secret"' >> .env.production
-   ```
+# Run the complete PostgreSQL setup
+sudo ./scripts/setup-postgresql.sh
+```
 
-3. **Deploy using the automated script**:
+This will automatically:
+- ✅ Install PostgreSQL with optimal configuration
+- ✅ Create secure database and user
+- ✅ Configure authentication and firewall
+- ✅ Install Node.js and PM2
+- ✅ Create production environment file
+- ✅ Set up automated backups
 
-   ```bash
-   # Cross-platform deployment script
-   npm run deploy:production
+#### Option 2: Quick Setup
 
-   # Or run the script directly
-   node scripts/deploy-production.js
-   ```
+For a faster setup process:
 
-#### Option 2: SQLite (For Simple Deployments)
+```bash
+# Quick PostgreSQL installation and configuration
+sudo ./scripts/quick-postgresql-setup.sh
+```
+
+#### Option 3: Manual Setup
+
+Follow the detailed [PostgreSQL Ubuntu Setup Guide](docs/postgresql-ubuntu-setup.md)
+
+### Application Deployment
+
+After PostgreSQL is set up, deploy your application:
+
+```bash
+# Install dependencies
+npm ci --only=production
+
+# Switch to production schema
+cp prisma/schema.production.prisma prisma/schema.prisma
+
+# Generate Prisma client
+npx prisma generate
+
+# Build application
+npm run build
+
+# Apply database migrations
+npx prisma migrate deploy
+
+# Seed database (optional)
+npm run seed
+
+# Start with PM2
+pm2 start npm --name "afct-dashboard" -- start
+pm2 save
+```
+
+### Troubleshooting Database Connections
+
+If you encounter database connection issues:
+
+```bash
+# Use the connection test script
+./scripts/test-db-connection.sh
+```
+
+This script will:
+- ✅ Test PostgreSQL service status
+- ✅ Verify port connectivity  
+- ✅ Test authentication
+- ✅ Check Prisma compatibility
+- ✅ Handle special characters in passwords
+
+### Legacy Deployment Options
+
+#### Cross-Platform Deployment Script
+
+For existing setups, you can still use the original deployment script:
+
+```bash
+# Cross-platform deployment script
+npm run deploy:production
+
+# Or run the script directly
+node scripts/deploy-production.js
+```
+
+#### SQLite (For Simple Deployments)
 
 1. **Build the application**:
 
@@ -328,7 +454,10 @@ prisma/
   seed.ts                # Database seeding script
 
 scripts/
-  deploy-production.js    # Automated deployment script
+  setup-postgresql.sh     # Complete PostgreSQL installation & setup
+  quick-postgresql-setup.sh # Quick PostgreSQL setup
+  test-db-connection.sh   # Database connection testing & troubleshooting
+  deploy-production.js    # Automated application deployment script
 
 public/
   uploads/               # User uploaded files
@@ -503,7 +632,54 @@ DATABASE_URL="file:./dev.db?connection_limit=1"
 
 ---
 
-## 📚 Learning Resources
+## �️ Automated Scripts Reference
+
+The AFCT Dashboard includes several automated scripts to simplify setup and deployment:
+
+### PostgreSQL Setup Scripts
+
+| Script | Purpose | Usage |
+|--------|---------|-------|
+| `setup-postgresql.sh` | Complete PostgreSQL installation and configuration | `sudo ./scripts/setup-postgresql.sh` |
+| `quick-postgresql-setup.sh` | Fast PostgreSQL setup for testing | `sudo ./scripts/quick-postgresql-setup.sh` |
+| `test-db-connection.sh` | Database connection testing and troubleshooting | `./scripts/test-db-connection.sh` |
+
+### Application Deployment Scripts
+
+| Script | Purpose | Usage |
+|--------|---------|-------|
+| `deploy-production.js` | Cross-platform application deployment | `npm run deploy:production` |
+
+### Script Features
+
+- ✅ **Cross-platform compatibility** (Windows, macOS, Linux)
+- ✅ **Error handling and validation**
+- ✅ **Interactive prompts for configuration**
+- ✅ **Automatic backup creation**
+- ✅ **Security best practices**
+- ✅ **Comprehensive logging**
+
+### Quick Commands Summary
+
+```bash
+# Make all scripts executable
+chmod +x scripts/*.sh
+
+# Complete production setup
+sudo ./scripts/setup-postgresql.sh
+npm run deploy:production
+
+# Quick development setup
+sudo ./scripts/quick-postgresql-setup.sh
+npm run dev
+
+# Troubleshooting
+./scripts/test-db-connection.sh
+```
+
+---
+
+## �📚 Learning Resources
 
 ### Next.js
 
