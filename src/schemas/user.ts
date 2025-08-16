@@ -1,0 +1,53 @@
+// src/schemas/user.ts
+import { z } from 'zod';
+
+export const RoleEnum = z.enum(['ADMIN', 'FACULTY', 'TA', 'STUDENT']);
+
+export const StrongPassword = z
+  .string()
+  .min(8, 'At least 8 characters.')
+  .refine((v) => /[A-Z]/.test(v), { message: 'One uppercase letter.' })
+  .refine((v) => /[a-z]/.test(v), { message: 'One lowercase letter.' })
+  .refine((v) => /\d/.test(v), { message: 'One number.' })
+  .refine((v) => /[^A-Za-z0-9]/.test(v), { message: 'One special character.' });
+
+const BaseUserSchema = z.object({
+  firstName: z.string().trim().min(1, 'First name is required.'),
+  lastName: z.string().trim().min(1, 'Last name is required.'),
+  email: z
+    .string()
+    .trim()
+    .email('Enter a valid email.')
+    .transform((v) => v.toLowerCase()),
+  role: RoleEnum,
+});
+
+export const CreateUserSchema = BaseUserSchema.extend({
+  password: StrongPassword,
+  confirmPassword: z.string(),
+}).refine((d) => d.password === d.confirmPassword, {
+  path: ['confirmPassword'],
+  message: 'Passwords must match.',
+});
+
+const ImageFileOptional = z
+  .instanceof(File, { message: 'Invalid file.' })
+  .refine((f) => f.size <= 5 * 1024 * 1024, 'Avatar must be ≤ 5MB.')
+  .refine((f) => f.type.startsWith('image/'), 'Avatar must be an image.')
+  .optional();
+
+export const UpdateUserSchema = z.object({
+  firstName: z.string().trim().min(1, 'First name is required.'),
+  lastName: z.string().trim().min(1, 'Last name is required.'),
+  role: RoleEnum,
+  /** optional new avatar file */
+  avatarFile: ImageFileOptional,
+  /** if true, server should delete current avatar */
+  deleteAvatar: z.boolean().default(false),
+});
+
+export type CreateUserInput = z.infer<typeof CreateUserSchema>;
+export type CreateUserRaw = z.input<typeof CreateUserSchema>;
+
+export type UpdateUserInput = z.infer<typeof UpdateUserSchema>;
+export type UpdateUserRaw = z.input<typeof UpdateUserSchema>;

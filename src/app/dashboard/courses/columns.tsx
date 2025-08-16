@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { ColumnDef } from '@tanstack/react-table';
-import { Pencil, Trash2, BookOpen } from 'lucide-react';
+import { Pencil, Trash2, BookOpen, ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -159,7 +159,9 @@ export const columns = (
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="secondary">Manage</Button>
+              <Button variant="secondary">
+                <ChevronDown /> Manage
+              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel className="flex items-center gap-2">

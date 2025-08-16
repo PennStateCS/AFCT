@@ -10,11 +10,29 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { User, Role } from '@prisma/client';
-import { useState } from 'react';
-import InputGroup from '@/components/ui/InputGroup';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select';
+import InputGroup from '@/components/ui/InputGroup';
 import { UploadCloud, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
+
+import { useEffect, useMemo, useState } from 'react';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+
+import type { User } from '@prisma/client';
+import {
+  UpdateUserSchema,
+  type UpdateUserRaw,
+  type UpdateUserInput,
+  RoleEnum,
+} from '@/schemas/user';
 
 type EditUserDialogProps = {
   user: User;
@@ -24,94 +42,177 @@ type EditUserDialogProps = {
 };
 
 export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogProps) {
-  const [firstName, setFirstName] = useState(user.firstName);
-  const [lastName, setLastName] = useState(user.lastName);
-  const [role, setRole] = useState<Role>(user.role);
-  const [avatar, setAvatar] = useState<string>(
+  // Local preview state (keep separate from RHF file)
+  const [avatarPreview, setAvatarPreview] = useState<string>(
     user.avatar ? `/uploads/${user.avatar}` : '/default-avatar.png',
   );
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [deleteAvatar, setDeleteAvatar] = useState(false);
 
-  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  // RHF defaults – email is read-only so it isn't in the schema
+  const defaults: UpdateUserRaw = useMemo(
+    () => ({
+      firstName: user.firstName ?? '',
+      lastName: user.lastName ?? '',
+      role: (user.role as any) ?? 'STUDENT',
+      avatarFile: undefined,
+      deleteAvatar: false,
+    }),
+    [user],
+  );
+
+  const {
+    control,
+    handleSubmit,
+    reset,
+    watch,
+    setValue,
+    formState: { errors, isSubmitting, isValid, isDirty },
+  } = useForm<UpdateUserRaw>({
+    resolver: zodResolver(UpdateUserSchema),
+    defaultValues: defaults,
+    mode: 'onBlur',
+    reValidateMode: 'onChange',
+  });
+
+  const deleteAvatar = watch('deleteAvatar');
+
+  // Reset form (avoid error flash on close)
+  useEffect(() => {
+    if (open) {
+      reset(defaults, {
+        keepDirty: false,
+        keepTouched: false,
+        keepErrors: false,
+        keepValues: true,
+      });
+      // Reset preview from current user
+      setAvatarPreview(user.avatar ? `/uploads/${user.avatar}` : '/default-avatar.png');
+    } else {
+      reset(defaults, {
+        keepDirty: false,
+        keepTouched: false,
+        keepErrors: false,
+        keepValues: false,
+      });
+    }
+  }, [open, defaults, reset, user.avatar]);
+
+  // Avatar upload handler: set file in RHF + update local preview + clear delete flag
+  const onAvatarPicked = (file?: File) => {
+    setValue('avatarFile', file as any, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+    setValue('deleteAvatar', false, { shouldDirty: true });
     if (file) {
-      setAvatarFile(file);
-      setDeleteAvatar(false);
       const reader = new FileReader();
-      reader.onload = () => setAvatar(reader.result as string);
+      reader.onload = () => setAvatarPreview(reader.result as string);
       reader.readAsDataURL(file);
     }
   };
 
-  const handleDeleteAvatar = () => {
-    setAvatar('/default-avatar.png');
-    setAvatarFile(null);
-    setDeleteAvatar(true);
+  const onDeleteAvatar = () => {
+    setAvatarPreview('/default-avatar.png');
+    setValue('avatarFile', undefined, { shouldDirty: true });
+    setValue('deleteAvatar', true, { shouldDirty: true });
   };
 
-  const handleSubmit = async () => {
+  const resetForm = () =>
+    reset(defaults, { keepDirty: false, keepTouched: false, keepErrors: false, keepValues: false });
+
+  const onSubmit = async (raw: UpdateUserRaw) => {
+    const parsed: UpdateUserInput = UpdateUserSchema.parse(raw);
+
     const formData = new FormData();
-    formData.append('firstName', firstName);
-    formData.append('lastName', lastName);
-    formData.append('role', role);
-    if (avatarFile) formData.append('avatar', avatarFile);
-    if (deleteAvatar) formData.append('deleteAvatar', 'true');
+    formData.append('firstName', parsed.firstName);
+    formData.append('lastName', parsed.lastName);
+    formData.append('role', parsed.role);
+    if (parsed.avatarFile instanceof File) formData.append('avatar', parsed.avatarFile);
+    if (parsed.deleteAvatar) formData.append('deleteAvatar', 'true');
 
-    await fetch(`/api/users/${user.id}`, {
-      method: 'PATCH',
-      body: formData,
-    });
+    const res = await fetch(`/api/users/${user.id}`, { method: 'PATCH', body: formData });
 
+    if (!res.ok) {
+      const text = await res.text().catch(() => null);
+      toast.error(text || 'Failed to update user');
+      return;
+    }
+
+    // Let parent refresh or patch its state
     await onSave?.({
       ...user,
-      firstName,
-      lastName,
-      role,
-      avatar: deleteAvatar ? null : user.avatar,
+      firstName: parsed.firstName,
+      lastName: parsed.lastName,
+      role: parsed.role as any,
+      // If you want to immediately clear avatar in UI on delete:
+      avatar: parsed.deleteAvatar ? null : user.avatar,
     });
 
+    toast.success('User updated');
+    resetForm();
     setOpen(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(val) => {
+        setOpen(val);
+        if (!val) resetForm();
+      }}
+    >
       <DialogContent className="bg-card">
         <DialogHeader>
           <DialogTitle>Edit User</DialogTitle>
           <DialogDescription>Modify the user’s information and profile photo.</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {/* Avatar block */}
           <div className="flex items-center gap-4">
             <Avatar className="h-20 w-20">
-              <AvatarImage src={avatar} alt="User Avatar" />
+              <AvatarImage src={avatarPreview} alt="User Avatar" />
               <AvatarFallback className="bg-secondary text-secondary-foreground">
-                {firstName?.charAt(0)}
-                {lastName?.charAt(0)}
+                {(watch('firstName') || user.firstName || '?').charAt(0)}
+                {(watch('lastName') || user.lastName || '?').charAt(0)}
               </AvatarFallback>
             </Avatar>
+
             <div className="flex flex-col gap-2">
-              <input
-                id="avatar-upload"
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleAvatarUpload}
+              <Controller
+                control={control}
+                name="avatarFile"
+                render={({ field }) => (
+                  <>
+                    <input
+                      id="avatar-upload"
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => onAvatarPicked(e.target.files?.[0])}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => document.getElementById('avatar-upload')?.click()}
+                      className="flex items-center gap-2"
+                    >
+                      <UploadCloud className="h-4 w-4" />
+                      Upload Avatar
+                    </Button>
+                    {errors.avatarFile && (
+                      <p className="mt-1 text-xs text-red-600">{errors.avatarFile.message}</p>
+                    )}
+                  </>
+                )}
               />
-              <Button
-                variant="outline"
-                onClick={() => document.getElementById('avatar-upload')?.click()}
-                className="flex items-center gap-2"
-              >
-                <UploadCloud className="h-4 w-4" />
-                Upload Avatar
-              </Button>
-              {avatar && avatar !== '/default-avatar.png' && (
+
+              {avatarPreview && avatarPreview !== '/default-avatar.png' && (
                 <Button
+                  type="button"
                   variant="outline"
                   className="flex items-center gap-2 border-red-600 text-red-600 hover:bg-red-50"
-                  onClick={handleDeleteAvatar}
+                  onClick={onDeleteAvatar}
                 >
                   <Trash2 className="h-4 w-4" />
                   Delete Avatar
@@ -120,8 +221,35 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
             </div>
           </div>
 
-          <InputGroup label="First Name" value={firstName} setValue={setFirstName} />
-          <InputGroup label="Last Name" value={lastName} setValue={setLastName} />
+          {/* First name */}
+          <Controller
+            control={control}
+            name="firstName"
+            render={({ field }) => (
+              <InputGroup
+                label="First Name"
+                name="firstName"
+                fieldProps={field}
+                error={errors.firstName?.message}
+              />
+            )}
+          />
+
+          {/* Last name */}
+          <Controller
+            control={control}
+            name="lastName"
+            render={({ field }) => (
+              <InputGroup
+                label="Last Name"
+                name="lastName"
+                fieldProps={field}
+                error={errors.lastName?.message}
+              />
+            )}
+          />
+
+          {/* Email (read-only) */}
           <div>
             <label className="mb-2 block text-sm font-medium">Email</label>
             <input
@@ -132,31 +260,57 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
               className="w-full cursor-not-allowed rounded border bg-gray-200 p-2 text-sm opacity-70"
             />
           </div>
-          <div>
-            <label className="mb-2 block text-sm font-medium">Role</label>
-            <select
-              className="bg-background text-foreground focus:ring-ring w-full rounded border p-2 text-sm focus:ring-2 focus:outline-none"
-              value={role}
-              onChange={(e) => setRole(e.target.value as Role)}
-            >
-              <option value="ADMIN">Admin</option>
-              <option value="FACULTY">Faculty</option>
-              <option value="TA">TA</option>
-              <option value="STUDENT">Student</option>
-            </select>
-          </div>
-        </div>
 
-        <DialogFooter className="mt-4">
-          <DialogClose asChild>
-            <Button type="button" variant="secondary">
-              Cancel
+          {/* Role */}
+          <Controller
+            control={control}
+            name="role"
+            render={({ field }) => (
+              <div>
+                <label className="mb-2 block text-sm font-medium">Role</label>
+                <Select
+                  value={(field.value as any) ?? ''}
+                  onValueChange={(v) => field.onChange(v as (typeof RoleEnum)['_type'])}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select a role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ADMIN">Admin</SelectItem>
+                    <SelectItem value="FACULTY">Faculty</SelectItem>
+                    <SelectItem value="TA">TA</SelectItem>
+                    <SelectItem value="STUDENT">Student</SelectItem>
+                  </SelectContent>
+                </Select>
+                {errors.role && <p className="mt-1 text-xs text-red-600">{errors.role.message}</p>}
+              </div>
+            )}
+          />
+
+          {/* Hidden deleteAvatar flag (driven by Delete button) */}
+          <Controller control={control} name="deleteAvatar" render={() => null} />
+
+          <DialogFooter className="mt-4">
+            <DialogClose asChild>
+              <Button type="button" variant="secondary" onClick={resetForm} disabled={isSubmitting}>
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button
+              type="submit"
+              disabled={!isValid || !isDirty || isSubmitting}
+              title={
+                !isValid
+                  ? 'Fix validation errors to save'
+                  : !isDirty
+                    ? 'No changes to save'
+                    : undefined
+              }
+            >
+              {isSubmitting ? 'Saving…' : 'Save Changes'}
             </Button>
-          </DialogClose>
-          <Button type="button" onClick={handleSubmit}>
-            Save Changes
-          </Button>
-        </DialogFooter>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

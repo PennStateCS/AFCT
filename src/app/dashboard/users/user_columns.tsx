@@ -12,7 +12,7 @@ import { AdminResetPasswordDialog } from '@/components/dialogs/AdminResetPasswor
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Pencil, Trash2, Lock, User2 } from 'lucide-react';
+import { Pencil, Trash2, Lock, User2, ChevronDown } from 'lucide-react';
 
 import {
   DropdownMenu,
@@ -189,7 +189,10 @@ export function getUserColumns(onUserUpdate: () => void): ColumnDef<User>[] {
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="menu">Manage</Button>
+                <Button variant="secondary">
+                  <ChevronDown />
+                  Manage
+                </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-50">
                 <DropdownMenuLabel className="flex items-center gap-2">
