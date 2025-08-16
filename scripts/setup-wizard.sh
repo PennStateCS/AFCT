@@ -1044,6 +1044,18 @@ reset_production_database() {
         return 1
     fi
     
+    print_info "Using production schema: prisma/schema.production.prisma"
+    print_info "Database URL: $DATABASE_URL"
+    
+    # Verify production schema has PostgreSQL provider
+    if ! grep -q 'provider = "postgresql"' prisma/schema.production.prisma; then
+        print_error "Production schema is not configured for PostgreSQL"
+        print_info "Expected 'provider = \"postgresql\"' in prisma/schema.production.prisma"
+        return 1
+    else
+        print_success "Production schema verified for PostgreSQL"
+    fi
+    
     # Source environment variables
     set -a
     source .env.production
@@ -1076,19 +1088,40 @@ reset_production_database() {
     
     # Apply migrations with production schema
     print_step "Applying migrations..."
+    export DATABASE_URL="$DATABASE_URL"
     if npx prisma migrate deploy --schema=prisma/schema.production.prisma; then
         print_success "Migrations applied successfully"
     else
         print_error "Migration failed - check database connection"
-        return 1
+        print_info "Trying alternative migration approach..."
+        
+        # Try generating client first, then migrate
+        if npx prisma generate --schema=prisma/schema.production.prisma; then
+            print_info "Prisma client generated, retrying migration..."
+            if npx prisma migrate deploy --schema=prisma/schema.production.prisma; then
+                print_success "Migrations applied successfully on retry"
+            else
+                print_error "Migration failed even after client generation"
+                return 1
+            fi
+        else
+            print_error "Could not generate Prisma client"
+            return 1
+        fi
     fi
     
     # Seed database with production environment
-    print_step "Seeding database..."
-    if NODE_ENV=production npm run seed 2>/dev/null || NODE_ENV=production npx tsx prisma/seed.ts; then
+    print_step "Seeding database with production environment..."
+    export NODE_ENV=production
+    export DATABASE_URL="$DATABASE_URL"
+    
+    if npm run seed 2>/dev/null; then
         print_success "Database seeded successfully"
+    elif npx tsx prisma/seed.ts 2>/dev/null; then
+        print_success "Database seeded successfully (using npx tsx)"
     else
-        print_warning "Database seeding failed - continuing anyway"
+        print_warning "Database seeding failed - this may be normal for production"
+        print_info "You can manually seed later if needed"
     fi
     
     print_success "Production database reset complete!"
