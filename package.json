@@ -22,7 +22,8 @@
     "db:generate:with-erd": "cp prisma/schema.development.prisma prisma/schema.prisma && prisma generate && echo 'ERD generated successfully at ERD.svg'",
     "db:install-chrome": "echo 'To enable ERD generation, install Chrome/Chromium: sudo apt install chromium-browser (Ubuntu) or download Chrome manually, then run: npm run db:generate:with-erd'",
     "db:test": "node scripts/test-db.js",
-    "db:test:prod": "node scripts/test-db.js .env.production"
+    "db:test:prod": "node scripts/test-db.js .env.production",
+    "db:reset:prod": "echo 'Use setup wizard option 11 for safe production reset'"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.1",
