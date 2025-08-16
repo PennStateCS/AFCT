@@ -1,92 +1,295 @@
 # 📚 AFCT Dashboard
 
-This is a [Next.js](https://nextjs.org) application bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).  
-It serves as the **AFCT Dashboard** — a role-based course management platform for faculty, TAs, and students.
+A modern **Next.js 15** application serving as a role-based course management platform for faculty, TAs, and students. Built with TypeScript, Prisma ORM, and designed for cross-platform development and deployment.
+
+## ✨ Features
+
+- 🔐 **Role-based authentication** (Admin, Faculty, TA, Student)
+- 📝 **Assignment management** with file uploads
+- 💬 **Comments system** with student-specific filtering
+- 📊 **Grade tracking** and submission management
+- 🎨 **Modern UI** with Tailwind CSS and shadcn/ui
+- 🗄️ **Database flexibility** (SQLite for development, PostgreSQL for production)
+- 🚀 **Cross-platform** development and deployment
+
+## 🛠️ Tech Stack
+
+- **Frontend**: Next.js 15, TypeScript, Tailwind CSS, shadcn/ui
+- **Backend**: Next.js API Routes, Prisma ORM
+- **Database**: SQLite (development), PostgreSQL (production)
+- **Authentication**: JWT-based auth system
+- **Deployment**: Linux-ready with automated scripts
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Quick Start
 
-### 1️⃣ Install node.js
+### Prerequisites
 
-1. Go to the download page for node.js: https://nodejs.org/en/download
-2. Scroll down to get a prebuilt Node.js
-3. Select your operating system with the appropriate architecture
-4. Click on one of the green boxes labled `[operating system] Installer` or `Standalone Binary`
-5. Open installer or unzip files
+- **Node.js 18+** - [Download here](https://nodejs.org/en/download)
+- **Git** - [Download here](https://git-scm.com/downloads)
 
-### 2️⃣ Install dependencies
-
-Run one of the following commands in the terminal for this repository (npm is recommended)
+### 1️⃣ Clone and Install
 
 ```bash
+git clone <repository-url>
+cd afct
 npm install
-# or
-yarn install
-# or
-pnpm install
-# or
-bun install
 ```
 
-<br>
+### 2️⃣ Environment Setup
 
-_Possible Error:_
+Copy the environment template:
 
-If you recieve the following error:
+```bash
+# Windows (PowerShell)
+Copy-Item .env.example .env.local
 
-```
-ps1 cannot be loaded because running scripts is disabled on this system. For more informationm see about_Execution_Policies at http://go.microsoft.com/fwlink/?LinkID=135170.
-```
-
-Run the following in your terminal:
-
-```
-Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Unrestricted
+# macOS/Linux
+cp .env.example .env.local
 ```
 
-### 3️⃣ Start the development server
+### 3️⃣ Database Setup
+
+```bash
+# Generate Prisma client
+npx prisma generate
+
+# Run database migrations
+npx prisma migrate dev
+
+# Seed with sample data
+npm run seed
+```
+
+### 4️⃣ Start Development Server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Your app will be running at **[http://localhost:3000](http://localhost:3000)**.
+Visit **[http://localhost:3000](http://localhost:3000)** to see your application.
 
-<br>
+### 🔑 Default Login Credentials
 
-_Possible Error:_
+**All users have the password**: `password123`
 
-If the following is shown when accessing **[http://localhost:3000](http://localhost:3000)**:
-
-```
-@prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
-```
-
-Try `npx prisma generate` and then start the development server
+- **Admin**: `admin@example.com`
+- **Faculty**: `prof1@example.com`, `prof2@example.com`, `prof3@example.com`
+- **TA**: `ta1@example.com`, `ta2@example.com`
+- **Students**: `student1@example.com` through `student26@example.com`
 
 ---
 
-## 🛠 Development Notes
+## 🏗️ Development Guide
 
-- The main entry point for the UI is `app/page.tsx`.
-- Pages auto-refresh when you save changes.
-- This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to optimize and load [Geist](https://vercel.com/font) fonts.
-- **Backend integration** is done via API routes in `src/app/api/`, using **Prisma** as the ORM.
+### Platform-Specific Setup
+
+#### Windows
+
+```powershell
+# If you get PowerShell execution policy errors:
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Unrestricted
+
+# Install dependencies
+npm install
+
+# Start development
+npm run dev
+```
+
+#### macOS/Linux
+
+```bash
+# Install dependencies
+npm install
+
+# Start development
+npm run dev
+```
+
+### Environment Configuration
+
+The project uses three environment files:
+
+- **`.env`** - Default configuration (committed to repo)
+- **`.env.local`** - Local development overrides (not committed)
+- **`.env.production`** - Production configuration (not committed)
+
+#### Required Environment Variables
+
+```env
+# Database
+DATABASE_URL="file:./dev.db"  # SQLite for development
+POSTGRES_URL=""  # PostgreSQL for production
+
+# JWT
+JWT_SECRET="your-super-secret-jwt-key-here"
+
+# File Upload
+UPLOAD_DIR="./public/uploads"
+MAX_FILE_SIZE="10485760"  # 10MB
+```
+
+### Database Management
+
+#### Development Commands
+
+```bash
+# Generate Prisma client (after schema changes)
+npx prisma generate
+
+# Create and apply new migration
+npx prisma migrate dev --name your_migration_name
+
+# Reset database (drops all data and re-runs migrations + seed)
+npx prisma migrate reset
+
+# Seed database with sample data
+npm run seed
+
+# Open database browser (Prisma Studio)
+npx prisma studio
+```
+
+#### Production Commands
+
+```bash
+# Apply migrations without prompts
+npx prisma migrate deploy
+
+# Generate production client
+npx prisma generate
+
+# Seed production database
+npm run seed:production
+```
+
+### Code Quality
+
+```bash
+# Lint code
+npm run lint
+
+# Type check
+npm run type-check
+
+# Build for production
+npm run build
+```
 
 ---
 
-## 📖 Learn More
+## � Deployment
 
-- [Next.js Documentation](https://nextjs.org/docs) – official framework docs.
-- [Learn Next.js](https://nextjs.org/learn) – interactive tutorials.
-- [Prisma Documentation](https://www.prisma.io/docs) – database access and schema management.
+### Production Database Setup
+
+#### Option 1: PostgreSQL (Recommended for Production)
+
+1. **Set up PostgreSQL database** (e.g., on DigitalOcean, AWS RDS, or local)
+
+2. **Configure production environment**:
+
+   ```bash
+   # Create .env.production
+   echo 'DATABASE_URL="postgresql://username:password@host:port/database"' > .env.production
+   echo 'JWT_SECRET="your-production-jwt-secret"' >> .env.production
+   ```
+
+3. **Deploy using the automated script**:
+
+   ```bash
+   # Cross-platform deployment script
+   npm run deploy:production
+
+   # Or run the script directly
+   node scripts/deploy-production.js
+   ```
+
+#### Option 2: SQLite (For Simple Deployments)
+
+1. **Build the application**:
+
+   ```bash
+   npm run build
+   ```
+
+2. **Deploy files** to your server (ensure `prisma/` folder is included)
+
+3. **Run production setup** on the server:
+
+   ```bash
+   # Install dependencies (production only)
+   npm ci --only=production
+
+   # Generate Prisma client
+   npx prisma generate
+
+   # Apply migrations
+   npx prisma migrate deploy
+
+   # Start the application
+   npm start
+   ```
+
+### Deployment Script Features
+
+The automated deployment script (`scripts/deploy-production.js`) handles:
+
+- ✅ Environment validation
+- ✅ Database schema switching (SQLite → PostgreSQL)
+- ✅ Production build generation
+- ✅ Database migration and seeding
+- ✅ Error handling and rollback
+- ✅ Cross-platform compatibility
+
+### Environment-Specific Configurations
+
+#### Development (SQLite)
+
+```env
+DATABASE_URL="file:./dev.db"
+```
+
+#### Production (PostgreSQL)
+
+```env
+DATABASE_URL="postgresql://username:password@host:port/database"
+```
+
+### Manual Production Deployment
+
+If you prefer manual deployment:
+
+```bash
+# 1. Install production dependencies
+npm ci --only=production
+
+# 2. Switch to production schema
+cp prisma/schema.production.prisma prisma/schema.prisma
+
+# 3. Generate production client
+npx prisma generate
+
+# 4. Build application
+npm run build
+
+# 5. Apply migrations
+npx prisma migrate deploy
+
+# 6. Seed database (optional)
+npm run seed
+
+# 7. Start application
+npm start
+```
+
+### Server Requirements
+
+- **Node.js 18+**
+- **PostgreSQL 12+** (for production)
+- **2GB+ RAM** (recommended)
+- **Linux/Windows/macOS** compatible
 
 ---
 
@@ -94,128 +297,305 @@ Try `npx prisma generate` and then start the development server
 
 ```
 src/
-  app/            # Next.js app router
-    api/          # API routes (server-side)
-    dashboard/    # Dashboard pages
-  components/     # Reusable UI components
-  lib/            # Helpers and utilities
-  prisma/         # Prisma schema and migrations
+  app/              # Next.js app router
+    api/            # API routes (server-side)
+      auth/         # Authentication endpoints
+      comments/     # Comments management
+      courses/      # Course management
+      problems/     # Problem management
+      submissions/  # Assignment submissions
+      users/        # User management
+    dashboard/      # Dashboard pages
+      admin/        # Admin-only pages
+      faculty/      # Faculty pages
+      student/      # Student pages
+    login/          # Authentication pages
+  components/       # Reusable UI components
+    dialogs/        # Modal dialogs
+    forms/          # Form components
+    ui/             # Base UI components (shadcn/ui)
+  hooks/            # Custom React hooks
+  lib/              # Utilities and configurations
+    prisma-config.ts # Database configuration
+    auth.ts         # Authentication helpers
+  schemas/          # Validation schemas
+  types/            # TypeScript type definitions
+
+prisma/
+  schema.prisma           # Development schema (SQLite)
+  schema.production.prisma # Production schema (PostgreSQL)
+  migrations/             # Database migrations
+  seed.ts                # Database seeding script
+
+scripts/
+  deploy-production.js    # Automated deployment script
+
+public/
+  uploads/               # User uploaded files
 ```
 
 ---
 
-## 👥 Roles & Access
+## 👥 User Roles & Permissions
 
-- **Admin** – Full system control
-- **Faculty** – Manage courses and assignments
-- **TA** – Assist faculty, manage problems, view submissions
-- **Student** – Access courses, submit assignments
+### 🔧 Admin
+
+- Full system access
+- User management (create, edit, delete)
+- Course and assignment oversight
+- System configuration
+
+### 👨‍🏫 Faculty
+
+- Create and manage courses
+- Create assignments and problems
+- View all student submissions
+- Grade assignments
+- Manage course roster
+
+### 👨‍🎓 TA (Teaching Assistant)
+
+- Assist with course management
+- View and grade submissions
+- Help with problem management
+- Limited user access
+
+### 🎓 Student
+
+- Enroll in courses
+- View assignments
+- Submit solutions
+- Track grades and progress
 
 ---
 
-## 🧑‍💻 Local Development with Database
+## � Troubleshooting
 
-### Initial Database Setup
+### Common Issues
 
-1. **Generate Prisma Client** (required for first setup):
-
-   ```bash
-   npx prisma generate
-   ```
-
-2. **Apply database migrations**:
-
-   ```bash
-   npx prisma migrate dev
-   ```
-
-3. **Seed the database with sample data**:
-   ```bash
-   npm run seed
-   # or alternatively
-   npx prisma db seed
-   ```
-
-### Database Management Commands
-
-**Reset Database & Reseed** (useful during development):
+#### Prisma Client Not Generated
 
 ```bash
-npx prisma migrate reset
-```
-
-This will:
-
-- Drop the database
-- Recreate it
-- Apply all migrations
-- Run the seed script automatically
-
-**Manual Seeding** (if you want to add sample data without reset):
-
-```bash
-npm run seed
-```
-
-**View Database in Browser** (Prisma Studio):
-
-```bash
-npx prisma studio
-```
-
-This opens a web interface at `http://localhost:5555` where you can:
-
-- Browse all database tables and records
-- Edit data directly in the browser
-- View relationships between tables
-- Execute queries and filters
-- Export data in various formats
-
-**Prisma Studio Tips**:
-
-- Use filters to find specific users, courses, or assignments
-- Click on related records to navigate relationships
-- Perfect for debugging database issues during development
-- Safe to use alongside your running Next.js app
-
-### Sample Data Included
-
-The seed file creates:
-
-- **1 Admin user**
-- **3 Faculty users**
-- **2 TA users**
-- **26 Student users**
-- **2 Sample courses**
-- **Problems and assignments**
-- **Course roster memberships**
-
-**Default password for all users**: `password123`
-
-### Database Troubleshooting
-
-**If you encounter Prisma client errors**:
-
-```bash
+# Solution
 npx prisma generate
 npm run dev
 ```
 
-**If migrations are out of sync**:
+#### Migration Errors
 
 ```bash
+# Reset and retry
 npx prisma migrate reset
-# This will reset and reseed automatically
+npx prisma migrate dev
 ```
 
-**If you need to start fresh**:
+#### Database Connection Issues
 
 ```bash
-# Delete the database file (SQLite)
-rm prisma/dev.db
-# Run migrations and seed
-npx prisma migrate dev
-npm run seed
+# Check your DATABASE_URL in .env.local
+# Ensure database server is running
+# Verify credentials and network access
 ```
+
+#### Build Errors
+
+```bash
+# Clear Next.js cache
+rm -rf .next
+npm run build
+```
+
+#### File Upload Issues
+
+```bash
+# Check UPLOAD_DIR permissions
+# Verify MAX_FILE_SIZE setting
+# Ensure public/uploads directory exists
+```
+
+### Platform-Specific Issues
+
+#### Windows PowerShell Execution Policy
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Unrestricted
+```
+
+#### macOS/Linux File Permissions
+
+```bash
+# Fix upload directory permissions
+chmod 755 public/uploads
+```
+
+### Performance Tips
+
+1. **Database Optimization**:
+   - Use connection pooling for PostgreSQL
+   - Index frequently queried fields
+   - Implement pagination for large datasets
+
+2. **File Management**:
+   - Consider cloud storage for large files
+   - Implement file cleanup scripts
+   - Use CDN for static assets
+
+3. **Caching**:
+   - Enable Next.js caching
+   - Use Redis for session storage
+   - Implement API response caching
 
 ---
+
+## 🔧 Advanced Configuration
+
+### Custom Environment Variables
+
+Add custom variables to your environment files:
+
+```env
+# Custom app settings
+APP_NAME="AFCT Dashboard"
+APP_VERSION="1.0.0"
+ADMIN_EMAIL="admin@yourschool.edu"
+
+# File upload limits
+MAX_UPLOAD_SIZE="10485760"  # 10MB
+ALLOWED_FILE_TYPES="pdf,doc,docx,txt,jpg,png"
+
+# Email configuration (optional)
+SMTP_HOST=""
+SMTP_PORT=""
+SMTP_USER=""
+SMTP_PASS=""
+```
+
+### Database Configuration
+
+#### PostgreSQL Connection Pooling
+
+```env
+DATABASE_URL="postgresql://user:pass@host:port/db?connection_limit=20&pool_timeout=20"
+```
+
+#### SQLite Optimizations
+
+```env
+DATABASE_URL="file:./dev.db?connection_limit=1"
+```
+
+### Security Considerations
+
+1. **Environment Variables**:
+   - Never commit `.env.local` or `.env.production`
+   - Use strong, unique JWT secrets
+   - Rotate secrets regularly
+
+2. **File Uploads**:
+   - Validate file types and sizes
+   - Scan uploads for malware
+   - Store uploads outside web root
+
+3. **Database Security**:
+   - Use connection pooling
+   - Enable SSL for PostgreSQL
+   - Regular security updates
+
+---
+
+## 📚 Learning Resources
+
+### Next.js
+
+- [Next.js Documentation](https://nextjs.org/docs)
+- [Learn Next.js](https://nextjs.org/learn)
+- [Next.js Examples](https://github.com/vercel/next.js/tree/canary/examples)
+
+### Prisma
+
+- [Prisma Documentation](https://www.prisma.io/docs)
+- [Prisma Schema Reference](https://www.prisma.io/docs/reference/api-reference/prisma-schema-reference)
+- [Database Migrations](https://www.prisma.io/docs/concepts/components/prisma-migrate)
+
+### TypeScript
+
+- [TypeScript Handbook](https://www.typescriptlang.org/docs/)
+- [TypeScript with Next.js](https://nextjs.org/docs/pages/building-your-application/configuring/typescript)
+
+### UI Components
+
+- [shadcn/ui](https://ui.shadcn.com/)
+- [Tailwind CSS](https://tailwindcss.com/docs)
+- [Radix UI](https://www.radix-ui.com/)
+
+---
+
+## 🤝 Contributing
+
+1. **Fork the repository**
+2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
+3. **Make your changes** and add tests
+4. **Commit changes**: `git commit -m 'Add amazing feature'`
+5. **Push to branch**: `git push origin feature/amazing-feature`
+6. **Open a Pull Request**
+
+### Development Standards
+
+- Use TypeScript for all new code
+- Follow ESLint configuration
+- Add tests for new features
+- Update documentation
+- Follow semantic commit messages
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🆘 Support
+
+Need help? Here are your options:
+
+1. **Check the troubleshooting section** above
+2. **Search existing issues** in the repository
+3. **Create a new issue** with detailed information
+4. **Contact the development team**
+
+### Issue Template
+
+When reporting bugs, please include:
+
+- Operating system and version
+- Node.js version
+- Error messages and logs
+- Steps to reproduce
+- Expected vs actual behavior
+
+---
+
+## 🎯 Roadmap
+
+### Upcoming Features
+
+- [ ] Email notifications
+- [ ] Advanced analytics dashboard
+- [ ] Mobile responsive design improvements
+- [ ] API rate limiting
+- [ ] Enhanced file management
+- [ ] Integration with external learning systems
+- [ ] Advanced grading features
+- [ ] Student collaboration tools
+
+### Version History
+
+- **v1.0.0** - Initial release with core functionality
+- **v1.1.0** - Added comment system and improved UI
+- **v1.2.0** - Cross-platform deployment support
+- **v2.0.0** - (Planned) Enhanced analytics and mobile support
+
+---
+
+_Last updated: January 2025_

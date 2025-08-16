@@ -5,9 +5,18 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:prod": "cross-env NODE_ENV=production next build",
     "start": "next start",
     "lint": "next lint",
-    "seed": "ts-node prisma/seed.ts"
+    "seed": "ts-node prisma/seed.ts",
+    "db:generate": "prisma generate",
+    "db:generate:prod": "prisma generate --schema=prisma/schema.production.prisma",
+    "db:migrate": "prisma migrate dev",
+    "db:migrate:prod": "prisma migrate deploy --schema=prisma/schema.production.prisma",
+    "db:studio": "prisma studio",
+    "db:studio:prod": "prisma studio --schema=prisma/schema.production.prisma",
+    "deploy:prod": "node scripts/deploy-production.js",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.1",
@@ -30,6 +39,7 @@
     "@radix-ui/react-tooltip": "^1.2.7",
     "@tanstack/react-table": "^8.21.3",
     "@tanstack/react-virtual": "^3.13.12",
+    "@types/pg": "^8.15.5",
     "bcrypt": "^6.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -42,6 +52,7 @@
     "next": "^15.4.6",
     "next-auth": "^4.24.11",
     "next-themes": "^0.4.6",
+    "pg": "^8.16.3",
     "prisma": "^6.12.0",
     "react": "^19.1.1",
     "react-day-picker": "^9.8.1",
@@ -62,6 +73,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/uuid": "^10.0.0",
+    "cross-env": "^10.0.0",
     "eslint": "^9",
     "eslint-config-next": "^15.4.6",
     "eslint-config-prettier": "^10.1.8",
