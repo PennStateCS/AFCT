@@ -374,10 +374,21 @@ setup_development_database() {
     # Setup development environment
     print_step "Setting up development environment..."
     
-    # Create .env.local if it doesn't exist
+    # Create .env.local robustly
     if [[ ! -f ".env.local" ]]; then
-        cp .env.example .env.local
-        print_success "Created .env.local file"
+        if [[ -f ".env.example" ]]; then
+            cp .env.example .env.local
+            print_success "Created .env.local from .env.example"
+        else
+            cat > .env.local << EOF
+# AFCT Dashboard Development Environment
+DATABASE_URL="file:./prisma/dev.db"
+NODE_ENV="development"
+NEXTAUTH_URL="http://localhost:3000"
+NEXTAUTH_SECRET="$(openssl rand -base64 32 2>/dev/null || echo dev-secret)"
+EOF
+            print_success "Created .env.local with default SQLite configuration"
+        fi
     else
         print_info ".env.local already exists"
     fi
@@ -507,11 +518,16 @@ setup_production_database() {
     prompt_input "Database user" DB_USER_PROD "$DB_USER_PROD"
     prompt_password "Enter password for database user ($DB_USER_PROD)" DB_PASSWORD_PROD
     
-    # Set postgres superuser password
-    print_step "Setting PostgreSQL superuser password..."
-    prompt_password "Enter password for PostgreSQL superuser (postgres)" POSTGRES_PASSWORD
-    sudo -u postgres psql -c "ALTER USER postgres PASSWORD '$POSTGRES_PASSWORD';"
-    print_success "PostgreSQL superuser password set"
+    # Optionally set postgres superuser password (safer for existing setups)
+    prompt_input "Would you like to set/change the PostgreSQL superuser (postgres) password now? (y/N)" SET_PG_SUPER "n"
+    if [[ "$SET_PG_SUPER" =~ ^[Yy]$ ]]; then
+        print_step "Setting PostgreSQL superuser password..."
+        prompt_password "Enter password for PostgreSQL superuser (postgres)" POSTGRES_PASSWORD
+        sudo -u postgres psql -c "ALTER USER postgres PASSWORD '$POSTGRES_PASSWORD';"
+        print_success "PostgreSQL superuser password set"
+    else
+        print_info "Skipping superuser password change"
+    fi
     
     # Create application database and user with error handling
     print_step "Creating application database and user..."
@@ -605,11 +621,8 @@ EOF
         exit 1
     fi
     
-    # Handle migration issues - use db push for production setup
-    print_step "Synchronizing database schema..."
-    print_info "Using Prisma db push for production setup (safer than migrations)"
-    
     # Generate Prisma client first
+    print_step "Generating Prisma client (production schema)..."
     if npx prisma generate --schema=prisma/schema.production.prisma; then
         print_success "Prisma client generated successfully"
     else
@@ -617,100 +630,47 @@ EOF
         exit 1
     fi
     
-    # Use db push instead of migrations to avoid SQLite/PostgreSQL compatibility issues
-    if npx prisma db push --schema=prisma/schema.production.prisma --accept-data-loss; then
-        print_success "Database schema synchronized successfully"
+    # Decide migration strategy
+    print_step "Synchronizing database schema..."
+    MIGRATION_SQL_COUNT=$(find prisma/migrations -name "*.sql" 2>/dev/null | wc -l | tr -d ' ')
+    if [[ -f "prisma/migrations/migration_lock.toml" ]] && grep -q 'provider = "postgresql"' prisma/migrations/migration_lock.toml 2>/dev/null && [[ "$MIGRATION_SQL_COUNT" -gt 0 ]]; then
+        print_info "Detected PostgreSQL migrations. Running 'prisma migrate deploy'."
+        if npx prisma migrate deploy --schema=prisma/schema.production.prisma; then
+            print_success "Migrations deployed successfully"
+        else
+            print_error "Migration deployment failed"
+            print_info "Trying alternative approach with 'db push'..."
+            if npx prisma db push --schema=prisma/schema.production.prisma --accept-data-loss; then
+                print_success "Database schema synchronized successfully (db push)"
+            else
+                print_error "Failed to synchronize schema via db push"
+                exit 1
+            fi
+        fi
     else
-        print_error "Failed to synchronize database schema"
-        print_info "This may be due to existing data or schema conflicts"
-        exit 1
+        print_warning "No PostgreSQL migration history detected. Using 'db push'."
+        if npx prisma db push --schema=prisma/schema.production.prisma --accept-data-loss; then
+            print_success "Database schema synchronized successfully (db push)"
+        else
+            print_error "Failed to synchronize schema via db push"
+            exit 1
+        fi
     fi
     
-    # Seed database with production-compatible script
-    print_step "Seeding database with sample data..."
-    
-    # Create a production-safe seed script
-    cat > temp_prod_seed.js << 'EOF'
-const { PrismaClient } = require('@prisma/client');
-const bcrypt = require('bcrypt');
-
-const prisma = new PrismaClient();
-
-async function main() {
-  console.log('Starting production database seeding...');
-
-  // Hash password for all users
-  const hashedPassword = await bcrypt.hash('password123', 10);
-
-  // Create Admin User
-  const admin = await prisma.user.upsert({
-    where: { email: 'admin@example.com' },
-    update: {},
-    create: {
-      email: 'admin@example.com',
-      firstName: 'Admin',
-      lastName: 'User',
-      password: hashedPassword,
-      role: 'ADMIN',
-    },
-  });
-  console.log('✓ Created admin user:', admin.email);
-
-  // Create Faculty User
-  const faculty = await prisma.user.upsert({
-    where: { email: 'faculty@example.com' },
-    update: {},
-    create: {
-      email: 'faculty@example.com',
-      firstName: 'Jeffrey',
-      lastName: 'Chiampi',
-      password: hashedPassword,
-      role: 'FACULTY',
-    },
-  });
-  console.log('✓ Created faculty user:', faculty.email);
-
-  // Create Student User
-  const student = await prisma.user.upsert({
-    where: { email: 'student@example.com' },
-    update: {},
-    create: {
-      email: 'student@example.com',
-      firstName: 'John',
-      lastName: 'Doe',
-      password: hashedPassword,
-      role: 'STUDENT',
-    },
-  });
-  console.log('✓ Created student user:', student.email);
-
-  console.log('✓ Database seeding completed successfully!');
-}
-
-main()
-  .catch((e) => {
-    console.error('Error seeding database:', e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
-EOF
-    
-    # Run the production seed
-    if node temp_prod_seed.js; then
-        print_success "Database seeded with sample data"
+    # Seed database with production-safe script
+    print_step "Seeding database with production environment..."
+    set -a
+    source .env.production
+    set +a
+    if node scripts/simple-seed.js; then
+        print_success "Database seeded successfully"
         print_info "Default credentials:"
-        print_info "  Admin: admin@example.com / password123"
-        print_info "  Faculty: faculty@example.com / password123"
-        print_info "  Student: student@example.com / password123"
+        print_info "  Admin: admin@afct.edu / password123"
+        print_info "  Faculty: faculty@afct.edu / password123"
+        print_info "  Student: student@afct.edu / password123"
     else
-        print_warning "Database seeding failed, but setup can continue"
-        print_info "You can create users manually through the application"
+        print_warning "Database seeding failed - you can run: node scripts/simple-seed.js after fixing issues"
     fi
-    
-    # Clean up temp file
-    rm -f temp_prod_seed.js
     
     print_success "Production database setup complete!"
     print_info "Connection string: $DB_CONNECTION_STRING"
@@ -1012,7 +972,7 @@ test_database_connection() {
                 DB_PASSWORD=$(echo $DATABASE_URL | sed -n 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/p')
                 DB_HOST=$(echo $DATABASE_URL | sed -n 's/.*@\([^:]*\):.*/\1/p')
                 DB_PORT=$(echo $DATABASE_URL | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
-                DB_NAME=$(echo $DATABASE_URL | sed -n 's/.*\/\([^?]*\).*/\1/p')
+                DB_NAME=$(echo $DATABASE_URL | sed -n 's:.*/\([^?]*\).*:\1:p')
                 
                 if PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "SELECT 'PostgreSQL connection successful!' as status;" &> /dev/null; then
                     print_success "PostgreSQL database connection successful"
@@ -1103,7 +1063,6 @@ reset_production_database() {
     fi
     
     print_info "Using production schema: prisma/schema.production.prisma"
-    print_info "Database URL: $DATABASE_URL"
     
     # Verify production schema has PostgreSQL provider
     if ! grep -q 'provider = "postgresql"' prisma/schema.production.prisma; then
@@ -1114,22 +1073,30 @@ reset_production_database() {
         print_success "Production schema verified for PostgreSQL"
     fi
     
-    # Source environment variables
+    # Source environment variables (before logging DB URL)
     set -a
     source .env.production
     set +a
+    print_info "Database URL: $DATABASE_URL"
     
     # Extract connection details
     DB_USER=$(echo $DATABASE_URL | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p')
     DB_PASSWORD=$(echo $DATABASE_URL | sed -n 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/p')
-    DB_NAME=$(echo $DATABASE_URL | sed -n 's/.*\/\([^?]*\).*/\1/p')
+    DB_NAME=$(echo $DATABASE_URL | sed -n 's:.*/\([^?]*\).*:\1:p')
     
     print_info "Resetting database: $DB_NAME"
     print_info "User: $DB_USER"
     
-    # Drop and recreate database
+    # Safely drop and recreate database (terminate existing connections first)
+    print_step "Terminating existing connections..."
+    if sudo -u postgres psql -v ON_ERROR_STOP=1 -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$DB_NAME' AND pid <> pg_backend_pid();"; then
+        print_success "Connections terminated"
+    else
+        print_warning "Could not terminate some connections (may be safe to ignore)"
+    fi
+    
     print_step "Dropping existing database..."
-    if sudo -u postgres psql -c "DROP DATABASE IF EXISTS $DB_NAME;"; then
+    if sudo -u postgres psql -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS \"$DB_NAME\";"; then
         print_success "Database dropped"
     else
         print_error "Failed to drop database"
@@ -1137,49 +1104,66 @@ reset_production_database() {
     fi
     
     print_step "Recreating database..."
-    if sudo -u postgres psql -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;"; then
+    if sudo -u postgres psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"$DB_NAME\" OWNER \"$DB_USER\";"; then
         print_success "Database recreated"
     else
         print_error "Failed to recreate database"
         return 1
     fi
     
-    # Apply migrations with production schema
-    print_step "Applying migrations..."
+    # Ensure env vars are exported for Prisma
+    export NODE_ENV=production
     export DATABASE_URL="$DATABASE_URL"
-    if npx prisma migrate deploy --schema=prisma/schema.production.prisma; then
-        print_success "Migrations applied successfully"
+    
+    # Generate Prisma client first (using production schema)
+    print_step "Generating Prisma client (production schema)..."
+    if npx prisma generate --schema=prisma/schema.production.prisma; then
+        print_success "Prisma client generated successfully"
     else
-        print_error "Migration failed - check database connection"
-        print_info "Trying alternative migration approach..."
-        
-        # Try generating client first, then migrate
-        if npx prisma generate --schema=prisma/schema.production.prisma; then
-            print_info "Prisma client generated, retrying migration..."
-            if npx prisma migrate deploy --schema=prisma/schema.production.prisma; then
-                print_success "Migrations applied successfully on retry"
+        print_error "Failed to generate Prisma client"
+        return 1
+    fi
+    
+    # Apply migrations or fallback to db push
+    print_step "Applying schema to database..."
+    MIGRATION_SQL_COUNT=$(find prisma/migrations -name "*.sql" 2>/dev/null | wc -l | tr -d ' ')
+    if [[ -f "prisma/migrations/migration_lock.toml" ]] && grep -q 'provider = "postgresql"' prisma/migrations/migration_lock.toml 2>/dev/null && [[ "$MIGRATION_SQL_COUNT" -gt 0 ]]; then
+        print_info "Detected PostgreSQL migrations. Running 'prisma migrate deploy'."
+        if npx prisma migrate deploy --schema=prisma/schema.production.prisma; then
+            print_success "Migrations deployed successfully"
+        else
+            print_error "Migration deployment failed"
+            print_info "Trying alternative approach with 'db push'..."
+            if npx prisma db push --schema=prisma/schema.production.prisma --accept-data-loss; then
+                print_success "Database schema synchronized successfully (db push)"
             else
-                print_error "Migration failed even after client generation"
+                print_error "Failed to synchronize schema via db push"
                 return 1
             fi
+        fi
+    else
+        print_warning "No PostgreSQL migration history detected. Using 'db push'."
+        if npx prisma db push --schema=prisma/schema.production.prisma --accept-data-loss; then
+            print_success "Database schema synchronized successfully (db push)"
         else
-            print_error "Could not generate Prisma client"
+            print_error "Failed to synchronize schema via db push"
             return 1
         fi
     fi
     
-    # Seed database with production environment
+    # Seed database with production-safe script
     print_step "Seeding database with production environment..."
-    export NODE_ENV=production
-    export DATABASE_URL="$DATABASE_URL"
-    
-    if npm run seed 2>/dev/null; then
+    set -a
+    source .env.production
+    set +a
+    if node scripts/simple-seed.js; then
         print_success "Database seeded successfully"
-    elif npx tsx prisma/seed.ts 2>/dev/null; then
-        print_success "Database seeded successfully (using npx tsx)"
+        print_info "Default credentials:"
+        print_info "  Admin: admin@afct.edu / password123"
+        print_info "  Faculty: faculty@afct.edu / password123"
+        print_info "  Student: student@afct.edu / password123"
     else
-        print_warning "Database seeding failed - this may be normal for production"
-        print_info "You can manually seed later if needed"
+        print_warning "Database seeding failed - you can run: node scripts/simple-seed.js after fixing issues"
     fi
     
     print_success "Production database reset complete!"
@@ -1253,7 +1237,7 @@ troubleshoot_database() {
                 DB_PASSWORD=$(echo $DATABASE_URL | sed -n 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/p')
                 DB_HOST=$(echo $DATABASE_URL | sed -n 's/.*@\([^:]*\):.*/\1/p')
                 DB_PORT=$(echo $DATABASE_URL | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
-                DB_NAME=$(echo $DATABASE_URL | sed -n 's/.*\/\([^?]*\).*/\1/p')
+                DB_NAME=$(echo $DATABASE_URL | sed -n 's:.*/\([^?]*\).*:\1:p')
                 
                 print_info "Connection details:"
                 print_info "  Host: $DB_HOST"
