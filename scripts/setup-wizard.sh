@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash 
 
 # =============================================================================
 # AFCT Dashboard Setup Wizard
@@ -49,6 +49,14 @@ print_header() {
 mask_db_url() {
     local url="$1"
     echo "$url" | sed -E 's#(postgresql://[^:]+):[^@]+@#\1:****@#'
+}
+
+# ---- URL encoding/decoding helpers (use Node to be fully RFC 3986 compliant) ----
+url_encode() {
+  node -e "try{process.stdout.write(encodeURIComponent(process.argv[1]||''))}catch{process.stdout.write(process.argv[1]||'')}" "$1" 2>/dev/null || echo -n "$1"
+}
+url_decode() {
+  node -e "try{process.stdout.write(decodeURIComponent(process.argv[1]||''))}catch{process.stdout.write(process.argv[1]||'')}" "$1" 2>/dev/null || echo -n "$1"
 }
 
 # Default configuration
@@ -125,6 +133,7 @@ command_exists() {
 pause() {
     read -p "Press [Enter] to continue..."
 }
+
 # =============================================================================
 # Menu Functions
 # =============================================================================
@@ -409,7 +418,6 @@ EOF
             print_success "Development schema with ERD support activated"
         else
             print_step "Using development schema without ERD..."
-            # Use the basic schema without ERD generator
             print_success "Development schema activated (ERD disabled - requires Chrome/Chromium)"
         fi
     else
@@ -531,12 +539,10 @@ setup_production_database() {
         print_error "Invalid port. Must be a number."
         return 1
     fi
-    
-    # URL-encode password to avoid breaking the connection string
-    ENCODED_DB_PASSWORD_PROD=$(node -e "console.log(encodeURIComponent(process.argv[1]))" "$DB_PASSWORD_PROD" 2>/dev/null)
-    if [[ -z "$ENCODED_DB_PASSWORD_PROD" ]]; then
-        ENCODED_DB_PASSWORD_PROD="$DB_PASSWORD_PROD"
-    fi
+
+    # URL-encode user and password to avoid breaking the connection string
+    ENCODED_DB_USER_PROD=$(url_encode "$DB_USER_PROD")
+    ENCODED_DB_PASSWORD_PROD=$(url_encode "$DB_PASSWORD_PROD")
     
     # Optionally set postgres superuser password (safer for existing setups)
     prompt_input "Would you like to set/change the PostgreSQL superuser (postgres) password now? (y/N)" SET_PG_SUPER "n"
@@ -549,20 +555,18 @@ setup_production_database() {
         print_info "Skipping superuser password change"
     fi
     
-    # Create application database and user with error handling
+    # Create application database and user with error handling (use RAW values here)
     print_step "Creating application database and user..."
     
-    # Create user first
     if sudo -u postgres psql -tc "SELECT 1 FROM pg_user WHERE usename = '$DB_USER_PROD'" | grep -q 1; then
         print_info "User '$DB_USER_PROD' already exists, updating password..."
-        sudo -u postgres psql -c "ALTER USER $DB_USER_PROD WITH PASSWORD '$DB_PASSWORD_PROD';"
+        sudo -u postgres psql -c "ALTER USER \"$DB_USER_PROD\" WITH PASSWORD '$DB_PASSWORD_PROD';"
     else
         print_step "Creating new user '$DB_USER_PROD'..."
-        sudo -u postgres psql -c "CREATE USER $DB_USER_PROD WITH PASSWORD '$DB_PASSWORD_PROD';"
+        sudo -u postgres psql -c "CREATE USER \"$DB_USER_PROD\" WITH PASSWORD '$DB_PASSWORD_PROD';"
         print_success "User '$DB_USER_PROD' created"
     fi
     
-    # Create database
     if sudo -u postgres psql -lqt | cut -d \| -f 1 | grep -qw "$DB_NAME_PROD"; then
         print_info "Database '$DB_NAME_PROD' already exists"
     else
@@ -571,24 +575,21 @@ setup_production_database() {
         print_success "Database '$DB_NAME_PROD' created"
     fi
     
-    # Grant privileges
-    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME_PROD TO $DB_USER_PROD;"
+    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE \"$DB_NAME_PROD\" TO \"$DB_USER_PROD\";"
     print_success "Privileges granted to user '$DB_USER_PROD'"
     
     print_success "Database '$DB_NAME_PROD' and user '$DB_USER_PROD' configured"
     
-    # Skip the complex authentication configuration for now - use simpler approach
     print_step "Restarting PostgreSQL..."
     sudo systemctl restart postgresql
     print_success "PostgreSQL restarted"
     
-    # Wait a moment for service to be ready
     sleep 2
     
-    # Create production environment file with URL-encoded password
+    # Build the production .env with ENCODED credentials
     print_step "Creating production environment file..."
-    DB_CONNECTION_STRING="postgresql://$DB_USER_PROD:$ENCODED_DB_PASSWORD_PROD@$DB_HOST_PROD:$DB_PORT_PROD/$DB_NAME_PROD"
-    JWT_SECRET=$(openssl rand -base64 32)
+    DB_CONNECTION_STRING="postgresql://$ENCODED_DB_USER_PROD:$ENCODED_DB_PASSWORD_PROD@$DB_HOST_PROD:$DB_PORT_PROD/$DB_NAME_PROD"
+    JWT_SECRET="$(openssl rand -base64 32)"
     
     cat > .env.production << EOF
 # AFCT Dashboard Production Environment
@@ -632,9 +633,10 @@ EOF
     # Set environment for all operations
     export DATABASE_URL="$DB_CONNECTION_STRING"
     
-    # Test connection first (psql)
+    # Test connection first (psql) — DECODE password for PGPASSWORD
     print_step "Testing database connection..."
-    if PGPASSWORD="$DB_PASSWORD_PROD" psql -h "$DB_HOST_PROD" -p "$DB_PORT_PROD" -U "$DB_USER_PROD" -d "$DB_NAME_PROD" -c "SELECT 'Connection successful!' as status;" &> /dev/null; then
+    DECODED_DB_PASSWORD_PROD=$(url_decode "$ENCODED_DB_PASSWORD_PROD")
+    if PGPASSWORD="$DECODED_DB_PASSWORD_PROD" psql -h "$DB_HOST_PROD" -p "$DB_PORT_PROD" -U "$DB_USER_PROD" -d "$DB_NAME_PROD" -c "SELECT 'Connection successful!' as status;" &> /dev/null; then
         print_success "Database connection test passed"
     else
         print_error "Database connection test failed"
@@ -957,7 +959,6 @@ deploy_application() {
 test_database_connection() {
     print_header "🔍 Database Connection Test"
     
-    # Check which environment to test
     echo "Which database would you like to test?"
     echo "1) Development (SQLite)"
     echo "2) Production (PostgreSQL)"
@@ -966,7 +967,6 @@ test_database_connection() {
     
     case $db_choice in
         1)
-            # Test SQLite
             if [[ -f "prisma/dev.db" ]]; then
                 print_step "Testing SQLite connection..."
                 if sqlite3 prisma/dev.db "SELECT 'SQLite connection successful!' as status;" 2>/dev/null; then
@@ -979,23 +979,24 @@ test_database_connection() {
             fi
             ;;
         2)
-            # Test PostgreSQL
             if [[ -f ".env.production" ]]; then
                 print_step "Testing PostgreSQL connection..."
                 
-                # Source environment variables
                 set -a
                 source .env.production
                 set +a
                 
-                # Extract connection details from DATABASE_URL
-                DB_USER=$(echo $DATABASE_URL | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p')
-                DB_PASSWORD=$(echo $DATABASE_URL | sed -n 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/p')
-                DB_HOST=$(echo $DATABASE_URL | sed -n 's/.*@\([^:]*\):.*/\1/p')
-                DB_PORT=$(echo $DATABASE_URL | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
-                DB_NAME=$(echo $DATABASE_URL | sed -n 's:.*/\([^?]*\).*:\1:p')
+                # Extract connection pieces (may contain URL-encoded values)
+                DB_USER_ENC=$(echo "$DATABASE_URL" | sed -n 's#.*://\([^:/]*\).*#\1#p')
+                DB_PASS_ENC=$(echo "$DATABASE_URL" | sed -n 's#.*://[^:]*:\([^@]*\)@.*#\1#p')
+                DB_HOST=$(echo "$DATABASE_URL" | sed -n 's#.*@\([^:/]*\).*#\1#p')
+                DB_PORT=$(echo "$DATABASE_URL" | sed -n 's#.*:\([0-9][0-9]*\)/.*#\1#p')
+                DB_NAME=$(echo "$DATABASE_URL" | sed -n 's#.*/\([^?]*\).*#\1#p')
+
+                DB_USER=$(url_decode "$DB_USER_ENC")
+                DB_PASS=$(url_decode "$DB_PASS_ENC")
                 
-                if PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "SELECT 'PostgreSQL connection successful!' as status;" &> /dev/null; then
+                if PGPASSWORD="$DB_PASS" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "SELECT 'PostgreSQL connection successful!' as status;" &> /dev/null; then
                     print_success "PostgreSQL database connection successful"
                 else
                     print_error "PostgreSQL database connection failed"
@@ -1030,23 +1031,19 @@ reset_development_database() {
         return 0
     fi
     
-    # Remove existing database
     if [[ -f "prisma/dev.db" ]]; then
         print_step "Removing existing database..."
         rm -f prisma/dev.db
         print_success "Existing database removed"
     fi
     
-    # Reset migrations
     print_step "Resetting migrations..."
     rm -rf prisma/migrations
     
-    # Run fresh migration
     print_step "Creating fresh database..."
     npx prisma migrate dev --name init
     print_success "Fresh database created"
     
-    # Seed database
     print_step "Seeding database..."
     npm run seed 2>/dev/null || npx tsx prisma/seed.ts
     print_success "Database seeded"
@@ -1070,14 +1067,12 @@ reset_production_database() {
         return 0
     fi
     
-    # Check if production environment exists
     if [[ ! -f ".env.production" ]]; then
         print_error "Production environment not configured"
         print_info "Please run 'Setup Production Database' first (option 7)"
         return 1
     fi
     
-    # Check if production schema exists
     if [[ ! -f "prisma/schema.production.prisma" ]]; then
         print_error "Production schema file not found: prisma/schema.production.prisma"
         return 1
@@ -1085,7 +1080,6 @@ reset_production_database() {
     
     print_info "Using production schema: prisma/schema.production.prisma"
     
-    # Verify production schema has PostgreSQL provider
     if ! grep -q 'provider = "postgresql"' prisma/schema.production.prisma; then
         print_error "Production schema is not configured for PostgreSQL"
         print_info "Expected 'provider = \"postgresql\"' in prisma/schema.production.prisma"
@@ -1094,21 +1088,22 @@ reset_production_database() {
         print_success "Production schema verified for PostgreSQL"
     fi
     
-    # Source environment variables (before logging DB URL)
     set -a
     source .env.production
     set +a
-    print_info "Database URL: $DATABASE_URL"
+    print_info "Database URL: $(mask_db_url "$DATABASE_URL")"
     
-    # Extract connection details
-    DB_USER=$(echo $DATABASE_URL | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p')
-    DB_PASSWORD=$(echo $DATABASE_URL | sed -n 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/p')
-    DB_NAME=$(echo $DATABASE_URL | sed -n 's:.*/\([^?]*\).*:\1:p')
+    # Extract, then DECODE user/pass for PGPASSWORD usage
+    DB_USER_ENC=$(echo "$DATABASE_URL" | sed -n 's#.*://\([^:/]*\).*#\1#p')
+    DB_PASS_ENC=$(echo "$DATABASE_URL" | sed -n 's#.*://[^:]*:\([^@]*\)@.*#\1#p')
+    DB_NAME=$(echo "$DATABASE_URL" | sed -n 's#.*/\([^?]*\).*#\1#p')
+
+    DB_USER=$(url_decode "$DB_USER_ENC")
+    DB_PASSWORD=$(url_decode "$DB_PASS_ENC")
     
     print_info "Resetting database: $DB_NAME"
     print_info "User: $DB_USER"
     
-    # Safely drop and recreate database (terminate existing connections first)
     print_step "Terminating existing connections..."
     if sudo -u postgres psql -v ON_ERROR_STOP=1 -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$DB_NAME' AND pid <> pg_backend_pid();"; then
         print_success "Connections terminated"
@@ -1132,11 +1127,9 @@ reset_production_database() {
         return 1
     fi
     
-    # Ensure env vars are exported for Prisma
     export NODE_ENV=production
     export DATABASE_URL="$DATABASE_URL"
     
-    # Generate Prisma client first (using production schema)
     print_step "Generating Prisma client (production schema)..."
     if npx prisma generate --schema=prisma/schema.production.prisma; then
         print_success "Prisma client generated successfully"
@@ -1145,7 +1138,6 @@ reset_production_database() {
         return 1
     fi
     
-    # Apply migrations or fallback to db push
     print_step "Applying schema to database..."
     MIGRATION_SQL_COUNT=$(find prisma/migrations -name "*.sql" 2>/dev/null | wc -l | tr -d ' ')
     if [[ -f "prisma/migrations/migration_lock.toml" ]] && grep -q 'provider = "postgresql"' prisma/migrations/migration_lock.toml 2>/dev/null && [[ "$MIGRATION_SQL_COUNT" -gt 0 ]]; then
@@ -1172,7 +1164,6 @@ reset_production_database() {
         fi
     fi
     
-    # Seed database with production-safe script
     print_step "Seeding database with production environment..."
     set -a
     source .env.production
@@ -1208,16 +1199,10 @@ troubleshoot_database() {
     case $db_choice in
         1)
             print_step "SQLite Development Database Troubleshooting"
-            
-            # Check if SQLite database exists
             if [[ -f "prisma/dev.db" ]]; then
                 print_success "SQLite database file found: prisma/dev.db"
-                
-                # Check file size
                 DB_SIZE=$(du -h prisma/dev.db | cut -f1)
                 print_info "Database size: $DB_SIZE"
-                
-                # Try to connect
                 if sqlite3 prisma/dev.db "SELECT COUNT(*) FROM sqlite_master;" &>/dev/null; then
                     print_success "SQLite connection test passed"
                 else
@@ -1234,8 +1219,6 @@ troubleshoot_database() {
             ;;
         2)
             print_step "PostgreSQL Production Database Troubleshooting"
-            
-            # Check PostgreSQL service
             if systemctl is-active --quiet postgresql; then
                 print_success "PostgreSQL service is running"
             else
@@ -1244,21 +1227,22 @@ troubleshoot_database() {
                 return 1
             fi
             
-            # Check if .env.production exists
             if [[ -f ".env.production" ]]; then
                 print_success "Production environment file found"
                 
-                # Source environment
                 set -a
                 source .env.production
                 set +a
                 
-                # Extract connection details
-                DB_USER=$(echo $DATABASE_URL | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p')
-                DB_PASSWORD=$(echo $DATABASE_URL | sed -n 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/p')
-                DB_HOST=$(echo $DATABASE_URL | sed -n 's/.*@\([^:]*\):.*/\1/p')
-                DB_PORT=$(echo $DATABASE_URL | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
-                DB_NAME=$(echo $DATABASE_URL | sed -n 's:.*/\([^?]*\).*:\1:p')
+                # Pull parts (encoded in URL) then decode for testing
+                DB_USER_ENC=$(echo "$DATABASE_URL" | sed -n 's#.*://\([^:/]*\).*#\1#p')
+                DB_PASS_ENC=$(echo "$DATABASE_URL" | sed -n 's#.*://[^:]*:\([^@]*\)@.*#\1#p')
+                DB_HOST=$(echo "$DATABASE_URL" | sed -n 's#.*@\([^:/]*\).*#\1#p')
+                DB_PORT=$(echo "$DATABASE_URL" | sed -n 's#.*:\([0-9][0-9]*\)/.*#\1#p')
+                DB_NAME=$(echo "$DATABASE_URL" | sed -n 's#.*/\([^?]*\).*#\1#p')
+                
+                DB_USER=$(url_decode "$DB_USER_ENC")
+                DB_PASSWORD=$(url_decode "$DB_PASS_ENC")
                 
                 print_info "Connection details:"
                 print_info "  Host: $DB_HOST"
@@ -1266,14 +1250,11 @@ troubleshoot_database() {
                 print_info "  Database: $DB_NAME"
                 print_info "  User: $DB_USER"
                 
-                # Test with Node.js
                 print_step "Testing with Node.js..."
                 if npm run db:test:prod; then
                     print_success "Node.js connection test passed"
                 else
                     print_warning "Node.js connection test failed"
-                    
-                    # Test with psql
                     print_step "Testing with psql..."
                     if PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "SELECT version();" &>/dev/null; then
                         print_success "psql connection test passed"
@@ -1281,17 +1262,11 @@ troubleshoot_database() {
                         print_info "Try: npx prisma generate --schema=prisma/schema.production.prisma"
                     else
                         print_error "psql connection test failed"
-                        
-                        # Show authentication troubleshooting
                         print_info "Common solutions:"
-                        print_info "1. Check if user exists:"
-                        print_info "   sudo -u postgres psql -c \"\\du\""
-                        print_info "2. Check if database exists:"
-                        print_info "   sudo -u postgres psql -l | grep $DB_NAME"
-                        print_info "3. Check authentication file:"
-                        print_info "   sudo cat /etc/postgresql/*/main/pg_hba.conf | grep afct"
-                        print_info "4. Restart PostgreSQL:"
-                        print_info "   sudo systemctl restart postgresql"
+                        print_info "1. Check if user exists: sudo -u postgres psql -c \"\\du\""
+                        print_info "2. Check if database exists: sudo -u postgres psql -l | grep $DB_NAME"
+                        print_info "3. Check authentication file: sudo cat /etc/postgresql/*/main/pg_hba.conf | grep $DB_USER"
+                        print_info "4. Restart PostgreSQL: sudo systemctl restart postgresql"
                     fi
                 fi
             else
@@ -1314,7 +1289,6 @@ troubleshoot_database() {
 check_migration_issues() {
     print_header "🔧 Checking Migration Issues"
     
-    # Check if we're in project directory
     if [[ ! -f "package.json" ]]; then
         print_error "Not in AFCT Dashboard project directory"
         print_info "Please run this script from the project root directory"
@@ -1324,7 +1298,6 @@ check_migration_issues() {
     
     print_step "Checking project structure..."
     
-    # Check for schema files
     if [[ -f "prisma/schema.prisma" ]]; then
         print_success "Found development schema: prisma/schema.prisma"
     else
@@ -1339,8 +1312,6 @@ check_migration_issues() {
     fi
     
     print_step "Checking migration files..."
-    
-    # Check if migration files exist
     if [[ ! -d "prisma/migrations" ]]; then
         print_warning "No migrations directory found"
         print_info "This is normal for a fresh setup or when using db push"
@@ -1348,8 +1319,6 @@ check_migration_issues() {
     else
         MIGRATION_COUNT=$(find prisma/migrations -name "*.sql" | wc -l)
         print_info "Found $MIGRATION_COUNT migration SQL files"
-        
-        # List migration directories
         print_step "Migration directories:"
         for dir in prisma/migrations/*/; do
             if [[ -d "$dir" ]]; then
@@ -1359,12 +1328,9 @@ check_migration_issues() {
         done
     fi
     
-    # Check migration lock file
     if [[ -f "prisma/migrations/migration_lock.toml" ]]; then
         PROVIDER=$(grep "provider = " prisma/migrations/migration_lock.toml | cut -d'"' -f2)
         print_info "Migration lock provider: $PROVIDER"
-        
-        # Check for SQLite/PostgreSQL mismatch
         if [[ "$PROVIDER" == "sqlite" ]] && [[ -f "prisma/schema.production.prisma" ]]; then
             SCHEMA_PROVIDER=$(grep 'provider = "' prisma/schema.production.prisma | cut -d'"' -f2)
             if [[ "$SCHEMA_PROVIDER" == "postgresql" ]]; then
@@ -1389,7 +1355,6 @@ check_migration_issues() {
         print_info "No migration lock file found (normal for fresh setup)"
     fi
     
-    # Check environment files
     print_step "Checking environment configuration..."
     
     if [[ -f ".env" ]]; then
@@ -1427,14 +1392,12 @@ check_migration_issues() {
 fix_migration_provider_mismatch() {
     print_step "Fixing migration provider mismatch..."
     
-    # Backup existing migrations
     if [[ -d "prisma/migrations" ]]; then
         print_step "Backing up existing migrations..."
         cp -r prisma/migrations prisma/migrations_backup_$(date +%Y%m%d_%H%M%S)
         print_success "Migrations backed up"
     fi
     
-    # Update migration lock file
     if [[ -f "prisma/migrations/migration_lock.toml" ]]; then
         print_step "Updating migration lock to PostgreSQL..."
         sed -i 's/provider = "sqlite"/provider = "postgresql"/' prisma/migrations/migration_lock.toml
@@ -1449,7 +1412,6 @@ fix_migration_provider_mismatch() {
 validate_production_environment() {
     print_header "✅ Validating Production Environment"
     
-    # Check required files
     print_step "Checking required files..."
     
     local required_files=(
@@ -1467,7 +1429,6 @@ validate_production_environment() {
         fi
     done
     
-    # Check environment variables
     if [[ -f ".env.production" ]]; then
         print_step "Checking environment variables..."
         
@@ -1485,7 +1446,6 @@ validate_production_environment() {
             fi
         done
         
-        # Check DATABASE_URL format
         if grep -q "postgresql://" .env.production; then
             print_success "PostgreSQL connection string detected"
         else
@@ -1493,22 +1453,17 @@ validate_production_environment() {
         fi
     fi
     
-    # Check database connection if possible
     if command_exists "psql" && [[ -f ".env.production" ]]; then
         print_step "Testing database connection..."
-        
-        # Extract connection details from .env.production
-        local db_url=$(grep "^DATABASE_URL=" .env.production | cut -d'=' -f2 | tr -d '"')
-        
+        local db_url
+        db_url=$(grep "^DATABASE_URL=" .env.production | cut -d'=' -f2- | tr -d '"')
         if [[ -n "$db_url" ]]; then
             export DATABASE_URL="$db_url"
-            
-            # Try to connect
+            # do a no-op DB execute to test connectivity
             if npx prisma db execute --file /dev/null --schema=prisma/schema.production.prisma 2>/dev/null; then
                 print_success "Database connection successful"
             else
-                print_warning "Database connection failed"
-                print_info "This may be normal if the database hasn't been set up yet"
+                print_warning "Database connection failed (may be normal if DB not initialized yet)"
             fi
         fi
     fi
@@ -1522,7 +1477,6 @@ validate_production_environment() {
 # =============================================================================
 
 main() {
-    # Check if in project directory
     if [[ ! -f "package.json" ]] && [[ "$1" != "0" ]] && [[ "$1" != "12" ]] && [[ "$1" != "13" ]] && [[ "$1" != "14" ]]; then
         print_error "Please run this script from the AFCT Dashboard project directory"
         exit 1
