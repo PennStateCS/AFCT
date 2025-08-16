@@ -67,7 +67,6 @@ async function main() {
     console.log('   Faculty: faculty@afct.edu / password123');
     console.log('   Student: student@afct.edu / password123');
     console.log('\n⚠️  Please change these passwords after first login!');
-
   } catch (error) {
     console.error('❌ Error seeding database:', error);
     throw error;

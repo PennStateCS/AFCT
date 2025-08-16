@@ -10,7 +10,7 @@
     "start:prod": "cross-env NODE_ENV=production dotenv -e .env.production -- next start",
     "lint": "next lint",
     "seed": "ts-node prisma/seed.ts",
-    "seed:prod": "cross-env NODE_ENV=production dotenv -e .env.production -- node scripts/prod-seed.js",
+    "seed:prod": "cross-env NODE_ENV=production dotenv -e .env.production -- ts-node prisma/seed.ts",
     "seed:simple": "node scripts/simple-seed.js",
     "db:generate": "prisma generate",
     "db:generate:prod": "cross-env NODE_ENV=production dotenv -e .env.production -- prisma generate --schema=prisma/schema.production.prisma",
