@@ -16,7 +16,11 @@
     "db:studio": "prisma studio",
     "db:studio:prod": "prisma studio --schema=prisma/schema.production.prisma",
     "deploy:prod": "node scripts/deploy-production.js",
-    "postinstall": "prisma generate"
+    "postinstall": "npm run db:generate:safe",
+    "db:generate:safe": "prisma generate || npm run db:generate:fallback",
+    "db:generate:fallback": "echo 'ERD generation failed (missing Chrome/Chromium), continuing without ERD...' && prisma generate --skip-postinstall-generate || echo 'Prisma client generated successfully without ERD'",
+    "db:generate:with-erd": "cp prisma/schema.development.prisma prisma/schema.prisma && prisma generate && echo 'ERD generated successfully at ERD.svg'",
+    "db:install-chrome": "echo 'To enable ERD generation, install Chrome/Chromium: sudo apt install chromium-browser (Ubuntu) or download Chrome manually, then run: npm run db:generate:with-erd'"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.1",

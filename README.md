@@ -263,6 +263,23 @@ npm run seed
 npx prisma studio
 ```
 
+#### ERD (Entity Relationship Diagram) Generation
+
+ERD generation is **optional** and only available in development mode:
+
+```bash
+# Generate ERD diagram (requires Chrome/Chromium)
+npm run db:generate:with-erd
+
+# Safe generation without ERD (fallback)
+npm run db:generate:safe
+
+# Install Chrome/Chromium for ERD support (Ubuntu)
+sudo apt install chromium-browser
+```
+
+**Note**: ERDs require Chrome/Chromium browser. If not available, the application works perfectly without them.
+
 #### Production Commands
 
 ```bash
@@ -629,6 +646,24 @@ npm run build
 # Verify MAX_FILE_SIZE setting
 # Ensure public/uploads directory exists
 ```
+
+#### ERD Generation Issues
+
+If you see Chrome/Chromium errors during `npm install`:
+
+```bash
+# This is normal and won't affect functionality
+# ERD generation is optional - the app works fine without it
+
+# To fix ERD generation:
+sudo apt install chromium-browser  # Ubuntu
+# or download Chrome manually
+
+# Then generate ERD:
+npm run db:generate:with-erd
+```
+
+**Solution**: ERDs are development-only features. Use `npm run db:generate:safe` for safe installation.
 
 ### Platform-Specific Issues
 
