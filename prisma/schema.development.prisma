@@ -1,0 +1,176 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+generator erd {
+  provider = "prisma-erd-generator"
+  output   = "../ERD.svg"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  FACULTY
+  TA
+  STUDENT
+}
+
+enum CourseRole {
+  ADMIN
+  FACULTY
+  TA
+  STUDENT
+}
+
+enum ProblemType {
+  PDA
+  RE
+  CFG
+  FA
+}
+
+model User {
+  id       String @id @default(cuid())
+  email    String @unique
+  name     String?
+  password String
+  role     Role   @default(STUDENT)
+  avatar   String?
+
+  // Course participation
+  coursesAsAdmin   Course[] @relation("CourseAdmin")
+  coursesAsFaculty Course[] @relation("CourseFaculty")
+  coursesAsTA      Course[] @relation("CourseTA")
+  coursesAsStudent Course[] @relation("CourseStudent")
+
+  // Submissions and comments
+  submissions Submission[]
+  comments    Comment[]
+
+  // Activity tracking
+  activityLogs ActivityLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+model Course {
+  id          String @id @default(cuid())
+  name        String
+  description String?
+  isPublished Boolean @default(false)
+
+  // Course staff relationships
+  admin   User   @relation("CourseAdmin", fields: [adminId], references: [id])
+  adminId String
+
+  faculty User[] @relation("CourseFaculty")
+  tas     User[] @relation("CourseTA")
+  
+  // Students enrolled in the course
+  students User[] @relation("CourseStudent")
+
+  // Course content
+  problems Problem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("courses")
+}
+
+model Problem {
+  id              String      @id @default(cuid())
+  title           String
+  description     String
+  type            ProblemType
+  points          Int         @default(100)
+  dueDate         DateTime?
+  isPublished     Boolean     @default(false)
+  originalFilename String?
+
+  // Course relationship
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseId String
+
+  // Student submissions
+  submissions Submission[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("problems")
+}
+
+model Submission {
+  id               String    @id @default(cuid())
+  content          String?   // Text submission
+  fileName         String?   // Uploaded file name
+  originalFilename String?   // Original filename before processing
+  filePath         String?   // Server file path
+  grade            Float?    // Grade received
+  feedback         String?   // Instructor feedback
+  submittedAt      DateTime  @default(now())
+
+  // Relationships
+  student   User    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+  problem   Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  problemId String
+
+  // Comments on this submission
+  comments Comment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studentId])
+  @@index([problemId])
+  @@map("submissions")
+}
+
+model Comment {
+  id        String  @id @default(cuid())
+  content   String
+  isPrivate Boolean @default(false) // Whether comment is visible to student
+
+  // Relationships
+  author       User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId     String
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  submissionId String
+
+  // Optional: Link to specific student this comment is about
+  // This allows instructors to make notes about specific students
+  aboutStudentId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([submissionId])
+  @@index([authorId])
+  @@index([aboutStudentId])
+  @@map("comments")
+}
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  action      String   // Description of the action
+  details     String?  // Additional details (JSON)
+  ipAddress   String?  // User's IP address
+  userAgent   String?  // User's browser info
+  createdAt   DateTime @default(now())
+
+  // Optional user relationship (for authenticated actions)
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId String?
+
+  @@index([userId])
+  @@map("activity_logs")
+}

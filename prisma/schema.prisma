@@ -187,7 +187,3 @@ model ActivityLog {
   @@index([timestamp])
   @@index([userId])
 }
-
-generator erd {
-  provider = "prisma-erd-generator"
-}

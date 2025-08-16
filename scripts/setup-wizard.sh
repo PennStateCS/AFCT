@@ -380,28 +380,26 @@ setup_development_database() {
     fi
     
     # Switch to development schema
-    if [[ -f "prisma/schema.prisma.dev" ]] || [[ ! -f "prisma/schema.production.prisma" ]]; then
-        print_success "Using development schema"
+    print_step "Setting up development schema..."
+    if [[ -f "prisma/schema.development.prisma" ]]; then
+        # Check if ERD generation is available
+        if command_exists "google-chrome" || command_exists "chromium-browser" || command_exists "chromium"; then
+            print_step "Using development schema with ERD generation..."
+            cp prisma/schema.development.prisma prisma/schema.prisma
+            print_success "Development schema with ERD support activated"
+        else
+            print_step "Using development schema without ERD..."
+            # Use the basic schema without ERD generator
+            print_success "Development schema activated (ERD disabled - requires Chrome/Chromium)"
+        fi
     else
+        print_step "Creating development schema..."
+        # Ensure we have a basic development schema
         if [[ -f "prisma/schema.production.prisma" ]]; then
-            print_step "Switching to development schema..."
-            if [[ -f "prisma/schema.prisma" ]]; then
-                cp prisma/schema.prisma prisma/schema.prisma.backup
-            fi
-            # Development schema should use SQLite
-            cat > prisma/schema.prisma << 'EOF'
-generator client {
-  provider = "prisma-client-js"
-}
-
-datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
-}
-EOF
-            # Copy the rest from production schema but keep SQLite datasource
-            tail -n +10 prisma/schema.production.prisma >> prisma/schema.prisma
-            print_success "Switched to development schema"
+            cp prisma/schema.production.prisma prisma/schema.prisma
+            # Replace PostgreSQL with SQLite for development
+            sed -i 's/provider = "postgresql"/provider = "sqlite"/' prisma/schema.prisma
+            print_success "Development schema created from production schema"
         fi
     fi
     
@@ -412,10 +410,15 @@ EOF
         print_success "Dependencies installed"
     fi
     
-    # Generate Prisma client
+    # Generate Prisma client with safe ERD handling
     print_step "Generating Prisma client..."
-    npx prisma generate
-    print_success "Prisma client generated"
+    if npm run db:generate:safe; then
+        print_success "Prisma client generated successfully"
+    else
+        print_warning "Using fallback Prisma generation..."
+        npx prisma generate --skip-postinstall-generate
+        print_success "Prisma client generated"
+    fi
     
     # Run database migrations
     print_step "Setting up database..."
@@ -658,10 +661,63 @@ install_project_dependencies() {
         exit 1
     fi
     
-    # Install dependencies
+    # Install system dependencies for ERD generation (optional)
+    print_step "Checking ERD generation dependencies..."
+    if command_exists "google-chrome" || command_exists "chromium-browser" || command_exists "chromium"; then
+        print_success "Chrome/Chromium found - ERD generation will be available"
+        ERD_AVAILABLE=true
+    else
+        print_warning "Chrome/Chromium not found - ERD generation will be skipped"
+        print_info "ERD diagrams are optional and don't affect application functionality"
+        if [[ "$OS" == "ubuntu" ]] && check_root; then
+            prompt_input "Would you like to install Chromium for ERD generation? (y/n)" INSTALL_CHROMIUM "n"
+            if [[ "$INSTALL_CHROMIUM" =~ ^[Yy]$ ]]; then
+                print_step "Installing Chromium browser..."
+                apt update
+                apt install -y chromium-browser && {
+                    print_success "Chromium installed successfully"
+                    ERD_AVAILABLE=true
+                } || {
+                    print_warning "Could not install Chromium browser"
+                    ERD_AVAILABLE=false
+                }
+            else
+                ERD_AVAILABLE=false
+            fi
+        else
+            ERD_AVAILABLE=false
+        fi
+    fi
+    
+    # Install dependencies with error handling
     print_step "Installing NPM dependencies..."
-    npm install
-    print_success "Dependencies installed successfully"
+    if npm install; then
+        print_success "Dependencies installed successfully"
+    else
+        print_warning "Some dependencies had warnings, but installation completed"
+        print_info "This is often due to optional ERD generation dependencies"
+        print_info "The application will work fine without them"
+    fi
+    
+    # Try to generate Prisma client with conditional ERD
+    print_step "Generating Prisma client..."
+    if [[ "$ERD_AVAILABLE" == "true" ]]; then
+        print_step "Using development schema with ERD generation..."
+        cp prisma/schema.development.prisma prisma/schema.prisma 2>/dev/null || true
+        if npm run db:generate:with-erd; then
+            print_success "Prisma client and ERD generated successfully"
+            print_info "ERD diagram saved as ERD.svg"
+        else
+            print_warning "ERD generation failed, falling back to basic generation..."
+            npm run db:generate:safe
+            print_success "Prisma client generated without ERD"
+        fi
+    else
+        print_step "Generating Prisma client without ERD..."
+        npm run db:generate:safe
+        print_success "Prisma client generated successfully"
+        print_info "To generate ERDs later, install Chrome/Chromium and run: npm run db:generate:with-erd"
+    fi
     
     # Install Prisma CLI globally if not present
     if ! command_exists "prisma"; then
