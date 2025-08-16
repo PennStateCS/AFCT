@@ -6,6 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
+import { ProblemType } from '@prisma/client';
 
 // POST /api/problems - Create a new problem with file upload
 export async function POST(req: Request) {
@@ -49,7 +50,7 @@ export async function POST(req: Request) {
       data: {
         title,
         description,
-        type,
+        type: type as ProblemType,
         courseId,
         fileName,
         originalFileName: file.name,

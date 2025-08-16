@@ -22,9 +22,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 
 // ✅ Import assignment schemas directly to avoid barrel/cycle issues
-import { CreateAssignmentSchema } from '@/schemas/assignment';
+import { CreateAssignmentFormSchema, CreateAssignmentSchema } from '@/schemas/assignment';
 
-type FormValues = z.input<typeof CreateAssignmentSchema>; // strings for datetime-local
+type FormValues = z.infer<typeof CreateAssignmentFormSchema>; // strings for datetime-local
 type ParsedValues = z.output<typeof CreateAssignmentSchema>; // Dates, coerced numbers
 
 import { Assignment } from '@prisma/client';
@@ -65,7 +65,7 @@ export function CreateAssignmentDialog({
     () => ({
       title: '',
       description: '',
-      maxPoints: 100,
+      maxPoints: '100',
       dueDate: defaultDueLocalString(),
       isPublished: false,
       courseId,
@@ -79,7 +79,7 @@ export function CreateAssignmentDialog({
     reset,
     formState: { errors, isSubmitting, isValid },
   } = useForm<FormValues>({
-    resolver: zodResolver(CreateAssignmentSchema),
+    resolver: zodResolver(CreateAssignmentFormSchema),
     defaultValues: defaults,
     mode: 'onBlur',
     reValidateMode: 'onChange',
@@ -111,8 +111,15 @@ export function CreateAssignmentDialog({
     });
 
   const onSubmit = async (raw: FormValues) => {
+    // Convert form values to the format expected by the API schema
+    const formData = {
+      ...raw,
+      maxPoints: Number(raw.maxPoints), // Convert string to number for API schema
+      dueDate: raw.dueDate, // Keep as string for CreateAssignmentSchema to transform
+    };
+    
     // Normalize & transform via Zod
-    const values: ParsedValues = CreateAssignmentSchema.parse(raw);
+    const values: ParsedValues = CreateAssignmentSchema.parse(formData);
 
     const payload = {
       ...values,
@@ -138,6 +145,11 @@ export function CreateAssignmentDialog({
     }
   };
 
+  const onSubmitWrapper = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    handleSubmit((data) => onSubmit(data as unknown as FormValues))(e);
+  };
+
   return (
     <Dialog
       open={open}
@@ -152,7 +164,7 @@ export function CreateAssignmentDialog({
           <DialogDescription>Fill in the assignment details and click Create.</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <form onSubmit={onSubmitWrapper} className="space-y-4">
           {/* Title */}
           <Controller
             control={control}

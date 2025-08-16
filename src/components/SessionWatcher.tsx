@@ -13,6 +13,11 @@ import {
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 
+// Constants moved outside component to avoid dependency issues
+const INACTIVITY_LIMIT = 5 * 60 * 1000; // 5 minutes
+const WARNING_TIME = 60 * 1000; // 1 minute
+const TOTAL_COUNTDOWN = 60; // 60 seconds
+
 export default function SessionWatcher() {
   const { data: session, status, update } = useSession();
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -21,10 +26,6 @@ export default function SessionWatcher() {
 
   const [showModal, setShowModal] = useState(false);
   const [timeLeft, setTimeLeft] = useState(60);
-
-  const INACTIVITY_LIMIT = 5 * 60 * 1000;
-  const WARNING_TIME = 60 * 1000;
-  const TOTAL_COUNTDOWN = 60;
 
   // Always run hooks, but guard effects with conditions
   useEffect(() => {

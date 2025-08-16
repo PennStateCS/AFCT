@@ -34,8 +34,7 @@ function toDateTimeLocalString(date: Date | string): string {
 }
 
 // RHF form state before transforms (strings for datetime-local)
-type FormValues = z.input<typeof CourseFormSchema>;
-type ParsedFormValues = z.output<typeof CourseFormSchema>;
+type FormValues = z.infer<typeof CourseFormSchema>;
 
 export function EditCourseDialog({ course, open, setOpen, onSave }: EditCourseDialogProps) {
   const defaultValues: FormValues = useMemo(
@@ -43,7 +42,7 @@ export function EditCourseDialog({ course, open, setOpen, onSave }: EditCourseDi
       name: course.name ?? '',
       code: course.code ?? '',
       semester: course.semester ?? '',
-      credits: course.credits ?? 3,
+      credits: String(course.credits ?? 3),
       startDate: toDateTimeLocalString(course.startDate),
       endDate: toDateTimeLocalString(course.endDate),
     }),
@@ -74,8 +73,14 @@ export function EditCourseDialog({ course, open, setOpen, onSave }: EditCourseDi
   }, [open, defaultValues, reset]);
 
   const onSubmit = (raw: FormValues) => {
-    const parsed: ParsedFormValues = CourseFormSchema.parse(raw);
-    const payload = UpdateCourseSchema.parse({ id: course.id, ...parsed });
+    // Convert form values to the format expected by the API
+    const formData = {
+      ...raw,
+      credits: Number(raw.credits), // Convert string to number
+      code: raw.code.trim().replace(/\s+/g, ' ').toUpperCase(), // Normalize code
+    };
+    
+    const payload = UpdateCourseSchema.parse({ id: course.id, ...formData });
 
     onSave?.({
       ...course,
@@ -94,6 +99,11 @@ export function EditCourseDialog({ course, open, setOpen, onSave }: EditCourseDi
       keepValues: false,
     });
     setOpen(false);
+  };
+
+  const onSubmitWrapper = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    handleSubmit((data) => onSubmit(data as unknown as FormValues))(e);
   };
 
   const resetForm = () =>
@@ -118,7 +128,7 @@ export function EditCourseDialog({ course, open, setOpen, onSave }: EditCourseDi
           <DialogDescription>Update the course details and save your changes.</DialogDescription>
         </DialogHeader>
 
-        <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
+        <form className="space-y-4" onSubmit={onSubmitWrapper}>
           {/* NAME */}
           <Controller
             name="name"

@@ -14,14 +14,10 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/RoleBadge';
+import { User } from '@prisma/client';
 
-type User = {
-  id: string;
-  firstName?: string;
-  lastName?: string;
-  email: string;
-  role: 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT';
-};
+// Subset of User fields needed for enrollment
+type EnrollableUser = Pick<User, 'id' | 'firstName' | 'lastName' | 'email' | 'role'>;
 
 const roleDisplayNames: Record<string, string> = {
   ADMIN: 'Admin',
@@ -33,8 +29,8 @@ const roleDisplayNames: Record<string, string> = {
 type EnrollUserDialogProps = {
   open: boolean;
   setOpen: (open: boolean) => void;
-  users: User[]; // NOT already in the course
-  onEnroll: (user: User) => void;
+  users: EnrollableUser[]; // NOT already in the course
+  onEnroll: (user: EnrollableUser) => void;
 };
 
 export function EnrollUserDialog({ open, setOpen, users, onEnroll }: EnrollUserDialogProps) {
@@ -45,8 +41,8 @@ export function EnrollUserDialog({ open, setOpen, users, onEnroll }: EnrollUserD
     const q = search.toLowerCase();
     return users.filter(
       (u) =>
-        u.firstName?.toLowerCase().includes(q) ||
-        u.lastName?.toLowerCase().includes(q) ||
+        (u.firstName && u.firstName.toLowerCase().includes(q)) ||
+        (u.lastName && u.lastName.toLowerCase().includes(q)) ||
         u.email.toLowerCase().includes(q),
     );
   }, [users, search]);
@@ -95,7 +91,7 @@ export function EnrollUserDialog({ open, setOpen, users, onEnroll }: EnrollUserD
   };
 
   // Enroll the user
-  const handleEnroll = (user?: User) => {
+  const handleEnroll = (user?: EnrollableUser) => {
     const userToEnroll = user ?? (selectedIdx >= 0 ? filteredUsers[selectedIdx] : undefined);
     if (userToEnroll) {
       onEnroll(userToEnroll);
@@ -131,7 +127,7 @@ export function EnrollUserDialog({ open, setOpen, users, onEnroll }: EnrollUserD
                 {filteredUsers.slice(0, 50).map((user, idx) => (
                   <li
                     key={user.id}
-                    ref={(el) => (itemRefs.current[idx] = el)}
+                    ref={(el) => { itemRefs.current[idx] = el; }}
                     className={`hover:bg-primary/10 flex cursor-pointer items-center gap-2 rounded px-3 py-2 ${
                       selectedIdx === idx ? 'bg-primary/10' : ''
                     }`}

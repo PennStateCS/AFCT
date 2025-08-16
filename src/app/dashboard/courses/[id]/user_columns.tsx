@@ -31,7 +31,7 @@ function ActionsCell({ user, onChange }: ActionsCellProps) {
     if (res.ok) onChange();
   };
 
-  const handleSave = async (updatedUser: User) => {
+  const handleSave = async (updatedUser: Partial<User>) => {
     const res = await fetch(`/api/users/${updatedUser.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },

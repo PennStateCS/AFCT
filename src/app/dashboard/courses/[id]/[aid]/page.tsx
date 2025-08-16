@@ -10,31 +10,24 @@ import { toast } from 'sonner';
 import { EditAssignmentDialog } from '@/components/dialogs/EditAssignmentDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AssignmentSubmissions from '@/components/AssignmentSubmissions';
+import { Assignment, Course, Problem, User } from '@prisma/client';
 
-type Person = { firstName?: string; lastName?: string; id: string };
-type Course = {
-  name: string;
-  code: string;
-  faculty: Person[];
-  tas: Person[];
+type UserBasic = Pick<User, 'id' | 'firstName' | 'lastName'>;
+
+type CourseWithRelations = Course & {
+  roster: Array<{
+    user: UserBasic;
+    role: string;
+  }>;
 };
-type Problem = {
-  id: string;
-  title: string;
-  description?: string;
-  type?: string;
-  maxStates?: number;
-  isDeterministic?: boolean;
-};
-type Assignment = {
-  id: string;
-  title: string;
-  description?: string;
-  dueDate: string;
-  maxPoints: number;
-  isPublished: boolean;
-  problems: Problem[];
-  course: Course;
+
+type ProblemForAssignment = Problem;
+
+type AssignmentWithRelations = Assignment & {
+  problems: Array<{
+    problem: ProblemForAssignment;
+  }>;
+  course: CourseWithRelations;
 };
 
 const problemTypeLabels: Record<string, string> = {
@@ -44,12 +37,22 @@ const problemTypeLabels: Record<string, string> = {
   RE: 'Regular Expression',
 };
 
+// Convert Prisma Problem to component-compatible Problem
+const convertPrismaProblem = (prismaProblem: ProblemForAssignment) => ({
+  id: prismaProblem.id,
+  title: prismaProblem.title,
+  description: prismaProblem.description || undefined,
+  type: prismaProblem.type || undefined,
+  maxStates: prismaProblem.maxStates || undefined,
+  isDeterministic: prismaProblem.isDeterministic || undefined,
+});
+
 export default function AssignmentPage() {
   const { id, aid } = useParams<{ id: string; aid: string }>();
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const [assignment, setAssignment] = useState<Assignment | null>(null);
+  const [assignment, setAssignment] = useState<AssignmentWithRelations | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAddProblem, setShowAddProblem] = useState(false);
   const [allProblems, setAllProblems] = useState<Problem[]>([]);
@@ -225,7 +228,9 @@ export default function AssignmentPage() {
                 </p>
               ) : (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  {assignment.problems.map((problem, idx) => (
+                  {assignment.problems.map((assignmentProblem, idx) => {
+                    const problem = assignmentProblem.problem;
+                    return (
                     <div
                       key={problem.id}
                       className="dark:bg-muted relative w-full rounded border bg-white p-4 shadow-sm"
@@ -266,16 +271,16 @@ export default function AssignmentPage() {
                             {problem.type && (
                               <span>
                                 <strong>Type:</strong>{' '}
-                                {problemTypeLabels[problem.type ?? ''] || problem.type || 'Unknown'}
+                                {problemTypeLabels[problem.type] || problem.type || 'Unknown'}
                               </span>
                             )}
-                            {problem.maxStates !== undefined && (
+                            {problem.maxStates !== null && problem.maxStates !== undefined && (
                               <span>
                                 <strong>Max States:</strong>{' '}
                                 {problem.maxStates === -1 ? 'Unlimited' : problem.maxStates}
                               </span>
                             )}
-                            {typeof problem.isDeterministic === 'boolean' && (
+                            {problem.isDeterministic !== null && (
                               <span>
                                 <strong>Deterministic:</strong>{' '}
                                 {problem.isDeterministic ? 'Yes' : 'No'}
@@ -285,7 +290,7 @@ export default function AssignmentPage() {
                         </div>
                       </div>
                     </div>
-                  ))}
+                  )})}
                 </div>
               )}
             </CardContent>
@@ -301,7 +306,7 @@ export default function AssignmentPage() {
               <AssignmentSubmissions
                 courseId={id}
                 assignmentId={aid}
-                problems={assignment.problems}
+                problems={assignment.problems.map(ap => convertPrismaProblem(ap.problem))}
               />
             </CardContent>
           </Card>
@@ -312,10 +317,9 @@ export default function AssignmentPage() {
       <AssociateProblemsDialog
         open={showAddProblem}
         onClose={() => setShowAddProblem(false)}
-        allProblems={allProblems}
-        usedProblems={assignment.problems}
+        allProblems={allProblems.map(convertPrismaProblem)}
+        usedProblems={assignment.problems.map(ap => convertPrismaProblem(ap.problem))}
         onAddProblems={handleAddProblems}
-        problemTypeLabels={problemTypeLabels}
       />
 
       <ConfirmDialog
@@ -337,7 +341,13 @@ export default function AssignmentPage() {
           open={editAssignmentOpen}
           setOpen={setEditAssignmentOpen}
           onSave={(updated) => {
-            setAssignment(updated); // Update local assignment state
+            // Update assignment while preserving relations
+            if (assignment) {
+              setAssignment({
+                ...assignment,
+                ...updated,
+              });
+            }
             toast.success('Assignment updated!');
           }}
         />

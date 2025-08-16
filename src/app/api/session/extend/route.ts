@@ -1,20 +1,20 @@
 // /src/app/api/session/extend/route.ts
 
 import { getToken } from 'next-auth/jwt';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 const EXTEND_BY = 15 * 60; // Extend session by 15 minutes (in seconds)
 
 // Extract IP address from headers or fallback
-function getClientIp(req: Request): string {
+function getClientIp(req: NextRequest): string {
   const forwarded = req.headers.get('x-forwarded-for');
   if (forwarded) return forwarded.split(',')[0].trim();
   // Note: req.ip is not available in Next.js App Router, fallback to 'unknown'
   return 'unknown';
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const ip = getClientIp(req);
 
   try {

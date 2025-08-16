@@ -89,6 +89,7 @@ export function AdminResetPasswordDialog({
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <InputGroup
+            name="newPassword"
             label="New Password"
             value={newPassword}
             setValue={setNewPassword}
@@ -100,6 +101,7 @@ export function AdminResetPasswordDialog({
             isValid={passwordValid(newPassword)}
           />
           <InputGroup
+            name="confirmNewPassword"
             label="Confirm New Password"
             value={confirmNewPassword}
             setValue={setConfirmNewPassword}

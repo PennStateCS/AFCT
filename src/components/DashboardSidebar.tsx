@@ -174,7 +174,7 @@ export default function DashboardSidebar() {
     email,
     avatarUrl,
     initials,
-    role: role?.toUpperCase?.() || 'STUDENT',
+    role: (role?.toUpperCase?.() || 'STUDENT') as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT',
   };
 
   const filteredCourses = getCoursesForUser(user, courses);

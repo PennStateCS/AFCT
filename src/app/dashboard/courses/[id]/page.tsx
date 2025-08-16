@@ -9,7 +9,7 @@ import { EditAssignmentDialog } from '@/components/dialogs/EditAssignmentDialog'
 import { CreateAssignmentDialog } from '@/components/dialogs/CreateAssignmentDialog';
 import { EnrollUserDialog } from '@/components/dialogs/EnrollUsersDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
-import { Course, User, Assignment, Problem } from '@prisma/client';
+import { Course, User, Assignment, Problem, Role } from '@prisma/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DataTable } from '@/components/ui/data-table';
@@ -21,11 +21,16 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { Plus, Pencil } from 'lucide-react';
 
+// Assignment with problem count as returned by API
+type AssignmentWithProblemCount = Assignment & {
+  problemCount: number;
+};
+
 type FullCourse = Course & {
   faculty: User[];
   tas: User[];
   students: User[];
-  assignments: Assignment[];
+  assignments: AssignmentWithProblemCount[];
   problems: Problem[];
 };
 
@@ -62,7 +67,13 @@ export default function AdminCoursePage() {
 
   // Enroll user
   const [enrollOpen, setEnrollOpen] = useState(false);
-  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [allUsers, setAllUsers] = useState<{
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    role: Role;
+  }[]>([]);
 
   // Publish Toggle
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
@@ -157,7 +168,13 @@ export default function AdminCoursePage() {
     }
   }, []);
 
-  const handleEnrollUser = async (user: User) => {
+  const handleEnrollUser = async (user: {
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    role: Role;
+  }) => {
     try {
       const res = await fetch(`/api/courses/${id}/enroll`, {
         method: 'POST',
@@ -203,7 +220,7 @@ export default function AdminCoursePage() {
         ? {
             ...prev,
             assignments: prev.assignments.map((a) =>
-              a.id === updatedAssignment.id ? updatedAssignment : a,
+              a.id === updatedAssignment.id ? { ...updatedAssignment, problemCount: a.problemCount } : a,
             ),
           }
         : prev,
@@ -258,7 +275,10 @@ export default function AdminCoursePage() {
           <div>
             <span className="font-semibold">Registration Code: </span>
             <span className="text-muted-foreground">
-              {`${course.regCode.toUpperCase().slice(0, 3)}-${course.regCode.toUpperCase().slice(3)}`}
+              {course.regCode 
+                ? `${course.regCode.toUpperCase().slice(0, 3)}-${course.regCode.toUpperCase().slice(3)}`
+                : 'Not set'
+              }
             </span>
           </div>
           <div>
@@ -450,10 +470,12 @@ export default function AdminCoursePage() {
           setOpen={setProblemOpen}
           courseId={course.id}
           onCreated={(newProblem) => {
-            setCourse((prev) =>
-              prev ? { ...prev, problems: [...prev.problems, newProblem] } : prev,
-            );
-            toast.success('Problem created!');
+            if (newProblem) {
+              setCourse((prev) =>
+                prev ? { ...prev, problems: [...prev.problems, newProblem] } : prev,
+              );
+              toast.success('Problem created!');
+            }
           }}
         />
       )}
@@ -497,7 +519,7 @@ export default function AdminCoursePage() {
         courseId={course.id}
         onCreate={(newAssignment) => {
           setCourse((prev) =>
-            prev ? { ...prev, assignments: [...prev.assignments, newAssignment] } : prev,
+            prev ? { ...prev, assignments: [...prev.assignments, { ...newAssignment, problemCount: 0 }] } : prev,
           );
           toast.success('Assignment created!');
         }}
@@ -512,7 +534,6 @@ export default function AdminCoursePage() {
 
       <ConfirmDialog
         open={publishConfirmOpen}
-        setOpen={setPublishConfirmOpen}
         confirmText={pendingPublish ? 'Publish' : 'Unpublish'}
         title={pendingPublish ? 'Publish Course?' : 'Unpublish Course?'}
         description={

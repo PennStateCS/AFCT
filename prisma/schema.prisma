@@ -174,8 +174,8 @@ model Comment {
 
 model ActivityLog {
   id        String   @id @default(cuid())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
-  userId    String
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  userId    String?
   action    String
   timestamp DateTime @default(now())
   metadata  Json?

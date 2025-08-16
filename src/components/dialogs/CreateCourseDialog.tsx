@@ -19,13 +19,14 @@ import InputGroup from '@/components/ui/InputGroup';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
-  CreateCourseSchema, // Zod schema (includes publish/faculty rule)
+  CreateCourseFormSchema, // Form schema (no transformations)
+  CreateCourseSchema,     // API schema (with transformations)
 } from '@/schemas/course';
 import { z } from 'zod';
 
 // RHF form state = Zod INPUT (strings for datetime-local)
-type FormValues = z.input<typeof CreateCourseSchema>;
-// Parsed values returned by Zod (Dates, normalized code, coerced credits)
+type FormValues = z.infer<typeof CreateCourseFormSchema>;
+// Parsed values returned by API Zod schema (Dates, normalized code, coerced credits)
 type ParsedValues = z.output<typeof CreateCourseSchema>;
 
 interface CreateCourseDialogProps {
@@ -41,7 +42,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
       name: '',
       code: '',
       semester: '',
-      credits: 3,
+      credits: '3',
       startDate: '', // <- strings for input type="datetime-local"
       endDate: '',
       isPublished: false,
@@ -57,7 +58,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
     watch,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
-    resolver: zodResolver(CreateCourseSchema),
+    resolver: zodResolver(CreateCourseFormSchema),
     defaultValues: defaults,
     mode: 'onBlur',
     reValidateMode: 'onChange',
@@ -91,8 +92,15 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
     });
 
   const onSubmit = async (raw: FormValues) => {
+    // Convert form values to the format expected by the API schema
+    const formData = {
+      ...raw,
+      credits: Number(raw.credits), // Convert string to number for API schema
+      // Date strings remain as-is for API schema to transform
+    };
+    
     // Parse with Zod: code uppercased, credits coerced, dates transformed to Date
-    const values: ParsedValues = CreateCourseSchema.parse(raw);
+    const values: ParsedValues = CreateCourseSchema.parse(formData);
 
     const payload = {
       ...values,
@@ -118,6 +126,11 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
     }
   };
 
+  const onSubmitWrapper = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    handleSubmit((data) => onSubmit(data as unknown as FormValues))(e);
+  };
+
   return (
     <Dialog
       open={open}
@@ -131,7 +144,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
           <DialogTitle>Create Course</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <form onSubmit={onSubmitWrapper} className="space-y-4">
           {/* NAME */}
           <Controller
             control={control}

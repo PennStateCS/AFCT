@@ -8,11 +8,11 @@ export async function getPublishedCoursesForUser(userId: string) {
   return prisma.course.findMany({
     where: {
       isPublished: true,
-      OR: [
-        { students: { some: { id: userId } } },
-        { faculty: { some: { id: userId } } },
-        { tas: { some: { id: userId } } },
-      ],
+      roster: {
+        some: {
+          userId: userId,
+        },
+      },
     },
     select: {
       id: true,
@@ -38,11 +38,11 @@ export async function getPublishedCourseById(userId: string, courseId: string) {
     where: {
       id: courseId,
       isPublished: true,
-      OR: [
-        { students: { some: { id: userId } } },
-        { faculty: { some: { id: userId } } },
-        { tas: { some: { id: userId } } },
-      ],
+      roster: {
+        some: {
+          userId: userId,
+        },
+      },
     },
     include: {
       assignments: {
