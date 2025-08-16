@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/app/utils/jwt';
+import { verifyToken, JwtPayload } from '@/app/utils/jwt';
 
 // GET: Fetch all published assignments for a course
-export async function GET(req: NextRequest, context: any) {
-  // Await params if it is a Promise
-  const params = typeof context.params?.then === 'function' ? await context.params : context.params;
-
+export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+  // Await params
+  const params = await context.params;
   const courseId = params.id;
 
   // 1. Validate courseId
@@ -17,7 +16,7 @@ export async function GET(req: NextRequest, context: any) {
   // 2. Extract and verify token
   const authHeader = req.headers.get('authorization');
   const token = authHeader?.split(' ')[1];
-  const decoded = token ? verifyToken(token) : null;
+  const decoded: JwtPayload | null = token ? verifyToken(token) : null;
 
   if (!decoded) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

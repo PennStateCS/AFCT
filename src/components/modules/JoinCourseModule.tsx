@@ -34,8 +34,9 @@ export function JoinCourseModule() {
       if (!res.ok) throw new Error(data.error || 'Failed to join course');
 
       toast.success(`You have joined ${data.course.name}`);
-    } catch (err: any) {
-      toast.error(err.message || 'Unable to join course');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Unable to join course';
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
       setCode(''); // ✅ Always clears boxes after click

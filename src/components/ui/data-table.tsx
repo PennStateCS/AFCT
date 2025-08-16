@@ -22,6 +22,12 @@ import {
 } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+
+// Define meta type for table columns
+interface ColumnMeta {
+  priority?: number;
+}
+
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -225,7 +231,7 @@ export function DataTable<TData, TValue>({
                 {headerGroup.headers.map((header) => {
                   const sorted = header.column.getIsSorted();
                   const canSort = header.column.getCanSort();
-                  const priority = (header.column.columnDef.meta as any)?.priority;
+                  const priority = (header.column.columnDef.meta as ColumnMeta)?.priority;
 
                   const handleSortClick = () => {
                     if (!canSort) return;

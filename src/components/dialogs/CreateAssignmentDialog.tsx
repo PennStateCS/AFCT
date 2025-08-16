@@ -27,11 +27,13 @@ import { CreateAssignmentSchema } from '@/schemas/assignment';
 type FormValues = z.input<typeof CreateAssignmentSchema>; // strings for datetime-local
 type ParsedValues = z.output<typeof CreateAssignmentSchema>; // Dates, coerced numbers
 
+import { Assignment } from '@prisma/client';
+
 type CreateAssignmentDialogProps = {
   open: boolean;
   setOpen: (open: boolean) => void;
   courseId: string;
-  onCreate?: (assignment: any) => void;
+  onCreate?: (assignment: Assignment) => void;
 };
 
 function nowLocalString(): string {

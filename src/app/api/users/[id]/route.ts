@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { writeFile, unlink } from 'fs/promises';
 import path from 'path';
+import { Role } from '@prisma/client';
 
 // PATCH: Update a user's profile
 export async function PATCH(req: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -82,13 +83,19 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     }
 
     // Prepare data for update
-    const dataToUpdate: any = {
+    const dataToUpdate: {
+      firstName?: string;
+      lastName?: string;
+      avatar?: string | null;
+      role?: Role;
+      inactive?: boolean;
+    } = {
       firstName: firstName ?? undefined,
       lastName: lastName ?? undefined,
       avatar: avatarFilename !== undefined ? avatarFilename : undefined,
     };
     if (isAdmin) {
-      dataToUpdate.role = role ?? undefined;
+      dataToUpdate.role = role as Role ?? undefined;
       dataToUpdate.inactive = inactive ?? undefined;
     }
 

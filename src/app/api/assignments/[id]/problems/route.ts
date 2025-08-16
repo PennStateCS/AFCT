@@ -1,13 +1,11 @@
 // /src/app/api/assignments/[id]/problems/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/app/utils/jwt';
+import { verifyToken, JwtPayload } from '@/app/utils/jwt';
 
-export async function GET(req: NextRequest, context: any) {
+export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   // Await params if it is a Promise (some environments do this)
-  const params =
-    typeof context?.params?.then === 'function' ? await context.params : context.params;
-
+  const params = await context.params;
   const assignmentId = params?.id;
 
   try {
@@ -20,7 +18,7 @@ export async function GET(req: NextRequest, context: any) {
     }
 
     // ---- Verify token ----
-    let decoded: any;
+    let decoded: JwtPayload | null;
     try {
       decoded = verifyToken(token);
     } catch {

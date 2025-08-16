@@ -78,8 +78,9 @@ export default function CreateCoursePage() {
       }
 
       router.push('/dashboard/courses');
-    } catch (err: any) {
-      setErrorMsg(err.message);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create course';
+      setErrorMsg(errorMessage);
     } finally {
       setLoading(false);
     }

@@ -13,7 +13,8 @@ import os from 'os';
 function getClientIp(req: NextRequest): string {
   const forwarded = req.headers.get('x-forwarded-for');
   if (forwarded) return forwarded.split(',')[0].trim();
-  return (req as any).ip || 'unknown';
+  // Note: req.ip is not available in Next.js App Router, fallback to 'unknown'
+  return 'unknown';
 }
 
 // Helper to extract user-agent

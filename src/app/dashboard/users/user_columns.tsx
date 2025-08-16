@@ -113,125 +113,136 @@ export function getUserColumns(onUserUpdate: () => void): ColumnDef<User>[] {
       meta: { priority: 1 },
       cell: ({ row }) => {
         const user = row.original;
-        const [editOpen, setEditOpen] = useState(false);
-        const [resetOpen, setResetOpen] = useState(false);
-        const [confirmOpen, setConfirmOpen] = useState(false);
-
-        async function handlePasswordReset(newPassword: string) {
-          try {
-            await fetch('/api/admin/reset-password', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ userId: user.id, newPassword }),
-            });
-            toast.success('Password reset successfully.');
-            setResetOpen(false);
-          } catch {
-            toast.error('Failed to reset password.');
-          }
-        }
-
-        async function handleDelete() {
-          try {
-            const res = await fetch(`/api/users/${user.id}`, {
-              method: 'DELETE',
-            });
-
-            if (!res.ok) throw new Error('Delete failed');
-
-            toast.success('User deleted successfully.');
-            setConfirmOpen(false);
-            onUserUpdate();
-          } catch {
-            toast.error('Failed to delete user.');
-          }
-        }
-
-        return (
-          <>
-            <EditUserDialog
-              user={user}
-              open={editOpen}
-              setOpen={setEditOpen}
-              onSave={async (updatedUser) => {
-                try {
-                  const res = await fetch(`/api/users/${updatedUser.id}`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(updatedUser),
-                  });
-                  if (!res.ok) throw new Error();
-                  toast.success('User updated successfully.');
-                  setEditOpen(false);
-                  onUserUpdate();
-                } catch {
-                  toast.error('Failed to update user.');
-                }
-              }}
-            />
-
-            <AdminResetPasswordDialog
-              open={resetOpen}
-              setOpen={setResetOpen}
-              onResetPassword={handlePasswordReset}
-              targetUserName={`${user.firstName} ${user.lastName}`}
-            />
-
-            <ConfirmDialog
-              open={confirmOpen}
-              onCancel={() => setConfirmOpen(false)}
-              onConfirm={handleDelete}
-              title="Delete User"
-              description={`Are you sure you want to delete ${user.firstName} ${user.lastName}?`}
-              confirmText="Delete"
-              cancelText="Cancel"
-            />
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="secondary">
-                  <ChevronDown />
-                  Manage
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-50">
-                <DropdownMenuLabel className="flex items-center gap-2">
-                  <User2 className="h-4 w-4" />
-                  {user.firstName} {user.lastName}
-                </DropdownMenuLabel>
-
-                <DropdownMenuSeparator />
-
-                <DropdownMenuItem
-                  onClick={() => setEditOpen(true)}
-                  className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2"
-                >
-                  <Pencil className="h-4 w-4" />
-                  Edit User Profile
-                </DropdownMenuItem>
-
-                <DropdownMenuItem
-                  onClick={() => setResetOpen(true)}
-                  className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2"
-                >
-                  <Lock className="h-4 w-4" />
-                  Reset Password
-                </DropdownMenuItem>
-
-                <DropdownMenuSeparator />
-
-                <DropdownMenuItem
-                  onClick={() => setConfirmOpen(true)}
-                  className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Delete User
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </>
-        );
+        return <UserActionsCell user={user} onUserUpdate={onUserUpdate} />;
       },
     },
   ];
+}
+
+// Extract the cell component to fix React hooks violation
+function UserActionsCell({ 
+  user, 
+  onUserUpdate 
+}: { 
+  user: User; 
+  onUserUpdate: () => void;
+}) {
+  const [editOpen, setEditOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  async function handlePasswordReset(newPassword: string) {
+    try {
+      await fetch('/api/admin/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, newPassword }),
+      });
+      toast.success('Password reset successfully.');
+      setResetOpen(false);
+    } catch {
+      toast.error('Failed to reset password.');
+    }
+  }
+
+  async function handleDelete() {
+    try {
+      const res = await fetch(`/api/users/${user.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) throw new Error('Delete failed');
+
+      toast.success('User deleted successfully.');
+      setConfirmOpen(false);
+      onUserUpdate();
+    } catch {
+      toast.error('Failed to delete user.');
+    }
+  }
+
+  return (
+    <>
+      <EditUserDialog
+        user={user}
+        open={editOpen}
+        setOpen={setEditOpen}
+        onSave={async (updatedUser) => {
+          try {
+            const res = await fetch(`/api/users/${updatedUser.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(updatedUser),
+            });
+            if (!res.ok) throw new Error();
+            toast.success('User updated successfully.');
+            setEditOpen(false);
+            onUserUpdate();
+          } catch {
+            toast.error('Failed to update user.');
+          }
+        }}
+      />
+
+      <AdminResetPasswordDialog
+        open={resetOpen}
+        setOpen={setResetOpen}
+        onResetPassword={handlePasswordReset}
+        targetUserName={`${user.firstName} ${user.lastName}`}
+      />
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={handleDelete}
+        title="Delete User"
+        description={`Are you sure you want to delete ${user.firstName} ${user.lastName}?`}
+        confirmText="Delete"
+        cancelText="Cancel"
+      />
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="secondary">
+            <ChevronDown />
+            Manage
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="w-50">
+          <DropdownMenuLabel className="flex items-center gap-2">
+            <User2 className="h-4 w-4" />
+            {user.firstName} {user.lastName}
+          </DropdownMenuLabel>
+
+          <DropdownMenuSeparator />
+
+          <DropdownMenuItem
+            onClick={() => setEditOpen(true)}
+            className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2"
+          >
+            <Pencil className="h-4 w-4" />
+            Edit User Profile
+          </DropdownMenuItem>
+
+          <DropdownMenuItem
+            onClick={() => setResetOpen(true)}
+            className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2"
+          >
+            <Lock className="h-4 w-4" />
+            Reset Password
+          </DropdownMenuItem>
+
+          <DropdownMenuSeparator />
+
+          <DropdownMenuItem
+            onClick={() => setConfirmOpen(true)}
+            className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2"
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete User
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
+  );
 }

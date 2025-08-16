@@ -10,7 +10,8 @@ const EXTEND_BY = 15 * 60; // Extend session by 15 minutes (in seconds)
 function getClientIp(req: Request): string {
   const forwarded = req.headers.get('x-forwarded-for');
   if (forwarded) return forwarded.split(',')[0].trim();
-  return (req as any).ip || 'unknown';
+  // Note: req.ip is not available in Next.js App Router, fallback to 'unknown'
+  return 'unknown';
 }
 
 export async function POST(req: Request) {

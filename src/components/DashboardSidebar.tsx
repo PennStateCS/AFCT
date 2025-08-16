@@ -166,7 +166,7 @@ export default function DashboardSidebar() {
     lastName = '',
     avatar = '',
     role = 'STUDENT',
-  } = session.user as any;
+  } = session.user;
 
   const resolvedName =
     name ||
