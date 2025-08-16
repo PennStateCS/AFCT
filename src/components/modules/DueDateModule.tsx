@@ -27,18 +27,21 @@ export function DueDateModule({ assignments }: Props) {
       <CardHeader>
         <CardTitle className="text-lg font-semibold">Upcoming Assignments</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-3">
         {upcoming.length === 0 ? (
           <p className="text-muted-foreground">None</p>
         ) : (
           upcoming.map((assignment) => (
             <div key={assignment.id} className="flex flex-col">
-              <Link
-                href={`/dashboard/courses/${assignment.courseId}/${assignment.id}`}
-                className="text-sidebar font-medium hover:underline"
-              >
-                📄 {assignment.title}
-              </Link>
+              <div>
+                📄
+                <Link
+                  href={`/dashboard/courses/${assignment.courseId}/${assignment.id}`}
+                  className="text-foreground font-medium hover:underline"
+                >
+                  {assignment.title}
+                </Link>
+              </div>
               <span className="text-muted-foreground text-sm">
                 {format(new Date(assignment.dueDate), "PPP 'at' p")}
               </span>
