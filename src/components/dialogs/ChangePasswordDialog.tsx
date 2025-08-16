@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -7,11 +8,15 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import InputGroup from '@/components/ui/InputGroup';
-import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
+
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { ChangePasswordSchema, type ChangePasswordInput } from '@/schemas/password';
 
 type Props = {
   open: boolean;
@@ -19,111 +24,134 @@ type Props = {
   onChangePassword: (oldPassword: string, newPassword: string) => Promise<void>;
 };
 
-const passwordValid = (password: string) => {
-  return (
-    password.length >= 8 && /[A-Z]/.test(password) && /[a-z]/.test(password) && /\d/.test(password)
-  );
-};
-
 export function ChangePasswordDialog({ open, setOpen, onChangePassword }: Props) {
-  const [oldPassword, setOldPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmNewPassword, setConfirmNewPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const {
+    control,
+    handleSubmit,
+    reset,
+    watch,
+    formState: { errors, isSubmitting, isDirty },
+  } = useForm<ChangePasswordInput>({
+    resolver: zodResolver(ChangePasswordSchema),
+    defaultValues: { oldPassword: '', newPassword: '', confirmNewPassword: '' },
+    mode: 'onBlur',
+    reValidateMode: 'onChange',
+  });
 
-  const [showOld, setShowOld] = useState(false);
-  const [showNew, setShowNew] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
+  const newPw = watch('newPassword');
+  const confirmPw = watch('confirmNewPassword');
 
+  // Clear the form UI state when dialog closes (prevents red flash on cancel)
   useEffect(() => {
     if (!open) {
-      setOldPassword('');
-      setNewPassword('');
-      setConfirmNewPassword('');
-      setLoading(false);
-      setShowOld(false);
-      setShowNew(false);
-      setShowConfirm(false);
+      reset(
+        { oldPassword: '', newPassword: '', confirmNewPassword: '' },
+        { keepDirty: false, keepTouched: false, keepErrors: false },
+      );
     }
-  }, [open]);
+  }, [open, reset]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!oldPassword || !newPassword || !confirmNewPassword) {
-      toast.error('Please fill in all fields');
-      return;
-    }
-    if (!passwordValid(newPassword)) {
-      toast.error('New password does not meet the requirements');
-      return;
-    }
-    if (newPassword !== confirmNewPassword) {
-      toast.error("New passwords don't match!");
-      return;
-    }
-
-    setLoading(true);
+  const onSubmit = async (values: ChangePasswordInput) => {
     try {
-      await onChangePassword(oldPassword, newPassword);
+      await onChangePassword(values.oldPassword, values.newPassword);
       toast.success('Password changed successfully!');
       setOpen(false);
     } catch (err: any) {
       toast.error(err?.message || 'Failed to change password');
-    } finally {
-      setLoading(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(val) => {
+        if (!val) {
+          reset(
+            { oldPassword: '', newPassword: '', confirmNewPassword: '' },
+            { keepDirty: false, keepTouched: false, keepErrors: false },
+          );
+        }
+        setOpen(val);
+      }}
+    >
       <DialogContent className="bg-card">
         <DialogHeader>
           <DialogTitle>Change Password</DialogTitle>
           <DialogDescription>Enter your old password and choose a new one.</DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <InputGroup
-            label="Old Password"
-            value={oldPassword}
-            setValue={setOldPassword}
-            type={showOld ? 'text' : 'password'}
-            showEye
-            isPasswordVisible={showOld}
-            togglePasswordVisibility={() => setShowOld((v) => !v)}
+
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {/* Old Password */}
+          <Controller
+            name="oldPassword"
+            control={control}
+            render={({ field }) => (
+              <InputGroup
+                label="Old Password"
+                name="oldPassword"
+                type="password"
+                showEye
+                fieldProps={field}
+                error={errors.oldPassword?.message}
+              />
+            )}
           />
-          <InputGroup
-            label="New Password"
-            value={newPassword}
-            setValue={setNewPassword}
-            type={showNew ? 'text' : 'password'}
-            showEye
-            isPasswordVisible={showNew}
-            togglePasswordVisibility={() => setShowNew((v) => !v)}
-            showStatus
-            isValid={passwordValid(newPassword)}
+
+          {/* New Password */}
+          <Controller
+            name="newPassword"
+            control={control}
+            render={({ field }) => (
+              <InputGroup
+                label="New Password"
+                name="newPassword"
+                type="password"
+                showEye
+                showStatus
+                isValid={!errors.newPassword && !!newPw}
+                fieldProps={field}
+                error={errors.newPassword?.message}
+                description="At least 8 characters and include upper, lower, and a number."
+              />
+            )}
           />
-          <InputGroup
-            label="Confirm New Password"
-            value={confirmNewPassword}
-            setValue={setConfirmNewPassword}
-            type={showConfirm ? 'text' : 'password'}
-            showEye
-            isPasswordVisible={showConfirm}
-            togglePasswordVisibility={() => setShowConfirm((v) => !v)}
-            showStatus
-            isValid={confirmNewPassword.length > 0 && confirmNewPassword === newPassword}
+
+          {/* Confirm New Password */}
+          <Controller
+            name="confirmNewPassword"
+            control={control}
+            render={({ field }) => (
+              <InputGroup
+                label="Confirm New Password"
+                name="confirmNewPassword"
+                type="password"
+                showEye
+                showStatus
+                isValid={!errors.confirmNewPassword && !!confirmPw && confirmPw === newPw}
+                fieldProps={field}
+                error={errors.confirmNewPassword?.message}
+              />
+            )}
           />
+
           <DialogFooter className="mt-2">
-            <Button
-              variant="secondary"
-              type="button"
-              onClick={() => setOpen(false)}
-              disabled={loading}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? 'Saving...' : 'Save'}
+            <DialogClose asChild>
+              <Button
+                variant="secondary"
+                type="button"
+                onClick={() =>
+                  reset(
+                    { oldPassword: '', newPassword: '', confirmNewPassword: '' },
+                    { keepDirty: false, keepTouched: false, keepErrors: false },
+                  )
+                }
+                disabled={isSubmitting}
+              >
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button type="submit" disabled={isSubmitting || !isDirty}>
+              {isSubmitting ? 'Saving...' : 'Save'}
             </Button>
           </DialogFooter>
         </form>
