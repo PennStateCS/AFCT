@@ -3,10 +3,7 @@
 import { ColumnDef } from '@tanstack/react-table';
 import { Assignment } from '@prisma/client';
 import { Button } from '@/components/ui/button';
-import { Pencil, Trash2, ChevronDown, Eye, BookOpen } from 'lucide-react';
-import { Badge } from '@/components/ui/RoleBadge';
-import { useRouter } from 'next/navigation';
-import { cn } from '@/lib/utils';
+import { Pencil, Trash2, ChevronDown, BookOpen } from 'lucide-react';
 import { format } from 'date-fns';
 import Link from 'next/link';
 import {
@@ -18,13 +15,15 @@ import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 
+// Extended assignment type with problem count
+type AssignmentWithProblemCount = Assignment & {
+  problemCount: number;
+};
+
 export function useAssignmentColumns(
   handleAssignmentDeleteClick: (id: string) => void,
   handleAssignmentEditClick: (assignment: Assignment) => void,
-): ColumnDef<Assignment>[] {
-  const router = useRouter();
-  const headerClass = 'whitespace-normal break-words text-xs sm:text-base px-1 py-1';
-
+): ColumnDef<AssignmentWithProblemCount>[] {
   return [
     {
       accessorKey: 'title',
@@ -52,7 +51,7 @@ export function useAssignmentColumns(
     },
     {
       accessorKey: 'maxPoints',
-      header: ({ column }) => 'Points',
+      header: () => 'Points',
       cell: ({ row }) => <div>{row.original.maxPoints}</div>,
     },
     {

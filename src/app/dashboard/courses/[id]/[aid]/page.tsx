@@ -55,7 +55,7 @@ export default function AssignmentPage() {
   const [allProblems, setAllProblems] = useState<Problem[]>([]);
   const [problemsLoading, setProblemsLoading] = useState(false);
   const [problemToRemove, setProblemToRemove] = useState<Problem | null>(null);
-  const [removing, setRemoving] = useState(false);
+  const [, setRemoving] = useState(false);
   const [editAssignmentOpen, setEditAssignmentOpen] = useState(false);
 
   // tab state synced with URL param
@@ -143,11 +143,6 @@ export default function AssignmentPage() {
 
   if (loading) return <div className="p-6">Loading assignment...</div>;
   if (!assignment) return <div className="p-6 text-red-500">Assignment not found.</div>;
-
-  const renderNames = (people: Person[]) =>
-    people.length
-      ? people.map((p) => `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim()).join(', ')
-      : 'None';
 
   return (
     <div className="mx-auto w-full text-sm">

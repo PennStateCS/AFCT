@@ -11,6 +11,7 @@ export async function authenticateUser(email: string, password: string) {
 
   const token = signToken({ userId: user.id }, '15m');
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { password: _pw, ...safeUser } = user;
   return { token, user: safeUser };
 }

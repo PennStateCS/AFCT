@@ -31,7 +31,6 @@ import {
   UpdateUserSchema,
   type UpdateUserRaw,
   type UpdateUserInput,
-  RoleEnum,
 } from '@/schemas/user';
 
 type EditUserDialogProps = {
@@ -52,7 +51,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
     () => ({
       firstName: user.firstName ?? '',
       lastName: user.lastName ?? '',
-      role: (user.role as any) ?? 'STUDENT',
+      role: (user.role as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT') ?? 'STUDENT',
       avatarFile: undefined,
       deleteAvatar: false,
     }),
@@ -72,8 +71,6 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
     mode: 'onBlur',
     reValidateMode: 'onChange',
   });
-
-  const deleteAvatar = watch('deleteAvatar');
 
   // Reset form (avoid error flash on close)
   useEffect(() => {
@@ -98,7 +95,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
 
   // Avatar upload handler: set file in RHF + update local preview + clear delete flag
   const onAvatarPicked = (file?: File) => {
-    setValue('avatarFile', file as any, {
+    setValue('avatarFile', file, {
       shouldDirty: true,
       shouldTouch: true,
       shouldValidate: true,
@@ -143,7 +140,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
       ...user,
       firstName: parsed.firstName,
       lastName: parsed.lastName,
-      role: parsed.role as any,
+      role: parsed.role as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT',
       // If you want to immediately clear avatar in UI on delete:
       avatar: parsed.deleteAvatar ? null : user.avatar,
     });
@@ -182,7 +179,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
               <Controller
                 control={control}
                 name="avatarFile"
-                render={({ field }) => (
+                render={() => (
                   <>
                     <input
                       id="avatar-upload"
@@ -269,8 +266,8 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
               <div>
                 <label className="mb-2 block text-sm font-medium">Role</label>
                 <Select
-                  value={(field.value as any) ?? ''}
-                  onValueChange={(v) => field.onChange(v as (typeof RoleEnum)['_type'])}
+                  value={field.value ?? ''}
+                  onValueChange={(v) => field.onChange(v)}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select a role" />
@@ -288,7 +285,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
           />
 
           {/* Hidden deleteAvatar flag (driven by Delete button) */}
-          <Controller control={control} name="deleteAvatar" render={() => null} />
+          <Controller control={control} name="deleteAvatar" render={() => <></>} />
 
           <DialogFooter className="mt-4">
             <DialogClose asChild>

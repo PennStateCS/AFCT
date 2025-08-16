@@ -77,7 +77,6 @@ export function CreateAssignmentDialog({
     control,
     handleSubmit,
     reset,
-    watch,
     formState: { errors, isSubmitting, isValid },
   } = useForm<FormValues>({
     resolver: zodResolver(CreateAssignmentSchema),
@@ -138,8 +137,6 @@ export function CreateAssignmentDialog({
       toast.error(msg ?? 'Failed to create assignment');
     }
   };
-
-  const dueStr = watch('dueDate');
 
   return (
     <Dialog
@@ -272,7 +269,8 @@ export function CreateAssignmentDialog({
 async function safeMessage(res: Response) {
   try {
     const data = await res.json();
-    return (data as any)?.message ?? (data as any)?.error ?? null;
+    return (data as { message?: string; error?: string })?.message ?? 
+           (data as { message?: string; error?: string })?.error ?? null;
   } catch {
     return null;
   }

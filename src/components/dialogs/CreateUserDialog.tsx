@@ -28,8 +28,6 @@ import {
   CreateUserSchema,
   type CreateUserRaw,
   type CreateUserInput,
-  RoleEnum,
-  StrongPassword,
 } from '@/schemas/user';
 
 // For the checklist UI only
@@ -55,7 +53,7 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
       email: '',
       password: '',
       confirmPassword: '',
-      role: undefined as any, // RHF Select starts empty; Zod will require a valid RoleEnum value
+      role: 'STUDENT' as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT', // Default to STUDENT
     }),
     [],
   );
@@ -97,6 +95,7 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
 
   const onSubmit = async (raw: CreateUserRaw) => {
     const parsed: CreateUserInput = CreateUserSchema.parse(raw);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { confirmPassword, ...payload } = parsed;
 
     const res = await fetch('/api/users', {
@@ -117,7 +116,6 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
   };
 
   const pw = watch('password');
-  const confirmPw = watch('confirmPassword');
 
   return (
     <Dialog
@@ -223,8 +221,8 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
               <div>
                 <label className="mb-2 block text-sm font-medium">Role</label>
                 <Select
-                  onValueChange={(v) => field.onChange(v as (typeof RoleEnum)['_type'])}
-                  value={(field.value as any) ?? ''}
+                  onValueChange={(v) => field.onChange(v)}
+                  value={field.value ?? ''}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select a role" />

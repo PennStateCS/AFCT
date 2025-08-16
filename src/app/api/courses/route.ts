@@ -65,6 +65,7 @@ export async function GET() {
       const tas = c.roster.filter((r) => r.role === 'TA').map((r) => r.user);
       const students = c.roster.filter((r) => r.role === 'STUDENT').map((r) => r.user);
 
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { roster, ...rest } = c;
       return { ...rest, faculty, tas, students };
     });

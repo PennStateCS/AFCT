@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { CreateUserDialog } from '@/components/dialogs/CreateUserDialog';
 import { UserRoundPlus } from 'lucide-react';
-import { Separator } from '@radix-ui/react-separator';
 
 export default function ViewUsersPage() {
   const searchParams = useSearchParams();

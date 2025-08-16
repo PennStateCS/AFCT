@@ -7,7 +7,6 @@ export function EnhancedSidebarTrigger() {
   const { state } = useSidebar();
 
   const isCollapsed = state === 'collapsed';
-  const label = isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar';
   const Icon = isCollapsed ? PanelRightIcon : PanelLeftIcon;
 
   return (

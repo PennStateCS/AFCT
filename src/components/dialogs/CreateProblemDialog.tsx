@@ -1,5 +1,6 @@
 'use client';
 
+import { Problem } from '@prisma/client';
 import {
   Dialog,
   DialogContent,
@@ -24,8 +25,9 @@ import { z } from 'zod';
 
 import {
   CreateProblemSchema,
+  ProblemFormSchema,
   ProblemTypeEnum,
-  type CreateProblemRaw,
+  type ProblemFormRaw,
   type CreateProblemInput,
 } from '@/schemas/problem';
 
@@ -33,11 +35,11 @@ type CreateProblemDialogProps = {
   open: boolean;
   setOpen: (open: boolean) => void;
   courseId: string;
-  onCreated?: (created?: any) => void;
+  onCreated?: (created?: Problem) => void;
 };
 
 // RHF state BEFORE transforms
-type FormValues = CreateProblemRaw;
+type FormValues = ProblemFormRaw;
 // Parsed AFTER Zod transforms
 type ParsedValues = CreateProblemInput;
 
@@ -56,7 +58,7 @@ export function CreateProblemDialog({
       isUnlimited: true,
       maxStates: 100,
       isDeterministic: false,
-      file: undefined as any,
+      file: undefined,
       courseId,
     }),
     [courseId],
@@ -69,7 +71,7 @@ export function CreateProblemDialog({
     watch,
     formState: { errors, isSubmitting, isValid },
   } = useForm<FormValues>({
-    resolver: zodResolver(CreateProblemSchema),
+    resolver: zodResolver(ProblemFormSchema),
     defaultValues: defaults,
     mode: 'onBlur',
     reValidateMode: 'onChange',
@@ -225,9 +227,7 @@ export function CreateProblemDialog({
                     type="number"
                     fieldProps={{
                       ...field,
-                      value: isUnlimited ? '' : (field.value as any),
-                      onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                        field.onChange(e.target.value),
+                      value: isUnlimited ? '' : String(field.value || ''),
                     }}
                     min={1}
                     max={1000}
@@ -312,7 +312,8 @@ export function CreateProblemDialog({
 async function safeMessage(res: Response) {
   try {
     const data = await res.json();
-    return (data as any)?.message ?? (data as any)?.error ?? null;
+    return (data as { message?: string; error?: string })?.message ?? 
+           (data as { message?: string; error?: string })?.error ?? null;
   } catch {
     return null;
   }

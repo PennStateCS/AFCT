@@ -15,7 +15,6 @@ import {
   LogOut,
   LockKeyhole,
   UserPen,
-  User2,
   ChevronUp,
 } from 'lucide-react';
 
@@ -23,7 +22,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -58,12 +56,6 @@ type Course = {
 const adminMenu = [
   { title: 'Courses', url: '/dashboard/courses', icon: Book },
   { title: 'User Accounts', url: '/dashboard/users', icon: User },
-];
-
-const footer = [
-  { title: 'Edit Profile', url: '/dashboard/profile', icon: UserPen },
-  { title: 'Change Password', url: '/dashboard/users/create', icon: LockKeyhole },
-  { title: 'Sign Out', url: '/dashboard/courses', icon: LogOut },
 ];
 
 function getCoursesForUser(
@@ -140,7 +132,7 @@ export default function DashboardSidebar() {
         if (!res.ok) throw new Error('Failed to fetch courses');
         const data = await res.json();
         setCourses(data);
-      } catch (err) {
+      } catch {
         setCourses([]);
       } finally {
         setLoadingCourses(false);

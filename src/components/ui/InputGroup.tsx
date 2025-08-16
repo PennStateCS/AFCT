@@ -87,7 +87,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
     disabled,
     ...rest
   },
-  _ref,
+  ref,
 ) {
   const inputId = id ?? name;
 
@@ -159,7 +159,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
           {...rest}
           id={inputId}
           name={rhfName ?? name}
-          ref={rhfRef}
+          ref={rhfRef || ref}
           type={effectiveType}
           value={currValue}
           onChange={handleChange}

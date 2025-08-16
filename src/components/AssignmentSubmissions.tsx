@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import Link from 'next/link';
 import { Button } from './ui/button';
 import { DataTable } from './ui/data-table';
 import { Textarea } from './ui/textarea';
@@ -118,7 +117,7 @@ export default function AssignmentSubmissions({ courseId, assignmentId, problems
 
       {selectedStudent && (
         <div className="space-y-4">
-          {problems.map((problem, index) => (
+          {problems.map((problem) => (
             <div key={problem.id} className="bg-background mb-15 rounded border p-4 shadow-sm">
               <div className="mb-2 flex items-start gap-4 rounded border bg-white p-4 shadow">
                 <div className="mb-4 flex-1">

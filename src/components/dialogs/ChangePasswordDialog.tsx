@@ -56,8 +56,9 @@ export function ChangePasswordDialog({ open, setOpen, onChangePassword }: Props)
       await onChangePassword(values.oldPassword, values.newPassword);
       toast.success('Password changed successfully!');
       setOpen(false);
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to change password');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to change password';
+      toast.error(errorMessage);
     }
   };
 
