@@ -1,4 +1,3 @@
-// InputGroup.tsx
 'use client';
 
 import * as React from 'react';
@@ -7,34 +6,62 @@ import { Label } from '@/components/ui/label';
 import { CheckCircle, XCircle, Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+/** RHF field props shape */
 type RHFFieldProps =
   | Pick<
       React.InputHTMLAttributes<HTMLInputElement>,
       'name' | 'onChange' | 'onBlur' | 'value' | 'ref'
     >
-  | Record<string, never>;
+  | Record<string, never>; // allow not using RHF
 
 interface InputGroupProps
   extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'type'> {
+  /** Visible label text */
   label: string;
+  /** Field name (use the same as RHF schema key) */
   name: string;
-  fieldProps?: RHFFieldProps;
-  error?: string;
-  description?: string;
-  showStatus?: boolean;
-  isValid?: boolean;
-  isChecking?: boolean | string;
-  showEye?: boolean;
-  requiredMark?: boolean;
-  className?: string;
-  setValue?: (val: string) => void;
-  type?: string;
 
-  /** Back-compat (won't be forwarded to DOM) */
+  /** RHF field props: pass `{...field}` from Controller or `{...register('name')}` */
+  fieldProps?: RHFFieldProps;
+
+  /** Validation error message (from Zod/RHF) */
+  error?: string;
+  /** Optional helper/description under the field */
+  description?: string;
+
+  /** Show async/valid/invalid status area on the right */
+  showStatus?: boolean;
+  /** Current validity when showStatus is enabled */
+  isValid?: boolean;
+  /** Async checking indicator text or boolean */
+  isChecking?: boolean | string;
+
+  /** Show an eye to toggle password visibility (pass `type="password"` below) */
+  showEye?: boolean;
+  /**
+   * OPTIONAL external control of the eye (if you need it).
+   * If omitted, the eye is controlled internally.
+   */
   isPasswordVisible?: boolean;
   togglePasswordVisibility?: () => void;
+
+  /** Force required markup/ARIA; leave undefined to control via schema */
+  requiredMark?: boolean;
+
+  /** For controlled usage without RHF */
+  setValue?: (val: string) => void;
+
+  /** Override input type; defaults to 'text'. Keep as 'password' to use the eye. */
+  type?: React.HTMLInputTypeAttribute;
 }
 
+/**
+ * InputGroup
+ * - Works with RHF (pass fieldProps={...field} and error from formState.errors)
+ * - Works without RHF (pass value + setValue)
+ * - Shows status icons/eye toggle and error/description text
+ * - Eye stays visible when toggling (no disappearing)
+ */
 const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function InputGroup(
   {
     label,
@@ -46,50 +73,47 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
     isValid,
     isChecking,
     showEye,
+    isPasswordVisible,
+    togglePasswordVisibility,
     requiredMark,
     className,
     setValue,
-
-    // back-compat (do not forward)
-    isPasswordVisible,
-    togglePasswordVisibility,
-
     type = 'text',
     id,
     value,
     onBlur,
     placeholder,
     disabled,
-    ...rest // <- safe now; back-compat props were pulled out above
+    ...rest
   },
   _ref,
 ) {
   const inputId = id ?? name;
 
-  // RHF wiring
   const rhfName = (fieldProps as any)?.name as string | undefined;
   const rhfValue = (fieldProps as any)?.value as any;
   const rhfOnChange = (fieldProps as any)?.onChange as ((e: any) => void) | undefined;
   const rhfOnBlur = (fieldProps as any)?.onBlur as ((e: any) => void) | undefined;
   const rhfRef = (fieldProps as any)?.ref as React.Ref<HTMLInputElement> | undefined;
 
-  // Password visibility
+  // Internal password visibility (used if no external control provided)
   const [pwdVisibleInternal, setPwdVisibleInternal] = React.useState(false);
-  const isPasswordType = type === 'password';
-  const pwdVisible =
-    typeof isPasswordVisible === 'boolean' ? isPasswordVisible : pwdVisibleInternal;
-  const handleTogglePwd = () => {
-    if (typeof isPasswordVisible === 'boolean') togglePasswordVisibility?.();
-    else setPwdVisibleInternal((s) => !s);
-  };
-  const effectiveType = showEye && isPasswordType ? (pwdVisible ? 'text' : 'password') : type;
+  const externallyControlled = typeof isPasswordVisible === 'boolean';
 
-  // Right adornments -> padding
-  const hasStatus = !!showStatus;
-  const hasEye = !!showEye && isPasswordType;
-  const inputPaddingRight = hasStatus && hasEye ? 'pr-16' : hasStatus || hasEye ? 'pr-10' : '';
+  // Only treat as "passwordish" if the declared prop is password.
+  // (We don't rely on the current, effective type.)
+  const isPasswordish = type === 'password';
 
-  // Unified handlers
+  // Effective visibility
+  const pwdVisible = externallyControlled ? !!isPasswordVisible : pwdVisibleInternal;
+
+  // Compute the effective type (toggle only if it started as password)
+  const effectiveType = showEye && isPasswordish ? (pwdVisible ? 'text' : 'password') : type;
+
+  // Eye should always be visible when asked, regardless of effective type
+  const hasEye = !!showEye;
+
+  // Unified change/blur handlers: prefer RHF, then controlled, then noop
   const handleChange = (evt: React.ChangeEvent<HTMLInputElement>) => {
     if (rhfOnChange) return rhfOnChange(evt);
     if (setValue) return setValue(evt.target.value);
@@ -99,8 +123,24 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
     if (onBlur) return onBlur(evt);
   };
 
+  // Determine current value: prefer RHF, then controlled prop `value`
   const currValue = rhfValue ?? value ?? '';
 
+  // Toggle handler supports both internal & external control
+  const handleToggleEye = () => {
+    if (!hasEye) return;
+    if (externallyControlled) {
+      togglePasswordVisibility?.();
+    } else {
+      setPwdVisibleInternal((s) => !s);
+    }
+  };
+
+  // Decide right padding based on adornments
+  const hasStatus = !!showStatus;
+  const inputPaddingRight = hasStatus && hasEye ? 'pr-16' : hasStatus || hasEye ? 'pr-10' : '';
+
+  // aria-describedby
   const describedByIds = [error ? `${inputId}-error` : null, description ? `${inputId}-desc` : null]
     .filter(Boolean)
     .join(' ')
@@ -115,6 +155,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
 
       <div className="relative">
         <Input
+          {...rest}
           id={inputId}
           name={rhfName ?? name}
           ref={rhfRef as any}
@@ -127,10 +168,9 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
           aria-invalid={!!error || undefined}
           aria-describedby={describedByIds || undefined}
           className={cn(inputPaddingRight)}
-          {...rest}
         />
 
-        {/* status + eye */}
+        {/* STATUS + EYE together */}
         {hasStatus && hasEye && (
           <>
             <div className="absolute inset-y-0 right-10 flex items-center pr-1">
@@ -143,9 +183,10 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
             <div className="absolute inset-y-0 right-3 flex items-center">
               <button
                 type="button"
-                onClick={handleTogglePwd}
+                onClick={handleToggleEye}
                 aria-label={pwdVisible ? 'Hide password' : 'Show password'}
                 className="text-muted-foreground transition-opacity hover:opacity-80"
+                // Keep the button even if not passwordish; it simply toggles internal state
               >
                 {pwdVisible ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
@@ -153,7 +194,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
           </>
         )}
 
-        {/* status only */}
+        {/* STATUS only */}
         {hasStatus && !hasEye && (
           <div className="absolute inset-y-0 right-3 flex items-center">
             <StatusAdornment
@@ -164,12 +205,12 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
           </div>
         )}
 
-        {/* eye only */}
+        {/* EYE only */}
         {!hasStatus && hasEye && (
           <div className="absolute inset-y-0 right-3 flex items-center">
             <button
               type="button"
-              onClick={handleTogglePwd}
+              onClick={handleToggleEye}
               aria-label={pwdVisible ? 'Hide password' : 'Show password'}
               className="text-muted-foreground transition-opacity hover:opacity-80"
             >
@@ -179,6 +220,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
         )}
       </div>
 
+      {/* Description / Error */}
       {description ? (
         <p id={`${inputId}-desc`} className="text-muted-foreground mt-1 text-xs">
           {description}
@@ -202,12 +244,10 @@ function StatusAdornment({
   isValid?: boolean;
   hasValue: boolean;
 }) {
-  if (isChecking)
-    return (
-      <span className="text-muted-foreground text-xs italic">
-        {typeof isChecking === 'string' ? isChecking : 'Checking...'}
-      </span>
-    );
+  if (isChecking) {
+    const text = typeof isChecking === 'string' ? isChecking : 'Checking...';
+    return <span className="text-muted-foreground text-xs italic">{text}</span>;
+  }
   if (!hasValue || isValid === undefined) return null;
   return isValid ? (
     <CheckCircle size={18} className="text-green-600" aria-label="Valid" />
