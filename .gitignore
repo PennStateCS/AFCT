@@ -1,6 +1,16 @@
 # Node.js
 node_modules/
 
+# Environment files
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Database files
+*.db
+*.db-journal
+
 # Yarn / pnpm / npm logs
 .pnp/
 .pnp.*
