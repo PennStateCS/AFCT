@@ -172,7 +172,6 @@ model Comment {
   roster   Roster @relation(fields: [rosterId], references: [id], onDelete: Restrict)
   rosterId String
 
-  // The student whose work this comment is about (optional for general comments)
   aboutStudent   User?   @relation("CommentsAboutStudent", fields: [aboutStudentId], references: [id], onDelete: Restrict)
   aboutStudentId String?
 }

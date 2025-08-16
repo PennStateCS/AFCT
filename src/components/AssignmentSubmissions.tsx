@@ -337,7 +337,7 @@ export default function AssignmentSubmissions({ courseId, assignmentId, problems
                       {comments[problem.id].map((comment) => (
                         <div
                           key={comment.id}
-                          className="border-primary relative rounded border-r-4 border-l-4 bg-gray-100 py-2 pl-3 pr-10"
+                          className="border-primary relative rounded border-r-4 border-l-4 bg-gray-100 py-2 pr-10 pl-3"
                         >
                           <div className="mb-4 text-sm whitespace-pre-wrap">{comment.content}</div>
                           <div className="text-sm font-medium text-gray-900">
