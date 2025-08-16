@@ -1034,7 +1034,14 @@ reset_production_database() {
     # Check if production environment exists
     if [[ ! -f ".env.production" ]]; then
         print_error "Production environment not configured"
-        exit 1
+        print_info "Please run 'Setup Production Database' first (option 7)"
+        return 1
+    fi
+    
+    # Check if production schema exists
+    if [[ ! -f "prisma/schema.production.prisma" ]]; then
+        print_error "Production schema file not found: prisma/schema.production.prisma"
+        return 1
     fi
     
     # Source environment variables
@@ -1047,22 +1054,45 @@ reset_production_database() {
     DB_PASSWORD=$(echo $DATABASE_URL | sed -n 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/p')
     DB_NAME=$(echo $DATABASE_URL | sed -n 's/.*\/\([^?]*\).*/\1/p')
     
+    print_info "Resetting database: $DB_NAME"
+    print_info "User: $DB_USER"
+    
     # Drop and recreate database
     print_step "Dropping existing database..."
-    sudo -u postgres psql -c "DROP DATABASE IF EXISTS $DB_NAME;"
+    if sudo -u postgres psql -c "DROP DATABASE IF EXISTS $DB_NAME;"; then
+        print_success "Database dropped"
+    else
+        print_error "Failed to drop database"
+        return 1
+    fi
     
     print_step "Recreating database..."
-    sudo -u postgres psql -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;"
+    if sudo -u postgres psql -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;"; then
+        print_success "Database recreated"
+    else
+        print_error "Failed to recreate database"
+        return 1
+    fi
     
-    # Apply migrations
+    # Apply migrations with production schema
     print_step "Applying migrations..."
-    npx prisma migrate deploy
+    if npx prisma migrate deploy --schema=prisma/schema.production.prisma; then
+        print_success "Migrations applied successfully"
+    else
+        print_error "Migration failed - check database connection"
+        return 1
+    fi
     
-    # Seed database
+    # Seed database with production environment
     print_step "Seeding database..."
-    npm run seed 2>/dev/null || npx tsx prisma/seed.ts
+    if NODE_ENV=production npm run seed 2>/dev/null || NODE_ENV=production npx tsx prisma/seed.ts; then
+        print_success "Database seeded successfully"
+    else
+        print_warning "Database seeding failed - continuing anyway"
+    fi
     
     print_success "Production database reset complete!"
+    print_info "Database: $DB_NAME is ready for use"
     pause
 }
 
