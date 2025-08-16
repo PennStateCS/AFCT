@@ -1,19 +1,16 @@
 'use client';
 
-import { signIn } from 'next-auth/react';
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { signIn } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Eye, EyeOff, Info } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as Popover from '@radix-ui/react-popover';
-import { CheckCircle, XCircle } from 'lucide-react';
+import { Info } from 'lucide-react';
 import InputGroup from '@/components/ui/InputGroup';
 
-// Validation rules
+// Simple validators
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const passwordRules = [
   { label: 'At least 8 characters', test: (pw: string) => pw.length >= 8 },
@@ -26,10 +23,13 @@ const isStrongPassword = (password: string) => passwordRules.every((rule) => rul
 
 export default function LoginPage() {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
+
+  // Login state
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
 
+  // Signup state
   const [signupFirst, setSignupFirst] = useState('');
   const [signupLast, setSignupLast] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
@@ -37,20 +37,23 @@ export default function LoginPage() {
   const [signupConfirm, setSignupConfirm] = useState('');
   const [showSignupPassword, setShowSignupPassword] = useState(false);
   const [showSignupConfirm, setShowSignupConfirm] = useState(false);
-  const [loading, setLoading] = useState(false);
 
+  const [loading, setLoading] = useState(false);
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const [isEmailAvailable, setIsEmailAvailable] = useState<boolean | null>(null);
 
   const searchParams = useSearchParams();
-  const loginEmailRef = useRef<HTMLInputElement>(null);
-  const signupFirstRef = useRef<HTMLInputElement>(null);
 
+  // Focus the right field on mode change
   useEffect(() => {
-    if (mode === 'login') loginEmailRef.current?.focus();
-    else signupFirstRef.current?.focus();
+    if (mode === 'login') {
+      document.getElementById('login-email')?.focus();
+    } else {
+      document.getElementById('signup-first')?.focus();
+    }
   }, [mode]);
 
+  // Surface next-auth errors from callback
   useEffect(() => {
     const error = searchParams.get('error');
     if (error === 'CredentialsSignin') toast.error('Invalid email or password.');
@@ -68,7 +71,7 @@ export default function LoginPage() {
       const data = await res.json();
       setIsEmailAvailable(!data.exists);
     } catch {
-      setIsEmailAvailable(null); // fallback to unknown
+      setIsEmailAvailable(null);
     } finally {
       setIsCheckingEmail(false);
     }
@@ -84,20 +87,23 @@ export default function LoginPage() {
     const result = await signIn('credentials', {
       email: loginEmail,
       password: loginPassword,
-      redirect: false,
+      redirect: true,
       callbackUrl: '/dashboard',
     });
-    setLoading(false);
 
-    if (result?.error)
+    if (result?.error) {
+      setLoading(false);
       toast.error(
         result.error === 'CredentialsSignin' ? 'Invalid email or password.' : 'Login failed.',
       );
-    else if (result?.ok && result.url) window.location.href = result.url;
+    } else if (result?.ok && result.url) {
+      window.location.href = result.url;
+    }
   };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (!signupFirst || !signupLast || !signupEmail || !signupPassword || !signupConfirm) {
       toast.error('Please fill in all fields.');
       return;
@@ -111,12 +117,18 @@ export default function LoginPage() {
       return;
     }
 
-    // Check if email already exists
-    const checkRes = await fetch(`/api/auth/check-email?email=${encodeURIComponent(signupEmail)}`);
-    const checkData = await checkRes.json();
-    if (checkData.exists) {
-      toast.error('Email is already registered.');
-      return;
+    // Optional: immediate availability check
+    try {
+      const checkRes = await fetch(
+        `/api/auth/check-email?email=${encodeURIComponent(signupEmail)}`,
+      );
+      const checkData = await checkRes.json();
+      if (checkData.exists) {
+        toast.error('Email is already registered.');
+        return;
+      }
+    } catch {
+      /* ignore — we still attempt signup */
     }
 
     setLoading(true);
@@ -145,13 +157,16 @@ export default function LoginPage() {
     const result = await signIn('credentials', {
       email: signupEmail,
       password: signupPassword,
-      redirect: false,
+      redirect: true,
       callbackUrl: '/dashboard',
     });
-    setLoading(false);
 
-    if (result?.ok && result.url) window.location.href = result.url;
-    else toast.error('Signup succeeded but login failed.');
+    if (result?.ok && result.url) {
+      window.location.href = result.url;
+      setLoading(false);
+    } else {
+      toast.error('Signup succeeded but login failed.');
+    }
   };
 
   const isLoginEmailValid = isValidEmail(loginEmail);
@@ -159,6 +174,7 @@ export default function LoginPage() {
 
   return (
     <div className="from-background to-primary/10 relative flex min-h-screen w-full items-center justify-center bg-gradient-to-tr">
+      {' '}
       <div className="bg-card relative z-10 mx-2 w-full max-w-[400px] rounded-2xl border px-5 py-8 shadow-2xl">
         {/* Floating Login Test Menu */}
         <div
@@ -184,23 +200,25 @@ export default function LoginPage() {
                 setLoginEmail(`${role}@example.com`);
                 setLoginPassword('password123');
                 setMode('login');
-                setTimeout(() => loginEmailRef.current?.focus(), 10);
+                setTimeout(() => document.getElementById('login-email')?.focus(), 10);
               }}
             >
               {role.charAt(0).toUpperCase() + role.slice(1)}
             </button>
           ))}
         </div>
+
         <h1 className="p-2 text-center text-2xl font-bold text-gray-900">AFCT Dashboard</h1>
+
         <div className="bg-secondary/20 my-6 flex justify-center gap-x-2 rounded-xl shadow">
-          {['login', 'signup'].map((m) => (
+          {(['login', 'signup'] as const).map((m) => (
             <button
               key={m}
               type="button"
               className={`flex-1 rounded-xl py-1 text-base transition-all ${
                 mode === m ? 'bg-secondary text-white shadow' : 'text-gray-900 dark:text-gray-400'
               }`}
-              onClick={() => setMode(m as 'login' | 'signup')}
+              onClick={() => setMode(m)}
               disabled={mode === m}
             >
               {m === 'login' ? 'Login' : 'Sign Up'}
@@ -220,19 +238,24 @@ export default function LoginPage() {
               className="space-y-5"
             >
               <InputGroup
+                id="login-email"
                 label="Email"
+                name="login-email"
                 value={loginEmail}
                 setValue={setLoginEmail}
                 type="email"
                 showStatus
-                isValid={isValidEmail(loginEmail)}
+                isValid={isLoginEmailValid}
               />
+
               <InputGroup
                 label="Password"
+                name="login-password"
                 value={loginPassword}
                 setValue={setLoginPassword}
-                type={showLoginPassword ? 'text' : 'password'}
+                type="password"
                 showEye
+                showStatus={false}
                 isPasswordVisible={showLoginPassword}
                 togglePasswordVisibility={() => setShowLoginPassword((v) => !v)}
               />
@@ -251,28 +274,40 @@ export default function LoginPage() {
               onSubmit={handleSignup}
               className="space-y-5"
             >
-              <InputGroup label="First Name" value={signupFirst} setValue={setSignupFirst} />
-              <InputGroup label="Last Name" value={signupLast} setValue={setSignupLast} />
+              <InputGroup
+                id="signup-first"
+                label="First Name"
+                name="signup-first"
+                value={signupFirst}
+                setValue={setSignupFirst}
+              />
+              <InputGroup
+                label="Last Name"
+                name="signup-last"
+                value={signupLast}
+                setValue={setSignupLast}
+              />
               <InputGroup
                 label="Email"
+                name="signup-email"
                 value={signupEmail}
                 setValue={(val) => {
                   setSignupEmail(val);
-                  setIsEmailAvailable(null); // reset availability state while typing
+                  setIsEmailAvailable(null);
                 }}
                 type="email"
                 showStatus
                 isValid={isSignupEmailValid && isEmailAvailable === true}
                 onBlur={() => checkEmailAvailability(signupEmail)}
                 isChecking={isCheckingEmail}
-                isAvailable={isEmailAvailable}
               />
 
               <InputGroup
                 label="Password"
+                name="signup-password"
                 value={signupPassword}
                 setValue={setSignupPassword}
-                type={showSignupPassword ? 'text' : 'password'}
+                type="password"
                 showStatus
                 isValid={signupPassword.length > 0 && isStrongPassword(signupPassword)}
                 showEye
@@ -282,9 +317,10 @@ export default function LoginPage() {
 
               <InputGroup
                 label="Confirm Password"
+                name="signup-confirm"
                 value={signupConfirm}
                 setValue={setSignupConfirm}
-                type={showSignupConfirm ? 'text' : 'password'}
+                type="password"
                 showEye
                 isPasswordVisible={showSignupConfirm}
                 togglePasswordVisibility={() => setShowSignupConfirm((v) => !v)}
