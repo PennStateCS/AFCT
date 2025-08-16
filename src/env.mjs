@@ -1,5 +1,14 @@
 // src/env.mjs
 import { z } from 'zod';
+import { config } from 'dotenv';
+import { resolve } from 'path';
+
+// Load environment file based on NODE_ENV
+const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env.local';
+const envPath = resolve(process.cwd(), envFile);
+
+// Load environment variables from the appropriate file
+config({ path: envPath });
 
 const serverSchema = z.object({
   DATABASE_URL: z.string().url(),
@@ -28,4 +37,4 @@ if (!_client.success) {
   throw new Error('Invalid client environment variables');
 }
 
-export const env = { ..._server.data, ..._client.data } as const;
+export const env = { ..._server.data, ..._client.data };
