@@ -1,1515 +1,561 @@
-#!/bin/bash 
-
+#!/usr/bin/env bash
 # =============================================================================
-# AFCT Dashboard Setup Wizard
+# AFCT Dashboard Setup Wizard (TUI with whiptail/dialog) - ENV-SAFE (Auto-install TUI)
 # =============================================================================
-# Complete setup wizard for AFCT Dashboard - beginner friendly!
-# Handles Node.js, database, and application setup for development and production
-# =============================================================================
-
-set -e  # Exit on any error
-
-# Color codes
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
-NC='\033[0m'
-
-# Print functions
-print_step() {
-    echo -e "${BLUE}▶${NC} $1"
-}
-
-print_success() {
-    echo -e "${GREEN}✓${NC} $1"
-}
-
-print_warning() {
-    echo -e "${YELLOW}⚠${NC} $1"
-}
-
-print_error() {
-    echo -e "${RED}✗${NC} $1"
-}
-
-print_info() {
-    echo -e "${CYAN}ℹ${NC} $1"
-}
-
-print_header() {
-    echo -e "${PURPLE}=============================================="
-    echo -e "  $1"
-    echo -e "==============================================\033[0m"
-}
-
-# Mask a PostgreSQL DATABASE_URL password when printing
-mask_db_url() {
-    local url="$1"
-    echo "$url" | sed -E 's#(postgresql://[^:]+):[^@]+@#\1:****@#'
-}
-
-# ---- URL encoding/decoding helpers (use Node to be fully RFC 3986 compliant) ----
-url_encode() {
-  node -e "try{process.stdout.write(encodeURIComponent(process.argv[1]||''))}catch{process.stdout.write(process.argv[1]||'')}" "$1" 2>/dev/null || echo -n "$1"
-}
-url_decode() {
-  node -e "try{process.stdout.write(decodeURIComponent(process.argv[1]||''))}catch{process.stdout.write(process.argv[1]||'')}" "$1" 2>/dev/null || echo -n "$1"
-}
-
-# Default configuration
-DB_NAME_DEV="dev.db"
-DB_NAME_PROD="afct_production"
-DB_USER_PROD="afct_user"
-APP_DIR="/var/www/afct"
-NODE_VERSION="20"
-
-# Check if running as root for certain operations
-check_root() {
-    if [[ $EUID -eq 0 ]]; then
-        return 0
-    else
-        return 1
-    fi
-}
-
-# Function to prompt for input with validation
-prompt_input() {
-    local prompt="$1"
-    local var_name="$2"
-    local default_value="$3"
-    local required="$4"
-    
-    while true; do
-        if [[ -n "$default_value" ]]; then
-            read -p "$prompt [$default_value]: " input
-            if [[ -z "$input" ]]; then
-                eval "$var_name='$default_value'"
-            else
-                eval "$var_name='$input'"
-            fi
-        else
-            read -p "$prompt: " input
-            eval "$var_name='$input'"
-        fi
-        
-        # Check if required and empty
-        if [[ "$required" == "true" && -z "${!var_name}" ]]; then
-            print_error "This field is required. Please enter a value."
-            continue
-        fi
-        break
-    done
-}
-
-# Function to prompt for password with confirmation
-prompt_password() {
-    local prompt="$1"
-    local var_name="$2"
-    
-    while true; do
-        read -s -p "$prompt: " password1
-        echo
-        read -s -p "Confirm password: " password2
-        echo
-        
-        if [[ "$password1" == "$password2" ]]; then
-            eval "$var_name='$password1'"
-            break
-        else
-            print_error "Passwords do not match. Please try again."
-        fi
-    done
-}
-
-# Check if command exists
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
-}
-
-# Pause for user to read
-pause() {
-    read -p "Press [Enter] to continue..."
-}
-
-# =============================================================================
-# Menu Functions
+# Full-featured wizard for dev & prod:
+#  - Auto-installs whiptail (or dialog) if missing
+#  - Detects/fixes DATABASE_URL conflicts (dev & prod)
+#  - Safe runners that ignore inherited DATABASE_URL and load correct .env
+#  - URL-encoding for credentials in DATABASE_URL
+#  - Node.js/PostgreSQL setup, Prisma generate/migrate/seed, deploy with PM2
 # =============================================================================
 
-show_main_menu() {
-    clear
-    print_header "🚀 AFCT Dashboard Setup Wizard"
-    echo
-    print_info "Welcome! This wizard will help you set up the AFCT Dashboard project."
-    print_info "Perfect for beginners - we'll handle everything for you!"
-    echo
-    echo "Choose your setup type:"
-    echo
-    echo "📝 DEVELOPMENT SETUP:"
-    echo "  1) Complete Development Setup (Node.js + SQLite + App)"
-    echo "  2) Install Node.js only"
-    echo "  3) Setup Development Database (SQLite)"
-    echo "  4) Install Project Dependencies"
-    echo
-    echo "🚀 PRODUCTION SETUP:"
-    echo "  5) Complete Production Setup (Node.js + PostgreSQL + App)"
-    echo "  6) Install PostgreSQL only"
-    echo "  7) Setup Production Database (PostgreSQL)"
-    echo "  8) Deploy Application"
-    echo
-    echo "🔧 UTILITIES:"
-    echo "  9) Test Database Connection"
-    echo " 10) Reset Database (Development)"
-    echo " 11) Reset Database (Production)"
-    echo " 12) System Health Check"
-    echo " 13) View System Status"
-    echo " 14) Check Migration Issues"
-    echo " 15) Validate Production Environment"
-    echo " 16) Database Troubleshooting"
-    echo
-    echo " 0) Exit"
-    echo
+set -euo pipefail
+
+# ------------------------------ TUI Backend ---------------------------------
+detect_pkg_mgr() {
+  if command -v apt-get >/dev/null 2>&1; then
+    echo "apt-get"
+  elif command -v yum >/dev/null 2>&1; then
+    echo "yum"
+  elif command -v dnf >/dev/null 2>&1; then
+    echo "dnf"
+  elif command -v pacman >/dev/null 2>&1; then
+    echo "pacman"
+  else
+    echo ""
+  fi
 }
 
-get_user_choice() {
-    while true; do
-        echo -n "Enter your choice (0-16): "
-        read choice
-        case $choice in
-            [0-9]|1[0-6]) return 0 ;;
-            *) print_error "Invalid choice. Please enter a number between 0 and 16." ;;
-        esac
-    done
+ensure_tui() {
+  if command -v whiptail >/dev/null 2>&1; then
+    TUI="whiptail"
+  elif command -v dialog >/dev/null 2>&1; then
+    TUI="dialog"
+  else
+    echo "Neither whiptail nor dialog found. Attempting to install whiptail..."
+    PKG_MGR=$(detect_pkg_mgr)
+    if [[ -n "$PKG_MGR" ]]; then
+      case "$PKG_MGR" in
+        apt-get) sudo apt-get update && sudo apt-get install -y whiptail || sudo apt-get install -y dialog ;;
+        yum)     sudo yum install -y newt || sudo yum install -y dialog ;;
+        dnf)     sudo dnf install -y newt  || sudo dnf install -y dialog  ;;
+        pacman)  sudo pacman -Sy --noconfirm libnewt || sudo pacman -Sy --noconfirm dialog ;;
+      esac
+    else
+      echo "No supported package manager found. Falling back to plain bash prompts."
+      TUI="none"
+      return
+    fi
+
+    if command -v whiptail >/dev/null 2>&1; then
+      TUI="whiptail"
+    elif command -v dialog >/dev/null 2>&1; then
+      TUI="dialog"
+    else
+      echo "Failed to install whiptail/dialog. Falling back to plain bash prompts."
+      TUI="none"
+    fi
+  fi
 }
 
-# =============================================================================
-# System Check Functions
-# =============================================================================
+ensure_tui
 
-check_os() {
-    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        if command_exists "apt"; then
-            OS="ubuntu"
-            print_success "Detected Ubuntu/Debian system"
-        elif command_exists "yum"; then
-            OS="centos"
-            print_success "Detected CentOS/RHEL system"
-        else
-            print_error "Unsupported Linux distribution"
-            exit 1
-        fi
-    else
-        print_error "This script only supports Linux systems"
-        exit 1
-    fi
+title(){ echo "AFCT Dashboard Setup Wizard"; }
+msgbox(){ if [[ "${TUI:-none}" != "none" ]]; then $TUI --title "$(title)" --msgbox "$1" 12 78; else echo -e "$1"; fi; }
+infobox(){ if [[ "${TUI:-none}" != "none" ]]; then $TUI --title "$(title)" --infobox "$1" 8 78; else echo -e "$1"; fi; }
+yesno(){ if [[ "${TUI:-none}" != "none" ]]; then $TUI --title "$(title)" --yesno "$1" 12 78; else read -r -p "$1 [y/N]: " _r; [[ "$_r" =~ ^[Yy]$ ]]; fi }
+inputbox(){ # $1 prompt, $2 default -> echoes result
+  if [[ "${TUI:-none}" != "none" ]]; then
+    local out
+    out=$($TUI --title "$(title)" --inputbox "$1" 12 78 "$2" 3>&1 1>&2 2>&3) || return 1
+    echo "$out"
+  else
+    local out; read -r -p "$1 [$2]: " out; echo "${out:-$2}"
+  fi
+}
+passwordbox(){ # $1 prompt -> echoes result
+  if [[ "${TUI:-none}" != "none" ]]; then
+    local out
+    out=$($TUI --title "$(title)" --passwordbox "$1" 12 78 3>&1 1>&2 2>&3) || return 1
+    echo "$out"
+  else
+    local out; read -rs -p "$1: " out; echo; echo "$out"
+  fi
+}
+menu(){ # args: tag1 item1 tag2 item2 ...
+  if [[ "${TUI:-none}" != "none" ]]; then
+    $TUI --title "$(title)" --menu "Choose an option" 20 78 12 "$@" 3>&1 1>&2 2>&3
+  else
+    echo "Menu:"; local i=1; while [[ "$#" -gt 0 ]]; do echo " $i) $1 - $2"; shift 2; ((i++)); done
+    read -r -p "Enter number: " _n; echo "$_n"
+  fi
 }
 
-system_health_check() {
-    print_header "🔍 System Health Check"
-    
-    # Check OS
-    check_os
-    
-    # Check available space
-    print_step "Checking disk space..."
-    AVAILABLE_SPACE=$(df / | awk 'NR==2 {print $4}')
-    if [[ $AVAILABLE_SPACE -gt 1048576 ]]; then  # 1GB in KB
-        print_success "Sufficient disk space available"
-    else
-        print_warning "Low disk space. Consider freeing up space."
-    fi
-    
-    # Check memory
-    print_step "Checking memory..."
-    AVAILABLE_MEMORY=$(free -m | awk 'NR==2{print $7}')
-    if [[ $AVAILABLE_MEMORY -gt 512 ]]; then
-        print_success "Sufficient memory available"
-    else
-        print_warning "Low memory. Consider closing other applications."
-    fi
-    
-    # Check internet connection
-    print_step "Checking internet connection..."
-    if ping -c 1 google.com &> /dev/null; then
-        print_success "Internet connection available"
-    else
-        print_error "No internet connection. Some installations may fail."
-    fi
-    
-    # Check if running with appropriate permissions
-    print_step "Checking permissions..."
-    if [[ $EUID -eq 0 ]]; then
-        print_info "Running as root - good for system installations"
-    else
-        print_info "Running as regular user - some operations may require sudo"
-    fi
-    
-    pause
+# ------------------------------ UI Helpers ----------------------------------
+GREEN='\033[0;32m'; BLUE='\033[0;34m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
+log(){ echo -e "${BLUE}==>${NC} $*"; }
+ok(){ echo -e "${GREEN}✓${NC} $*"; }
+warn(){ echo -e "${YELLOW}⚠${NC} $*"; }
+err(){ echo -e "${RED}✗${NC} $*"; }
+
+# ------------------------------ Utilities -----------------------------------
+mask_db_url(){ local url="$1"; echo "$url" | sed -E 's#(postgresql://[^:]+):[^@]+@#\1:****@#'; }
+command_exists(){ command -v "$1" >/dev/null 2>&1; }
+check_root(){ [[ $EUID -eq 0 ]]; }
+nowstamp(){ date +%Y%m%d_%H%M%S; }
+normalize_file_unix(){ local f="$1"; [[ -f "$f" ]] || return 0; if command_exists dos2unix; then dos2unix "$f" >/dev/null 2>&1 || true; else sed -i 's/\r$//' "$f" || true; fi; }
+read_dburl_from_file(){ local f="$1"; [[ -f "$f" ]] || return 1; normalize_file_unix "$f"; grep -E '^DATABASE_URL=' "$f" | tail -n1 | sed -E 's/^DATABASE_URL=//; s/^"//; s/"$//'; }
+url_encode(){ node -e "try{process.stdout.write(encodeURIComponent(process.argv[1]||''))}catch{process.stdout.write(process.argv[1]||'')}" "$1" 2>/dev/null || echo -n "$1"; }
+
+# ------------------------------ OS Checks -----------------------------------
+OS=""
+check_os(){
+  if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    if command_exists apt-get; then OS="ubuntu"
+    elif command_exists yum; then OS="centos"
+    elif command_exists dnf; then OS="centos"
+    elif command_exists pacman; then OS="arch"
+    else msgbox "Unsupported Linux distribution"; exit 1; fi
+  else
+    msgbox "This wizard supports Linux only."; exit 1
+  fi
 }
 
-view_system_status() {
-    print_header "📊 System Status"
-    
-    # Node.js status
-    print_step "Node.js Status:"
-    if command_exists "node"; then
-        NODE_VERSION=$(node --version)
-        print_success "Node.js installed: $NODE_VERSION"
-    else
-        print_warning "Node.js not installed"
-    fi
-    
-    # NPM status
-    if command_exists "npm"; then
-        NPM_VERSION=$(npm --version)
-        print_success "NPM installed: $NPM_VERSION"
-    else
-        print_warning "NPM not installed"
-    fi
-    
-    # PostgreSQL status
-    print_step "PostgreSQL Status:"
-    if command_exists "psql"; then
-        if systemctl is-active --quiet postgresql 2>/dev/null; then
-            print_success "PostgreSQL installed and running"
-        else
-            print_warning "PostgreSQL installed but not running"
-        fi
-    else
-        print_warning "PostgreSQL not installed"
-    fi
-    
-    # SQLite status
-    print_step "SQLite Status:"
-    if command_exists "sqlite3"; then
-        SQLITE_VERSION=$(sqlite3 --version | cut -d' ' -f1)
-        print_success "SQLite installed: $SQLITE_VERSION"
-    else
-        print_warning "SQLite not installed"
-    fi
-    
-    # Project status
-    print_step "Project Status:"
-    if [[ -f "package.json" ]]; then
-        print_success "Project files found"
-        if [[ -d "node_modules" ]]; then
-            print_success "Dependencies installed"
-        else
-            print_warning "Dependencies not installed"
-        fi
-        
-        if [[ -f ".env.local" ]]; then
-            print_success "Development environment configured"
-        else
-            print_warning "Development environment not configured"
-        fi
-        
-        if [[ -f ".env.production" ]]; then
-            print_success "Production environment configured"
-        else
-            print_warning "Production environment not configured"
-        fi
-    else
-        print_error "Not in AFCT Dashboard project directory"
-    fi
-    
-    pause
+# -------------------------- Safe Env Runners --------------------------------
+run_with_env(){ # dev|prod, "command..."
+  local mode="$1"; shift; local cmd="$*"
+  local envfile=""
+  case "$mode" in
+    dev) envfile=".env.local" ;;
+    prod) envfile=".env.production" ;;
+    *) err "run_with_env: mode must be dev|prod"; return 1;;
+  esac
+
+  if npx --yes --quiet dotenv -v >/dev/null 2>&1; then
+    env -u DATABASE_URL npx dotenv -e "$envfile" -- bash -lc "$cmd"
+  else
+    local url; url="$(read_dburl_from_file "$envfile")"
+    [[ -z "$url" ]] && { err "DATABASE_URL missing in $envfile"; return 1; }
+    env -u DATABASE_URL DATABASE_URL="$url" bash -lc "$cmd"
+  fi
 }
 
-# =============================================================================
-# Node.js Installation Functions
-# =============================================================================
+# ---------------------- Env Conflict Detection & Fix ------------------------
+detect_env_conflicts(){ # dev|prod
+  local mode="$1"
+  local envfile otherfiles label
+  [[ "$mode" == "dev" || "$mode" == "prod" ]] || { err "detect_env_conflicts: mode must be dev|prod"; return 2; }
 
-install_nodejs() {
-    print_header "📦 Installing Node.js"
-    
-    if command_exists "node"; then
-        CURRENT_VERSION=$(node --version | cut -d'v' -f2 | cut -d'.' -f1)
-        print_info "Node.js already installed: v$(node --version)"
-        
-        prompt_input "Do you want to update to Node.js $NODE_VERSION? (y/n)" UPDATE_NODE "n"
-        if [[ ! "$UPDATE_NODE" =~ ^[Yy]$ ]]; then
-            print_info "Keeping current Node.js installation"
-            return 0
-        fi
+  if [[ "$mode" == "dev" ]]; then envfile=".env.local"; otherfiles=(".env" "prisma/.env" ".env.production"); label="Development (.env.local)"
+  else envfile=".env.production"; otherfiles=(".env" "prisma/.env" ".env.local"); label="Production (.env.production)" ; fi
+
+  local report=""
+  local conflicts=0
+
+  normalize_file_unix "$envfile"
+  local file_val="$(read_dburl_from_file "$envfile")"
+  if [[ -n "$file_val" ]]; then report+="From $envfile: $(mask_db_url "$file_val")\n"
+  else report+="$envfile is missing or has no DATABASE_URL\n"; conflicts=1; fi
+
+  if [[ -n "${DATABASE_URL:-}" ]]; then report+="Current shell DATABASE_URL: $(mask_db_url "$DATABASE_URL")\n"; conflicts=1; fi
+
+  if [[ -f "$envfile" ]]; then
+    if grep -q $'\r' "$envfile"; then report+="$envfile has CRLF line endings\n"; conflicts=1; fi
+    local cnt; cnt=$(grep -c '^DATABASE_URL=' "$envfile" || true)
+    if [[ "$cnt" -gt 1 ]]; then report+="$envfile has duplicate DATABASE_URL entries ($cnt)\n"; conflicts=1; fi
+  fi
+
+  for f in "${otherfiles[@]}"; do
+    if [[ -f "$f" ]] && grep -q '^DATABASE_URL=' "$f" 2>/dev/null; then
+      report+="Conflicting file: $f\n"; conflicts=1
     fi
-    
-    print_step "Installing Node.js $NODE_VERSION..."
-    
-    # Install NodeSource repository
-    curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | sudo -E bash -
-    
-    # Install Node.js
-    if [[ "$OS" == "ubuntu" ]]; then
-        sudo apt-get install -y nodejs
-    elif [[ "$OS" == "centos" ]]; then
-        sudo yum install -y nodejs npm
-    fi
-    
-    # Verify installation
-    if command_exists "node" && command_exists "npm"; then
-        print_success "Node.js installed successfully: $(node --version)"
-        print_success "NPM installed successfully: $(npm --version)"
-    else
-        print_error "Node.js installation failed"
-        exit 1
-    fi
-    
-    # Install global packages
-    print_step "Installing global packages..."
-    sudo npm install -g pm2 cross-env
-    print_success "Global packages installed"
-    
-    pause
+  done
+
+  for f in ~/.bashrc ~/.profile ~/.bash_profile; do
+    [[ -f "$f" ]] && grep -qE '(^|\s)export\s+DATABASE_URL=|^DATABASE_URL=' "$f" && { report+="User shell sets DATABASE_URL in $f\n"; conflicts=1; }
+  done
+  for f in /etc/environment /etc/profile /etc/profile.d/*.sh; do
+    [[ -f "$f" ]] && grep -qE '(^|\s)export\s+DATABASE_URL=|^DATABASE_URL=' "$f" && { report+="System file sets DATABASE_URL in $f\n"; conflicts=1; }
+  done
+  if [[ $EUID -eq 0 ]]; then
+    sudo grep -nE 'Environment=.*DATABASE_URL' /etc/systemd/system/*.service 2>/dev/null && { report+="DATABASE_URL in a systemd service (see /etc/systemd/system/*.service)\n"; conflicts=1; }
+  fi
+  grep -RIn --color=never -E 'DATABASE_URL' . 2>/dev/null | grep -E 'ecosystem|pm2' >/dev/null 2>&1 && { report+="PM2 ecosystem contains DATABASE_URL\n"; conflicts=1; }
+
+  if [[ -z "$report" ]]; then report="No findings."; fi
+  if [[ "$conflicts" -eq 0 ]]; then
+    msgbox "ENV Check ($label):\n\n$report\n\nNo conflicts detected."
+    return 0
+  else
+    msgbox "ENV Check ($label):\n\n$report\n\nConflicts detected."
+    return 1
+  fi
 }
 
-# =============================================================================
-# Database Installation Functions
-# =============================================================================
+fix_env_conflicts(){ # dev|prod
+  local mode="$1" envfile otherfiles ts; ts="$(nowstamp)"
+  [[ "$mode" == "dev" || "$mode" == "prod" ]] || { err "fix_env_conflicts: mode must be dev|prod"; return 2; }
 
-setup_development_database() {
-    print_header "🗄️ Setting Up Development Database (SQLite)"
-    
-    # Install SQLite if not present
-    if ! command_exists "sqlite3"; then
-        print_step "Installing SQLite..."
-        if [[ "$OS" == "ubuntu" ]]; then
-            sudo apt-get update
-            sudo apt-get install -y sqlite3 libsqlite3-dev
-        elif [[ "$OS" == "centos" ]]; then
-            sudo yum install -y sqlite sqlite-devel
-        fi
-        print_success "SQLite installed"
-    else
-        print_success "SQLite already installed"
+  if [[ "$mode" == "dev" ]]; then envfile=".env.local"; otherfiles=(".env" "prisma/.env" ".env.production")
+  else envfile=".env.production"; otherfiles=(".env" "prisma/.env" ".env.local"); fi
+
+  if [[ -n "${DATABASE_URL:-}" ]]; then unset DATABASE_URL; fi
+
+  if [[ -f "$envfile" ]]; then
+    normalize_file_unix "$envfile"
+    mapfile -t lines < <(grep -n '^DATABASE_URL=' "$envfile" | cut -d: -f1 || true)
+    if [[ "${#lines[@]}" -gt 1 ]]; then
+      local keep="${lines[-1]}"
+      awk -v keep="$keep" '{
+        if (NR==keep) {print; next}
+        if ($0 ~ /^DATABASE_URL=/) next
+        print
+      }' "$envfile" > "$envfile.tmp"
+      mv "$envfile.tmp" "$envfile"
     fi
-    
-    # Setup development environment
-    print_step "Setting up development environment..."
-    
-    # Create .env.local robustly
-    if [[ ! -f ".env.local" ]]; then
-        if [[ -f ".env.example" ]]; then
-            cp .env.example .env.local
-            print_success "Created .env.local from .env.example"
-        else
-            cat > .env.local << EOF
-# AFCT Dashboard Development Environment
+  fi
+
+  for f in "${otherfiles[@]}"; do
+    if [[ -f "$f" ]] && grep -q '^DATABASE_URL=' "$f" 2>/dev/null; then
+      if yesno "Rename conflicting $f to $f.bak-$ts ?"; then
+        mv "$f" "$f.bak-$ts"
+      fi
+    fi
+  done
+
+  local tips="If DATABASE_URL is set in shell/system files, edit them:\n - ~/.bashrc, ~/.profile, ~/.bash_profile\n - /etc/environment, /etc/profile, /etc/profile.d/*.sh\n - systemd unit Environment=DATABASE_URL=... (then daemon-reload & restart)\n"
+  msgbox "Env conflicts fixed for this session (where possible).\n\n$tips"
+}
+
+# --------------------------- System Health/Status ---------------------------
+system_health_check(){
+  local out="Disk space:\n$(df -h / | awk 'NR==2{print $4" free"}')\n\n"
+  out+="Memory free:\n$(free -m | awk 'NR==2{print $7" MB"}')\n\n"
+  if ping -c1 -W2 google.com >/dev/null 2>&1; then out+="Internet: reachable\n"; else out+="Internet: not reachable\n"; fi
+  msgbox "$out"
+}
+view_system_status(){
+  local out=""
+  if command_exists node; then out+="Node.js: $(node --version)\n"; else out+="Node.js: not installed\n"; fi
+  if command_exists npm; then out+="NPM: $(npm --version)\n"; else out+="NPM: not installed\n"; fi
+  if command_exists psql; then systemctl is-active --quiet postgresql 2>/dev/null && out+="PostgreSQL: running\n" || out+="PostgreSQL: installed, not running\n"; else out+="PostgreSQL: not installed\n"; fi
+  if command_exists sqlite3; then out+="SQLite: $(sqlite3 --version | awk '{print $1}')\n"; else out+="SQLite: not installed\n"; fi
+  if [[ -f package.json ]]; then
+    out+="Project: present\n"
+    [[ -d node_modules ]] && out+="Dependencies: installed\n" || out+="Dependencies: not installed\n"
+    [[ -f .env.local ]] && out+=".env.local: present\n" || out+=".env.local: missing\n"
+    [[ -f .env.production ]] && out+=".env.production: present\n" || out+=".env.production: missing\n"
+  else
+    out+="Project: not in repo root\n"
+  fi
+  msgbox "$out"
+}
+
+# ------------------------------ Node Install --------------------------------
+install_nodejs(){
+  check_os
+  if command_exists node; then
+    if ! yesno "Node.js $(node --version) detected. Update to LTS (NodeSource)?"; then return 0; fi
+  fi
+  if [[ "$OS" == "ubuntu" ]]; then
+    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+    sudo apt-get install -y nodejs
+  elif [[ "$OS" == "centos" ]]; then
+    sudo yum install -y nodejs npm
+  elif [[ "$OS" == "arch" ]]; then
+    sudo pacman -Sy --noconfirm nodejs npm
+  fi
+  ok "Node: $(node --version)  NPM: $(npm --version)"
+  sudo npm i -g pm2 cross-env >/dev/null 2>&1 || true
+}
+
+# ----------------------- Project Dependencies/Prisma ------------------------
+install_project_dependencies(){
+  [[ -f package.json ]] || { msgbox "Run this from the project root (package.json not found)."; return 1; }
+  infobox "Installing dependencies..."; npm install
+  if ! npx --yes --quiet dotenv -v >/dev/null 2>&1; then npm i -D dotenv-cli; fi
+  msgbox "Dependencies installed."
+}
+
+# ------------------------------ Dev Database --------------------------------
+setup_development_database(){
+  check_os
+  if ! command_exists sqlite3; then
+    if [[ "$OS" == "ubuntu" ]]; then sudo apt-get update && sudo apt-get install -y sqlite3 libsqlite3-dev
+    elif [[ "$OS" == "centos" ]]; then sudo yum install -y sqlite sqlite-devel
+    else sudo pacman -Sy --noconfirm sqlite; fi
+  fi
+  if [[ ! -f ".env.local" ]]; then
+    cat > .env.local <<EOF
 DATABASE_URL="file:./prisma/dev.db"
 NODE_ENV="development"
 NEXTAUTH_URL="http://localhost:3000"
 NEXTAUTH_SECRET="$(openssl rand -base64 32 2>/dev/null || echo dev-secret)"
 EOF
-            print_success "Created .env.local with default SQLite configuration"
-        fi
-    else
-        print_info ".env.local already exists"
-    fi
-    
-    # Switch to development schema
-    print_step "Setting up development schema..."
-    if [[ -f "prisma/schema.development.prisma" ]]; then
-        # Check if ERD generation is available
-        if command_exists "google-chrome" || command_exists "chromium-browser" || command_exists "chromium"; then
-            print_step "Using development schema with ERD generation..."
-            cp prisma/schema.development.prisma prisma/schema.prisma
-            print_success "Development schema with ERD support activated"
-        else
-            print_step "Using development schema without ERD..."
-            print_success "Development schema activated (ERD disabled - requires Chrome/Chromium)"
-        fi
-    else
-        print_step "Creating development schema..."
-        # Ensure we have a basic development schema
-        if [[ -f "prisma/schema.production.prisma" ]]; then
-            cp prisma/schema.production.prisma prisma/schema.prisma
-            # Replace PostgreSQL with SQLite for development
-            sed -i 's/provider = "postgresql"/provider = "sqlite"/' prisma/schema.prisma
-            print_success "Development schema created from production schema"
-        fi
-    fi
-    
-    # Install dependencies if needed
-    if [[ ! -d "node_modules" ]]; then
-        print_step "Installing project dependencies..."
-        npm install
-        print_success "Dependencies installed"
-    fi
-    
-    # Generate Prisma client with safe ERD handling
-    print_step "Generating Prisma client..."
-    if [[ -f "prisma/schema.development.prisma" ]] && (command_exists "google-chrome" || command_exists "chromium-browser" || command_exists "chromium"); then
-        print_step "Attempting to generate with ERD support..."
-        if npm run db:generate:with-erd 2>/dev/null; then
-            print_success "Prisma client generated successfully with ERD"
-        else
-            print_warning "ERD generation failed, using safe fallback..."
-            npm run db:generate:safe
-        fi
-    else
-        print_step "Generating without ERD support..."
-        npm run db:generate:safe
-    fi
-    
-    # Run database migrations
-    print_step "Setting up database..."
-    npx prisma migrate dev --name init
-    print_success "Database migrations applied"
-    
-    # Seed database
-    print_step "Seeding database with sample data..."
-    npm run seed 2>/dev/null || npx tsx prisma/seed.ts
-    print_success "Database seeded with sample data"
-    
-    print_success "Development database setup complete!"
-    print_info "Your SQLite database is located at: prisma/dev.db"
-    pause
+  fi
+  detect_env_conflicts dev || { if yesno "Fix dev env conflicts now?"; then fix_env_conflicts dev; fi; }
+  infobox "Generating Prisma client..." ; npx prisma generate || true
+  infobox "Applying dev migrations..." ; npx prisma migrate dev --name init
+  infobox "Seeding dev DB..." ; npm run seed 2>/dev/null || npx tsx prisma/seed.ts || true
+  msgbox "Development DB ready."
 }
 
-install_postgresql() {
-    print_header "🐘 Installing PostgreSQL"
-    
-    # Check if PostgreSQL is already installed
-    if command_exists "psql"; then
-        print_info "PostgreSQL already installed"
-        if systemctl is-active --quiet postgresql; then
-            print_success "PostgreSQL service is running"
-        else
-            print_step "Starting PostgreSQL service..."
-            sudo systemctl start postgresql
-            sudo systemctl enable postgresql
-            print_success "PostgreSQL service started"
-        fi
-        pause
-        return 0
-    fi
-    
-    # Check for root privileges
-    if ! check_root; then
-        print_error "Installing PostgreSQL requires root privileges. Please run with sudo."
-        exit 1
-    fi
-    
-    print_step "Installing PostgreSQL..."
-    
-    if [[ "$OS" == "ubuntu" ]]; then
-        apt update
-        apt install -y postgresql postgresql-contrib
-    elif [[ "$OS" == "centos" ]]; then
-        yum install -y postgresql-server postgresql-contrib
-        postgresql-setup initdb
-    fi
-    
-    # Start and enable PostgreSQL
-    systemctl start postgresql
-    systemctl enable postgresql
-    
-    # Verify installation
-    if systemctl is-active --quiet postgresql; then
-        print_success "PostgreSQL installed and running successfully"
-    else
-        print_error "PostgreSQL installation failed"
-        exit 1
-    fi
-    
-    pause
+# ------------------------------ PostgreSQL ----------------------------------
+install_postgresql(){
+  check_os
+  if command_exists psql; then
+    systemctl is-active --quiet postgresql || { sudo systemctl start postgresql; sudo systemctl enable postgresql; }
+    msgbox "PostgreSQL available."; return 0
+  fi
+  if ! check_root; then msgbox "Please run with sudo/root to install PostgreSQL."; return 1; fi
+  if [[ "$OS" == "ubuntu" ]]; then sudo apt-get update && sudo apt-get install -y postgresql postgresql-contrib
+  elif [[ "$OS" == "centos" ]]; then sudo yum install -y postgresql-server postgresql-contrib && postgresql-setup initdb
+  else sudo pacman -Sy --noconfirm postgresql; fi
+  sudo systemctl start postgresql && sudo systemctl enable postgresql
+  msgbox "PostgreSQL installed & running."
 }
 
-setup_production_database() {
-    print_header "🗄️ Setting Up Production Database (PostgreSQL)"
-    
-    # Ensure PostgreSQL is installed
-    if ! command_exists "psql"; then
-        print_step "PostgreSQL not found. Installing..."
-        install_postgresql
-    fi
-    
-    # Get database configuration
-    print_step "Database Configuration"
-    prompt_input "Database name" DB_NAME_PROD "$DB_NAME_PROD"
-    prompt_input "Database user" DB_USER_PROD "$DB_USER_PROD"
-    prompt_password "Enter password for database user ($DB_USER_PROD)" DB_PASSWORD_PROD
-    prompt_input "Database host" DB_HOST_PROD "localhost"
-    prompt_input "Database port" DB_PORT_PROD "5432"
-    
-    # Validate port is numeric
-    if ! [[ "$DB_PORT_PROD" =~ ^[0-9]+$ ]]; then
-        print_error "Invalid port. Must be a number."
-        return 1
-    fi
+setup_production_database(){
+  command_exists psql || install_postgresql
+  detect_env_conflicts prod || { if yesno "Fix prod env conflicts now?"; then fix_env_conflicts prod; fi; }
 
-    # URL-encode user and password to avoid breaking the connection string
-    ENCODED_DB_USER_PROD=$(url_encode "$DB_USER_PROD")
-    ENCODED_DB_PASSWORD_PROD=$(url_encode "$DB_PASSWORD_PROD")
-    
-    # Optionally set postgres superuser password (safer for existing setups)
-    prompt_input "Would you like to set/change the PostgreSQL superuser (postgres) password now? (y/N)" SET_PG_SUPER "n"
-    if [[ "$SET_PG_SUPER" =~ ^[Yy]$ ]]; then
-        print_step "Setting PostgreSQL superuser password..."
-        prompt_password "Enter password for PostgreSQL superuser (postgres)" POSTGRES_PASSWORD
-        sudo -u postgres psql -c "ALTER USER postgres PASSWORD '$POSTGRES_PASSWORD';"
-        print_success "PostgreSQL superuser password set"
-    else
-        print_info "Skipping superuser password change"
-    fi
-    
-    # Create application database and user with error handling (use RAW values here)
-    print_step "Creating application database and user..."
-    
-    if sudo -u postgres psql -tc "SELECT 1 FROM pg_user WHERE usename = '$DB_USER_PROD'" | grep -q 1; then
-        print_info "User '$DB_USER_PROD' already exists, updating password..."
-        sudo -u postgres psql -c "ALTER USER \"$DB_USER_PROD\" WITH PASSWORD '$DB_PASSWORD_PROD';"
-    else
-        print_step "Creating new user '$DB_USER_PROD'..."
-        sudo -u postgres psql -c "CREATE USER \"$DB_USER_PROD\" WITH PASSWORD '$DB_PASSWORD_PROD';"
-        print_success "User '$DB_USER_PROD' created"
-    fi
-    
-    if sudo -u postgres psql -lqt | cut -d \| -f 1 | grep -qw "$DB_NAME_PROD"; then
-        print_info "Database '$DB_NAME_PROD' already exists"
-    else
-        print_step "Creating database '$DB_NAME_PROD'..."
-        sudo -u postgres createdb -O "$DB_USER_PROD" "$DB_NAME_PROD"
-        print_success "Database '$DB_NAME_PROD' created"
-    fi
-    
-    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE \"$DB_NAME_PROD\" TO \"$DB_USER_PROD\";"
-    print_success "Privileges granted to user '$DB_USER_PROD'"
-    
-    print_success "Database '$DB_NAME_PROD' and user '$DB_USER_PROD' configured"
-    
-    print_step "Restarting PostgreSQL..."
-    sudo systemctl restart postgresql
-    print_success "PostgreSQL restarted"
-    
-    sleep 2
-    
-    # Build the production .env with ENCODED credentials
-    print_step "Creating production environment file..."
-    DB_CONNECTION_STRING="postgresql://$ENCODED_DB_USER_PROD:$ENCODED_DB_PASSWORD_PROD@$DB_HOST_PROD:$DB_PORT_PROD/$DB_NAME_PROD"
-    JWT_SECRET="$(openssl rand -base64 32)"
-    
-    cat > .env.production << EOF
+  local DB_NAME DB_USER DB_PASS DB_HOST DB_PORT
+  DB_NAME=$(inputbox "Database name" "afct_production") || return 1
+  DB_USER=$(inputbox "Database user" "afct_user") || return 1
+  DB_PASS=$(passwordbox "Password for ${DB_USER}") || return 1
+  DB_HOST=$(inputbox "Database host" "localhost") || return 1
+  DB_PORT=$(inputbox "Database port" "5432") || return 1
+  [[ "$DB_PORT" =~ ^[0-9]+$ ]] || { msgbox "Invalid port number."; return 1; }
+
+  local USER_ENC PASS_ENC DB_URL
+  USER_ENC="$(url_encode "$DB_USER")"; PASS_ENC="$(url_encode "$DB_PASS")"
+  DB_URL="postgresql://${USER_ENC}:${PASS_ENC}@${DB_HOST}:${DB_PORT}/${DB_NAME}?schema=public"
+
+  # Create role/db using RAW password
+  sudo -u postgres psql -v ON_ERROR_STOP=1 <<SQL
+DO \$\$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${DB_USER}') THEN
+    CREATE ROLE "${DB_USER}" LOGIN PASSWORD '${DB_PASS}';
+  ELSE
+    ALTER ROLE "${DB_USER}" WITH LOGIN PASSWORD '${DB_PASS}';
+  END IF;
+END\$\$;
+DO \$\$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = '${DB_NAME}') THEN
+    CREATE DATABASE "${DB_NAME}" OWNER "${DB_USER}";
+  END IF;
+END\$\$;
+GRANT ALL PRIVILEGES ON DATABASE "${DB_NAME}" TO "${DB_USER}";
+SQL
+
+  cat > .env.production <<EOF
 # AFCT Dashboard Production Environment
-# Generated by setup wizard on $(date)
-
-# Database Configuration
-DATABASE_URL="$DB_CONNECTION_STRING"
-
-# Authentication
-JWT_SECRET="$JWT_SECRET"
-
-# Application Settings
+# Generated: $(date)
+DATABASE_URL="${DB_URL}"
 NODE_ENV="production"
 NEXTAUTH_URL="http://localhost:3000"
-NEXTAUTH_SECRET="$JWT_SECRET"
-
-# File Upload Settings
+NEXTAUTH_SECRET="$(openssl rand -base64 32 2>/dev/null || echo prod-secret)"
 UPLOAD_DIR="./public/uploads"
 MAX_FILE_SIZE="10485760"
 EOF
-    
-    print_success "Production environment file created"
-    print_info "Saved DATABASE_URL: $(mask_db_url "$DB_CONNECTION_STRING")"
-    
-    # Ensure production schema exists
-    if [[ ! -f "prisma/schema.production.prisma" ]]; then
-        print_error "Production schema file not found: prisma/schema.production.prisma"
-        print_info "Please ensure the file exists before running production setup"
-        exit 1
-    else
-        print_success "Production schema found"
+  normalize_file_unix ".env.production"
+
+  # Test psql
+  if PGPASSWORD="$DB_PASS" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "select 1" >/dev/null 2>&1; then
+    :
+  else
+    msgbox "psql connection failed. Check credentials/pg_hba.conf."; return 1
+  fi
+
+  # Prisma generate/migrate/seed with env-safe runner
+  run_with_env prod "npx prisma generate --schema=prisma/schema.production.prisma" || { msgbox "Prisma generate failed"; return 1; }
+  if ! run_with_env prod "npx prisma migrate deploy --schema=prisma/schema.production.prisma"; then
+    if yesno "migrate deploy failed. Try 'db push' (may accept data loss)?"; then
+      run_with_env prod "npx prisma db push --schema=prisma/schema.production.prisma --accept-data-loss"
     fi
-    
-    # Install dependencies if needed
-    if [[ ! -d "node_modules" ]]; then
-        print_step "Installing project dependencies..."
-        npm install
-        print_success "Dependencies installed"
-    fi
-    
-    # Set environment for all operations
-    export DATABASE_URL="$DB_CONNECTION_STRING"
-    
-    # Test connection first (psql) — DECODE password for PGPASSWORD
-    print_step "Testing database connection..."
-    DECODED_DB_PASSWORD_PROD=$(url_decode "$ENCODED_DB_PASSWORD_PROD")
-    if PGPASSWORD="$DECODED_DB_PASSWORD_PROD" psql -h "$DB_HOST_PROD" -p "$DB_PORT_PROD" -U "$DB_USER_PROD" -d "$DB_NAME_PROD" -c "SELECT 'Connection successful!' as status;" &> /dev/null; then
-        print_success "Database connection test passed"
-    else
-        print_error "Database connection test failed"
-        print_info "Please check PostgreSQL configuration and credentials"
-        exit 1
-    fi
-    
-    # Generate Prisma client first
-    print_step "Generating Prisma client (production schema)..."
-    if npx prisma generate --schema=prisma/schema.production.prisma; then
-        print_success "Prisma client generated successfully"
-    else
-        print_error "Failed to generate Prisma client"
-        exit 1
-    fi
-    
-    # Decide migration strategy
-    print_step "Synchronizing database schema..."
-    MIGRATION_SQL_COUNT=$(find prisma/migrations -name "*.sql" 2>/dev/null | wc -l | tr -d ' ')
-    if [[ -f "prisma/migrations/migration_lock.toml" ]] && grep -q 'provider = "postgresql"' prisma/migrations/migration_lock.toml 2>/dev/null && [[ "$MIGRATION_SQL_COUNT" -gt 0 ]]; then
-        print_info "Detected PostgreSQL migrations. Running 'prisma migrate deploy'."
-        if npx prisma migrate deploy --schema=prisma/schema.production.prisma; then
-            print_success "Migrations deployed successfully"
+  fi
+  run_with_env prod "npx prisma db seed --schema=prisma/schema.production.prisma" || msgbox "Seeding failed; you can re-run later."
+
+  msgbox "Production DB configured.\nDATABASE_URL=$(mask_db_url "$DB_URL")"
+}
+
+# ------------------------------ Deploy App ----------------------------------
+deploy_application(){
+  [[ -f package.json ]] || { msgbox "Run from project root."; return 1; }
+  [[ -f ".env.production" ]] || { msgbox ".env.production is missing. Run production DB setup first."; return 1; }
+  infobox "Installing deps (if needed)"; [[ -d node_modules ]] || npm install
+  infobox "Building application"; npm run build
+  if command_exists pm2; then
+    pm2 delete afct-dashboard 2>/dev/null || true
+    pm2 start npm --name afct-dashboard -- start
+    pm2 save
+    msgbox "Application started with PM2.\nLogs: pm2 logs afct-dashboard"
+  else
+    npm start &
+    msgbox "Application started with npm start (consider using PM2)."
+  fi
+}
+
+# ------------------------------ DB Utilities --------------------------------
+test_database_connection(){
+  local choice; choice=$(menu 1 "Development (SQLite)" 2 "Production (PostgreSQL)" 0 "Back") || return 0
+  case "$choice" in
+    1)
+      if [[ -f "prisma/dev.db" ]]; then
+        sqlite3 prisma/dev.db "SELECT 'SQLite OK';" >/dev/null 2>&1 && msgbox "SQLite connection OK" || msgbox "SQLite connection failed"
+      else
+        msgbox "prisma/dev.db not found."
+      fi
+      ;;
+    2)
+      if [[ -f ".env.production" ]]; then
+        local url user pass host port db
+        url="$(read_dburl_from_file ".env.production")"
+        user=$(echo "$url" | sed -n 's#postgresql://\([^:/@]\+\).*#\1#p')
+        pass=$(echo "$url" | sed -n 's#postgresql://[^:]\+:\([^@]\+\)@.*#\1#p')
+        host=$(echo "$url" | sed -n 's#.*@\(.*\):[0-9]\+/.*#\1#p')
+        port=$(echo "$url" | sed -n 's#.*@.*:\([0-9]\+\)/.*#\1#p')
+        db=$(echo "$url"   | sed -n 's#.*/\([^?]\+\).*#\1#p')
+        if PGPASSWORD="$(printf '%b' "$pass")" psql -h "$host" -p "$port" -U "$user" -d "$db" -c "select 1;" >/dev/null 2>&1; then
+          msgbox "PostgreSQL connection OK"
         else
-            print_error "Migration deployment failed"
-            print_info "Trying alternative approach with 'db push'..."
-            if npx prisma db push --schema=prisma/schema.production.prisma --accept-data-loss; then
-                print_success "Database schema synchronized successfully (db push)"
-            else
-                print_error "Failed to synchronize schema via db push"
-                exit 1
-            fi
+          msgbox "PostgreSQL connection failed"
         fi
-    else
-        print_warning "No PostgreSQL migration history detected. Using 'db push'."
-        if npx prisma db push --schema=prisma/schema.production.prisma --accept-data-loss; then
-            print_success "Database schema synchronized successfully (db push)"
-        else
-            print_error "Failed to synchronize schema via db push"
-            exit 1
-        fi
-    fi
-    
-    # Seed database with production-safe script
-    print_step "Seeding database with production environment..."
-    set -a
-    source .env.production
-    set +a
-    if node scripts/simple-seed.js; then
-        print_success "Database seeded successfully"
-        print_info "Default credentials:"
-        print_info "  Admin: admin@afct.edu / password123"
-        print_info "  Faculty: faculty@afct.edu / password123"
-        print_info "  Student: student@afct.edu / password123"
-    else
-        print_warning "Database seeding failed - you can run: node scripts/simple-seed.js after fixing issues"
-    fi
-    
-    print_success "Production database setup complete!"
-    print_info "Connection string: $(mask_db_url "$DB_CONNECTION_STRING")"
-    print_info "Application ready to start with: npm run start:prod"
-    pause
+      else
+        msgbox ".env.production not found"
+      fi
+      ;;
+    *) ;;
+  esac
 }
 
-# =============================================================================
-# Application Setup Functions
-# =============================================================================
-
-install_project_dependencies() {
-    print_header "📦 Installing Project Dependencies"
-    
-    # Check if in project directory
-    if [[ ! -f "package.json" ]]; then
-        print_error "Not in AFCT Dashboard project directory"
-        print_info "Please run this script from the project root directory"
-        exit 1
-    fi
-    
-    # Install system dependencies for ERD generation (optional)
-    print_step "Checking ERD generation dependencies..."
-    ERD_AVAILABLE=false
-    
-    # Check for Chrome/Chromium executables
-    if command_exists "google-chrome" || command_exists "chromium-browser" || command_exists "chromium"; then
-        print_step "Chrome/Chromium found, testing ERD generation..."
-        
-        # Test if ERD generation actually works
-        if npx puppeteer browsers install chrome &>/dev/null; then
-            print_success "Chrome/Chromium compatible - ERD generation will be available"
-            ERD_AVAILABLE=true
-        else
-            print_warning "Chrome/Chromium found but not compatible with Puppeteer"
-            print_info "ERD generation will be disabled to prevent errors"
-            ERD_AVAILABLE=false
-        fi
-    else
-        print_warning "Chrome/Chromium not found - ERD generation will be skipped"
-        print_info "ERD diagrams are optional and don't affect application functionality"
-        
-        if [[ "$OS" == "ubuntu" ]] && check_root; then
-            prompt_input "Would you like to install Chromium for ERD generation? (y/n)" INSTALL_CHROMIUM "n"
-            if [[ "$INSTALL_CHROMIUM" =~ ^[Yy]$ ]]; then
-                print_step "Installing Chromium browser..."
-                apt update
-                if apt install -y chromium-browser; then
-                    print_step "Installing Puppeteer Chrome..."
-                    if npx puppeteer browsers install chrome &>/dev/null; then
-                        print_success "Chromium and Puppeteer installed successfully"
-                        ERD_AVAILABLE=true
-                    else
-                        print_warning "Chromium installed but Puppeteer setup failed"
-                        ERD_AVAILABLE=false
-                    fi
-                else
-                    print_warning "Could not install Chromium browser"
-                    ERD_AVAILABLE=false
-                fi
-            else
-                ERD_AVAILABLE=false
-            fi
-        else
-            ERD_AVAILABLE=false
-        fi
-    fi
-    
-    # Install dependencies with error handling
-    print_step "Installing NPM dependencies..."
-    if npm install; then
-        print_success "Dependencies installed successfully"
-    else
-        print_warning "Some dependencies had warnings, but installation completed"
-        print_info "This is often due to optional ERD generation dependencies"
-        print_info "The application will work fine without them"
-    fi
-    
-    # Try to generate Prisma client with conditional ERD
-    print_step "Generating Prisma client..."
-    if [[ "$ERD_AVAILABLE" == "true" ]]; then
-        print_step "Using development schema with ERD generation..."
-        cp prisma/schema.development.prisma prisma/schema.prisma 2>/dev/null || true
-        if npm run db:generate:with-erd; then
-            print_success "Prisma client and ERD generated successfully"
-            print_info "ERD diagram saved as ERD.svg"
-        else
-            print_warning "ERD generation failed, falling back to basic generation..."
-            npm run db:generate:safe
-            print_success "Prisma client generated without ERD"
-        fi
-    else
-        print_step "Generating Prisma client without ERD..."
-        npm run db:generate:safe
-        print_success "Prisma client generated successfully"
-        print_info "To generate ERDs later, install Chrome/Chromium and run: npm run db:generate:with-erd"
-    fi
-    
-    # Install Prisma CLI globally if not present
-    if ! command_exists "prisma"; then
-        print_step "Installing Prisma CLI globally..."
-        npm install -g prisma
-        print_success "Prisma CLI installed"
-    fi
-    
-    pause
-}
-
-complete_development_setup() {
-    print_header "🚀 Complete Development Setup"
-    
-    print_info "This will set up everything needed for development:"
-    print_info "• Node.js $NODE_VERSION"
-    print_info "• SQLite database"
-    print_info "• Project dependencies"
-    print_info "• Development environment"
-    echo
-    
-    prompt_input "Continue with development setup? (y/n)" CONTINUE "y"
-    if [[ ! "$CONTINUE" =~ ^[Yy]$ ]]; then
-        return 0
-    fi
-    
-    # System check
-    check_os
-    
-    # Install Node.js
-    if ! command_exists "node"; then
-        install_nodejs
-    else
-        print_success "Node.js already installed: $(node --version)"
-    fi
-    
-    # Install project dependencies
-    install_project_dependencies
-    
-    # Setup development database
-    setup_development_database
-    
-    print_header "🎉 Development Setup Complete!"
-    print_success "Your development environment is ready!"
-    echo
-    print_info "To start developing:"
-    print_info "1. Run: npm run dev"
-    print_info "2. Open: http://localhost:3000"
-    echo
-    print_info "Default login credentials:"
-    print_info "• Admin: admin@example.com / password123"
-    print_info "• Faculty: prof1@example.com / password123"
-    print_info "• Student: student1@example.com / password123"
-    
-    pause
-}
-
-complete_production_setup() {
-    print_header "🚀 Complete Production Setup"
-    
-    print_info "This will set up everything needed for production:"
-    print_info "• Node.js $NODE_VERSION"
-    print_info "• PostgreSQL database"
-    print_info "• Project dependencies"
-    print_info "• Production environment"
-    print_info "• PM2 process manager"
-    echo
-    
-    # Check for root privileges
-    if ! check_root; then
-        print_error "Production setup requires root privileges. Please run with sudo."
-        exit 1
-    fi
-    
-    prompt_input "Continue with production setup? (y/n)" CONTINUE "y"
-    if [[ ! "$CONTINUE" =~ ^[Yy]$ ]]; then
-        return 0
-    fi
-    
-    # System check
-    check_os
-    
-    # Install Node.js
-    install_nodejs
-    
-    # Install PostgreSQL
-    install_postgresql
-    
-    # Install project dependencies
-    install_project_dependencies
-    
-    # Setup production database
-    setup_production_database
-    
-    # Build application
-    print_step "Building application for production..."
-    npm run build
-    print_success "Application built successfully"
-    
-    print_header "🎉 Production Setup Complete!"
-    print_success "Your production environment is ready!"
-    echo
-    print_info "To start the application:"
-    print_info "1. Run: npm start"
-    print_info "2. Open: http://localhost:3000"
-    echo
-    print_info "For production deployment with PM2:"
-    print_info "1. Run: pm2 start npm --name afct-dashboard -- start"
-    print_info "2. Run: pm2 save && pm2 startup"
-    
-    pause
-}
-
-deploy_application() {
-    print_header "🚀 Deploying Application"
-    
-    # Check if in project directory
-    if [[ ! -f "package.json" ]]; then
-        print_error "Not in AFCT Dashboard project directory"
-        exit 1
-    fi
-    
-    # Check if production environment is set up
-    if [[ ! -f ".env.production" ]]; then
-        print_error "Production environment not configured"
-        print_info "Please run 'Setup Production Database' first"
-        exit 1
-    fi
-    
-    # Install dependencies
-    if [[ ! -d "node_modules" ]]; then
-        print_step "Installing dependencies..."
-        npm install
-    fi
-    
-    # Build application
-    print_step "Building application..."
-    npm run build
-    print_success "Application built"
-    
-    # Start with PM2
-    print_step "Starting application with PM2..."
-    if command_exists "pm2"; then
-        pm2 delete afct-dashboard 2>/dev/null || true
-        pm2 start npm --name afct-dashboard -- start
-        pm2 save
-        print_success "Application deployed with PM2"
-        
-        print_info "PM2 commands:"
-        print_info "• View logs: pm2 logs afct-dashboard"
-        print_info "• Restart: pm2 restart afct-dashboard"
-        print_info "• Stop: pm2 stop afct-dashboard"
-    else
-        print_warning "PM2 not installed. Starting with npm..."
-        npm start &
-        print_success "Application started"
-    fi
-    
-    pause
-}
-
-# =============================================================================
-# Utility Functions
-# =============================================================================
-
-test_database_connection() {
-    print_header "🔍 Database Connection Test"
-    
-    echo "Which database would you like to test?"
-    echo "1) Development (SQLite)"
-    echo "2) Production (PostgreSQL)"
-    echo
-    read -p "Enter choice (1-2): " db_choice
-    
-    case $db_choice in
-        1)
-            if [[ -f "prisma/dev.db" ]]; then
-                print_step "Testing SQLite connection..."
-                if sqlite3 prisma/dev.db "SELECT 'SQLite connection successful!' as status;" 2>/dev/null; then
-                    print_success "SQLite database connection successful"
-                else
-                    print_error "SQLite database connection failed"
-                fi
-            else
-                print_error "SQLite database not found. Run development setup first."
-            fi
-            ;;
-        2)
-            if [[ -f ".env.production" ]]; then
-                print_step "Testing PostgreSQL connection..."
-                
-                set -a
-                source .env.production
-                set +a
-                
-                # Extract connection pieces (may contain URL-encoded values)
-                DB_USER_ENC=$(echo "$DATABASE_URL" | sed -n 's#.*://\([^:/]*\).*#\1#p')
-                DB_PASS_ENC=$(echo "$DATABASE_URL" | sed -n 's#.*://[^:]*:\([^@]*\)@.*#\1#p')
-                DB_HOST=$(echo "$DATABASE_URL" | sed -n 's#.*@\([^:/]*\).*#\1#p')
-                DB_PORT=$(echo "$DATABASE_URL" | sed -n 's#.*:\([0-9][0-9]*\)/.*#\1#p')
-                DB_NAME=$(echo "$DATABASE_URL" | sed -n 's#.*/\([^?]*\).*#\1#p')
-
-                DB_USER=$(url_decode "$DB_USER_ENC")
-                DB_PASS=$(url_decode "$DB_PASS_ENC")
-                
-                if PGPASSWORD="$DB_PASS" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "SELECT 'PostgreSQL connection successful!' as status;" &> /dev/null; then
-                    print_success "PostgreSQL database connection successful"
-                else
-                    print_error "PostgreSQL database connection failed"
-                    print_info "Connection details:"
-                    print_info "Host: $DB_HOST"
-                    print_info "Port: $DB_PORT"
-                    print_info "Database: $DB_NAME"
-                    print_info "User: $DB_USER"
-                fi
-            else
-                print_error "Production environment not configured. Run production setup first."
-            fi
-            ;;
-        *)
-            print_error "Invalid choice"
-            ;;
-    esac
-    
-    pause
-}
-
-reset_development_database() {
-    print_header "🔄 Reset Development Database"
-    
-    print_warning "This will completely reset your development database!"
-    print_warning "All data will be lost!"
-    echo
-    prompt_input "Are you sure you want to continue? (yes/no)" CONFIRM "no"
-    
-    if [[ "$CONFIRM" != "yes" ]]; then
-        print_info "Database reset cancelled"
-        return 0
-    fi
-    
-    if [[ -f "prisma/dev.db" ]]; then
-        print_step "Removing existing database..."
-        rm -f prisma/dev.db
-        print_success "Existing database removed"
-    fi
-    
-    print_step "Resetting migrations..."
+reset_development_database(){
+  if yesno "This will DELETE dev DB. Continue?"; then
+    rm -f prisma/dev.db
     rm -rf prisma/migrations
-    
-    print_step "Creating fresh database..."
     npx prisma migrate dev --name init
-    print_success "Fresh database created"
-    
-    print_step "Seeding database..."
-    npm run seed 2>/dev/null || npx tsx prisma/seed.ts
-    print_success "Database seeded"
-    
-    print_success "Development database reset complete!"
-    pause
+    npm run seed 2>/dev/null || npx tsx prisma/seed.ts || true
+    msgbox "Dev DB reset complete."
+  fi
 }
 
-reset_production_database() {
-    print_header "🔄 Reset Production Database"
-    
-    print_warning "This will completely reset your production database!"
-    print_warning "ALL PRODUCTION DATA WILL BE LOST!"
-    print_warning "This action cannot be undone!"
-    echo
-    
-    prompt_input "Type 'RESET PRODUCTION' to confirm" CONFIRM ""
-    
-    if [[ "$CONFIRM" != "RESET PRODUCTION" ]]; then
-        print_info "Database reset cancelled"
-        return 0
-    fi
-    
-    if [[ ! -f ".env.production" ]]; then
-        print_error "Production environment not configured"
-        print_info "Please run 'Setup Production Database' first (option 7)"
-        return 1
-    fi
-    
-    if [[ ! -f "prisma/schema.production.prisma" ]]; then
-        print_error "Production schema file not found: prisma/schema.production.prisma"
-        return 1
-    fi
-    
-    print_info "Using production schema: prisma/schema.production.prisma"
-    
-    if ! grep -q 'provider = "postgresql"' prisma/schema.production.prisma; then
-        print_error "Production schema is not configured for PostgreSQL"
-        print_info "Expected 'provider = \"postgresql\"' in prisma/schema.production.prisma"
-        return 1
-    else
-        print_success "Production schema verified for PostgreSQL"
-    fi
-    
-    set -a
-    source .env.production
-    set +a
-    print_info "Database URL: $(mask_db_url "$DATABASE_URL")"
-    
-    # Extract, then DECODE user/pass for PGPASSWORD usage
-    DB_USER_ENC=$(echo "$DATABASE_URL" | sed -n 's#.*://\([^:/]*\).*#\1#p')
-    DB_PASS_ENC=$(echo "$DATABASE_URL" | sed -n 's#.*://[^:]*:\([^@]*\)@.*#\1#p')
-    DB_NAME=$(echo "$DATABASE_URL" | sed -n 's#.*/\([^?]*\).*#\1#p')
+reset_production_database(){
+  if ! yesno "This will DROP and recreate the production DB! Continue?"; then return 0; fi
+  [[ -f ".env.production" ]] || { msgbox ".env.production missing"; return 1; }
+  local url user pass host port db
+  url="$(read_dburl_from_file ".env.production")"
+  user=$(echo "$url" | sed -n 's#postgresql://\([^:/@]\+\).*#\1#p')
+  pass=$(echo "$url" | sed -n 's#postgresql://[^:]\+:\([^@]\+\)@.*#\1#p')
+  host=$(echo "$url" | sed -n 's#.*@\(.*\):[0-9]\+/.*#\1#p')
+  port=$(echo "$url" | sed -n 's#.*@.*:\([0-9]\+\)/.*#\1#p')
+  db=$(echo "$url"   | sed -n 's#.*/\([^?]\+\).*#\1#p')
 
-    DB_USER=$(url_decode "$DB_USER_ENC")
-    DB_PASSWORD=$(url_decode "$DB_PASS_ENC")
-    
-    print_info "Resetting database: $DB_NAME"
-    print_info "User: $DB_USER"
-    
-    print_step "Terminating existing connections..."
-    if sudo -u postgres psql -v ON_ERROR_STOP=1 -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$DB_NAME' AND pid <> pg_backend_pid();"; then
-        print_success "Connections terminated"
-    else
-        print_warning "Could not terminate some connections (may be safe to ignore)"
-    fi
-    
-    print_step "Dropping existing database..."
-    if sudo -u postgres psql -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS \"$DB_NAME\";"; then
-        print_success "Database dropped"
-    else
-        print_error "Failed to drop database"
-        return 1
-    fi
-    
-    print_step "Recreating database..."
-    if sudo -u postgres psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"$DB_NAME\" OWNER \"$DB_USER\";"; then
-        print_success "Database recreated"
-    else
-        print_error "Failed to recreate database"
-        return 1
-    fi
-    
-    export NODE_ENV=production
-    export DATABASE_URL="$DATABASE_URL"
-    
-    print_step "Generating Prisma client (production schema)..."
-    if npx prisma generate --schema=prisma/schema.production.prisma; then
-        print_success "Prisma client generated successfully"
-    else
-        print_error "Failed to generate Prisma client"
-        return 1
-    fi
-    
-    print_step "Applying schema to database..."
-    MIGRATION_SQL_COUNT=$(find prisma/migrations -name "*.sql" 2>/dev/null | wc -l | tr -d ' ')
-    if [[ -f "prisma/migrations/migration_lock.toml" ]] && grep -q 'provider = "postgresql"' prisma/migrations/migration_lock.toml 2>/dev/null && [[ "$MIGRATION_SQL_COUNT" -gt 0 ]]; then
-        print_info "Detected PostgreSQL migrations. Running 'prisma migrate deploy'."
-        if npx prisma migrate deploy --schema=prisma/schema.production.prisma; then
-            print_success "Migrations deployed successfully"
-        else
-            print_error "Migration deployment failed"
-            print_info "Trying alternative approach with 'db push'..."
-            if npx prisma db push --schema=prisma/schema.production.prisma --accept-data-loss; then
-                print_success "Database schema synchronized successfully (db push)"
-            else
-                print_error "Failed to synchronize schema via db push"
-                return 1
-            fi
-        fi
-    else
-        print_warning "No PostgreSQL migration history detected. Using 'db push'."
-        if npx prisma db push --schema=prisma/schema.production.prisma --accept-data-loss; then
-            print_success "Database schema synchronized successfully (db push)"
-        else
-            print_error "Failed to synchronize schema via db push"
-            return 1
-        fi
-    fi
-    
-    print_step "Seeding database with production environment..."
-    set -a
-    source .env.production
-    set +a
-    if node scripts/simple-seed.js; then
-        print_success "Database seeded successfully"
-        print_info "Default credentials:"
-        print_info "  Admin: admin@afct.edu / password123"
-        print_info "  Faculty: faculty@afct.edu / password123"
-        print_info "  Student: student@afct.edu / password123"
-    else
-        print_warning "Database seeding failed - you can run: node scripts/simple-seed.js after fixing issues"
-    fi
-    
-    print_success "Production database setup complete!"
-    print_info "Database: $DB_NAME is ready for use"
-    pause
+  sudo -u postgres psql -v ON_ERROR_STOP=1 -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$db' AND pid <> pg_backend_pid();" || true
+  sudo -u postgres psql -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS \"$db\";"
+  sudo -u postgres psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"$db\" OWNER \"$user\";"
+
+  run_with_env prod "npx prisma generate --schema=prisma/schema.production.prisma"
+  run_with_env prod "npx prisma migrate deploy --schema=prisma/schema.production.prisma" || run_with_env prod "npx prisma db push --schema=prisma/schema.production.prisma --accept-data-loss"
+  run_with_env prod "npx prisma db seed --schema=prisma/schema.production.prisma" || true
+  msgbox "Production DB reset complete."
 }
 
-# =============================================================================
-# Troubleshooting Functions  
-# =============================================================================
+troubleshoot_database(){
+  local choice; choice=$(menu 1 "Detect conflicts (DEV)" 2 "Detect conflicts (PROD)" 3 "Run Prisma validate (PROD)" 0 "Back") || return 0
+  case "$choice" in
+    1) detect_env_conflicts dev || true ;;
+    2) detect_env_conflicts prod || true ;;
+    3) run_with_env prod "npx prisma validate --schema=prisma/schema.production.prisma" && msgbox "Schema valid" || msgbox "Schema invalid" ;;
+    *) ;;
+  esac
+}
 
-troubleshoot_database() {
-    print_header "🔧 Database Troubleshooting"
-    
-    echo "Which database are you having issues with?"
-    echo "1) Development (SQLite)"
-    echo "2) Production (PostgreSQL)"
-    echo
-    read -p "Enter choice (1-2): " db_choice
-    
-    case $db_choice in
-        1)
-            print_step "SQLite Development Database Troubleshooting"
-            if [[ -f "prisma/dev.db" ]]; then
-                print_success "SQLite database file found: prisma/dev.db"
-                DB_SIZE=$(du -h prisma/dev.db | cut -f1)
-                print_info "Database size: $DB_SIZE"
-                if sqlite3 prisma/dev.db "SELECT COUNT(*) FROM sqlite_master;" &>/dev/null; then
-                    print_success "SQLite connection test passed"
-                else
-                    print_error "SQLite connection test failed - database may be corrupted"
-                    prompt_input "Would you like to reset the development database? (y/n)" RESET_DEV "n"
-                    if [[ "$RESET_DEV" =~ ^[Yy]$ ]]; then
-                        reset_development_database
-                    fi
-                fi
-            else
-                print_warning "SQLite database not found"
-                print_info "Run: setup_development_database or choice 3 from main menu"
-            fi
-            ;;
-        2)
-            print_step "PostgreSQL Production Database Troubleshooting"
-            if systemctl is-active --quiet postgresql; then
-                print_success "PostgreSQL service is running"
-            else
-                print_error "PostgreSQL service is not running"
-                print_info "Try: sudo systemctl start postgresql"
-                return 1
-            fi
-            
-            if [[ -f ".env.production" ]]; then
-                print_success "Production environment file found"
-                
-                set -a
-                source .env.production
-                set +a
-                
-                # Pull parts (encoded in URL) then decode for testing
-                DB_USER_ENC=$(echo "$DATABASE_URL" | sed -n 's#.*://\([^:/]*\).*#\1#p')
-                DB_PASS_ENC=$(echo "$DATABASE_URL" | sed -n 's#.*://[^:]*:\([^@]*\)@.*#\1#p')
-                DB_HOST=$(echo "$DATABASE_URL" | sed -n 's#.*@\([^:/]*\).*#\1#p')
-                DB_PORT=$(echo "$DATABASE_URL" | sed -n 's#.*:\([0-9][0-9]*\)/.*#\1#p')
-                DB_NAME=$(echo "$DATABASE_URL" | sed -n 's#.*/\([^?]*\).*#\1#p')
-                
-                DB_USER=$(url_decode "$DB_USER_ENC")
-                DB_PASSWORD=$(url_decode "$DB_PASS_ENC")
-                
-                print_info "Connection details:"
-                print_info "  Host: $DB_HOST"
-                print_info "  Port: $DB_PORT"
-                print_info "  Database: $DB_NAME"
-                print_info "  User: $DB_USER"
-                
-                print_step "Testing with Node.js..."
-                if npm run db:test:prod; then
-                    print_success "Node.js connection test passed"
-                else
-                    print_warning "Node.js connection test failed"
-                    print_step "Testing with psql..."
-                    if PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "SELECT version();" &>/dev/null; then
-                        print_success "psql connection test passed"
-                        print_info "Issue may be with Prisma client generation"
-                        print_info "Try: npx prisma generate --schema=prisma/schema.production.prisma"
-                    else
-                        print_error "psql connection test failed"
-                        print_info "Common solutions:"
-                        print_info "1. Check if user exists: sudo -u postgres psql -c \"\\du\""
-                        print_info "2. Check if database exists: sudo -u postgres psql -l | grep $DB_NAME"
-                        print_info "3. Check authentication file: sudo cat /etc/postgresql/*/main/pg_hba.conf | grep $DB_USER"
-                        print_info "4. Restart PostgreSQL: sudo systemctl restart postgresql"
-                    fi
-                fi
-            else
-                print_error "Production environment file not found"
-                print_info "Run: setup_production_database or choice 7 from main menu"
-            fi
-            ;;
-        *)
-            print_error "Invalid choice"
-            ;;
+check_migration_issues(){
+  local out=""
+  [[ -f prisma/schema.prisma ]] && out+="schema.prisma: present\n" || out+="schema.prisma: missing\n"
+  [[ -f prisma/schema.production.prisma ]] && out+="schema.production.prisma: present\n" || out+="schema.production.prisma: missing\n"
+  if [[ -d prisma/migrations ]]; then
+    local count; count=$(find prisma/migrations -name "*.sql" | wc -l)
+    out+="migrations: $count SQL files\n"
+  else
+    out+="migrations: directory missing (db push is fine)\n"
+  fi
+  if [[ -f .env.production ]]; then
+    out+=".env.production: present\n"
+  else
+    out+=".env.production: missing\n"
+  fi
+  out+="\nTip: prefer 'db push' when mixing SQLite dev & Postgres prod."
+  msgbox "$out"
+}
+
+validate_production_environment(){
+  local missing=""
+  for f in package.json prisma/schema.production.prisma .env.production; do [[ -f "$f" ]] || missing+="$f\n"; done
+  if [[ -n "$missing" ]]; then msgbox "Missing:\n$missing"; return 1; fi
+
+  detect_env_conflicts prod || true
+  local url; url="$(read_dburl_from_file ".env.production")"
+  [[ -n "$url" ]] || { msgbox "DATABASE_URL missing in .env.production"; return 1; }
+  local res="DATABASE_URL: $(mask_db_url "$url")\n"
+  if run_with_env prod "npx prisma validate --schema=prisma/schema.production.prisma"; then res+="Schema: valid\n"; else res+="Schema: invalid\n"; fi
+  if run_with_env prod "npx prisma generate --schema=prisma/schema.production.prisma"; then res+="Client: generated\n"; else res+="Client: failed\n"; fi
+  msgbox "$res"
+}
+
+# ------------------------------- Main Menu ----------------------------------
+main_menu(){
+  while true; do
+    local choice
+    choice=$(menu \
+      1 "Complete Development Setup" \
+      2 "Install Node.js only" \
+      3 "Setup Development Database (SQLite)" \
+      4 "Install Project Dependencies" \
+      5 "Complete Production Setup" \
+      6 "Install PostgreSQL only" \
+      7 "Setup Production Database (PostgreSQL)" \
+      8 "Deploy Application" \
+      9 "Test Database Connection" \
+      10 "Reset Database (Development)" \
+      11 "Reset Database (Production)" \
+      12 "System Health Check" \
+      13 "View System Status" \
+      14 "Check Migration Issues" \
+      15 "Validate Production Environment" \
+      16 "Database Troubleshooting" \
+      17 "Detect & Fix Env Conflicts (DEV)" \
+      18 "Detect & Fix Env Conflicts (PROD)" \
+      0 "Exit") || exit 0
+
+    case "$choice" in
+      1) install_nodejs; install_project_dependencies; setup_development_database; msgbox "Dev setup complete.\nRun: npm run dev";;
+      2) install_nodejs;;
+      3) setup_development_database;;
+      4) install_project_dependencies;;
+      5) install_nodejs; install_postgresql; install_project_dependencies; setup_production_database; infobox "Building app..."; npm run build; msgbox "Production setup complete.\nStart: npm start or PM2";;
+      6) install_postgresql;;
+      7) setup_production_database;;
+      8) deploy_application;;
+      9) test_database_connection;;
+      10) reset_development_database;;
+      11) reset_production_database;;
+      12) system_health_check;;
+      13) view_system_status;;
+      14) check_migration_issues;;
+      15) validate_production_environment;;
+      16) troubleshoot_database;;
+      17) detect_env_conflicts dev || { if yesno "Run auto-fix?"; then fix_env_conflicts dev; fi; };;
+      18) detect_env_conflicts prod || { if yesno "Run auto-fix?"; then fix_env_conflicts prod; fi; };;
+      0) exit 0;;
+      *) : ;;
     esac
-    
-    pause
+  done
 }
 
-# =============================================================================
-# Migration and Schema Troubleshooting Functions
-# =============================================================================
-
-check_migration_issues() {
-    print_header "🔧 Checking Migration Issues"
-    
-    if [[ ! -f "package.json" ]]; then
-        print_error "Not in AFCT Dashboard project directory"
-        print_info "Please run this script from the project root directory"
-        pause
-        return 1
-    fi
-    
-    print_step "Checking project structure..."
-    
-    if [[ -f "prisma/schema.prisma" ]]; then
-        print_success "Found development schema: prisma/schema.prisma"
-    else
-        print_warning "Development schema not found: prisma/schema.prisma"
-    fi
-    
-    if [[ -f "prisma/schema.production.prisma" ]]; then
-        print_success "Found production schema: prisma/schema.production.prisma"
-    else
-        print_error "Production schema not found: prisma/schema.production.prisma"
-        print_info "This file is required for production deployment"
-    fi
-    
-    print_step "Checking migration files..."
-    if [[ ! -d "prisma/migrations" ]]; then
-        print_warning "No migrations directory found"
-        print_info "This is normal for a fresh setup or when using db push"
-        print_info "Migrations are optional when using 'npx prisma db push'"
-    else
-        MIGRATION_COUNT=$(find prisma/migrations -name "*.sql" | wc -l)
-        print_info "Found $MIGRATION_COUNT migration SQL files"
-        print_step "Migration directories:"
-        for dir in prisma/migrations/*/; do
-            if [[ -d "$dir" ]]; then
-                dirname=$(basename "$dir")
-                print_info "  - $dirname"
-            fi
-        done
-    fi
-    
-    if [[ -f "prisma/migrations/migration_lock.toml" ]]; then
-        PROVIDER=$(grep "provider = " prisma/migrations/migration_lock.toml | cut -d'"' -f2)
-        print_info "Migration lock provider: $PROVIDER"
-        if [[ "$PROVIDER" == "sqlite" ]] && [[ -f "prisma/schema.production.prisma" ]]; then
-            SCHEMA_PROVIDER=$(grep 'provider = "' prisma/schema.production.prisma | cut -d'"' -f2)
-            if [[ "$SCHEMA_PROVIDER" == "postgresql" ]]; then
-                print_warning "⚠️  Migration provider mismatch detected!"
-                print_info "Migrations: $PROVIDER, Production Schema: $SCHEMA_PROVIDER"
-                print_info "This can cause deployment issues with PostgreSQL"
-                echo
-                echo -n "Would you like to fix this mismatch? (y/n): "
-                read fix_migrations
-                if [[ "$fix_migrations" =~ ^[Yy]$ ]]; then
-                    fix_migration_provider_mismatch
-                else
-                    print_info "You can fix this later by running option 14 again"
-                fi
-            else
-                print_success "Migration and schema providers match: $PROVIDER"
-            fi
-        else
-            print_success "Migration provider: $PROVIDER"
-        fi
-    else
-        print_info "No migration lock file found (normal for fresh setup)"
-    fi
-    
-    print_step "Checking environment configuration..."
-    
-    if [[ -f ".env" ]]; then
-        print_info "Found .env file"
-        if grep -q "DATABASE_URL.*sqlite" .env 2>/dev/null; then
-            print_info "  - Contains SQLite database URL"
-        elif grep -q "DATABASE_URL.*postgresql" .env 2>/dev/null; then
-            print_info "  - Contains PostgreSQL database URL"
-        fi
-    fi
-    
-    if [[ -f ".env.production" ]]; then
-        print_success "Found .env.production file"
-        if grep -q "DATABASE_URL.*postgresql" .env.production 2>/dev/null; then
-            print_success "  - Contains PostgreSQL database URL"
-        else
-            print_warning "  - Does not contain PostgreSQL database URL"
-        fi
-    else
-        print_warning "No .env.production file found"
-        print_info "Run setup wizard option 7 to create production environment"
-    fi
-    
-    echo
-    print_step "Recommendations:"
-    print_info "✓ For production deployment, use: npx prisma db push"
-    print_info "✓ This avoids migration compatibility issues"
-    print_info "✓ Run setup wizard option 7 for complete production setup"
-    print_info "✓ Use option 15 to validate your production environment"
-    
-    print_success "Migration check complete"
-    pause
-}
-
-fix_migration_provider_mismatch() {
-    print_step "Fixing migration provider mismatch..."
-    
-    if [[ -d "prisma/migrations" ]]; then
-        print_step "Backing up existing migrations..."
-        cp -r prisma/migrations prisma/migrations_backup_$(date +%Y%m%d_%H%M%S)
-        print_success "Migrations backed up"
-    fi
-    
-    if [[ -f "prisma/migrations/migration_lock.toml" ]]; then
-        print_step "Updating migration lock to PostgreSQL..."
-        sed -i 's/provider = "sqlite"/provider = "postgresql"/' prisma/migrations/migration_lock.toml
-        print_success "Migration lock updated"
-    fi
-    
-    print_success "Migration provider mismatch fixed"
-    print_info "Consider using 'npx prisma db push' for production deployments"
-    print_info "This avoids migration compatibility issues between SQLite and PostgreSQL"
-}
-
-validate_production_environment() {
-    print_header "✅ Validating Production Environment"
-    
-    print_step "Checking required files..."
-    
-    local required_files=(
-        "package.json"
-        "prisma/schema.production.prisma"
-        ".env.production"
-    )
-    
-    for file in "${required_files[@]}"; do
-        if [[ -f "$file" ]]; then
-            print_success "Found: $file"
-        else
-            print_error "Missing: $file"
-            return 1
-        fi
-    done
-    
-    if [[ -f ".env.production" ]]; then
-        print_step "Checking environment variables..."
-        
-        local required_vars=(
-            "DATABASE_URL"
-            "NEXTAUTH_SECRET"
-            "NODE_ENV"
-        )
-        
-        for var in "${required_vars[@]}"; do
-            if grep -q "^$var=" .env.production; then
-                print_success "Found: $var"
-            else
-                print_warning "Missing: $var"
-            fi
-        done
-        
-        if grep -q "postgresql://" .env.production; then
-            print_success "PostgreSQL connection string detected"
-        else
-            print_warning "Non-PostgreSQL connection string detected"
-        fi
-    fi
-    
-    if command_exists "psql" && [[ -f ".env.production" ]]; then
-        print_step "Testing database connection..."
-        local db_url
-        db_url=$(grep "^DATABASE_URL=" .env.production | cut -d'=' -f2- | tr -d '"')
-        if [[ -n "$db_url" ]]; then
-            export DATABASE_URL="$db_url"
-            # do a no-op DB execute to test connectivity
-            if npx prisma db execute --file /dev/null --schema=prisma/schema.production.prisma 2>/dev/null; then
-                print_success "Database connection successful"
-            else
-                print_warning "Database connection failed (may be normal if DB not initialized yet)"
-            fi
-        fi
-    fi
-    
-    print_success "Environment validation complete"
-    pause
-}
-
-# =============================================================================
-# Main Script Logic
-# =============================================================================
-
-main() {
-    if [[ ! -f "package.json" ]] && [[ "$1" != "0" ]] && [[ "$1" != "12" ]] && [[ "$1" != "13" ]] && [[ "$1" != "14" ]]; then
-        print_error "Please run this script from the AFCT Dashboard project directory"
-        exit 1
-    fi
-    
-    while true; do
-        show_main_menu
-        get_user_choice
-        
-        case $choice in
-            1) complete_development_setup ;;
-            2) install_nodejs ;;
-            3) setup_development_database ;;
-            4) install_project_dependencies ;;
-            5) complete_production_setup ;;
-            6) install_postgresql ;;
-            7) setup_production_database ;;
-            8) deploy_application ;;
-            9) test_database_connection ;;
-            10) reset_development_database ;;
-            11) reset_production_database ;;
-            12) system_health_check ;;
-            13) view_system_status ;;
-            14) check_migration_issues ;;
-            15) validate_production_environment ;;
-            16) troubleshoot_database ;;
-            0) 
-                print_success "Thank you for using the AFCT Dashboard Setup Wizard!"
-                exit 0 
-                ;;
-        esac
-    done
-}
-
-# Run main function
-main "$@"
+# ------------------------------- Entry Point --------------------------------
+check_os
+main_menu

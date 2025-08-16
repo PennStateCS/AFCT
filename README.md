@@ -9,7 +9,10 @@ A modern **Next.js 15** application serving as a role-based course management pl
 - 💬 **Comments system** with student-specific filtering
 - 📊 **Grade tracking** and submission management
 - 🎨 **Modern UI** with Tailwind CSS and shadcn/ui
-- 🗄️ **Database flexibility** (SQLite for development, PostgreSQL for ## 🔧 Troubleshooting
+- 🗄️ **Database flexibility** (SQLite for development, PostgreSQL for production)
+- 🚀 **Cross-platform** development and deployment
+
+## 🔧 Troubleshooting
 
 ### Automated Troubleshooting Tools
 
@@ -51,9 +54,11 @@ npm run db:generate:with-erd
 # The wizard now detects Chrome compatibility automatically!
 ```
 
-### Common Issuesduction)
+### Common Issues
 
-- 🚀 **Cross-platform** development and deployment
+- Prisma "invalid port number in database URL": ensure .env.production has no quotes around DATABASE_URL and credentials are URL-encoded (especially special characters in the password). Example: postgresql://user:pa%40%23%24ss@host:5432/db
+
+---
 
 ## 🛠️ Tech Stack
 
@@ -201,20 +206,17 @@ npm run seed
 
 ##### For Production (PostgreSQL)
 
-If you used the automated PostgreSQL setup scripts, the database is already configured. Just run:
+If you used the automated PostgreSQL setup scripts, the database is already configured. Use the production-safe commands that load .env.production automatically:
 
 ```bash
-# Switch to production schema
-cp prisma/schema.production.prisma prisma/schema.prisma
-
-# Generate Prisma client for PostgreSQL
-npx prisma generate
+# Generate Prisma client for PostgreSQL using production schema and env
+yarn db:generate:prod # or: npm run db:generate:prod
 
 # Apply migrations to production database
-npx prisma migrate deploy
+yarn db:migrate:prod  # or: npm run db:migrate:prod
 
-# Seed production database (optional)
-npm run seed
+# Seed production database (uses unified prisma/seed.ts)
+yarn seed:prod        # or: npm run seed:prod
 ```
 
 ### 6️⃣ Start Development Server
@@ -223,16 +225,16 @@ npm run seed
 npm run dev
 ```
 
-Visit **[http://localhost:3000](http://localhost:3000)** to see your application.
+Visit **http://localhost:3000** to see your application.
 
 ### 🔑 Default Login Credentials
 
-**All users have the password**: `password123`
+All users have the password: `password123`
 
-- **Admin**: `admin@example.com`
-- **Faculty**: `prof1@example.com`, `prof2@example.com`, `prof3@example.com`
-- **TA**: `ta1@example.com`, `ta2@example.com`
-- **Students**: `student1@example.com` through `student26@example.com`
+- Admin: `admin@example.com`
+- Faculty: `faculty@example.com`, `faculty2@example.com`, `faculty1@example.com`
+- TA: `ta1@example.com`, `ta2@example.com`
+- Students: `student@example.com`, `student1@example.com` … `student25@example.com`
 
 ---
 
@@ -267,16 +269,16 @@ npm run dev
 
 The project uses three environment files:
 
-- **`.env`** - Default configuration (committed to repo)
-- **`.env.local`** - Local development overrides (not committed)
-- **`.env.production`** - Production configuration (not committed)
+- `.env` - Default configuration (committed to repo)
+- `.env.local` - Local development overrides (not committed)
+- `.env.production` - Production configuration (not committed)
 
-#### Required Environment Variables
+Required variables:
 
 ```env
 # Database
 DATABASE_URL="file:./dev.db"  # SQLite for development
-POSTGRES_URL=""  # PostgreSQL for production
+# For production, we use .env.production with a postgresql:// URL
 
 # JWT
 JWT_SECRET="your-super-secret-jwt-key-here"
@@ -309,7 +311,7 @@ npx prisma studio
 
 #### ERD (Entity Relationship Diagram) Generation
 
-ERD generation is **optional** and only available in development mode:
+ERD generation is optional and only available in development mode:
 
 ```bash
 # Generate ERD diagram (requires Chrome/Chromium)
@@ -322,19 +324,19 @@ npm run db:generate:safe
 sudo apt install chromium-browser
 ```
 
-**Note**: ERDs require Chrome/Chromium browser. If not available, the application works perfectly without them.
+Note: The app works fine without ERDs.
 
 #### Production Commands
 
 ```bash
-# Apply migrations without prompts
-npx prisma migrate deploy
+# Apply migrations without prompts (uses .env.production)
+npm run db:migrate:prod
 
-# Generate production client
-npx prisma generate
+# Generate production client (uses .env.production)
+npm run db:generate:prod
 
-# Seed production database
-npm run seed:production
+# Seed production database via unified seed (prisma/seed.ts)
+npm run seed:prod
 ```
 
 ### Code Quality
@@ -352,7 +354,7 @@ npm run build
 
 ---
 
-## �️ Automation Scripts
+## 🧰 Automation Scripts
 
 The project includes several automation scripts to make setup and deployment easier:
 
@@ -362,32 +364,32 @@ The project includes several automation scripts to make setup and deployment eas
 ./scripts/setup-wizard.sh
 ```
 
-**Interactive menu-driven setup for beginners.** Handles everything from Node.js installation to complete application deployment.
+Interactive menu-driven setup for beginners. Handles everything from Node.js installation to complete application deployment.
 
 ### PostgreSQL Scripts
 
 ```bash
-sudo ./scripts/setup-postgresql.sh      # Complete PostgreSQL setup with all features
+sudo ./scripts/setup-postgresql.sh       # Complete PostgreSQL setup with all features
 sudo ./scripts/quick-postgresql-setup.sh # Fast PostgreSQL installation and configuration
 ```
 
 ### Deployment Scripts
 
 ```bash
-./scripts/deploy-production.js          # Automated production deployment
+./scripts/deploy-production.js           # Automated production deployment
 ```
 
-### All Scripts Features:
+Features:
 
-- ✅ **Beginner-friendly** with step-by-step guidance
-- ✅ **Error handling** for existing installations
-- ✅ **Cross-platform** compatibility (Ubuntu/CentOS)
-- ✅ **Re-runnable** without breaking existing setups
-- ✅ **Built-in testing** and validation
+- Beginner-friendly with step-by-step guidance
+- Error handling for existing installations
+- Cross-platform compatibility (Ubuntu/CentOS)
+- Re-runnable without breaking existing setups
+- Built-in testing and validation
 
 ---
 
-## �🚀 Deployment
+## 🚀 Deployment
 
 ### PostgreSQL Production Setup
 
@@ -652,7 +654,7 @@ public/
 
 ---
 
-## � Troubleshooting
+## 🛠️ Troubleshooting
 
 ### Common Issues
 
@@ -822,7 +824,7 @@ DATABASE_URL="file:./dev.db?connection_limit=1"
 
 ---
 
-## �️ Automated Scripts Reference
+## 📜 Automated Scripts Reference
 
 The AFCT Dashboard includes several automated scripts to simplify setup and deployment:
 

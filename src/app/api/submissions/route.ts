@@ -54,12 +54,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
-  // 3. Ensure the problem is linked to the assignment
+  // 3. Ensure the problem is linked to the assignment and get problem details
   const link = await prisma.assignmentProblem.findUnique({
     where: {
       assignmentId_problemId: {
         assignmentId,
         problemId,
+      },
+    },
+    include: {
+      problem: {
+        select: {
+          fileName: true,
+          maxStates: true,
+          isDeterministic: true,
+          type: true,
+        },
       },
     },
   });
@@ -94,17 +104,59 @@ export async function POST(req: NextRequest) {
       // 4b. Run system command to analyze the uploaded file
       try {
         if (os.platform() === 'win32') {
+          // Windows: Count lines as before
           const result = execSync(`powershell -Command "(Get-Content '${filePath}').Count"`, {
             encoding: 'utf-8',
           });
           feedback = `File has ${result.trim()} lines (Windows).`;
         } else {
-          const result = execSync(`wc -l < "${filePath}"`, { encoding: 'utf-8' });
-          feedback = `File has ${result.trim()} lines (Unix).`;
+          // Linux: Use afct-evaluator.jar
+          const answerFileName = link.problem.fileName;
+          if (answerFileName) {
+            const answerFilePath = path.join(
+              process.cwd(),
+              'public',
+              'uploads',
+              'problems',
+              answerFileName,
+            );
+
+            // Check if answer file exists
+            if (fs.existsSync(answerFilePath)) {
+              // Build command arguments
+              const args = ['-jar', 'afct-evaluator.jar', answerFilePath, filePath];
+
+              // Add optional arguments based on problem type
+              if (link.problem.type === 'FA' || link.problem.type === 'PDA') {
+                const maxStates = link.problem.maxStates ?? -1;
+                args.push(maxStates.toString());
+
+                if (link.problem.type === 'FA') {
+                  const deterministic = link.problem.isDeterministic ?? false;
+                  args.push(deterministic.toString());
+                }
+              }
+
+              // Execute the evaluator
+              const result = execSync(`java ${args.join(' ')}`, {
+                encoding: 'utf-8',
+                timeout: 30000, // 30 second timeout
+              });
+              feedback = `Evaluation result: ${result.trim()}`;
+            } else {
+              feedback = 'ERROR: Answer file not found on server.';
+            }
+          } else {
+            feedback = 'ERROR: No answer file configured for this problem.';
+          }
         }
       } catch (cmdErr) {
         console.error('Command execution failed:', cmdErr);
-        feedback = 'ERROR: Failed to analyze file.';
+        if (os.platform() === 'win32') {
+          feedback = 'ERROR: Failed to analyze file.';
+        } else {
+          feedback = `ERROR: Evaluation failed - ${cmdErr instanceof Error ? cmdErr.message : 'Unknown error'}`;
+        }
       }
     }
 
