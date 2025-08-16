@@ -1313,7 +1313,24 @@ check_migration_issues() {
     if [[ ! -f "package.json" ]]; then
         print_error "Not in AFCT Dashboard project directory"
         print_info "Please run this script from the project root directory"
+        pause
         return 1
+    fi
+    
+    print_step "Checking project structure..."
+    
+    # Check for schema files
+    if [[ -f "prisma/schema.prisma" ]]; then
+        print_success "Found development schema: prisma/schema.prisma"
+    else
+        print_warning "Development schema not found: prisma/schema.prisma"
+    fi
+    
+    if [[ -f "prisma/schema.production.prisma" ]]; then
+        print_success "Found production schema: prisma/schema.production.prisma"
+    else
+        print_error "Production schema not found: prisma/schema.production.prisma"
+        print_info "This file is required for production deployment"
     fi
     
     print_step "Checking migration files..."
@@ -1321,8 +1338,20 @@ check_migration_issues() {
     # Check if migration files exist
     if [[ ! -d "prisma/migrations" ]]; then
         print_warning "No migrations directory found"
-        print_info "This is normal for a fresh setup"
-        return 0
+        print_info "This is normal for a fresh setup or when using db push"
+        print_info "Migrations are optional when using 'npx prisma db push'"
+    else
+        MIGRATION_COUNT=$(find prisma/migrations -name "*.sql" | wc -l)
+        print_info "Found $MIGRATION_COUNT migration SQL files"
+        
+        # List migration directories
+        print_step "Migration directories:"
+        for dir in prisma/migrations/*/; do
+            if [[ -d "$dir" ]]; then
+                dirname=$(basename "$dir")
+                print_info "  - $dirname"
+            fi
+        done
     fi
     
     # Check migration lock file
@@ -1334,20 +1363,60 @@ check_migration_issues() {
         if [[ "$PROVIDER" == "sqlite" ]] && [[ -f "prisma/schema.production.prisma" ]]; then
             SCHEMA_PROVIDER=$(grep 'provider = "' prisma/schema.production.prisma | cut -d'"' -f2)
             if [[ "$SCHEMA_PROVIDER" == "postgresql" ]]; then
-                print_warning "Migration provider mismatch detected!"
-                print_info "Migrations: $PROVIDER, Schema: $SCHEMA_PROVIDER"
-                print_info "This can cause deployment issues"
-                
-                echo -n "Would you like to fix this? (y/n): "
+                print_warning "⚠️  Migration provider mismatch detected!"
+                print_info "Migrations: $PROVIDER, Production Schema: $SCHEMA_PROVIDER"
+                print_info "This can cause deployment issues with PostgreSQL"
+                echo
+                echo -n "Would you like to fix this mismatch? (y/n): "
                 read fix_migrations
                 if [[ "$fix_migrations" =~ ^[Yy]$ ]]; then
                     fix_migration_provider_mismatch
+                else
+                    print_info "You can fix this later by running option 14 again"
                 fi
+            else
+                print_success "Migration and schema providers match: $PROVIDER"
             fi
+        else
+            print_success "Migration provider: $PROVIDER"
+        fi
+    else
+        print_info "No migration lock file found (normal for fresh setup)"
+    fi
+    
+    # Check environment files
+    print_step "Checking environment configuration..."
+    
+    if [[ -f ".env" ]]; then
+        print_info "Found .env file"
+        if grep -q "DATABASE_URL.*sqlite" .env 2>/dev/null; then
+            print_info "  - Contains SQLite database URL"
+        elif grep -q "DATABASE_URL.*postgresql" .env 2>/dev/null; then
+            print_info "  - Contains PostgreSQL database URL"
         fi
     fi
     
+    if [[ -f ".env.production" ]]; then
+        print_success "Found .env.production file"
+        if grep -q "DATABASE_URL.*postgresql" .env.production 2>/dev/null; then
+            print_success "  - Contains PostgreSQL database URL"
+        else
+            print_warning "  - Does not contain PostgreSQL database URL"
+        fi
+    else
+        print_warning "No .env.production file found"
+        print_info "Run setup wizard option 7 to create production environment"
+    fi
+    
+    echo
+    print_step "Recommendations:"
+    print_info "✓ For production deployment, use: npx prisma db push"
+    print_info "✓ This avoids migration compatibility issues"
+    print_info "✓ Run setup wizard option 7 for complete production setup"
+    print_info "✓ Use option 15 to validate your production environment"
+    
     print_success "Migration check complete"
+    pause
 }
 
 fix_migration_provider_mismatch() {
@@ -1440,6 +1509,7 @@ validate_production_environment() {
     fi
     
     print_success "Environment validation complete"
+    pause
 }
 
 # =============================================================================
