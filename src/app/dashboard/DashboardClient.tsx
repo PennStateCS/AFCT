@@ -2,9 +2,8 @@
 
 import { format } from 'date-fns';
 import Link from 'next/link';
-import { Badge } from '@/components/ui/badge';
 import type { Course, User } from '@prisma/client';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
 type Props = {
   sessionUser: {

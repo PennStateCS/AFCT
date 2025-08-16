@@ -80,8 +80,8 @@ export function EditAssignmentDialog({
     reValidateMode: 'onChange',
   });
 
-  // Keep publish in RHF too (not part of AssignmentFormSchema, so we mark as any)
-  const isPublished = watch('isPublished' as any) as boolean | undefined;
+  // Keep publish in RHF too (not part of AssignmentFormSchema, so we watch the extended field)
+  const isPublished = watch('isPublished' as keyof typeof defaultValues) as boolean | undefined;
 
   // Reset on open/close (prevents error/touched flicker)
   useEffect(() => {
@@ -235,7 +235,7 @@ export function EditAssignmentDialog({
           <div className="flex items-center justify-between">
             <Label htmlFor="isPublished">Published</Label>
             <Controller
-              name={'isPublished' as any}
+              name={'isPublished' as keyof typeof defaultValues}
               control={control}
               defaultValue={assignment.isPublished}
               render={({ field }) => (
@@ -282,7 +282,8 @@ export function EditAssignmentDialog({
 async function safeMessage(res: Response) {
   try {
     const data = await res.json();
-    return (data as any)?.message ?? (data as any)?.error ?? null;
+    return (data as { message?: string; error?: string })?.message ?? 
+           (data as { message?: string; error?: string })?.error ?? null;
   } catch {
     return null;
   }

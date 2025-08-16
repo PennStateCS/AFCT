@@ -16,6 +16,62 @@ export const authOptions: NextAuthOptions = {
   jwt: {
     maxAge: 60 * 60,
   },
+  events: {
+    // Log signin
+    async signIn({ user, account, isNewUser }) {
+      try {
+        await prisma.activityLog.create({
+          data: {
+            userId: user.id,
+            action: 'USER_SIGNIN',
+            metadata: {
+              provider: account?.provider,
+              isNewUser,
+              ipAddress: account?.ipAddress ?? null, // Optional, inject via middleware if needed
+              userAgent: account?.userAgent ?? null, // Optional, inject via middleware if needed
+            },
+          },
+        });
+      } catch (error) {
+        console.error('[SIGNIN_LOG_ERROR]', error);
+      }
+    },
+
+    // Log signout
+    async signOut({ token }) {
+      try {
+        if (!token?.sub) return;
+
+        await prisma.activityLog.create({
+          data: {
+            userId: token.sub,
+            action: 'USER_SIGNOUT',
+            metadata: {
+              ipAddress: token?.ipAddress ?? null, // Optional
+              userAgent: token?.userAgent ?? null, // Optional
+            },
+          },
+        });
+      } catch (error) {
+        console.error('[SIGNOUT_LOG_ERROR]', error);
+      }
+    },
+
+    // Logs new user
+    async createUser({ user }) {
+      try {
+        await prisma.activityLog.create({
+          data: {
+            userId: user.id,
+            action: 'USER_CREATED',
+            metadata: {},
+          },
+        });
+      } catch (error) {
+        console.error('[USER_CREATION_LOG_ERROR]', error);
+      }
+    },
+  },
   providers: [
     CredentialsProvider({
       name: 'Credentials',
@@ -47,7 +103,7 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async jwt({ token, user, req }) {
+    async jwt({ token, user }) {
       // On initial sign-in, merge user fields into token
       if (user) {
         token.id = user.id;
@@ -59,11 +115,7 @@ export const authOptions: NextAuthOptions = {
         token.name = user.name;
         token.image = user.avatar;
 
-        // Optionally add ip/userAgent if needed
-        const forwarded = req?.headers.get('x-forwarded-for');
-        token.ipAddress = forwarded?.split(',')[0]?.trim() || req?.headers.get('x-real-ip') || null;
-        token.userAgent = req?.headers.get('user-agent') || null;
-
+        // Set token expiration
         token.exp = Math.floor(Date.now() / 1000) + 60 * 30;
       }
 
@@ -80,9 +132,6 @@ export const authOptions: NextAuthOptions = {
         session.user.avatar = token.avatar as string;
         session.user.name = token.name as string;
         session.user.image = token.image as string;
-
-        session.ipAddress = token.ipAddress as string;
-        session.userAgent = token.userAgent as string;
       }
 
       if (token.exp) {

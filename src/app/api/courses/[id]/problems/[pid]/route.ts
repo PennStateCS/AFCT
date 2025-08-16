@@ -7,8 +7,8 @@ import { promises as fs } from 'fs';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 
-export async function DELETE(req: Request, context: { params: { id: string; pid: string } }) {
-  const { id: courseId, pid: problemId } = context.params;
+export async function DELETE(req: Request, context: { params: Promise<{ id: string; pid: string }> }) {
+  const { id: courseId, pid: problemId } = await context.params;
 
   try {
     // Step 1: Verify the user is authenticated and authorized (ADMIN, FACULTY, TA)

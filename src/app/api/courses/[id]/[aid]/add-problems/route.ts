@@ -3,11 +3,11 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/authOptions';
 
 // POST: Replace problems for a given assignment in a specific course
-export async function POST(req: Request, { params }: { params: { id: string; aid: string } }) {
-  const { id: courseId, aid: assignmentId } = params;
+export async function POST(req: Request, { params }: { params: Promise<{ id: string; aid: string }> }) {
+  const { id: courseId, aid: assignmentId } = await params;
 
   try {
     // Get session and validate user role

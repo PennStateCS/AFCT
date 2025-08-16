@@ -52,10 +52,10 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
       title: problem.title ?? '',
       description: problem.description ?? '',
       type: problem.type as z.infer<typeof ProblemTypeEnum>,
-      isUnlimited: deriveUnlimited(problem.maxStates as any),
-      maxStates: deriveMaxStates(problem.maxStates as any),
-      isDeterministic: problem.type === 'FA' ? !!(problem as any).isDeterministic : false,
-      file: undefined as any, // optional in edit; user can choose a new file
+      isUnlimited: deriveUnlimited(problem.maxStates),
+      maxStates: deriveMaxStates(problem.maxStates),
+      isDeterministic: problem.type === 'FA' ? !!(problem as Problem & { isDeterministic?: boolean }).isDeterministic : false,
+      file: undefined as File | undefined, // optional in edit; user can choose a new file
       courseId: problem.courseId,
     }),
     [problem],
@@ -241,7 +241,7 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
                     type="number"
                     fieldProps={{
                       ...field,
-                      value: isUnlimited ? '' : (field.value as any),
+                      value: isUnlimited ? '' : String(field.value || ''),
                       onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
                         field.onChange(e.target.value),
                     }}
@@ -338,7 +338,8 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
 async function safeMessage(res: Response) {
   try {
     const data = await res.json();
-    return (data as any)?.message ?? (data as any)?.error ?? null;
+    return (data as { message?: string; error?: string })?.message ?? 
+           (data as { message?: string; error?: string })?.error ?? null;
   } catch {
     return null;
   }

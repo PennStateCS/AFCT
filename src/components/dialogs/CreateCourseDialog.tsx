@@ -34,17 +34,6 @@ interface CreateCourseDialogProps {
   onSuccess?: () => void;
 }
 
-// Helpers for min attribute etc.
-function toDateTimeLocalString(d?: Date | string): string {
-  if (!d) return '';
-  const date = new Date(d);
-  if (isNaN(date.getTime())) return '';
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const tzOffsetMs = date.getTimezoneOffset() * 60000;
-  const local = new Date(date.getTime() - tzOffsetMs);
-  return `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())}T${pad(local.getHours())}:${pad(local.getMinutes())}`;
-}
-
 export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDialogProps) {
   // Default form values (strings for datetime-local)
   const defaults: FormValues = useMemo(

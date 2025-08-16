@@ -19,7 +19,7 @@ import { problemColumns } from './problem_columns';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { EditIcon, Plus, Pencil } from 'lucide-react';
+import { Plus, Pencil } from 'lucide-react';
 
 type FullCourse = Course & {
   faculty: User[];
@@ -63,7 +63,6 @@ export default function AdminCoursePage() {
   // Enroll user
   const [enrollOpen, setEnrollOpen] = useState(false);
   const [allUsers, setAllUsers] = useState<User[]>([]);
-  const [loadingUsers, setLoadingUsers] = useState(false);
 
   // Publish Toggle
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
@@ -71,23 +70,22 @@ export default function AdminCoursePage() {
 
   // Filter user dataset
   const openEnrollDialog = async () => {
-    setLoadingUsers(true);
     try {
       const res = await fetch('/api/users'); // Adjust endpoint as needed
       if (!res.ok) throw new Error('Failed to fetch users');
       const users: User[] = await res.json();
       // Filter out already enrolled users (students, faculty, tas)
-      const inCourseIds = new Set([
-        ...course.students.map((u) => u.id),
-        ...course.faculty.map((u) => u.id),
-        ...course.tas.map((u) => u.id),
-      ]);
-      setAllUsers(users.filter((u) => !inCourseIds.has(u.id)));
+      if (course) {
+        const inCourseIds = new Set([
+          ...course.students.map((u) => u.id),
+          ...course.faculty.map((u) => u.id),
+          ...course.tas.map((u) => u.id),
+        ]);
+        setAllUsers(users.filter((u) => !inCourseIds.has(u.id)));
+      }
       setEnrollOpen(true);
-    } catch (err) {
+    } catch {
       toast.error('Failed to load user list');
-    } finally {
-      setLoadingUsers(false);
     }
   };
 
@@ -173,7 +171,7 @@ export default function AdminCoursePage() {
         .then((res) => res.json())
         .then(setCourse)
         .catch(() => toast.error('Failed to reload course data'));
-    } catch (err) {
+    } catch {
       toast.error('Error enrolling user');
     }
   };
@@ -197,15 +195,6 @@ export default function AdminCoursePage() {
     },
     [searchParams, router],
   );
-
-  // Assignment create handler
-  const handleAssignmentCreate = useCallback(async (newAssignment: Assignment) => {
-    setCourse((prev) =>
-      prev ? { ...prev, assignments: [...prev.assignments, newAssignment] } : prev,
-    );
-    setCreateAssignmentOpen(false);
-    toast.success('Assignment created!');
-  }, []);
 
   // Assignment edit handler
   const handleAssignmentSave = useCallback(async (updatedAssignment: Assignment) => {
@@ -448,7 +437,7 @@ export default function AdminCoursePage() {
             const updated = await res.json();
             setCourse((prev) => (prev ? { ...prev, ...updated } : prev));
             toast.success('Course updated!');
-          } catch (err) {
+          } catch {
             toast.error('Failed to save course');
           }
           setEditOpen(false);
@@ -545,7 +534,7 @@ export default function AdminCoursePage() {
             const updated = await res.json();
             setCourse((prev) => (prev ? { ...prev, isPublished: updated.isPublished } : prev));
             toast.success(pendingPublish ? 'Course published' : 'Course unpublished');
-          } catch (err) {
+          } catch {
             toast.error('Error updating publish status');
           } finally {
             setPublishConfirmOpen(false);

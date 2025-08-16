@@ -3,10 +3,10 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/authOptions';
 
-export async function POST(req: Request, context: { params: { id: string; aid: string } }) {
-  const { id: courseId, aid: assignmentId } = context.params;
+export async function POST(req: Request, context: { params: Promise<{ id: string; aid: string }> }) {
+  const { id: courseId, aid: assignmentId } = await context.params;
 
   // Get the user session and check for required roles
   const session = await getServerSession(authOptions);

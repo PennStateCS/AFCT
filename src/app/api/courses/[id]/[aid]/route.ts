@@ -65,6 +65,7 @@ export async function GET(_: Request, context: { params: Promise<{ id: string; a
     const students = roster.filter((r) => r.role === 'STUDENT').map((r) => r.user);
 
     // Remove joined fields to avoid duplication in the response
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { problems: _problems, course, ...assignmentData } = assignment;
 
     // Return structured assignment + course + role-separated roster

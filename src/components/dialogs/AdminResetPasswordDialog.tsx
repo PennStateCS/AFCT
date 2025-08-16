@@ -68,8 +68,9 @@ export function AdminResetPasswordDialog({
       await onResetPassword(newPassword);
       toast.success('Password reset successfully!');
       setOpen(false);
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to reset password');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to reset password';
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
