@@ -1,3 +1,4 @@
+// InputGroup.tsx
 'use client';
 
 import * as React from 'react';
@@ -11,51 +12,29 @@ type RHFFieldProps =
       React.InputHTMLAttributes<HTMLInputElement>,
       'name' | 'onChange' | 'onBlur' | 'value' | 'ref'
     >
-  | Record<string, never>; // allow not using RHF
+  | Record<string, never>;
 
-interface InputGroupProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> {
-  /** Visible label text */
+interface InputGroupProps
+  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'type'> {
   label: string;
-  /** Field name (use the same as RHF schema key) */
   name: string;
-
-  /** RHF field props: pass `{...field}` from Controller or `{...register('name')}` */
   fieldProps?: RHFFieldProps;
-
-  /** Validation error message (from Zod/RHF) */
   error?: string;
-  /** Optional helper/description under the field */
   description?: string;
-
-  /** Show async/valid/invalid status area on the right */
   showStatus?: boolean;
-  /** Current validity when showStatus is enabled */
   isValid?: boolean;
-  /** Async checking indicator text or boolean */
   isChecking?: boolean | string;
-
-  /** Show an eye to toggle password visibility */
   showEye?: boolean;
-
-  /** Force required markup/ARIA; leave undefined to control via schema */
   requiredMark?: boolean;
-
-  /** Extra className for wrapper */
   className?: string;
-
-  /** For controlled usage without RHF */
   setValue?: (val: string) => void;
-
-  /** Override input type; defaults to 'text' */
   type?: string;
+
+  /** Back-compat (won't be forwarded to DOM) */
+  isPasswordVisible?: boolean;
+  togglePasswordVisibility?: () => void;
 }
 
-/**
- * InputGroup
- * - Works with RHF (pass fieldProps={...field} and error from formState.errors)
- * - Works without RHF (pass value + setValue)
- * - Shows status icons/eye toggle and error/description text
- */
 const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function InputGroup(
   {
     label,
@@ -70,40 +49,47 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
     requiredMark,
     className,
     setValue,
+
+    // back-compat (do not forward)
+    isPasswordVisible,
+    togglePasswordVisibility,
+
     type = 'text',
     id,
     value,
     onBlur,
     placeholder,
     disabled,
-    ...rest
+    ...rest // <- safe now; back-compat props were pulled out above
   },
   _ref,
 ) {
   const inputId = id ?? name;
-  const describedByIds = [error ? `${inputId}-error` : null, description ? `${inputId}-desc` : null]
-    .filter(Boolean)
-    .join(' ')
-    .trim();
 
-  // Merge RHF field props if provided
+  // RHF wiring
   const rhfName = (fieldProps as any)?.name as string | undefined;
   const rhfValue = (fieldProps as any)?.value as any;
   const rhfOnChange = (fieldProps as any)?.onChange as ((e: any) => void) | undefined;
   const rhfOnBlur = (fieldProps as any)?.onBlur as ((e: any) => void) | undefined;
   const rhfRef = (fieldProps as any)?.ref as React.Ref<HTMLInputElement> | undefined;
 
-  // Internal password visibility (only if showEye)
-  const [pwdVisible, setPwdVisible] = React.useState(false);
+  // Password visibility
+  const [pwdVisibleInternal, setPwdVisibleInternal] = React.useState(false);
   const isPasswordType = type === 'password';
+  const pwdVisible =
+    typeof isPasswordVisible === 'boolean' ? isPasswordVisible : pwdVisibleInternal;
+  const handleTogglePwd = () => {
+    if (typeof isPasswordVisible === 'boolean') togglePasswordVisibility?.();
+    else setPwdVisibleInternal((s) => !s);
+  };
   const effectiveType = showEye && isPasswordType ? (pwdVisible ? 'text' : 'password') : type;
 
-  // Decide right padding based on adornments
+  // Right adornments -> padding
   const hasStatus = !!showStatus;
   const hasEye = !!showEye && isPasswordType;
   const inputPaddingRight = hasStatus && hasEye ? 'pr-16' : hasStatus || hasEye ? 'pr-10' : '';
 
-  // Unified change/blur handlers: prefer RHF, then controlled, then noop
+  // Unified handlers
   const handleChange = (evt: React.ChangeEvent<HTMLInputElement>) => {
     if (rhfOnChange) return rhfOnChange(evt);
     if (setValue) return setValue(evt.target.value);
@@ -113,8 +99,12 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
     if (onBlur) return onBlur(evt);
   };
 
-  // Determine current value: prefer RHF, then controlled prop `value`
   const currValue = rhfValue ?? value ?? '';
+
+  const describedByIds = [error ? `${inputId}-error` : null, description ? `${inputId}-desc` : null]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
 
   return (
     <div className={cn('flex flex-col', className)}>
@@ -140,7 +130,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
           {...rest}
         />
 
-        {/* STATUS + EYE together */}
+        {/* status + eye */}
         {hasStatus && hasEye && (
           <>
             <div className="absolute inset-y-0 right-10 flex items-center pr-1">
@@ -153,7 +143,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
             <div className="absolute inset-y-0 right-3 flex items-center">
               <button
                 type="button"
-                onClick={() => setPwdVisible((s) => !s)}
+                onClick={handleTogglePwd}
                 aria-label={pwdVisible ? 'Hide password' : 'Show password'}
                 className="text-muted-foreground transition-opacity hover:opacity-80"
               >
@@ -163,7 +153,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
           </>
         )}
 
-        {/* STATUS only */}
+        {/* status only */}
         {hasStatus && !hasEye && (
           <div className="absolute inset-y-0 right-3 flex items-center">
             <StatusAdornment
@@ -174,12 +164,12 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
           </div>
         )}
 
-        {/* EYE only */}
+        {/* eye only */}
         {!hasStatus && hasEye && (
           <div className="absolute inset-y-0 right-3 flex items-center">
             <button
               type="button"
-              onClick={() => setPwdVisible((s) => !s)}
+              onClick={handleTogglePwd}
               aria-label={pwdVisible ? 'Hide password' : 'Show password'}
               className="text-muted-foreground transition-opacity hover:opacity-80"
             >
@@ -189,7 +179,6 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
         )}
       </div>
 
-      {/* Description / Error */}
       {description ? (
         <p id={`${inputId}-desc`} className="text-muted-foreground mt-1 text-xs">
           {description}
@@ -213,10 +202,12 @@ function StatusAdornment({
   isValid?: boolean;
   hasValue: boolean;
 }) {
-  if (isChecking) {
-    const text = typeof isChecking === 'string' ? isChecking : 'Checking...';
-    return <span className="text-muted-foreground text-xs italic">{text}</span>;
-  }
+  if (isChecking)
+    return (
+      <span className="text-muted-foreground text-xs italic">
+        {typeof isChecking === 'string' ? isChecking : 'Checking...'}
+      </span>
+    );
   if (!hasValue || isValid === undefined) return null;
   return isValid ? (
     <CheckCircle size={18} className="text-green-600" aria-label="Valid" />
