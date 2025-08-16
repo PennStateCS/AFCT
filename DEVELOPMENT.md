@@ -42,6 +42,7 @@ chmod +x scripts/setup-wizard.sh
 ```
 
 The wizard will automatically:
+
 - ✅ Install Node.js and dependencies
 - ✅ Set up SQLite database
 - ✅ Configure environment files
