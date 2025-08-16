@@ -15,6 +15,7 @@ chmod +x scripts/setup-wizard.sh
 ```
 
 ### What the Wizard Does:
+
 - ✅ **Complete Production Setup**: Handles Node.js, PostgreSQL, database, and application
 - ✅ **System Health Checks**: Verifies requirements and troubleshoots issues
 - ✅ **Graceful Error Handling**: Manages existing installations and configurations

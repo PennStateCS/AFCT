@@ -150,9 +150,6 @@ show_main_menu() {
     echo " 11) Reset Database (Production)"
     echo " 12) System Health Check"
     echo " 13) View System Status"
-    echo " 14) Check Migration Issues"
-    echo " 15) Validate Production Environment"
-    echo " 16) Database Troubleshooting"
     echo
     echo " 0) Exit"
     echo
@@ -160,11 +157,11 @@ show_main_menu() {
 
 get_user_choice() {
     while true; do
-        echo -n "Enter your choice (0-16): "
+        echo -n "Enter your choice (0-13): "
         read choice
         case $choice in
-            [0-9]|1[0-6]) return 0 ;;
-            *) print_error "Invalid choice. Please enter a number between 0 and 16." ;;
+            [0-9]|1[0-3]) return 0 ;;
+            *) print_error "Invalid choice. Please enter a number between 0 and 13." ;;
         esac
     done
 }
@@ -383,26 +380,28 @@ setup_development_database() {
     fi
     
     # Switch to development schema
-    print_step "Setting up development schema..."
-    if [[ -f "prisma/schema.development.prisma" ]]; then
-        # Check if ERD generation is available
-        if command_exists "google-chrome" || command_exists "chromium-browser" || command_exists "chromium"; then
-            print_step "Using development schema with ERD generation..."
-            cp prisma/schema.development.prisma prisma/schema.prisma
-            print_success "Development schema with ERD support activated"
-        else
-            print_step "Using development schema without ERD..."
-            # Use the basic schema without ERD generator
-            print_success "Development schema activated (ERD disabled - requires Chrome/Chromium)"
-        fi
+    if [[ -f "prisma/schema.prisma.dev" ]] || [[ ! -f "prisma/schema.production.prisma" ]]; then
+        print_success "Using development schema"
     else
-        print_step "Creating development schema..."
-        # Ensure we have a basic development schema
         if [[ -f "prisma/schema.production.prisma" ]]; then
-            cp prisma/schema.production.prisma prisma/schema.prisma
-            # Replace PostgreSQL with SQLite for development
-            sed -i 's/provider = "postgresql"/provider = "sqlite"/' prisma/schema.prisma
-            print_success "Development schema created from production schema"
+            print_step "Switching to development schema..."
+            if [[ -f "prisma/schema.prisma" ]]; then
+                cp prisma/schema.prisma prisma/schema.prisma.backup
+            fi
+            # Development schema should use SQLite
+            cat > prisma/schema.prisma << 'EOF'
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+EOF
+            # Copy the rest from production schema but keep SQLite datasource
+            tail -n +10 prisma/schema.production.prisma >> prisma/schema.prisma
+            print_success "Switched to development schema"
         fi
     fi
     
@@ -413,20 +412,10 @@ setup_development_database() {
         print_success "Dependencies installed"
     fi
     
-    # Generate Prisma client with safe ERD handling
+    # Generate Prisma client
     print_step "Generating Prisma client..."
-    if [[ -f "prisma/schema.development.prisma" ]] && (command_exists "google-chrome" || command_exists "chromium-browser" || command_exists "chromium"); then
-        print_step "Attempting to generate with ERD support..."
-        if npm run db:generate:with-erd 2>/dev/null; then
-            print_success "Prisma client generated successfully with ERD"
-        else
-            print_warning "ERD generation failed, using safe fallback..."
-            npm run db:generate:safe
-        fi
-    else
-        print_step "Generating without ERD support..."
-        npm run db:generate:safe
-    fi
+    npx prisma generate
+    print_success "Prisma client generated"
     
     # Run database migrations
     print_step "Setting up database..."
@@ -515,39 +504,74 @@ setup_production_database() {
     
     # Create application database and user with error handling
     print_step "Creating application database and user..."
+    sudo -u postgres psql << EOF
+-- Create user (ignore if exists)
+DO \$\$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '$DB_USER_PROD') THEN
+        CREATE USER $DB_USER_PROD WITH PASSWORD '$DB_PASSWORD_PROD';
+        RAISE NOTICE 'User $DB_USER_PROD created successfully';
+    ELSE
+        ALTER USER $DB_USER_PROD WITH PASSWORD '$DB_PASSWORD_PROD';
+        RAISE NOTICE 'User $DB_USER_PROD already exists, password updated';
+    END IF;
+END
+\$\$;
+
+-- Create database (ignore if exists)
+DO \$\$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_database WHERE datname = '$DB_NAME_PROD') THEN
+        PERFORM dblink_exec('dbname=' || current_database(), 'CREATE DATABASE $DB_NAME_PROD OWNER $DB_USER_PROD');
+        RAISE NOTICE 'Database $DB_NAME_PROD created successfully';
+    ELSE
+        RAISE NOTICE 'Database $DB_NAME_PROD already exists';
+    END IF;
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Using fallback database creation method';
+END
+\$\$;
+
+-- Grant privileges
+GRANT ALL PRIVILEGES ON DATABASE $DB_NAME_PROD TO $DB_USER_PROD;
+\q
+EOF
     
-    # Create user first
-    if sudo -u postgres psql -tc "SELECT 1 FROM pg_user WHERE usename = '$DB_USER_PROD'" | grep -q 1; then
-        print_info "User '$DB_USER_PROD' already exists, updating password..."
-        sudo -u postgres psql -c "ALTER USER $DB_USER_PROD WITH PASSWORD '$DB_PASSWORD_PROD';"
-    else
-        print_step "Creating new user '$DB_USER_PROD'..."
-        sudo -u postgres psql -c "CREATE USER $DB_USER_PROD WITH PASSWORD '$DB_PASSWORD_PROD';"
-        print_success "User '$DB_USER_PROD' created"
+    # Alternative database creation if the above fails
+    if ! sudo -u postgres psql -lqt | cut -d \| -f 1 | grep -qw $DB_NAME_PROD; then
+        print_step "Creating database using alternative method..."
+        sudo -u postgres createdb -O $DB_USER_PROD $DB_NAME_PROD 2>/dev/null || print_warning "Database may already exist"
     fi
-    
-    # Create database
-    if sudo -u postgres psql -lqt | cut -d \| -f 1 | grep -qw "$DB_NAME_PROD"; then
-        print_info "Database '$DB_NAME_PROD' already exists"
-    else
-        print_step "Creating database '$DB_NAME_PROD'..."
-        sudo -u postgres createdb -O "$DB_USER_PROD" "$DB_NAME_PROD"
-        print_success "Database '$DB_NAME_PROD' created"
-    fi
-    
-    # Grant privileges
-    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME_PROD TO $DB_USER_PROD;"
-    print_success "Privileges granted to user '$DB_USER_PROD'"
     
     print_success "Database '$DB_NAME_PROD' and user '$DB_USER_PROD' configured"
     
-    # Skip the complex authentication configuration for now - use simpler approach
-    print_step "Restarting PostgreSQL..."
-    sudo systemctl restart postgresql
-    print_success "PostgreSQL restarted"
+    # Configure authentication
+    print_step "Configuring authentication..."
+    PG_VERSION=$(sudo -u postgres psql -t -c "SELECT version();" | head -n1 | awk '{print $2}' | cut -d. -f1)
+    PG_HBA_FILE="/etc/postgresql/$PG_VERSION/main/pg_hba.conf"
     
-    # Wait a moment for service to be ready
-    sleep 2
+    # Backup original file
+    cp "$PG_HBA_FILE" "$PG_HBA_FILE.backup.$(date +%Y%m%d_%H%M%S)"
+    
+    # Add authentication rules if not already present
+    if ! grep -q "# AFCT Dashboard Rules" "$PG_HBA_FILE"; then
+        cat >> "$PG_HBA_FILE" << EOF
+
+# AFCT Dashboard Rules - Added $(date)
+local   $DB_NAME_PROD        $DB_USER_PROD                                md5
+host    $DB_NAME_PROD        $DB_USER_PROD        127.0.0.1/32            md5
+host    $DB_NAME_PROD        $DB_USER_PROD        ::1/128                 md5
+EOF
+        print_success "Authentication rules added"
+    else
+        print_info "Authentication rules already configured"
+    fi
+    
+    # Restart PostgreSQL
+    print_step "Restarting PostgreSQL..."
+    systemctl restart postgresql
+    print_success "PostgreSQL restarted"
     
     # Create production environment file
     print_step "Creating production environment file..."
@@ -576,13 +600,12 @@ EOF
     
     print_success "Production environment file created"
     
-    # Ensure production schema exists
-    if [[ ! -f "prisma/schema.production.prisma" ]]; then
-        print_error "Production schema file not found: prisma/schema.production.prisma"
-        print_info "Please ensure the file exists before running production setup"
-        exit 1
-    else
-        print_success "Production schema found"
+    # Switch to production schema
+    if [[ -f "prisma/schema.production.prisma" ]]; then
+        print_step "Switching to production schema..."
+        cp prisma/schema.prisma prisma/schema.dev.backup 2>/dev/null || true
+        cp prisma/schema.production.prisma prisma/schema.prisma
+        print_success "Switched to production schema"
     fi
     
     # Install dependencies if needed
@@ -592,129 +615,32 @@ EOF
         print_success "Dependencies installed"
     fi
     
-    # Set environment for all operations
-    export DATABASE_URL="$DB_CONNECTION_STRING"
+    # Generate Prisma client
+    print_step "Generating Prisma client..."
+    npx prisma generate
+    print_success "Prisma client generated"
     
-    # Test connection first
+    # Test connection
     print_step "Testing database connection..."
     if PGPASSWORD="$DB_PASSWORD_PROD" psql -h localhost -U "$DB_USER_PROD" -d "$DB_NAME_PROD" -c "SELECT 'Connection successful!' as status;" &> /dev/null; then
         print_success "Database connection test passed"
     else
         print_error "Database connection test failed"
-        print_info "Please check PostgreSQL configuration and credentials"
         exit 1
     fi
     
-    # Handle migration issues - use db push for production setup
-    print_step "Synchronizing database schema..."
-    print_info "Using Prisma db push for production setup (safer than migrations)"
+    # Apply migrations
+    print_step "Applying database migrations..."
+    npx prisma migrate deploy
+    print_success "Database migrations applied"
     
-    # Generate Prisma client first
-    if npx prisma generate --schema=prisma/schema.production.prisma; then
-        print_success "Prisma client generated successfully"
-    else
-        print_error "Failed to generate Prisma client"
-        exit 1
-    fi
-    
-    # Use db push instead of migrations to avoid SQLite/PostgreSQL compatibility issues
-    if npx prisma db push --schema=prisma/schema.production.prisma --accept-data-loss; then
-        print_success "Database schema synchronized successfully"
-    else
-        print_error "Failed to synchronize database schema"
-        print_info "This may be due to existing data or schema conflicts"
-        exit 1
-    fi
-    
-    # Seed database with production-compatible script
+    # Seed database
     print_step "Seeding database with sample data..."
-    
-    # Create a production-safe seed script
-    cat > temp_prod_seed.js << 'EOF'
-const { PrismaClient } = require('@prisma/client');
-const bcrypt = require('bcrypt');
-
-const prisma = new PrismaClient();
-
-async function main() {
-  console.log('Starting production database seeding...');
-
-  // Hash password for all users
-  const hashedPassword = await bcrypt.hash('password123', 10);
-
-  // Create Admin User
-  const admin = await prisma.user.upsert({
-    where: { email: 'admin@example.com' },
-    update: {},
-    create: {
-      email: 'admin@example.com',
-      firstName: 'Admin',
-      lastName: 'User',
-      password: hashedPassword,
-      role: 'ADMIN',
-    },
-  });
-  console.log('✓ Created admin user:', admin.email);
-
-  // Create Faculty User
-  const faculty = await prisma.user.upsert({
-    where: { email: 'faculty@example.com' },
-    update: {},
-    create: {
-      email: 'faculty@example.com',
-      firstName: 'Jeffrey',
-      lastName: 'Chiampi',
-      password: hashedPassword,
-      role: 'FACULTY',
-    },
-  });
-  console.log('✓ Created faculty user:', faculty.email);
-
-  // Create Student User
-  const student = await prisma.user.upsert({
-    where: { email: 'student@example.com' },
-    update: {},
-    create: {
-      email: 'student@example.com',
-      firstName: 'John',
-      lastName: 'Doe',
-      password: hashedPassword,
-      role: 'STUDENT',
-    },
-  });
-  console.log('✓ Created student user:', student.email);
-
-  console.log('✓ Database seeding completed successfully!');
-}
-
-main()
-  .catch((e) => {
-    console.error('Error seeding database:', e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
-EOF
-    
-    # Run the production seed
-    if node temp_prod_seed.js; then
-        print_success "Database seeded with sample data"
-        print_info "Default credentials:"
-        print_info "  Admin: admin@example.com / password123"
-        print_info "  Faculty: faculty@example.com / password123"
-        print_info "  Student: student@example.com / password123"
-    else
-        print_warning "Database seeding failed, but setup can continue"
-        print_info "You can create users manually through the application"
-    fi
-    
-    # Clean up temp file
-    rm -f temp_prod_seed.js
+    npm run seed 2>/dev/null || npx tsx prisma/seed.ts
+    print_success "Database seeded with sample data"
     
     print_success "Production database setup complete!"
     print_info "Connection string: $DB_CONNECTION_STRING"
-    print_info "Application ready to start with: npm run start:prod"
     pause
 }
 
@@ -732,82 +658,10 @@ install_project_dependencies() {
         exit 1
     fi
     
-    # Install system dependencies for ERD generation (optional)
-    print_step "Checking ERD generation dependencies..."
-    ERD_AVAILABLE=false
-    
-    # Check for Chrome/Chromium executables
-    if command_exists "google-chrome" || command_exists "chromium-browser" || command_exists "chromium"; then
-        print_step "Chrome/Chromium found, testing ERD generation..."
-        
-        # Test if ERD generation actually works
-        if npx puppeteer browsers install chrome &>/dev/null; then
-            print_success "Chrome/Chromium compatible - ERD generation will be available"
-            ERD_AVAILABLE=true
-        else
-            print_warning "Chrome/Chromium found but not compatible with Puppeteer"
-            print_info "ERD generation will be disabled to prevent errors"
-            ERD_AVAILABLE=false
-        fi
-    else
-        print_warning "Chrome/Chromium not found - ERD generation will be skipped"
-        print_info "ERD diagrams are optional and don't affect application functionality"
-        
-        if [[ "$OS" == "ubuntu" ]] && check_root; then
-            prompt_input "Would you like to install Chromium for ERD generation? (y/n)" INSTALL_CHROMIUM "n"
-            if [[ "$INSTALL_CHROMIUM" =~ ^[Yy]$ ]]; then
-                print_step "Installing Chromium browser..."
-                apt update
-                if apt install -y chromium-browser; then
-                    print_step "Installing Puppeteer Chrome..."
-                    if npx puppeteer browsers install chrome &>/dev/null; then
-                        print_success "Chromium and Puppeteer installed successfully"
-                        ERD_AVAILABLE=true
-                    else
-                        print_warning "Chromium installed but Puppeteer setup failed"
-                        ERD_AVAILABLE=false
-                    fi
-                else
-                    print_warning "Could not install Chromium browser"
-                    ERD_AVAILABLE=false
-                fi
-            else
-                ERD_AVAILABLE=false
-            fi
-        else
-            ERD_AVAILABLE=false
-        fi
-    fi
-    
-    # Install dependencies with error handling
+    # Install dependencies
     print_step "Installing NPM dependencies..."
-    if npm install; then
-        print_success "Dependencies installed successfully"
-    else
-        print_warning "Some dependencies had warnings, but installation completed"
-        print_info "This is often due to optional ERD generation dependencies"
-        print_info "The application will work fine without them"
-    fi
-    
-    # Try to generate Prisma client with conditional ERD
-    print_step "Generating Prisma client..."
-    if [[ "$ERD_AVAILABLE" == "true" ]]; then
-        print_step "Using development schema with ERD generation..."
-        cp prisma/schema.development.prisma prisma/schema.prisma 2>/dev/null || true
-        if npm run db:generate:with-erd; then
-            print_success "Prisma client and ERD generated successfully"
-            print_info "ERD diagram saved as ERD.svg"
-        else
-            print_warning "ERD generation failed, falling back to basic generation..."
-            npm run db:generate:safe
-            print_success "Prisma client generated without ERD"
-        fi
-    else
-        print_step "Generating Prisma client without ERD..."
-        npm run db:generate:safe
-        print_success "Prisma client generated successfully"
-        print_info "To generate ERDs later, install Chrome/Chromium and run: npm run db:generate:with-erd"
-    fi
+    npm install
+    print_success "Dependencies installed successfully"
     
     # Install Prisma CLI globally if not present
     if ! command_exists "prisma"; then
@@ -1092,26 +946,7 @@ reset_production_database() {
     # Check if production environment exists
     if [[ ! -f ".env.production" ]]; then
         print_error "Production environment not configured"
-        print_info "Please run 'Setup Production Database' first (option 7)"
-        return 1
-    fi
-    
-    # Check if production schema exists
-    if [[ ! -f "prisma/schema.production.prisma" ]]; then
-        print_error "Production schema file not found: prisma/schema.production.prisma"
-        return 1
-    fi
-    
-    print_info "Using production schema: prisma/schema.production.prisma"
-    print_info "Database URL: $DATABASE_URL"
-    
-    # Verify production schema has PostgreSQL provider
-    if ! grep -q 'provider = "postgresql"' prisma/schema.production.prisma; then
-        print_error "Production schema is not configured for PostgreSQL"
-        print_info "Expected 'provider = \"postgresql\"' in prisma/schema.production.prisma"
-        return 1
-    else
-        print_success "Production schema verified for PostgreSQL"
+        exit 1
     fi
     
     # Source environment variables
@@ -1124,322 +959,23 @@ reset_production_database() {
     DB_PASSWORD=$(echo $DATABASE_URL | sed -n 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/p')
     DB_NAME=$(echo $DATABASE_URL | sed -n 's/.*\/\([^?]*\).*/\1/p')
     
-    print_info "Resetting database: $DB_NAME"
-    print_info "User: $DB_USER"
-    
     # Drop and recreate database
     print_step "Dropping existing database..."
-    if sudo -u postgres psql -c "DROP DATABASE IF EXISTS $DB_NAME;"; then
-        print_success "Database dropped"
-    else
-        print_error "Failed to drop database"
-        return 1
-    fi
+    sudo -u postgres psql -c "DROP DATABASE IF EXISTS $DB_NAME;"
     
     print_step "Recreating database..."
-    if sudo -u postgres psql -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;"; then
-        print_success "Database recreated"
-    else
-        print_error "Failed to recreate database"
-        return 1
-    fi
+    sudo -u postgres psql -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;"
     
-    # Apply migrations with production schema
+    # Apply migrations
     print_step "Applying migrations..."
-    export DATABASE_URL="$DATABASE_URL"
-    if npx prisma migrate deploy --schema=prisma/schema.production.prisma; then
-        print_success "Migrations applied successfully"
-    else
-        print_error "Migration failed - check database connection"
-        print_info "Trying alternative migration approach..."
-        
-        # Try generating client first, then migrate
-        if npx prisma generate --schema=prisma/schema.production.prisma; then
-            print_info "Prisma client generated, retrying migration..."
-            if npx prisma migrate deploy --schema=prisma/schema.production.prisma; then
-                print_success "Migrations applied successfully on retry"
-            else
-                print_error "Migration failed even after client generation"
-                return 1
-            fi
-        else
-            print_error "Could not generate Prisma client"
-            return 1
-        fi
-    fi
+    npx prisma migrate deploy
     
-    # Seed database with production environment
-    print_step "Seeding database with production environment..."
-    export NODE_ENV=production
-    export DATABASE_URL="$DATABASE_URL"
-    
-    if npm run seed 2>/dev/null; then
-        print_success "Database seeded successfully"
-    elif npx tsx prisma/seed.ts 2>/dev/null; then
-        print_success "Database seeded successfully (using npx tsx)"
-    else
-        print_warning "Database seeding failed - this may be normal for production"
-        print_info "You can manually seed later if needed"
-    fi
+    # Seed database
+    print_step "Seeding database..."
+    npm run seed 2>/dev/null || npx tsx prisma/seed.ts
     
     print_success "Production database reset complete!"
-    print_info "Database: $DB_NAME is ready for use"
     pause
-}
-
-# =============================================================================
-# Troubleshooting Functions  
-# =============================================================================
-
-troubleshoot_database() {
-    print_header "🔧 Database Troubleshooting"
-    
-    echo "Which database are you having issues with?"
-    echo "1) Development (SQLite)"
-    echo "2) Production (PostgreSQL)"
-    echo
-    read -p "Enter choice (1-2): " db_choice
-    
-    case $db_choice in
-        1)
-            print_step "SQLite Development Database Troubleshooting"
-            
-            # Check if SQLite database exists
-            if [[ -f "prisma/dev.db" ]]; then
-                print_success "SQLite database file found: prisma/dev.db"
-                
-                # Check file size
-                DB_SIZE=$(du -h prisma/dev.db | cut -f1)
-                print_info "Database size: $DB_SIZE"
-                
-                # Try to connect
-                if sqlite3 prisma/dev.db "SELECT COUNT(*) FROM sqlite_master;" &>/dev/null; then
-                    print_success "SQLite connection test passed"
-                else
-                    print_error "SQLite connection test failed - database may be corrupted"
-                    prompt_input "Would you like to reset the development database? (y/n)" RESET_DEV "n"
-                    if [[ "$RESET_DEV" =~ ^[Yy]$ ]]; then
-                        reset_development_database
-                    fi
-                fi
-            else
-                print_warning "SQLite database not found"
-                print_info "Run: setup_development_database or choice 3 from main menu"
-            fi
-            ;;
-        2)
-            print_step "PostgreSQL Production Database Troubleshooting"
-            
-            # Check PostgreSQL service
-            if systemctl is-active --quiet postgresql; then
-                print_success "PostgreSQL service is running"
-            else
-                print_error "PostgreSQL service is not running"
-                print_info "Try: sudo systemctl start postgresql"
-                return 1
-            fi
-            
-            # Check if .env.production exists
-            if [[ -f ".env.production" ]]; then
-                print_success "Production environment file found"
-                
-                # Source environment
-                set -a
-                source .env.production
-                set +a
-                
-                # Extract connection details
-                DB_USER=$(echo $DATABASE_URL | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p')
-                DB_PASSWORD=$(echo $DATABASE_URL | sed -n 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/p')
-                DB_HOST=$(echo $DATABASE_URL | sed -n 's/.*@\([^:]*\):.*/\1/p')
-                DB_PORT=$(echo $DATABASE_URL | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
-                DB_NAME=$(echo $DATABASE_URL | sed -n 's/.*\/\([^?]*\).*/\1/p')
-                
-                print_info "Connection details:"
-                print_info "  Host: $DB_HOST"
-                print_info "  Port: $DB_PORT"
-                print_info "  Database: $DB_NAME"
-                print_info "  User: $DB_USER"
-                
-                # Test with Node.js
-                print_step "Testing with Node.js..."
-                if npm run db:test:prod; then
-                    print_success "Node.js connection test passed"
-                else
-                    print_warning "Node.js connection test failed"
-                    
-                    # Test with psql
-                    print_step "Testing with psql..."
-                    if PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "SELECT version();" &>/dev/null; then
-                        print_success "psql connection test passed"
-                        print_info "Issue may be with Prisma client generation"
-                        print_info "Try: npx prisma generate --schema=prisma/schema.production.prisma"
-                    else
-                        print_error "psql connection test failed"
-                        
-                        # Show authentication troubleshooting
-                        print_info "Common solutions:"
-                        print_info "1. Check if user exists:"
-                        print_info "   sudo -u postgres psql -c \"\\du\""
-                        print_info "2. Check if database exists:"
-                        print_info "   sudo -u postgres psql -l | grep $DB_NAME"
-                        print_info "3. Check authentication file:"
-                        print_info "   sudo cat /etc/postgresql/*/main/pg_hba.conf | grep afct"
-                        print_info "4. Restart PostgreSQL:"
-                        print_info "   sudo systemctl restart postgresql"
-                    fi
-                fi
-            else
-                print_error "Production environment file not found"
-                print_info "Run: setup_production_database or choice 7 from main menu"
-            fi
-            ;;
-        *)
-            print_error "Invalid choice"
-            ;;
-    esac
-    
-    pause
-}
-
-# =============================================================================
-# Migration and Schema Troubleshooting Functions
-# =============================================================================
-
-check_migration_issues() {
-    print_header "🔧 Checking Migration Issues"
-    
-    # Check if we're in project directory
-    if [[ ! -f "package.json" ]]; then
-        print_error "Not in AFCT Dashboard project directory"
-        print_info "Please run this script from the project root directory"
-        return 1
-    fi
-    
-    print_step "Checking migration files..."
-    
-    # Check if migration files exist
-    if [[ ! -d "prisma/migrations" ]]; then
-        print_warning "No migrations directory found"
-        print_info "This is normal for a fresh setup"
-        return 0
-    fi
-    
-    # Check migration lock file
-    if [[ -f "prisma/migrations/migration_lock.toml" ]]; then
-        PROVIDER=$(grep "provider = " prisma/migrations/migration_lock.toml | cut -d'"' -f2)
-        print_info "Migration lock provider: $PROVIDER"
-        
-        # Check for SQLite/PostgreSQL mismatch
-        if [[ "$PROVIDER" == "sqlite" ]] && [[ -f "prisma/schema.production.prisma" ]]; then
-            SCHEMA_PROVIDER=$(grep 'provider = "' prisma/schema.production.prisma | cut -d'"' -f2)
-            if [[ "$SCHEMA_PROVIDER" == "postgresql" ]]; then
-                print_warning "Migration provider mismatch detected!"
-                print_info "Migrations: $PROVIDER, Schema: $SCHEMA_PROVIDER"
-                print_info "This can cause deployment issues"
-                
-                echo -n "Would you like to fix this? (y/n): "
-                read fix_migrations
-                if [[ "$fix_migrations" =~ ^[Yy]$ ]]; then
-                    fix_migration_provider_mismatch
-                fi
-            fi
-        fi
-    fi
-    
-    print_success "Migration check complete"
-}
-
-fix_migration_provider_mismatch() {
-    print_step "Fixing migration provider mismatch..."
-    
-    # Backup existing migrations
-    if [[ -d "prisma/migrations" ]]; then
-        print_step "Backing up existing migrations..."
-        cp -r prisma/migrations prisma/migrations_backup_$(date +%Y%m%d_%H%M%S)
-        print_success "Migrations backed up"
-    fi
-    
-    # Update migration lock file
-    if [[ -f "prisma/migrations/migration_lock.toml" ]]; then
-        print_step "Updating migration lock to PostgreSQL..."
-        sed -i 's/provider = "sqlite"/provider = "postgresql"/' prisma/migrations/migration_lock.toml
-        print_success "Migration lock updated"
-    fi
-    
-    print_success "Migration provider mismatch fixed"
-    print_info "Consider using 'npx prisma db push' for production deployments"
-    print_info "This avoids migration compatibility issues between SQLite and PostgreSQL"
-}
-
-validate_production_environment() {
-    print_header "✅ Validating Production Environment"
-    
-    # Check required files
-    print_step "Checking required files..."
-    
-    local required_files=(
-        "package.json"
-        "prisma/schema.production.prisma"
-        ".env.production"
-    )
-    
-    for file in "${required_files[@]}"; do
-        if [[ -f "$file" ]]; then
-            print_success "Found: $file"
-        else
-            print_error "Missing: $file"
-            return 1
-        fi
-    done
-    
-    # Check environment variables
-    if [[ -f ".env.production" ]]; then
-        print_step "Checking environment variables..."
-        
-        local required_vars=(
-            "DATABASE_URL"
-            "NEXTAUTH_SECRET"
-            "NODE_ENV"
-        )
-        
-        for var in "${required_vars[@]}"; do
-            if grep -q "^$var=" .env.production; then
-                print_success "Found: $var"
-            else
-                print_warning "Missing: $var"
-            fi
-        done
-        
-        # Check DATABASE_URL format
-        if grep -q "postgresql://" .env.production; then
-            print_success "PostgreSQL connection string detected"
-        else
-            print_warning "Non-PostgreSQL connection string detected"
-        fi
-    fi
-    
-    # Check database connection if possible
-    if command_exists "psql" && [[ -f ".env.production" ]]; then
-        print_step "Testing database connection..."
-        
-        # Extract connection details from .env.production
-        local db_url=$(grep "^DATABASE_URL=" .env.production | cut -d'=' -f2 | tr -d '"')
-        
-        if [[ -n "$db_url" ]]; then
-            export DATABASE_URL="$db_url"
-            
-            # Try to connect
-            if npx prisma db execute --file /dev/null --schema=prisma/schema.production.prisma 2>/dev/null; then
-                print_success "Database connection successful"
-            else
-                print_warning "Database connection failed"
-                print_info "This may be normal if the database hasn't been set up yet"
-            fi
-        fi
-    fi
-    
-    print_success "Environment validation complete"
 }
 
 # =============================================================================
@@ -1448,7 +984,7 @@ validate_production_environment() {
 
 main() {
     # Check if in project directory
-    if [[ ! -f "package.json" ]] && [[ "$1" != "0" ]] && [[ "$1" != "12" ]] && [[ "$1" != "13" ]] && [[ "$1" != "14" ]]; then
+    if [[ ! -f "package.json" ]] && [[ "$1" != "0" ]] && [[ "$1" != "12" ]] && [[ "$1" != "13" ]]; then
         print_error "Please run this script from the AFCT Dashboard project directory"
         exit 1
     fi
@@ -1471,9 +1007,6 @@ main() {
             11) reset_production_database ;;
             12) system_health_check ;;
             13) view_system_status ;;
-            14) check_migration_issues ;;
-            15) validate_production_environment ;;
-            16) troubleshoot_database ;;
             0) 
                 print_success "Thank you for using the AFCT Dashboard Setup Wizard!"
                 exit 0 

@@ -21,7 +21,7 @@ A modern **Next.js 15** application serving as a role-based course management pl
 
 # Choose from new troubleshooting options:
 # 12) System Health Check    - Check system requirements and status
-# 13) View System Status     - Show installed components and versions  
+# 13) View System Status     - Show installed components and versions
 # 14) Database Troubleshooting - Diagnose and fix database issues
 ```
 
@@ -33,7 +33,7 @@ A modern **Next.js 15** application serving as a role-based course management pl
 # Test development database (SQLite)
 npm run db:test
 
-# Test production database (PostgreSQL)  
+# Test production database (PostgreSQL)
 npm run db:test:prod
 ```
 
@@ -52,6 +52,7 @@ npm run db:generate:with-erd
 ```
 
 ### Common Issuesduction)
+
 - 🚀 **Cross-platform** development and deployment
 
 ## 🛠️ Tech Stack
@@ -123,11 +124,12 @@ chmod +x scripts/setup-wizard.sh
 The setup wizard provides a menu-driven interface that handles everything for you:
 
 - **📝 Development Setup**: Complete development environment (Node.js + SQLite + App)
-- **🚀 Production Setup**: Full production deployment (Node.js + PostgreSQL + App) 
+- **🚀 Production Setup**: Full production deployment (Node.js + PostgreSQL + App)
 - **🔧 Individual Components**: Install Node.js, databases, or dependencies separately
 - **⚙️ Utilities**: Test connections, reset databases, system health checks
 
 **Benefits:**
+
 - ✅ Beginner-friendly with step-by-step guidance
 - ✅ Handles existing installations gracefully
 - ✅ Automatic error detection and recovery
@@ -355,23 +357,28 @@ npm run build
 The project includes several automation scripts to make setup and deployment easier:
 
 ### Setup Wizard (Recommended)
+
 ```bash
 ./scripts/setup-wizard.sh
 ```
+
 **Interactive menu-driven setup for beginners.** Handles everything from Node.js installation to complete application deployment.
 
 ### PostgreSQL Scripts
+
 ```bash
 sudo ./scripts/setup-postgresql.sh      # Complete PostgreSQL setup with all features
 sudo ./scripts/quick-postgresql-setup.sh # Fast PostgreSQL installation and configuration
 ```
 
 ### Deployment Scripts
+
 ```bash
 ./scripts/deploy-production.js          # Automated production deployment
 ```
 
 ### All Scripts Features:
+
 - ✅ **Beginner-friendly** with step-by-step guidance
 - ✅ **Error handling** for existing installations
 - ✅ **Cross-platform** compatibility (Ubuntu/CentOS)
@@ -671,7 +678,7 @@ npx prisma migrate dev
 
 ```bash
 # Quick database connection test
-npm run db:test              # Development (SQLite)  
+npm run db:test              # Development (SQLite)
 npm run db:test:prod         # Production (PostgreSQL)
 
 # Or use the troubleshooting wizard
@@ -687,7 +694,7 @@ npm run db:test:prod         # Production (PostgreSQL)
 
 # For PostgreSQL specifically:
 sudo systemctl status postgresql  # Check service status
-sudo -u postgres psql -l          # List databases  
+sudo -u postgres psql -l          # List databases
 sudo -u postgres psql -c "\du"    # List users
 ```
 
@@ -823,7 +830,7 @@ The AFCT Dashboard includes several automated scripts to simplify setup and depl
 
 | Script                      | Purpose                                            | Usage                                      |
 | --------------------------- | -------------------------------------------------- | ------------------------------------------ |
-| `setup-wizard.sh`           | 🎯 **Interactive setup wizard (recommended)**     | `./scripts/setup-wizard.sh`               |
+| `setup-wizard.sh`           | 🎯 **Interactive setup wizard (recommended)**      | `./scripts/setup-wizard.sh`                |
 | `setup-postgresql.sh`       | Complete PostgreSQL installation and configuration | `sudo ./scripts/setup-postgresql.sh`       |
 | `quick-postgresql-setup.sh` | Fast PostgreSQL setup for testing                  | `sudo ./scripts/quick-postgresql-setup.sh` |
 
@@ -835,7 +842,7 @@ The AFCT Dashboard includes several automated scripts to simplify setup and depl
 
 ### Script Features
 
-- ✅ **Beginner-friendly** with step-by-step guidance  
+- ✅ **Beginner-friendly** with step-by-step guidance
 - ✅ **Cross-platform compatibility** (Windows, macOS, Linux)
 - ✅ **Error handling and validation** for existing installations
 - ✅ **Interactive prompts for configuration**
