@@ -339,6 +339,43 @@ npm run db:generate:prod
 npm run seed:prod
 ```
 
+#### PM2 Process Management Commands
+
+**🆕 NEW**: Complete PM2 integration for robust production deployment!
+
+```bash
+# PM2 Process Management
+npm run pm2:start      # Start application with PM2
+npm run pm2:stop       # Stop all PM2 processes
+npm run pm2:restart    # Restart all processes
+npm run pm2:reload     # Reload processes (zero-downtime)
+npm run pm2:logs       # View application logs
+npm run pm2:status     # Show process status
+npm run pm2:monit      # Open PM2 monitor dashboard
+npm run pm2:save       # Save process list for startup
+npm run pm2:delete     # Delete all PM2 processes
+
+# Deployment Commands
+npm run prod:deploy          # Build and restart PM2
+npm run prod:full-deploy     # Migrate, build, and restart PM2
+```
+
+**PM2 Setup via Wizard:**
+```bash
+./scripts/setup-wizard.sh
+# Navigate to: System Tools → Install PM2 Process Manager
+# Then: System Tools → Setup PM2 Ecosystem
+# Finally: System Tools → Configure PM2 Startup (for auto-start on boot)
+```
+
+**PM2 Features:**
+- 🔄 **Auto-restart** on crashes
+- 📊 **Process monitoring** and health checks
+- 📝 **Log management** with rotation
+- ⚡ **Zero-downtime** deployments
+- 🚀 **Cluster mode** for scaling
+- 🔧 **System startup** integration
+
 ### Code Quality
 
 ```bash
@@ -365,6 +402,20 @@ The project includes several automation scripts to make setup and deployment eas
 ```
 
 Interactive menu-driven setup for beginners. Handles everything from Node.js installation to complete application deployment.
+
+### Quick Setup Examples
+
+```bash
+./scripts/quick-setup-examples.sh
+```
+
+**🆕 NEW**: Interactive guide with common setup scenarios:
+- 🔧 Development Setup (Local SQLite)
+- 🚀 Production Setup (PostgreSQL + PM2)
+- 📦 PM2 Only Setup (Existing App)
+- 🔄 Migration from Dev to Prod
+- 🛠️ System Tools & Maintenance
+- 📚 Manual Commands Reference
 
 ### PostgreSQL Scripts
 

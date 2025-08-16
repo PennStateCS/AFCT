@@ -228,6 +228,60 @@ fix_env_conflicts(){ # dev|prod
   msgbox "Env conflicts fixed for this session (where possible).\n\n$tips"
 }
 
+# ---------------------- Migration Provider Fix -------------------------------
+fix_migration_provider_mismatch(){
+  local target_provider="$1"  # postgresql or sqlite
+  [[ "$target_provider" == "postgresql" || "$target_provider" == "sqlite" ]] || { err "fix_migration_provider_mismatch: provider must be postgresql|sqlite"; return 1; }
+  
+  local current_provider=""
+  if [[ -f "prisma/migrations/migration_lock.toml" ]]; then
+    current_provider=$(grep 'provider = ' prisma/migrations/migration_lock.toml | cut -d'"' -f2 2>/dev/null || echo "unknown")
+  fi
+
+  if [[ "$current_provider" == "$target_provider" ]]; then
+    msgbox "Migration provider is already set to '$target_provider'. No changes needed."
+    return 0
+  fi
+
+  local backup_dir="prisma/migrations_backup_$(nowstamp)"
+  msgbox "Migration Provider Mismatch Detected!\n\nCurrent: $current_provider\nTarget: $target_provider\n\nThis will:\n1. Backup existing migrations to $backup_dir\n2. Remove migration directory\n3. Use 'db push' for clean schema sync\n\nNote: Migration history will be lost but data is preserved."
+
+  if ! yesno "Continue with migration provider fix?"; then return 1; fi
+
+  # Backup migrations if they exist
+  if [[ -d "prisma/migrations" ]]; then
+    infobox "Backing up migrations..."
+    cp -r prisma/migrations "$backup_dir"
+    ok "Migrations backed up to: $backup_dir"
+  fi
+
+  # Remove problematic migration directory
+  infobox "Removing migration directory..."
+  rm -rf prisma/migrations
+  ok "Migration directory removed"
+
+  # Use db push for clean sync (no migration history)
+  if [[ "$target_provider" == "postgresql" ]]; then
+    infobox "Syncing PostgreSQL schema with 'db push'..."
+    if run_with_env prod "npx prisma db push --schema=prisma/schema.production.prisma --accept-data-loss"; then
+      ok "PostgreSQL schema synchronized successfully"
+      msgbox "Migration provider fix complete!\n\nSchema is now synchronized with PostgreSQL.\nFuture migrations will use PostgreSQL provider.\n\nBackup location: $backup_dir"
+    else
+      err "Failed to sync PostgreSQL schema"
+      return 1
+    fi
+  else
+    infobox "Syncing SQLite schema with migrate dev..."
+    if npx prisma migrate dev --name init; then
+      ok "SQLite migration created successfully"
+      msgbox "Migration provider fix complete!\n\nFresh SQLite migration created.\n\nBackup location: $backup_dir"
+    else
+      err "Failed to create SQLite migration"
+      return 1
+    fi
+  fi
+}
+
 # --------------------------- System Health/Status ---------------------------
 system_health_check(){
   local out="Disk space:\n$(df -h / | awk 'NR==2{print $4" free"}')\n\n"
@@ -477,18 +531,44 @@ check_migration_issues(){
   local out=""
   [[ -f prisma/schema.prisma ]] && out+="schema.prisma: present\n" || out+="schema.prisma: missing\n"
   [[ -f prisma/schema.production.prisma ]] && out+="schema.production.prisma: present\n" || out+="schema.production.prisma: missing\n"
+  
+  # Check migration provider mismatch
+  if [[ -f "prisma/migrations/migration_lock.toml" ]]; then
+    local migration_provider; migration_provider=$(grep 'provider = ' prisma/migrations/migration_lock.toml | cut -d'"' -f2 2>/dev/null || echo "unknown")
+    out+="Migration provider: $migration_provider\n"
+    
+    if [[ -f "prisma/schema.production.prisma" ]]; then
+      local schema_provider; schema_provider=$(grep 'provider.*=' prisma/schema.production.prisma | grep -v '//' | cut -d'"' -f2 2>/dev/null || echo "unknown")
+      out+="Production schema provider: $schema_provider\n"
+      
+      if [[ "$migration_provider" != "$schema_provider" && "$migration_provider" != "unknown" && "$schema_provider" != "unknown" ]]; then
+        out+="\n⚠️  PROVIDER MISMATCH DETECTED!\n"
+        out+="Migrations: $migration_provider vs Schema: $schema_provider\n"
+        out+="This causes P3019 errors. Use 'Fix Migration Provider' option.\n"
+      fi
+    fi
+  else
+    out+="migrations: no lock file (fresh setup or db push only)\n"
+  fi
+  
   if [[ -d prisma/migrations ]]; then
     local count; count=$(find prisma/migrations -name "*.sql" | wc -l)
     out+="migrations: $count SQL files\n"
   else
     out+="migrations: directory missing (db push is fine)\n"
   fi
+  
   if [[ -f .env.production ]]; then
     out+=".env.production: present\n"
   else
     out+=".env.production: missing\n"
   fi
-  out+="\nTip: prefer 'db push' when mixing SQLite dev & Postgres prod."
+  
+  out+="\nRecommendations:\n"
+  out+="• For dev/prod provider switching: use 'Fix Migration Provider'\n"
+  out+="• For clean deployment: prefer 'db push' over migrations\n"
+  out+="• For P3019 errors: use migration provider fix option"
+  
   msgbox "$out"
 }
 
@@ -506,52 +586,450 @@ validate_production_environment(){
   msgbox "$res"
 }
 
+# -------------------------------- Submenus -----------------------------------
+development_menu(){
+  while true; do
+    local choice
+    choice=$(menu \
+      1 "Complete Development Setup (All-in-One)" \
+      2 "Install Node.js" \
+      3 "Install Project Dependencies" \
+      4 "Setup Development Database (SQLite)" \
+      5 "Reset Development Database" \
+      6 "Test Development Database" \
+      7 "Environment Conflict Detection & Fix" \
+      0 "Back to Main Menu") || return 0
+
+    case "$choice" in
+      1) install_nodejs; install_project_dependencies; setup_development_database; msgbox "Dev setup complete.\nRun: npm run dev";;
+      2) install_nodejs;;
+      3) install_project_dependencies;;
+      4) setup_development_database;;
+      5) reset_development_database;;
+      6) if [[ -f "prisma/dev.db" ]]; then
+           sqlite3 prisma/dev.db "SELECT 'SQLite OK';" >/dev/null 2>&1 && msgbox "SQLite connection OK" || msgbox "SQLite connection failed"
+         else
+           msgbox "prisma/dev.db not found."
+         fi;;
+      7) detect_env_conflicts dev || { if yesno "Run auto-fix?"; then fix_env_conflicts dev; fi; };;
+      0) return 0;;
+      *) ;;
+    esac
+  done
+}
+
+production_menu(){
+  while true; do
+    local choice
+    choice=$(menu \
+      1 "Complete Production Setup (All-in-One)" \
+      2 "Install PostgreSQL" \
+      3 "Setup Production Database" \
+      4 "Install PM2 Process Manager" \
+      5 "Setup PM2 Ecosystem" \
+      6 "Deploy Application" \
+      7 "Configure PM2 Startup" \
+      8 "Manage PM2 Processes" \
+      9 "Reset Production Database" \
+      10 "Test Production Database" \
+      11 "Validate Production Environment" \
+      12 "Fix Migration Provider Mismatch" \
+      13 "Environment Conflict Detection & Fix" \
+      0 "Back to Main Menu") || return 0
+
+    case "$choice" in
+      1) install_nodejs; install_postgresql; install_project_dependencies; install_pm2; install_dotenv_cli; setup_production_database; setup_pm2_ecosystem; infobox "Building app..."; npm run build; msgbox "Production setup complete.\nStart: pm2 start ecosystem.config.js";;
+      2) install_postgresql;;
+      3) setup_production_database;;
+      4) install_pm2;;
+      5) setup_pm2_ecosystem;;
+      6) deploy_application;;
+      7) configure_pm2_startup;;
+      8) manage_pm2_processes;;
+      9) reset_production_database;;
+      10) if [[ -f ".env.production" ]]; then
+           local url user pass host port db
+           url="$(read_dburl_from_file ".env.production")"
+           user=$(echo "$url" | sed -n 's#postgresql://\([^:/@]\+\).*#\1#p')
+           pass=$(echo "$url" | sed -n 's#postgresql://[^:]\+:\([^@]\+\)@.*#\1#p')
+           host=$(echo "$url" | sed -n 's#.*@\(.*\):[0-9]\+/.*#\1#p')
+           port=$(echo "$url" | sed -n 's#.*@.*:\([0-9]\+\)/.*#\1#p')
+           db=$(echo "$url"   | sed -n 's#.*/\([^?]\+\).*#\1#p')
+           if PGPASSWORD="$(printf '%b' "$pass")" psql -h "$host" -p "$port" -U "$user" -d "$db" -c "select 1;" >/dev/null 2>&1; then
+             msgbox "PostgreSQL connection OK"
+           else
+             msgbox "PostgreSQL connection failed"
+           fi
+         else
+           msgbox ".env.production not found"
+         fi;;
+      11) validate_production_environment;;
+      12) fix_migration_provider_mismatch postgresql;;
+      13) detect_env_conflicts prod || { if yesno "Run auto-fix?"; then fix_env_conflicts prod; fi; };;
+      0) return 0;;
+      *) ;;
+    esac
+  done
+}
+
+database_menu(){
+  while true; do
+    local choice
+    choice=$(menu \
+      1 "Test Database Connections" \
+      2 "Database Troubleshooting" \
+      3 "Check Migration Issues" \
+      4 "Fix Migration Provider Mismatch" \
+      5 "Reset Development Database" \
+      6 "Reset Production Database" \
+      7 "Environment Conflict Detection (DEV)" \
+      8 "Environment Conflict Detection (PROD)" \
+      0 "Back to Main Menu") || return 0
+
+    case "$choice" in
+      1) test_database_connection;;
+      2) troubleshoot_database;;
+      3) check_migration_issues;;
+      4) 
+        local provider_choice
+        provider_choice=$(menu 1 "Fix for PostgreSQL (Production)" 2 "Fix for SQLite (Development)" 0 "Back") || continue
+        case "$provider_choice" in
+          1) fix_migration_provider_mismatch postgresql;;
+          2) fix_migration_provider_mismatch sqlite;;
+          *) ;;
+        esac
+        ;;
+      5) reset_development_database;;
+      6) reset_production_database;;
+      7) detect_env_conflicts dev || { if yesno "Run auto-fix?"; then fix_env_conflicts dev; fi; };;
+      8) detect_env_conflicts prod || { if yesno "Run auto-fix?"; then fix_env_conflicts prod; fi; };;
+      0) return 0;;
+      *) ;;
+    esac
+  done
+}
+
+system_menu(){
+  while true; do
+    local choice
+    choice=$(menu \
+      1 "System Health Check" \
+      2 "View System Status" \
+      3 "Install Node.js" \
+      4 "Install PostgreSQL" \
+      5 "Install Project Dependencies" \
+      6 "Install PM2 Process Manager" \
+      7 "Install dotenv-cli" \
+      8 "Setup PM2 Ecosystem" \
+      9 "Configure PM2 Startup" \
+      10 "Manage PM2 Processes" \
+      0 "Back to Main Menu") || return 0
+
+    case "$choice" in
+      1) system_health_check;;
+      2) view_system_status;;
+      3) install_nodejs;;
+      4) install_postgresql;;
+      5) install_project_dependencies;;
+      6) install_pm2;;
+      7) install_dotenv_cli;;
+      8) setup_pm2_ecosystem;;
+      9) configure_pm2_startup;;
+      10) manage_pm2_processes;;
+      0) return 0;;
+      *) ;;
+    esac
+  done
+}
+
+# ------------------------- PM2 & Process Management --------------------------
+install_pm2(){
+  if command_exists pm2; then
+    local current_version; current_version=$(pm2 --version 2>/dev/null || echo "unknown")
+    if ! yesno "PM2 $current_version detected. Reinstall/update?"; then return 0; fi
+  fi
+  
+  infobox "Installing PM2 globally..."
+  if sudo npm install -g pm2; then
+    ok "PM2 installed: $(pm2 --version)"
+  else
+    err "Failed to install PM2"
+    return 1
+  fi
+  
+  # Install PM2 logrotate module
+  infobox "Installing PM2 logrotate module..."
+  pm2 install pm2-logrotate >/dev/null 2>&1 || true
+  
+  msgbox "PM2 installed successfully!\n\nFeatures available:\n• Process management\n• Auto-restart on crashes\n• Log rotation\n• System startup integration"
+}
+
+setup_pm2_ecosystem(){
+  [[ -f package.json ]] || { msgbox "Run from project root (package.json not found)."; return 1; }
+  
+  local app_name; app_name=$(inputbox "Application name" "afct-dashboard") || return 1
+  local instances; instances=$(inputbox "Number of instances (0=auto)" "0") || return 1
+  local max_memory; max_memory=$(inputbox "Max memory per instance (MB)" "512") || return 1
+  local node_env; node_env=$(menu 1 "production" 2 "development" 3 "staging") || return 1
+  
+  case "$node_env" in
+    1) node_env="production";;
+    2) node_env="development";;
+    3) node_env="staging";;
+    *) node_env="production";;
+  esac
+  
+  local env_file
+  if [[ "$node_env" == "production" ]]; then
+    env_file=".env.production"
+    [[ -f "$env_file" ]] || { msgbox "Production environment file missing. Run production DB setup first."; return 1; }
+  else
+    env_file=".env.local"
+    [[ -f "$env_file" ]] || { msgbox "Development environment file missing. Run development setup first."; return 1; }
+  fi
+  
+  local ecosystem_file="ecosystem.config.js"
+  
+  infobox "Creating PM2 ecosystem configuration..."
+  
+  cat > "$ecosystem_file" <<EOF
+module.exports = {
+  apps: [
+    {
+      name: '${app_name}',
+      script: 'npm',
+      args: 'start',
+      cwd: '$(pwd)',
+      instances: ${instances},
+      exec_mode: instances > 1 ? 'cluster' : 'fork',
+      
+      // Environment
+      env_file: '${env_file}',
+      
+      // Memory & Performance
+      max_memory_restart: '${max_memory}M',
+      node_args: '--max-old-space-size=${max_memory}',
+      
+      // Restart Policy
+      autorestart: true,
+      max_restarts: 10,
+      min_uptime: '10s',
+      restart_delay: 4000,
+      
+      // Logging
+      log_file: './logs/combined.log',
+      out_file: './logs/out.log',
+      error_file: './logs/error.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      merge_logs: true,
+      
+      // Monitoring
+      pmx: true,
+      
+      // Development vs Production
+      watch: $([ "$node_env" == "development" ] && echo "true" || echo "false"),
+      ignore_watch: [
+        'node_modules',
+        'logs',
+        '.git',
+        '*.log',
+        'public/uploads'
+      ],
+      
+      // Environment Variables
+      env: {
+        NODE_ENV: '${node_env}',
+        PORT: 3000
+      },
+      
+      // Production Environment
+      env_production: {
+        NODE_ENV: 'production',
+        PORT: 3000
+      }
+    }
+  ],
+  
+  // Deployment configuration (optional)
+  deploy: {
+    production: {
+      user: 'deploy',
+      host: 'localhost',
+      ref: 'origin/main',
+      repo: 'git@github.com:username/afct-dashboard.git',
+      path: '/var/www/afct-dashboard',
+      'post-deploy': 'npm install && npm run build && pm2 reload ecosystem.config.js --env production'
+    }
+  }
+};
+EOF
+
+  # Create logs directory
+  mkdir -p logs
+  
+  ok "PM2 ecosystem configuration created: $ecosystem_file"
+  
+  # Validate ecosystem file
+  if pm2 ecosystem "$ecosystem_file" >/dev/null 2>&1; then
+    ok "Ecosystem configuration validated"
+  else
+    warn "Ecosystem configuration may have issues"
+  fi
+  
+  msgbox "PM2 Ecosystem Setup Complete!\n\nConfiguration: $ecosystem_file\nEnvironment: $node_env\nInstances: $instances\nMemory limit: ${max_memory}MB\n\nNext steps:\n• Start: pm2 start $ecosystem_file\n• Monitor: pm2 monit\n• Logs: pm2 logs"
+}
+
+configure_pm2_startup(){
+  command_exists pm2 || { msgbox "PM2 not installed. Install PM2 first."; return 1; }
+  
+  if ! check_root; then
+    msgbox "PM2 startup configuration requires root privileges.\nRun: sudo bash scripts/setup-wizard.sh"
+    return 1
+  fi
+  
+  infobox "Configuring PM2 startup script..."
+  
+  # Generate startup script
+  local startup_cmd; startup_cmd=$(pm2 startup | grep "sudo env" | head -n1)
+  if [[ -n "$startup_cmd" ]]; then
+    infobox "Executing startup configuration..."
+    eval "$startup_cmd"
+    
+    # Save current PM2 process list
+    if [[ $(pm2 list | grep -c "online\|stopped") -gt 0 ]]; then
+      pm2 save
+      ok "PM2 process list saved"
+    fi
+    
+    ok "PM2 startup configuration complete"
+    msgbox "PM2 Startup Configuration Complete!\n\nPM2 will now automatically:\n• Start on system boot\n• Restore saved processes\n• Run as current user\n\nManagement:\n• Save processes: pm2 save\n• Unstartup: pm2 unstartup"
+  else
+    err "Failed to generate PM2 startup command"
+    return 1
+  fi
+}
+
+manage_pm2_processes(){
+  command_exists pm2 || { msgbox "PM2 not installed. Install PM2 first."; return 1; }
+  
+  while true; do
+    local choice
+    choice=$(menu \
+      1 "View Process Status" \
+      2 "Start Application" \
+      3 "Stop Application" \
+      4 "Restart Application" \
+      5 "View Logs" \
+      6 "Monitor Processes" \
+      7 "Save Process List" \
+      8 "Delete All Processes" \
+      0 "Back") || return 0
+
+    case "$choice" in
+      1) 
+        local status; status=$(pm2 list 2>/dev/null | head -20)
+        msgbox "PM2 Process Status:\n\n$status"
+        ;;
+      2)
+        if [[ -f "ecosystem.config.js" ]]; then
+          infobox "Starting application with PM2..."
+          pm2 start ecosystem.config.js && msgbox "Application started successfully!" || msgbox "Failed to start application"
+        else
+          msgbox "No ecosystem.config.js found. Create one first via 'Setup PM2 Ecosystem'."
+        fi
+        ;;
+      3)
+        infobox "Stopping PM2 processes..."
+        pm2 stop all && msgbox "All processes stopped" || msgbox "Failed to stop processes"
+        ;;
+      4)
+        infobox "Restarting PM2 processes..."
+        pm2 restart all && msgbox "All processes restarted" || msgbox "Failed to restart processes"
+        ;;
+      5)
+        infobox "Displaying recent logs (press Ctrl+C to exit)..."
+        sleep 2
+        pm2 logs --lines 50 || true
+        ;;
+      6)
+        msgbox "Opening PM2 monitor (press 'q' to exit)..."
+        sleep 2
+        pm2 monit || true
+        ;;
+      7)
+        pm2 save && msgbox "Process list saved for startup" || msgbox "Failed to save process list"
+        ;;
+      8)
+        if yesno "Delete ALL PM2 processes? This cannot be undone."; then
+          pm2 delete all && msgbox "All processes deleted" || msgbox "Failed to delete processes"
+        fi
+        ;;
+      0) return 0;;
+      *) ;;
+    esac
+  done
+}
+
+install_dotenv_cli(){
+  # Check if dotenv-cli is already available
+  if npx --yes --quiet dotenv -v >/dev/null 2>&1; then
+    local current_version; current_version=$(npx --yes --quiet dotenv -v 2>/dev/null | head -n1 || echo "unknown")
+    if ! yesno "dotenv-cli $current_version detected. Reinstall/update?"; then return 0; fi
+  fi
+  
+  [[ -f package.json ]] || { msgbox "Run from project root (package.json not found)."; return 1; }
+  
+  local install_type; install_type=$(menu 1 "Development dependency (recommended)" 2 "Global installation" 3 "Production dependency") || return 1
+  
+  case "$install_type" in
+    1)
+      infobox "Installing dotenv-cli as dev dependency..."
+      npm install --save-dev dotenv-cli
+      ;;
+    2)
+      infobox "Installing dotenv-cli globally..."
+      sudo npm install -g dotenv-cli
+      ;;
+    3)
+      infobox "Installing dotenv-cli as production dependency..."
+      npm install --save dotenv-cli
+      ;;
+    *) return 1;;
+  esac
+  
+  if npx --yes --quiet dotenv -v >/dev/null 2>&1; then
+    local version; version=$(npx --yes --quiet dotenv -v 2>/dev/null | head -n1 || echo "unknown")
+    ok "dotenv-cli installed: $version"
+    
+    msgbox "dotenv-cli Installation Complete!\n\nUsage examples:\n• Load .env.production: npx dotenv -e .env.production -- npm start\n• Load .env.local: npx dotenv -e .env.local -- npm run dev\n• Multiple files: npx dotenv -e .env -e .env.local -- command\n\nThis enables safe environment loading for all commands."
+  else
+    err "dotenv-cli installation failed"
+    return 1
+  fi
+}
+
 # ------------------------------- Main Menu ----------------------------------
 main_menu(){
   while true; do
     local choice
     choice=$(menu \
-      1 "Complete Development Setup" \
-      2 "Install Node.js only" \
-      3 "Setup Development Database (SQLite)" \
-      4 "Install Project Dependencies" \
-      5 "Complete Production Setup" \
-      6 "Install PostgreSQL only" \
-      7 "Setup Production Database (PostgreSQL)" \
-      8 "Deploy Application" \
-      9 "Test Database Connection" \
-      10 "Reset Database (Development)" \
-      11 "Reset Database (Production)" \
-      12 "System Health Check" \
-      13 "View System Status" \
-      14 "Check Migration Issues" \
-      15 "Validate Production Environment" \
-      16 "Database Troubleshooting" \
-      17 "Detect & Fix Env Conflicts (DEV)" \
-      18 "Detect & Fix Env Conflicts (PROD)" \
+      1 "Development Setup" \
+      2 "Production Setup" \
+      3 "Database Management" \
+      4 "System Tools" \
+      5 "Quick Setup (Dev)" \
+      6 "Quick Setup (Prod)" \
       0 "Exit") || exit 0
 
     case "$choice" in
-      1) install_nodejs; install_project_dependencies; setup_development_database; msgbox "Dev setup complete.\nRun: npm run dev";;
-      2) install_nodejs;;
-      3) setup_development_database;;
-      4) install_project_dependencies;;
-      5) install_nodejs; install_postgresql; install_project_dependencies; setup_production_database; infobox "Building app..."; npm run build; msgbox "Production setup complete.\nStart: npm start or PM2";;
-      6) install_postgresql;;
-      7) setup_production_database;;
-      8) deploy_application;;
-      9) test_database_connection;;
-      10) reset_development_database;;
-      11) reset_production_database;;
-      12) system_health_check;;
-      13) view_system_status;;
-      14) check_migration_issues;;
-      15) validate_production_environment;;
-      16) troubleshoot_database;;
-      17) detect_env_conflicts dev || { if yesno "Run auto-fix?"; then fix_env_conflicts dev; fi; };;
-      18) detect_env_conflicts prod || { if yesno "Run auto-fix?"; then fix_env_conflicts prod; fi; };;
+      1) development_menu;;
+      2) production_menu;;
+      3) database_menu;;
+      4) system_menu;;
+      5) install_nodejs; install_project_dependencies; setup_development_database; msgbox "Quick dev setup complete.\nRun: npm run dev";;
+      6) install_nodejs; install_postgresql; install_project_dependencies; setup_production_database; deploy_application; msgbox "Quick prod setup complete.\nApplication running with PM2";;
       0) exit 0;;
-      *) : ;;
+      *) ;;
     esac
   done
 }
