@@ -111,12 +111,93 @@ src/
 
 ## 🧑‍💻 Local Development with Database
 
-1. Ensure you have SQLite or your configured database running.
-2. Run migrations:
+### Initial Database Setup
+
+1. **Generate Prisma Client** (required for first setup):
+   ```bash
+   npx prisma generate
+   ```
+
+2. **Apply database migrations**:
    ```bash
    npx prisma migrate dev
    ```
-3. Seed initial data:
+
+3. **Seed the database with sample data**:
    ```bash
+   npm run seed
+   # or alternatively
    npx prisma db seed
    ```
+
+### Database Management Commands
+
+**Reset Database & Reseed** (useful during development):
+```bash
+npx prisma migrate reset
+```
+This will:
+- Drop the database
+- Recreate it
+- Apply all migrations
+- Run the seed script automatically
+
+**Manual Seeding** (if you want to add sample data without reset):
+```bash
+npm run seed
+```
+
+**View Database in Browser** (Prisma Studio):
+```bash
+npx prisma studio
+```
+This opens a web interface at `http://localhost:5555` where you can:
+- Browse all database tables and records
+- Edit data directly in the browser
+- View relationships between tables
+- Execute queries and filters
+- Export data in various formats
+
+**Prisma Studio Tips**:
+- Use filters to find specific users, courses, or assignments
+- Click on related records to navigate relationships
+- Perfect for debugging database issues during development
+- Safe to use alongside your running Next.js app
+
+### Sample Data Included
+
+The seed file creates:
+- **1 Admin user** (`admin@example.com`)
+- **3 Faculty users** (including Jeffrey Chiampi)
+- **2 TA users** (Diana Prince, Hal Jordan)
+- **26 Student users** (Marvel/DC characters)
+- **2 Sample courses** (CMPSC 131, CS 101)
+- **Problems and assignments** with proper linkages
+- **Course roster memberships**
+
+**Default password for all users**: `password123`
+
+### Database Troubleshooting
+
+**If you encounter Prisma client errors**:
+```bash
+npx prisma generate
+npm run dev
+```
+
+**If migrations are out of sync**:
+```bash
+npx prisma migrate reset
+# This will reset and reseed automatically
+```
+
+**If you need to start fresh**:
+```bash
+# Delete the database file (SQLite)
+rm prisma/dev.db
+# Run migrations and seed
+npx prisma migrate dev
+npm run seed
+```
+
+---
