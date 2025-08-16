@@ -118,7 +118,7 @@ export function EditAssignmentDialog({
       ...raw,
       maxPoints: Number(raw.maxPoints), // Convert string to number
     };
-    
+
     // Use the update schema with transformations for API
     const payload = UpdateAssignmentSchema.parse({
       id: assignment.id,
@@ -245,11 +245,7 @@ export function EditAssignmentDialog({
           {/* Published switch (kept outside the form schema) */}
           <div className="flex items-center justify-between">
             <Label htmlFor="isPublished">Published</Label>
-            <Switch
-              id="isPublished"
-              checked={isPublished}
-              onCheckedChange={setIsPublished}
-            />
+            <Switch id="isPublished" checked={isPublished} onCheckedChange={setIsPublished} />
           </div>
 
           <DialogFooter className="mt-4">
@@ -286,8 +282,11 @@ export function EditAssignmentDialog({
 async function safeMessage(res: Response) {
   try {
     const data = await res.json();
-    return (data as { message?: string; error?: string })?.message ?? 
-           (data as { message?: string; error?: string })?.error ?? null;
+    return (
+      (data as { message?: string; error?: string })?.message ??
+      (data as { message?: string; error?: string })?.error ??
+      null
+    );
   } catch {
     return null;
   }

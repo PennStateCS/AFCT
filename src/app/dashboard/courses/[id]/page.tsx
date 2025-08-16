@@ -67,13 +67,15 @@ export default function AdminCoursePage() {
 
   // Enroll user
   const [enrollOpen, setEnrollOpen] = useState(false);
-  const [allUsers, setAllUsers] = useState<{
-    id: string;
-    email: string;
-    firstName: string | null;
-    lastName: string | null;
-    role: Role;
-  }[]>([]);
+  const [allUsers, setAllUsers] = useState<
+    {
+      id: string;
+      email: string;
+      firstName: string | null;
+      lastName: string | null;
+      role: Role;
+    }[]
+  >([]);
 
   // Publish Toggle
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
@@ -220,7 +222,9 @@ export default function AdminCoursePage() {
         ? {
             ...prev,
             assignments: prev.assignments.map((a) =>
-              a.id === updatedAssignment.id ? { ...updatedAssignment, problemCount: a.problemCount } : a,
+              a.id === updatedAssignment.id
+                ? { ...updatedAssignment, problemCount: a.problemCount }
+                : a,
             ),
           }
         : prev,
@@ -275,10 +279,9 @@ export default function AdminCoursePage() {
           <div>
             <span className="font-semibold">Registration Code: </span>
             <span className="text-muted-foreground">
-              {course.regCode 
+              {course.regCode
                 ? `${course.regCode.toUpperCase().slice(0, 3)}-${course.regCode.toUpperCase().slice(3)}`
-                : 'Not set'
-              }
+                : 'Not set'}
             </span>
           </div>
           <div>
@@ -519,7 +522,12 @@ export default function AdminCoursePage() {
         courseId={course.id}
         onCreate={(newAssignment) => {
           setCourse((prev) =>
-            prev ? { ...prev, assignments: [...prev.assignments, { ...newAssignment, problemCount: 0 }] } : prev,
+            prev
+              ? {
+                  ...prev,
+                  assignments: [...prev.assignments, { ...newAssignment, problemCount: 0 }],
+                }
+              : prev,
           );
           toast.success('Assignment created!');
         }}

@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { DataTable } from './ui/data-table';
 import { Textarea } from './ui/textarea';
 import { Submission, User } from '@prisma/client';
+import { toast } from 'sonner';
+import { ConfirmDialog } from './dialogs/ConfirmDialog';
 
 type Person = Pick<User, 'firstName' | 'lastName' | 'id'>;
 
@@ -16,6 +18,16 @@ type Problem = {
   type?: string;
   maxStates?: number;
   isDeterministic?: boolean;
+};
+
+type Comment = {
+  id: string;
+  content: string;
+  createdAt: string;
+  author: {
+    firstName: string | null;
+    lastName: string | null;
+  };
 };
 
 type Props = {
@@ -35,6 +47,13 @@ export default function AssignmentSubmissions({ courseId, assignmentId, problems
   const [students, setStudents] = useState<Person[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [submissions, setSubmissions] = useState<Record<string, Submission[]>>({});
+  const [comments, setComments] = useState<Record<string, Comment[]>>({});
+  const [commentTexts, setCommentTexts] = useState<Record<string, string>>({});
+  const [savingComments, setSavingComments] = useState<Record<string, boolean>>({});
+  const [deletingComments, setDeletingComments] = useState<Record<string, boolean>>({});
+  const [commentToDelete, setCommentToDelete] = useState<{ id: string; problemId: string } | null>(
+    null,
+  );
 
   const selectedStudent = students[selectedIndex] ?? null;
 
@@ -55,6 +74,131 @@ export default function AssignmentSubmissions({ courseId, assignmentId, problems
       .then((data: Record<string, Submission[]>) => setSubmissions(data))
       .catch(() => setSubmissions({}));
   }, [courseId, assignmentId, selectedStudent]);
+
+  // Load comments for all problems when a student is selected
+  useEffect(() => {
+    const loadComments = async () => {
+      if (!selectedStudent) {
+        setComments({});
+        return;
+      }
+
+      const commentsData: Record<string, Comment[]> = {};
+
+      for (const problem of problems) {
+        try {
+          const response = await fetch(
+            `/api/comments?assignmentId=${assignmentId}&problemId=${problem.id}&studentId=${selectedStudent.id}`,
+          );
+          if (response.ok) {
+            const problemComments = await response.json();
+            commentsData[problem.id] = problemComments || [];
+          } else {
+            console.warn(`Failed to load comments for problem ${problem.id}:`, response.status);
+            commentsData[problem.id] = [];
+          }
+        } catch (error) {
+          console.error(`Error loading comments for problem ${problem.id}:`, error);
+          commentsData[problem.id] = [];
+        }
+      }
+
+      setComments(commentsData);
+    };
+
+    if (problems.length > 0) {
+      loadComments();
+    }
+  }, [assignmentId, problems, selectedStudent]);
+
+  const saveComment = async (problemId: string) => {
+    const commentText = commentTexts[problemId]?.trim();
+    if (!commentText) {
+      toast.error('Please enter a comment before saving.');
+      return;
+    }
+
+    if (!selectedStudent) {
+      toast.error('No student selected.');
+      return;
+    }
+
+    setSavingComments((prev) => ({ ...prev, [problemId]: true }));
+
+    try {
+      const response = await fetch('/api/comments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          content: commentText,
+          assignmentId,
+          problemId,
+          studentId: selectedStudent.id,
+        }),
+      });
+
+      if (response.ok) {
+        const newComment = await response.json();
+        setComments((prev) => ({
+          ...prev,
+          [problemId]: [...(prev[problemId] || []), newComment],
+        }));
+        setCommentTexts((prev) => ({ ...prev, [problemId]: '' }));
+        toast.success('Comment saved successfully!');
+      } else {
+        const error = await response.json();
+        toast.error(error.error || 'Failed to save comment');
+      }
+    } catch (error) {
+      console.error('Error saving comment:', error);
+      toast.error('Failed to save comment');
+    } finally {
+      setSavingComments((prev) => ({ ...prev, [problemId]: false }));
+    }
+  };
+
+  const deleteComment = async (commentId: string, problemId: string) => {
+    setDeletingComments((prev) => ({ ...prev, [commentId]: true }));
+
+    try {
+      const response = await fetch(`/api/comments?commentId=${commentId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        setComments((prev) => ({
+          ...prev,
+          [problemId]: prev[problemId]?.filter((comment) => comment.id !== commentId) || [],
+        }));
+        toast.success('Comment deleted successfully!');
+      } else {
+        const error = await response.json();
+        toast.error(error.error || 'Failed to delete comment');
+      }
+    } catch (error) {
+      console.error('Error deleting comment:', error);
+      toast.error('Failed to delete comment');
+    } finally {
+      setDeletingComments((prev) => ({ ...prev, [commentId]: false }));
+    }
+  };
+
+  const handleDeleteClick = (commentId: string, problemId: string) => {
+    setCommentToDelete({ id: commentId, problemId });
+  };
+
+  const handleConfirmDelete = () => {
+    if (commentToDelete) {
+      deleteComment(commentToDelete.id, commentToDelete.problemId);
+      setCommentToDelete(null);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setCommentToDelete(null);
+  };
 
   const handleSelectChange = (id: string) => {
     const index = students.findIndex((s) => s.id === id);
@@ -186,13 +330,69 @@ export default function AssignmentSubmissions({ courseId, assignmentId, problems
 
                 <div className="rounded border bg-white p-4 shadow">
                   <div className="text-md pb-4 font-semibold">Comments</div>
-                  <Textarea />
+
+                  {/* Display existing comments */}
+                  {comments[problem.id]?.length > 0 ? (
+                    <div className="mb-4 space-y-2">
+                      {comments[problem.id].map((comment) => (
+                        <div
+                          key={comment.id}
+                          className="border-primary relative rounded border-r-4 border-l-4 bg-gray-100 py-2 pl-3 pr-10"
+                        >
+                          <div className="mb-4 text-sm whitespace-pre-wrap">{comment.content}</div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {comment.author.firstName} {comment.author.lastName}
+                          </div>
+                          <div className="text-xs text-gray-600 italic">
+                            {new Date(comment.createdAt).toLocaleString()}
+                          </div>
+
+                          {/* Delete button - only show if not currently deleting */}
+                          {!deletingComments[comment.id] && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteClick(comment.id, problem.id)}
+                              className="absolute top-2 right-2 h-auto p-1 text-red-500 hover:bg-red-50 hover:text-red-700"
+                              title="Delete comment"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+
+                          {/* Show loading state on delete button */}
+                          {deletingComments[comment.id] && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled
+                              className="absolute top-2 right-2 h-auto p-1 text-gray-400"
+                              title="Deleting comment..."
+                            >
+                              <Trash2 className="h-4 w-4 animate-pulse" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mb-4 text-sm text-gray-500 italic">No comments.</div>
+                  )}
+
+                  <Textarea
+                    placeholder="Add a comment..."
+                    value={commentTexts[problem.id] || ''}
+                    onChange={(e) =>
+                      setCommentTexts((prev) => ({ ...prev, [problem.id]: e.target.value }))
+                    }
+                  />
                   <Button
                     variant="default"
-                    onClick={goPrev}
+                    onClick={() => saveComment(problem.id)}
+                    disabled={savingComments[problem.id]}
                     className="mt-4 flex items-center gap-x-1"
                   >
-                    Save Comment
+                    {savingComments[problem.id] ? 'Saving...' : 'Save Comment'}
                   </Button>
                 </div>
               </div>
@@ -200,6 +400,17 @@ export default function AssignmentSubmissions({ courseId, assignmentId, problems
           ))}
         </div>
       )}
+
+      {/* Confirm Delete Dialog */}
+      <ConfirmDialog
+        open={!!commentToDelete}
+        title="Delete Comment"
+        description="Are you sure you want to delete this comment? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+      />
     </div>
   );
 }

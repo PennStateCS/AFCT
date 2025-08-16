@@ -117,7 +117,7 @@ export function CreateAssignmentDialog({
       maxPoints: Number(raw.maxPoints), // Convert string to number for API schema
       dueDate: raw.dueDate, // Keep as string for CreateAssignmentSchema to transform
     };
-    
+
     // Normalize & transform via Zod
     const values: ParsedValues = CreateAssignmentSchema.parse(formData);
 
@@ -281,8 +281,11 @@ export function CreateAssignmentDialog({
 async function safeMessage(res: Response) {
   try {
     const data = await res.json();
-    return (data as { message?: string; error?: string })?.message ?? 
-           (data as { message?: string; error?: string })?.error ?? null;
+    return (
+      (data as { message?: string; error?: string })?.message ??
+      (data as { message?: string; error?: string })?.error ??
+      null
+    );
   } catch {
     return null;
   }

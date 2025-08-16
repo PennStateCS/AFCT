@@ -5,7 +5,10 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 
-export async function POST(req: Request, context: { params: Promise<{ id: string; aid: string }> }) {
+export async function POST(
+  req: Request,
+  context: { params: Promise<{ id: string; aid: string }> },
+) {
   const { id: courseId, aid: assignmentId } = await context.params;
 
   // Get the user session and check for required roles

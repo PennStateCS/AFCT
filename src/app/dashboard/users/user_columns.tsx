@@ -120,13 +120,7 @@ export function getUserColumns(onUserUpdate: () => void): ColumnDef<User>[] {
 }
 
 // Extract the cell component to fix React hooks violation
-function UserActionsCell({ 
-  user, 
-  onUserUpdate 
-}: { 
-  user: User; 
-  onUserUpdate: () => void;
-}) {
+function UserActionsCell({ user, onUserUpdate }: { user: User; onUserUpdate: () => void }) {
   const [editOpen, setEditOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);

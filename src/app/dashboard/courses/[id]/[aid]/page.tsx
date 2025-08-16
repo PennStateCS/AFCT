@@ -231,66 +231,67 @@ export default function AssignmentPage() {
                   {assignment.problems.map((assignmentProblem, idx) => {
                     const problem = assignmentProblem.problem;
                     return (
-                    <div
-                      key={problem.id}
-                      className="dark:bg-muted relative w-full rounded border bg-white p-4 shadow-sm"
-                    >
-                      <div className="absolute top-4 right-4 flex gap-2">
-                        <Button
-                          variant="default"
-                          aria-label={`Edit Problem ${problem.title}`}
-                          onClick={() => handleEditProblem(problem)}
-                        >
-                          Edit Problem
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          aria-label={`Remove Problem ${problem.title}`}
-                          onClick={() => setProblemToRemove(problem)}
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                      <div className="flex items-start gap-4">
-                        <div className="flex min-w-[2.5rem] flex-col items-center pt-1">
-                          <span
-                            className="bg-secondary flex h-8 w-8 items-center justify-center rounded-full text-base font-semibold text-white"
-                            style={{ minWidth: '2rem', minHeight: '2rem' }}
+                      <div
+                        key={problem.id}
+                        className="dark:bg-muted relative w-full rounded border bg-white p-4 shadow-sm"
+                      >
+                        <div className="absolute top-4 right-4 flex gap-2">
+                          <Button
+                            variant="default"
+                            aria-label={`Edit Problem ${problem.title}`}
+                            onClick={() => handleEditProblem(problem)}
                           >
-                            {idx + 1}
-                          </span>
+                            Edit Problem
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            aria-label={`Remove Problem ${problem.title}`}
+                            onClick={() => setProblemToRemove(problem)}
+                          >
+                            Remove
+                          </Button>
                         </div>
-                        <div className="flex-1">
-                          <h3 className="text-lg font-bold">{problem.title}</h3>
-                          {problem.description && (
-                            <p className="text-muted-foreground mt-1 text-sm">
-                              {problem.description}
-                            </p>
-                          )}
-                          <div className="mt-2 flex flex-wrap gap-4 text-xs">
-                            {problem.type && (
-                              <span>
-                                <strong>Type:</strong>{' '}
-                                {problemTypeLabels[problem.type] || problem.type || 'Unknown'}
-                              </span>
+                        <div className="flex items-start gap-4">
+                          <div className="flex min-w-[2.5rem] flex-col items-center pt-1">
+                            <span
+                              className="bg-secondary flex h-8 w-8 items-center justify-center rounded-full text-base font-semibold text-white"
+                              style={{ minWidth: '2rem', minHeight: '2rem' }}
+                            >
+                              {idx + 1}
+                            </span>
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="text-lg font-bold">{problem.title}</h3>
+                            {problem.description && (
+                              <p className="text-muted-foreground mt-1 text-sm">
+                                {problem.description}
+                              </p>
                             )}
-                            {problem.maxStates !== null && problem.maxStates !== undefined && (
-                              <span>
-                                <strong>Max States:</strong>{' '}
-                                {problem.maxStates === -1 ? 'Unlimited' : problem.maxStates}
-                              </span>
-                            )}
-                            {problem.isDeterministic !== null && (
-                              <span>
-                                <strong>Deterministic:</strong>{' '}
-                                {problem.isDeterministic ? 'Yes' : 'No'}
-                              </span>
-                            )}
+                            <div className="mt-2 flex flex-wrap gap-4 text-xs">
+                              {problem.type && (
+                                <span>
+                                  <strong>Type:</strong>{' '}
+                                  {problemTypeLabels[problem.type] || problem.type || 'Unknown'}
+                                </span>
+                              )}
+                              {problem.maxStates !== null && problem.maxStates !== undefined && (
+                                <span>
+                                  <strong>Max States:</strong>{' '}
+                                  {problem.maxStates === -1 ? 'Unlimited' : problem.maxStates}
+                                </span>
+                              )}
+                              {problem.isDeterministic !== null && (
+                                <span>
+                                  <strong>Deterministic:</strong>{' '}
+                                  {problem.isDeterministic ? 'Yes' : 'No'}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  )})}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -306,7 +307,7 @@ export default function AssignmentPage() {
               <AssignmentSubmissions
                 courseId={id}
                 assignmentId={aid}
-                problems={assignment.problems.map(ap => convertPrismaProblem(ap.problem))}
+                problems={assignment.problems.map((ap) => convertPrismaProblem(ap.problem))}
               />
             </CardContent>
           </Card>
@@ -318,7 +319,7 @@ export default function AssignmentPage() {
         open={showAddProblem}
         onClose={() => setShowAddProblem(false)}
         allProblems={allProblems.map(convertPrismaProblem)}
-        usedProblems={assignment.problems.map(ap => convertPrismaProblem(ap.problem))}
+        usedProblems={assignment.problems.map((ap) => convertPrismaProblem(ap.problem))}
         onAddProblems={handleAddProblems}
       />
 

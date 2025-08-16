@@ -55,7 +55,9 @@ export default function ViewCoursesPage() {
         <DataTable
           columns={columns((refreshedCourse: CourseWithFaculty) => {
             setCourses((prev) =>
-              prev.map((c) => (c.id === refreshedCourse.id ? { ...c, ...refreshedCourse, faculty: c.faculty } : c)),
+              prev.map((c) =>
+                c.id === refreshedCourse.id ? { ...c, ...refreshedCourse, faculty: c.faculty } : c,
+              ),
             );
           })}
           data={courses}

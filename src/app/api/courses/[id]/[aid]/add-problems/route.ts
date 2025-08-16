@@ -6,7 +6,10 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 
 // POST: Replace problems for a given assignment in a specific course
-export async function POST(req: Request, { params }: { params: Promise<{ id: string; aid: string }> }) {
+export async function POST(
+  req: Request,
+  { params }: { params: Promise<{ id: string; aid: string }> },
+) {
   const { id: courseId, aid: assignmentId } = await params;
 
   try {

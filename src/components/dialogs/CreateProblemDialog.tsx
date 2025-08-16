@@ -312,8 +312,11 @@ export function CreateProblemDialog({
 async function safeMessage(res: Response) {
   try {
     const data = await res.json();
-    return (data as { message?: string; error?: string })?.message ?? 
-           (data as { message?: string; error?: string })?.error ?? null;
+    return (
+      (data as { message?: string; error?: string })?.message ??
+      (data as { message?: string; error?: string })?.error ??
+      null
+    );
   } catch {
     return null;
   }

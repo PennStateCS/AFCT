@@ -95,7 +95,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       avatar: avatarFilename !== undefined ? avatarFilename : undefined,
     };
     if (isAdmin) {
-      dataToUpdate.role = role as Role ?? undefined;
+      dataToUpdate.role = (role as Role) ?? undefined;
       dataToUpdate.inactive = inactive ?? undefined;
     }
 

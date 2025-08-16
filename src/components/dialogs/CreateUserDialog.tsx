@@ -24,11 +24,7 @@ import { toast } from 'sonner';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
-import {
-  CreateUserSchema,
-  type CreateUserRaw,
-  type CreateUserInput,
-} from '@/schemas/user';
+import { CreateUserSchema, type CreateUserRaw, type CreateUserInput } from '@/schemas/user';
 
 // For the checklist UI only
 const passwordRules = [
@@ -220,10 +216,7 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
             render={({ field }) => (
               <div>
                 <label className="mb-2 block text-sm font-medium">Role</label>
-                <Select
-                  onValueChange={(v) => field.onChange(v)}
-                  value={field.value ?? ''}
-                >
+                <Select onValueChange={(v) => field.onChange(v)} value={field.value ?? ''}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select a role" />
                   </SelectTrigger>

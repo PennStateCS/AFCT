@@ -7,13 +7,15 @@ import { CheckCircle, XCircle, Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /** RHF field props shape */
-type RHFFieldProps = {
-  name?: string;
-  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
-  value?: string;
-  ref?: React.Ref<HTMLInputElement>;
-} | Record<string, never>; // allow not using RHF
+type RHFFieldProps =
+  | {
+      name?: string;
+      onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+      onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
+      value?: string;
+      ref?: React.Ref<HTMLInputElement>;
+    }
+  | Record<string, never>; // allow not using RHF
 
 interface InputGroupProps
   extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'type'> {
@@ -93,8 +95,12 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
 
   const rhfName = (fieldProps as RHFFieldProps)?.name as string | undefined;
   const rhfValue = (fieldProps as RHFFieldProps)?.value as string | undefined;
-  const rhfOnChange = (fieldProps as RHFFieldProps)?.onChange as ((e: React.ChangeEvent<HTMLInputElement>) => void) | undefined;
-  const rhfOnBlur = (fieldProps as RHFFieldProps)?.onBlur as ((e: React.FocusEvent<HTMLInputElement>) => void) | undefined;
+  const rhfOnChange = (fieldProps as RHFFieldProps)?.onChange as
+    | ((e: React.ChangeEvent<HTMLInputElement>) => void)
+    | undefined;
+  const rhfOnBlur = (fieldProps as RHFFieldProps)?.onBlur as
+    | ((e: React.FocusEvent<HTMLInputElement>) => void)
+    | undefined;
   const rhfRef = (fieldProps as RHFFieldProps)?.ref as React.Ref<HTMLInputElement> | undefined;
 
   // Internal password visibility (used if no external control provided)
