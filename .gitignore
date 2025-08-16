@@ -35,7 +35,6 @@ build/
 # Prisma
 prisma/dev.db
 prisma/dev.db-journal
-prisma/migrations/
 src/generated/prisma
 
 # Environment variables
