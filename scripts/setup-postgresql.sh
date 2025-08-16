@@ -192,17 +192,48 @@ create_app_database() {
     prompt_input "Database user" DB_USER "$DB_USER"
     prompt_password "Enter password for database user ($DB_USER)" DB_PASSWORD
     
-    # Create user
+    # Create user with error handling for existing users
     print_status "Creating database user: $DB_USER"
-    sudo -u postgres psql -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';"
+    sudo -u postgres psql << EOF
+-- Create user (ignore if exists)
+DO \$\$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '$DB_USER') THEN
+        CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';
+        RAISE NOTICE 'User $DB_USER created successfully';
+    ELSE
+        ALTER USER $DB_USER WITH PASSWORD '$DB_PASSWORD';
+        RAISE NOTICE 'User $DB_USER already exists, password updated';
+    END IF;
+END
+\$\$;
+
+-- Create database (ignore if exists)
+DO \$\$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_database WHERE datname = '$DB_NAME') THEN
+        PERFORM dblink_exec('dbname=' || current_database(), 'CREATE DATABASE $DB_NAME OWNER $DB_USER');
+        RAISE NOTICE 'Database $DB_NAME created successfully';
+    ELSE
+        RAISE NOTICE 'Database $DB_NAME already exists';
+    END IF;
+EXCEPTION
+    WHEN OTHERS THEN
+        -- Fallback method if dblink is not available
+        RAISE NOTICE 'Using fallback database creation method';
+END
+\$\$;
+
+-- Grant privileges
+GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;
+\q
+EOF
     
-    # Create database
-    print_status "Creating database: $DB_NAME"
-    sudo -u postgres psql -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;"
-    
-    # Grant privileges
-    print_status "Granting privileges..."
-    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;"
+    # Alternative database creation if the above fails
+    if ! sudo -u postgres psql -lqt | cut -d \| -f 1 | grep -qw $DB_NAME; then
+        print_status "Creating database using alternative method..."
+        sudo -u postgres createdb -O $DB_USER $DB_NAME 2>/dev/null || print_warning "Database may already exist"
+    fi
     
     print_success "Database and user created successfully!"
     

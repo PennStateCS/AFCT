@@ -29,7 +29,26 @@ src/
 
 ## 🚀 Getting Started
 
-### Quick Setup
+### Easy Setup with Setup Wizard (Recommended)
+
+**Perfect for beginners!** Use our automated setup wizard:
+
+```bash
+# Make the wizard executable
+chmod +x scripts/setup-wizard.sh
+
+# Run the setup wizard and choose "Complete Development Setup"
+./scripts/setup-wizard.sh
+```
+
+The wizard will automatically:
+- ✅ Install Node.js and dependencies
+- ✅ Set up SQLite database
+- ✅ Configure environment files
+- ✅ Run migrations and seed data
+- ✅ Validate everything is working
+
+### Manual Setup (Advanced)
 
 ```bash
 git clone <repository>
@@ -66,7 +85,7 @@ For testing with PostgreSQL during development:
 sudo ./scripts/quick-postgresql-setup.sh
 
 # Test database connection
-./scripts/test-db-connection.sh
+./scripts/setup-wizard.sh  # Choose option 9: Test Database Connection
 
 # Complete setup with all features
 sudo ./scripts/setup-postgresql.sh
@@ -389,10 +408,10 @@ import type { ApiResponse } from '@/types';
 #### Database Connection Issues
 
 ```bash
-# Use the comprehensive database test script
-./scripts/test-db-connection.sh
+# Use the setup wizard database test
+./scripts/setup-wizard.sh  # Choose option 9: Test Database Connection
 
-# This script will test:
+# This test will check:
 # - PostgreSQL service status
 # - Port connectivity
 # - Authentication
@@ -424,7 +443,7 @@ sudo ./scripts/quick-postgresql-setup.sh
 sudo ./scripts/setup-postgresql.sh
 
 # Test existing PostgreSQL connection
-./scripts/test-db-connection.sh
+./scripts/setup-wizard.sh  # Choose option 9: Test Database Connection
 ```
 
 #### Next.js Build Issues

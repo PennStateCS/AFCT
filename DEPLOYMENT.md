@@ -2,7 +2,32 @@
 
 Use this checklist to ensure a smooth deployment process.
 
-## 📋 Pre-Deployment Checklist
+## 🎯 Easy Setup with Setup Wizard (Recommended)
+
+**Perfect for beginners!** Skip the manual checklist and use our automated setup wizard:
+
+```bash
+# Make the wizard executable
+chmod +x scripts/setup-wizard.sh
+
+# Run the interactive setup wizard
+./scripts/setup-wizard.sh
+```
+
+### What the Wizard Does:
+- ✅ **Complete Production Setup**: Handles Node.js, PostgreSQL, database, and application
+- ✅ **System Health Checks**: Verifies requirements and troubleshoots issues
+- ✅ **Graceful Error Handling**: Manages existing installations and configurations
+- ✅ **Built-in Testing**: Validates database connections and application deployment
+- ✅ **User-Friendly Interface**: Step-by-step guidance with clear instructions
+
+**The wizard eliminates most manual steps below and is recommended for all users, especially beginners.**
+
+---
+
+## 📋 Manual Deployment Checklist (Advanced Users)
+
+For advanced users who prefer manual control:
 
 ### Environment Setup
 
@@ -14,9 +39,9 @@ Use this checklist to ensure a smooth deployment process.
 
 ### Database
 
-- [ ] PostgreSQL installed (use `sudo ./scripts/setup-postgresql.sh`)
+- [ ] PostgreSQL installed (use `sudo ./scripts/setup-postgresql.sh` or setup wizard)
 - [ ] Database and user created automatically by setup script
-- [ ] Database credentials tested (use `./scripts/test-db-connection.sh`)
+- [ ] Database credentials tested (use setup wizard's connection test or `./scripts/setup-wizard.sh`)
 - [ ] Production schema file (`prisma/schema.production.prisma`) up to date
 - [ ] Backup system configured by setup script
 
@@ -50,13 +75,16 @@ sudo ./scripts/setup-postgresql.sh
 ```
 
 This script will handle:
+
 - ✅ PostgreSQL installation and security configuration
-- ✅ Database and user creation
+- ✅ Database and user creation with graceful handling of existing resources
 - ✅ Authentication setup
 - ✅ Firewall configuration
 - ✅ Node.js and PM2 installation
 - ✅ Production environment file creation
 - ✅ Automated backup setup
+
+**Note**: Both scripts intelligently handle existing databases and users, updating passwords and permissions as needed without failing.
 
 #### Option 2: Quick PostgreSQL Setup
 
@@ -71,7 +99,7 @@ If you encounter database issues:
 
 ```bash
 # Test and troubleshoot database connections
-./scripts/test-db-connection.sh
+./scripts/setup-wizard.sh  # Choose option 9: Test Database Connection
 ```
 
 ### Application Deployment
@@ -181,8 +209,8 @@ npm run deploy:production
 ### Database Connection Issues
 
 ```bash
-# Use the comprehensive database test script
-./scripts/test-db-connection.sh
+# Use the setup wizard database test
+./scripts/setup-wizard.sh  # Choose option 9: Test Database Connection
 
 # Manual test database connection
 npx prisma db pull
