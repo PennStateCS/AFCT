@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -21,7 +21,18 @@ import {
 import InputGroup from '@/components/ui/InputGroup';
 import { toast } from 'sonner';
 
-// Password validation rules
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+
+import {
+  CreateUserSchema,
+  type CreateUserRaw,
+  type CreateUserInput,
+  RoleEnum,
+  StrongPassword,
+} from '@/schemas/user';
+
+// For the checklist UI only
 const passwordRules = [
   { label: 'At least 8 characters', test: (pw: string) => pw.length >= 8 },
   { label: 'One uppercase letter', test: (pw: string) => /[A-Z]/.test(pw) },
@@ -29,7 +40,6 @@ const passwordRules = [
   { label: 'One number', test: (pw: string) => /\d/.test(pw) },
   { label: 'One special character', test: (pw: string) => /[^A-Za-z0-9]/.test(pw) },
 ];
-const isStrongPassword = (pw: string) => passwordRules.every((rule) => rule.test(pw));
 
 type CreateUserDialogProps = {
   open: boolean;
@@ -38,125 +48,230 @@ type CreateUserDialogProps = {
 };
 
 export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogProps) {
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [role, setRole] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const defaults: CreateUserRaw = useMemo(
+    () => ({
+      firstName: '',
+      lastName: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
+      role: undefined as any, // RHF Select starts empty; Zod will require a valid RoleEnum value
+    }),
+    [],
+  );
 
-  const handleSubmit = async () => {
-    if (!firstName || !lastName || !email || !password || !confirmPassword || !role) {
-      toast.error('Please fill out all fields.');
-      return;
+  const {
+    control,
+    handleSubmit,
+    reset,
+    watch,
+    formState: { errors, isSubmitting, isValid },
+  } = useForm<CreateUserRaw>({
+    resolver: zodResolver(CreateUserSchema),
+    defaultValues: defaults,
+    mode: 'onBlur',
+    reValidateMode: 'onChange',
+  });
+
+  // Clear RHF state when closing (prevents red error flash)
+  useEffect(() => {
+    if (open) {
+      reset(defaults, {
+        keepDirty: false,
+        keepTouched: false,
+        keepErrors: false,
+        keepValues: true,
+      });
+    } else {
+      reset(defaults, {
+        keepDirty: false,
+        keepTouched: false,
+        keepErrors: false,
+        keepValues: false,
+      });
     }
+  }, [open, defaults, reset]);
 
-    if (!isStrongPassword(password)) {
-      toast.error('Password does not meet the requirements.');
-      return;
-    }
+  const resetForm = () =>
+    reset(defaults, { keepDirty: false, keepTouched: false, keepErrors: false, keepValues: false });
 
-    if (password !== confirmPassword) {
-      toast.error('Passwords do not match.');
-      return;
-    }
+  const onSubmit = async (raw: CreateUserRaw) => {
+    const parsed: CreateUserInput = CreateUserSchema.parse(raw);
+    const { confirmPassword, ...payload } = parsed;
 
-    setSubmitting(true);
     const res = await fetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ firstName, lastName, email, password, role }),
+      body: JSON.stringify(payload),
     });
 
     if (res.ok) {
       toast.success('User created');
       onSuccess?.();
+      resetForm();
       setOpen(false);
     } else {
-      const message = await res.text();
-      toast.error(message || 'Failed to create user');
+      const text = await res.text().catch(() => null);
+      toast.error(text || 'Failed to create user');
     }
-    setSubmitting(false);
   };
 
+  const pw = watch('password');
+  const confirmPw = watch('confirmPassword');
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(val) => {
+        setOpen(val);
+        if (!val) resetForm();
+      }}
+    >
       <DialogContent className="bg-card max-w-2xl">
         <DialogHeader>
           <DialogTitle>Create New User</DialogTitle>
           <DialogDescription>Fill out the fields to create a user account.</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <InputGroup label="First Name" value={firstName} setValue={setFirstName} />
-          <InputGroup label="Last Name" value={lastName} setValue={setLastName} />
-          <InputGroup label="Email" value={email} setValue={setEmail} type="email" />
-          <InputGroup
-            label="Password"
-            value={password}
-            setValue={setPassword}
-            type={showPassword ? 'text' : 'password'}
-            showEye
-            isPasswordVisible={showPassword}
-            togglePasswordVisibility={() => setShowPassword((v) => !v)}
-            showStatus
-            isValid={password.length > 0 && isStrongPassword(password)}
-          />
-          <InputGroup
-            label="Confirm Password"
-            value={confirmPassword}
-            setValue={setConfirmPassword}
-            type={showConfirm ? 'text' : 'password'}
-            showEye
-            isPasswordVisible={showConfirm}
-            togglePasswordVisibility={() => setShowConfirm((v) => !v)}
-            showStatus
-            isValid={confirmPassword.length > 0 && confirmPassword === password}
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {/* First Name */}
+          <Controller
+            control={control}
+            name="firstName"
+            render={({ field }) => (
+              <InputGroup
+                label="First Name"
+                name="firstName"
+                fieldProps={field}
+                error={errors.firstName?.message}
+              />
+            )}
           />
 
-          <div>
-            <label className="mb-2 block text-sm font-medium">Role</label>
-            <Select onValueChange={setRole} value={role}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select a role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ADMIN">Admin</SelectItem>
-                <SelectItem value="FACULTY">Faculty</SelectItem>
-                <SelectItem value="TA">TA</SelectItem>
-                <SelectItem value="STUDENT">Student</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Last Name */}
+          <Controller
+            control={control}
+            name="lastName"
+            render={({ field }) => (
+              <InputGroup
+                label="Last Name"
+                name="lastName"
+                fieldProps={field}
+                error={errors.lastName?.message}
+              />
+            )}
+          />
 
+          {/* Email */}
+          <Controller
+            control={control}
+            name="email"
+            render={({ field }) => (
+              <InputGroup
+                label="Email"
+                name="email"
+                type="email"
+                fieldProps={field}
+                error={errors.email?.message}
+                showStatus
+                isValid={!errors.email && !!field.value}
+              />
+            )}
+          />
+
+          {/* Password */}
+          <Controller
+            control={control}
+            name="password"
+            render={({ field }) => (
+              <InputGroup
+                label="Password"
+                name="password"
+                type="password"
+                showEye
+                fieldProps={field}
+                error={errors.password?.message}
+                showStatus
+                isValid={!errors.password && !!field.value}
+              />
+            )}
+          />
+
+          {/* Confirm Password */}
+          <Controller
+            control={control}
+            name="confirmPassword"
+            render={({ field }) => (
+              <InputGroup
+                label="Confirm Password"
+                name="confirmPassword"
+                type="password"
+                showEye
+                fieldProps={field}
+                error={errors.confirmPassword?.message}
+                showStatus
+                isValid={!errors.confirmPassword && !!field.value && field.value === pw}
+              />
+            )}
+          />
+
+          {/* Role */}
+          <Controller
+            control={control}
+            name="role"
+            render={({ field }) => (
+              <div>
+                <label className="mb-2 block text-sm font-medium">Role</label>
+                <Select
+                  onValueChange={(v) => field.onChange(v as (typeof RoleEnum)['_type'])}
+                  value={(field.value as any) ?? ''}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select a role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ADMIN">Admin</SelectItem>
+                    <SelectItem value="FACULTY">Faculty</SelectItem>
+                    <SelectItem value="TA">TA</SelectItem>
+                    <SelectItem value="STUDENT">Student</SelectItem>
+                  </SelectContent>
+                </Select>
+                {errors.role && <p className="mt-1 text-xs text-red-600">{errors.role.message}</p>}
+              </div>
+            )}
+          />
+
+          {/* Password checklist (UI helper) */}
           <div className="text-muted-foreground pt-1 text-sm">
             Password must include:
             <ul className="ml-4 list-disc">
               {passwordRules.map((rule) => {
-                const passed = rule.test(password);
+                const ok = rule.test(pw ?? '');
                 return (
-                  <li key={rule.label} className={passed ? 'text-green-600' : 'text-red-500'}>
+                  <li key={rule.label} className={ok ? 'text-green-600' : 'text-red-500'}>
                     {rule.label}
                   </li>
                 );
               })}
             </ul>
           </div>
-        </div>
 
-        <DialogFooter className="bg-card mt-4">
-          <DialogClose asChild>
-            <Button variant="secondary" type="button">
-              Cancel
+          <DialogFooter className="bg-card mt-4">
+            <DialogClose asChild>
+              <Button
+                variant="secondary"
+                type="button"
+                onClick={resetForm} // clear touched/dirty/errors before closing
+                disabled={isSubmitting}
+              >
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button type="submit" disabled={!isValid || isSubmitting}>
+              {isSubmitting ? 'Creating...' : 'Create User'}
             </Button>
-          </DialogClose>
-          <Button onClick={handleSubmit} disabled={submitting}>
-            {submitting ? 'Creating...' : 'Create User'}
-          </Button>
-        </DialogFooter>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );
