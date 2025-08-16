@@ -22,6 +22,22 @@ A modern **Next.js 15** application serving as a role-based course management pl
 
 ---
 
+## ⚡ Super Quick Setup (Recommended)
+
+**🎯 For beginners or anyone who wants everything set up automatically:**
+
+```bash
+git clone <repository-url>
+cd afct
+
+# Run the automated setup wizard
+./scripts/setup-wizard.sh
+```
+
+Choose "Complete Development Setup" for a full development environment or "Complete Production Setup" for production deployment. The wizard handles everything automatically!
+
+---
+
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -50,11 +66,38 @@ Copy-Item .env.example .env.local
 cp .env.example .env.local
 ```
 
-### 3️⃣ PostgreSQL Setup (Production)
+### 3️⃣ Easy Setup (Recommended for Beginners)
 
-For production deployment, use our automated PostgreSQL setup scripts:
+**🎯 One-Click Setup Wizard** - Perfect for users with no experience!
+
+```bash
+# Make the wizard executable
+chmod +x scripts/setup-wizard.sh
+
+# Run the interactive setup wizard
+./scripts/setup-wizard.sh
+```
+
+The setup wizard provides a menu-driven interface that handles everything for you:
+
+- **📝 Development Setup**: Complete development environment (Node.js + SQLite + App)
+- **🚀 Production Setup**: Full production deployment (Node.js + PostgreSQL + App) 
+- **🔧 Individual Components**: Install Node.js, databases, or dependencies separately
+- **⚙️ Utilities**: Test connections, reset databases, system health checks
+
+**Benefits:**
+- ✅ Beginner-friendly with step-by-step guidance
+- ✅ Handles existing installations gracefully
+- ✅ Automatic error detection and recovery
+- ✅ Cross-platform compatibility (Ubuntu/CentOS)
+- ✅ Built-in troubleshooting and status checks
+
+### 4️⃣ Manual PostgreSQL Setup (Advanced Users)
+
+For advanced users who prefer manual control:
 
 #### Option A: Complete Setup (Recommended)
+
 ```bash
 # Make scripts executable
 chmod +x scripts/*.sh
@@ -64,31 +107,43 @@ sudo ./scripts/setup-postgresql.sh
 ```
 
 This script will:
+
 - ✅ Install PostgreSQL and dependencies
 - ✅ Configure security settings
-- ✅ Create application database and user
+- ✅ Create application database and user (handles existing resources gracefully)
 - ✅ Set up automated backups
 - ✅ Configure firewall
 - ✅ Install Node.js and PM2
 - ✅ Create production environment file
 
+**Note**: Scripts are designed to be re-runnable and will intelligently handle existing databases, users, and configurations.
+
 #### Option B: Quick Setup
+
 ```bash
 # For faster, streamlined setup
 sudo ./scripts/quick-postgresql-setup.sh
 ```
 
 #### Option C: Connection Testing
+
 ```bash
 # If you have issues with database connections
-./scripts/test-db-connection.sh
+./scripts/setup-wizard.sh  # Choose option 9: Test Database Connection
 ```
 
 See [PostgreSQL Setup Guide](docs/postgresql-ubuntu-setup.md) for detailed manual installation.
 
-### 4️⃣ Database Setup
+### 5️⃣ Database Setup
 
-#### For Development (SQLite)
+#### Using the Setup Wizard (Recommended)
+
+If you used the setup wizard (`./scripts/setup-wizard.sh`), your database is already configured and ready to use!
+
+#### Manual Database Setup
+
+##### For Development (SQLite)
+
 ```bash
 # Generate Prisma client
 npx prisma generate
@@ -100,7 +155,8 @@ npx prisma migrate dev
 npm run seed
 ```
 
-#### For Production (PostgreSQL)
+##### For Production (PostgreSQL)
+
 If you used the automated PostgreSQL setup scripts, the database is already configured. Just run:
 
 ```bash
@@ -117,7 +173,7 @@ npx prisma migrate deploy
 npm run seed
 ```
 
-### 5️⃣ Start Development Server
+### 6️⃣ Start Development Server
 
 ```bash
 npm run dev
@@ -235,7 +291,37 @@ npm run build
 
 ---
 
-## 🚀 Deployment
+## �️ Automation Scripts
+
+The project includes several automation scripts to make setup and deployment easier:
+
+### Setup Wizard (Recommended)
+```bash
+./scripts/setup-wizard.sh
+```
+**Interactive menu-driven setup for beginners.** Handles everything from Node.js installation to complete application deployment.
+
+### PostgreSQL Scripts
+```bash
+sudo ./scripts/setup-postgresql.sh      # Complete PostgreSQL setup with all features
+sudo ./scripts/quick-postgresql-setup.sh # Fast PostgreSQL installation and configuration
+```
+
+### Deployment Scripts
+```bash
+./scripts/deploy-production.js          # Automated production deployment
+```
+
+### All Scripts Features:
+- ✅ **Beginner-friendly** with step-by-step guidance
+- ✅ **Error handling** for existing installations
+- ✅ **Cross-platform** compatibility (Ubuntu/CentOS)
+- ✅ **Re-runnable** without breaking existing setups
+- ✅ **Built-in testing** and validation
+
+---
+
+## �🚀 Deployment
 
 ### PostgreSQL Production Setup
 
@@ -254,6 +340,7 @@ sudo ./scripts/setup-postgresql.sh
 ```
 
 This will automatically:
+
 - ✅ Install PostgreSQL with optimal configuration
 - ✅ Create secure database and user
 - ✅ Configure authentication and firewall
@@ -307,13 +394,14 @@ pm2 save
 If you encounter database connection issues:
 
 ```bash
-# Use the connection test script
-./scripts/test-db-connection.sh
+# Use the setup wizard connection test
+./scripts/setup-wizard.sh  # Choose option 9: Test Database Connection
 ```
 
 This script will:
+
 - ✅ Test PostgreSQL service status
-- ✅ Verify port connectivity  
+- ✅ Verify port connectivity
 - ✅ Test authentication
 - ✅ Check Prisma compatibility
 - ✅ Handle special characters in passwords
@@ -454,9 +542,9 @@ prisma/
   seed.ts                # Database seeding script
 
 scripts/
+  setup-wizard.sh         # 🎯 Interactive setup wizard (recommended for beginners)
   setup-postgresql.sh     # Complete PostgreSQL installation & setup
   quick-postgresql-setup.sh # Quick PostgreSQL setup
-  test-db-connection.sh   # Database connection testing & troubleshooting
   deploy-production.js    # Automated application deployment script
 
 public/
@@ -636,28 +724,30 @@ DATABASE_URL="file:./dev.db?connection_limit=1"
 
 The AFCT Dashboard includes several automated scripts to simplify setup and deployment:
 
-### PostgreSQL Setup Scripts
+### Setup and Installation Scripts
 
-| Script | Purpose | Usage |
-|--------|---------|-------|
-| `setup-postgresql.sh` | Complete PostgreSQL installation and configuration | `sudo ./scripts/setup-postgresql.sh` |
-| `quick-postgresql-setup.sh` | Fast PostgreSQL setup for testing | `sudo ./scripts/quick-postgresql-setup.sh` |
-| `test-db-connection.sh` | Database connection testing and troubleshooting | `./scripts/test-db-connection.sh` |
+| Script                      | Purpose                                            | Usage                                      |
+| --------------------------- | -------------------------------------------------- | ------------------------------------------ |
+| `setup-wizard.sh`           | 🎯 **Interactive setup wizard (recommended)**     | `./scripts/setup-wizard.sh`               |
+| `setup-postgresql.sh`       | Complete PostgreSQL installation and configuration | `sudo ./scripts/setup-postgresql.sh`       |
+| `quick-postgresql-setup.sh` | Fast PostgreSQL setup for testing                  | `sudo ./scripts/quick-postgresql-setup.sh` |
 
 ### Application Deployment Scripts
 
-| Script | Purpose | Usage |
-|--------|---------|-------|
+| Script                 | Purpose                               | Usage                       |
+| ---------------------- | ------------------------------------- | --------------------------- |
 | `deploy-production.js` | Cross-platform application deployment | `npm run deploy:production` |
 
 ### Script Features
 
+- ✅ **Beginner-friendly** with step-by-step guidance  
 - ✅ **Cross-platform compatibility** (Windows, macOS, Linux)
-- ✅ **Error handling and validation**
+- ✅ **Error handling and validation** for existing installations
 - ✅ **Interactive prompts for configuration**
 - ✅ **Automatic backup creation**
 - ✅ **Security best practices**
 - ✅ **Comprehensive logging**
+- ✅ **Re-runnable** without breaking existing setups
 
 ### Quick Commands Summary
 
@@ -674,7 +764,7 @@ sudo ./scripts/quick-postgresql-setup.sh
 npm run dev
 
 # Troubleshooting
-./scripts/test-db-connection.sh
+./scripts/setup-wizard.sh  # Menu option 9: Test Database Connection
 ```
 
 ---
