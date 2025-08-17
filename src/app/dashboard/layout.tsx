@@ -9,7 +9,9 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
   const cookieStore = await cookies();
-  const defaultOpen = cookieStore.get('sidebar_state')?.value === 'true';
+  const sidebarCookie = cookieStore.get('sidebar_state');
+  // Default to open for first-time users (no cookie), otherwise use cookie value
+  const defaultOpen = sidebarCookie ? sidebarCookie.value === 'true' : true;
 
   if (!session || !session.user) {
     redirect('/login');

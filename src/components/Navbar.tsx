@@ -74,7 +74,12 @@ const Navbar: React.FC = () => {
   const { firstName, lastName, role, avatar } = data.user;
   const roleDisplay = role || 'STUDENT';
   const avatarUrl = avatar ? `/uploads/${avatar}` : '/default-avatar.png';
-  const fullName = [firstName, lastName].filter(Boolean).join(' ') || 'User';
+  
+  // Use session.user.name first (which is built from firstName + lastName in auth)
+  // Then fallback to building it from individual fields, then fallback to 'User'
+  const fullName = data.user.name || 
+    [firstName, lastName].filter(Boolean).join(' ') || 
+    'User';
 
   return (
     <nav className="bg-secondary bordery mb-4 flex h-16 items-center justify-between rounded-lg p-4 text-white shadow-sm">
