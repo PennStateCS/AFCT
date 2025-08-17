@@ -21,15 +21,23 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <SessionWatcher />
             <Toaster
               position="top-center"
-              theme="system"
-              richColors
+              theme="light"
+              closeButton
+              expand={true}
+              offset={20}
+              icons={{
+                success: '✓',
+                error: '✕',
+                warning: '⚠',
+                info: 'i',
+                loading: '○',
+              }}
               toastOptions={{
-                style: {
-                  fontSize: '0.875rem',
-                  padding: '1.25rem 1.5rem',
-                  borderRadius: '6px',
-                  boxShadow: '0 8px 40px 0 rgba(0,0,0,0.15)',
-                },
+                style: {},
+                className: 'custom-toast',
+                duration: 4000,
+                actionButtonStyle: {},
+                cancelButtonStyle: {},
               }}
             />
             {children}

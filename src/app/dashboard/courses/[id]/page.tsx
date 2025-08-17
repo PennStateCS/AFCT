@@ -21,7 +21,7 @@ import { useAssignmentColumns } from './assignment-columns';
 import { problemColumns } from './problem-columns';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { toast } from 'sonner';
+import { showToast } from '@/lib/toast';
 import { Pencil } from 'lucide-react';
 
 // Assignment with problem count as returned by API
@@ -101,7 +101,7 @@ export default function AdminCoursePage() {
       }
       setEnrollOpen(true);
     } catch {
-      toast.error('Failed to load user list');
+      showToast.error('Failed to load user list');
     }
   };
 
@@ -119,7 +119,7 @@ export default function AdminCoursePage() {
           problems: data.problems || [],
         });
       })
-      .catch(() => toast.error('Failed to load course'));
+      .catch(() => showToast.error('Failed to load course'));
   }, [id]);
 
   // Assignment handlers
@@ -155,17 +155,17 @@ export default function AdminCoursePage() {
             ? { ...prev, assignments: prev.assignments.filter((a) => a.id !== target.id) }
             : prev,
         );
-        toast.success('Assignment deleted');
+        showToast.success('Assignment deleted');
       } else if (target.type === 'problem') {
         const res = await fetch(`/api/problems/${target.id}`, { method: 'DELETE' });
         if (!res.ok) throw new Error('Failed to delete problem');
         setCourse((prev) =>
           prev ? { ...prev, problems: prev.problems.filter((p) => p.id !== target.id) } : prev,
         );
-        toast.success('Problem deleted');
+        showToast.success('Problem deleted');
       }
     } catch (err) {
-      toast.error('Error deleting item');
+      showToast.error('Error deleting item');
       console.error(err);
     } finally {
       setConfirmOpen(false);
@@ -187,14 +187,14 @@ export default function AdminCoursePage() {
         body: JSON.stringify({ userId: user.id }),
       });
       if (!res.ok) throw new Error('Failed to enroll user');
-      toast.success('User enrolled!');
+      showToast.success('User enrolled!');
       // Refresh course data
       fetch(`/api/courses/${id}`)
         .then((res) => res.json())
         .then(setCourse)
-        .catch(() => toast.error('Failed to reload course data'));
+        .catch(() => showToast.error('Failed to reload course data'));
     } catch {
-      toast.error('Error enrolling user');
+      showToast.error('Error enrolling user');
     }
   };
 
@@ -234,7 +234,7 @@ export default function AdminCoursePage() {
     );
     setEditAssignmentOpen(false);
     setSelectedAssignment(null);
-    toast.success('Assignment updated!');
+    showToast.success('Assignment updated!');
   }, []);
 
   // Assignment publish toggle handler
@@ -260,9 +260,9 @@ export default function AdminCoursePage() {
           : prev,
       );
       
-      toast.success(`Assignment ${newValue ? 'published' : 'unpublished'} successfully!`);
+      showToast.success(`Assignment ${newValue ? 'published' : 'unpublished'} successfully!`);
     } catch (error) {
-      toast.error('Failed to update assignment status');
+      showToast.error('Failed to update assignment status');
       console.error('Error updating assignment:', error);
     }
   }, []);
@@ -451,9 +451,9 @@ export default function AdminCoursePage() {
             if (!res.ok) throw new Error('Failed to save course');
             const updated = await res.json();
             setCourse((prev) => (prev ? { ...prev, ...updated } : prev));
-            toast.success('Course updated!');
+            showToast.success('Course updated!');
           } catch {
-            toast.error('Failed to save course');
+            showToast.error('Failed to save course');
           }
           setEditOpen(false);
         }}
@@ -469,7 +469,7 @@ export default function AdminCoursePage() {
               setCourse((prev) =>
                 prev ? { ...prev, problems: [...prev.problems, newProblem] } : prev,
               );
-              toast.success('Problem created!');
+              showToast.success('Problem created!');
             }
           }}
         />
@@ -502,7 +502,7 @@ export default function AdminCoursePage() {
                     }
                   : prev,
               );
-              toast.success('Problem updated!');
+              showToast.success('Problem updated!');
             }
           }}
         />
@@ -521,7 +521,7 @@ export default function AdminCoursePage() {
                 }
               : prev,
           );
-          toast.success('Assignment created!');
+          showToast.success('Assignment created!');
         }}
       />
       <ConfirmDialog
@@ -554,9 +554,9 @@ export default function AdminCoursePage() {
 
             const updated = await res.json();
             setCourse((prev) => (prev ? { ...prev, isPublished: updated.isPublished } : prev));
-            toast.success(pendingPublish ? 'Course published' : 'Course unpublished');
+            showToast.success(pendingPublish ? 'Course published' : 'Course unpublished');
           } catch {
-            toast.error('Error updating publish status');
+            showToast.error('Error updating publish status');
           } finally {
             setPublishConfirmOpen(false);
             setPendingPublish(null);

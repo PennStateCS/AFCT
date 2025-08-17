@@ -16,7 +16,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import InputGroup from '@/components/ui/InputGroup';
-import { toast } from 'sonner';
 
 import { useEffect, useMemo } from 'react';
 import { useForm, Controller } from 'react-hook-form';
@@ -139,29 +138,18 @@ export function CreateProblemDialog({
 
       if (res.ok) {
         const created = await res.json().catch(() => null);
-        toast.success('Problem created successfully');
         onCreated?.(created);
         resetForm();
         setOpen(false);
       } else {
         const msg = await safeMessage(res);
-        toast.error(msg ?? 'Failed to create problem.');
+        console.error('Failed to create problem:', msg);
       }
     } catch (error) {
       console.error('Form submission error:', error);
       if (error instanceof z.ZodError) {
         // Handle Zod validation errors
         console.log('Zod validation errors:', error.errors);
-        const fileError = error.errors.find(err => err.path.includes('file'));
-        if (fileError) {
-          toast.error(fileError.message);
-        } else {
-          // Show the first validation error
-          const firstError = error.errors[0];
-          toast.error(firstError?.message || 'Please check all required fields.');
-        }
-      } else {
-        toast.error('An unexpected error occurred.');
       }
     }
   };

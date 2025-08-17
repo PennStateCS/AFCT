@@ -14,7 +14,6 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import InputGroup from '@/components/ui/InputGroup';
-import { toast } from 'sonner';
 
 import { useEffect, useMemo } from 'react';
 import { useForm, Controller } from 'react-hook-form';
@@ -135,13 +134,12 @@ export function CreateAssignmentDialog({
 
     if (res.ok) {
       const created = await res.json().catch(() => null);
-      toast.success('Assignment created successfully');
       onCreate?.(created);
       resetForm(); // clear RHF state before closing (prevents error flash)
       setOpen(false);
     } else {
       const msg = await safeMessage(res);
-      toast.error(msg ?? 'Failed to create assignment');
+      console.error('Failed to create assignment:', msg);
     }
   };
 

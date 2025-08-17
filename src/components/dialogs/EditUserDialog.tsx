@@ -20,7 +20,6 @@ import {
 } from '@/components/ui/select';
 import InputGroup from '@/components/ui/InputGroup';
 import { UploadCloud, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
 
 import { useEffect, useMemo, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
@@ -127,7 +126,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
 
     if (!res.ok) {
       const text = await res.text().catch(() => null);
-      toast.error(text || 'Failed to update user');
+      console.error('Failed to update user:', text);
       return;
     }
 
@@ -141,7 +140,6 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
       avatar: parsed.deleteAvatar ? null : user.avatar,
     });
 
-    toast.success('User updated');
     resetForm();
     setOpen(false);
   };

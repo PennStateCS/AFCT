@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/RoleBadge';
 import { EditUserDialog } from '@/components/dialogs/EditUserDialog';
 import { AdminResetPasswordDialog } from '@/components/dialogs/AdminResetPasswordDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
-import { toast } from 'sonner';
+import { showToast } from '@/lib/toast';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Pencil, Trash2, Lock, User2, ChevronDown } from 'lucide-react';
 
@@ -132,10 +132,10 @@ function UserActionsCell({ user, onUserUpdate }: { user: User; onUserUpdate: () 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, newPassword }),
       });
-      toast.success('Password reset successfully.');
+      showToast.success('Password reset successfully.');
       setResetOpen(false);
     } catch {
-      toast.error('Failed to reset password.');
+      showToast.error('Failed to reset password.');
     }
   }
 
@@ -147,11 +147,11 @@ function UserActionsCell({ user, onUserUpdate }: { user: User; onUserUpdate: () 
 
       if (!res.ok) throw new Error('Delete failed');
 
-      toast.success('User deleted successfully.');
+      showToast.success('User deleted successfully.');
       setConfirmOpen(false);
       onUserUpdate();
     } catch {
-      toast.error('Failed to delete user.');
+      showToast.error('Failed to delete user.');
     }
   }
 
@@ -169,11 +169,11 @@ function UserActionsCell({ user, onUserUpdate }: { user: User; onUserUpdate: () 
               body: JSON.stringify(updatedUser),
             });
             if (!res.ok) throw new Error();
-            toast.success('User updated successfully.');
+            showToast.success('User updated successfully.');
             setEditOpen(false);
             onUserUpdate();
           } catch {
-            toast.error('Failed to update user.');
+            showToast.error('Failed to update user.');
           }
         }}
       />
