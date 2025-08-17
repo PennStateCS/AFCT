@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Course } from '@prisma/client';
-import { columns } from './columns';
+import { columns } from './course-columns';
 import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
