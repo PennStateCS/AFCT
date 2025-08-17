@@ -237,9 +237,40 @@ export default function AdminCoursePage() {
     toast.success('Assignment updated!');
   }, []);
 
+  // Assignment publish toggle handler
+  const handleAssignmentPublishToggle = useCallback(async (assignmentId: string, newValue: boolean) => {
+    try {
+      const res = await fetch(`/api/assignments/${assignmentId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPublished: newValue }),
+      });
+      
+      if (!res.ok) throw new Error('Failed to update assignment');
+      
+      // Update local state
+      setCourse((prev) =>
+        prev
+          ? {
+              ...prev,
+              assignments: prev.assignments.map((a) =>
+                a.id === assignmentId ? { ...a, isPublished: newValue } : a,
+              ),
+            }
+          : prev,
+      );
+      
+      toast.success(`Assignment ${newValue ? 'published' : 'unpublished'} successfully!`);
+    } catch (error) {
+      toast.error('Failed to update assignment status');
+      console.error('Error updating assignment:', error);
+    }
+  }, []);
+
   const assignmentColumns = useAssignmentColumns(
     handleAssignmentDeleteClick,
     handleAssignmentEditClick,
+    handleAssignmentPublishToggle,
   );
 
   const problemCols = useMemo(
