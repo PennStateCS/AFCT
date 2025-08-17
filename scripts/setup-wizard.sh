@@ -111,11 +111,31 @@ menu(){ # args: tag1 item1 tag2 item2 ...
 }
 
 # ------------------------------ UI Helpers ----------------------------------
+# Basic Colors
 GREEN='\033[0;32m'; BLUE='\033[0;34m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
+# Extended Colors
+CYAN='\033[0;36m'; MAGENTA='\033[0;35m'; WHITE='\033[0;37m'
+# Bright Colors
+BRIGHT_GREEN='\033[1;32m'; BRIGHT_BLUE='\033[1;34m'; BRIGHT_CYAN='\033[1;36m'; BRIGHT_MAGENTA='\033[1;35m'
+# Text Formatting
+BOLD='\033[1m'; DIM='\033[2m'; UNDERLINE='\033[4m'
+
+# Core message functions
 log(){ echo -e "${BLUE}==>${NC} $*"; }
 ok(){ echo -e "${GREEN}✓${NC} $*"; }
 warn(){ echo -e "${YELLOW}⚠${NC} $*"; }
 err(){ echo -e "${RED}✗${NC} $*"; }
+
+# Enhanced message functions
+success(){ echo -e "${BRIGHT_GREEN}🎉${NC} $*"; }
+info(){ echo -e "${CYAN}ℹ${NC} $*"; }
+database_msg(){ echo -e "${CYAN}🗄${NC} $*"; }
+auth_msg(){ echo -e "${MAGENTA}🔐${NC} $*"; }
+node_msg(){ echo -e "${BRIGHT_BLUE}⬢${NC} $*"; }
+build_msg(){ echo -e "${BRIGHT_CYAN}🔨${NC} $*"; }
+deploy_msg(){ echo -e "${BRIGHT_MAGENTA}🚀${NC} $*"; }
+quiet(){ echo -e "${DIM}$*${NC}"; }
+highlight(){ echo -e "${BOLD}$*${NC}"; }
 
 # ------------------------------ Utilities -----------------------------------
 mask_db_url(){ local url="$1"; echo "$url" | sed -E 's#(postgresql://[^:]+):[^@]+@#\1:****@#'; }
@@ -928,33 +948,6 @@ validate_production_environment(){
            fi
          else
            msgbox ".env.production not found"
-         fi;; to Main Menu") || return 0
-
-    case "$choice" in
-      1) install_nodejs; install_postgresql; install_project_dependencies; install_pm2; install_dotenv_cli; setup_production_database; setup_pm2_ecosystem; infobox "Building app..."; npm run build; msgbox "Production setup complete.\nStart: pm2 start ecosystem.config.js";;
-      2) install_postgresql;;
-      3) setup_production_database;;
-      4) install_pm2;;
-      5) setup_pm2_ecosystem;;
-      6) deploy_application;;
-      7) configure_pm2_startup;;
-      8) manage_pm2_processes;;
-      9) reset_production_database;;
-      10) if [[ -f ".env.production" ]]; then
-           local url user pass host port db
-           url="$(read_dburl_from_file ".env.production")"
-           user=$(echo "$url" | sed -n 's#postgresql://\([^:/@]\+\).*#\1#p')
-           pass=$(echo "$url" | sed -n 's#postgresql://[^:]\+:\([^@]\+\)@.*#\1#p')
-           host=$(echo "$url" | sed -n 's#.*@\(.*\):[0-9]\+/.*#\1#p')
-           port=$(echo "$url" | sed -n 's#.*@.*:\([0-9]\+\)/.*#\1#p')
-           db=$(echo "$url"   | sed -n 's#.*/\([^?]\+\).*#\1#p')
-           if PGPASSWORD="$(printf '%b' "$pass")" psql -h "$host" -p "$port" -U "$user" -d "$db" -c "select 1;" >/dev/null 2>&1; then
-             msgbox "PostgreSQL connection OK"
-           else
-             msgbox "PostgreSQL connection failed"
-           fi
-         else
-           msgbox ".env.production not found"
          fi;;
       11) validate_production_environment;;
       12) fix_migration_provider_mismatch postgresql;;
@@ -971,19 +964,21 @@ database_menu(){
     choice=$(menu \
       1 "Test Database Connections" \
       2 "Database Troubleshooting" \
-      3 "Check Migration Issues" \
-      4 "Fix Migration Provider Mismatch" \
-      5 "Reset Development Database" \
-      6 "Reset Production Database" \
-      7 "Environment Conflict Detection (DEV)" \
-      8 "Environment Conflict Detection (PROD)" \
+      3 "NextAuth Troubleshooting" \
+      4 "Check Migration Issues" \
+      5 "Fix Migration Provider Mismatch" \
+      6 "Reset Development Database" \
+      7 "Reset Production Database" \
+      8 "Environment Conflict Detection (DEV)" \
+      9 "Environment Conflict Detection (PROD)" \
       0 "Back to Main Menu") || return 0
 
     case "$choice" in
       1) test_database_connection;;
       2) troubleshoot_database;;
-      3) check_migration_issues;;
-      4) 
+      3) troubleshoot_nextauth;;
+      4) check_migration_issues;;
+      5) 
         local provider_choice
         provider_choice=$(menu 1 "Fix for PostgreSQL (Production)" 2 "Fix for SQLite (Development)" 0 "Back") || continue
         case "$provider_choice" in
@@ -992,10 +987,10 @@ database_menu(){
           *) ;;
         esac
         ;;
-      5) reset_development_database;;
-      6) reset_production_database;;
-      7) detect_env_conflicts dev || { if yesno "Run auto-fix?"; then fix_env_conflicts dev; fi; };;
-      8) detect_env_conflicts prod || { if yesno "Run auto-fix?"; then fix_env_conflicts prod; fi; };;
+      6) reset_development_database;;
+      7) reset_production_database;;
+      8) detect_env_conflicts dev || { if yesno "Run auto-fix?"; then fix_env_conflicts dev; fi; };;
+      9) detect_env_conflicts prod || { if yesno "Run auto-fix?"; then fix_env_conflicts prod; fi; };;
       0) return 0;;
       *) ;;
     esac
@@ -1320,40 +1315,53 @@ install_dotenv_cli(){
         ;;
       0) exit 0;;
       *) ;;
-    esac------------------------- Main Menu ----------------------------------
-main_menu(){
-  while true; do
-    local choice
-    choice=$(menu \
-      1 "Development Setup" \
-      2 "Production Setup" \
-      3 "Database Management" \
-      4 "System Tools" \
-      5 "Quick Setup (Dev)" \
-      6 "Quick Setup (Prod)" \
-      0 "Exit") || exit 0
-
-    case "$choice" in
-      1) development_menu;;
-      2) production_menu;;
-      3) database_menu;;
-      4) system_menu;;
-      5) install_nodejs; install_project_dependencies; setup_development_database; msgbox "Quick dev setup complete.\nRun: npm run dev";;
-# ------------------------------- Entry Point --------------------------------
-check_os
-
-# Welcome message
-if [[ "$VERBOSE" == "true" ]]; then
-  msgbox "AFCT Dashboard Setup Wizard (Verbose Mode)\n\nThis wizard will help you set up the AFCT Dashboard for development or production.\n\nVerbose mode is enabled - you'll see detailed output for all operations."
-else
-  msgbox "AFCT Dashboard Setup Wizard\n\nThis wizard will help you set up the AFCT Dashboard for development or production.\n\nQuiet mode is active. Use '$0 --verbose' for detailed output.\n\nOnly errors and important messages will be shown."
-fi
-
-main_menu;;
     esac
-  done
+  fi
 }
 
-# ------------------------------- Entry Point --------------------------------
-check_os
-main_menu
+troubleshoot_nextauth(){
+  local choice; choice=$(menu \
+    1 "Fix NextAuth Package Issues" \
+    2 "Regenerate Prisma Client" \
+    3 "Clear Next.js Cache" \
+    4 "Check NextAuth Dependencies" \
+    5 "Full NextAuth Reset" \
+    0 "Back") || return 0
+    
+  case "$choice" in
+    1) 
+      infobox "Reinstalling NextAuth packages..."
+      npm uninstall next-auth >/dev/null 2>&1 || true
+      npm install next-auth@^5.0.0-beta.29 >/dev/null 2>&1 || { err "Failed to reinstall next-auth"; return 1; }
+      success "NextAuth reinstalled successfully"
+      ;;
+    2)
+      infobox "Regenerating Prisma client..."
+      npm run db:generate >/dev/null 2>&1 || { err "Failed to regenerate Prisma client"; return 1; }
+      success "Prisma client regenerated"
+      ;;
+    3)
+      infobox "Clearing Next.js build cache..."
+      [[ -d .next ]] && rm -rf .next
+      success "Next.js cache cleared"
+      ;;
+    4)
+      local out=""
+      out+="NextAuth Dependencies:\n"
+      out+="$(npm ls next-auth @auth/core @auth/prisma-adapter 2>/dev/null | head -10)\n\n"
+      out+="Package Versions:\n"
+      if command -v jq >/dev/null 2>&1; then
+        out+="next-auth: $(jq -r '.dependencies["next-auth"] // "not found"' package.json)\n"
+        out+="@auth/core: $(jq -r '.dependencies["@auth/core"] // "not found"' package.json)\n"
+        out+="@auth/prisma-adapter: $(jq -r '.dependencies["@auth/prisma-adapter"] // "not found"' package.json)\n"
+      else
+        out+="Install 'jq' to see package.json versions\n"
+      fi
+      msgbox "$out"
+      ;;
+    5)
+      if confirm "This will:\n• Uninstall/reinstall NextAuth\n• Clear Next.js cache\n• Regenerate Prisma client\n\nContinue?"; then
+        infobox "Performing full NextAuth reset..."
+        [[ -d .next ]] && rm -rf .next
+        npm uninstall next-auth >/dev/null 2>&1 || true
+        npm install next-auth@^5.0.0

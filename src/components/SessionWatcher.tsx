@@ -14,9 +14,9 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 
 // Constants moved outside component to avoid dependency issues
-const INACTIVITY_LIMIT = 5 * 60 * 1000; // 5 minutes
-const WARNING_TIME = 60 * 1000; // 1 minute
-const TOTAL_COUNTDOWN = 60; // 60 seconds
+const INACTIVITY_LIMIT = 20 * 60 * 1000; // 20 minutes (was 5 minutes)
+const WARNING_TIME = 5 * 60 * 1000; // 5 minutes warning (was 1 minute)
+const TOTAL_COUNTDOWN = 300; // 300 seconds = 5 minutes (was 60 seconds)
 
 export default function SessionWatcher() {
   const { data: session, status, update } = useSession();
@@ -111,7 +111,12 @@ export default function SessionWatcher() {
   };
 
   const progressValue = (timeLeft / TOTAL_COUNTDOWN) * 100;
-  const displaySeconds = Math.ceil(timeLeft);
+  const displayMinutes = Math.floor(timeLeft / 60);
+  const displaySeconds = Math.ceil(timeLeft % 60);
+  const timeDisplay = displayMinutes > 0 
+    ? `${displayMinutes}:${displaySeconds.toString().padStart(2, '0')}` 
+    : `${Math.ceil(timeLeft)}`;
+  const timeUnit = displayMinutes > 0 ? 'minutes' : 'seconds';
 
   // Render guard AFTER all hooks
   if (status !== 'authenticated' || !session?.user) {
@@ -124,7 +129,7 @@ export default function SessionWatcher() {
         <DialogHeader>
           <DialogTitle>Session Expiring</DialogTitle>
           <DialogDescription>
-            Your session will expire in <strong>{displaySeconds}</strong> seconds due to inactivity.
+            Your session will expire in <strong>{timeDisplay}</strong> {timeUnit} due to inactivity.
           </DialogDescription>
         </DialogHeader>
 
