@@ -8,17 +8,9 @@ import path from 'path';
 import { randomUUID } from 'crypto';
 import { execSync } from 'child_process';
 import os from 'os';
-import { getClientIp } from '@/lib/ip-utils';
-
-// Helper to extract user-agent
-function getUserAgent(req: NextRequest): string {
-  return req.headers.get('user-agent') || 'unknown';
-}
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 export async function POST(req: NextRequest) {
-  const ip = getClientIp(req);
-  const userAgent = getUserAgent(req);
-
   // 1. Verify token
   const authHeader = req.headers.get('authorization');
   const token = authHeader?.split(' ')[1];
@@ -26,12 +18,11 @@ export async function POST(req: NextRequest) {
 
   if (!decoded) {
     console.warn('Unauthorized submission attempt');
-    await prisma.activityLog.create({
-      data: {
-        userId: null,
-        action: 'SUBMISSION_UNAUTHORIZED',
-        metadata: { ipAddress: ip, userAgent },
-      },
+    await createEnhancedActivityLog(prisma, req, {
+      userId: undefined,
+      action: 'SUBMISSION_UNAUTHORIZED',
+      category: 'SUBMISSION',
+      metadata: {},
     });
 
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -166,17 +157,15 @@ export async function POST(req: NextRequest) {
     });
 
     // 6. Log successful submission
-    await prisma.activityLog.create({
-      data: {
-        userId: decoded.userId,
-        action: 'SUBMISSION_CREATED',
-        metadata: {
-          assignmentId,
-          problemId,
-          fileName,
-          ipAddress: ip,
-          userAgent,
-        },
+    await createEnhancedActivityLog(prisma, req, {
+      userId: decoded.userId,
+      action: 'SUBMISSION_CREATED',
+      category: 'SUBMISSION',
+      assignmentId,
+      problemId,
+      submissionId: submission.id,
+      metadata: {
+        fileName,
       },
     });
 
@@ -184,17 +173,14 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error('Submission error:', error);
 
-    await prisma.activityLog.create({
-      data: {
-        userId: decoded.userId,
-        action: 'SUBMISSION_ERROR',
-        metadata: {
-          assignmentId,
-          problemId,
-          error: error instanceof Error ? error.message : 'Unknown error',
-          ipAddress: ip,
-          userAgent,
-        },
+    await createEnhancedActivityLog(prisma, req, {
+      userId: decoded.userId,
+      action: 'SUBMISSION_ERROR',
+      category: 'SUBMISSION',
+      assignmentId,
+      problemId,
+      metadata: {
+        error: error instanceof Error ? error.message : 'Unknown error',
       },
     });
 

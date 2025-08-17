@@ -6,6 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { auth } from '@/lib/auth';
 import { ProblemType } from '@prisma/client';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 // POST /api/problems - Create a new problem with file upload
 export async function POST(req: Request) {
@@ -59,24 +60,15 @@ export async function POST(req: Request) {
     });
 
     // Log creation activity
-    const ip =
-      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      req.headers.get('x-real-ip') ||
-      'unknown';
-    const userAgent = req.headers.get('user-agent') || 'unknown';
-
-    await prisma.activityLog.create({
-      data: {
-        userId: user.id,
-        action: 'CREATE_PROBLEM',
-        metadata: {
-          courseId,
-          problemId: problem.id,
-          problemType: type,
-          fileName,
-          ipAddress: ip,
-          userAgent,
-        },
+    await createEnhancedActivityLog(prisma, req, {
+      userId: user.id,
+      action: 'CREATE_PROBLEM',
+      category: 'PROBLEM',
+      courseId,
+      problemId: problem.id,
+      metadata: {
+        problemType: type,
+        fileName,
       },
     });
 

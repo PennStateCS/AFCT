@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 // POST: Replace problems for a given assignment in a specific course
 export async function POST(
@@ -68,23 +69,14 @@ export async function POST(
     const problems = updated?.problems.map((ap) => ap.problem) || [];
 
     // Log the action to the ActivityLog
-    const ip =
-      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      req.headers.get('x-real-ip') ||
-      'unknown';
-    const userAgent = req.headers.get('user-agent') || 'unknown';
-
-    await prisma.activityLog.create({
-      data: {
-        userId: user.id,
-        action: 'UPDATE_ASSIGNMENT_PROBLEMS',
-        metadata: {
-          courseId,
-          assignmentId,
-          addedProblemIds: validIds,
-          ipAddress: ip,
-          userAgent: userAgent,
-        },
+    await createEnhancedActivityLog(prisma, req, {
+      userId: user.id,
+      action: 'UPDATE_ASSIGNMENT_PROBLEMS',
+      category: 'ASSIGNMENT',
+      courseId,
+      assignmentId,
+      metadata: {
+        addedProblemIds: validIds,
       },
     });
 

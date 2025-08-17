@@ -4,8 +4,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
-
-
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 export async function POST(req: Request) {
   // Retrieve the current authenticated session
@@ -44,21 +43,13 @@ export async function POST(req: Request) {
       data: { password: hashedPassword },
     });
 
-    // Extract IP address from the request headers
-    const ip =
-      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      req.headers.get('x-real-ip') ||
-      'unknown';
-
     // Log the password reset action to ActivityLog
-    await prisma.activityLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'RESET_PASSWORD',
-        metadata: {
-          targetUserId: userId,
-          ipAddress: ip,
-        },
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session.user.id,
+      action: 'RESET_PASSWORD',
+      category: 'USER',
+      metadata: {
+        targetUserId: userId,
       },
     });
 

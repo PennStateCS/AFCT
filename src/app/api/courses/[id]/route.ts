@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 // GET: Fetch a course by ID with full metadata
 export async function GET(_: Request, context: { params: Promise<{ id: string }> }) {
@@ -167,22 +168,13 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
     }));
 
     // Log the update action to ActivityLog
-    const ip =
-      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      req.headers.get('x-real-ip') ||
-      'unknown';
-    const userAgent = req.headers.get('user-agent') || 'unknown';
-
-    await prisma.activityLog.create({
-      data: {
-        userId: user.id,
-        action: 'UPDATE_COURSE',
-        metadata: {
-          courseId: updatedCourse.id,
-          ipAddress: ip,
-          userAgent: userAgent,
-          updatedFields: Object.keys(body),
-        },
+    await createEnhancedActivityLog(prisma, req, {
+      userId: user.id,
+      action: 'UPDATE_COURSE',
+      category: 'COURSE',
+      courseId: updatedCourse.id,
+      metadata: {
+        updatedFields: Object.keys(body),
       },
     });
 

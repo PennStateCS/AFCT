@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 export async function GET(
   req: Request,
@@ -112,23 +113,14 @@ export async function GET(
     }
 
     // Log access to assignment submissions
-    const ip =
-      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      req.headers.get('x-real-ip') ||
-      'unknown';
-    const userAgent = req.headers.get('user-agent') || 'unknown';
-
-    await prisma.activityLog.create({
-      data: {
-        userId: user.id,
-        action: 'VIEW_ASSIGNMENT_SUBMISSIONS',
-        metadata: {
-          courseId,
-          assignmentId,
-          viewedStudentId: studentId,
-          ipAddress: ip,
-          userAgent,
-        },
+    await createEnhancedActivityLog(prisma, req, {
+      userId: user.id,
+      action: 'VIEW_ASSIGNMENT_SUBMISSIONS',
+      category: 'SUBMISSION',
+      courseId,
+      assignmentId,
+      metadata: {
+        viewedStudentId: studentId,
       },
     });
 

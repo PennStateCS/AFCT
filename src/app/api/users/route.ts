@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
 import { auth } from '@/lib/auth';
 import { Role } from '@prisma/client';
-import { getClientIpSimple } from '@/lib/ip-utils';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 // Utility to validate email format
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -52,16 +52,12 @@ export async function GET(req: Request) {
     });
 
     // 4. Log the access
-    const ip = getClientIpSimple(req);
-
-    await prisma.activityLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'VIEW_USERS',
-        metadata: {
-          filterRole: role,
-          ipAddress: ip,
-        },
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session.user.id,
+      action: 'VIEW_USERS',
+      category: 'USER',
+      metadata: {
+        filterRole: role,
       },
     });
 
@@ -138,18 +134,14 @@ export async function POST(req: Request) {
     console.log(`[USERS_POST] User created: ${newUser.id} (${newUser.email})`);
 
     // 5. Log the creation
-    const ip = getClientIpSimple(req);
-
-    await prisma.activityLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'CREATE_USER',
-        metadata: {
-          createdUserId: newUser.id,
-          createdUserEmail: newUser.email,
-          createdUserRole: newUser.role,
-          ipAddress: ip,
-        },
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session.user.id,
+      action: 'CREATE_USER',
+      category: 'USER',
+      metadata: {
+        createdUserId: newUser.id,
+        createdUserEmail: newUser.email,
+        createdUserRole: newUser.role,
       },
     });
 

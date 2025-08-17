@@ -3,6 +3,8 @@
  * Note: This requires the enhanced ActivityLog schema with foreign keys
  */
 
+import { getClientIp } from './ip-utils';
+
 export type ActivityCategory = 
   | 'SYSTEM'      // Login, logout, session extend
   | 'USER'        // User CRUD, password changes  
@@ -10,6 +12,17 @@ export type ActivityCategory =
   | 'ASSIGNMENT'  // Assignment CRUD, publishing
   | 'PROBLEM'     // Problem CRUD
   | 'SUBMISSION'; // Submission CRUD, grading
+
+export interface EnhancedActivityLogData {
+  userId?: string;
+  action: string;
+  category?: ActivityCategory;
+  courseId?: string;
+  assignmentId?: string;
+  problemId?: string;
+  submissionId?: string;
+  metadata?: Record<string, unknown>;
+}
 
 /**
  * Determines the activity category from the action string
@@ -116,6 +129,36 @@ export const ActivityLogQueries = {
     orderBy: { timestamp: 'desc' as const },
   }),
 };
+
+/**
+ * Enhanced activity log creation helper
+ * Automatically extracts IP address and categorizes the activity
+ */
+export async function createEnhancedActivityLog(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  prisma: any,
+  req: Request,
+  data: EnhancedActivityLogData
+): Promise<void> {
+  const category = data.category || getActivityCategory(data.action);
+  const ipAddress = getClientIp(req);
+  const userAgent = req.headers.get('user-agent') || undefined;
+  
+  await prisma.activityLog.create({
+    data: {
+      userId: data.userId,
+      action: data.action,
+      category,
+      courseId: data.courseId,
+      assignmentId: data.assignmentId,
+      problemId: data.problemId,
+      submissionId: data.submissionId,
+      ipAddress,
+      userAgent,
+      metadata: data.metadata,
+    }
+  });
+}
 
 /**
  * Example usage patterns for the enhanced ActivityLog system

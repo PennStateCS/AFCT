@@ -7,6 +7,7 @@ import path from 'path';
 import { writeFile, unlink, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import { randomUUID } from 'crypto';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 const uploadDir = path.join(process.cwd(), 'public', 'uploads');
 
@@ -92,16 +93,15 @@ export async function POST(req: Request) {
   });
 
   // Log profile update
-  await prisma.activityLog.create({
-    data: {
-      userId: session.user.id,
-      action: 'PROFILE_UPDATED',
-      metadata: {
-        firstName,
-        lastName,
-        avatarUpdated: !!avatar,
-        avatarDeleted: deleteAvatar,
-      },
+  await createEnhancedActivityLog(prisma, req, {
+    userId: session.user.id,
+    action: 'PROFILE_UPDATED',
+    category: 'USER',
+    metadata: {
+      firstName,
+      lastName,
+      avatarUpdated: !!avatar,
+      avatarDeleted: deleteAvatar,
     },
   });
 

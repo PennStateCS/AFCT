@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 // POST: Enroll a user into a course using their global role
 // Expects: { userId: string }
@@ -48,23 +49,14 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
     const session = await auth();
     const actingUser = session?.user;
 
-    const ip =
-      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      req.headers.get('x-real-ip') ||
-      'unknown';
-    const userAgent = req.headers.get('user-agent') || 'unknown';
-
-    await prisma.activityLog.create({
-      data: {
-        userId: actingUser?.id ?? 'system',
-        action: 'ENROLL_USER',
-        metadata: {
-          enrolledUserId: userId,
-          courseId,
-          role: user.role,
-          ipAddress: ip,
-          userAgent,
-        },
+    await createEnhancedActivityLog(prisma, req, {
+      userId: actingUser?.id,
+      action: 'ENROLL_USER',
+      category: 'COURSE',
+      courseId,
+      metadata: {
+        enrolledUserId: userId,
+        role: user.role,
       },
     });
 

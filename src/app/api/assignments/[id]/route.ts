@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
-import { getClientIp } from '@/lib/ip-utils';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 // Update an existing assignment (full update)
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -29,16 +29,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       },
     });
 
-    const ip = getClientIp(req);
-
-    await prisma.activityLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'UPDATE_ASSIGNMENT',
-        metadata: {
-          assignmentId: id,
-          ipAddress: ip,
-        },
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session.user.id,
+      action: 'UPDATE_ASSIGNMENT',
+      category: 'ASSIGNMENT',
+      courseId: updated.courseId,
+      assignmentId: id,
+      metadata: {
+        updatedFields: Object.keys(data),
       },
     });
 
@@ -82,17 +80,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       data: updateData,
     });
 
-    const ip = getClientIp(req);
-
-    await prisma.activityLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'UPDATE_ASSIGNMENT',
-        metadata: {
-          assignmentId: id,
-          ipAddress: ip,
-          updatedFields: Object.keys(updateData),
-        },
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session.user.id,
+      action: 'UPDATE_ASSIGNMENT',
+      category: 'ASSIGNMENT',
+      courseId: updated.courseId,
+      assignmentId: id,
+      metadata: {
+        updatedFields: Object.keys(updateData),
       },
     });
 
@@ -129,20 +124,15 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    const ip =
-      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      req.headers.get('x-real-ip') ||
-      'unknown';
-
-    await prisma.activityLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'CREATE_ASSIGNMENT',
-        metadata: {
-          assignmentId: created.id,
-          courseId: created.courseId,
-          ipAddress: ip,
-        },
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session.user.id,
+      action: 'CREATE_ASSIGNMENT',
+      category: 'ASSIGNMENT',
+      courseId: created.courseId,
+      assignmentId: created.id,
+      metadata: {
+        title: created.title,
+        maxPoints: created.maxPoints,
       },
     });
 

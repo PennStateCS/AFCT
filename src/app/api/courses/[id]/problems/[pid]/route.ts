@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import path from 'path';
 import { promises as fs } from 'fs';
 import { auth } from '@/lib/auth';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 export async function DELETE(
   req: Request,
@@ -60,23 +61,14 @@ export async function DELETE(
     }
 
     // Step 7: Log the delete action to ActivityLog
-    const ip =
-      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      req.headers.get('x-real-ip') ||
-      'unknown';
-    const userAgent = req.headers.get('user-agent') || 'unknown';
-
-    await prisma.activityLog.create({
-      data: {
-        userId: user.id,
-        action: 'DELETE_PROBLEM',
-        metadata: {
-          courseId,
-          problemId,
-          fileName: problem.fileName || null,
-          ipAddress: ip,
-          userAgent,
-        },
+    await createEnhancedActivityLog(prisma, req, {
+      userId: user.id,
+      action: 'DELETE_PROBLEM',
+      category: 'PROBLEM',
+      courseId,
+      problemId,
+      metadata: {
+        fileName: problem.fileName || null,
       },
     });
 
