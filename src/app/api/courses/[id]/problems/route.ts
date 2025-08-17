@@ -5,8 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { auth } from '@/lib/auth';
 import { ProblemType } from '@prisma/client';
 
 // Create solution upload directory if it doesn't exist
@@ -27,7 +26,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
 
   try {
     // Step 1: Authorize only TA, FACULTY, or ADMIN
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     const user = session?.user;
 
     if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {

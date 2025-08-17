@@ -2,8 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { auth } from '@/lib/auth';
 
 // GET: Fetch a course by ID with full metadata
 export async function GET(_: Request, context: { params: Promise<{ id: string }> }) {
@@ -98,7 +97,7 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
   }
 
   // Get authenticated user session
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   const user = session?.user;
 
   if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {

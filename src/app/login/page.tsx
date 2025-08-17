@@ -84,20 +84,25 @@ export default function LoginPage() {
       return;
     }
     setLoading(true);
-    const result = await signIn('credentials', {
-      email: loginEmail,
-      password: loginPassword,
-      redirect: true,
-      callbackUrl: '/dashboard',
-    });
+    try {
+      const result = await signIn('credentials', {
+        email: loginEmail,
+        password: loginPassword,
+        redirect: false, // Handle redirect manually
+      });
 
-    if (result?.error) {
+      if (result?.error) {
+        setLoading(false);
+        toast.error(
+          result.error === 'CredentialsSignin' ? 'Invalid email or password.' : 'Login failed.',
+        );
+      } else {
+        // Successful login - redirect to dashboard
+        window.location.href = '/dashboard';
+      }
+    } catch {
       setLoading(false);
-      toast.error(
-        result.error === 'CredentialsSignin' ? 'Invalid email or password.' : 'Login failed.',
-      );
-    } else if (result?.ok && result.url) {
-      window.location.href = result.url;
+      toast.error('Login failed. Please try again.');
     }
   };
 
@@ -154,18 +159,22 @@ export default function LoginPage() {
     toast.success('Account created! Logging you in...');
     setLoading(true);
     await new Promise((r) => setTimeout(r, 600));
-    const result = await signIn('credentials', {
-      email: signupEmail,
-      password: signupPassword,
-      redirect: true,
-      callbackUrl: '/dashboard',
-    });
+    try {
+      const result = await signIn('credentials', {
+        email: signupEmail,
+        password: signupPassword,
+        redirect: false,
+      });
 
-    if (result?.ok && result.url) {
-      window.location.href = result.url;
-      setLoading(false);
-    } else {
+      if (result?.error) {
+        toast.error('Signup succeeded but login failed.');
+        setLoading(false);
+      } else {
+        window.location.href = '/dashboard';
+      }
+    } catch {
       toast.error('Signup succeeded but login failed.');
+      setLoading(false);
     }
   };
 

@@ -1,12 +1,11 @@
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import DashboardClient from './DashboardClient';
 import { DueDateModule } from '@/components/modules/DueDateModule';
 import { JoinCourseModule } from '@/components/modules/JoinCourseModule';
 
 export default async function DashboardPage() {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
 
   if (!session?.user) {
     return (

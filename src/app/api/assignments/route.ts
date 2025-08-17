@@ -1,14 +1,13 @@
 // /src/app/api/assignments
 
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
 
 export async function POST(req: NextRequest) {
   try {
     // Retrieve the current authenticated session
-    const session = await getServerSession(authOptions);
+    const session = await auth();
 
     // Ensure user is authenticated and has the correct role
     if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {

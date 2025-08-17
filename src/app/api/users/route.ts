@@ -3,8 +3,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { auth } from '@/lib/auth';
 import { Role } from '@prisma/client';
 
 // Utility to validate email format
@@ -22,7 +21,7 @@ const isStrongPassword = (pw: string) =>
 export async function GET(req: Request) {
   try {
     // 1. Verify session and role
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
       console.warn('[USERS_GET] Unauthorized access attempt');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
@@ -79,7 +78,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     // 1. Verify session and role
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
       console.warn('[USERS_POST] Unauthorized access attempt');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });

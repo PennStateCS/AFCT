@@ -2,8 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { auth } from '@/lib/auth';
 
 export async function GET(req: Request, context: { params: Promise<{ id: string }> }) {
   // Extract the course ID from route parameters
@@ -11,7 +10,7 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
 
   try {
     // Check that the user is authenticated and authorized
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     const user = session?.user;
 
     if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {

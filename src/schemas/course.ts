@@ -53,80 +53,46 @@ const normalizeCode = (v: string) => v.trim().replace(/\s+/g, ' ').toUpperCase()
 /**
  * Base schema for course fields used in forms.
  */
-const BaseCourseSchema = z
-  .object({
-    name: z.string().trim().min(3, 'Course name must be at least 3 characters.'),
-    code: z
-      .string()
-      .trim()
-      .min(2, 'Course code is required.')
-      .transform(normalizeCode)
-      .refine((v) => courseCodeRegex.test(v), {
-        message: 'Use a code like "CMPSC 221" or "MATH220".',
-      }),
-    semester: z.string().trim().min(1, 'Semester is required.'),
-    credits: z.coerce.number().int('Credits must be an integer.').min(1).max(6),
-    startDate: DateTimeLocal,
-    endDate: DateTimeLocal,
-  })
-  .refine((d) => d.startDate <= d.endDate, {
-    path: ['endDate'],
-    message: 'End date/time must be on or after the start date/time.',
-  })
-  .strict();
+/**
+ * Base schema object without effects
+ */
+const BaseCourseObject = z.object({
+  name: z.string().trim().min(3, 'Course name must be at least 3 characters.'),
+  code: z
+    .string()
+    .trim()
+    .min(2, 'Course code is required.')
+    .transform(normalizeCode)
+    .refine((v) => courseCodeRegex.test(v), {
+      message: 'Use a code like "CMPSC 221" or "MATH220".',
+    }),
+  semester: z.string().trim().min(1, 'Semester is required.'),
+  credits: z.coerce.number().int('Credits must be an integer.').min(1).max(6),
+  startDate: DateTimeLocal,
+  endDate: DateTimeLocal,
+}).strict();
 
 /**
- * Form-only schema (no date transformation)
+ * Form-only base object schema (no date transformation)
  */
-const BaseCourseFormSchema = z
-  .object({
-    name: z.string().trim().min(3, 'Course name must be at least 3 characters.'),
-    code: z.string().trim().min(2, 'Course code is required.'),
-    semester: z.string().trim().min(1, 'Semester is required.'),
-    credits: z.string().min(1, 'Credits are required.'),
-    startDate: DateTimeLocalForm,
-    endDate: DateTimeLocalForm,
-  })
-  .superRefine((d, ctx) => {
-    // Validate course code format
-    const normalizedCode = normalizeCode(d.code);
-    if (!courseCodeRegex.test(normalizedCode)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['code'],
-        message: 'Use a code like "CMPSC 221" or "MATH220".',
-      });
-    }
-
-    // Validate credits
-    const credits = Number(d.credits);
-    if (isNaN(credits) || !Number.isInteger(credits) || credits < 1 || credits > 6) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['credits'],
-        message: 'Credits must be an integer between 1 and 6.',
-      });
-    }
-
-    // Validate date range
-    const startDate = new Date(d.startDate);
-    const endDate = new Date(d.endDate);
-    if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime()) && startDate > endDate) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['endDate'],
-        message: 'End date/time must be on or after the start date/time.',
-      });
-    }
-  })
-  .strict();
+const BaseCourseFormObject = z.object({
+  name: z.string().trim().min(3, 'Course name must be at least 3 characters.'),
+  code: z.string().trim().min(2, 'Course code is required.'),
+  semester: z.string().trim().min(1, 'Semester is required.'),
+  credits: z.string().min(1, 'Credits are required.'),
+  startDate: DateTimeLocalForm,
+  endDate: DateTimeLocalForm,
+}).strict();
 
 /**
  * Create schema — includes publish+faculty selection.
  */
-export const CreateCourseSchema = BaseCourseSchema.extend({
+export const CreateCourseSchema = BaseCourseObject.extend({
   isPublished: z.boolean().default(false),
   facultyIds: z.array(z.string()).default([]),
+}).refine((d) => d.startDate <= d.endDate, {
+  path: ['endDate'],
+  message: 'End date/time must be on or after the start date/time.',
 }).superRefine((d, ctx) => {
   if (d.isPublished && d.facultyIds.length === 0) {
     ctx.addIssue({
@@ -141,10 +107,41 @@ export const CreateCourseSchema = BaseCourseSchema.extend({
  * Create form schema — includes publish+faculty selection.
  * Uses form-only validation (no transformations)
  */
-export const CreateCourseFormSchema = BaseCourseFormSchema.extend({
+export const CreateCourseFormSchema = BaseCourseFormObject.extend({
   isPublished: z.boolean(),
   facultyIds: z.array(z.string()),
 }).superRefine((d, ctx) => {
+  // Validate course code format
+  const normalizedCode = normalizeCode(d.code);
+  if (!courseCodeRegex.test(normalizedCode)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['code'],
+      message: 'Use a code like "CMPSC 221" or "MATH220".',
+    });
+  }
+
+  // Validate credits
+  const credits = Number(d.credits);
+  if (isNaN(credits) || !Number.isInteger(credits) || credits < 1 || credits > 6) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['credits'],
+      message: 'Credits must be an integer between 1 and 6.',
+    });
+  }
+
+  // Validate date range
+  const startDate = new Date(d.startDate);
+  const endDate = new Date(d.endDate);
+  if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime()) && startDate > endDate) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['endDate'],
+      message: 'End date/time must be on or after the start date/time.',
+    });
+  }
+
   if (d.isPublished && d.facultyIds.length === 0) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -155,20 +152,20 @@ export const CreateCourseFormSchema = BaseCourseFormSchema.extend({
 });
 
 /**
- * Update schema — partial create schema + id
+ * Update schema — partial base object + id
  */
-export const UpdateCourseSchema = CreateCourseSchema.partial().extend({
+export const UpdateCourseSchema = BaseCourseObject.partial().extend({
   id: z.string().min(1, 'Course id is required.'),
 });
 
 /**
  * Export form-only schema for use in Add/Edit forms.
  */
-export const CourseFormSchema = BaseCourseFormSchema;
+export const CourseFormSchema = BaseCourseFormObject;
 
 /** Types */
 export type CreateCourseInput = z.infer<typeof CreateCourseSchema>;
 export type UpdateCourseInput = z.infer<typeof UpdateCourseSchema>;
-export type CourseFormInput = z.infer<typeof BaseCourseSchema>;
+export type CourseFormInput = z.infer<typeof CourseFormSchema>;
 export type CourseFormInputRaw = z.input<typeof CourseFormSchema>; // raw input values
 export type CourseFormParsed = z.output<typeof CourseFormSchema>; // parsed/normalized values

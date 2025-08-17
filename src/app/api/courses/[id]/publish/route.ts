@@ -2,8 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { auth } from '@/lib/auth';
 
 export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
   try {
@@ -19,7 +18,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     }
 
     // Get authenticated user session
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     const user = session?.user;
 
     // Allow only ADMIN, FACULTY, or TA to toggle publish status

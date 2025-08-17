@@ -2,8 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { auth } from '@/lib/auth';
 
 // POST: Enroll a user into a course using their global role
 // Expects: { userId: string }
@@ -46,7 +45,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
     });
 
     // Log enrollment to the ActivityLog
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     const actingUser = session?.user;
 
     const ip =

@@ -1,14 +1,15 @@
 // /src/app/api/admin/reset-password
 
 import { NextResponse } from 'next/server';
+import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+
+
 
 export async function POST(req: Request) {
   // Retrieve the current authenticated session
-  const session = await getServerSession(authOptions);
+  const session = await auth();
 
   // Restrict access to users with ADMIN or FACULTY roles only
   if (!session || !['ADMIN', 'FACULTY'].includes(session.user.role)) {

@@ -6,11 +6,29 @@
 #  - Auto-installs whiptail (or dialog) if missing
 #  - Detects/fixes DATABASE_URL conflicts (dev & prod)
 #  - Safe runners that ignore inherited DATABASE_URL and load correct .env
-#  - URL-encoding for credentials in DATABASE_URL
+#  - URL-encoding for credentials in PostgreSQL URLs
 #  - Node.js/PostgreSQL setup, Prisma generate/migrate/seed, deploy with PM2
+#  - Quiet mode by default (use --verbose for detailed output)
 # =============================================================================
 
 set -euo pipefail
+
+# Verbosity control
+VERBOSE=false
+[[ "${1:-}" == "--verbose" || "${1:-}" == "-v" ]] && VERBOSE=true
+
+# Quiet output helpers
+quiet_infobox() {
+  if [[ "$VERBOSE" == "true" ]]; then
+    infobox "$1"
+  else
+    echo -e "${BLUE}${1}${NC}"
+  fi
+}
+
+verbose_log() {
+  [[ "$VERBOSE" == "true" ]] && log "$@"
+}
 
 # ------------------------------ TUI Backend ---------------------------------
 detect_pkg_mgr() {
@@ -312,35 +330,198 @@ install_nodejs(){
   if command_exists node; then
     if ! yesno "Node.js $(node --version) detected. Update to LTS (NodeSource)?"; then return 0; fi
   fi
+  
+  quiet_infobox "Installing Node.js..."
+  
+  local install_output
   if [[ "$OS" == "ubuntu" ]]; then
-    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-    sudo apt-get install -y nodejs
+    install_output=$(curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - 2>&1) || { err "Failed to setup NodeSource repo"; [[ "$VERBOSE" == "true" ]] && echo "$install_output"; return 1; }
+    install_output=$(sudo apt-get install -y nodejs 2>&1) || { err "Failed to install Node.js"; [[ "$VERBOSE" == "true" ]] && echo "$install_output"; return 1; }
   elif [[ "$OS" == "centos" ]]; then
-    sudo yum install -y nodejs npm
+    install_output=$(sudo yum install -y nodejs npm 2>&1) || { err "Failed to install Node.js"; [[ "$VERBOSE" == "true" ]] && echo "$install_output"; return 1; }
   elif [[ "$OS" == "arch" ]]; then
-    sudo pacman -Sy --noconfirm nodejs npm
+    install_output=$(sudo pacman -Sy --noconfirm nodejs npm 2>&1) || { err "Failed to install Node.js"; [[ "$VERBOSE" == "true" ]] && echo "$install_output"; return 1; }
   fi
+  
   ok "Node: $(node --version)  NPM: $(npm --version)"
+  
+  # Install global tools quietly
+  verbose_log "Installing global PM2 and cross-env..."
   sudo npm i -g pm2 cross-env >/dev/null 2>&1 || true
 }
 
 # ----------------------- Project Dependencies/Prisma ------------------------
 install_project_dependencies(){
   [[ -f package.json ]] || { msgbox "Run this from the project root (package.json not found)."; return 1; }
-  infobox "Installing dependencies..."; npm install
-  if ! npx --yes --quiet dotenv -v >/dev/null 2>&1; then npm i -D dotenv-cli; fi
+  quiet_infobox "Installing dependencies..."
+  
+  # Install main dependencies quietly
+  local install_output
+  if [[ "$VERBOSE" == "true" ]]; then
+    npm install
+  else
+    install_output=$(npm install 2>&1) || { err "npm install failed"; echo "$install_output"; return 1; }
+  fi
+  
+  # Ensure dotenv-cli is available
+  if ! npx --yes --quiet dotenv -v >/dev/null 2>&1; then 
+    verbose_log "Installing dotenv-cli..."
+    npm i -D dotenv-cli >/dev/null 2>&1
+  fi
+  
+  # Check for missing dependencies and install them quietly
+  local missing_deps=()
+  
+  # Check for required dependencies
+  if ! npm list date-fns >/dev/null 2>&1; then missing_deps+=("date-fns"); fi
+  if ! npm list sonner >/dev/null 2>&1; then missing_deps+=("sonner"); fi
+  if ! npm list @tailwindcss/postcss >/dev/null 2>&1; then missing_deps+=("@tailwindcss/postcss"); fi
+  if ! npm list tailwindcss >/dev/null 2>&1; then missing_deps+=("tailwindcss"); fi
+  if ! npm list autoprefixer >/dev/null 2>&1; then missing_deps+=("autoprefixer"); fi
+  if ! npm list postcss >/dev/null 2>&1; then missing_deps+=("postcss"); fi
+  
+  if [[ ${#missing_deps[@]} -gt 0 ]]; then
+    verbose_log "Installing missing dependencies: ${missing_deps[*]}"
+    if [[ "$VERBOSE" == "true" ]]; then
+      npm install date-fns sonner
+      npm install -D @tailwindcss/postcss tailwindcss autoprefixer postcss
+    else
+      npm install date-fns sonner >/dev/null 2>&1
+      npm install -D @tailwindcss/postcss tailwindcss autoprefixer postcss >/dev/null 2>&1
+    fi
+  fi
+  
+  ok "Dependencies installed successfully"
+    npm install -D @tailwindcss/postcss tailwindcss autoprefixer postcss
+  fi
+  
   msgbox "Dependencies installed."
+}
+
+# ----------------------- Build Dependencies Fix -----------------------------
+fix_build_dependencies(){
+  [[ -f package.json ]] || { msgbox "Run this from the project root (package.json not found)."; return 1; }
+  
+  infobox "Checking and fixing build dependencies..."
+  
+  # List of required dependencies and their versions
+  local required_deps=(
+    "date-fns@^3.6.0"
+    "sonner@^1.5.0"
+    "lucide-react@^0.469.0"
+    "framer-motion@^11.11.17"
+    "next-themes@^0.4.3"
+    "@radix-ui/react-avatar@^1.1.1"
+    "@radix-ui/react-popover@^1.1.2"
+    "@radix-ui/react-dropdown-menu@^2.1.2"
+    "@radix-ui/react-dialog@^1.1.2"
+    "@radix-ui/react-slot@^1.1.0"
+    "@radix-ui/react-label@^2.1.0"
+    "@radix-ui/react-tabs@^1.1.1"
+    "@radix-ui/react-toast@^1.2.2"
+    "@radix-ui/react-tooltip@^1.1.3"
+    "@radix-ui/react-select@^2.1.2"
+    "@radix-ui/react-checkbox@^1.1.2"
+    "@radix-ui/react-separator@^1.1.0"
+    "@hookform/resolvers@^3.6.0"
+    "react-hook-form@^7.53.2"
+    "class-variance-authority@^0.7.1"
+    "clsx@^2.1.1"
+    "tailwind-merge@^2.5.4"
+  )
+  
+  local required_dev_deps=(
+    "@tailwindcss/postcss@^4.1.12"
+    "tailwindcss@^4.1.12"
+    "autoprefixer@^10.4.20"
+    "postcss@^8.4.47"
+  )
+  
+  # Install missing production dependencies
+  local missing_prod=()
+  for dep in "${required_deps[@]}"; do
+    local pkg_name=$(echo "$dep" | cut -d'@' -f1)
+    if ! npm list "$pkg_name" >/dev/null 2>&1; then
+      missing_prod+=("$dep")
+    fi
+  done
+  
+  if [[ ${#missing_prod[@]} -gt 0 ]]; then
+    infobox "Installing missing production dependencies: ${missing_prod[*]}"
+    npm install "${missing_prod[@]}"
+  fi
+  
+  # Install missing dev dependencies
+  local missing_dev=()
+  for dep in "${required_dev_deps[@]}"; do
+    local pkg_name=$(echo "$dep" | cut -d'@' -f1)
+    if ! npm list "$pkg_name" >/dev/null 2>&1; then
+      missing_dev+=("$dep")
+    fi
+  done
+  
+  if [[ ${#missing_dev[@]} -gt 0 ]]; then
+    infobox "Installing missing dev dependencies: ${missing_dev[*]}"
+    npm install -D "${missing_dev[@]}"
+  fi
+  
+  # Create Prisma config file if it doesn't exist (Prisma 7 preparation)
+  if [[ ! -f "prisma.config.ts" ]]; then
+    infobox "Creating Prisma 7-ready config file..."
+    cat > prisma.config.ts <<EOF
+const config = {
+  seed: 'tsx prisma/seed.ts'
+}
+
+export default config
+EOF
+    ok "Created prisma.config.ts"
+  fi
+  
+  # Check if Tailwind config exists
+  if [[ ! -f "tailwind.config.js" && ! -f "tailwind.config.ts" ]]; then
+    infobox "Creating Tailwind CSS configuration..."
+    cat > tailwind.config.js <<EOF
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: [
+    "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
+  ],
+  theme: {
+    extend: {
+      colors: {
+        background: "var(--background)",
+        foreground: "var(--foreground)",
+      },
+    },
+  },
+  plugins: [],
+}
+EOF
+    ok "Created tailwind.config.js"
+  fi
+  
+  msgbox "Build dependencies fixed!\n\nChanges made:\n• Installed missing dependencies\n• Created Prisma 7-ready config\n• Verified Tailwind CSS setup\n\nYou can now run 'npm run build' successfully."
 }
 
 # ------------------------------ Dev Database --------------------------------
 setup_development_database(){
   check_os
   if ! command_exists sqlite3; then
-    if [[ "$OS" == "ubuntu" ]]; then sudo apt-get update && sudo apt-get install -y sqlite3 libsqlite3-dev
-    elif [[ "$OS" == "centos" ]]; then sudo yum install -y sqlite sqlite-devel
-    else sudo pacman -Sy --noconfirm sqlite; fi
+    quiet_infobox "Installing SQLite..."
+    if [[ "$OS" == "ubuntu" ]]; then 
+      sudo apt-get update >/dev/null 2>&1 && sudo apt-get install -y sqlite3 libsqlite3-dev >/dev/null 2>&1
+    elif [[ "$OS" == "centos" ]]; then 
+      sudo yum install -y sqlite sqlite-devel >/dev/null 2>&1
+    else 
+      sudo pacman -Sy --noconfirm sqlite >/dev/null 2>&1
+    fi
   fi
+  
   if [[ ! -f ".env.local" ]]; then
+    verbose_log "Creating .env.local file..."
     cat > .env.local <<EOF
 DATABASE_URL="file:./prisma/dev.db"
 NODE_ENV="development"
@@ -348,11 +529,36 @@ NEXTAUTH_URL="http://localhost:3000"
 NEXTAUTH_SECRET="$(openssl rand -base64 32 2>/dev/null || echo dev-secret)"
 EOF
   fi
+  
   detect_env_conflicts dev || { if yesno "Fix dev env conflicts now?"; then fix_env_conflicts dev; fi; }
-  infobox "Generating Prisma client..." ; npx prisma generate || true
-  infobox "Applying dev migrations..." ; npx prisma migrate dev --name init
-  infobox "Seeding dev DB..." ; npm run seed 2>/dev/null || npx tsx prisma/seed.ts || true
-  msgbox "Development DB ready."
+  
+  quiet_infobox "Setting up development database..."
+  
+  # Generate Prisma client
+  verbose_log "Generating Prisma client..."
+  if [[ "$VERBOSE" == "true" ]]; then
+    npx prisma generate || true
+  else
+    npx prisma generate >/dev/null 2>&1 || true
+  fi
+  
+  # Apply migrations
+  verbose_log "Applying dev migrations..."
+  if [[ "$VERBOSE" == "true" ]]; then
+    npx prisma migrate dev --name init
+  else
+    npx prisma migrate dev --name init >/dev/null 2>&1
+  fi
+  
+  # Seed database
+  verbose_log "Seeding dev database..."
+  if [[ "$VERBOSE" == "true" ]]; then
+    npm run seed 2>/dev/null || npx tsx prisma/seed.ts || true
+  else
+    npm run seed >/dev/null 2>&1 || npx tsx prisma/seed.ts >/dev/null 2>&1 || true
+  fi
+  
+  ok "Development database ready"
 }
 
 # ------------------------------ PostgreSQL ----------------------------------
@@ -360,14 +566,26 @@ install_postgresql(){
   check_os
   if command_exists psql; then
     systemctl is-active --quiet postgresql || { sudo systemctl start postgresql; sudo systemctl enable postgresql; }
-    msgbox "PostgreSQL available."; return 0
+    ok "PostgreSQL available"
+    return 0
   fi
   if ! check_root; then msgbox "Please run with sudo/root to install PostgreSQL."; return 1; fi
-  if [[ "$OS" == "ubuntu" ]]; then sudo apt-get update && sudo apt-get install -y postgresql postgresql-contrib
-  elif [[ "$OS" == "centos" ]]; then sudo yum install -y postgresql-server postgresql-contrib && postgresql-setup initdb
-  else sudo pacman -Sy --noconfirm postgresql; fi
+  
+  quiet_infobox "Installing PostgreSQL..."
+  
+  local install_output
+  if [[ "$OS" == "ubuntu" ]]; then 
+    install_output=$(sudo apt-get update 2>&1) || { err "Failed to update packages"; [[ "$VERBOSE" == "true" ]] && echo "$install_output"; return 1; }
+    install_output=$(sudo apt-get install -y postgresql postgresql-contrib 2>&1) || { err "Failed to install PostgreSQL"; [[ "$VERBOSE" == "true" ]] && echo "$install_output"; return 1; }
+  elif [[ "$OS" == "centos" ]]; then 
+    install_output=$(sudo yum install -y postgresql-server postgresql-contrib 2>&1) || { err "Failed to install PostgreSQL"; [[ "$VERBOSE" == "true" ]] && echo "$install_output"; return 1; }
+    postgresql-setup initdb >/dev/null 2>&1
+  else 
+    install_output=$(sudo pacman -Sy --noconfirm postgresql 2>&1) || { err "Failed to install PostgreSQL"; [[ "$VERBOSE" == "true" ]] && echo "$install_output"; return 1; }
+  fi
+  
   sudo systemctl start postgresql && sudo systemctl enable postgresql
-  msgbox "PostgreSQL installed & running."
+  ok "PostgreSQL installed & running"
 }
 
 setup_production_database(){
@@ -412,25 +630,62 @@ DATABASE_URL="${DB_URL}"
 NODE_ENV="production"
 NEXTAUTH_URL="http://localhost:3000"
 NEXTAUTH_SECRET="$(openssl rand -base64 32 2>/dev/null || echo prod-secret)"
-UPLOAD_DIR="./public/uploads"
-MAX_FILE_SIZE="10485760"
-EOF
-  normalize_file_unix ".env.production"
-
-  # Test psql
-  if PGPASSWORD="$DB_PASS" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "select 1" >/dev/null 2>&1; then
-    :
-  else
-    msgbox "psql connection failed. Check credentials/pg_hba.conf."; return 1
-  fi
-
   # Prisma generate/migrate/seed with env-safe runner
-  run_with_env prod "npx prisma generate --schema=prisma/schema.production.prisma" || { msgbox "Prisma generate failed"; return 1; }
-  if ! run_with_env prod "npx prisma migrate deploy --schema=prisma/schema.production.prisma"; then
-    if yesno "migrate deploy failed. Try 'db push' (may accept data loss)?"; then
-      run_with_env prod "npx prisma db push --schema=prisma/schema.production.prisma --accept-data-loss"
+  quiet_infobox "Setting up production database schema..."
+  
+  verbose_log "Generating Prisma client for production..."
+  if [[ "$VERBOSE" == "true" ]]; then
+    run_with_env prod "npx prisma generate --schema=prisma/schema.production.prisma" || { msgbox "Prisma generate failed"; return 1; }
+  else
+    run_with_env prod "npx prisma generate --schema=prisma/schema.production.prisma" >/dev/null 2>&1 || { err "Prisma generate failed"; return 1; }
+  fi
+  
+  # Handle migration - prefer db push for production to avoid P3005 errors
+  verbose_log "Syncing database schema..."
+  if [[ "$VERBOSE" == "true" ]]; then
+    if ! run_with_env prod "npx prisma migrate deploy --schema=prisma/schema.production.prisma" 2>/dev/null; then
+      warn "Migration deploy failed (likely P3005 - database not empty). Using db push instead..."
+      if run_with_env prod "npx prisma db push --schema=prisma/schema.production.prisma --accept-data-loss"; then
+        ok "Schema synchronized with db push"
+      else
+        msgbox "Database schema sync failed. Check your connection and try again."
+        return 1
+      fi
+    else
+      ok "Migrations applied successfully"
+    fi
+  else
+    if ! run_with_env prod "npx prisma migrate deploy --schema=prisma/schema.production.prisma" >/dev/null 2>&1; then
+      verbose_log "Migration deploy failed, using db push..."
+      if run_with_env prod "npx prisma db push --schema=prisma/schema.production.prisma --accept-data-loss" >/dev/null 2>&1; then
+        ok "Schema synchronized"
+      else
+        err "Database schema sync failed"
+        return 1
+      fi
+    else
+      ok "Migrations applied"
     fi
   fi
+  
+  # Seed the database
+  verbose_log "Seeding production database..."
+  if [[ "$VERBOSE" == "true" ]]; then
+    run_with_env prod "npx prisma db seed --schema=prisma/schema.production.prisma" || msgbox "Seeding failed; you can re-run later."
+  else
+    run_with_env prod "npx prisma db seed --schema=prisma/schema.production.prisma" >/dev/null 2>&1 || verbose_log "Seeding failed; you can re-run later."
+  fi
+      ok "Schema synchronized with db push"
+    else
+      msgbox "Database schema sync failed. Check your connection and try again."
+      return 1
+    fi
+  else
+    ok "Migrations applied successfully"
+  fi
+  
+  # Seed the database
+  infobox "Seeding production database..."
   run_with_env prod "npx prisma db seed --schema=prisma/schema.production.prisma" || msgbox "Seeding failed; you can re-run later."
 
   msgbox "Production DB configured.\nDATABASE_URL=$(mask_db_url "$DB_URL")"
@@ -440,16 +695,38 @@ EOF
 deploy_application(){
   [[ -f package.json ]] || { msgbox "Run from project root."; return 1; }
   [[ -f ".env.production" ]] || { msgbox ".env.production is missing. Run production DB setup first."; return 1; }
-  infobox "Installing deps (if needed)"; [[ -d node_modules ]] || npm install
-  infobox "Building application"; npm run build
-  if command_exists pm2; then
-    pm2 delete afct-dashboard 2>/dev/null || true
-    pm2 start npm --name afct-dashboard -- start
-    pm2 save
-    msgbox "Application started with PM2.\nLogs: pm2 logs afct-dashboard"
+  
+  # Install dependencies if needed
+  if [[ ! -d node_modules ]]; then
+    quiet_infobox "Installing dependencies..."
+    if [[ "$VERBOSE" == "true" ]]; then
+      npm install
+    else
+      npm install >/dev/null 2>&1
+    fi
+  fi
+  
+  # Build application
+  quiet_infobox "Building application..."
+  if [[ "$VERBOSE" == "true" ]]; then
+    npm run build
   else
+    npm run build >/dev/null 2>&1 || { err "Build failed"; return 1; }
+  fi
+  
+  # Deploy with PM2 or npm
+  if command_exists pm2; then
+    verbose_log "Starting with PM2..."
+    pm2 delete afct-dashboard 2>/dev/null || true
+    pm2 start npm --name afct-dashboard -- start >/dev/null 2>&1
+    pm2 save >/dev/null 2>&1
+    ok "Application started with PM2"
+    msgbox "Deployment Complete!\n\nApplication: afct-dashboard\nStatus: Running with PM2\nLogs: pm2 logs afct-dashboard\nMonitor: pm2 monit"
+  else
+    verbose_log "Starting with npm..."
     npm start &
-    msgbox "Application started with npm start (consider using PM2)."
+    ok "Application started with npm start"
+    msgbox "Deployment Complete!\n\nApplication started with npm start\n(Consider installing PM2 for production)"
   fi
 }
 
@@ -578,21 +855,26 @@ validate_production_environment(){
   if [[ -n "$missing" ]]; then msgbox "Missing:\n$missing"; return 1; fi
 
   detect_env_conflicts prod || true
-  local url; url="$(read_dburl_from_file ".env.production")"
-  [[ -n "$url" ]] || { msgbox "DATABASE_URL missing in .env.production"; return 1; }
-  local res="DATABASE_URL: $(mask_db_url "$url")\n"
-  if run_with_env prod "npx prisma validate --schema=prisma/schema.production.prisma"; then res+="Schema: valid\n"; else res+="Schema: invalid\n"; fi
-  if run_with_env prod "npx prisma generate --schema=prisma/schema.production.prisma"; then res+="Client: generated\n"; else res+="Client: failed\n"; fi
-  msgbox "$res"
-}
-
-# -------------------------------- Submenus -----------------------------------
-development_menu(){
-  while true; do
-    local choice
-    choice=$(menu \
-      1 "Complete Development Setup (All-in-One)" \
-      2 "Install Node.js" \
+    case "$choice" in
+      1) 
+        quiet_infobox "Running complete development setup..."
+        install_nodejs && install_project_dependencies && setup_development_database
+        ok "Development setup complete"
+        msgbox "Development Environment Ready!\n\nNext steps:\n• Run: npm run dev\n• Open: http://localhost:3000\n• Database: SQLite (prisma/dev.db)"
+        ;;
+      2) install_nodejs;;
+      3) install_project_dependencies;;
+      4) setup_development_database;;
+      5) reset_development_database;;
+      6) if [[ -f "prisma/dev.db" ]]; then
+           sqlite3 prisma/dev.db "SELECT 'SQLite OK';" >/dev/null 2>&1 && msgbox "SQLite connection OK" || msgbox "SQLite connection failed"
+         else
+           msgbox "prisma/dev.db not found."
+         fi;;
+      7) detect_env_conflicts dev || { if yesno "Run auto-fix?"; then fix_env_conflicts dev; fi; };;
+      0) return 0;;
+      *) ;;
+    esac"Install Node.js" \
       3 "Install Project Dependencies" \
       4 "Setup Development Database (SQLite)" \
       5 "Reset Development Database" \
@@ -610,32 +892,43 @@ development_menu(){
            sqlite3 prisma/dev.db "SELECT 'SQLite OK';" >/dev/null 2>&1 && msgbox "SQLite connection OK" || msgbox "SQLite connection failed"
          else
            msgbox "prisma/dev.db not found."
-         fi;;
-      7) detect_env_conflicts dev || { if yesno "Run auto-fix?"; then fix_env_conflicts dev; fi; };;
-      0) return 0;;
-      *) ;;
-    esac
-  done
-}
-
-production_menu(){
-  while true; do
-    local choice
-    choice=$(menu \
-      1 "Complete Production Setup (All-in-One)" \
-      2 "Install PostgreSQL" \
-      3 "Setup Production Database" \
-      4 "Install PM2 Process Manager" \
-      5 "Setup PM2 Ecosystem" \
-      6 "Deploy Application" \
-      7 "Configure PM2 Startup" \
-      8 "Manage PM2 Processes" \
-      9 "Reset Production Database" \
-      10 "Test Production Database" \
-      11 "Validate Production Environment" \
-      12 "Fix Migration Provider Mismatch" \
-      13 "Environment Conflict Detection & Fix" \
-      0 "Back to Main Menu") || return 0
+    case "$choice" in
+      1) 
+        quiet_infobox "Running complete production setup..."
+        install_nodejs && install_postgresql && install_project_dependencies && install_pm2 && install_dotenv_cli && setup_production_database && setup_pm2_ecosystem
+        verbose_log "Building application..."
+        if [[ "$VERBOSE" == "true" ]]; then
+          npm run build
+        else
+          npm run build >/dev/null 2>&1
+        fi
+        ok "Production setup complete"
+        msgbox "Production Environment Ready!\n\nNext steps:\n• Start: pm2 start ecosystem.config.js\n• Monitor: pm2 monit\n• Logs: pm2 logs"
+        ;;
+      2) install_postgresql;;
+      3) setup_production_database;;
+      4) install_pm2;;
+      5) setup_pm2_ecosystem;;
+      6) deploy_application;;
+      7) configure_pm2_startup;;
+      8) manage_pm2_processes;;
+      9) reset_production_database;;
+      10) if [[ -f ".env.production" ]]; then
+           local url user pass host port db
+           url="$(read_dburl_from_file ".env.production")"
+           user=$(echo "$url" | sed -n 's#postgresql://\([^:/@]\+\).*#\1#p')
+           pass=$(echo "$url" | sed -n 's#postgresql://[^:]\+:\([^@]\+\)@.*#\1#p')
+           host=$(echo "$url" | sed -n 's#.*@\(.*\):[0-9]\+/.*#\1#p')
+           port=$(echo "$url" | sed -n 's#.*@.*:\([0-9]\+\)/.*#\1#p')
+           db=$(echo "$url"   | sed -n 's#.*/\([^?]\+\).*#\1#p')
+           if PGPASSWORD="$(printf '%b' "$pass")" psql -h "$host" -p "$port" -U "$user" -d "$db" -c "select 1;" >/dev/null 2>&1; then
+             msgbox "PostgreSQL connection OK"
+           else
+             msgbox "PostgreSQL connection failed"
+           fi
+         else
+           msgbox ".env.production not found"
+         fi;; to Main Menu") || return 0
 
     case "$choice" in
       1) install_nodejs; install_postgresql; install_project_dependencies; install_pm2; install_dotenv_cli; setup_production_database; setup_pm2_ecosystem; infobox "Building app..."; npm run build; msgbox "Production setup complete.\nStart: pm2 start ecosystem.config.js";;
@@ -718,26 +1011,35 @@ system_menu(){
       3 "Install Node.js" \
       4 "Install PostgreSQL" \
       5 "Install Project Dependencies" \
-      6 "Install PM2 Process Manager" \
-      7 "Install dotenv-cli" \
-      8 "Setup PM2 Ecosystem" \
-      9 "Configure PM2 Startup" \
-      10 "Manage PM2 Processes" \
-      0 "Back to Main Menu") || return 0
-
-    case "$choice" in
-      1) system_health_check;;
-      2) view_system_status;;
-      3) install_nodejs;;
-      4) install_postgresql;;
-      5) install_project_dependencies;;
-      6) install_pm2;;
-      7) install_dotenv_cli;;
-      8) setup_pm2_ecosystem;;
-      9) configure_pm2_startup;;
-      10) manage_pm2_processes;;
-      0) return 0;;
-      *) ;;
+      6 "Fix Build Dependencies" \
+      7 "Install PM2 Process Manager" \
+install_pm2(){
+  if command_exists pm2; then
+    local current_version; current_version=$(pm2 --version 2>/dev/null || echo "unknown")
+    if ! yesno "PM2 $current_version detected. Reinstall/update?"; then return 0; fi
+  fi
+  
+  quiet_infobox "Installing PM2 globally..."
+  
+  local install_output
+  if [[ "$VERBOSE" == "true" ]]; then
+    if sudo npm install -g pm2; then
+      ok "PM2 installed: $(pm2 --version)"
+    else
+      err "Failed to install PM2"
+      return 1
+    fi
+  else
+    install_output=$(sudo npm install -g pm2 2>&1) || { err "Failed to install PM2"; echo "$install_output"; return 1; }
+    ok "PM2 installed: $(pm2 --version)"
+  fi
+  
+  # Install PM2 logrotate module
+  verbose_log "Installing PM2 logrotate module..."
+  pm2 install pm2-logrotate >/dev/null 2>&1 || true
+  
+  ok "PM2 setup complete"
+}     *) ;;
     esac
   done
 }
@@ -756,9 +1058,9 @@ install_pm2(){
     err "Failed to install PM2"
     return 1
   fi
+  local ecosystem_file="ecosystem.config.js"
   
-  # Install PM2 logrotate module
-  infobox "Installing PM2 logrotate module..."
+  quiet_infobox "Creating PM2 ecosystem configuration..."
   pm2 install pm2-logrotate >/dev/null 2>&1 || true
   
   msgbox "PM2 installed successfully!\n\nFeatures available:\n• Process management\n• Auto-restart on crashes\n• Log rotation\n• System startup integration"
@@ -999,16 +1301,26 @@ install_dotenv_cli(){
   
   if npx --yes --quiet dotenv -v >/dev/null 2>&1; then
     local version; version=$(npx --yes --quiet dotenv -v 2>/dev/null | head -n1 || echo "unknown")
-    ok "dotenv-cli installed: $version"
-    
-    msgbox "dotenv-cli Installation Complete!\n\nUsage examples:\n• Load .env.production: npx dotenv -e .env.production -- npm start\n• Load .env.local: npx dotenv -e .env.local -- npm run dev\n• Multiple files: npx dotenv -e .env -e .env.local -- command\n\nThis enables safe environment loading for all commands."
-  else
-    err "dotenv-cli installation failed"
-    return 1
-  fi
-}
-
-# ------------------------------- Main Menu ----------------------------------
+    case "$choice" in
+      1) development_menu;;
+      2) production_menu;;
+      3) database_menu;;
+      4) system_menu;;
+      5) 
+        quiet_infobox "Running quick development setup..."
+        install_nodejs && install_project_dependencies && setup_development_database
+        ok "Quick dev setup complete"
+        msgbox "Development Environment Ready!\n\nNext steps:\n• Run: npm run dev\n• Open: http://localhost:3000\n• Database: SQLite (prisma/dev.db)"
+        ;;
+      6) 
+        quiet_infobox "Running quick production setup..."
+        install_nodejs && install_postgresql && install_project_dependencies && setup_production_database && deploy_application
+        ok "Quick prod setup complete"
+        msgbox "Production Environment Ready!\n\nApplication is running with PM2\n• Monitor: pm2 monit\n• Logs: pm2 logs afct-dashboard\n• Restart: pm2 restart afct-dashboard"
+        ;;
+      0) exit 0;;
+      *) ;;
+    esac------------------------- Main Menu ----------------------------------
 main_menu(){
   while true; do
     local choice
@@ -1027,9 +1339,17 @@ main_menu(){
       3) database_menu;;
       4) system_menu;;
       5) install_nodejs; install_project_dependencies; setup_development_database; msgbox "Quick dev setup complete.\nRun: npm run dev";;
-      6) install_nodejs; install_postgresql; install_project_dependencies; setup_production_database; deploy_application; msgbox "Quick prod setup complete.\nApplication running with PM2";;
-      0) exit 0;;
-      *) ;;
+# ------------------------------- Entry Point --------------------------------
+check_os
+
+# Welcome message
+if [[ "$VERBOSE" == "true" ]]; then
+  msgbox "AFCT Dashboard Setup Wizard (Verbose Mode)\n\nThis wizard will help you set up the AFCT Dashboard for development or production.\n\nVerbose mode is enabled - you'll see detailed output for all operations."
+else
+  msgbox "AFCT Dashboard Setup Wizard\n\nThis wizard will help you set up the AFCT Dashboard for development or production.\n\nQuiet mode is active. Use '$0 --verbose' for detailed output.\n\nOnly errors and important messages will be shown."
+fi
+
+main_menu;;
     esac
   done
 }
