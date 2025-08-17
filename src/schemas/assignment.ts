@@ -127,10 +127,29 @@ export const CreateAssignmentFormSchema = BaseAssignmentFormSchema.extend({
 });
 
 /**
- * UPDATE: partial base schema + id.
+ * UPDATE: partial base schema + id + optional isPublished with validation.
  */
 export const UpdateAssignmentSchema = BaseAssignmentFormSchema.partial().extend({
   id: z.string().min(1, 'Assignment id is required.'),
+  isPublished: z.boolean().optional(),
+}).superRefine((d, ctx) => {
+  // Only validate maxPoints vs publish if both are provided
+  if (d.isPublished && d.maxPoints !== undefined) {
+    const maxPoints = Number(d.maxPoints);
+    if (isNaN(maxPoints)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['maxPoints'],
+        message: 'Max points must be a valid number.',
+      });
+    } else if (d.isPublished && maxPoints <= 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['maxPoints'],
+        message: 'Max points must be greater than 0 to publish.',
+      });
+    }
+  }
 });
 
 /** Export a form-only schema for UI, if you want the bare form without publish logic */
