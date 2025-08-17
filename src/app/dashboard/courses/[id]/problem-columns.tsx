@@ -1,4 +1,4 @@
-// problem_columns.ts
+// problem-columns.tsx
 import { ColumnDef } from '@tanstack/react-table';
 import type { Problem } from '@prisma/client';
 import { ChevronDown, Pencil, Trash2, Notebook } from 'lucide-react';
