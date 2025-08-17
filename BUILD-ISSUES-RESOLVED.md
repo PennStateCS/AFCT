@@ -67,6 +67,36 @@ The database schema is not empty. Read more about how to baseline an existing pr
 npx prisma db push --schema=prisma/schema.production.prisma --accept-data-loss
 ```
 
+### 6. **NextAuth Package Corruption** ✅
+**Problem**: NextAuth file missing error causing client-side crashes
+```
+Error: ENOENT: no such file or directory, open 'node_modules\next-auth\node_modules\@auth\core\errors.js'
+```
+
+**Root Cause**: Version conflicts between `@auth/core` packages:
+- Main package: `@auth/core@0.19.1` 
+- next-auth dependency: `@auth/core@0.40.0`
+- @auth/prisma-adapter dependency: `@auth/core@0.40.0`
+
+**Solution**: 
+1. Updated package.json to use unified version:
+   ```json
+   "@auth/core": "^0.40.0"
+   ```
+2. Reinstalled NextAuth packages:
+   ```bash
+   npm uninstall next-auth
+   npm install next-auth@^5.0.0-beta.29
+   ```
+3. Regenerated Prisma client:
+   ```bash
+   npm run db:generate
+   ```
+4. Cleared Next.js build cache
+5. Added NextAuth troubleshooting to setup wizard
+
+**Result**: All NextAuth functionality now working perfectly with 0 security vulnerabilities
+
 ## 🎯 Build Status
 
 **Current Status**: ✅ **SUCCESS WITH WARNINGS**

@@ -10,7 +10,10 @@ export const config = {
 };
 
 export async function middleware(req: NextRequest) {
-  const token = await getToken({ req });
+  const token = await getToken({ 
+    req, 
+    secret: process.env.NEXTAUTH_SECRET 
+  });
   const pathname = req.nextUrl.pathname;
 
   // IP/User-Agent extraction (no req.ip!)
