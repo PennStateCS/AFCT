@@ -42,7 +42,13 @@ export async function POST(req: NextRequest) {
       category: 'ASSIGNMENT',
       courseId: created.courseId,
       assignmentId: created.id,
-      metadata: {},
+      metadata: {
+        title: created.title,
+        description: created.description ? 'Has description' : 'No description',
+        maxPoints: created.maxPoints,
+        isPublished: created.isPublished,
+        dueDate: created.dueDate.toISOString(),
+      },
     });
 
     // Respond with the newly created assignment

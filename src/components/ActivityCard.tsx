@@ -22,6 +22,36 @@ interface ActivityLog {
   timestamp: string;
   metadata: Record<string, unknown> | null;
   user: ActivityUser | null;
+  // Enhanced fields (available in new entries with enhanced schema)
+  category?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  courseId?: string;
+  assignmentId?: string;
+  problemId?: string;
+  submissionId?: string;
+  // Enhanced relations (available from API includes)
+  course?: {
+    id: string;
+    name: string;
+    code: string;
+  } | null;
+  assignment?: {
+    id: string;
+    title: string;
+  } | null;
+  problem?: {
+    id: string;
+    title: string;
+  } | null;
+  submission?: {
+    id: string;
+    assignmentProblem: {
+      assignment: {
+        title: string;
+      };
+    };
+  } | null;
 }
 
 interface ActivityResponse {

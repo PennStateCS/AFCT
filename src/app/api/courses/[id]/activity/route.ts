@@ -32,40 +32,46 @@ export async function GET(
 
     // Get URL search params for pagination
     const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get('limit') || '20');
+    const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    // Get activity logs for users in this course - simplified query first
-    const courseUserIds = await prisma.roster.findMany({
-      where: { courseId },
-      select: { userId: true },
-    });
-
-    const userIds = courseUserIds.map(r => r.userId);
-
-    // Simple query first to test
+    // Get activities for this specific course using enhanced ActivityLog schema
     const activityLogs = await prisma.activityLog.findMany({
       where: {
-        AND: [
-          { userId: { in: userIds } },
+        OR: [
+          // Direct course activities (most efficient with foreign key)
+          { courseId: courseId },
+          // Assignment activities in this course
+          { 
+            assignment: { courseId: courseId }
+          },
+          // Problem activities in this course  
           {
-            OR: [
-              // Course-specific actions
-              { action: { contains: 'COURSE' } },
-              { action: { contains: 'ASSIGNMENT' } },
-              { action: { contains: 'PROBLEM' } },
-              { action: { contains: 'SUBMISSION' } },
-              { action: { contains: 'GRADE' } },
-              // Only recent logins (last 2 hours) to show current activity
+            problem: { courseId: courseId }
+          },
+          // Submission activities for assignments in this course
+          {
+            submission: { 
+              assignmentProblem: { 
+                assignment: { courseId: courseId }
+              }
+            }
+          },
+          // Login activities from course members (last 24 hours for better context)
+          {
+            AND: [
+              { action: { contains: 'LOGIN' } },
               { 
-                AND: [
-                  { action: { contains: 'LOGIN' } },
-                  { 
-                    timestamp: {
-                      gte: new Date(Date.now() - 2 * 60 * 60 * 1000) // Last 2 hours only
-                    }
+                timestamp: {
+                  gte: new Date(Date.now() - 24 * 60 * 60 * 1000)
+                }
+              },
+              {
+                user: {
+                  rosterEntries: {
+                    some: { courseId: courseId }
                   }
-                ]
+                }
               }
             ]
           }
@@ -81,33 +87,77 @@ export async function GET(
             avatar: true,
           },
         },
+        course: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+          },
+        },
+        assignment: {
+          select: {
+            id: true,
+            title: true,
+          },
+        },
+        problem: {
+          select: {
+            id: true,
+            title: true,
+          },
+        },
+        submission: {
+          select: {
+            id: true,
+            assignmentProblem: {
+              select: {
+                assignment: {
+                  select: {
+                    title: true,
+                  },
+                },
+              },
+            },
+          },
+        },
       },
       orderBy: { timestamp: 'desc' },
       take: limit,
       skip: offset,
     });
 
-    // Get total count for pagination
+    // Get total count for pagination using the same course-specific filter
     const totalCount = await prisma.activityLog.count({
       where: {
-        AND: [
-          { userId: { in: userIds } },
+        OR: [
+          { courseId: courseId },
+          { 
+            assignment: { courseId: courseId }
+          },
           {
-            OR: [
-              { action: { contains: 'COURSE' } },
-              { action: { contains: 'ASSIGNMENT' } },
-              { action: { contains: 'PROBLEM' } },
-              { action: { contains: 'SUBMISSION' } },
-              { action: { contains: 'GRADE' } },
+            problem: { courseId: courseId }
+          },
+          {
+            submission: { 
+              assignmentProblem: { 
+                assignment: { courseId: courseId }
+              }
+            }
+          },
+          {
+            AND: [
+              { action: { contains: 'LOGIN' } },
               { 
-                AND: [
-                  { action: { contains: 'LOGIN' } },
-                  { 
-                    timestamp: {
-                      gte: new Date(Date.now() - 2 * 60 * 60 * 1000)
-                    }
+                timestamp: {
+                  gte: new Date(Date.now() - 24 * 60 * 60 * 1000)
+                }
+              },
+              {
+                user: {
+                  rosterEntries: {
+                    some: { courseId: courseId }
                   }
-                ]
+                }
               }
             ]
           }
