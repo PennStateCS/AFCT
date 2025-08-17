@@ -36,7 +36,7 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
   --color-table-header: var(--table-header);
-  --color-table-hightlight: var(--table-hightlight);
+  --color-table-highlight: var(--table-highlight);
   --color-table-background: var(--table-background);
   --color-table-header-foreground: var(--table-header-foreground);
   --color-popover-foreground: var(--popover-foreground);

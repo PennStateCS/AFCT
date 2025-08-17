@@ -1,5 +1,3 @@
-'use client';
-
 import { useEffect, useState } from 'react';
 import {
   Dialog,
@@ -26,7 +24,7 @@ type Props = {
 };
 
 export function EditProfileDialog({ open, setOpen }: Props) {
-  const { data: session, status, update } = useSession();
+  const { status, update } = useSession();
 
   // Avatar/file/UI state
   const [email, setEmail] = useState('');
@@ -106,19 +104,14 @@ export function EditProfileDialog({ open, setOpen }: Props) {
 
       const updatedUser = await res.json();
 
-      // keep session in sync
+      // Use NextAuth's update function to immediately update the session
       await update({
-        user: {
-          ...session?.user,
-          firstName: updatedUser.firstName,
-          lastName: updatedUser.lastName,
-          avatar: updatedUser.avatar,
-          name: `${updatedUser.firstName ?? ''} ${updatedUser.lastName ?? ''}`.trim(),
-          image: updatedUser.avatar,
-          email: updatedUser.email ?? session?.user?.email,
-        },
+        firstName: updatedUser.firstName,
+        lastName: updatedUser.lastName,
+        avatar: updatedUser.avatar,
+        name: `${updatedUser.firstName || ''} ${updatedUser.lastName || ''}`.trim()
       });
-
+      
       toast.success('Profile updated!');
       setOpen(false);
     } catch {
