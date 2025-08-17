@@ -45,6 +45,10 @@ model User {
   submissions   Submission[]
   activityLogs  ActivityLog[]
   commentsAbout Comment[] @relation("CommentsAboutStudent") // Comments about this student's work
+
+  @@index([role])
+  @@index([inactive])
+  @@index([createdAt])
 }
 
 model Course {
@@ -64,6 +68,9 @@ model Course {
   roster      Roster[] // Users in the course with roles
   assignments Assignment[]
   problems    Problem[]
+
+  @@index([isPublished])
+  @@index([createdAt])
 }
 
 model Roster {
@@ -82,6 +89,9 @@ model Roster {
   comments Comment[] // Comments by this roster member
 
   @@unique([courseId, userId]) // Ensures one role per user per course
+  @@index([courseId])
+  @@index([userId])
+  @@index([role])
 }
 
 model Assignment {
@@ -100,6 +110,11 @@ model Assignment {
 
   problems AssignmentProblem[]
   comments Comment[]
+
+  @@index([courseId])
+  @@index([isPublished])
+  @@index([dueDate])
+  @@index([courseId, isPublished])
 }
 
 model Problem {
@@ -120,6 +135,10 @@ model Problem {
 
   assignments AssignmentProblem[]
   comments    Comment[]
+
+  @@index([courseId])
+  @@index([type])
+  @@index([createdAt])
 }
 
 model AssignmentProblem {
@@ -174,6 +193,14 @@ model Comment {
 
   aboutStudent   User?   @relation("CommentsAboutStudent", fields: [aboutStudentId], references: [id], onDelete: Restrict)
   aboutStudentId String?
+
+  @@index([assignmentId])
+  @@index([problemId])
+  @@index([rosterId])
+  @@index([aboutStudentId])
+  @@index([assignmentId, problemId])
+  @@index([assignmentId, problemId, aboutStudentId])
+  @@index([createdAt])
 }
 
 model ActivityLog {

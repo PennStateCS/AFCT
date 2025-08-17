@@ -34,143 +34,188 @@ enum ProblemType {
 }
 
 model User {
-  id       String @id @default(cuid())
-  email    String @unique
-  name     String?
-  password String
-  role     Role   @default(STUDENT)
-  avatar   String?
-
-  // Course participation
-  coursesAsAdmin   Course[] @relation("CourseAdmin")
-  coursesAsFaculty Course[] @relation("CourseFaculty")
-  coursesAsTA      Course[] @relation("CourseTA")
-  coursesAsStudent Course[] @relation("CourseStudent")
-
-  // Submissions and comments
-  submissions Submission[]
-  comments    Comment[]
-
-  // Activity tracking
-  activityLogs ActivityLog[]
+  id        String  @id @default(cuid())
+  email     String  @unique
+  firstName String?
+  lastName  String?
+  password  String
+  role      Role    @default(STUDENT) // Global role
+  avatar    String?
+  inactive  Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@map("users")
+  rosterEntries Roster[] // Per-course memberships with roles
+  submissions   Submission[]
+  activityLogs  ActivityLog[]
+  commentsAbout Comment[] @relation("CommentsAboutStudent") // Comments about this student's work
+
+  @@index([role])
+  @@index([inactive])
+  @@index([createdAt])
 }
 
 model Course {
-  id          String @id @default(cuid())
+  id          String   @id @default(cuid())
   name        String
-  description String?
-  isPublished Boolean @default(false)
-
-  // Course staff relationships
-  admin   User   @relation("CourseAdmin", fields: [adminId], references: [id])
-  adminId String
-
-  faculty User[] @relation("CourseFaculty")
-  tas     User[] @relation("CourseTA")
-  
-  // Students enrolled in the course
-  students User[] @relation("CourseStudent")
-
-  // Course content
-  problems Problem[]
+  code        String   @unique
+  regCode     String?  @unique
+  semester    String
+  credits     Int
+  startDate   DateTime
+  endDate     DateTime
+  isPublished Boolean  @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@map("courses")
+  roster      Roster[] // Users in the course with roles
+  assignments Assignment[]
+  problems    Problem[]
+
+  @@index([isPublished])
+  @@index([createdAt])
+}
+
+model Roster {
+  id   String     @id @default(cuid())
+  role CourseRole // Role for the user in this course
+
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  courseId String
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  userId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  comments Comment[] // Comments by this roster member
+
+  @@unique([courseId, userId]) // Ensures one role per user per course
+  @@index([courseId])
+  @@index([userId])
+  @@index([role])
+}
+
+model Assignment {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  dueDate     DateTime
+  maxPoints   Float
+  isPublished Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  courseId String
+
+  problems AssignmentProblem[]
+  comments Comment[]
+
+  @@index([courseId])
+  @@index([isPublished])
+  @@index([dueDate])
+  @@index([courseId, isPublished])
 }
 
 model Problem {
-  id              String      @id @default(cuid())
-  title           String
-  description     String
-  type            ProblemType
-  points          Int         @default(100)
-  dueDate         DateTime?
-  isPublished     Boolean     @default(false)
-  originalFilename String?
-
-  // Course relationship
-  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  courseId String
-
-  // Student submissions
-  submissions Submission[]
+  id               String       @id @default(cuid())
+  title            String
+  description      String?
+  fileName         String?
+  originalFileName String?
+  type             ProblemType?
+  maxStates        Int?
+  isDeterministic  Boolean?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@map("problems")
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  courseId String
+
+  assignments AssignmentProblem[]
+  comments    Comment[]
+
+  @@index([courseId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model AssignmentProblem {
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  assignmentId String
+  problem      Problem    @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  problemId    String
+
+  submissions Submission[]
+
+  @@id([assignmentId, problemId])
 }
 
 model Submission {
-  id               String    @id @default(cuid())
-  content          String?   // Text submission
-  fileName         String?   // Uploaded file name
-  originalFilename String?   // Original filename before processing
-  filePath         String?   // Server file path
-  grade            Float?    // Grade received
-  feedback         String?   // Instructor feedback
-  submittedAt      DateTime  @default(now())
+  id          String   @id @default(cuid())
+  submittedAt DateTime @default(now())
+  grade       Float?
+  feedback    String?
+  correct     Boolean?
 
-  // Relationships
-  student   User    @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  studentId String
-  problem   Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
-  problemId String
-
-  // Comments on this submission
-  comments Comment[]
+  fileName         String?
+  originalFileName String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  assignmentProblem AssignmentProblem @relation(fields: [assignmentId, problemId], references: [assignmentId, problemId], onDelete: Restrict)
+  assignmentId      String
+  problemId         String
+
+  student   User   @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  studentId String
+
+  @@index([assignmentId])
   @@index([studentId])
-  @@index([problemId])
-  @@map("submissions")
+  @@index([assignmentId, problemId, studentId])
 }
 
 model Comment {
-  id        String  @id @default(cuid())
+  id        String   @id @default(cuid())
   content   String
-  isPrivate Boolean @default(false) // Whether comment is visible to student
+  createdAt DateTime @default(now())
 
-  // Relationships
-  author       User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  authorId     String
-  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  submissionId String
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  assignmentId String
 
-  // Optional: Link to specific student this comment is about
-  // This allows instructors to make notes about specific students
+  problem   Problem @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  problemId String
+
+  roster   Roster @relation(fields: [rosterId], references: [id], onDelete: Restrict)
+  rosterId String
+
+  aboutStudent   User?   @relation("CommentsAboutStudent", fields: [aboutStudentId], references: [id], onDelete: Restrict)
   aboutStudentId String?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([submissionId])
-  @@index([authorId])
+  @@index([assignmentId])
+  @@index([problemId])
+  @@index([rosterId])
   @@index([aboutStudentId])
-  @@map("comments")
+  @@index([assignmentId, problemId])
+  @@index([assignmentId, problemId, aboutStudentId])
+  @@index([createdAt])
 }
 
 model ActivityLog {
-  id          String   @id @default(cuid())
-  action      String   // Description of the action
-  details     String?  // Additional details (JSON)
-  ipAddress   String?  // User's IP address
-  userAgent   String?  // User's browser info
-  createdAt   DateTime @default(now())
+  id        String   @id @default(cuid())
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  userId    String?
+  action    String
+  timestamp DateTime @default(now())
+  metadata  Json?
 
-  // Optional user relationship (for authenticated actions)
-  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
-  userId String?
-
+  @@index([timestamp])
   @@index([userId])
-  @@map("activity_logs")
 }

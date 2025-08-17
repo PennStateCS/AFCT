@@ -112,6 +112,117 @@ Also simplified DashboardSidebarShell by removing redundant state management sin
 
 **Result**: New users now see the sidebar open by default, improving UX while preserving user preferences for returning users.
 
+### 8. **Database Performance Optimization with Strategic Indexes** ✅
+**Problem**: Database queries could be slow without proper indexing, especially for common operations like course enrollment, assignment filtering, and comment retrieval
+
+**Solution**: Added comprehensive indexes based on query pattern analysis
+```sql
+-- Course-related indexes
+CREATE INDEX "Course_isPublished_idx" ON "Course"("isPublished");
+CREATE INDEX "Course_createdAt_idx" ON "Course"("createdAt");
+
+-- Assignment-related indexes  
+CREATE INDEX "Assignment_courseId_idx" ON "Assignment"("courseId");
+CREATE INDEX "Assignment_isPublished_idx" ON "Assignment"("isPublished");
+CREATE INDEX "Assignment_dueDate_idx" ON "Assignment"("dueDate");
+CREATE INDEX "Assignment_courseId_isPublished_idx" ON "Assignment"("courseId", "isPublished");
+
+-- Roster/enrollment indexes
+CREATE INDEX "Roster_courseId_idx" ON "Roster"("courseId");
+CREATE INDEX "Roster_userId_idx" ON "Roster"("userId");
+CREATE INDEX "Roster_role_idx" ON "Roster"("role");
+
+-- User-related indexes
+CREATE INDEX "User_role_idx" ON "User"("role");
+CREATE INDEX "User_inactive_idx" ON "User"("inactive");
+CREATE INDEX "User_createdAt_idx" ON "User"("createdAt");
+
+-- Comment system indexes
+CREATE INDEX "Comment_assignmentId_idx" ON "Comment"("assignmentId");
+CREATE INDEX "Comment_problemId_idx" ON "Comment"("problemId");
+CREATE INDEX "Comment_assignmentId_problemId_idx" ON "Comment"("assignmentId", "problemId");
+CREATE INDEX "Comment_assignmentId_problemId_aboutStudentId_idx" ON "Comment"("assignmentId", "problemId", "aboutStudentId");
+
+-- Problem-related indexes
+CREATE INDEX "Problem_courseId_idx" ON "Problem"("courseId");
+CREATE INDEX "Problem_type_idx" ON "Problem"("type");
+CREATE INDEX "Problem_createdAt_idx" ON "Problem"("createdAt");
+```
+
+**Key Performance Improvements**:
+- **Course queries** - Fast filtering by published status and course enrollment
+- **Assignment queries** - Optimized for course-specific and published assignment lookups
+- **Roster operations** - Efficient course enrollment and role-based queries
+- **Comment system** - Fast retrieval of assignment/problem-specific comments
+- **User management** - Improved filtering by role and active status
+- **Submission tracking** - Enhanced with existing submission indexes
+
+**Result**: Database queries now have proper indexes for all common access patterns, significantly improving performance especially as data grows.
+
+### 9. **Multi-Environment Schema Synchronization** ✅
+**Problem**: Had 3 Prisma schema files for different environments but they were out of sync - development schema was completely outdated and production schema was missing performance indexes
+
+**Previous State**:
+- `schema.prisma` - Main development schema (SQLite) ✅ Current
+- `schema.development.prisma` - Old schema with different data model ❌ Outdated  
+- `schema.production.prisma` - Missing performance indexes ❌ Outdated
+
+**Solution**: Synchronized all three schemas to have identical data models with appropriate providers:
+
+**Current Schema Structure**:
+```
+prisma/
+├── schema.prisma              # Main/Active (SQLite + indexes)
+├── schema.development.prisma   # Development template (SQLite + ERD generator + indexes)  
+└── schema.production.prisma    # Production ready (PostgreSQL + indexes)
+```
+
+**Schema Usage Patterns**:
+- **Development**: Use `schema.prisma` for migrations and daily work
+- **ERD Generation**: Copy `schema.development.prisma` → `schema.prisma` via `npm run db:generate:with-erd`  
+- **Production Deploy**: Copy `schema.production.prisma` → `schema.prisma` for PostgreSQL deployment
+
+**Key Differences**:
+| Schema | Provider | ERD Generator | Indexes | Usage |
+|--------|----------|---------------|---------|-------|
+| `schema.prisma` | SQLite | ❌ | ✅ | Active development |
+| `schema.development.prisma` | SQLite | ✅ | ✅ | ERD generation template |
+| `schema.production.prisma` | PostgreSQL | ❌ | ✅ | Production deployment |
+
+**Result**: All schemas now have identical data models with proper indexes, ensuring consistency across development and production environments while supporting ERD generation.
+
+### 10. **Prisma Studio Environment Variable Fix** ✅
+**Problem**: Prisma Studio was failing with "Environment variable not found: DATABASE_URL" error because it couldn't find the environment variables from `.env.local`
+
+**Root Cause**: 
+- Prisma looks for `.env` file by default
+- Next.js uses `.env.local` convention  
+- When `prisma.config.ts` exists, Prisma skips environment variable loading entirely
+
+**Solution**: 
+1. **Created `.env` file** - Copied `.env.local` to `.env` so Prisma can find environment variables
+2. **Removed problematic config** - Avoided `prisma.config.ts` since it breaks environment loading
+3. **Kept seed config in package.json** - Maintained the deprecated but functional approach
+
+**Commands that now work:**
+```bash
+# ✅ Works perfectly
+npx prisma studio
+npm run db:studio
+
+# ✅ Environment variables loaded correctly  
+npx prisma validate
+npx prisma migrate dev
+```
+
+**Files created/updated:**
+- `.env` - Copy of `.env.local` for Prisma compatibility
+- `package.json` - Maintained `"prisma": {"seed": "tsx prisma/seed.ts"}` config
+
+**Note**: The deprecation warning about `package.json#prisma` is expected and will be resolved when Prisma 7 is released with better environment handling.
+
+**Result**: Prisma Studio now launches successfully and can browse all database tables without environment variable errors.
+
 ## Configuration Issues (August 16, 2025)
 
 ### Issue: Orphaned prisma.config.ts File
@@ -239,3 +350,29 @@ npm run prod:full-deploy
 4. **Monitor Application**: Use PM2 monitoring tools
 
 The AFCT Dashboard is now fully functional and production-ready! 🚀
+
+### 16. **Documentation Organization** ✅
+**Problem**: PM2-DOTENV-SETUP-GUIDE.md was located in the root directory instead of the docs folder
+
+**Solution**: Moved documentation file to proper location and updated all references
+
+**Changes Made**:
+- Moved `PM2-DOTENV-SETUP-GUIDE.md` → `docs/PM2-DOTENV-SETUP-GUIDE.md`
+- Updated references in `PM2-SETUP-COMPLETE.md` to point to new location
+
+**Final Documentation Structure**:
+```
+Root Level (Project-wide docs):
+├── README.md                    # Main project documentation
+├── BUILD-ISSUES-RESOLVED.md    # Build & migration log
+└── PM2-SETUP-COMPLETE.md       # PM2 setup status
+
+docs/ (Technical documentation):
+├── development-setup.md         # Development environment setup
+├── database-troubleshooting.md  # Database issue resolution
+├── postgresql-quick-reference.md # PostgreSQL commands
+├── postgresql-ubuntu-setup.md   # Ubuntu PostgreSQL setup  
+└── PM2-DOTENV-SETUP-GUIDE.md   # PM2 & dotenv comprehensive guide
+```
+
+**Result**: Clean documentation organization with project-level docs in root and technical guides in docs/ folder.

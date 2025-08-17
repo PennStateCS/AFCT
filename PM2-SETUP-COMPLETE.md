@@ -62,7 +62,7 @@ The AFCT Dashboard setup wizard has been **successfully expanded** with comprehe
 ```
 
 ### 5. Additional Files Created
-- ✅ **PM2-DOTENV-SETUP-GUIDE.md** - Comprehensive documentation
+- ✅ **docs/PM2-DOTENV-SETUP-GUIDE.md** - Comprehensive documentation
 - ✅ **quick-setup-examples.sh** - Interactive scenario-based setup guide
 - ✅ **Updated README.md** - Added PM2 commands and documentation
 
@@ -149,7 +149,7 @@ npm run pm2:logs
 
 ## 📚 Documentation
 
-- **PM2-DOTENV-SETUP-GUIDE.md** - Complete setup and usage guide
+- **docs/PM2-DOTENV-SETUP-GUIDE.md** - Complete setup and usage guide
 - **README.md** - Updated with PM2 commands and integration info
 - **quick-setup-examples.sh** - Interactive scenario guide
 
