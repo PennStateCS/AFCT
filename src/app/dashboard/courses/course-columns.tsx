@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
+import { showToast } from '@/lib/toast';
 import { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Trash2, BookOpen, ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
@@ -125,10 +125,10 @@ function CourseActionsCell({
     try {
       const res = await fetch(`/api/courses/${course.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Delete failed');
-      toast.success('Course deleted');
+      showToast.success('Course deleted');
       setConfirmOpen(false);
     } catch {
-      toast.error('Failed to delete course');
+      showToast.error('Failed to delete course');
     }
   };
 
@@ -150,9 +150,9 @@ function CourseActionsCell({
             const refreshed = await fetch(`/api/courses/${updatedCourse.id}`).then((r) => r.json());
 
             onCourseUpdated(refreshed);
-            toast.success('Course updated!');
+            showToast.success('Course updated!');
           } catch {
-            toast.error('Failed to save course');
+            showToast.error('Failed to save course');
           } finally {
             setEditOpen(false);
           }

@@ -6,7 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { AssociateProblemsDialog } from '@/components/dialogs/AssociateProblemsDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
-import { toast } from 'sonner';
+import { showToast } from '@/lib/toast';
 import { EditAssignmentDialog } from '@/components/dialogs/EditAssignmentDialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AssignmentSubmissions from '@/components/AssignmentSubmissions';
@@ -105,9 +105,9 @@ export default function AssignmentPage() {
         body: JSON.stringify({ problemIds }),
       });
       if (!res.ok) throw new Error();
-      toast.success('Problems added');
+      showToast.success('Problems added');
     } catch {
-      toast.error('Failed to add problems');
+      showToast.error('Failed to add problems');
     }
     setLoading(true);
     fetch(`/api/courses/${id}/${aid}`)
@@ -126,9 +126,9 @@ export default function AssignmentPage() {
         body: JSON.stringify({ problemId: problemToRemove.id }),
       });
       if (!res.ok) throw new Error();
-      toast.success(`"${problemToRemove.title}" removed from assignment`);
+      showToast.success(`"${problemToRemove.title}" removed from assignment`);
     } catch {
-      toast.error(`Failed to remove "${problemToRemove.title}"`);
+      showToast.error(`Failed to remove "${problemToRemove.title}"`);
     }
     setLoading(true);
     fetch(`/api/courses/${id}/${aid}`)
@@ -349,7 +349,7 @@ export default function AssignmentPage() {
                 ...updated,
               });
             }
-            toast.success('Assignment updated!');
+            showToast.success('Assignment updated!');
           }}
         />
       )}

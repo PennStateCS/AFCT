@@ -19,7 +19,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import InputGroup from '@/components/ui/InputGroup';
-import { toast } from 'sonner';
 
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -101,13 +100,12 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
     });
 
     if (res.ok) {
-      toast.success('User created');
       onSuccess?.();
       resetForm();
       setOpen(false);
     } else {
       const text = await res.text().catch(() => null);
-      toast.error(text || 'Failed to create user');
+      console.error('Failed to create user:', text);
     }
   };
 

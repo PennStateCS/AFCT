@@ -15,7 +15,6 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import InputGroup from '@/components/ui/InputGroup';
 import { Input } from '@/components/ui/input';
-import { toast } from 'sonner';
 
 import { useEffect, useMemo } from 'react';
 import { useForm, Controller } from 'react-hook-form';
@@ -170,12 +169,11 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
           // Keep default message if response isn't JSON
         }
         
-        toast.error(errorMessage);
+        console.error('Failed to update problem:', errorMessage);
         return;
       }
 
       const updated = (await res.json().catch(() => null)) as Problem | null;
-      toast.success('Problem updated.');
       resetForm(); // clear RHF state before closing
       onSaved?.(updated ?? undefined);
       setOpen(false);
@@ -183,9 +181,6 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
       console.error('Edit problem submission error:', error);
       if (error instanceof z.ZodError) {
         console.log('Zod validation errors:', error.errors);
-        toast.error('Please check all required fields.');
-      } else {
-        toast.error('An unexpected error occurred.');
       }
     }
   };
