@@ -1,5 +1,7 @@
 # Database Setup Troubleshooting Guide
 
+> **⚡ Quick Fix**: Most database issues can be resolved using `./scripts/setup-wizard.sh` - choose "Database Management" for interactive troubleshooting tools.
+
 ## Common Issues and Solutions
 
 ### 1. ERD Generation Errors
