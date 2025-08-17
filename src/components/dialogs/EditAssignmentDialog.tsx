@@ -113,16 +113,10 @@ export function EditAssignmentDialog({
   };
 
   const onSubmit = async (raw: FormValues) => {
-    // Convert form values to the format expected by the API
-    const formData = {
-      ...raw,
-      maxPoints: Number(raw.maxPoints), // Convert string to number
-    };
-
-    // Use the update schema with transformations for API
+    // Use the update schema with form values (keep strings as strings)
     const payload = UpdateAssignmentSchema.parse({
       id: assignment.id,
-      ...formData,
+      ...raw, // Keep maxPoints as string for schema validation
       isPublished: typeof isPublished === 'boolean' ? isPublished : assignment.isPublished,
     });
 
@@ -131,7 +125,7 @@ export function EditAssignmentDialog({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         ...payload,
-        maxPoints: Number(payload.maxPoints),
+        maxPoints: Number(payload.maxPoints), // Convert to number for API
         dueDate: payload.dueDate,
       }),
     });

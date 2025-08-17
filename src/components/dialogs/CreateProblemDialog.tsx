@@ -27,8 +27,8 @@ import {
   CreateProblemSchema,
   ProblemFormSchema,
   ProblemTypeEnum,
-  type ProblemFormRaw,
   type CreateProblemInput,
+  type ProblemFormRaw,
 } from '@/schemas/problem';
 
 type CreateProblemDialogProps = {
@@ -38,7 +38,7 @@ type CreateProblemDialogProps = {
   onCreated?: (created?: Problem) => void;
 };
 
-// RHF state BEFORE transforms
+// RHF state BEFORE transforms  
 type FormValues = ProblemFormRaw;
 // Parsed AFTER Zod transforms
 type ParsedValues = CreateProblemInput;
@@ -107,34 +107,62 @@ export function CreateProblemDialog({
     });
 
   const onSubmit = async (raw: FormValues) => {
-    const values: ParsedValues = CreateProblemSchema.parse(raw);
+    try {
+      // Debug: Log the raw form data to see what we're getting
+      console.log('Form data before validation:', {
+        title: raw.title,
+        file: raw.file,
+        fileType: typeof raw.file,
+        fileName: raw.file?.name,
+        fileSize: raw.file?.size,
+      });
 
-    const formData = new FormData();
-    formData.append('title', values.title);
-    formData.append('description', values.description ?? '');
-    formData.append('type', values.type);
-    formData.append('courseId', values.courseId);
+      // Parse with CreateProblemSchema which requires file
+      const values: ParsedValues = CreateProblemSchema.parse(raw);
 
-    if (values.type === 'FA' || values.type === 'PDA') {
-      formData.append('maxStates', values.isUnlimited ? '-1' : String(values.maxStates ?? 0));
-    }
-    if (values.type === 'FA') {
-      formData.append('isDeterministic', String(!!values.isDeterministic));
-    }
+      const formData = new FormData();
+      formData.append('title', values.title);
+      formData.append('description', values.description ?? '');
+      formData.append('type', values.type);
+      formData.append('courseId', values.courseId);
 
-    formData.append('file', values.file);
+      if (values.type === 'FA' || values.type === 'PDA') {
+        formData.append('maxStates', values.isUnlimited ? '-1' : String(values.maxStates ?? 0));
+      }
+      if (values.type === 'FA') {
+        formData.append('isDeterministic', String(!!values.isDeterministic));
+      }
 
-    const res = await fetch('/api/problems', { method: 'POST', body: formData });
+      formData.append('file', values.file);
 
-    if (res.ok) {
-      const created = await res.json().catch(() => null);
-      toast.success('Problem created successfully');
-      onCreated?.(created);
-      resetForm();
-      setOpen(false);
-    } else {
-      const msg = await safeMessage(res);
-      toast.error(msg ?? 'Failed to create problem.');
+      const res = await fetch('/api/problems', { method: 'POST', body: formData });
+
+      if (res.ok) {
+        const created = await res.json().catch(() => null);
+        toast.success('Problem created successfully');
+        onCreated?.(created);
+        resetForm();
+        setOpen(false);
+      } else {
+        const msg = await safeMessage(res);
+        toast.error(msg ?? 'Failed to create problem.');
+      }
+    } catch (error) {
+      console.error('Form submission error:', error);
+      if (error instanceof z.ZodError) {
+        // Handle Zod validation errors
+        console.log('Zod validation errors:', error.errors);
+        const fileError = error.errors.find(err => err.path.includes('file'));
+        if (fileError) {
+          toast.error(fileError.message);
+        } else {
+          // Show the first validation error
+          const firstError = error.errors[0];
+          toast.error(firstError?.message || 'Please check all required fields.');
+        }
+      } else {
+        toast.error('An unexpected error occurred.');
+      }
     }
   };
 
@@ -277,16 +305,23 @@ export function CreateProblemDialog({
           <Controller
             control={control}
             name="file"
-            render={({ field }) => (
+            render={({ field: { onChange, onBlur, name, ref } }) => (
               <div>
                 <Label htmlFor="answer-file" className="mb-2 block">
                   Answer File
                 </Label>
                 <Input
                   id="answer-file"
+                  name={name}
                   type="file"
                   accept=".txt,.fa,.pda,.cfg,.re"
-                  onChange={(e) => field.onChange(e.target.files?.[0])}
+                  ref={ref}
+                  onBlur={onBlur}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    console.log('File selected:', file?.name, file?.size);
+                    onChange(file);
+                  }}
                 />
                 {errors.file && <p className="mt-1 text-xs text-red-600">{errors.file.message}</p>}
               </div>

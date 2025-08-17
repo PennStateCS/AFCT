@@ -109,52 +109,85 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
     });
 
   const onSubmit = async (raw: FormValues) => {
-    // 1) Normalize with form schema
-    const parsed: ParsedValues = ProblemFormSchema.parse(raw);
-    // 2) Enforce update contract with id (file stays optional)
-    const payload = UpdateProblemSchema.parse({
-      id: problem.id,
-      ...parsed,
-    });
+    try {
+      console.log('Edit problem form data:', {
+        title: raw.title,
+        type: raw.type,
+        courseId: raw.courseId,
+        file: raw.file,
+        fileName: raw.file?.name,
+        fileSize: raw.file?.size,
+      });
 
-    const formData = new FormData();
-    formData.append('title', payload.title ?? '');
-    formData.append('description', payload.description ?? '');
-    formData.append('type', payload.type ?? '');
-    formData.append('courseId', payload.courseId ?? '');
+      // 1) Normalize with form schema
+      const parsed: ParsedValues = ProblemFormSchema.parse(raw);
+      // 2) Enforce update contract with id (file stays optional)
+      const payload = UpdateProblemSchema.parse({
+        id: problem.id,
+        ...parsed,
+      });
 
-    // FA/PDA maxStates normalization
-    if (payload.type === 'FA' || payload.type === 'PDA') {
-      const normalizedMax = payload.isUnlimited ? -1 : Number(payload.maxStates ?? 0);
-      formData.append('maxStates', String(normalizedMax));
+      const formData = new FormData();
+      formData.append('title', payload.title ?? '');
+      formData.append('description', payload.description ?? '');
+      formData.append('type', payload.type ?? '');
+      formData.append('courseId', payload.courseId ?? '');
+
+      // FA/PDA maxStates normalization
+      if (payload.type === 'FA' || payload.type === 'PDA') {
+        const normalizedMax = payload.isUnlimited ? -1 : Number(payload.maxStates ?? 0);
+        formData.append('maxStates', String(normalizedMax));
+      }
+
+      // FA determinism toggle
+      if (payload.type === 'FA') {
+        formData.append('isDeterministic', String(!!payload.isDeterministic));
+      }
+
+      // Include file ONLY if user selected a new one
+      if (payload.file instanceof File) {
+        formData.append('file', payload.file);
+      }
+
+      console.log('Sending PUT request to:', `/api/problems/${problem.id}`);
+
+      const res = await fetch(`/api/problems/${problem.id}`, {
+        method: 'PUT',
+        body: formData,
+      });
+
+      console.log('Response status:', res.status);
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('Edit problem error response:', errorText);
+        
+        let errorMessage = 'Failed to update problem.';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch {
+          // Keep default message if response isn't JSON
+        }
+        
+        toast.error(errorMessage);
+        return;
+      }
+
+      const updated = (await res.json().catch(() => null)) as Problem | null;
+      toast.success('Problem updated.');
+      resetForm(); // clear RHF state before closing
+      onSaved?.(updated ?? undefined);
+      setOpen(false);
+    } catch (error) {
+      console.error('Edit problem submission error:', error);
+      if (error instanceof z.ZodError) {
+        console.log('Zod validation errors:', error.errors);
+        toast.error('Please check all required fields.');
+      } else {
+        toast.error('An unexpected error occurred.');
+      }
     }
-
-    // FA determinism toggle
-    if (payload.type === 'FA') {
-      formData.append('isDeterministic', String(!!payload.isDeterministic));
-    }
-
-    // Include file ONLY if user selected a new one
-    if (payload.file instanceof File) {
-      formData.append('file', payload.file);
-    }
-
-    const res = await fetch(`/api/problems/${problem.id}`, {
-      method: 'PUT',
-      body: formData,
-    });
-
-    if (!res.ok) {
-      const msg = await safeMessage(res);
-      toast.error(msg ?? 'Failed to update problem.');
-      return;
-    }
-
-    const updated = (await res.json().catch(() => null)) as Problem | null;
-    toast.success('Problem updated.');
-    resetForm(); // clear RHF state before closing
-    onSaved?.(updated ?? undefined);
-    setOpen(false);
   };
 
   return (
@@ -336,17 +369,4 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
       </DialogContent>
     </Dialog>
   );
-}
-
-async function safeMessage(res: Response) {
-  try {
-    const data = await res.json();
-    return (
-      (data as { message?: string; error?: string })?.message ??
-      (data as { message?: string; error?: string })?.error ??
-      null
-    );
-  } catch {
-    return null;
-  }
 }
