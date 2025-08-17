@@ -2,6 +2,8 @@
 
 This guide walks you through installing PostgreSQL on Ubuntu and configuring it for production deployment of the AFCT Dashboard.
 
+> **⚡ Quick Setup**: For automated installation, use `./scripts/setup-wizard.sh` and choose "Complete Production Setup" or "Install PostgreSQL". This guide is for manual installation and advanced configuration.
+
 ## 📋 Prerequisites
 
 - Ubuntu 20.04 LTS or newer

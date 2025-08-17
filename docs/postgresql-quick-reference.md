@@ -2,6 +2,8 @@
 
 A condensed reference for setting up PostgreSQL on Ubuntu for AFCT Dashboard production deployment.
 
+> **⚡ Automated Setup**: Use `./scripts/setup-wizard.sh` → "Complete Production Setup" for fully automated installation. This guide is for manual setup reference.
+
 ## ⚡ Quick Installation
 
 ```bash
