@@ -87,10 +87,12 @@ export const userColumns = (onChange: () => void): ColumnDef<User>[] => [
     cell: ({ row }) => {
       const user = row.original;
       const initials = `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase();
+      const avatarUrl = user.avatar ? `/uploads/${user.avatar}` : undefined;
+      
       return (
         <Avatar className="h-10 w-10">
           <AvatarImage
-            src={user.avatar ? `/uploads/${user.avatar}` : undefined}
+            src={avatarUrl}
             alt={`${user.firstName} ${user.lastName}`}
           />
           <AvatarFallback className="bg-secondary text-secondary-foreground">
