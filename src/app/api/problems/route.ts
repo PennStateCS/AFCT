@@ -4,15 +4,14 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import fs from 'fs';
 import path from 'path';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { auth } from '@/lib/auth';
 import { ProblemType } from '@prisma/client';
 
 // POST /api/problems - Create a new problem with file upload
 export async function POST(req: Request) {
   try {
     // Verify authenticated user
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     const user = session?.user;
 
     if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {

@@ -4,8 +4,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import path from 'path';
 import { promises as fs } from 'fs';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { auth } from '@/lib/auth';
 
 export async function DELETE(
   req: Request,
@@ -15,7 +14,7 @@ export async function DELETE(
 
   try {
     // Step 1: Verify the user is authenticated and authorized (ADMIN, FACULTY, TA)
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     const user = session?.user;
 
     if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {

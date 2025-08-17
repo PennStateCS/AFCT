@@ -2,8 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { auth } from '@/lib/auth';
 
 // POST: Replace problems for a given assignment in a specific course
 export async function POST(
@@ -14,7 +13,7 @@ export async function POST(
 
   try {
     // Get session and validate user role
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     const user = session?.user;
 
     if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {

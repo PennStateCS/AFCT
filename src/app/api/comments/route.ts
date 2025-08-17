@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { auth } from '@/lib/auth';
 
 const createCommentSchema = z.object({
   content: z.string().min(1, 'Comment content is required'),
@@ -14,7 +13,7 @@ const createCommentSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     // Verify authentication
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     const user = session?.user;
 
     if (!user) {
@@ -126,7 +125,7 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     // Verify authentication
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     const user = session?.user;
 
     if (!user) {
@@ -217,7 +216,7 @@ export async function GET(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     // Verify authentication
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     const user = session?.user;
 
     if (!user) {

@@ -119,7 +119,7 @@ export async function POST(req: Request) {
 
       if (data.facultyIds.length > 0) {
         await tx.roster.createMany({
-          data: data.facultyIds.map((userId) => ({
+          data: data.facultyIds.map((userId: string) => ({
             userId,
             courseId: course.id,
             role: 'FACULTY',

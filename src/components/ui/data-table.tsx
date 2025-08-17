@@ -46,7 +46,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useEffect, useState } from 'react';
 import {
-  Funnel,
+  Filter,
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
@@ -198,7 +198,7 @@ export function DataTable<TData, TValue>({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
-                <Funnel className="h-4 w-4" aria-hidden="true" />
+                <Filter className="h-4 w-4" aria-hidden="true" />
                 Filter Columns
               </Button>
             </DropdownMenuTrigger>

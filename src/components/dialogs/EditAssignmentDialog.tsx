@@ -132,7 +132,7 @@ export function EditAssignmentDialog({
       body: JSON.stringify({
         ...payload,
         maxPoints: Number(payload.maxPoints),
-        dueDate: payload.dueDate?.toISOString(),
+        dueDate: payload.dueDate,
       }),
     });
     if (!res.ok) {

@@ -127,9 +127,9 @@ export const CreateAssignmentFormSchema = BaseAssignmentFormSchema.extend({
 });
 
 /**
- * UPDATE: partial create schema + id.
+ * UPDATE: partial base schema + id.
  */
-export const UpdateAssignmentSchema = CreateAssignmentSchema.partial().extend({
+export const UpdateAssignmentSchema = BaseAssignmentFormSchema.partial().extend({
   id: z.string().min(1, 'Assignment id is required.'),
 });
 

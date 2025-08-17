@@ -2,14 +2,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { auth } from '@/lib/auth';
 
 // Update an existing assignment
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const session = await getServerSession(authOptions);
+  const session = await auth();
 
   if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
@@ -54,7 +53,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
 // Create a new assignment (POST /api/assignments/[id])
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
 
   if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });

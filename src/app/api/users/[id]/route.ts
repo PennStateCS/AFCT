@@ -1,8 +1,7 @@
 // /src/app/api/users/[id]
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { auth } from '@/lib/auth';
 import { writeFile, unlink } from 'fs/promises';
 import path from 'path';
 import { Role } from '@prisma/client';
@@ -15,7 +14,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
   console.log(`[PATCH] Attempting to update user: ${userId}`);
 
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     const currentUser = session?.user;
 
     if (!currentUser || !currentUser.id || !currentUser.role) {
@@ -148,7 +147,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
   console.log(`[DELETE] Attempting to delete user: ${userId}`);
 
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     const currentUser = session?.user;
 
     if (!currentUser || !['ADMIN', 'FACULTY', 'TA'].includes(currentUser.role)) {

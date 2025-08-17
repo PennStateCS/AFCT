@@ -1,15 +1,14 @@
 // /src/app/api/users/change-password/
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/authOptions';
+import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
 
 export async function POST(req: NextRequest) {
   try {
     // 1. Verify the current session (must be logged in)
-    const session = await getServerSession(authOptions);
+    const session = await auth();
 
     if (!session?.user?.id || !session.user.role) {
       console.warn('[CHANGE_PASSWORD] Unauthorized access attempt');
