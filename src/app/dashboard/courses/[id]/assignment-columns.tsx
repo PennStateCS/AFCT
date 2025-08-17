@@ -1,11 +1,14 @@
 'use client';
 
+import { useState } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
 import { Assignment } from '@prisma/client';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { Pencil, Trash2, ChevronDown, BookOpen } from 'lucide-react';
 import { format } from 'date-fns';
 import Link from 'next/link';
+import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -20,9 +23,57 @@ type AssignmentWithProblemCount = Assignment & {
   problemCount: number;
 };
 
+// Component for the publish switch with confirmation dialog
+function PublishSwitchCell({ 
+  assignment, 
+  onPublishToggle 
+}: { 
+  assignment: AssignmentWithProblemCount; 
+  onPublishToggle: (assignmentId: string, newValue: boolean) => void;
+}) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingValue, setPendingValue] = useState(false);
+
+  const handleSwitchChange = (checked: boolean) => {
+    setPendingValue(checked);
+    setConfirmOpen(true);
+  };
+
+  const handleConfirm = () => {
+    onPublishToggle(assignment.id, pendingValue);
+    setConfirmOpen(false);
+  };
+
+  const handleCancel = () => {
+    setConfirmOpen(false);
+  };
+
+  const action = pendingValue ? 'publish' : 'unpublish';
+  const description = `Are you sure you want to ${action} "${assignment.title}"? This will ${pendingValue ? 'make it visible to students' : 'hide it from students'}.`;
+
+  return (
+    <>
+      <Switch
+        checked={assignment.isPublished}
+        onCheckedChange={handleSwitchChange}
+      />
+      <ConfirmDialog
+        open={confirmOpen}
+        title={`${action.charAt(0).toUpperCase() + action.slice(1)} Assignment`}
+        description={description}
+        confirmText={action.charAt(0).toUpperCase() + action.slice(1)}
+        cancelText="Cancel"
+        onConfirm={handleConfirm}
+        onCancel={handleCancel}
+      />
+    </>
+  );
+}
+
 export function useAssignmentColumns(
   handleAssignmentDeleteClick: (id: string) => void,
   handleAssignmentEditClick: (assignment: Assignment) => void,
+  handlePublishToggle: (assignmentId: string, newValue: boolean) => void,
 ): ColumnDef<AssignmentWithProblemCount>[] {
   return [
     {
@@ -67,12 +118,12 @@ export function useAssignmentColumns(
     {
       accessorKey: 'isPublished',
       header: 'Published',
-      cell: ({ row }) =>
-        row.original.isPublished ? (
-          <span className="font-semibold text-green-600">Yes</span>
-        ) : (
-          <span className="font-semibold text-yellow-600">No</span>
-        ),
+      cell: ({ row }) => (
+        <PublishSwitchCell
+          assignment={row.original}
+          onPublishToggle={handlePublishToggle}
+        />
+      ),
     },
     {
       id: 'actions',
