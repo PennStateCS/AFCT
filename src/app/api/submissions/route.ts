@@ -8,14 +8,7 @@ import path from 'path';
 import { randomUUID } from 'crypto';
 import { execSync } from 'child_process';
 import os from 'os';
-
-// Helper to extract IP address from headers or fallback
-function getClientIp(req: NextRequest): string {
-  const forwarded = req.headers.get('x-forwarded-for');
-  if (forwarded) return forwarded.split(',')[0].trim();
-  // Note: req.ip is not available in Next.js App Router, fallback to 'unknown'
-  return 'unknown';
-}
+import { getClientIp } from '@/lib/ip-utils';
 
 // Helper to extract user-agent
 function getUserAgent(req: NextRequest): string {

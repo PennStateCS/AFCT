@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
 import { auth } from '@/lib/auth';
 import { Role } from '@prisma/client';
+import { getClientIpSimple } from '@/lib/ip-utils';
 
 // Utility to validate email format
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -51,10 +52,7 @@ export async function GET(req: Request) {
     });
 
     // 4. Log the access
-    const ip =
-      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      req.headers.get('x-real-ip') ||
-      'unknown';
+    const ip = getClientIpSimple(req);
 
     await prisma.activityLog.create({
       data: {
@@ -140,10 +138,7 @@ export async function POST(req: Request) {
     console.log(`[USERS_POST] User created: ${newUser.id} (${newUser.email})`);
 
     // 5. Log the creation
-    const ip =
-      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      req.headers.get('x-real-ip') ||
-      'unknown';
+    const ip = getClientIpSimple(req);
 
     await prisma.activityLog.create({
       data: {
