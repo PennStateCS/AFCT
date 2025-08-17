@@ -32,7 +32,7 @@ export function useAssignmentColumns(
         <div>
           <Link
             href={`/dashboard/courses/${row.original.courseId}/${row.original.id}`}
-            className="text-primary font-medium hover:underline"
+            className="text-blue-700 hover:underline"
           >
             {row.original.title}
           </Link>
