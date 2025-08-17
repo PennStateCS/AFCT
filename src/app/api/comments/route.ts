@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 const createCommentSchema = z.object({
   content: z.string().min(1, 'Comment content is required'),
@@ -96,6 +97,21 @@ export async function POST(request: NextRequest) {
             },
           },
         },
+      },
+    });
+
+    // Log the comment creation
+    await createEnhancedActivityLog(prisma, request, {
+      userId: user.id,
+      action: 'CREATE_COMMENT',
+      category: 'ASSIGNMENT',
+      courseId: assignment.courseId,
+      assignmentId,
+      problemId,
+      metadata: {
+        commentId: comment.id,
+        aboutStudentId: studentId || null,
+        contentLength: content.length,
       },
     });
 
@@ -272,6 +288,25 @@ export async function DELETE(request: NextRequest) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
     }
+
+    // Log the comment deletion before actually deleting
+    await createEnhancedActivityLog(prisma, request, {
+      userId: user.id,
+      action: 'DELETE_COMMENT',
+      category: 'ASSIGNMENT',
+      courseId: comment.assignment.courseId,
+      assignmentId: comment.assignmentId,
+      problemId: comment.problemId,
+      metadata: {
+        commentId: comment.id,
+        deletedCommentAuthor: {
+          id: comment.roster.user.id,
+          name: `${comment.roster.user.firstName} ${comment.roster.user.lastName}`,
+        },
+        aboutStudentId: comment.aboutStudentId,
+        isOwnerDeleting: comment.roster.user.id === user.id,
+      },
+    });
 
     // Delete the comment
     await prisma.comment.delete({
