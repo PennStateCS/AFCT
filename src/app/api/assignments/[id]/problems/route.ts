@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, JwtPayload } from '@/app/utils/jwt';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   // Await params if it is a Promise (some environments do this)
@@ -73,18 +74,14 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     const problems = assignmentProblems.map((ap) => ap.problem);
 
     // ---- Activity log ----
-    const ip =
-      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      req.headers.get('x-real-ip') ||
-      'unknown';
-
     try {
-      await prisma.activityLog.create({
-        data: {
-          userId,
-          action: 'VIEW_ASSIGNMENT_PROBLEMS',
-          metadata: { assignmentId, courseId, ipAddress: ip },
-        },
+      await createEnhancedActivityLog(prisma, req, {
+        userId,
+        action: 'VIEW_ASSIGNMENT_PROBLEMS',
+        category: 'ASSIGNMENT',
+        assignmentId,
+        courseId,
+        metadata: {},
       });
     } catch (logErr) {
       console.error('[problems] activityLog.create failed:', logErr);

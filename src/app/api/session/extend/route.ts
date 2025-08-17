@@ -3,20 +3,11 @@
 import { getToken } from 'next-auth/jwt';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 const EXTEND_BY = 15 * 60; // Extend session by 15 minutes (in seconds)
 
-// Extract IP address from headers or fallback
-function getClientIp(req: NextRequest): string {
-  const forwarded = req.headers.get('x-forwarded-for');
-  if (forwarded) return forwarded.split(',')[0].trim();
-  // Note: req.ip is not available in Next.js App Router, fallback to 'unknown'
-  return 'unknown';
-}
-
 export async function POST(req: NextRequest) {
-  const ip = getClientIp(req);
-
   try {
     // Extract token from the request using the NEXTAUTH secret
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
@@ -25,14 +16,11 @@ export async function POST(req: NextRequest) {
     if (!token) {
       console.warn('Session extension failed: no token present');
 
-      await prisma.activityLog.create({
-        data: {
-          userId: null,
-          action: 'SESSION_EXTENSION_FAILED',
-          metadata: {
-            reason: 'No token found',
-            ipAddress: ip,
-          },
+      await createEnhancedActivityLog(prisma, req, {
+        action: 'SESSION_EXTENSION_FAILED',
+        category: 'SYSTEM',
+        metadata: {
+          reason: 'No token found',
         },
       });
 
@@ -44,15 +32,13 @@ export async function POST(req: NextRequest) {
     const newExpiry = now + EXTEND_BY;
 
     // Log session extension to ActivityLog
-    await prisma.activityLog.create({
-      data: {
-        userId: token.sub,
-        action: 'SESSION_EXTENDED',
-        metadata: {
-          ipAddress: ip,
-          extendedBy: `${EXTEND_BY} seconds`,
-          newExpiry: new Date(newExpiry * 1000).toISOString(),
-        },
+    await createEnhancedActivityLog(prisma, req, {
+      userId: token.sub,
+      action: 'SESSION_EXTENDED',
+      category: 'SYSTEM',
+      metadata: {
+        extendedBy: `${EXTEND_BY} seconds`,
+        newExpiry: new Date(newExpiry * 1000).toISOString(),
       },
     });
 
@@ -64,14 +50,11 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error('Session extend error:', err);
 
-    await prisma.activityLog.create({
-      data: {
-        userId: null,
-        action: 'SESSION_EXTENSION_ERROR',
-        metadata: {
-          error: err instanceof Error ? err.message : 'Unknown error',
-          ipAddress: ip,
-        },
+    await createEnhancedActivityLog(prisma, req, {
+      action: 'SESSION_EXTENSION_ERROR',
+      category: 'SYSTEM',
+      metadata: {
+        error: err instanceof Error ? err.message : 'Unknown error',
       },
     });
 

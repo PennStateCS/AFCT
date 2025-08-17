@@ -5,6 +5,7 @@ import { auth } from '@/lib/auth';
 import { writeFile, unlink } from 'fs/promises';
 import path from 'path';
 import { Role } from '@prisma/client';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 // PATCH: Update a user's profile
 export async function PATCH(req: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -114,20 +115,13 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     });
 
     // Log activity
-    const ip =
-      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      req.headers.get('x-real-ip') ||
-      'unknown';
-
-    await prisma.activityLog.create({
-      data: {
-        userId: currentUser.id,
-        action: 'UPDATE_USER',
-        metadata: {
-          targetUserId: userId,
-          updatedFields: Object.keys(dataToUpdate),
-          ipAddress: ip,
-        },
+    await createEnhancedActivityLog(prisma, req, {
+      userId: currentUser.id,
+      action: 'UPDATE_USER',
+      category: 'USER',
+      metadata: {
+        targetUserId: userId,
+        updatedFields: Object.keys(dataToUpdate),
       },
     });
 
@@ -173,19 +167,12 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     });
 
     // Log activity
-    const ip =
-      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      req.headers.get('x-real-ip') ||
-      'unknown';
-
-    await prisma.activityLog.create({
-      data: {
-        userId: currentUser.id,
-        action: 'DELETE_USER',
-        metadata: {
-          deletedUserId: userId,
-          ipAddress: ip,
-        },
+    await createEnhancedActivityLog(prisma, req, {
+      userId: currentUser.id,
+      action: 'DELETE_USER',
+      category: 'USER',
+      metadata: {
+        deletedUserId: userId,
       },
     });
 

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 export async function POST(req: NextRequest) {
   try {
@@ -79,19 +80,12 @@ export async function POST(req: NextRequest) {
     console.log(`[CHANGE_PASSWORD] Password successfully updated for user ${userId}`);
 
     // 8. Log the password change
-    const ip =
-      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      req.headers.get('x-real-ip') ||
-      'unknown';
-
-    await prisma.activityLog.create({
-      data: {
-        userId,
-        action: 'CHANGE_PASSWORD',
-        metadata: {
-          role: userRole,
-          ipAddress: ip,
-        },
+    await createEnhancedActivityLog(prisma, req, {
+      userId,
+      action: 'CHANGE_PASSWORD',
+      category: 'USER',
+      metadata: {
+        role: userRole,
       },
     });
 

@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 export async function POST(
   req: Request,
@@ -65,24 +66,14 @@ export async function POST(
     const problems = updated?.problems.map((ap) => ap.problem) || [];
 
     // Log the removal action
-    const ip =
-      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      req.headers.get('x-real-ip') ||
-      'unknown';
-    const userAgent = req.headers.get('user-agent') || 'unknown';
-
-    await prisma.activityLog.create({
-      data: {
-        userId: user.id,
-        action: 'REMOVE_ASSIGNMENT_PROBLEM',
-        metadata: {
-          courseId,
-          assignmentId,
-          problemId,
-          ipAddress: ip,
-          userAgent,
-        },
-      },
+    await createEnhancedActivityLog(prisma, req, {
+      userId: user.id,
+      action: 'REMOVE_ASSIGNMENT_PROBLEM',
+      category: 'ASSIGNMENT',
+      courseId,
+      assignmentId,
+      problemId,
+      metadata: {},
     });
 
     // Return the updated list of problems

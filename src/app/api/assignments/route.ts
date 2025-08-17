@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 export async function POST(req: NextRequest) {
   try {
@@ -34,23 +35,14 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Get IP address for logging (from headers if behind proxy)
-    const ip =
-      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      req.headers.get('x-real-ip') ||
-      'unknown';
-
     // Log the creation action to ActivityLog
-    await prisma.activityLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'CREATE_ASSIGNMENT',
-        metadata: {
-          assignmentId: created.id,
-          courseId: created.courseId,
-          ipAddress: ip,
-        },
-      },
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session.user.id,
+      action: 'CREATE_ASSIGNMENT',
+      category: 'ASSIGNMENT',
+      courseId: created.courseId,
+      assignmentId: created.id,
+      metadata: {},
     });
 
     // Respond with the newly created assignment

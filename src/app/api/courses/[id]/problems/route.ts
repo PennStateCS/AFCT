@@ -7,6 +7,7 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { auth } from '@/lib/auth';
 import { ProblemType } from '@prisma/client';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 // Create solution upload directory if it doesn't exist
 async function ensureDirExists(dir: string) {
@@ -81,25 +82,16 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
     });
 
     // Step 6: Log the problem creation
-    const ip =
-      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      req.headers.get('x-real-ip') ||
-      'unknown';
-    const userAgent = req.headers.get('user-agent') || 'unknown';
-
-    await prisma.activityLog.create({
-      data: {
-        userId: user.id,
-        action: 'CREATE_PROBLEM',
-        metadata: {
-          courseId,
-          problemId: problem.id,
-          fileName,
-          originalFileName,
-          type,
-          ipAddress: ip,
-          userAgent,
-        },
+    await createEnhancedActivityLog(prisma, req, {
+      userId: user.id,
+      action: 'CREATE_PROBLEM',
+      category: 'PROBLEM',
+      courseId,
+      problemId: problem.id,
+      metadata: {
+        fileName,
+        originalFileName,
+        type,
       },
     });
 

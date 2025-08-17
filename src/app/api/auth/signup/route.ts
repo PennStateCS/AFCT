@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 // Regex utilities for validating email and password
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -62,22 +63,14 @@ export async function POST(req: Request) {
       },
     });
 
-    // Get request IP address
-    const ip =
-      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      req.headers.get('x-real-ip') ||
-      'unknown';
-
     // Log the signup event in ActivityLog
-    await prisma.activityLog.create({
-      data: {
-        userId: newUser.id,
-        action: 'USER_SIGNUP',
-        metadata: {
-          email,
-          role,
-          ipAddress: ip,
-        },
+    await createEnhancedActivityLog(prisma, req, {
+      userId: newUser.id,
+      action: 'USER_SIGNUP',
+      category: 'USER',
+      metadata: {
+        email,
+        role,
       },
     });
 

@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateUser } from '@/app/services/authService';
 import { prisma } from '@/lib/prisma';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,12 +13,10 @@ export async function POST(req: NextRequest) {
     // Check for missing credentials
     if (!email || !password) {
       console.warn('Login failed: Missing email or password');
-      await prisma.activityLog.create({
-        data: {
-          userId: null,
-          action: 'LOGIN_FAILED',
-          metadata: { reason: 'Missing credentials', email },
-        },
+      await createEnhancedActivityLog(prisma, req, {
+        action: 'LOGIN_FAILED',
+        category: 'SYSTEM',
+        metadata: { reason: 'Missing credentials', email },
       });
 
       return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
@@ -29,26 +28,23 @@ export async function POST(req: NextRequest) {
     // If authentication fails, log and return 401
     if (!auth) {
       console.warn(`Login failed for ${email}: Invalid credentials`);
-      await prisma.activityLog.create({
-        data: {
-          userId: null,
-          action: 'LOGIN_FAILED',
-          metadata: { reason: 'Invalid credentials', email },
-        },
+      await createEnhancedActivityLog(prisma, req, {
+        action: 'LOGIN_FAILED',
+        category: 'SYSTEM',
+        metadata: { reason: 'Invalid credentials', email },
       });
 
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 
     // Log successful login
-    await prisma.activityLog.create({
-      data: {
-        userId: auth.user.id,
-        action: 'LOGIN_SUCCESS',
-        metadata: {
-          email: auth.user.email,
-          role: auth.user.role,
-        },
+    await createEnhancedActivityLog(prisma, req, {
+      userId: auth.user.id,
+      action: 'LOGIN_SUCCESS',
+      category: 'SYSTEM',
+      metadata: {
+        email: auth.user.email,
+        role: auth.user.role,
       },
     });
 
@@ -70,13 +66,11 @@ export async function POST(req: NextRequest) {
     console.error('Login error:', err);
 
     // Log unexpected error
-    await prisma.activityLog.create({
-      data: {
-        userId: null,
-        action: 'LOGIN_ERROR',
-        metadata: {
-          error: err instanceof Error ? err.message : 'Unknown error',
-        },
+    await createEnhancedActivityLog(prisma, req, {
+      action: 'LOGIN_ERROR',
+      category: 'SYSTEM',
+      metadata: {
+        error: err instanceof Error ? err.message : 'Unknown error',
       },
     });
 

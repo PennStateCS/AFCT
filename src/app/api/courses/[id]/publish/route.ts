@@ -1,8 +1,9 @@
-// /src/app/api/courses/[id]/publish/route.ts
+// /src/api/courses/[id]/publish/route.ts
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
   try {
@@ -40,23 +41,14 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     });
 
     // Log the publish/unpublish event
-    const ip =
-      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      req.headers.get('x-real-ip') ||
-      'unknown';
-    const userAgent = req.headers.get('user-agent') || 'unknown';
-
-    await prisma.activityLog.create({
-      data: {
-        userId: user.id,
-        action: isPublished ? 'COURSE_PUBLISHED' : 'COURSE_UNPUBLISHED',
-        metadata: {
-          courseId,
-          courseName: updated.name,
-          isPublished,
-          ipAddress: ip,
-          userAgent,
-        },
+    await createEnhancedActivityLog(prisma, req, {
+      userId: user.id,
+      action: isPublished ? 'COURSE_PUBLISHED' : 'COURSE_UNPUBLISHED',
+      category: 'COURSE',
+      courseId,
+      metadata: {
+        courseName: updated.name,
+        isPublished,
       },
     });
 
