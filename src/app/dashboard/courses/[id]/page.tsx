@@ -9,17 +9,20 @@ import { EditAssignmentDialog } from '@/components/dialogs/EditAssignmentDialog'
 import { CreateAssignmentDialog } from '@/components/dialogs/CreateAssignmentDialog';
 import { EnrollUserDialog } from '@/components/dialogs/EnrollUsersDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
+import { ActivityCard } from '@/components/ActivityCard';
+import { AssignmentsCard } from '@/components/AssignmentsCard';
+import { ProblemsCard } from '@/components/ProblemsCard';
+import { RosterCard } from '@/components/RosterCard';
 import { Course, User, Assignment, Problem, Role } from '@prisma/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { DataTable } from '@/components/ui/data-table';
 import { userColumns } from './user-columns';
 import { useAssignmentColumns } from './assignment-columns';
 import { problemColumns } from './problem-columns';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { Plus, Pencil } from 'lucide-react';
+import { Pencil } from 'lucide-react';
 
 // Assignment with problem count as returned by API
 type AssignmentWithProblemCount = Assignment & {
@@ -346,75 +349,38 @@ export default function AdminCoursePage() {
           value="assignments"
           className="animate-fade-in-up transition-opacity duration-300"
         >
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-2xl">Assignments</CardTitle>
-              <Button
-                style={{
-                  backgroundColor: 'var(--color-primary)',
-                  color: 'var(--color-primary-foreground)',
-                }}
-                onClick={() => setCreateAssignmentOpen(true)}
-              >
-                <Plus /> Create Assignment
-              </Button>
-            </CardHeader>
-            <CardContent className="overflow-x-auto">
-              {course.assignments.length ? (
-                <DataTable columns={assignmentColumns} data={course.assignments} />
-              ) : (
-                <p className="text-muted-foreground italic">No assignments found.</p>
-              )}
-            </CardContent>
-          </Card>
+          <AssignmentsCard
+            assignments={course.assignments}
+            assignmentColumns={assignmentColumns}
+            onCreateAssignment={() => setCreateAssignmentOpen(true)}
+          />
         </TabsContent>
 
         <TabsContent
           value="problems"
           className="animate-fade-in-up transition-opacity duration-300"
         >
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-2xl">Problems</CardTitle>
-              <Button variant="default" onClick={() => setProblemOpen(true)}>
-                <Plus /> Create Problem
-              </Button>
-            </CardHeader>
-            <CardContent className="overflow-x-auto">
-              {course.problems.length ? (
-                <DataTable columns={problemCols} data={course.problems} />
-              ) : (
-                <p className="text-muted-foreground italic">No problems added.</p>
-              )}
-            </CardContent>
-          </Card>
+          <ProblemsCard
+            problems={course.problems}
+            problemColumns={problemCols}
+            onCreateProblem={() => setProblemOpen(true)}
+          />
         </TabsContent>
 
         <TabsContent value="roster" className="animate-fade-in-up transition-opacity duration-300">
           <div className="space-y-6">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-2xl">Course Roster</CardTitle>
-                <Button variant="default" onClick={openEnrollDialog}>
-                  <Plus /> Enroll User
-                </Button>
-              </CardHeader>
-              <CardContent>
-                <DataTable
-                  columns={userColumns(() => {
-                    // Optional callback to refresh course after edit/delete
-                    fetch(`/api/courses/${id}`)
-                      .then((res) => res.json())
-                      .then(setCourse);
-                  })}
-                  data={[
-                    ...course.faculty.map((u) => ({ ...u, _role: 'Faculty' })),
-                    ...course.tas.map((u) => ({ ...u, _role: 'TA' })),
-                    ...course.students.map((u) => ({ ...u, _role: 'Student' })),
-                  ]}
-                />
-              </CardContent>
-            </Card>
+            <RosterCard
+              faculty={course.faculty}
+              tas={course.tas}
+              students={course.students}
+              userColumns={userColumns(() => {
+                // Optional callback to refresh course after edit/delete
+                fetch(`/api/courses/${id}`)
+                  .then((res) => res.json())
+                  .then(setCourse);
+              })}
+              onEnrollUser={openEnrollDialog}
+            />
           </div>
         </TabsContent>
 
@@ -434,12 +400,7 @@ export default function AdminCoursePage() {
           className="animate-fade-in-up transition-opacity duration-300"
         >
           <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-2xl">Activity</CardTitle>
-              </CardHeader>
-              <CardContent>To Do...</CardContent>
-            </Card>
+            <ActivityCard courseId={course.id} />
           </div>
         </TabsContent>
       </Tabs>
