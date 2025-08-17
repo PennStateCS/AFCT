@@ -73,6 +73,7 @@ model Course {
   roster      Roster[] // Users in the course with roles
   assignments Assignment[]
   problems    Problem[]
+  activityLogs ActivityLog[]
 
   @@index([isPublished])
   @@index([createdAt])
@@ -115,6 +116,7 @@ model Assignment {
 
   problems AssignmentProblem[]
   comments Comment[]
+  activityLogs ActivityLog[]
 
   @@index([courseId])
   @@index([isPublished])
@@ -140,6 +142,7 @@ model Problem {
 
   assignments AssignmentProblem[]
   comments    Comment[]
+  activityLogs ActivityLog[]
 
   @@index([courseId])
   @@index([type])
@@ -176,6 +179,8 @@ model Submission {
 
   student   User   @relation(fields: [studentId], references: [id], onDelete: Restrict)
   studentId String
+
+  activityLogs ActivityLog[]
 
   @@index([assignmentId])
   @@index([studentId])
@@ -216,6 +221,31 @@ model ActivityLog {
   timestamp DateTime @default(now())
   metadata  Json?
 
+  // Normalized foreign keys for fast filtering
+  courseId     String?
+  course       Course?     @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  assignmentId String?
+  assignment   Assignment? @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  problemId    String?
+  problem      Problem?    @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  submissionId String?
+  submission   Submission? @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+
+  // Additional categorization
+  category    String? // SYSTEM, COURSE, ASSIGNMENT, PROBLEM, SUBMISSION, USER
+  ipAddress   String?
+  userAgent   String?
+
   @@index([timestamp])
   @@index([userId])
+  @@index([action])
+  @@index([category])
+  @@index([courseId])
+  @@index([assignmentId])
+  @@index([problemId])
+  @@index([submissionId])
+  @@index([courseId, action])
+  @@index([assignmentId, action])
+  @@index([userId, courseId])
+  @@index([timestamp, category])
 }
