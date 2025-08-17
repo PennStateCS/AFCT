@@ -5,6 +5,75 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
+// Get a single assignment by ID
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+
+  const session = await auth();
+
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  try {
+    const assignment = await prisma.assignment.findUnique({
+      where: { id },
+      include: {
+        course: true,
+        problems: {
+          include: {
+            problem: true
+          }
+        }
+      }
+    });
+
+    if (!assignment) {
+      return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+    }
+
+    // Check permissions - students can only see published assignments in courses they're enrolled in
+    if (session.user.role === 'STUDENT') {
+      // Check if assignment is published
+      if (!assignment.isPublished) {
+        return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+      }
+
+      // Check if student is enrolled in the course
+      const enrollment = await prisma.roster.findFirst({
+        where: {
+          courseId: assignment.courseId,
+          userId: session.user.id
+        }
+      });
+
+      if (!enrollment) {
+        return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+      }
+    }
+
+    // For non-students, check if they have access to the course
+    if (!['ADMIN'].includes(session.user.role)) {
+      const hasAccess = await prisma.roster.findFirst({
+        where: {
+          courseId: assignment.courseId,
+          userId: session.user.id,
+          role: { in: ['FACULTY', 'TA'] }
+        }
+      });
+
+      if (!hasAccess && session.user.role !== 'ADMIN') {
+        return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+      }
+    }
+
+    return NextResponse.json(assignment);
+  } catch (error) {
+    console.error('Failed to fetch assignment:', error);
+    return NextResponse.json({ error: 'Failed to fetch assignment' }, { status: 500 });
+  }
+}
+
 // Update an existing assignment (full update)
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

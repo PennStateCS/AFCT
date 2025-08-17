@@ -1,579 +1,189 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
-import { useParams, useSearchParams, useRouter } from 'next/navigation';
-import { CreateProblemDialog } from '@/components/dialogs/CreateProblemDialog';
-import { EditProblemDialog } from '@/components/dialogs/EditProblemDialog';
-import { EditCourseDialog } from '@/components/dialogs/EditCourseDialog';
-import { EditAssignmentDialog } from '@/components/dialogs/EditAssignmentDialog';
-import { CreateAssignmentDialog } from '@/components/dialogs/CreateAssignmentDialog';
-import { EnrollUserDialog } from '@/components/dialogs/EnrollUsersDialog';
-import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
-import { ActivityCard } from '@/components/ActivityCard';
-import { AssignmentsCard } from '@/components/AssignmentsCard';
-import { ProblemsCard } from '@/components/ProblemsCard';
-import { RosterCard } from '@/components/RosterCard';
-import { Course, User, Assignment, Problem, Role } from '@prisma/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { userColumns } from './user-columns';
-import { useAssignmentColumns } from './assignment-columns';
-import { problemColumns } from './problem-columns';
-import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
-import { showToast } from '@/lib/toast';
-import { Pencil } from 'lucide-react';
+import { useCallback } from 'react';
+import { useParams } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 
-// Assignment with problem count as returned by API
-type AssignmentWithProblemCount = Assignment & {
-  problemCount: number;
-};
+// Types
+import { EnrollableUser } from '@/types/course';
+import { Assignment, Problem } from '@prisma/client';
 
-type FullCourse = Course & {
-  faculty: User[];
-  tas: User[];
-  students: User[];
-  assignments: AssignmentWithProblemCount[];
-  problems: Problem[];
-};
+// Hooks
+import { useCourseData, useTabNavigation, useDialogStates, useEnrollment } from '@/hooks/use-course';
+import { useCourseHandlers } from '@/lib/course-handlers';
 
-type DeleteTarget = {
-  id: string;
-  type: 'problem' | 'assignment';
-};
+// Components
+import { CourseHeader } from '@/components/course/CourseHeader';
+import { StudentCourseView } from '@/components/course/StudentCourseView';
+import { AdminCourseView } from '@/components/course/AdminCourseView';
+import { CourseDialogs } from '@/components/course/CourseDialogs';
 
 export default function AdminCoursePage() {
   const { id } = useParams();
-  const [course, setCourse] = useState<FullCourse | null>(null);
+  const { data: session } = useSession();
+  const courseId = Array.isArray(id) ? id[0] : id;
+  
+  // Check if user is a student (vs admin/faculty/TA)
+  const isStudent = session?.user?.role === 'STUDENT';
 
-  // Edit course dialog
-  const [editOpen, setEditOpen] = useState(false);
+  // Data fetching
+  const { course, setCourse, refetchCourse } = useCourseData(courseId || '');
+  
+  // Tab navigation (admin only)
+  const { tab, handleTabChange } = useTabNavigation();
+  
+  // Dialog states
+  const dialogStates = useDialogStates();
+  
+  // Enrollment
+  const { allUsers, fetchAvailableUsers, handleEnrollUser } = useEnrollment(course);
+  
+  // Event handlers
+  const handlers = useCourseHandlers(course, setCourse);
 
-  // Problem dialog
-  const [problemOpen, setProblemOpen] = useState(false);
-  const [editProblemOpen, setEditProblemOpen] = useState(false);
-  const [selectedProblem, setSelectedProblem] = useState<Problem | null>(null);
+  // Enrollment dialog opener
+  const openEnrollDialog = useCallback(async () => {
+    await fetchAvailableUsers();
+    dialogStates.setAllUsers(allUsers);
+    dialogStates.setEnrollOpen(true);
+  }, [fetchAvailableUsers, allUsers, dialogStates]);
 
-  // Assignment create/edit dialog state
-  const [editAssignmentOpen, setEditAssignmentOpen] = useState(false);
-  const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
-  const [createAssignmentOpen, setCreateAssignmentOpen] = useState(false);
+  // Problem handlers with dialog state
+  const handleProblemEditClick = useCallback((problem: Problem) => {
+    dialogStates.setSelectedProblem(problem);
+    dialogStates.setEditProblemOpen(true);
+  }, [dialogStates]);
 
-  // Delete confirm
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [pendingDelete, setPendingDelete] = useState<DeleteTarget | null>(null);
+  const handleProblemDeleteClick = useCallback((problemId: string) => {
+    dialogStates.setPendingDelete({ id: problemId, type: 'problem' });
+    dialogStates.setConfirmOpen(true);
+  }, [dialogStates]);
 
-  // Tab logic
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const [tab, setTab] = useState(searchParams.get('tab') || 'assignments');
-
-  // Enroll user
-  const [enrollOpen, setEnrollOpen] = useState(false);
-  const [allUsers, setAllUsers] = useState<
-    {
-      id: string;
-      email: string;
-      firstName: string | null;
-      lastName: string | null;
-      role: Role;
-    }[]
-  >([]);
-
-  // Publish Toggle
-  const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
-  const [pendingPublish, setPendingPublish] = useState<boolean | null>(null);
-
-  // Filter user dataset
-  const openEnrollDialog = async () => {
-    try {
-      const res = await fetch('/api/users'); // Adjust endpoint as needed
-      if (!res.ok) throw new Error('Failed to fetch users');
-      const users: User[] = await res.json();
-      // Filter out already enrolled users (students, faculty, tas)
-      if (course) {
-        const inCourseIds = new Set([
-          ...course.students.map((u) => u.id),
-          ...course.faculty.map((u) => u.id),
-          ...course.tas.map((u) => u.id),
-        ]);
-        setAllUsers(users.filter((u) => !inCourseIds.has(u.id)));
-      }
-      setEnrollOpen(true);
-    } catch {
-      showToast.error('Failed to load user list');
-    }
-  };
-
-  // Fetch course info
-  useEffect(() => {
-    fetch(`/api/courses/${id}`)
-      .then((res) => res.json())
-      .then((data) => {
-        setCourse({
-          ...data,
-          faculty: data.faculty || [],
-          tas: data.tas || [],
-          students: data.students || [],
-          assignments: data.assignments || [],
-          problems: data.problems || [],
-        });
-      })
-      .catch(() => showToast.error('Failed to load course'));
-  }, [id]);
-
-  // Assignment handlers
+  // Assignment handlers with dialog state
   const handleAssignmentEditClick = useCallback((assignment: Assignment) => {
-    setSelectedAssignment(assignment);
-    setEditAssignmentOpen(true);
-  }, []);
+    dialogStates.setSelectedAssignment(assignment);
+    dialogStates.setEditAssignmentOpen(true);
+  }, [dialogStates]);
 
   const handleAssignmentDeleteClick = useCallback((assignmentId: string) => {
-    setPendingDelete({ id: assignmentId, type: 'assignment' });
-    setConfirmOpen(true);
-  }, []);
+    dialogStates.setPendingDelete({ id: assignmentId, type: 'assignment' });
+    dialogStates.setConfirmOpen(true);
+  }, [dialogStates]);
 
-  // Problem delete handler
-  const handleProblemDeleteClick = useCallback((problemId: string) => {
-    setPendingDelete({ id: problemId, type: 'problem' });
-    setConfirmOpen(true);
-  }, []);
-
-  const handleProblemEditClick = useCallback((problem: Problem) => {
-    setSelectedProblem(problem);
-    setEditProblemOpen(true);
-  }, []);
-
-  // Actually delete assignment or problem and update UI
-  const handleDelete = useCallback(async (target: DeleteTarget) => {
-    try {
-      if (target.type === 'assignment') {
-        const res = await fetch(`/api/assignments/${target.id}`, { method: 'DELETE' });
-        if (!res.ok) throw new Error('Failed to delete assignment');
-        setCourse((prev) =>
-          prev
-            ? { ...prev, assignments: prev.assignments.filter((a) => a.id !== target.id) }
-            : prev,
-        );
-        showToast.success('Assignment deleted');
-      } else if (target.type === 'problem') {
-        const res = await fetch(`/api/problems/${target.id}`, { method: 'DELETE' });
-        if (!res.ok) throw new Error('Failed to delete problem');
-        setCourse((prev) =>
-          prev ? { ...prev, problems: prev.problems.filter((p) => p.id !== target.id) } : prev,
-        );
-        showToast.success('Problem deleted');
-      }
-    } catch (err) {
-      showToast.error('Error deleting item');
-      console.error(err);
-    } finally {
-      setConfirmOpen(false);
-      setPendingDelete(null);
-    }
-  }, []);
-
-  const handleEnrollUser = async (user: {
-    id: string;
-    email: string;
-    firstName: string | null;
-    lastName: string | null;
-    role: Role;
-  }) => {
-    try {
-      const res = await fetch(`/api/courses/${id}/enroll`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id }),
-      });
-      if (!res.ok) throw new Error('Failed to enroll user');
-      showToast.success('User enrolled!');
-      // Refresh course data
-      fetch(`/api/courses/${id}`)
-        .then((res) => res.json())
-        .then(setCourse)
-        .catch(() => showToast.error('Failed to reload course data'));
-    } catch {
-      showToast.error('Error enrolling user');
-    }
-  };
-
+  // Confirm handlers
   const handleConfirm = useCallback(() => {
-    if (pendingDelete) handleDelete(pendingDelete);
-  }, [pendingDelete, handleDelete]);
+    if (dialogStates.pendingDelete) {
+      handlers.handleDelete(dialogStates.pendingDelete);
+    }
+    dialogStates.setConfirmOpen(false);
+    dialogStates.setPendingDelete(null);
+  }, [dialogStates, handlers]);
 
   const handleCancel = useCallback(() => {
-    setPendingDelete(null);
-    setConfirmOpen(false);
-  }, []);
+    dialogStates.setPendingDelete(null);
+    dialogStates.setConfirmOpen(false);
+  }, [dialogStates]);
 
-  // Tab switching, updates URL params
-  const handleTabChange = useCallback(
-    (value: string) => {
-      setTab(value);
-      const params = new URLSearchParams(searchParams.toString());
-      params.set('tab', value);
-      router.replace(`?${params.toString()}`);
-    },
-    [searchParams, router],
-  );
+  // Publish handlers
+  const handlePublishToggle = useCallback((checked: boolean) => {
+    dialogStates.setPendingPublish(checked);
+    dialogStates.setPublishConfirmOpen(true);
+  }, [dialogStates]);
 
-  // Assignment edit handler
-  const handleAssignmentSave = useCallback(async (updatedAssignment: Assignment) => {
-    setCourse((prev) =>
-      prev
-        ? {
-            ...prev,
-            assignments: prev.assignments.map((a) =>
-              a.id === updatedAssignment.id
-                ? { ...updatedAssignment, problemCount: a.problemCount }
-                : a,
-            ),
-          }
-        : prev,
-    );
-    setEditAssignmentOpen(false);
-    setSelectedAssignment(null);
-    showToast.success('Assignment updated!');
-  }, []);
-
-  // Assignment publish toggle handler
-  const handleAssignmentPublishToggle = useCallback(async (assignmentId: string, newValue: boolean) => {
-    try {
-      const res = await fetch(`/api/assignments/${assignmentId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isPublished: newValue }),
-      });
-      
-      if (!res.ok) throw new Error('Failed to update assignment');
-      
-      // Update local state
-      setCourse((prev) =>
-        prev
-          ? {
-              ...prev,
-              assignments: prev.assignments.map((a) =>
-                a.id === assignmentId ? { ...a, isPublished: newValue } : a,
-              ),
-            }
-          : prev,
-      );
-      
-      showToast.success(`Assignment ${newValue ? 'published' : 'unpublished'} successfully!`);
-    } catch (error) {
-      showToast.error('Failed to update assignment status');
-      console.error('Error updating assignment:', error);
+  const handlePublishConfirm = useCallback(async () => {
+    if (dialogStates.pendingPublish !== null) {
+      await handlers.handleCoursePublishToggle(dialogStates.pendingPublish);
     }
-  }, []);
+    dialogStates.setPublishConfirmOpen(false);
+    dialogStates.setPendingPublish(null);
+  }, [dialogStates, handlers]);
 
-  const assignmentColumns = useAssignmentColumns(
-    handleAssignmentDeleteClick,
-    handleAssignmentEditClick,
-    handleAssignmentPublishToggle,
-  );
+  const handlePublishCancel = useCallback(() => {
+    dialogStates.setPublishConfirmOpen(false);
+    dialogStates.setPendingPublish(null);
+  }, [dialogStates]);
 
-  const problemCols = useMemo(
-    () => problemColumns({ onEdit: handleProblemEditClick, onDelete: handleProblemDeleteClick }),
-    [handleProblemEditClick, handleProblemDeleteClick],
-  );
+  // Enrollment handler
+  const handleEnrollUserWrapper = useCallback(async (user: EnrollableUser) => {
+    if (!courseId) return;
+    await handleEnrollUser(user, courseId, refetchCourse);
+  }, [handleEnrollUser, courseId, refetchCourse]);
+
+  // Assignment save handler
+  const handleAssignmentSave = useCallback(async (updatedAssignment: Assignment) => {
+    await handlers.handleAssignmentSave(updatedAssignment);
+    dialogStates.setEditAssignmentOpen(false);
+    dialogStates.setSelectedAssignment(null);
+  }, [handlers, dialogStates]);
 
   if (!course) return <div className="p-6">Loading course...</div>;
 
   return (
     <div className="space-y-6 p-0">
-      {/* --- COURSE CARD --- */}
-      <Card>
-        <CardHeader className="flex items-start justify-between">
-          <div>
-            <CardTitle className="text-2xl">
-              {course.code}: {course.name}
-            </CardTitle>
-            <p className="text-muted-foreground mt-1 text-sm">
-              {course.semester} • {course.credits} credits •{' '}
-              {new Date(course.startDate).toLocaleDateString()} -{' '}
-              {new Date(course.endDate).toLocaleDateString()}
-            </p>
-          </div>
-          <Button variant="default" onClick={() => setEditOpen(true)} className="shrink-0">
-            <Pencil /> Edit Course
-          </Button>
-        </CardHeader>
-        <CardContent className="space-y-4 text-sm">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold">Published:</span>
-            <Switch
-              checked={course.isPublished}
-              onCheckedChange={(checked) => {
-                setPendingPublish(checked);
-                setPublishConfirmOpen(true);
-              }}
-            />
-          </div>
-          <div>
-            <span className="font-semibold">Registration Code: </span>
-            <span className="text-muted-foreground">
-              {course.regCode
-                ? `${course.regCode.toUpperCase().slice(0, 3)}-${course.regCode.toUpperCase().slice(3)}`
-                : 'Not set'}
-            </span>
-          </div>
-          <div>
-            <span className="font-semibold">Faculty: </span>
-            <span className="text-muted-foreground">
-              {course.faculty.length > 0
-                ? course.faculty
-                    .map((f) => `${f.firstName ?? ''} ${f.lastName ?? ''}`.trim())
-                    .join(', ')
-                : 'None assigned'}
-            </span>
-          </div>
-          <div>
-            <span className="font-semibold">Teaching Assistants: </span>
-            <span className="text-muted-foreground">
-              {course.tas.length > 0
-                ? course.tas
-                    .map((ta) => `${ta.firstName ?? ''} ${ta.lastName ?? ''}`.trim())
-                    .join(', ')
-                : 'None assigned'}
-            </span>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* --- MAIN TABS --- */}
-      <Tabs defaultValue="assignments" value={tab} onValueChange={handleTabChange}>
-        <TabsList className="bg-card border-border h-12 rounded-md border p-1 shadow-sm">
-          <TabsTrigger
-            className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white"
-            value="assignments"
-          >
-            📄 Assignments
-          </TabsTrigger>
-          <TabsTrigger
-            className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white"
-            value="problems"
-          >
-            🧠 Problems
-          </TabsTrigger>
-          <TabsTrigger
-            className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white"
-            value="roster"
-          >
-            📜 Roster
-          </TabsTrigger>
-          <TabsTrigger
-            className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white"
-            value="grades"
-          >
-            🎓 Grades
-          </TabsTrigger>
-          <TabsTrigger
-            className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white"
-            value="activity"
-          >
-            📈 Activity
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent
-          value="assignments"
-          className="animate-fade-in-up transition-opacity duration-300"
-        >
-          <AssignmentsCard
-            assignments={course.assignments}
-            assignmentColumns={assignmentColumns}
-            onCreateAssignment={() => setCreateAssignmentOpen(true)}
-          />
-        </TabsContent>
-
-        <TabsContent
-          value="problems"
-          className="animate-fade-in-up transition-opacity duration-300"
-        >
-          <ProblemsCard
-            problems={course.problems}
-            problemColumns={problemCols}
-            onCreateProblem={() => setProblemOpen(true)}
-          />
-        </TabsContent>
-
-        <TabsContent value="roster" className="animate-fade-in-up transition-opacity duration-300">
-          <div className="space-y-6">
-            <RosterCard
-              faculty={course.faculty}
-              tas={course.tas}
-              students={course.students}
-              userColumns={userColumns(() => {
-                // Optional callback to refresh course after edit/delete
-                fetch(`/api/courses/${id}`)
-                  .then((res) => res.json())
-                  .then(setCourse);
-              })}
-              onEnrollUser={openEnrollDialog}
-            />
-          </div>
-        </TabsContent>
-
-        <TabsContent value="grades" className="animate-fade-in-up transition-opacity duration-300">
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-2xl">Grades</CardTitle>
-              </CardHeader>
-              <CardContent>To Do...</CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent
-          value="activity"
-          className="animate-fade-in-up transition-opacity duration-300"
-        >
-          <div className="space-y-6">
-            <ActivityCard courseId={course.id} />
-          </div>
-        </TabsContent>
-      </Tabs>
-
-      {/* --- DIALOGS --- */}
-      <EditCourseDialog
+      {/* Course Header */}
+      <CourseHeader
         course={course}
-        open={editOpen}
-        setOpen={setEditOpen}
-        onSave={async (updatedCourse) => {
-          try {
-            const res = await fetch(`/api/courses/${updatedCourse.id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(updatedCourse),
-            });
-            if (!res.ok) throw new Error('Failed to save course');
-            const updated = await res.json();
-            setCourse((prev) => (prev ? { ...prev, ...updated } : prev));
-            showToast.success('Course updated!');
-          } catch {
-            showToast.error('Failed to save course');
-          }
-          setEditOpen(false);
-        }}
+        isStudent={isStudent}
+        onEditClick={() => dialogStates.setEditOpen(true)}
+        onPublishToggle={handlePublishToggle}
       />
 
-      {course && (
-        <CreateProblemDialog
-          open={problemOpen}
-          setOpen={setProblemOpen}
-          courseId={course.id}
-          onCreated={(newProblem) => {
-            if (newProblem) {
-              setCourse((prev) =>
-                prev ? { ...prev, problems: [...prev.problems, newProblem] } : prev,
-              );
-              showToast.success('Problem created!');
-            }
-          }}
+      {/* Main Content */}
+      {isStudent ? (
+        <StudentCourseView course={course} />
+      ) : (
+        <AdminCourseView
+          course={course}
+          tab={tab}
+          onTabChange={handleTabChange}
+          onCreateAssignment={() => dialogStates.setCreateAssignmentOpen(true)}
+          onCreateProblem={() => dialogStates.setProblemOpen(true)}
+          onEnrollUser={openEnrollDialog}
+          onAssignmentEdit={handleAssignmentEditClick}
+          onAssignmentDelete={handleAssignmentDeleteClick}
+          onAssignmentPublishToggle={handlers.handleAssignmentPublishToggle}
+          onProblemEdit={handleProblemEditClick}
+          onProblemDelete={handleProblemDeleteClick}
+          onRefreshCourse={refetchCourse}
         />
       )}
 
-      {selectedAssignment && (
-        <EditAssignmentDialog
-          assignment={selectedAssignment}
-          open={editAssignmentOpen}
-          setOpen={setEditAssignmentOpen}
-          onSave={handleAssignmentSave}
+      {/* Dialogs */}
+      {!isStudent && (
+        <CourseDialogs
+          course={course}
+          editOpen={dialogStates.editOpen}
+          setEditOpen={dialogStates.setEditOpen}
+          onCourseSave={handlers.handleCourseSave}
+          problemOpen={dialogStates.problemOpen}
+          setProblemOpen={dialogStates.setProblemOpen}
+          editProblemOpen={dialogStates.editProblemOpen}
+          setEditProblemOpen={dialogStates.setEditProblemOpen}
+          selectedProblem={dialogStates.selectedProblem}
+          setSelectedProblem={dialogStates.setSelectedProblem}
+          onProblemCreated={handlers.handleProblemCreated}
+          onProblemSaved={handlers.handleProblemSaved}
+          editAssignmentOpen={dialogStates.editAssignmentOpen}
+          setEditAssignmentOpen={dialogStates.setEditAssignmentOpen}
+          selectedAssignment={dialogStates.selectedAssignment}
+          createAssignmentOpen={dialogStates.createAssignmentOpen}
+          setCreateAssignmentOpen={dialogStates.setCreateAssignmentOpen}
+          onAssignmentSave={handleAssignmentSave}
+          onAssignmentCreate={handlers.handleAssignmentCreate}
+          confirmOpen={dialogStates.confirmOpen}
+          pendingDelete={dialogStates.pendingDelete}
+          onConfirm={handleConfirm}
+          onCancel={handleCancel}
+          publishConfirmOpen={dialogStates.publishConfirmOpen}
+          pendingPublish={dialogStates.pendingPublish}
+          onPublishConfirm={handlePublishConfirm}
+          onPublishCancel={handlePublishCancel}
+          enrollOpen={dialogStates.enrollOpen}
+          setEnrollOpen={dialogStates.setEnrollOpen}
+          allUsers={allUsers}
+          onEnrollUser={handleEnrollUserWrapper}
         />
       )}
-
-      {selectedProblem && (
-        <EditProblemDialog
-          problem={selectedProblem}
-          open={editProblemOpen}
-          setOpen={(val) => {
-            setEditProblemOpen(val);
-            if (!val) setSelectedProblem(null); // clear selection on close
-          }}
-          onSaved={(updated) => {
-            if (updated) {
-              setCourse((prev) =>
-                prev
-                  ? {
-                      ...prev,
-                      problems: prev.problems.map((p) => (p.id === updated.id ? updated : p)),
-                    }
-                  : prev,
-              );
-              showToast.success('Problem updated!');
-            }
-          }}
-        />
-      )}
-
-      <CreateAssignmentDialog
-        open={createAssignmentOpen}
-        setOpen={setCreateAssignmentOpen}
-        courseId={course.id}
-        onCreate={(newAssignment) => {
-          setCourse((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  assignments: [...prev.assignments, { ...newAssignment, problemCount: 0 }],
-                }
-              : prev,
-          );
-          showToast.success('Assignment created!');
-        }}
-      />
-      <ConfirmDialog
-        open={confirmOpen}
-        title={pendingDelete?.type === 'assignment' ? 'Delete Assignment?' : 'Delete Problem?'}
-        description="Are you sure you want to delete this item? This cannot be undone."
-        onConfirm={handleConfirm}
-        onCancel={handleCancel}
-      />
-
-      <ConfirmDialog
-        open={publishConfirmOpen}
-        confirmText={pendingPublish ? 'Publish' : 'Unpublish'}
-        title={pendingPublish ? 'Publish Course?' : 'Unpublish Course?'}
-        description={
-          pendingPublish
-            ? 'Are you sure you want to publish this course? It will be visible to students.'
-            : 'Are you sure you want to unpublish this course? Students will no longer see it.'
-        }
-        onConfirm={async () => {
-          if (pendingPublish === null) return;
-
-          try {
-            const res = await fetch(`/api/courses/${course.id}/publish`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ isPublished: pendingPublish }),
-            });
-            if (!res.ok) throw new Error('Failed to update publish status');
-
-            const updated = await res.json();
-            setCourse((prev) => (prev ? { ...prev, isPublished: updated.isPublished } : prev));
-            showToast.success(pendingPublish ? 'Course published' : 'Course unpublished');
-          } catch {
-            showToast.error('Error updating publish status');
-          } finally {
-            setPublishConfirmOpen(false);
-            setPendingPublish(null);
-          }
-        }}
-        onCancel={() => {
-          setPublishConfirmOpen(false);
-          setPendingPublish(null);
-        }}
-      />
-
-      <EnrollUserDialog
-        open={enrollOpen}
-        setOpen={setEnrollOpen}
-        users={allUsers}
-        onEnroll={handleEnrollUser}
-      />
     </div>
   );
 }
