@@ -412,9 +412,6 @@ install_project_dependencies(){
   fi
   
   ok "Dependencies installed successfully"
-    npm install -D @tailwindcss/postcss tailwindcss autoprefixer postcss
-  fi
-  
   msgbox "Dependencies installed."
 }
 
@@ -1008,33 +1005,28 @@ system_menu(){
       5 "Install Project Dependencies" \
       6 "Fix Build Dependencies" \
       7 "Install PM2 Process Manager" \
-install_pm2(){
-  if command_exists pm2; then
-    local current_version; current_version=$(pm2 --version 2>/dev/null || echo "unknown")
-    if ! yesno "PM2 $current_version detected. Reinstall/update?"; then return 0; fi
-  fi
-  
-  quiet_infobox "Installing PM2 globally..."
-  
-  local install_output
-  if [[ "$VERBOSE" == "true" ]]; then
-    if sudo npm install -g pm2; then
-      ok "PM2 installed: $(pm2 --version)"
-    else
-      err "Failed to install PM2"
-      return 1
-    fi
-  else
-    install_output=$(sudo npm install -g pm2 2>&1) || { err "Failed to install PM2"; echo "$install_output"; return 1; }
-    ok "PM2 installed: $(pm2 --version)"
-  fi
-  
-  # Install PM2 logrotate module
-  verbose_log "Installing PM2 logrotate module..."
-  pm2 install pm2-logrotate >/dev/null 2>&1 || true
-  
-  ok "PM2 setup complete"
-}     *) ;;
+      8 "Setup PM2 Ecosystem" \
+      9 "Configure PM2 Startup" \
+      10 "Manage PM2 Processes" \
+      11 "Reset Development Database" \
+      12 "Reset Production Database" \
+      0 "Back to Main Menu") || return 0
+
+    case "$choice" in
+      1) system_health_check;;
+      2) view_system_status;;
+      3) install_nodejs;;
+      4) install_postgresql;;
+      5) install_project_dependencies;;
+      6) fix_build_dependencies;;
+      7) install_pm2;;
+      8) setup_pm2_ecosystem;;
+      9) configure_pm2_startup;;
+      10) manage_pm2_processes;;
+      11) reset_development_database;;
+      12) reset_production_database;;
+      0) return 0;;
+      *) ;;
     esac
   done
 }
@@ -1167,8 +1159,9 @@ EOF
   ok "PM2 ecosystem configuration created: $ecosystem_file"
   
   # Validate ecosystem file
-  if pm2 ecosystem "$ecosystem_file" >/dev/null 2>&1; then
+  if pm2 start "$ecosystem_file" --no-daemon >/dev/null 2>&1; then
     ok "Ecosystem configuration validated"
+    pm2 delete "$ecosystem_file" >/dev/null 2>&1 # Clean up test run
   else
     warn "Ecosystem configuration may have issues"
   fi
@@ -1364,4 +1357,89 @@ troubleshoot_nextauth(){
         infobox "Performing full NextAuth reset..."
         [[ -d .next ]] && rm -rf .next
         npm uninstall next-auth >/dev/null 2>&1 || true
-        npm install next-auth@^5.0.0
+        npm install next-auth@^5.0.0 >/dev/null 2>&1 || { err "Failed to install next-auth"; return 1; }
+        npm run db:generate >/dev/null 2>&1 || { err "Failed to regenerate Prisma client"; return 1; }
+        success "NextAuth reset complete"
+      fi
+      ;;
+    0) return 0;;
+    *) ;;
+  esac
+}
+
+# ------------------------- Main Menu / Entry Point --------------------------
+while true; do
+  clear
+  echo -e "${BOLD}${GREEN}AFCT Dashboard Setup Wizard${NC}"
+  echo -e "${YELLOW}Automated Environment Setup for Development & Production${NC}"
+  echo
+
+  local choice
+  choice=$(menu \
+    1 "Development Setup" \
+    2 "Production Setup" \
+    3 "Database Utilities" \
+    4 "System Management" \
+    5 "Exit") || exit 0
+
+  case "$choice" in
+    1) 
+      while true; do
+        local dev_choice
+        dev_choice=$(menu \
+          1 "Install Node.js" \
+          2 "Install Project Dependencies" \
+          3 "Setup Development Database (SQLite)" \
+          4 "Reset Development Database" \
+          5 "Test Development Database" \
+          6 "Environment Conflict Detection & Fix" \
+          0 "Back to Main Menu") || return 0
+
+        case "$dev_choice" in
+          1) install_nodejs;;
+          2) install_project_dependencies;;
+          3) setup_development_database;;
+          4) reset_development_database;;
+          5) test_database_connection;;
+          6) detect_env_conflicts dev || { if yesno "Run auto-fix?"; then fix_env_conflicts dev; fi; };;
+          0) return 0;;
+          *) ;;
+        esac
+      done
+      ;;
+    2) 
+      while true; do
+        local prod_choice
+        prod_choice=$(menu \
+          1 "Install Node.js" \
+          2 "Install PostgreSQL" \
+          3 "Install Project Dependencies" \
+          4 "Setup PM2 Process Manager" \
+          5 "Setup PM2 Ecosystem" \
+          6 "Configure PM2 Startup" \
+          7 "Deploy Application" \
+          8 "Reset Production Database" \
+          9 "Environment Conflict Detection (PROD)" \
+          0 "Back to Main Menu") || return 0
+
+        case "$prod_choice" in
+          1) install_nodejs;;
+          2) install_postgresql;;
+          3) install_project_dependencies;;
+          4) install_pm2;;
+          5) setup_pm2_ecosystem;;
+          6) configure_pm2_startup;;
+          7) deploy_application;;
+          8) reset_production_database;;
+          9) detect_env_conflicts prod || { if yesno "Run auto-fix?"; then fix_env_conflicts prod; fi; };;
+          0) return 0;;
+          *) ;;
+        esac
+      done
+      ;;
+    3) database_menu;;
+    4) system_menu;;
+    5) exit 0;;
+    *) ;;
+  esac
+done
