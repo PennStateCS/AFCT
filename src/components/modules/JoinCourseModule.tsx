@@ -60,7 +60,7 @@ export function JoinCourseModule() {
 
           <InputOTP
             maxLength={6}
-            value={code}
+            value={code.toUpperCase()}
             onChange={setCode}
             pattern="[A-Z0-9a-z]"
             containerClassName="justify-start"
