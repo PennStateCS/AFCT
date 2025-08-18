@@ -923,32 +923,13 @@ validate_production_environment(){
         msgbox "Production Environment Ready!\n\nNext steps:\n• Start: pm2 start ecosystem.config.js\n• Monitor: pm2 monit\n• Logs: pm2 logs"
         ;;
       2) install_postgresql;;
-      3) setup_production_database;;
+      3) install_project_dependencies;;
       4) install_pm2;;
       5) setup_pm2_ecosystem;;
-      6) deploy_application;;
-      7) configure_pm2_startup;;
-      8) manage_pm2_processes;;
-      9) reset_production_database;;
-      10) if [[ -f ".env.production" ]]; then
-           local url user pass host port db
-           url="$(read_dburl_from_file ".env.production")"
-           user=$(echo "$url" | sed -n 's#postgresql://\([^:/@]\+\).*#\1#p')
-           pass=$(echo "$url" | sed -n 's#postgresql://[^:]\+:\([^@]\+\)@.*#\1#p')
-           host=$(echo "$url" | sed -n 's#.*@\(.*\):[0-9]\+/.*#\1#p')
-           port=$(echo "$url" | sed -n 's#.*@.*:\([0-9]\+\)/.*#\1#p')
-           db=$(echo "$url"   | sed -n 's#.*/\([^?]\+\).*#\1#p')
-           if PGPASSWORD="$(printf '%b' "$pass")" psql -h "$host" -p "$port" -U "$user" -d "$db" -c "select 1;" >/dev/null 2>&1; then
-             msgbox "PostgreSQL connection OK"
-           else
-             msgbox "PostgreSQL connection failed"
-           fi
-         else
-           msgbox ".env.production not found"
-         fi;;
-      11) validate_production_environment;;
-      12) fix_migration_provider_mismatch postgresql;;
-      13) detect_env_conflicts prod || { if yesno "Run auto-fix?"; then fix_env_conflicts prod; fi; };;
+      6) configure_pm2_startup;;
+      7) deploy_application;;
+      8) reset_production_database;;
+      9) detect_env_conflicts prod || { if yesno "Run auto-fix?"; then fix_env_conflicts prod; fi; };;
       0) return 0;;
       *) ;;
     esac
@@ -1374,7 +1355,6 @@ while true; do
   echo -e "${YELLOW}Automated Environment Setup for Development & Production${NC}"
   echo
 
-  local choice
   choice=$(menu \
     1 "Development Setup" \
     2 "Production Setup" \
@@ -1385,7 +1365,6 @@ while true; do
   case "$choice" in
     1) 
       while true; do
-        local dev_choice
         dev_choice=$(menu \
           1 "Install Node.js" \
           2 "Install Project Dependencies" \
@@ -1409,7 +1388,6 @@ while true; do
       ;;
     2) 
       while true; do
-        local prod_choice
         prod_choice=$(menu \
           1 "Install Node.js" \
           2 "Install PostgreSQL" \
@@ -1442,4 +1420,5 @@ while true; do
     5) exit 0;;
     *) ;;
   esac
+
 done
