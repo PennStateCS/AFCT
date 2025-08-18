@@ -19,10 +19,13 @@ set -euo pipefail
 VERBOSE=false
 [[ "${1:-}" == "--verbose" || "${1:-}" == "-v" ]] && VERBOSE=true
 
-# Colors & formatting
-GREEN='\033[0;32m'; BLUE='\033[0;34m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
-CYAN='\033[0;36m'; MAGENTA='\033[0;35m'
-BOLD='\033[1m'; DIM='\033[2m'
+# Colors & formatting (disable if not supported)
+if tput colors >/dev/null 2>&1; then
+  GREEN='\033[0;32m'; BLUE='\033[0;34m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
+  CYAN='\033[0;36m'; MAGENTA='\033[0;35m'; BOLD='\033[1m'; DIM='\033[2m'
+else
+  GREEN=''; BLUE=''; YELLOW=''; RED=''; NC=''; CYAN=''; MAGENTA=''; BOLD=''; DIM=''
+fi
 
 log(){ echo -e "${BLUE}==>${NC} $*"; }
 ok(){ echo -e "${GREEN}✓${NC} $*"; }
@@ -35,10 +38,16 @@ verbose_log(){ [[ "$VERBOSE" == "true" ]] && log "$@"; }
 command_exists(){ command -v "$1" >/dev/null 2>&1; }
 check_root(){ [[ $EUID -eq 0 ]]; }
 nowstamp(){ date +%Y%m%d_%H%M%S; }
-normalize_file_unix(){ local f="$1"; [[ -f "$f" ]] || return 0; sed -i 's/\r$//' "$f" 2>/dev/null || true; }
-mask_db_url(){ local url="$1"; echo "$url" | sed -E 's#(postgresql://[^:]+):[^@]+@#\1:****@#'; }
-read_dburl_from_file(){ local f="$1"; [[ -f "$f" ]] || return 1; normalize_file_unix "$f"; grep -E '^DATABASE_URL=' "$f" | tail -n1 | sed -E 's/^DATABASE_URL=//; s/^"//; s/"$//'; }
-url_encode(){ node -e "try{process.stdout.write(encodeURIComponent(process.argv[1]||''))}catch{process.stdout.write(process.argv[1]||'')}" "$1" 2>/dev/null || echo -n "$1"; }
+normalize_file_unix(){ local f="$1"; [[ -f "$f" ]] && sed -i 's/\r$//' "$f" 2>/dev/null; }
+mask_db_url(){ echo "$1" | sed -E 's#(postgresql://[^:]+):[^@]+@#\1:****@#'; }
+read_dburl_from_file(){ 
+  local f="$1"; [[ -f "$f" ]] || return 1
+  normalize_file_unix "$f"
+  grep '^DATABASE_URL=' "$f" | tail -n1 | sed -E 's/^DATABASE_URL=//; s/^"//; s/"$//'
+}
+url_encode(){ 
+  node -e "process.stdout.write(encodeURIComponent(process.argv[1]||''))" "$1" 2>/dev/null || echo -n "$1"
+}
 
 # ------------------------------ TUI Backend ---------------------------------
 detect_pkg_mgr() {
@@ -103,15 +112,15 @@ menu(){ # args: tag1 item1 tag2 item2 ...
 # ------------------------------ OS Checks -----------------------------------
 OS=""
 check_os(){
-  if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    if command_exists apt-get; then OS="ubuntu"
-    elif command_exists yum; then OS="centos"
-    elif command_exists dnf; then OS="centos"
-    elif command_exists pacman; then OS="arch"
-    else msgbox "Unsupported Linux distribution"; exit 1; fi
-  else
-    msgbox "This wizard supports Linux only."; exit 1
-  fi
+  case "$OSTYPE" in
+    linux-gnu*)
+      if command_exists apt-get; then OS="ubuntu"
+      elif command_exists yum || command_exists dnf; then OS="centos"
+      elif command_exists pacman; then OS="arch"
+      else msgbox "Unsupported Linux distribution"; exit 1; fi
+      ;;
+    *) msgbox "This wizard supports Linux only."; exit 1 ;;
+  esac
 }
 
 # -------------------------- Safe Env Runners --------------------------------
@@ -295,28 +304,36 @@ view_system_status(){
 # ------------------------------ Node Install --------------------------------
 install_nodejs(){
   check_os
-  if command_exists node; then
-    if ! yesno "Node.js $(node --version) detected. Update to LTS (NodeSource)?"; then return 0; fi
-  fi
+  if command_exists node && ! yesno "Node.js $(node --version) detected. Update to LTS?"; then return 0; fi
+  
   quiet_infobox "Installing Node.js..."
-  if [[ "$OS" == "ubuntu" ]]; then
-    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-    sudo apt-get install -y nodejs
-  elif [[ "$OS" == "centos" ]]; then
-    sudo yum install -y nodejs npm
-  elif [[ "$OS" == "arch" ]]; then
-    sudo pacman -Sy --noconfirm nodejs npm
-  fi
+  case "$OS" in
+    ubuntu)
+      curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+      sudo apt-get install -y nodejs ;;
+    centos)
+      sudo yum install -y nodejs npm ;;
+    arch)
+      sudo pacman -Sy --noconfirm nodejs npm ;;
+  esac
+  
   ok "Node: $(node --version)  NPM: $(npm --version)"
   sudo npm i -g pm2 cross-env >/dev/null 2>&1 || true
 }
 
 # ----------------------- Project Dependencies/Prisma ------------------------
 install_project_dependencies(){
-  [[ -f package.json ]] || { msgbox "Run this from the project root (package.json not found)."; return 1; }
+  [[ -f package.json ]] || { msgbox "Run from project root (package.json missing)"; return 1; }
   quiet_infobox "Installing dependencies..."
-  if [[ "$VERBOSE" == "true" ]]; then npm install; else npm install >/dev/null 2>&1 || { err "npm install failed"; return 1; }; fi
-  if ! npx --yes --quiet dotenv -v >/dev/null 2>&1; then npm i -D dotenv-cli >/dev/null 2>&1; fi
+  
+  if [[ "$VERBOSE" == "true" ]]; then
+    npm install
+  else
+    npm install >/dev/null 2>&1 || { err "npm install failed"; return 1; }
+  fi
+  
+  # Ensure dotenv-cli is available
+  npx --yes --quiet dotenv -v >/dev/null 2>&1 || npm i -D dotenv-cli >/dev/null 2>&1
   ok "Dependencies installed"
 }
 
@@ -344,25 +361,27 @@ EOF
 # ------------------------------ Dev Database --------------------------------
 setup_development_database(){
   check_os
+  
+  # Install SQLite if needed
   if ! command_exists sqlite3; then
     quiet_infobox "Installing SQLite..."
-    if [[ "$OS" == "ubuntu" ]]; then 
-      sudo apt-get update >/dev/null 2>&1 && sudo apt-get install -y sqlite3 libsqlite3-dev >/dev/null 2>&1
-    elif [[ "$OS" == "centos" ]]; then 
-      sudo yum install -y sqlite sqlite-devel >/dev/null 2>&1
-    else 
-      sudo pacman -Sy --noconfirm sqlite >/dev/null 2>&1
-    fi
+    case "$OS" in
+      ubuntu) sudo apt-get update >/dev/null 2>&1 && sudo apt-get install -y sqlite3 libsqlite3-dev >/dev/null 2>&1 ;;
+      centos) sudo yum install -y sqlite sqlite-devel >/dev/null 2>&1 ;;
+      arch) sudo pacman -Sy --noconfirm sqlite >/dev/null 2>&1 ;;
+    esac
   fi
-  if [[ ! -f ".env.local" ]]; then
-    cat > .env.local <<EOF
+  
+  # Create .env.local if missing
+  [[ -f ".env.local" ]] || cat > .env.local <<EOF
 DATABASE_URL="file:./prisma/dev.db"
 NODE_ENV="development"
 NEXTAUTH_URL="http://localhost:3000"
 NEXTAUTH_SECRET="$(openssl rand -base64 32 2>/dev/null || echo dev-secret)"
 EOF
-  fi
-  detect_env_conflicts dev || { if yesno "Fix dev env conflicts now?"; then fix_env_conflicts dev; fi; }
+
+  detect_env_conflicts dev || { yesno "Fix dev env conflicts?" && fix_env_conflicts dev; }
+  
   quiet_infobox "Setting up development database..."
   npx prisma generate >/dev/null 2>&1 || true
   npx prisma migrate dev --name init >/dev/null 2>&1 || true
@@ -374,19 +393,27 @@ EOF
 install_postgresql(){
   check_os
   if command_exists psql; then
-    systemctl is-active --quiet postgresql || { sudo systemctl start postgresql; sudo systemctl enable postgresql; }
+    systemctl is-active --quiet postgresql || {
+      sudo systemctl start postgresql
+      sudo systemctl enable postgresql
+    }
     ok "PostgreSQL available"
     return 0
   fi
-  if ! check_root; then msgbox "Please run with sudo/root to install PostgreSQL."; return 1; fi
+  
+  check_root || { msgbox "Run with sudo to install PostgreSQL"; return 1; }
   quiet_infobox "Installing PostgreSQL..."
-  if [[ "$OS" == "ubuntu" ]]; then 
-    sudo apt-get update -y && sudo apt-get install -y postgresql postgresql-contrib
-  elif [[ "$OS" == "centos" ]]; then 
-    sudo yum install -y postgresql-server postgresql-contrib; postgresql-setup initdb >/dev/null 2>&1
-  else 
-    sudo pacman -Sy --noconfirm postgresql
-  fi
+  
+  case "$OS" in
+    ubuntu)
+      sudo apt-get update -y && sudo apt-get install -y postgresql postgresql-contrib ;;
+    centos)
+      sudo yum install -y postgresql-server postgresql-contrib
+      postgresql-setup initdb >/dev/null 2>&1 ;;
+    arch)
+      sudo pacman -Sy --noconfirm postgresql ;;
+  esac
+  
   sudo systemctl start postgresql && sudo systemctl enable postgresql
   ok "PostgreSQL installed & running"
 }
@@ -411,15 +438,15 @@ setup_production_database(){
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${DB_USER}') THEN
-    EXECUTE format('CREATE ROLE %I LOGIN PASSWORD %L', '${DB_USER}', '${DB_PASS}');
+    CREATE ROLE "${DB_USER}" LOGIN PASSWORD '${DB_PASS}';
   ELSE
-    EXECUTE format('ALTER ROLE %I WITH LOGIN PASSWORD %L', '${DB_USER}', '${DB_PASS}');
+    ALTER ROLE "${DB_USER}" WITH LOGIN PASSWORD '${DB_PASS}';
   END IF;
 END$$;
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = '${DB_NAME}') THEN
-    EXECUTE format('CREATE DATABASE %I OWNER %I', '${DB_NAME}', '${DB_USER}');
+    CREATE DATABASE "${DB_NAME}" OWNER "${DB_USER}";
   END IF;
 END$$;
 GRANT ALL PRIVILEGES ON DATABASE "${DB_NAME}" TO "${DB_USER}";
@@ -448,18 +475,22 @@ EOF
 
 # ------------------------------ Deploy App ----------------------------------
 deploy_application(){
-  [[ -f package.json ]] || { msgbox "Run from project root."; return 1; }
-  [[ -f ".env.production" ]] || { msgbox ".env.production is missing. Run production DB setup first."; return 1; }
-  if [[ ! -d node_modules ]]; then quiet_infobox "Installing dependencies..."; npm install >/dev/null 2>&1; fi
-  quiet_infobox "Building application..."; npm run build >/dev/null 2>&1 || { err "Build failed"; return 1; }
+  [[ -f package.json ]] || { msgbox "Run from project root"; return 1; }
+  [[ -f ".env.production" ]] || { msgbox ".env.production missing. Setup production DB first"; return 1; }
+  
+  [[ -d node_modules ]] || { quiet_infobox "Installing dependencies..."; npm install >/dev/null 2>&1; }
+  
+  quiet_infobox "Building application..."
+  npm run build >/dev/null 2>&1 || { err "Build failed"; return 1; }
+  
   if command_exists pm2; then
     pm2 delete afct-dashboard 2>/dev/null || true
     pm2 start npm --name afct-dashboard -- start >/dev/null 2>&1
     pm2 save >/dev/null 2>&1
-    msgbox "Deployment Complete!\n\nApplication: afct-dashboard\nStatus: Running with PM2\nLogs: pm2 logs afct-dashboard\nMonitor: pm2 monit"
+    msgbox "Deployment Complete!\n\nApp: afct-dashboard (PM2)\nLogs: pm2 logs afct-dashboard\nMonitor: pm2 monit"
   else
     npm start &
-    msgbox "Deployment Complete!\n\nApplication started with npm start\n(Consider installing PM2 for production)"
+    msgbox "Deployment Complete!\n\nApp started with npm start\n(Consider installing PM2)"
   fi
 }
 
@@ -559,9 +590,10 @@ check_migration_issues(){
 # ------------------------- PM2 & Process Management -------------------------
 install_pm2(){
   if command_exists pm2; then
-    local current_version; current_version=$(pm2 --version 2>/dev/null || echo "unknown")
-    if ! yesno "PM2 $current_version detected. Reinstall/update?"; then return 0; fi
+    local version=$(pm2 --version 2>/dev/null || echo "unknown")
+    yesno "PM2 $version detected. Reinstall/update?" || return 0
   fi
+  
   infobox "Installing PM2 globally..."
   sudo npm install -g pm2 >/dev/null 2>&1 || { err "Failed to install PM2"; return 1; }
   pm2 install pm2-logrotate >/dev/null 2>&1 || true
@@ -578,6 +610,13 @@ setup_pm2_ecosystem(){
   local env_file=".env.production"; [[ "$node_env" != "production" ]] && env_file=".env.local"
   [[ -f "$env_file" ]] || { msgbox "Environment file '$env_file' missing. Run the corresponding setup first."; return 1; }
 
+  local exec_mode
+  if [[ "$instances" =~ ^[1-9][0-9]*$ && "$instances" -gt 1 ]]; then
+    exec_mode="cluster"
+  else
+    exec_mode="fork"
+  fi
+
   cat > ecosystem.config.js <<EOF
 module.exports = {
   apps: [
@@ -586,7 +625,7 @@ module.exports = {
       script: 'npm',
       args: 'start',
       instances: ${instances},
-      exec_mode: ${instances} > 1 ? 'cluster' : 'fork',
+      exec_mode: '${exec_mode}',
       env_file: '${env_file}',
       max_memory_restart: '${max_memory}M',
       autorestart: true,
@@ -604,10 +643,18 @@ EOF
 }
 
 configure_pm2_startup(){
-  command_exists pm2 || { msgbox "PM2 not installed. Install PM2 first."; return 1; }
-  if ! check_root; then msgbox "PM2 startup configuration requires root privileges."; return 1; fi
-  local startup_cmd; startup_cmd=$(pm2 startup | grep "sudo env" | head -n1)
-  if [[ -n "$startup_cmd" ]]; then eval "$startup_cmd"; pm2 save; ok "PM2 startup configured"; else err "Failed to configure PM2 startup"; return 1; fi
+  command_exists pm2 || { msgbox "PM2 not installed. Install PM2 first"; return 1; }
+  check_root || { msgbox "PM2 startup requires root privileges"; return 1; }
+  
+  local startup_cmd=$(pm2 startup | grep "sudo env" | head -n1)
+  if [[ -n "$startup_cmd" ]]; then
+    eval "$startup_cmd"
+    pm2 save
+    ok "PM2 startup configured"
+  else
+    err "Failed to configure PM2 startup"
+    return 1
+  fi
 }
 
 manage_pm2_processes(){
