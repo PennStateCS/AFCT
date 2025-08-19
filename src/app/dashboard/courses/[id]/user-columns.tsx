@@ -116,7 +116,7 @@ export const userColumns = (onChange: () => void): ColumnDef<User>[] => [
     cell: ({ row }) => {
       const email = row.original.email;
       return (
-        <a href={`mailto:${email}`} className="text-blue-600 underline hover:text-blue-800">
+        <a href={`mailto:${email}`} className="text-blue-600 hover:underline">
           {email}
         </a>
       );
