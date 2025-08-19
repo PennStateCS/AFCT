@@ -53,6 +53,7 @@ export default async function DashboardPage() {
   const assignments = await prisma.assignment.findMany({
     where: {
       courseId: { in: courseIds },
+      isPublished: true,
       dueDate: { gt: new Date() },
     },
     select: {
