@@ -33,7 +33,7 @@ export const columns = (
     cell: ({ row }) => {
       const course = row.original;
       return (
-        <Link href={`/dashboard/courses/${course.id}`} className="text-blue-700 hover:underline">
+        <Link href={`/dashboard/courses/${course.id}`} className="text-blue-600 hover:underline">
           {course.name}
         </Link>
       );
