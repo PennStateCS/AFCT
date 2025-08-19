@@ -44,7 +44,7 @@ export const problemColumns = ({
         <a
           href={`/uploads/solutions/${fileName}`}
           download={file}
-          className="text-sm break-all text-blue-600 underline"
+          className="text-blue-600 hover:underline"
         >
           {file}
         </a>
