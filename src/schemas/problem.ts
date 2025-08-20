@@ -4,7 +4,7 @@ import { z } from 'zod';
 export const ProblemTypeEnum = z.enum(['FA', 'PDA', 'CFG', 'RE']);
 
 /** Allowed upload types (adjust as needed) */
-const allowedExt = ['txt', 'fa', 'pda', 'cfg', 're'];
+const allowedExt = ['txt', 'fa', 'pda', 'cfg', 're', 'jff'];
 
 const FileRequired = z
   .instanceof(File, { message: 'Answer file is required.' })
