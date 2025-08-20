@@ -113,16 +113,21 @@ export async function GET(
     }
 
     // Log access to assignment submissions
-    await createEnhancedActivityLog(prisma, req, {
-      userId: user.id,
-      action: 'VIEW_ASSIGNMENT_SUBMISSIONS',
-      category: 'SUBMISSION',
-      courseId,
-      assignmentId,
-      metadata: {
-        viewedStudentId: studentId,
-      },
-    });
+    try {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: user.id,
+        action: 'VIEW_ASSIGNMENT_SUBMISSIONS',
+        category: 'SUBMISSION',
+        courseId,
+        assignmentId,
+        metadata: {
+          viewedStudentId: studentId,
+        },
+      });
+    } catch (logError) {
+      console.warn('Failed to log activity:', logError);
+      // Don't fail the whole request if logging fails
+    }
 
     // Return structured submission data grouped by problem
     return NextResponse.json(result);
