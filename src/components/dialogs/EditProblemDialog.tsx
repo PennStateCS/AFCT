@@ -35,24 +35,15 @@ type EditProblemDialogProps = {
 type FormValues = z.input<typeof ProblemFormSchema>;
 type ParsedValues = z.output<typeof ProblemFormSchema>;
 
-// Helpers to adapt persisted values to the form model
-function deriveUnlimited(maxStates: number | null): boolean {
-  // Treat null or negative as unlimited
-  return maxStates == null || maxStates < 0;
-}
-function deriveMaxStates(maxStates: number | null): number {
-  // Use stored value if valid; otherwise a reasonable default for the input
-  return maxStates && maxStates > 0 ? maxStates : 100;
-}
-
 export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProblemDialogProps) {
+  
   const defaults: FormValues = useMemo(
     () => ({
       title: problem.title ?? '',
       description: problem.description ?? '',
       type: problem.type as z.infer<typeof ProblemTypeEnum>,
-      isUnlimited: deriveUnlimited(problem.maxStates),
-      maxStates: deriveMaxStates(problem.maxStates),
+      isUnlimited: problem.maxStates == null || problem.maxStates < 0,
+      maxStates: problem.maxStates ?? undefined,
       isDeterministic:
         problem.type === 'FA'
           ? !!(problem as Problem & { isDeterministic?: boolean }).isDeterministic
@@ -68,11 +59,11 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
     handleSubmit,
     reset,
     watch,
-    formState: { errors, isSubmitting, isDirty, isValid },
+    formState: { errors, isSubmitting, isValid },
   } = useForm<FormValues>({
     resolver: zodResolver(ProblemFormSchema),
     defaultValues: defaults,
-    mode: 'onBlur',
+    mode: 'onChange',
     reValidateMode: 'onChange',
   });
 
@@ -83,6 +74,7 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
   // Reset when opening/closing (prevents touched/error flicker)
   useEffect(() => {
     if (open) {
+      
       reset(defaults, {
         keepDirty: false,
         keepTouched: false,
@@ -109,22 +101,18 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
 
   const onSubmit = async (raw: FormValues) => {
     try {
-      console.log('Edit problem form data:', {
-        title: raw.title,
-        type: raw.type,
-        courseId: raw.courseId,
-        file: raw.file,
-        fileName: raw.file?.name,
-        fileSize: raw.file?.size,
-      });
+      console.log('Edit problem form data:', raw);
 
       // 1) Normalize with form schema
       const parsed: ParsedValues = ProblemFormSchema.parse(raw);
+      console.log('Parsed form data:', parsed);
+
       // 2) Enforce update contract with id (file stays optional)
       const payload = UpdateProblemSchema.parse({
         id: problem.id,
         ...parsed,
       });
+      console.log('Payload for submission:', payload);
 
       const formData = new FormData();
       formData.append('title', payload.title ?? '');
@@ -245,7 +233,7 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
                 <Label className="mb-2 block">Problem Type</Label>
                 <select
                   className="w-full rounded border p-2"
-                  value={field.value}
+                  value={field.value ?? ''}
                   onChange={(e) =>
                     field.onChange(e.target.value as z.infer<typeof ProblemTypeEnum>)
                   }
@@ -348,12 +336,12 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
             </DialogClose>
             <Button
               type="submit"
-              disabled={!isValid || !isDirty || isSubmitting}
+              disabled={!isValid || isSubmitting}
               title={
                 !isValid
                   ? 'Fix validation errors to save'
-                  : !isDirty
-                    ? 'No changes to save'
+                  : isSubmitting
+                    ? 'Submitting...'
                     : undefined
               }
             >
