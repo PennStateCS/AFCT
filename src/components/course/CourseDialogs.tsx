@@ -4,6 +4,7 @@ import { EditCourseDialog } from '@/components/dialogs/EditCourseDialog';
 import { EditAssignmentDialog } from '@/components/dialogs/EditAssignmentDialog';
 import { CreateAssignmentDialog } from '@/components/dialogs/CreateAssignmentDialog';
 import { EnrollUserDialog } from '@/components/dialogs/EnrollUsersDialog';
+import BulkEnrollDialog from '@/components/dialogs/BulkEnrollDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { FullCourse, DeleteTarget, EnrollableUser } from '@/types/course';
 import { Assignment, Problem, Course } from '@prisma/client';
@@ -51,6 +52,9 @@ interface CourseDialogsProps {
   setEnrollOpen: (open: boolean) => void;
   allUsers: EnrollableUser[];
   onEnrollUser: (user: EnrollableUser) => void;
+  // Bulk enroll
+  bulkEnrollOpen?: boolean;
+  setBulkEnrollOpen?: (open: boolean) => void;
 }
 
 export function CourseDialogs({
@@ -85,6 +89,8 @@ export function CourseDialogs({
   setEnrollOpen,
   allUsers,
   onEnrollUser,
+  bulkEnrollOpen,
+  setBulkEnrollOpen,
 }: CourseDialogsProps) {
   return (
     <>
@@ -157,6 +163,10 @@ export function CourseDialogs({
         users={allUsers}
         onEnroll={onEnrollUser}
       />
+
+      {setBulkEnrollOpen && (
+        <BulkEnrollDialog open={!!bulkEnrollOpen} setOpen={(v) => setBulkEnrollOpen?.(v)} courseId={course.id} onComplete={() => { /* noop */ }} />
+      )}
     </>
   );
 }

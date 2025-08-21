@@ -5,7 +5,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
-import { Plus } from 'lucide-react';
+import { Plus, Users } from 'lucide-react';
 
 type UserWithRole = User & {
   _role: string;
@@ -17,6 +17,7 @@ interface RosterCardProps {
   students: User[];
   userColumns: ColumnDef<User>[];
   onEnrollUser: () => void;
+  onBulkEnroll?: () => void;
 }
 
 export function RosterCard({ 
@@ -25,6 +26,7 @@ export function RosterCard({
   students, 
   userColumns, 
   onEnrollUser 
+  , onBulkEnroll
 }: RosterCardProps) {
   const rosterData: UserWithRole[] = [
     ...faculty.map((u) => ({ ...u, _role: 'Faculty' })),
@@ -36,9 +38,14 @@ export function RosterCard({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-2xl">Course Roster</CardTitle>
-        <Button variant="default" onClick={onEnrollUser}>
-          <Plus /> Enroll User
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="default" onClick={onEnrollUser}>
+            <Plus />Enroll User
+          </Button>
+          <Button variant="default" onClick={() => onBulkEnroll?.()}>
+            <Users className="mr-1" />Bulk Enroll
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         <DataTable
