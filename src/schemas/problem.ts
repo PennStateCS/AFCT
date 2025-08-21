@@ -27,7 +27,9 @@ const BaseProblemObject = z.object({
   description: z.string().trim().max(20000).optional().or(z.literal('')),
   type: ProblemTypeEnum,
   isUnlimited: z.boolean().default(true),
-  maxStates: z.union([z.coerce.number().int().min(1).max(1000), z.nan()]).optional(),
+  maxStates: z
+    .union([z.coerce.number().int(), z.null()])
+    .optional(),
   isDeterministic: z.boolean().default(false),
   courseId: z.string().min(1, 'Course id is required.'),
   file: z.instanceof(File).optional(),
@@ -41,14 +43,45 @@ function addProblemValidation<T extends z.ZodRawShape>(schema: z.ZodObject<T>) {
     const isFAorPDA = d.type === 'FA' || d.type === 'PDA';
 
     if (isFAorPDA && !d.isUnlimited) {
-      // when limited, maxStates must be provided and valid
-      const ms = Number(d.maxStates);
-      if (!Number.isFinite(ms) || ms < 1 || ms > 1000) {
+      // Check if maxStates is required when unlimited is unchecked
+      if (d.maxStates === null || d.maxStates === undefined) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['maxStates'],
-          message: 'Enter a max between 1 and 1000.',
+          message: 'Max States is required when Unlimited is unchecked.',
         });
+        return;
+      }
+
+      // Validate maxStates value based on isDeterministic
+      const ms = Number(d.maxStates);
+      if (!Number.isFinite(ms)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['maxStates'],
+          message: 'Max States must be a valid number.',
+        });
+        return;
+      }
+
+      if (d.isDeterministic) {
+        // When deterministic, allow -1 or values between 1-1000
+        if (ms !== -1 && (ms < 1 || ms > 1000)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['maxStates'],
+            message: 'For deterministic problems, Max States must be -1 or between 1 and 1000.',
+          });
+        }
+      } else {
+        // When non-deterministic, must be between 1-1000
+        if (ms < 1 || ms > 1000) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['maxStates'],
+            message: 'For non-deterministic problems, Max States must be between 1 and 1000.',
+          });
+        }
       }
     }
   });

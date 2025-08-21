@@ -28,27 +28,12 @@ export async function GET(
     const targetUserId = userId || session.user.id;
 
     // Calculate the total grade for the assignment by summing all problem grades
+    // Fetch submissions for the target user that belong to this assignment.
+    // Submission has an `assignmentId` field, so filter directly on that.
     const submissions = await prisma.submission.findMany({
       where: {
         studentId: targetUserId,
-        problem: {
-          assignments: {
-            some: {
-              assignmentId: assignmentId,
-            },
-          },
-        },
-      },
-      include: {
-        problem: {
-          include: {
-            assignments: {
-              where: {
-                assignmentId: assignmentId,
-              },
-            },
-          },
-        },
+        assignmentId: assignmentId,
       },
     });
 
