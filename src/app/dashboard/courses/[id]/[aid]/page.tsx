@@ -29,20 +29,30 @@ import { EditProblemDialog } from "@/components/dialogs/EditProblemDialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AssignmentSubmissions from "@/components/AssignmentSubmissions";
 import Link from 'next/link';
-import { Assignment, Course, Problem, User } from "@prisma/client";
-
-type UserBasic = Pick<User, "id" | "firstName" | "lastName">;
-type CourseWithRelations = Course & {
-	roster: Array<{
-		user: UserBasic;
-		role: string;
-	}>;
-};
-
-type ProblemForAssignment = Problem;
+import { Problem } from "@prisma/client";
 
 const problemTypeLabels: Record<string, string> = {
 	// Add your problem type labels here
+};
+
+type AssignmentWithDetails = {
+	id: string;
+	title: string;
+	description?: string | null;
+	courseId: string;
+	courseName?: string;
+	courseCode?: string;
+	dueDate: string | Date;
+	maxPoints: number;
+	isPublished: boolean;
+	createdAt?: Date;
+	updatedAt?: Date;
+	problems: Array<{ problem: Problem }>;
+	course?: {
+		id: string;
+		name: string;
+		code?: string;
+	};
 };
 
 export default function AssignmentDashboardPage() {
@@ -51,11 +61,10 @@ export default function AssignmentDashboardPage() {
 	const router = useRouter();
 
 		// Use a more flexible type for assignment to allow course details if available
-		const [assignment, setAssignment] = useState<any>(null);
+		const [assignment, setAssignment] = useState<AssignmentWithDetails | null>(null);
 	const [allProblems, setAllProblems] = useState<Problem[]>([]);
 	const [problemsLoading, setProblemsLoading] = useState(false);
 	const [problemToRemove, setProblemToRemove] = useState<Problem | null>(null);
-	const [removing, setRemoving] = useState(false);
 	const [editAssignmentOpen, setEditAssignmentOpen] = useState(false);
 	const [addProblemDialogOpen, setAddProblemDialogOpen] = useState(false);
 	const [editProblemDialogOpen, setEditProblemDialogOpen] = useState(false);
@@ -122,7 +131,6 @@ export default function AssignmentDashboardPage() {
 
 	async function handleConfirmRemoveProblem() {
 		if (!id || !aid || !problemToRemove) return;
-		setRemoving(true);
 		try {
 			const res = await fetch(`/api/courses/${id}/${aid}/remove-problem`, {
 				method: "POST",
@@ -139,7 +147,6 @@ export default function AssignmentDashboardPage() {
 			.then((res) => res.json())
 			.then((data) => setAssignment(data))
 			.finally(() => {
-				setRemoving(false);
 				setProblemToRemove(null);
 				setLoading(false);
 			});
@@ -366,7 +373,14 @@ export default function AssignmentDashboardPage() {
 					<AssignmentSubmissions
 						courseId={id}
 						assignmentId={aid}
-						problems={assignment.problems.map((ap: { problem: Problem }) => ap.problem)}
+						problems={assignment.problems.map((ap: { problem: Problem }) => ({
+							id: ap.problem.id,
+							title: ap.problem.title,
+							description: ap.problem.description ?? undefined,
+							type: ap.problem.type ? String(ap.problem.type) : undefined,
+							maxStates: ap.problem.maxStates ?? undefined,
+							isDeterministic: ap.problem.isDeterministic ?? undefined
+						}))}
 					/>
 				</TabsContent>
 			</Tabs>
@@ -412,7 +426,13 @@ export default function AssignmentDashboardPage() {
 				<EditAssignmentDialog
 					open={editAssignmentOpen}
 					setOpen={setEditAssignmentOpen}
-					assignment={assignment}
+					assignment={{
+						...assignment,
+						description: assignment.description ?? null,
+						createdAt: assignment.createdAt ?? new Date(),
+						updatedAt: assignment.updatedAt ?? new Date(),
+						dueDate: typeof assignment.dueDate === 'string' ? new Date(assignment.dueDate) : assignment.dueDate
+					}}
 					onSave={() => {
 						setLoading(true);
 						fetch(`/api/courses/${id}/${aid}`)
@@ -432,7 +452,7 @@ export default function AssignmentDashboardPage() {
 						// Preserve string type when present so FA/PDA fields render
 						type: typeof problemToEdit.type === 'string' ? problemToEdit.type : null,
 						maxStates: problemToEdit.maxStates ?? null,
-						isDeterministic: (problemToEdit as any).isDeterministic ?? null,
+						isDeterministic: (problemToEdit as Problem & { isDeterministic?: boolean }).isDeterministic ?? null,
 					} : {
 						id: '',
 						title: '',

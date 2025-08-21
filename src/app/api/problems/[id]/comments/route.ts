@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 // GET - Fetch comments for a specific problem
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
@@ -13,7 +13,8 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const problemId = params.id;
+    const resolvedParams = await params;
+    const problemId = resolvedParams.id;
 
     // Fetch comments for the problem
     const comments = await prisma.comment.findMany({
@@ -61,7 +62,7 @@ export async function GET(
 // POST - Create a new comment for a specific problem
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
@@ -69,7 +70,8 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const problemId = params.id;
+    const resolvedParams = await params;
+    const problemId = resolvedParams.id;
     const { content } = await request.json();
 
     if (!content || content.trim().length === 0) {
