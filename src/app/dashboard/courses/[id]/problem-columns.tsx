@@ -2,6 +2,7 @@
 import { ColumnDef } from '@tanstack/react-table';
 import type { Problem } from '@prisma/client';
 import { ChevronDown, Pencil, Trash2, Notebook } from 'lucide-react';
+import { Badge } from '@/components/ui/RoleBadge';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -26,7 +27,23 @@ export const problemColumns = ({
   onEdit: (p: Problem) => void;
   onDelete: (id: string) => void;
 }): ColumnDef<Problem>[] => [
-  { accessorKey: 'title', header: 'Title' },
+  {
+    accessorKey: 'title',
+    header: 'Title',
+    cell: ({ row }) => {
+      const problemWithMeta = row.original as Problem & { usedByAssignment?: boolean };
+      return (
+        <div className="flex items-center gap-2">
+          <span>{row.original.title}</span>
+          {problemWithMeta.usedByAssignment ? (
+            <Badge variant="outline" className="bg-amber-600 text-white text-xs px-2 py-0">
+              Used
+            </Badge>
+          ) : null}
+        </div>
+      );
+    },
+  },
   {
     accessorKey: 'type',
     header: 'Type',
@@ -73,37 +90,48 @@ export const problemColumns = ({
   {
     id: 'actions',
     header: '',
-    cell: ({ row }) => (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="secondary">
-            <ChevronDown />
-            Manage
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuLabel className="flex items-center gap-2">
-            <Notebook className="h-4 w-4" />
-            {row.original.title}
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onClick={() => onEdit(row.original)}
-            className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2"
-          >
-            <Pencil className="mr-2 h-4 w-4" />
-            Edit Problem
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onClick={() => onDelete(row.original.id)}
-            className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2 text-red-600"
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete Problem
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    ),
+    cell: ({ row }) => {
+      const problemWithMeta = row.original as Problem & { usedByAssignment?: boolean };
+      const disabled = Boolean(problemWithMeta.usedByAssignment);
+      return (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="secondary">
+              <ChevronDown />
+              Manage
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuLabel className="flex items-center gap-2">
+              <Notebook className="h-4 w-4" />
+              {row.original.title}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => onEdit(row.original)}
+              className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2"
+            >
+              <Pencil className="mr-2 h-4 w-4" />
+              Edit Problem
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => {
+                if (disabled) return;
+                onDelete(problemWithMeta.id);
+              }}
+              disabled={disabled}
+              title={disabled ? 'Problem is used by an assignment and cannot be deleted' : undefined}
+              className={`hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2 text-red-600 ${
+                disabled ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete Problem
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      );
+    },
   },
 ];

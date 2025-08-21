@@ -5,7 +5,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
-import { Plus } from 'lucide-react';
+import { Plus, Code } from 'lucide-react';
 
 interface ProblemsCardProps {
   problems: Problem[];
@@ -21,7 +21,7 @@ export function ProblemsCard({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-2xl">Problems</CardTitle>
+        <CardTitle className="text-2xl flex items-center gap-2"><Code className="h-5 w-5" />Problems</CardTitle>
         <Button variant="default" onClick={onCreateProblem}>
           <Plus /> Create Problem
         </Button>

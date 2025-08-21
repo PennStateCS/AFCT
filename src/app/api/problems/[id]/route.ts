@@ -131,13 +131,14 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Problem not found' }, { status: 404 });
     }
 
+    // Prevent deletion if the problem is linked to any assignment
+    const linked = await prisma.assignmentProblem.findFirst({ where: { problemId } });
+    if (linked) {
+      return NextResponse.json({ error: 'Problem is associated with an assignment and cannot be deleted' }, { status: 400 });
+    }
+
     // Delete associated submissions first
     await prisma.submission.deleteMany({
-      where: { problemId },
-    });
-
-    // Delete assignment-problem links
-    await prisma.assignmentProblem.deleteMany({
       where: { problemId },
     });
 

@@ -21,6 +21,9 @@ import {
 // Extended assignment type with problem count
 type AssignmentWithProblemCount = Assignment & {
   problemCount: number;
+  hasSubmissionsOrComments?: boolean;
+  submissionCount?: number;
+  commentCount?: number;
 };
 
 // Component for the publish switch with confirmation dialog
@@ -116,6 +119,20 @@ export function useAssignmentColumns(
       enableSorting: true,
     },
     {
+      id: 'submissionCount',
+      header: 'Submissions',
+      accessorKey: 'submissionCount',
+      cell: ({ row }) => <div>{row.original.submissionCount ?? 0}</div>,
+      enableSorting: true,
+    },
+    {
+      id: 'commentCount',
+      header: 'Comments',
+      accessorKey: 'commentCount',
+      cell: ({ row }) => <div>{row.original.commentCount ?? 0}</div>,
+      enableSorting: true,
+    },
+    {
       accessorKey: 'isPublished',
       header: 'Published',
       cell: ({ row }) => (
@@ -128,47 +145,56 @@ export function useAssignmentColumns(
     {
       id: 'actions',
       header: '',
-      cell: ({ row }) => (
-        <>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="secondary">
-                <ChevronDown />
-                Manage
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel className="flex items-center gap-2">
-                <BookOpen className="h-4 w-4" />
-                {row.original.title}
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <Link href={`/dashboard/courses/${row.original.courseId}/${row.original.id}`}>
-                <DropdownMenuItem className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2">
-                  <BookOpen className="mr-2 h-4 w-4" />
-                  View Assignment
-                </DropdownMenuItem>
-              </Link>
-              <DropdownMenuItem
-                onClick={() => handleAssignmentEditClick(row.original)}
-                className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2"
-              >
-                <Pencil className="mr-2 h-4 w-4" />
-                Edit Assignment
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
+      cell: ({ row }) => {
+  const disabled = !!(row.original.hasSubmissionsOrComments);
+        const title = disabled ? 'Cannot delete: assignment has submissions or comments' : undefined;
 
-              <DropdownMenuItem
-                onClick={() => handleAssignmentDeleteClick(row.original.id)}
-                className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2 text-red-600"
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete Assignment
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </>
-      ),
+        return (
+          <>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="secondary">
+                  <ChevronDown />
+                  Manage
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel className="flex items-center gap-2">
+                  <BookOpen className="h-4 w-4" />
+                  {row.original.title}
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <Link href={`/dashboard/courses/${row.original.courseId}/${row.original.id}`}>
+                  <DropdownMenuItem className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2">
+                    <BookOpen className="mr-2 h-4 w-4" />
+                    View Assignment
+                  </DropdownMenuItem>
+                </Link>
+                <DropdownMenuItem
+                  onClick={() => handleAssignmentEditClick(row.original)}
+                  className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2"
+                >
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Edit Assignment
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+
+                <DropdownMenuItem
+                  onClick={() => {
+                    if (disabled) return;
+                    handleAssignmentDeleteClick(row.original.id);
+                  }}
+                  title={title}
+                  className={`flex items-center gap-2 ${disabled ? 'opacity-50 cursor-not-allowed text-gray-500' : 'hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground text-red-600'}`}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete Assignment
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        );
+      },
     },
   ];
 }

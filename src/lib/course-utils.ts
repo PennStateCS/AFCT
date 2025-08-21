@@ -4,10 +4,28 @@ import { Assignment, Problem, Course } from '@prisma/client';
 export async function deleteItem(target: DeleteTarget): Promise<void> {
   if (target.type === 'assignment') {
     const res = await fetch(`/api/assignments/${target.id}`, { method: 'DELETE' });
-    if (!res.ok) throw new Error('Failed to delete assignment');
+    if (!res.ok) {
+      let msg = 'Failed to delete assignment';
+      try {
+        const body = await res.json();
+        msg = body?.error || body?.message || msg;
+      } catch {
+        // ignore JSON parse errors
+      }
+      throw new Error(msg);
+    }
   } else if (target.type === 'problem') {
     const res = await fetch(`/api/problems/${target.id}`, { method: 'DELETE' });
-    if (!res.ok) throw new Error('Failed to delete problem');
+    if (!res.ok) {
+      let msg = 'Failed to delete problem';
+      try {
+        const body = await res.json();
+        msg = body?.error || body?.message || msg;
+      } catch {
+        // ignore JSON parse errors
+      }
+      throw new Error(msg);
+    }
   }
 }
 

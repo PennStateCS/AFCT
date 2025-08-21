@@ -37,7 +37,7 @@ export function RosterCard({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-2xl">Course Roster</CardTitle>
+        <CardTitle className="text-2xl flex items-center gap-2"><Users className="h-5 w-5" />Roster</CardTitle>
         <div className="flex items-center gap-2">
           <Button variant="default" onClick={onEnrollUser}>
             <Plus />Enroll User
