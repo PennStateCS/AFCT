@@ -1,14 +1,16 @@
 import { useMemo } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { ActivityCard } from '@/components/ActivityCard';
 import { AssignmentsCard } from '@/components/AssignmentsCard';
 import { ProblemsCard } from '@/components/ProblemsCard';
 import { RosterCard } from '@/components/RosterCard';
+import GradesCard from '@/components/GradesCard';
 import { userColumns } from '@/app/dashboard/courses/[id]/user-columns';
 import { useAssignmentColumns } from '@/app/dashboard/courses/[id]/assignment-columns';
 import { problemColumns } from '@/app/dashboard/courses/[id]/problem-columns';
 import { FullCourse, TabType } from '@/types/course';
+import { FileText, Code, Users, GraduationCap, Activity } from 'lucide-react';
 import { Assignment, Problem } from '@prisma/client';
 
 interface AdminCourseViewProps {
@@ -60,31 +62,31 @@ export function AdminCourseView({
           className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white"
           value="assignments"
         >
-          📄 Assignments
+          <div className="flex items-center gap-2"><FileText className="h-4 w-4" />Assignments</div>
         </TabsTrigger>
         <TabsTrigger
           className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white"
           value="problems"
         >
-          🧠 Problems
+          <div className="flex items-center gap-2"><Code className="h-4 w-4" />Problems</div>
         </TabsTrigger>
         <TabsTrigger
           className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white"
           value="roster"
         >
-          📜 Roster
+          <div className="flex items-center gap-2"><Users className="h-4 w-4" />Roster</div>
         </TabsTrigger>
         <TabsTrigger
           className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white"
           value="grades"
         >
-          🎓 Grades
+          <div className="flex items-center gap-2"><GraduationCap className="h-4 w-4" />Grades</div>
         </TabsTrigger>
         <TabsTrigger
           className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white"
           value="activity"
         >
-          📈 Activity
+          <div className="flex items-center gap-2"><Activity className="h-4 w-4" />Activity</div>
         </TabsTrigger>
       </TabsList>
 
@@ -92,31 +94,35 @@ export function AdminCourseView({
         value="assignments"
         className="animate-fade-in-up transition-opacity duration-300"
       >
-        <AssignmentsCard
-          assignments={course.assignments}
-          assignmentColumns={assignmentColumns}
-          onCreateAssignment={onCreateAssignment}
-        />
+        <div className="space-y-6 mb-8">
+          <AssignmentsCard
+            assignments={course.assignments}
+            assignmentColumns={assignmentColumns}
+            onCreateAssignment={onCreateAssignment}
+          />
+        </div>
       </TabsContent>
 
       <TabsContent
         value="problems"
         className="animate-fade-in-up transition-opacity duration-300"
       >
-        <ProblemsCard
-          problems={course.problems}
-          problemColumns={problemCols}
-          onCreateProblem={onCreateProblem}
-        />
+        <div className="space-y-6 mb-8">
+          <ProblemsCard
+            problems={course.problems}
+            problemColumns={problemCols}
+            onCreateProblem={onCreateProblem}
+          />
+        </div>
       </TabsContent>
 
       <TabsContent value="roster" className="animate-fade-in-up transition-opacity duration-300">
-        <div className="space-y-6">
+        <div className="space-y-6 mb-8">
           <RosterCard
             faculty={course.faculty}
             tas={course.tas}
             students={course.students}
-            userColumns={userColumns(onRefreshCourse)}
+            userColumns={userColumns(onRefreshCourse, course.id, course.faculty?.length ?? 0)}
             onEnrollUser={onEnrollUser}
             onBulkEnroll={onBulkEnroll}
           />
@@ -124,13 +130,8 @@ export function AdminCourseView({
       </TabsContent>
 
       <TabsContent value="grades" className="animate-fade-in-up transition-opacity duration-300">
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-2xl">Grades</CardTitle>
-            </CardHeader>
-            <CardContent>To Do...</CardContent>
-          </Card>
+        <div className="space-y-6 mb-8">
+          <GradesCard courseId={course.id} />
         </div>
       </TabsContent>
 
@@ -138,7 +139,7 @@ export function AdminCourseView({
         value="activity"
         className="animate-fade-in-up transition-opacity duration-300"
       >
-        <div className="space-y-6">
+        <div className="space-y-6 mb-8">
           <ActivityCard courseId={course.id} />
         </div>
       </TabsContent>

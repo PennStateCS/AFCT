@@ -50,23 +50,62 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
     // Group roster users by role
     const faculty = course.roster.filter((r) => r.role === 'FACULTY').map((r) => r.user);
     const tas = course.roster.filter((r) => r.role === 'TA').map((r) => r.user);
-    const students = course.roster.filter((r) => r.role === 'STUDENT').map((r) => r.user);
+    // For students, compute whether they have any submissions for this course
+    const studentRoster = course.roster.filter((r) => r.role === 'STUDENT');
+    const students = await Promise.all(
+      studentRoster.map(async (r) => {
+        const user = r.user;
+        // gather assignment ids for this course
+        const assignmentIds = course.assignments.map((a) => a.id);
+        let hasSubmissions = false;
+        if (assignmentIds.length > 0) {
+          const found = await prisma.submission.findFirst({
+            where: {
+              studentId: user.id,
+              assignmentId: { in: assignmentIds },
+            },
+            select: { id: true },
+          });
+          hasSubmissions = !!found;
+        }
+        return { ...user, hasSubmissions };
+      }),
+    );
 
-    // Attach problem counts to assignments
-    const assignmentsWithProblemCount = course.assignments.map((assignment) => ({
-      id: assignment.id,
-      title: assignment.title,
-      description: assignment.description,
-      dueDate: assignment.dueDate,
-      maxPoints: assignment.maxPoints,
-      isPublished: assignment.isPublished,
-      createdAt: assignment.createdAt,
-      updatedAt: assignment.updatedAt,
-      courseId: assignment.courseId,
-      problemCount: assignment._count.problems,
-    }));
+    // Attach problem counts and safety flags to assignments
+    const assignmentsWithProblemCount = await Promise.all(
+      course.assignments.map(async (assignment) => {
+        // Check for submissions and comments
+  const submissionCount = await prisma.submission.count({ where: { assignmentId: assignment.id } });
+  const commentCount = await prisma.comment.count({ where: { assignmentId: assignment.id } });
+  const hasSubmissionsOrComments = submissionCount > 0 || commentCount > 0;
 
-    return NextResponse.json({
+        return {
+          id: assignment.id,
+          title: assignment.title,
+          description: assignment.description,
+          dueDate: assignment.dueDate,
+          maxPoints: assignment.maxPoints,
+          isPublished: assignment.isPublished,
+          createdAt: assignment.createdAt,
+          updatedAt: assignment.updatedAt,
+          courseId: assignment.courseId,
+          problemCount: assignment._count.problems,
+          submissionCount,
+          commentCount,
+          hasSubmissionsOrComments,
+        };
+      })
+    );
+
+  // Determine whether each problem is linked to any assignment via assignmentProblem
+  const problemIds = course.problems.map((p) => p.id);
+  const linked = await prisma.assignmentProblem.findMany({ where: { problemId: { in: problemIds } }, select: { problemId: true } });
+  const linkedSet = new Set(linked.map((l) => l.problemId));
+
+  const problemsWithLink = course.problems.map((p) => ({ ...p, usedByAssignment: linkedSet.has(p.id) }));
+
+  return NextResponse.json({
       id: course.id,
       name: course.name,
       code: course.code,
@@ -78,10 +117,10 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
       isPublished: course.isPublished,
       createdAt: course.createdAt,
       updatedAt: course.updatedAt,
-      faculty,
-      tas,
-      students,
-      problems: course.problems,
+  faculty,
+  tas,
+  students,
+  problems: problemsWithLink,
       assignments: assignmentsWithProblemCount,
     });
   } catch (error) {
@@ -154,18 +193,29 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
     const students = updatedCourse.roster.filter((r) => r.role === 'STUDENT').map((r) => r.user);
 
     // Attach problem counts to assignments
-    const assignmentsWithProblemCount = updatedCourse.assignments.map((assignment) => ({
-      id: assignment.id,
-      title: assignment.title,
-      description: assignment.description,
-      dueDate: assignment.dueDate,
-      maxPoints: assignment.maxPoints,
-      isPublished: assignment.isPublished,
-      createdAt: assignment.createdAt,
-      updatedAt: assignment.updatedAt,
-      courseId: assignment.courseId,
-      problemCount: assignment._count.problems,
-    }));
+    const assignmentsWithProblemCount = await Promise.all(
+      updatedCourse.assignments.map(async (assignment) => {
+  const submissionCount = await prisma.submission.count({ where: { assignmentId: assignment.id } });
+  const commentCount = await prisma.comment.count({ where: { assignmentId: assignment.id } });
+  const hasSubmissionsOrComments = submissionCount > 0 || commentCount > 0;
+
+        return {
+          id: assignment.id,
+          title: assignment.title,
+          description: assignment.description,
+          dueDate: assignment.dueDate,
+          maxPoints: assignment.maxPoints,
+          isPublished: assignment.isPublished,
+          createdAt: assignment.createdAt,
+          updatedAt: assignment.updatedAt,
+          courseId: assignment.courseId,
+          problemCount: assignment._count.problems,
+          submissionCount,
+          commentCount,
+          hasSubmissionsOrComments,
+        };
+      })
+    );
 
     // Log the update action to ActivityLog
     await createEnhancedActivityLog(prisma, req, {

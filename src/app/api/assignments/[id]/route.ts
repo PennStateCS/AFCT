@@ -211,3 +211,59 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to create assignment' }, { status: 500 });
   }
 }
+
+// Delete an assignment if safe
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+
+  const session = await auth();
+
+  if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  }
+
+  try {
+    // Find the assignment to get courseId
+    const assignment = await prisma.assignment.findUnique({ where: { id } });
+    if (!assignment) {
+      return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+    }
+
+    // Check for any submissions associated with this assignment via AssignmentProblem -> Submission
+    const submissionCount = await prisma.submission.count({ where: { assignmentId: id } });
+    if (submissionCount > 0) {
+      return NextResponse.json({ error: 'Cannot delete assignment: submissions exist' }, { status: 400 });
+    }
+
+    // Check for any comments associated with this assignment
+    const commentCount = await prisma.comment.count({ where: { assignmentId: id } });
+    if (commentCount > 0) {
+      return NextResponse.json({ error: 'Cannot delete assignment: comments exist' }, { status: 400 });
+    }
+
+    // Safe to delete: remove AssignmentProblem links first, then delete the assignment
+    await prisma.assignmentProblem.deleteMany({ where: { assignmentId: id } });
+
+    const deleted = await prisma.assignment.delete({ where: { id } });
+
+    // Log the deletion
+    try {
+      const { createEnhancedActivityLog } = await import('@/lib/activity-log-utils');
+      await createEnhancedActivityLog(prisma, req as unknown as Request, {
+        userId: session.user.id,
+        action: 'DELETE_ASSIGNMENT',
+        category: 'ASSIGNMENT',
+        courseId: deleted.courseId,
+        assignmentId: id,
+        metadata: { title: deleted.title }
+      });
+    } catch (logErr) {
+      console.error('Failed to write activity log for assignment deletion', logErr);
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Assignment delete failed:', error);
+    return NextResponse.json({ error: 'Failed to delete assignment' }, { status: 500 });
+  }
+}

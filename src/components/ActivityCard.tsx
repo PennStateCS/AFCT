@@ -120,9 +120,8 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Activity className="h-5 w-5" />
-            Recent Activity
+          <CardTitle className="flex items-center gap-2 text-2xl">
+            <Activity className="h-5 w-5" />Activity
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -139,8 +138,7 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
         <CardTitle className="flex items-center gap-2 text-2xl">
-          <Activity className="h-5 w-5" />
-          Recent Activity
+          <Activity className="h-5 w-5" />Activity
           {totalCount > 0 && (
             <Badge variant="secondary" className="ml-2">
               {totalCount}

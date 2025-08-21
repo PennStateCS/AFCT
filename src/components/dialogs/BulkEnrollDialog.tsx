@@ -113,6 +113,7 @@ export default function BulkEnrollDialog({ open, setOpen, courseId, onComplete }
               <Textarea id="emails" className="mt-2 h-64" value={rawText} onChange={(e) => setRawText(e.target.value)} />
               <div className="text-sm text-muted-foreground mt-2">
                 Note: This tool can only enroll users who already have a system account. If an email is not associated with an existing account it will be listed as not found and will not be enrolled — ask the student to create an account or add them manually.
+                Lookups are case-insensitive, so Email and email@example.com will match the same account.
               </div>
               {/* Controls are in the dialog footer to avoid duplication */}
             </div>
@@ -141,7 +142,7 @@ export default function BulkEnrollDialog({ open, setOpen, courseId, onComplete }
 
               <div className="border rounded p-2 h-96 overflow-auto">
                 <div className="font-medium mb-2">Not found ({notFound.length})</div>
-                  <div className="text-xs text-muted-foreground mb-2">These emails were not matched to existing system accounts and will not be enrolled automatically.</div>
+                  <div className="text-xs text-muted-foreground mb-2">These emails were not matched to existing system accounts and will not be enrolled automatically. Lookups are case-insensitive.</div>
                 {notFound.length === 0 ? (
                   <div className="text-sm text-muted-foreground">All emails matched existing accounts.</div>
                 ) : (
