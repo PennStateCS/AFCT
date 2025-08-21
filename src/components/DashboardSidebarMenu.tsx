@@ -33,7 +33,7 @@ import {
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-import { Book, User, UserRound, LogOut, LockKeyhole, UserPen, ChevronUp } from 'lucide-react';
+import { Book, User, UserRound, LogOut, LockKeyhole, UserPen, ChevronUp, BookPlus } from 'lucide-react';
 
 type Course = {
   id: string;
@@ -49,6 +49,7 @@ type Course = {
 const adminMenu = [
   { title: 'Courses', url: '/dashboard/courses', icon: Book },
   { title: 'User Accounts', url: '/dashboard/users', icon: User },
+  { title: 'System Status', url: '/dashboard/system-status', icon: BookPlus },
 ];
 
 // Filter courses based on user role

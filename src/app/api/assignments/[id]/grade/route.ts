@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
@@ -12,7 +12,8 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const assignmentId = params.id;
+    const resolvedParams = await params;
+    const assignmentId = resolvedParams.id;
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId');
 
@@ -28,27 +29,12 @@ export async function GET(
     const targetUserId = userId || session.user.id;
 
     // Calculate the total grade for the assignment by summing all problem grades
+    // Fetch submissions for the target user that belong to this assignment.
+    // Submission has an `assignmentId` field, so filter directly on that.
     const submissions = await prisma.submission.findMany({
       where: {
         studentId: targetUserId,
-        problem: {
-          assignments: {
-            some: {
-              assignmentId: assignmentId,
-            },
-          },
-        },
-      },
-      include: {
-        problem: {
-          include: {
-            assignments: {
-              where: {
-                assignmentId: assignmentId,
-              },
-            },
-          },
-        },
+        assignmentId: assignmentId,
       },
     });
 
