@@ -97,6 +97,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return session
     }
   },
+  events: {
+    async signIn({ user, account }) {
+      try {
+        await prisma.activityLog.create({
+          data: {
+            userId: user?.id ?? undefined,
+            action: 'LOGIN_SUCCESS',
+            category: 'SYSTEM',
+            metadata: { email: user?.email ?? null, provider: account?.provider ?? null },
+          },
+        });
+      } catch (e) {
+        // don't block sign-in on logging failure
+        console.error('Failed to log signIn event:', e);
+      }
+    },
+  },
   pages: {
     signIn: '/login',
   },
