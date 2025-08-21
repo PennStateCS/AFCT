@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth();
@@ -12,7 +12,8 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const assignmentId = params.id;
+    const resolvedParams = await params;
+    const assignmentId = resolvedParams.id;
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId');
 

@@ -51,11 +51,6 @@ type DatabaseStats = {
 };
 
 type DatabaseStatus = { ok: boolean; message: string; details?: DatabaseDetails; stats?: DatabaseStats };
-
-function getStr(obj: Record<string, unknown>, k: string): string | undefined {
-  const v = obj?.[k];
-  return typeof v === "string" ? v : undefined;
-}
 function getNum(obj: Record<string, unknown>, k: string): number | undefined {
   const v = obj?.[k];
   if (typeof v === "number") return v;
@@ -373,9 +368,9 @@ export async function GET(req: Request) {
         const row = wc?.[0];
         dbStats.sqlite.wal_checkpoint = row
           ? {
-              busy: getNum(row as any, "busy") ?? null,
-              log: getNum(row as any, "log") ?? null,
-              checkpointed: getNum(row as any, "checkpointed") ?? null,
+              busy: getNum(row as Record<string, unknown>, "busy") ?? null,
+              log: getNum(row as Record<string, unknown>, "log") ?? null,
+              checkpointed: getNum(row as Record<string, unknown>, "checkpointed") ?? null,
             }
           : null;
       } catch {}
@@ -418,7 +413,7 @@ export async function GET(req: Request) {
       const row = m?.[0];
       if (row) {
         dbDetails.last_migration_name = row.migration_name ?? null;
-        const fa = row.finished_at ? new Date(row.finished_at as any) : null;
+        const fa = row.finished_at ? new Date(row.finished_at as Date | string) : null;
         dbDetails.last_migration_finished_at = fa ? fa.toISOString() : null;
       }
     } catch {}
@@ -430,8 +425,8 @@ export async function GET(req: Request) {
         ? "unknown"
         : typeof err === "string"
         ? err
-        : typeof err === "object" && "message" in (err as any)
-        ? String((err as any).message ?? "unknown")
+        : typeof err === "object" && err !== null && "message" in err
+        ? String((err as { message?: unknown }).message ?? "unknown")
         : String(err);
     database = { ok: false, message: msg };
   }
@@ -510,7 +505,7 @@ export async function GET(req: Request) {
       const email = metaField(meta, "email");
       const ip = typeof r.ipAddress === "string" ? r.ipAddress : metaField(meta, "ip");
       const ua = typeof r.userAgent === "string" ? r.userAgent : metaField(meta, "ua");
-      const ts = r.timestamp ? new Date(r.timestamp as any).getTime() : null;
+      const ts = r.timestamp ? new Date(r.timestamp as Date | string).getTime() : null;
 
       if (uid) uniqUsers.add(uid);
 
@@ -567,7 +562,7 @@ export async function GET(req: Request) {
   } catch {}
 
   // ===== Build response =====
-  const body: any = {
+  const body: Record<string, unknown> = {
     system,
     database,
     env: { public: envPublic, masked: envMaskedSummary },
@@ -579,7 +574,7 @@ export async function GET(req: Request) {
 
   const t1 = performance.now();
   const latencyMs = Math.round(t1 - t0);
-  body.metrics.latencyMs = latencyMs;
+  (body.metrics as Record<string, unknown>).latencyMs = latencyMs;
 
   return NextResponse.json(body, {
     headers: {

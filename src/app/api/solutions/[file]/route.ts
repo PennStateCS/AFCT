@@ -5,9 +5,10 @@ import stream from 'stream';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 
-export async function GET(req: NextRequest, { params }: { params: { file: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ file: string }> }) {
   try {
-    const { file } = params;
+    const resolvedParams = await params;
+    const { file } = resolvedParams;
     if (!file || file.includes('..')) {
       return NextResponse.json({ error: 'Invalid file' }, { status: 400 });
     }
@@ -45,7 +46,7 @@ export async function GET(req: NextRequest, { params }: { params: { file: string
     const buffer = await fs.promises.readFile(filePath);
     const nodeStream = stream.Readable.from(buffer);
     // Convert Node stream to a web-compatible ReadableStream
-    const webStream = new (stream.Readable as any)().wrap(nodeStream);
+    const webStream = new (stream.Readable as unknown as new () => stream.Readable)().wrap(nodeStream);
     const headers: Record<string, string> = {
       'Content-Type': 'application/octet-stream',
       'Content-Disposition': `attachment; filename="${problem.originalFileName ?? file}"`,
