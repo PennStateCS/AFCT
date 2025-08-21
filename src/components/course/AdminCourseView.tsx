@@ -18,6 +18,7 @@ interface AdminCourseViewProps {
   onCreateAssignment: () => void;
   onCreateProblem: () => void;
   onEnrollUser: () => void;
+  onBulkEnroll?: () => void;
   onAssignmentEdit: (assignment: Assignment) => void;
   onAssignmentDelete: (assignmentId: string) => void;
   onAssignmentPublishToggle: (assignmentId: string, newValue: boolean) => void;
@@ -39,6 +40,7 @@ export function AdminCourseView({
   onProblemEdit,
   onProblemDelete,
   onRefreshCourse,
+  onBulkEnroll,
 }: AdminCourseViewProps) {
   const assignmentColumns = useAssignmentColumns(
     onAssignmentDelete,
@@ -116,6 +118,7 @@ export function AdminCourseView({
             students={course.students}
             userColumns={userColumns(onRefreshCourse)}
             onEnrollUser={onEnrollUser}
+            onBulkEnroll={onBulkEnroll}
           />
         </div>
       </TabsContent>

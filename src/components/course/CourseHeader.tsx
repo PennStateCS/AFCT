@@ -1,17 +1,19 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
-import { Pencil } from 'lucide-react';
+import { Pencil, Copy } from 'lucide-react';
 import { FullCourse } from '@/types/course';
 
 interface CourseHeaderProps {
   course: FullCourse;
   isStudent: boolean;
   onEditClick: () => void;
+  onDuplicate?: () => void;
   onPublishToggle: (checked: boolean) => void;
 }
 
-export function CourseHeader({ course, isStudent, onEditClick, onPublishToggle }: CourseHeaderProps) {
+export function CourseHeader({ course, isStudent, onEditClick, onDuplicate, onPublishToggle }: CourseHeaderProps) {
+  // ...existing code...
   return (
     <Card>
       <CardHeader className="flex items-start justify-between">
@@ -26,9 +28,17 @@ export function CourseHeader({ course, isStudent, onEditClick, onPublishToggle }
           </p>
         </div>
         {!isStudent && (
-          <Button variant="default" onClick={onEditClick} className="shrink-0">
-            <Pencil /> Edit Course
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="default" onClick={onEditClick} className="shrink-0">
+              <Pencil /> Edit Course
+            </Button>
+            {onDuplicate && (
+              <Button variant="default" onClick={onDuplicate} className="shrink-0">
+                <Copy className="mr-2" />
+                Duplicate Course
+              </Button>
+            )}
+          </div>
         )}
       </CardHeader>
       <CardContent className="space-y-4 text-sm">

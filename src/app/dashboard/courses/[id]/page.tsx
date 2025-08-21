@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 
@@ -17,6 +17,7 @@ import { CourseHeader } from '@/components/course/CourseHeader';
 import { StudentCourseView } from '@/components/course/StudentCourseView';
 import { AdminCourseView } from '@/components/course/AdminCourseView';
 import { CourseDialogs } from '@/components/course/CourseDialogs';
+import DuplicateCourseDialog from '@/components/dialogs/DuplicateCourseDialog';
 
 export default function AdminCoursePage() {
   const { id } = useParams();
@@ -40,6 +41,15 @@ export default function AdminCoursePage() {
   
   // Event handlers
   const handlers = useCourseHandlers(course, setCourse);
+  // Duplicate modal state
+  const [duplicateOpen, setDuplicateOpen] = useState(false);
+  // Bulk enroll dialog state
+  const [bulkEnrollOpen, setBulkEnrollOpen] = useState(false);
+  // Prepare duplicate form when opening
+  const openDuplicate = () => {
+    // dialog component will initialize values from the `course` prop
+    setDuplicateOpen(true);
+  };
 
   // Enrollment dialog opener
   const openEnrollDialog = useCallback(async () => {
@@ -47,6 +57,10 @@ export default function AdminCoursePage() {
     dialogStates.setAllUsers(allUsers);
     dialogStates.setEnrollOpen(true);
   }, [fetchAvailableUsers, allUsers, dialogStates]);
+
+  const openBulkEnrollDialog = useCallback(() => {
+    setBulkEnrollOpen(true);
+  }, []);
 
   // Problem handlers with dialog state
   const handleProblemEditClick = useCallback((problem: Problem) => {
@@ -125,6 +139,7 @@ export default function AdminCoursePage() {
         course={course}
         isStudent={isStudent}
         onEditClick={() => dialogStates.setEditOpen(true)}
+        onDuplicate={openDuplicate}
         onPublishToggle={handlePublishToggle}
       />
 
@@ -139,6 +154,7 @@ export default function AdminCoursePage() {
           onCreateAssignment={() => dialogStates.setCreateAssignmentOpen(true)}
           onCreateProblem={() => dialogStates.setProblemOpen(true)}
           onEnrollUser={openEnrollDialog}
+          onBulkEnroll={openBulkEnrollDialog}
           onAssignmentEdit={handleAssignmentEditClick}
           onAssignmentDelete={handleAssignmentDeleteClick}
           onAssignmentPublishToggle={handlers.handleAssignmentPublishToggle}
@@ -182,6 +198,20 @@ export default function AdminCoursePage() {
           setEnrollOpen={dialogStates.setEnrollOpen}
           allUsers={allUsers}
           onEnrollUser={handleEnrollUserWrapper}
+          bulkEnrollOpen={bulkEnrollOpen}
+          setBulkEnrollOpen={setBulkEnrollOpen}
+        />
+      )}
+
+      {!isStudent && (
+        <DuplicateCourseDialog
+          open={duplicateOpen}
+          setOpen={setDuplicateOpen}
+          course={course}
+          onSuccess={(newId) => {
+            // navigate to new course page after successful duplication
+            window.location.href = `/dashboard/courses/${newId}`;
+          }}
         />
       )}
     </div>
