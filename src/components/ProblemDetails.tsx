@@ -1,10 +1,10 @@
 "use client";
 
-import { Download, Package } from "lucide-react";
+import { Download, Package, Eye } from "lucide-react";
 import { useState } from 'react';
-import JflapFlowViewer from "./JffViewerDialog";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
+import JffViewerDialog from "./JffViewerDialog";
 import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
 
 type Problem = {
   id: string;
@@ -32,22 +32,22 @@ const getProblemTypeBadgeProps = (type: string | null) => {
     PDA: {
       label: "Pushdown Automaton",
       className: "bg-purple-100 text-purple-800 border-purple-200",
-      borderColor: "border-l-purple-500",
+      borderColor: "border-8-purple-500",
     },
     RE: {
       label: "Regular Expression",
       className: "bg-blue-100 text-blue-800 border-blue-200",
-      borderColor: "border-l-blue-500",
+      borderColor: "border-8-blue-500",
     },
     CFG: {
       label: "Context-Free Grammar",
       className: "bg-green-100 text-green-800 border-green-200",
-      borderColor: "border-l-green-500",
+      borderColor: "border-8-green-500",
     },
     FA: {
       label: "Finite Automaton",
       className: "bg-orange-100 text-orange-800 border-orange-200",
-      borderColor: "border-l-orange-500",
+      borderColor: "border-8-orange-500",
     },
   };
   return (
@@ -108,7 +108,7 @@ export default function ProblemDetails({
                 : "No"}
             </span>
           </div>
-          <div className="col-span-full flex items-center justify-between text-sm">
+          <div className=" flex items-center justify-between text-sm">
             <span className="text-gray-600">Answer File:</span>
 
             {problem.fileName && problem.originalFileName ? (
@@ -122,40 +122,37 @@ export default function ProblemDetails({
                   <Download className="h-3 w-3" />
                   {problem.originalFileName}
                 </a>
-                {/* View in dialog using the JflapFlowViewer component */}
+                {/* View in dialog using the new JffViewerDialog component */}
                 <div>
-                  <button
+                  <Button
                     type="button"
-                    className="text-sm text-blue-600 underline"
+                    variant="secondary"
+                    size="sm"
                     onClick={() => setOpen(true)}
+                    className="flex items-center gap-1"
                   >
+                    <Eye className="h-3 w-3" />
                     View
-                  </button>
-                  <Dialog open={open} onOpenChange={(v) => setOpen(v)}>
-                    <DialogContent className="w-[95vw] max-w-6xl">
-                      <DialogHeader>
-                        <DialogTitle>View JFLAP File: {problem.originalFileName || problem.fileName}</DialogTitle>
-                      </DialogHeader>
-                      <div className="mt-2">
-                        <JflapFlowViewer
-                          src={`/uploads/problems/${encodeURIComponent(problem.fileName ?? '')}`}
-                          title={problem.originalFileName ?? problem.fileName}
-                          height="60vh"
-                        />
-                      </div>
-                      <div className="mt-3 flex justify-end">
-                        <DialogClose asChild>
-                          <button className="btn">Close</button>
-                        </DialogClose>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
+                  </Button>
+<JffViewerDialog
+  open={open}
+  onOpenChange={setOpen}
+  src={`/uploads/problems/${encodeURIComponent(problem.fileName ?? '')}`}
+  title={`${problem.originalFileName || problem.fileName} - ${problem.title}`}
+  width="70vw"
+  height="70vh"
+  honorPositions         // turn on to respect <x>/<y> from .jff
+  // darkMode
+  // epsSymbol="ε"
+  // labelWrapWidth={24}
+/>
                 </div>
               </div>
             ) : (
               <span className="text-gray-500 text-sm">No answer file</span>
             )}
           </div>
+          
         </div>
       </div>
     </div>
