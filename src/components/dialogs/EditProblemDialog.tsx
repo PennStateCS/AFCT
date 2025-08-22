@@ -260,7 +260,7 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
                     type="number"
                     fieldProps={{
                       ...field,
-                      value: isUnlimited ? '' : String(field.value || ''),
+                      value: isUnlimited ? '' : String(Math.abs(field.value ?? 0) || ''),
                       onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
                         field.onChange(e.target.value),
                     }}
