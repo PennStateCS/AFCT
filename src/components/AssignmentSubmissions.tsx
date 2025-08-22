@@ -4,19 +4,16 @@ import { useEffect, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
-  Trash2,
-  MessageSquare,
-  Send,
-  FileText,
   Eye,
   EyeOff,
   Download,
   CheckCircle,
   XCircle,
-  Package
+  Package,
 } from "lucide-react";
 import { Button } from "./ui/button";
-import { Textarea } from "./ui/textarea";
+import { Input } from "./ui/input"; // grade box
+import { Switch } from "./ui/switch";
 import {
   Table,
   TableBody,
@@ -28,7 +25,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Submission, User } from "@prisma/client";
-import { ConfirmDialog } from "./dialogs/ConfirmDialog";
+import DiscussionPanel, { Comment as DiscussionComment } from "./DiscussionPanel";
 
 type Person = Pick<User, "firstName" | "lastName" | "id">;
 
@@ -43,26 +40,20 @@ type Problem = {
 
 type SubmissionData = Submission[] | { submissions: Submission[] };
 
-type Comment = {
-  id: string;
-  content: string;
-  createdAt: string;
-  author: {
-    firstName: string | null;
-    lastName: string | null;
-    role?: string;
-  };
-};
-
 type Props = {
   courseId: string;
   assignmentId: string;
   problems: Problem[];
 };
 
+// ---------------- helpers ----------------
+
 const getProblemTypeBadgeProps = (type: string | null) => {
   if (!type) return null;
-  const badgeMap: Record<string, { label: string; className: string; borderColor: string }> = {
+  const badgeMap: Record<
+    string,
+    { label: string; className: string; borderColor: string }
+  > = {
     PDA: {
       label: "Pushdown Automaton",
       className: "bg-purple-100 text-purple-800 border-purple-200",
@@ -86,23 +77,64 @@ const getProblemTypeBadgeProps = (type: string | null) => {
   };
   return (
     badgeMap[type] || {
-      label: type,
+      label: type ?? "Unknown",
       className: "bg-gray-100 text-gray-800 border-gray-200",
       borderColor: "border-l-gray-500",
     }
   );
 };
 
-export default function AssignmentSubmissions({ courseId, assignmentId, problems }: Props) {
+const extractSubs = (raw?: SubmissionData): Submission[] => {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  if (raw && typeof raw === "object" && "submissions" in raw)
+    return (raw as { submissions: Submission[] }).submissions;
+  return [];
+};
+
+const formatDateTime = (iso: string | Date) => {
+  const d = typeof iso === "string" ? new Date(iso) : iso;
+  return `${d.toLocaleDateString()} at ${d.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
+};
+
+// ---------------- component ----------------
+
+export default function AssignmentSubmissions({
+  courseId,
+  assignmentId,
+  problems,
+}: Props) {
   const [students, setStudents] = useState<Person[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
-  const [submissions, setSubmissions] = useState<Record<string, SubmissionData>>({});
-  const [comments, setComments] = useState<Record<string, Comment[]>>({});
+
+  const [submissions, setSubmissions] = useState<Record<string, SubmissionData>>(
+    {}
+  );
+  const [comments, setComments] = useState<Record<string, DiscussionComment[]>>({});
   const [commentTexts, setCommentTexts] = useState<Record<string, string>>({});
-  const [savingComments, setSavingComments] = useState<Record<string, boolean>>({});
-  const [deletingComments, setDeletingComments] = useState<Record<string, boolean>>({});
-  const [commentToDelete, setCommentToDelete] = useState<{ id: string; problemId: string } | null>(null);
-  const [expandedProblems, setExpandedProblems] = useState<Record<string, boolean>>({});
+  const [savingComments, setSavingComments] = useState<
+    Record<string, boolean>
+  >({});
+  const [deletingComments, setDeletingComments] = useState<
+    Record<string, boolean>
+  >({});
+  const [expandedProblems, setExpandedProblems] = useState<
+    Record<string, boolean>
+  >({});
+
+  const [filter, setFilter] = useState<
+    "all" | "correct" | "incorrect" | "unattempted"
+  >("all");
+  const [sortOrder, setSortOrder] = useState<"new" | "old">("new");
+  const [latestOnly, setLatestOnly] = useState(false);
+
+  const [gradeDraft, setGradeDraft] = useState<string>("");
+  const [gradeSaved, setGradeSaved] = useState<number | null>(null);
+  const [gradeSaving, setGradeSaving] = useState(false);
+  const [gradeError, setGradeError] = useState<string | null>(null);
 
   const selectedStudent = students[selectedIndex] ?? null;
 
@@ -118,11 +150,11 @@ export default function AssignmentSubmissions({ courseId, assignmentId, problems
 
   useEffect(() => {
     if (!selectedStudent) return;
-    fetch(`/api/courses/${courseId}/${assignmentId}/submissions/${selectedStudent.id}`)
+    fetch(
+      `/api/courses/${courseId}/${assignmentId}/submissions/${selectedStudent.id}`
+    )
       .then((res) => res.json())
-      .then((data) => {
-        setSubmissions(data || {});
-      })
+      .then((data) => setSubmissions(data || {}))
       .catch(() => setSubmissions({}));
   }, [courseId, assignmentId, selectedStudent]);
 
@@ -132,28 +164,44 @@ export default function AssignmentSubmissions({ courseId, assignmentId, problems
         setComments({});
         return;
       }
-      const commentsData: Record<string, Comment[]> = {};
-      for (const problem of problems) {
-        try {
-          const response = await fetch(
-            `/api/comments?assignmentId=${assignmentId}&problemId=${problem.id}&studentId=${selectedStudent.id}`
-          );
-          if (response.ok) {
-            const problemComments = await response.json();
-            commentsData[problem.id] = problemComments || [];
-          } else {
-            commentsData[problem.id] = [];
+      const entries = await Promise.all(
+        problems.map(async (p) => {
+          try {
+            const r = await fetch(
+              `/api/comments?assignmentId=${assignmentId}&problemId=${p.id}&studentId=${selectedStudent.id}`
+            );
+            const list = r.ok ? await r.json() : [];
+            return [p.id, list as Comment[]] as const;
+          } catch {
+            return [p.id, []] as const;
           }
-        } catch {
-          commentsData[problem.id] = [];
-        }
-      }
-      setComments(commentsData);
+        })
+      );
+      setComments(Object.fromEntries(entries));
     };
-    if (problems.length > 0) {
-      loadComments();
-    }
+    if (problems.length > 0) loadComments();
   }, [assignmentId, problems, selectedStudent]);
+
+  useEffect(() => {
+    setGradeDraft("");
+    setGradeSaved(null);
+    setGradeError(null);
+    if (!selectedStudent) return;
+    (async () => {
+      try {
+        const r = await fetch(
+          `/api/courses/${courseId}/${assignmentId}/grade/${selectedStudent.id}`
+        );
+        if (r.ok) {
+          const { grade } = await r.json();
+          if (typeof grade === "number") {
+            setGradeSaved(grade);
+            setGradeDraft(String(grade));
+          }
+        }
+      } catch {}
+    })();
+  }, [courseId, assignmentId, selectedStudent]);
 
   const saveComment = async (problemId: string) => {
     const commentText = commentTexts[problemId]?.trim();
@@ -191,56 +239,91 @@ export default function AssignmentSubmissions({ courseId, assignmentId, problems
       if (response.ok) {
         setComments((prev) => ({
           ...prev,
-          [problemId]: prev[problemId]?.filter((comment) => comment.id !== commentId) || [],
+          [problemId]:
+            prev[problemId]?.filter((c) => c.id !== commentId) || [],
         }));
       }
     } catch {}
     setDeletingComments((prev) => ({ ...prev, [commentId]: false }));
   };
 
-  const handleDeleteClick = (commentId: string, problemId: string) => {
-    setCommentToDelete({ id: commentId, problemId });
-  };
-  const handleConfirmDelete = () => {
-    if (commentToDelete) {
-      deleteComment(commentToDelete.id, commentToDelete.problemId);
-      setCommentToDelete(null);
-    }
-  };
-  const handleCancelDelete = () => {
-    setCommentToDelete(null);
+  const toggleProblemExpansion = (problemId: string) =>
+    setExpandedProblems((prev) => ({ ...prev, [problemId]: !prev[problemId] }));
+  const toggleAllProblems = () => {
+    const allExpanded = problems.every((p) => expandedProblems[p.id]);
+    const next: Record<string, boolean> = {};
+    problems.forEach((p) => (next[p.id] = !allExpanded));
+    setExpandedProblems(next);
   };
 
-  const toggleProblemExpansion = (problemId: string) => {
-    setExpandedProblems((prev) => ({
-      ...prev,
-      [problemId]: !prev[problemId],
-    }));
-  };
-  const toggleAllProblems = () => {
-    const allExpanded = problems.every((problem) => expandedProblems[problem.id]);
-    const newState: Record<string, boolean> = {};
-    problems.forEach((problem) => {
-      newState[problem.id] = !allExpanded;
-    });
-    setExpandedProblems(newState);
-  };
   const handleSelectChange = (id: string) => {
     const index = students.findIndex((s) => s.id === id);
     if (index !== -1) setSelectedIndex(index);
   };
   const goPrev = () => setSelectedIndex((prev) => Math.max(0, prev - 1));
-  const goNext = () => setSelectedIndex((prev) => Math.min(students.length - 1, prev + 1));
+  const goNext = () =>
+    setSelectedIndex((prev) => Math.min(students.length - 1, prev + 1));
+
+  // grade
+  const onGradeChange = (v: string) => {
+    setGradeDraft(v);
+    setGradeError(null);
+  };
+  const validateGrade = (v: string) => {
+    if (v.trim() === "") return "Enter a grade.";
+    const n = Number(v);
+    if (!Number.isFinite(n)) return "Grade must be a number.";
+    if (n < 0 || n > 100) return "Grade must be between 0 and 100.";
+    return null;
+  };
+  const saveGrade = async () => {
+    if (!selectedStudent) return;
+    const err = validateGrade(gradeDraft);
+    if (err) {
+      setGradeError(err);
+      return;
+    }
+    setGradeSaving(true);
+    try {
+      const res = await fetch(
+        `/api/courses/${courseId}/${assignmentId}/grade`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            studentId: selectedStudent.id,
+            grade: Number(gradeDraft),
+          }),
+        }
+      );
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setGradeError(json?.error || "Failed to save grade");
+      } else {
+        setGradeSaved(Number(gradeDraft));
+      }
+    } catch {} finally {
+      setGradeSaving(false);
+    }
+  };
+  const clearGrade = () => {
+    setGradeDraft("");
+    setGradeSaved(null);
+    setGradeError(null);
+  };
 
   return (
     <div>
       {selectedStudent && (
         <Card className="w-full">
-          <CardHeader >
+          <CardHeader>
             <CardTitle className="flex items-center gap-2 text-2xl">
-              <Package className="w-6 h-6" />Submissions
+              <Package className="h-6 w-6" /> Submissions
             </CardTitle>
+
+            {/* Top bar: student nav + filters + grade */}
             <div className="mt-4 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+              {/* left: student nav */}
               <div className="flex items-center gap-2">
                 <Button
                   variant="secondary"
@@ -254,6 +337,7 @@ export default function AssignmentSubmissions({ courseId, assignmentId, problems
                   className="w-[220px] rounded border px-3 py-2"
                   onChange={(e) => handleSelectChange(e.target.value)}
                   value={selectedStudent?.id ?? ""}
+                  aria-label="Select student"
                 >
                   {students.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -269,20 +353,73 @@ export default function AssignmentSubmissions({ courseId, assignmentId, problems
                 >
                   Next <ChevronRight className="h-4 w-4" />
                 </Button>
-                {selectedStudent && (
-                  <span className="text-muted-foreground text-sm ml-2">
-                    {selectedIndex + 1} of {students.length}
-                  </span>
-                )}
+                <span className="ml-2 text-sm text-muted-foreground">
+                  {selectedIndex + 1} of {students.length}
+                </span>
               </div>
-              {selectedStudent && (
+
+              {/* center: filters */}
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="sm"
+                    variant={filter === "all" ? "secondary" : "ghost"}
+                    onClick={() => setFilter("all")}
+                    aria-pressed={filter === "all"}
+                  >
+                    All
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={filter === "correct" ? "secondary" : "ghost"}
+                    onClick={() => setFilter("correct")}
+                    aria-pressed={filter === "correct"}
+                  >
+                    Correct
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={filter === "incorrect" ? "secondary" : "ghost"}
+                    onClick={() => setFilter("incorrect")}
+                    aria-pressed={filter === "incorrect"}
+                  >
+                    Incorrect
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={filter === "unattempted" ? "secondary" : "ghost"}
+                    onClick={() => setFilter("unattempted")}
+                    aria-pressed={filter === "unattempted"}
+                  >
+                    Unattempted
+                  </Button>
+                </div>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                    Latest only
+                    <Switch
+                      checked={latestOnly}
+                      onCheckedChange={setLatestOnly}
+                      aria-label="Show latest only"
+                    />
+                  </label>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      setSortOrder((s) => (s === "new" ? "old" : "new"))
+                    }
+                  >
+                    {sortOrder === "new" ? "Newest first" : "Oldest first"}
+                  </Button>
+                </div>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={toggleAllProblems}
                   className="flex items-center gap-x-1"
                 >
-                  {problems.every((problem) => expandedProblems[problem.id]) ? (
+                  {problems.every((p) => expandedProblems[p.id]) ? (
                     <>
                       <EyeOff className="h-4 w-4" /> Hide All
                     </>
@@ -292,219 +429,294 @@ export default function AssignmentSubmissions({ courseId, assignmentId, problems
                     </>
                   )}
                 </Button>
-              )}
+              </div>
+
+              {/* right: grade box */}
+              <div className="flex items-center gap-2">
+                <div className="text-sm text-muted-foreground">Grade</div>
+                <div className="relative">
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    max={100}
+                    step="0.5"
+                    value={gradeDraft}
+                    onChange={(e) => onGradeChange(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        saveGrade();
+                      } else if (e.key === "Escape") {
+                        e.preventDefault();
+                        clearGrade();
+                      }
+                    }}
+                    className={`h-9 w-[90px] pr-8 ${
+                      gradeError ? "border-red-300 focus-visible:ring-red-400" : ""
+                    }`}
+                    placeholder="0–100"
+                    aria-label="Grade (0–100)"
+                  />
+                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                    /100
+                  </span>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={saveGrade}
+                  disabled={
+                    gradeSaving || !!gradeError || gradeDraft.trim() === ""
+                  }
+                >
+                  {gradeSaving ? "Saving…" : "Save"}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={clearGrade}>
+                  Clear
+                </Button>
+              </div>
             </div>
+
+            {gradeError && (
+              <div className="mt-1 text-sm text-red-600">{gradeError}</div>
+            )}
+            {gradeSaved !== null && (
+              <div className="mt-1 text-xs text-muted-foreground">
+                Saved grade: <span className="font-medium">{gradeSaved}</span>
+                /100
+              </div>
+            )}
           </CardHeader>
+
           <CardContent>
             <div className="space-y-6">
               {problems.map((problem, idx) => {
-                const subsRaw = submissions[problem.id];
-                let subs: Submission[] = [];
-                if (Array.isArray(subsRaw)) {
-                  subs = subsRaw;
-                } else if (subsRaw && typeof subsRaw === "object" && "submissions" in subsRaw) {
-                  subs = (subsRaw as { submissions: Submission[] }).submissions;
-                }
+                const subsAll = extractSubs(submissions[problem.id]);
                 const isExpanded = expandedProblems[problem.id] || false;
+
+                const hasAny = subsAll.length > 0;
+                const anyCorrect = subsAll.some((s) => s.correct === true);
+
+                const typeProps = getProblemTypeBadgeProps(problem.type ?? null);
+                const typeBorderClass =
+                  typeProps?.borderColor || "border-l-gray-500";
+
+                // filtered submissions per controls
+                let filtered = [...subsAll].sort(
+                  (a, b) =>
+                    new Date(a.submittedAt).getTime() -
+                    new Date(b.submittedAt).getTime()
+                );
+                if (sortOrder === "new") filtered.reverse();
+                if (latestOnly && filtered.length > 0) filtered = [filtered[0]];
+                if (filter === "correct")
+                  filtered = filtered.filter((s) => s.correct === true);
+                if (filter === "incorrect")
+                  filtered = filtered.filter((s) => s.correct === false);
+                if (filter === "unattempted") filtered = [];
+
                 return (
-                  <div key={problem.id} className={`border rounded-lg p-4 border-l-4 ${getProblemTypeBadgeProps(problem.type ?? null)?.borderColor || "border-l-gray-500"}`}>
-                    <div className="flex justify-between items-start mb-4">
+                  <div
+                    key={problem.id}
+                    className={`rounded-lg border border-l-4 p-4 ${typeBorderClass}`}
+                  >
+                    {/* header */}
+                    <div className="mb-4 flex items-start justify-between">
                       <div className="flex-1">
-                        <h3 className="font-semibold text-lg flex items-center gap-2">
+                        <h3 className="flex items-center gap-2 text-lg font-semibold">
                           Problem {idx + 1}: {problem.title}
-                          {subs.some((sub) => sub.correct === true) ? (
-                            <Badge className="bg-green-100 text-green-800 border-green-200 flex items-center gap-1">
-                              <CheckCircle className="w-3 h-3" /> Correct
-                            </Badge>
-                          ) : (subs.length === 0 || !subs.some((sub) => sub.correct === true)) && (
-                            <Badge className="bg-red-100 text-red-800 border-red-200 flex items-center gap-1">
-                              <XCircle className="w-3 h-3" /> Incorrect
+                          {hasAny ? (
+                            anyCorrect ? (
+                              <Badge className="flex items-center gap-1 bg-green-100 text-green-800">
+                                <CheckCircle className="h-3 w-3" /> Correct
+                              </Badge>
+                            ) : (
+                              <Badge className="flex items-center gap-1 bg-red-100 text-red-800">
+                                <XCircle className="h-3 w-3" /> Incorrect
+                              </Badge>
+                            )
+                          ) : (
+                            <Badge
+                              variant="outline"
+                              className="border-gray-300 text-gray-600"
+                            >
+                              No attempts
                             </Badge>
                           )}
-                        </h3>
-                        {problem.description && (
-                          <p className="text-muted-foreground mt-1">{problem.description}</p>
-                        )}
-                        <div className="flex gap-4 mt-2 text-sm text-muted-foreground items-center">
+                          <Badge
+                            variant="outline"
+                            className="border-gray-200 text-gray-600"
+                          >
+                            Attempts: {subsAll.length}
+                          </Badge>
                           {problem.type && (
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline" className={getProblemTypeBadgeProps(problem.type ?? null)?.className}>
-                                {getProblemTypeBadgeProps(problem.type ?? null)?.label}
-                              </Badge>
-                            </div>
+                            <Badge
+                              variant="outline"
+                              className={typeProps?.className}
+                            >
+                              {typeProps?.label}
+                            </Badge>
                           )}
                           {problem.maxStates !== undefined && (
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">
-                                Max States: {problem.maxStates === -1 ? "Unlimited" : problem.maxStates}
-                              </Badge>
-                            </div>
-                          )}
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="bg-purple-100 text-purple-800 border-purple-200">
-                              Deterministic: {problem.isDeterministic ? "Yes" : "No"}
+                            <Badge
+                              variant="outline"
+                              className="border-green-200 bg-green-100 text-green-800"
+                            >
+                              Max States:{" "}
+                              {problem.maxStates === -1
+                                ? "Unlimited"
+                                : problem.maxStates}
                             </Badge>
-                          </div>
-                        </div>
+                          )}
+                          <Badge
+                            variant="outline"
+                            className="border-purple-200 bg-purple-100 text-purple-800"
+                          >
+                            Deterministic:{" "}
+                            {problem.isDeterministic ? "Yes" : "No"}
+                          </Badge>
+                        </h3>
+                        {problem.description && (
+                          <p className="mt-1 text-muted-foreground">
+                            {problem.description}
+                          </p>
+                        )}
                       </div>
                       <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={() => toggleProblemExpansion(problem.id)}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => toggleProblemExpansion(problem.id)}
+                        >
                           {isExpanded ? (
                             <>
-                              <EyeOff className="w-4 h-4 mr-2" /> Hide Details
+                              <EyeOff className="mr-2 h-4 w-4" /> Hide Details
                             </>
                           ) : (
                             <>
-                              <Eye className="w-4 h-4 mr-2" /> Show Details
+                              <Eye className="mr-2 h-4 w-4" /> Show Details
                             </>
                           )}
                         </Button>
                       </div>
                     </div>
+
+                    {/* details */}
                     {isExpanded && (
-                      <div className="space-y-4">
-                        <div>
-                          <h4 className="font-medium mb-2 flex items-center gap-2">
-                            <FileText className="w-4 h-4" /> Student Submissions ({subs.length})
-                          </h4>
-                          {subs.length > 0 ? (
-                            <div className="border rounded-lg">
-                              <Table>
-                                <TableHeader>
-                                  <TableRow>
-                                    <TableHead>Submitted At</TableHead>
-                                    <TableHead>File</TableHead>
-                                    <TableHead>Correct</TableHead>
-                                    <TableHead>Feedback</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {subs
-                                    .sort((a, b) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime())
-                                    .map((submission) => (
+                      <div className="grid gap-4 lg:grid-cols-3">
+                        {/* submissions: 2/3 */}
+                        <section className="m-0 p-0 lg:col-span-2">
+                          <div className="p-0">
+                            {filter === "unattempted" && !hasAny && (
+                              <p className="text-sm text-muted-foreground ">
+                                No submissions yet.
+                              </p>
+                            )}
+
+                            {filter !== "unattempted" && filtered.length > 0 ? (
+                              <div className="rounded-md border bg-card">
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow className="bg-accent/40">
+                                      <TableHead>Submitted At</TableHead>
+                                      <TableHead>File</TableHead>
+                                      <TableHead>Correct</TableHead>
+                                      <TableHead>Feedback</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {filtered.map((submission) => (
                                       <TableRow key={submission.id}>
                                         <TableCell>
-                                          {new Date(submission.submittedAt).toLocaleDateString()} at {new Date(submission.submittedAt).toLocaleTimeString()}
+                                          {formatDateTime(
+                                            submission.submittedAt
+                                          )}
                                         </TableCell>
                                         <TableCell>
-                                          {submission.originalFileName && submission.fileName ? (
+                                          {submission.originalFileName &&
+                                          submission.fileName ? (
                                             <a
                                               href={`/uploads/${submission.fileName}`}
                                               target="_blank"
                                               rel="noopener noreferrer"
-                                              className="text-blue-600 hover:text-blue-800 underline flex items-center gap-1"
+                                              className="flex items-center gap-1 underline hover:text-blue-700"
                                             >
-                                              <Download className="w-4 h-4" />
+                                              <Download className="h-4 w-4" />
                                               {submission.originalFileName}
                                             </a>
                                           ) : (
-                                            <span className="text-muted-foreground">No file</span>
+                                            <span className="text-muted-foreground">
+                                              No file
+                                            </span>
                                           )}
                                         </TableCell>
                                         <TableCell>
-                                          {submission.correct !== null && submission.correct !== undefined ? (
-                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                              submission.correct ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                                            }`}>
-                                              {submission.correct ? "Correct" : "Incorrect"}
+                                          {submission.correct !== null &&
+                                          submission.correct !== undefined ? (
+                                            <span
+                                              className={`rounded-full px-2 py-1 text-xs font-medium ${
+                                                submission.correct
+                                                  ? "bg-green-100 text-green-800"
+                                                  : "bg-red-100 text-red-800"
+                                              }`}
+                                            >
+                                              {submission.correct
+                                                ? "Correct"
+                                                : "Incorrect"}
                                             </span>
                                           ) : (
-                                            <span className="text-muted-foreground">Not checked</span>
+                                            <span className="text-muted-foreground">
+                                              Not checked
+                                            </span>
                                           )}
                                         </TableCell>
                                         <TableCell>
                                           {submission.feedback ? (
-                                            <span className="text-sm">{submission.feedback}</span>
+                                            <span className="text-sm">
+                                              {submission.feedback}
+                                            </span>
                                           ) : (
-                                            <span className="text-muted-foreground">No feedback</span>
+                                            <span className="text-muted-foreground">
+                                              No feedback
+                                            </span>
                                           )}
                                         </TableCell>
                                       </TableRow>
                                     ))}
-                                </TableBody>
-                              </Table>
-                            </div>
-                          ) : (
-                            <p className="text-muted-foreground text-sm">No submissions yet.</p>
-                          )}
-                        </div>
-                        <div>
-                          <h4 className="font-medium mb-2 flex items-center gap-2">
-                            <MessageSquare className="w-4 h-4" /> Discussion ({comments[problem.id]?.length || 0})
-                          </h4>
-                          {comments[problem.id]?.length > 0 && (
-                            <div className="space-y-3 mb-4">
-                              {comments[problem.id]
-                                .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-                                .map((comment) => (
-                                  <div key={comment.id} className="bg-gray-50 rounded-lg p-3 relative">
-                                    <div className="flex justify-between items-start mb-2">
-                                      <div className="flex items-center gap-2">
-                                        <span className="font-medium text-sm">
-                                          {comment.author.firstName} {comment.author.lastName}
-                                        </span>
-                                        {/* Uncomment if RoleBadge is available */}
-                                        {/* {comment.author.role && (
-                                          <RoleBadge role={comment.author.role} />
-                                        )} */}
-                                      </div>
-                                      <span className="text-xs text-muted-foreground">
-                                        {new Date(comment.createdAt).toLocaleDateString()} at {new Date(comment.createdAt).toLocaleTimeString()}
-                                      </span>
-                                    </div>
-                                    <p className="text-sm">{comment.content}</p>
-                                    {!deletingComments[comment.id] && (
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => handleDeleteClick(comment.id, problem.id)}
-                                        className="absolute top-2 right-2 h-auto p-1 text-red-500 hover:bg-red-50 hover:text-red-700"
-                                        title="Delete comment"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    )}
-                                    {deletingComments[comment.id] && (
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        disabled
-                                        className="absolute top-2 right-2 h-auto p-1 text-gray-400"
-                                        title="Deleting comment..."
-                                      >
-                                        <Trash2 className="h-4 w-4 animate-pulse" />
-                                      </Button>
-                                    )}
-                                  </div>
-                                ))}
-                            </div>
-                          )}
-                          <div className="space-y-2">
-                            <Textarea
-                              placeholder="Add a comment or feedback about this problem..."
-                              value={commentTexts[problem.id] || ""}
-                              onChange={(e) =>
-                                setCommentTexts((prev) => ({ ...prev, [problem.id]: e.target.value }))
-                              }
-                              className="min-h-[80px]"
-                            />
-                            <div className="flex justify-end">
-                              <Button
-                                size="sm"
-                                onClick={() => saveComment(problem.id)}
-                                disabled={!commentTexts[problem.id]?.trim() || savingComments[problem.id]}
-                              >
-                                {savingComments[problem.id] ? (
-                                  "Submitting..."
-                                ) : (
-                                  <>
-                                    <Send className="w-4 h-4 mr-2" /> Add Comment
-                                  </>
-                                )}
-                              </Button>
-                            </div>
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            ) : null}
+
+                            {filter !== "unattempted" &&
+                              filtered.length === 0 &&
+                              hasAny && (
+                                <p className="text-sm text-muted-foreground">
+                                  No submissions match your filters.
+                                </p>
+                              )}
                           </div>
-                        </div>
+                        </section>
+
+                        {/* discussion: 1/3 */}
+                        <DiscussionPanel
+                          comments={comments[problem.id] || []}
+                          commentText={commentTexts[problem.id] || ""}
+                          onCommentTextChange={(text) =>
+                            setCommentTexts((prev) => ({
+                              ...prev,
+                              [problem.id]: text,
+                            }))
+                          }
+                          onSaveComment={() => saveComment(problem.id)}
+                          onDeleteComment={(commentId) =>
+                            deleteComment(commentId, problem.id)
+                          }
+                          isSaving={savingComments[problem.id]}
+                          deletingComments={deletingComments}
+                          placeholder="Add a comment about this problem…"
+                          className="lg:col-span-1"
+                        />
                       </div>
                     )}
                   </div>
@@ -514,15 +726,6 @@ export default function AssignmentSubmissions({ courseId, assignmentId, problems
           </CardContent>
         </Card>
       )}
-      <ConfirmDialog
-        open={!!commentToDelete}
-        title="Delete Comment"
-        description="Are you sure you want to delete this comment? This action cannot be undone."
-        confirmText="Delete"
-        cancelText="Cancel"
-        onConfirm={handleConfirmDelete}
-        onCancel={handleCancelDelete}
-      />
     </div>
   );
 }
