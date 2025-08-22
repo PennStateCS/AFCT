@@ -1,0 +1,219 @@
+"use client";
+
+import { useState } from "react";
+import { useSession } from "next-auth/react";
+import { MessageSquare, Send } from "lucide-react";
+import { Button } from "./ui/button";
+import { Textarea } from "./ui/textarea";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ConfirmDialog } from "./dialogs/ConfirmDialog";
+
+export type Comment = {
+  id: string;
+  content: string;
+  createdAt: string;
+  author: {
+    id?: string;
+    firstName: string | null;
+    lastName: string | null;
+    role?: string | null;
+    avatar?: string | null;
+    avatarUrl?: string | null;
+  };
+};
+
+type Props = {
+  comments: Comment[];
+  commentText: string;
+  onCommentTextChange: (text: string) => void;
+  onSaveComment: () => void;
+  onDeleteComment: (commentId: string) => void;
+  isSaving?: boolean;
+  deletingComments?: Record<string, boolean>;
+  title?: string;
+  placeholder?: string;
+  className?: string;
+};
+
+// helpers
+const initials = (first?: string | null, last?: string | null) => {
+  const f = (first ?? "").trim();
+  const l = (last ?? "").trim();
+  const fi = f ? f[0].toUpperCase() : "";
+  const li = l ? l[0].toUpperCase() : "";
+  return fi + li || "U";
+};
+
+const authorAvatarSrc = (author: Comment["author"]) => {
+  const raw = author?.avatar ?? author?.avatarUrl ?? null;
+  if (!raw) return undefined;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith("/")) return raw;
+  return `/uploads/${raw}`;
+};
+
+const formatDateTime = (iso: string | Date) => {
+  const d = typeof iso === "string" ? new Date(iso) : iso;
+  return `${d.toLocaleDateString()} at ${d.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
+};
+
+export default function DiscussionPanel({
+  comments,
+  commentText,
+  onCommentTextChange,
+  onSaveComment,
+  onDeleteComment,
+  isSaving = false,
+  deletingComments = {},
+  title = "Discussion",
+  placeholder = "Add a comment...",
+  className = "",
+}: Props) {
+  const { data: session } = useSession();
+  const myId = session?.user?.id ?? null;
+
+  const [commentToDelete, setCommentToDelete] = useState<string | null>(null);
+  const handleConfirmDelete = () => {
+    if (commentToDelete) {
+      onDeleteComment(commentToDelete);
+      setCommentToDelete(null);
+    }
+  };
+  const handleCancelDelete = () => setCommentToDelete(null);
+
+  return (
+    <>
+      <section className={`rounded-md border overflow-hidden ${className}`}>
+        <header className="flex items-center gap-2 border-b bg-primary px-3 py-2 text-white rounded-t-md">
+          <MessageSquare className="h-4 w-4" />
+          <h4 className="text-sm font-medium text-white">
+            {title} ({comments.length})
+          </h4>
+        </header>
+
+        <div className="bg-gray-50 p-3">
+          {comments.length > 0 ? (
+            <ul className="mb-3 space-y-3">
+              {comments
+                .sort(
+                  (a, b) =>
+                    new Date(a.createdAt).getTime() -
+                    new Date(b.createdAt).getTime()
+                )
+                .map((comment) => {
+                  const name =
+                    `${comment.author.firstName ?? ""} ${
+                      comment.author.lastName ?? ""
+                    }`.trim() || "Unknown User";
+                  const isMine =
+                    Boolean(
+                      myId &&
+                        comment.author?.id &&
+                        String(comment.author.id) === String(myId)
+                    );
+
+                  // alignment: my comments right, others left
+                  const row = isMine ? "justify-end" : "justify-start";
+                  const wrapDir = isMine ? "flex-row-reverse" : "flex-row";
+                  const metaAlign = isMine ? "text-right" : "text-left";
+
+                  return (
+                    <li key={comment.id} className={`flex ${row}`}>
+                      <div className={`flex w-full items-start gap-2 ${wrapDir}`}>
+                        {/* avatar */}
+                        <div className="flex flex-col items-center gap-1">
+                          <Avatar className="h-10 w-10">
+                            <AvatarImage
+                              src={authorAvatarSrc(comment.author)}
+                              alt={name}
+                            />
+                            <AvatarFallback className="bg-secondary text-secondary-foreground">
+                              {initials(
+                                comment.author.firstName,
+                                comment.author.lastName
+                              )}
+                            </AvatarFallback>
+                          </Avatar>
+                        </div>
+
+                        {/* bubble */}
+                        <div
+                          className={`min-w-0 min-w-[65%] w-fit max-w-[90%] sm:max-w-[85%] lg:max-w-[75%] break-words rounded-lg border px-3 py-2 shadow bg-card border-gray-400 ${
+                            isMine ? "ml-auto" : ""
+                          }`}
+                        >
+                          <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                            {comment.content}
+                          </p>
+
+                          <div className="mt-1 flex items-center justify-between">
+                            <span className="truncate text-xs text-muted-foreground">
+                              {name}
+                            </span>
+                            <span
+                              className={`text-xs text-muted-foreground ${metaAlign}`}
+                            >
+                              {formatDateTime(comment.createdAt)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+            </ul>
+          ) : (
+            <div className="mb-3 flex items-center justify-center rounded-md border border-dashed bg-white py-8 text-muted-foreground">
+              <MessageSquare className="mr-2 h-5 w-5 opacity-50" />
+              <span>No comments yet.</span>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Textarea
+              placeholder={placeholder}
+              value={commentText}
+              onChange={(e) => onCommentTextChange(e.target.value)}
+              onKeyDown={(e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                  e.preventDefault();
+                  onSaveComment();
+                }
+              }}
+              className="min-h-[80px] bg-white"
+              aria-label="Add comment"
+            />
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                onClick={onSaveComment}
+                disabled={!commentText.trim() || isSaving}
+              >
+                {isSaving ? (
+                  "Submitting…"
+                ) : (
+                  <>
+                    <Send className="mr-2 h-4 w-4" /> Add Comment
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <ConfirmDialog
+        open={!!commentToDelete}
+        title="Delete Comment"
+        description="Are you sure you want to delete this comment? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+      />
+    </>
+  );
+}

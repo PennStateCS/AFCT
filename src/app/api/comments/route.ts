@@ -5,79 +5,59 @@ import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 const createCommentSchema = z.object({
-  content: z.string().min(1, 'Comment content is required'),
+  content: z.string().min(1, 'Comment content is required').max(5000, 'Comment too long'),
   assignmentId: z.string(),
   problemId: z.string(),
-  studentId: z.string().optional(), // ID of the student whose work this comment is about
+  studentId: z.string().optional(), // the student this thread is about (optional)
 });
 
 export async function POST(request: NextRequest) {
   try {
-    // Verify authentication
     const session = await auth();
     const user = session?.user;
-
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Parse and validate request body
     const body = await request.json();
     const { content, assignmentId, problemId, studentId } = createCommentSchema.parse(body);
 
-    // Get the course ID from the assignment to find the user's roster entry
+    // Verify assignment & course
     const assignment = await prisma.assignment.findUnique({
       where: { id: assignmentId },
       select: { courseId: true },
     });
-
     if (!assignment) {
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 
-    // Find the user's roster entry for this course
+    // Verify author is in this course
     const rosterEntry = await prisma.roster.findUnique({
-      where: {
-        courseId_userId: {
-          courseId: assignment.courseId,
-          userId: user.id,
-        },
-      },
+      where: { courseId_userId: { courseId: assignment.courseId, userId: user.id } },
     });
-
     if (!rosterEntry) {
       return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
     }
 
-    // Verify the problem exists and belongs to the same course
+    // Verify problem belongs to course
     const problem = await prisma.problem.findFirst({
-      where: {
-        id: problemId,
-        courseId: assignment.courseId,
-      },
+      where: { id: problemId, courseId: assignment.courseId },
     });
-
     if (!problem) {
       return NextResponse.json({ error: 'Problem not found in this course' }, { status: 404 });
     }
 
-    // If studentId is provided, verify the student is enrolled in the course
+    // If filtering by a specific student, verify they’re enrolled
     if (studentId) {
       const studentRosterEntry = await prisma.roster.findUnique({
-        where: {
-          courseId_userId: {
-            courseId: assignment.courseId,
-            userId: studentId,
-          },
-        },
+        where: { courseId_userId: { courseId: assignment.courseId, userId: studentId } },
       });
-
       if (!studentRosterEntry) {
         return NextResponse.json({ error: 'Student not enrolled in this course' }, { status: 404 });
       }
     }
 
-    // Create the comment
+    // Create comment
     const comment = await prisma.comment.create({
       data: {
         content,
@@ -88,11 +68,15 @@ export async function POST(request: NextRequest) {
       },
       include: {
         roster: {
-          include: {
+          select: {
+            role: true, // course-specific role (e.g., FACULTY/TA/STUDENT)
             user: {
               select: {
+                id: true,
                 firstName: true,
                 lastName: true,
+                avatar: true,
+                role: true, // global role if you want it too
               },
             },
           },
@@ -100,7 +84,6 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Log the comment creation
     await createEnhancedActivityLog(prisma, request, {
       userId: user.id,
       action: 'CREATE_COMMENT',
@@ -115,40 +98,40 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({
-      id: comment.id,
-      content: comment.content,
-      createdAt: comment.createdAt,
-      author: {
-        firstName: comment.roster?.user?.firstName || null,
-        lastName: comment.roster?.user?.lastName || null,
+    // IMPORTANT: include author.id (and role) so the client can right/left align immediately
+    return NextResponse.json(
+      {
+        id: comment.id,
+        content: comment.content,
+        createdAt: comment.createdAt,
+        author: {
+          id: comment.roster.user.id,
+          firstName: comment.roster.user.firstName ?? null,
+          lastName: comment.roster.user.lastName ?? null,
+          avatar: comment.roster.user.avatar ?? null,
+          // prefer course role (FACULTY/TA/STUDENT); fall back to global
+          role: comment.roster.role ?? comment.roster.user.role ?? null,
+        },
       },
-    });
+      { status: 201 }
+    );
   } catch (error) {
     console.error('Error creating comment:', error);
-
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Invalid request data', details: error.issues },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: 'Invalid request data', details: error.issues }, { status: 400 });
     }
-
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
 export async function GET(request: NextRequest) {
   try {
-    // Verify authentication
     const session = await auth();
     const user = session?.user;
-
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get query parameters
     const { searchParams } = new URL(request.url);
     const assignmentId = searchParams.get('assignmentId');
     const problemId = searchParams.get('problemId');
@@ -157,72 +140,70 @@ export async function GET(request: NextRequest) {
     if (!assignmentId || !problemId) {
       return NextResponse.json(
         { error: 'assignmentId and problemId are required' },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
-    // Get the assignment to verify course access
     const assignment = await prisma.assignment.findUnique({
       where: { id: assignmentId },
       select: { courseId: true },
     });
-
     if (!assignment) {
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 
-    // Verify user has access to this course
+    // Verify caller is in this course
     const rosterEntry = await prisma.roster.findUnique({
-      where: {
-        courseId_userId: {
-          courseId: assignment.courseId,
-          userId: user.id,
-        },
-      },
+      where: { courseId_userId: { courseId: assignment.courseId, userId: user.id } },
     });
-
     if (!rosterEntry) {
       return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
     }
 
-    // Build where clause for comments
-    const whereClause = {
-      assignmentId,
-      problemId,
-      ...(studentId && { aboutStudentId: studentId }),
-    };
+    // If studentId present, restrict to comments about that student OR authored by that student
+    const whereClause = studentId
+      ? {
+          assignmentId,
+          problemId,
+          OR: [{ aboutStudentId: studentId }, { roster: { userId: studentId } }],
+        }
+      : { assignmentId, problemId };
 
-    // Get comments for this assignment and problem (and optionally student)
     const comments = await prisma.comment.findMany({
       where: whereClause,
       include: {
         roster: {
-          include: {
+          select: {
+            role: true, // course role
             user: {
               select: {
+                id: true, // needed for right/left alignment on client
                 firstName: true,
                 lastName: true,
+                avatar: true,
+                role: true, // global role (optional)
               },
             },
           },
         },
       },
-      orderBy: {
-        createdAt: 'asc',
-      },
+      orderBy: { createdAt: 'asc' },
     });
 
-    const formattedComments = comments.map((comment) => ({
-      id: comment.id,
-      content: comment.content,
-      createdAt: comment.createdAt,
+    const formatted = comments.map((c) => ({
+      id: c.id,
+      content: c.content,
+      createdAt: c.createdAt,
       author: {
-        firstName: comment.roster.user.firstName,
-        lastName: comment.roster.user.lastName,
+        id: c.roster.user.id,
+        firstName: c.roster.user.firstName,
+        lastName: c.roster.user.lastName,
+        avatar: c.roster.user.avatar ?? null,
+        role: c.roster.role ?? c.roster.user.role ?? null,
       },
     }));
 
-    return NextResponse.json(formattedComments);
+    return NextResponse.json(formatted);
   } catch (error) {
     console.error('Error fetching comments:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -231,65 +212,43 @@ export async function GET(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    // Verify authentication
     const session = await auth();
     const user = session?.user;
-
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get comment ID from query parameters
     const { searchParams } = new URL(request.url);
     const commentId = searchParams.get('commentId');
-
     if (!commentId) {
       return NextResponse.json({ error: 'commentId is required' }, { status: 400 });
     }
 
-    // Find the comment and verify ownership or permissions
     const comment = await prisma.comment.findUnique({
       where: { id: commentId },
       include: {
-        roster: {
-          include: {
-            user: true,
-          },
-        },
-        assignment: {
-          select: {
-            courseId: true,
-          },
-        },
+        roster: { include: { user: true } },
+        assignment: { select: { courseId: true } },
       },
     });
-
     if (!comment) {
       return NextResponse.json({ error: 'Comment not found' }, { status: 404 });
     }
 
-    // Check if user can delete this comment
-    // Users can delete their own comments, or faculty/admins can delete any comments in their courses
+    // Owner or ADMIN/FACULTY can delete; otherwise check course role via roster
     const isOwner = comment.roster.user.id === user.id;
-    const isAuthorized = isOwner || ['ADMIN', 'FACULTY'].includes(user.role);
-
-    if (!isAuthorized) {
-      // If not owner or admin/faculty, check if they're faculty/TA in this course
+    const isAdminFaculty = ['ADMIN', 'FACULTY'].includes(user.role as string);
+    if (!isOwner && !isAdminFaculty) {
       const userRosterEntry = await prisma.roster.findUnique({
         where: {
-          courseId_userId: {
-            courseId: comment.assignment.courseId,
-            userId: user.id,
-          },
+          courseId_userId: { courseId: comment.assignment.courseId, userId: user.id },
         },
       });
-
       if (!userRosterEntry || userRosterEntry.role === 'STUDENT') {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
     }
 
-    // Log the comment deletion before actually deleting
     await createEnhancedActivityLog(prisma, request, {
       userId: user.id,
       action: 'DELETE_COMMENT',
@@ -308,11 +267,7 @@ export async function DELETE(request: NextRequest) {
       },
     });
 
-    // Delete the comment
-    await prisma.comment.delete({
-      where: { id: commentId },
-    });
-
+    await prisma.comment.delete({ where: { id: commentId } });
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting comment:', error);
