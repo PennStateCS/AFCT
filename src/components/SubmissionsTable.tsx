@@ -1,6 +1,7 @@
 "use client";
 
-import { Download } from "lucide-react";
+import { Download, Eye, Check, X, Minus } from "lucide-react";
+import { useState } from "react";
 import {
   Table,
   TableBody,
@@ -9,7 +10,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
 import { Submission } from "@prisma/client";
+import JffViewerDialog from "./JffViewerDialog";
 
 type Props = {
   submissions: Submission[];
@@ -28,10 +31,15 @@ export default function SubmissionsTable({
   submissions,
   className = "",
 }: Props) {
-  // Process submissions: sort by newest first
+  const [openDialog, setOpenDialog] = useState<{
+    open: boolean;
+    submission: Submission | null;
+  }>({ open: false, submission: null });
+
+  // Process submissions: sort by oldest first
   const filtered = [...submissions].sort(
     (a, b) =>
-      new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
+      new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime()
   );
 
   if (filtered.length === 0) {
@@ -51,16 +59,41 @@ export default function SubmissionsTable({
       <Table>
         <TableHeader>
           <TableRow className="bg-primary">
+            <TableHead className="text-white text-sm font-medium">Attempt</TableHead>
             <TableHead className="text-white text-sm font-medium">Submitted At</TableHead>
-            <TableHead className="text-white text-sm font-medium">File</TableHead>
             <TableHead className="text-white text-sm font-medium">Correct</TableHead>
             <TableHead className="text-white text-sm font-medium">Feedback</TableHead>
+            <TableHead className="text-white text-sm font-medium">File</TableHead>
+            <TableHead className="text-white text-sm font-medium">View</TableHead>
           </TableRow>
         </TableHeader>
-        <TableBody className="bg-gray-50">
-          {filtered.map((submission) => (
+        <TableBody>
+          {filtered.map((submission, index) => (
             <TableRow key={submission.id}>
+              <TableCell>{index + 1}</TableCell>
               <TableCell>{formatDateTime(submission.submittedAt)}</TableCell>
+              <TableCell>
+                {submission.correct !== null && submission.correct !== undefined ? (
+                  <div className="flex justify-center">
+                    {submission.correct ? (
+                      <Check className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <X className="h-4 w-4 text-red-600" />
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex justify-center">
+                    <Minus className="h-4 w-4 text-gray-400" />
+                  </div>
+                )}
+              </TableCell>
+              <TableCell>
+                {submission.feedback ? (
+                  <span className="text-sm">{submission.feedback}</span>
+                ) : (
+                  <span className="text-muted-foreground">No feedback</span>
+                )}
+              </TableCell>
               <TableCell>
                 {submission.originalFileName && submission.fileName ? (
                   <a
@@ -77,31 +110,40 @@ export default function SubmissionsTable({
                 )}
               </TableCell>
               <TableCell>
-                {submission.correct !== null && submission.correct !== undefined ? (
-                  <span
-                    className={`rounded-full px-2 py-1 text-xs font-medium ${
-                      submission.correct
-                        ? "bg-green-100 text-green-800"
-                        : "bg-red-100 text-red-800"
-                    }`}
+                {submission.originalFileName && submission.fileName ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setOpenDialog({ open: true, submission })}
+                    className="flex items-center gap-1"
                   >
-                    {submission.correct ? "Correct" : "Incorrect"}
-                  </span>
+                    <Eye className="h-3 w-3" />
+                    View
+                  </Button>
                 ) : (
-                  <span className="text-muted-foreground">Not checked</span>
-                )}
-              </TableCell>
-              <TableCell>
-                {submission.feedback ? (
-                  <span className="text-sm">{submission.feedback}</span>
-                ) : (
-                  <span className="text-muted-foreground">No feedback</span>
+                  <span className="text-muted-foreground text-sm">No file</span>
                 )}
               </TableCell>
             </TableRow>
           ))}
         </TableBody>
       </Table>
+
+      {/* JffViewerDialog for viewing submitted files */}
+      {openDialog.submission && (
+        <JffViewerDialog
+          open={openDialog.open}
+          onOpenChange={(open) => setOpenDialog({ open, submission: null })}
+          src={`/uploads/${encodeURIComponent(openDialog.submission.fileName ?? '')}`}
+          title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
+          width="70vw"
+          height="70vh"
+          honorPositions // turn on to respect <x>/<y> from .jff
+          // darkMode
+          // epsSymbol="ε"
+          // labelWrapWidth={24}
+        />
+      )}
     </div>
   );
 }
