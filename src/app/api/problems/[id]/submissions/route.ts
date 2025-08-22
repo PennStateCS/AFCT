@@ -40,10 +40,11 @@ export async function GET(
       select: {
         id: true,
         submittedAt: true,
-        grade: true,
         feedback: true,
+        correct: true,
+        fileName: true,
+        originalFileName: true,
         problemId: true,
-        // Add status based on grade and due date if needed
       },
     });
 
@@ -51,10 +52,12 @@ export async function GET(
     const formattedSubmissions = submissions.map(submission => ({
       id: submission.id,
       submittedAt: submission.submittedAt.toISOString(),
-      grade: submission.grade,
       feedback: submission.feedback,
+      correct: submission.correct,
+      fileName: submission.fileName,
+      originalFileName: submission.originalFileName,
       problemId: submission.problemId,
-      status: submission.grade !== null ? 'GRADED' : 'SUBMITTED' as 'SUBMITTED' | 'GRADED' | 'LATE',
+      status: 'SUBMITTED' as 'SUBMITTED' | 'GRADED' | 'LATE',
     }));
 
     return NextResponse.json(formattedSubmissions);

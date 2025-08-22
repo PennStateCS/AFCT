@@ -62,7 +62,6 @@ export async function GET(
       select: {
         id: true,
         submittedAt: true,
-        grade: true,
         feedback: true,
         correct: true,
         fileName: true,
@@ -87,7 +86,6 @@ export async function GET(
         submissions: {
           id: string;
           submittedAt: Date;
-          grade: number | null;
           feedback: string | null;
           correct: boolean | null;
           fileName: string | null;
@@ -103,7 +101,6 @@ export async function GET(
         submissions: subsForProblem.map((s) => ({
           id: s.id,
           submittedAt: s.submittedAt,
-          grade: s.grade,
           feedback: s.feedback,
           correct: s.correct,
           fileName: s.fileName,

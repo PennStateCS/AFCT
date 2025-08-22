@@ -43,6 +43,7 @@ model User {
 
   rosterEntries Roster[] // Per-course memberships with roles
   submissions   Submission[]
+  grades        AssignmentGrade[] // Grades for assignments
   activityLogs  ActivityLog[]
   commentsAbout Comment[] @relation("CommentsAboutStudent") // Comments about this student's work
 
@@ -112,6 +113,7 @@ model Assignment {
   problems AssignmentProblem[]
   comments Comment[]
   activityLogs ActivityLog[]
+  grades   AssignmentGrade[] // Student grades for this assignment
 
   @@index([courseId])
   @@index([isPublished])
@@ -158,7 +160,6 @@ model AssignmentProblem {
 model Submission {
   id          String   @id @default(cuid())
   submittedAt DateTime @default(now())
-  grade       Float?
   feedback    String?
   correct     Boolean?
 
@@ -180,6 +181,25 @@ model Submission {
   @@index([assignmentId])
   @@index([studentId])
   @@index([assignmentId, problemId, studentId])
+}
+
+model AssignmentGrade {
+  id    String @id @default(cuid())
+  grade Float
+  feedback String?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  assignmentId String
+
+  student   User   @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  studentId String
+
+  @@unique([assignmentId, studentId]) // One grade per student per assignment
+  @@index([assignmentId])
+  @@index([studentId])
 }
 
 model Comment {

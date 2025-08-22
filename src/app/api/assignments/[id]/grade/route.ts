@@ -28,35 +28,26 @@ export async function GET(
     // If no userId specified, use the current user's ID
     const targetUserId = userId || session.user.id;
 
-    // Calculate the total grade for the assignment by summing all problem grades
-    // Fetch submissions for the target user that belong to this assignment.
-    // Submission has an `assignmentId` field, so filter directly on that.
-    const submissions = await prisma.submission.findMany({
+    // Check for existing AssignmentGrade record
+    const assignmentGrade = await prisma.assignmentGrade.findUnique({
       where: {
-        studentId: targetUserId,
-        assignmentId: assignmentId,
+        assignmentId_studentId: {
+          assignmentId,
+          studentId: targetUserId,
+        },
       },
     });
 
-    // Get the best grade for each problem (in case of multiple submissions)
-    const problemGrades = new Map<string, number>();
-    
-    submissions.forEach(submission => {
-      if (submission.grade !== null) {
-        const currentGrade = problemGrades.get(submission.problemId) || 0;
-        if (submission.grade > currentGrade) {
-          problemGrades.set(submission.problemId, submission.grade);
-        }
-      }
-    });
+    if (assignmentGrade) {
+      return NextResponse.json({ 
+        grade: assignmentGrade.grade,
+        feedback: assignmentGrade.feedback,
+        updatedAt: assignmentGrade.updatedAt 
+      });
+    }
 
-    // Sum up all problem grades
-    const totalGrade = Array.from(problemGrades.values()).reduce((sum, grade) => sum + grade, 0);
-
-    return NextResponse.json({ 
-      grade: totalGrade > 0 ? totalGrade : null,
-      problemGrades: Object.fromEntries(problemGrades),
-    });
+    // No grade assigned yet
+    return NextResponse.json({ grade: null });
   } catch (error) {
     console.error('Error fetching assignment grade:', error);
     return NextResponse.json(

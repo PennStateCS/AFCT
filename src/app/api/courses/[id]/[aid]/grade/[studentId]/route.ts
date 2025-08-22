@@ -16,49 +16,95 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Check for latest manual grade override in activity logs
-    // Find recent manual grade overrides for this assignment and filter by metadata.studentId
-    const recent = await prisma.activityLog.findMany({
-      where: { assignmentId, action: 'GRADE_SET' },
-      orderBy: { timestamp: 'desc' },
-      take: 20,
-    });
-
-    type ManualMeta = { studentId?: string; grade?: number; source?: string };
-    const manual = recent.find((r) => {
-      if (!r.metadata || typeof r.metadata !== 'object') return false;
-      const m = r.metadata as ManualMeta;
-      return m.studentId === studentId;
-    });
-
-    if (manual && manual.metadata && typeof manual.metadata === 'object') {
-      const m = manual.metadata as ManualMeta;
-      if (m.grade !== undefined) return NextResponse.json({ grade: m.grade });
-    }
-
-    // Fallback: compute total from submissions (reuse assignments grade logic)
-    const submissions = await prisma.submission.findMany({
+  // Check for existing AssignmentGrade record
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const assignmentGrade = await (prisma as any).assignmentGrade.findUnique({
       where: {
-        studentId,
-        assignmentId,
+        assignmentId_studentId: {
+          assignmentId,
+          studentId,
+        },
       },
     });
 
-    const problemGrades = new Map<string, number>();
-    submissions.forEach(submission => {
-      if (submission.grade !== null) {
-        const currentGrade = problemGrades.get(submission.problemId) || 0;
-        if (submission.grade > currentGrade) {
-          problemGrades.set(submission.problemId, submission.grade);
-        }
-      }
-    });
+    if (assignmentGrade) {
+      return NextResponse.json({ 
+        grade: assignmentGrade.grade,
+        feedback: assignmentGrade.feedback,
+        updatedAt: assignmentGrade.updatedAt 
+      });
+    }
 
-    const totalGrade = Array.from(problemGrades.values()).reduce((sum, g) => sum + g, 0);
-
-    return NextResponse.json({ grade: totalGrade > 0 ? totalGrade : null, problemGrades: Object.fromEntries(problemGrades) });
+    // No grade assigned yet
+    return NextResponse.json({ grade: null });
   } catch (error) {
     console.error('GET /api/courses/[id]/[aid]/grade/[studentId] error:', error);
     return NextResponse.json({ error: 'Failed to fetch grade' }, { status: 500 });
+  }
+}
+
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string; aid: string; studentId: string }> }) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    // Only allow staff to set grades
+    if (!['FACULTY', 'TA', 'ADMIN'].includes(session.user.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const resolved = await params;
+    const assignmentId = resolved.aid;
+    const studentId = resolved.studentId;
+
+    const { grade, feedback } = await req.json();
+
+    // Validate grade: must be null (to clear) or a number between 0-100
+    if (grade !== null && (typeof grade !== 'number' || grade < 0 || grade > 100)) {
+      return NextResponse.json({ error: 'Invalid grade value' }, { status: 400 });
+    }
+
+    // Upsert the assignment grade
+    if (grade === null) {
+      // Delete the grade if setting to null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (prisma as any).assignmentGrade.deleteMany({
+        where: {
+          assignmentId,
+          studentId,
+        },
+      });
+      return NextResponse.json({ grade: null, feedback: null });
+    } else {
+      // Create or update the grade
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const assignmentGrade = await (prisma as any).assignmentGrade.upsert({
+        where: {
+          assignmentId_studentId: {
+            assignmentId,
+            studentId,
+          },
+        },
+        create: {
+          assignmentId,
+          studentId,
+          grade,
+          feedback: feedback || null,
+        },
+        update: {
+          grade,
+          feedback: feedback || null,
+        },
+      });
+
+      return NextResponse.json({ 
+        grade: assignmentGrade.grade,
+        feedback: assignmentGrade.feedback,
+        updatedAt: assignmentGrade.updatedAt 
+      });
+    }
+  } catch (error) {
+    console.error('POST /api/courses/[id]/[aid]/grade/[studentId] error:', error);
+    return NextResponse.json({ error: 'Failed to set grade' }, { status: 500 });
   }
 }

@@ -133,7 +133,6 @@ export async function createSubmission(data: {
 export async function updateSubmission(
   id: string,
   data: {
-    grade?: number;
     feedback?: string;
     correct?: boolean;
   },

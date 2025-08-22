@@ -100,9 +100,17 @@ export function DataTable<TData, TValue>({
     localStorage.setItem(storageKey, JSON.stringify(columnVisibility));
   }, [columnVisibility, storageKey]);
 
-  const table = useReactTable({
+  const table = useReactTable<TData>({
     data,
     columns,
+    // Use a stable row id (if provided on the data object) so pagination
+    // and internal row caching won't mix rows between pages. Defaults to
+    // index-based ids which can cause cells to show stale values when
+    // navigating pages.
+    getRowId: (row: TData) => {
+      const r = row as unknown as Record<string, unknown>;
+      return String(r.id ?? r._id ?? '');
+    },
     state: {
       globalFilter,
       columnVisibility,

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useSession } from "next-auth/react";
-import { MessageSquare, Send } from "lucide-react";
+import { MessageSquare, Send, X } from "lucide-react";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -124,7 +124,7 @@ export default function DiscussionPanel({
                     <li key={comment.id} className={`flex ${row}`}>
                       <div className={`flex w-full items-start gap-2 ${wrapDir}`}>
                         {/* avatar */}
-                        <div className="flex flex-col items-center gap-1">
+                        <div className="flex flex-col items-center gap-2">
                           <Avatar className="h-10 w-10">
                             <AvatarImage
                               src={authorAvatarSrc(comment.author)}
@@ -141,11 +141,21 @@ export default function DiscussionPanel({
 
                         {/* bubble */}
                         <div
-                          className={`min-w-0 min-w-[65%] w-fit max-w-[90%] sm:max-w-[85%] lg:max-w-[75%] break-words rounded-lg border px-3 py-2 shadow bg-card border-gray-400 ${
+                          className={`min-w-0 min-w-[65%] w-fit max-w-[90%] sm:max-w-[85%] lg:max-w-[75%] break-words rounded-lg border px-3 py-2 shadow bg-card border-gray-400 relative ${
                             isMine ? "ml-auto" : ""
                           }`}
                         >
-                          <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                          {/* Delete button - inside bubble top right */}
+                          <button
+                            onClick={() => setCommentToDelete(comment.id)}
+                            className="absolute top-1 right-1 h-4 w-4 rounded-full hover:bg-red-100 text-gray-500 hover:text-red-600 flex items-center justify-center text-xs transition-colors opacity-70 hover:opacity-100"
+                            title="Delete comment"
+                            disabled={deletingComments[comment.id]}
+                          >
+                            <X className="h-3 w-3 stroke-2" />
+                          </button>
+                          
+                          <p className="whitespace-pre-wrap text-sm leading-relaxed pr-6">
                             {comment.content}
                           </p>
 

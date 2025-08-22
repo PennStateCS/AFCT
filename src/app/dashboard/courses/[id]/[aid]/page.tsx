@@ -9,7 +9,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, Pencil, Trash2, BookOpen, FileQuestion } from "lucide-react";
+import { ChevronDown, Pencil, Trash2, BookOpen, Code, Package } from "lucide-react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -213,12 +213,14 @@ export default function AssignmentDashboardPage() {
 						className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white"
 						value="problems"
 					>
+            <Code className="h-4 w-4" />
 						Problems
 					</TabsTrigger>
 					<TabsTrigger
 						className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white"
 						value="submissions"
 					>
+            <Package className="h-4 w-4" />
 					Submissions
 					</TabsTrigger>
 				</TabsList>
@@ -229,7 +231,7 @@ export default function AssignmentDashboardPage() {
 					<Card className="w-full">
 						<CardHeader className="text-2xl">
 							<div className="flex items-center justify-between w-full">
-								<CardTitle  className="flex items-center gap-2 text-2xl"><FileQuestion className="w-6 h-6" />Problems</CardTitle>
+								<CardTitle  className="flex items-center gap-2 text-2xl"><Code className="w-6 h-6" />Problems</CardTitle>
 								<Button
 									variant="default"
 									aria-label="Add Existing Problem"
@@ -307,7 +309,7 @@ export default function AssignmentDashboardPage() {
 																			header: 'Answer File',
 																			cell: ({ row }: { row: { original: Problem } }) => {
 																				// Problem solution files are stored under public/uploads/solutions
-																				const fileUrl = row.original.fileName ? `/api/solutions/${row.original.fileName}` : null;
+																				const fileUrl = row.original.fileName ? `/uploads/problems/${row.original.fileName}` : null;
 																				const fileName = row.original.originalFileName || 'Download';
 																				return fileUrl ? (
 																					<a
@@ -379,7 +381,9 @@ export default function AssignmentDashboardPage() {
 							description: ap.problem.description ?? undefined,
 							type: ap.problem.type ? String(ap.problem.type) : undefined,
 							maxStates: ap.problem.maxStates ?? undefined,
-							isDeterministic: ap.problem.isDeterministic ?? undefined
+							isDeterministic: ap.problem.isDeterministic ?? undefined,
+							fileName: ap.problem.fileName ?? undefined,
+							originalFileName: ap.problem.originalFileName ?? undefined,
 						}))}
 					/>
 				</TabsContent>
