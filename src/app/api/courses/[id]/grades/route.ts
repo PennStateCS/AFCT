@@ -27,22 +27,23 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       orderBy: { createdAt: 'asc' }
     });
 
-  const students = roster.map((r) => ({ id: r.user.id, firstName: r.user.firstName, lastName: r.user.lastName, email: r.user.email, avatar: r.user.avatar }));
+    const students = roster.map((r) => ({ id: r.user.id, firstName: r.user.firstName, lastName: r.user.lastName, email: r.user.email, avatar: r.user.avatar }));
 
     // Get assignments for the course
     const assignments = await prisma.assignment.findMany({ where: { courseId: id }, orderBy: { dueDate: 'asc' } });
     const assignmentIds = assignments.map((a) => a.id);
     const studentIds = students.map((s) => s.id);
 
-    // Fetch all submissions for these students and assignments
-    const submissions = await prisma.submission.findMany({
+    // Fetch all assignment grades for these students and assignments
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const assignmentGrades = await (prisma as any).assignmentGrade.findMany({
       where: {
         assignmentId: { in: assignmentIds },
         studentId: { in: studentIds },
       },
     });
 
-    // Build nested map: grades[studentId][assignmentId] = totalGrade (sum best per problem)
+    // Build nested map: grades[studentId][assignmentId] = grade
     const grades: Record<string, Record<string, number | null>> = {};
 
     // Initialize with nulls
@@ -51,26 +52,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       for (const a of assignmentIds) grades[s][a] = null;
     }
 
-    // For each student+assignment, compute best per-problem then sum
-    // Group submissions by student+assignment+problem and take max grade
-    const bestMap = new Map<string, number>(); // key = `${studentId}|${assignmentId}|${problemId}` -> grade
-
-    submissions.forEach((sub) => {
-      const key = `${sub.studentId}|${sub.assignmentId}|${sub.problemId}`;
-      const existing = bestMap.get(key);
-      if (sub.grade !== null && (existing === undefined || sub.grade > existing)) {
-        bestMap.set(key, sub.grade as number);
+    // Populate with actual grades
+    assignmentGrades.forEach((g: { studentId: string; assignmentId: string; grade: number }) => {
+      if (grades[g.studentId]) {
+        grades[g.studentId][g.assignmentId] = g.grade;
       }
     });
-
-    // Sum per student-assignment
-    for (const [key, grade] of bestMap.entries()) {
-      const [studentId, assignmentId] = key.split('|');
-      if (grades[studentId] && grades[studentId][assignmentId] !== undefined) {
-        const prev = grades[studentId][assignmentId];
-        grades[studentId][assignmentId] = (prev || 0) + grade;
-      }
-    }
 
     return NextResponse.json({ students, assignments, grades });
   } catch (error) {
