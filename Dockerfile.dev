@@ -1,0 +1,20 @@
+FROM node:18-alpine
+WORKDIR /app
+
+# Install Java (OpenJDK) for running .jar files
+RUN apk add --no-cache openjdk21-jre
+
+COPY package*.json ./
+RUN npm install
+
+COPY . .
+RUN npx prisma generate
+
+# Create bin directory and set permissions for Java binary dependencies
+RUN mkdir -p /app/bin && chmod 755 /app/bin
+
+# Verify Java installation
+RUN java -version
+
+EXPOSE 3000
+CMD ["npm", "run", "dev"]

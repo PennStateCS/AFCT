@@ -1,0 +1,35 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: afct_dev
+      POSTGRES_USER: afct_user
+      POSTGRES_PASSWORD: devpassword123
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    environment:
+      DATABASE_URL: postgresql://afct_user:devpassword123@postgres:5432/afct_dev
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: dev-secret-key
+      # Java/AFCT Evaluator environment variables
+      CFGANALYZER_LIMIT: 15
+      CFGANALYZER_BINARY: /app/bin/cfganalyzer
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+      - ./public/uploads:/app/public/uploads
+volumes:
+  postgres_dev_data:
