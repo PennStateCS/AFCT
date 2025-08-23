@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import pkg from '../../../../package.json';
 
 type IpAddr = { iface?: string; address?: string; family?: string };
 type CpuInfo = { model?: string; speed?: number };
@@ -495,6 +496,7 @@ export default function SystemStatusPage() {
             <CardContent className="grid gap-6">
               {/* Basic stats */}
               <div className="grid gap-4 sm:grid-cols-2">
+                <Stat label="App Version" value={pkg.version} />
                 <Stat label="System Uptime" value={formatUptime(status.system?.uptime)} />
                 <Stat
                   label="Node / Process"
