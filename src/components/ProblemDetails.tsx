@@ -141,6 +141,7 @@ export default function ProblemDetails({
   title={`${problem.originalFileName || problem.fileName} - ${problem.title}`}
   width="70vw"
   height="70vh"
+  showGridDefault={true}
 />
                 </div>
               </div>

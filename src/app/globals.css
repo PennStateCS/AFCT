@@ -89,6 +89,69 @@
   --table-background: #ffffff;
 }
 
+/* Cytoscape + ELK JFLAP viewer — tooltip styles (tippy.js) */
+/* These use the existing CSS variables so they adapt to light/dark themes. */
+.tippy-box[data-theme~='cy'] {
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.tippy-box[data-theme~='cy'] .tippy-content {
+  padding: 8px 10px;
+}
+
+/* Arrow coloring for all placements */
+.tippy-box[data-theme~='cy'] > .tippy-arrow {
+  color: var(--popover); /* for SVG-based arrows */
+}
+.tippy-box[data-theme~='cy'][data-placement^='top'] > .tippy-arrow::before { border-top-color: var(--popover); }
+.tippy-box[data-theme~='cy'][data-placement^='bottom'] > .tippy-arrow::before { border-bottom-color: var(--popover); }
+.tippy-box[data-theme~='cy'][data-placement^='left'] > .tippy-arrow::before { border-left-color: var(--popover); }
+.tippy-box[data-theme~='cy'][data-placement^='right'] > .tippy-arrow::before { border-right-color: var(--popover); }
+
+/* Subtle hide animation */
+.tippy-box[data-theme~='cy'][data-animation='shift-away'][data-state='hidden'] {
+  opacity: 0;
+  transform: translateY(2px) scale(0.98);
+}
+
+/* Optional helper classes for rich tooltip content */
+.cy-tip { min-width: max-content; }
+.cy-tip .cy-tip-title {
+  font-weight: 600;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.cy-tip .cy-tip-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.3;
+}
+.cy-tip .cy-tip-key {
+  color: var(--muted-foreground);
+  min-width: 48px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  font-size: 11px;
+}
+.cy-tip .cy-tip-val {
+  color: var(--foreground);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  white-space: pre-wrap;
+}
+.cy-tip code, .cy-tip kbd {
+  background: color-mix(in oklch, var(--accent), transparent 75%);
+  border: 1px solid var(--border);
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
 .dark {
   --background: oklch(0.141 0.005 285.823);
   --foreground: oklch(0.985 0 0);
