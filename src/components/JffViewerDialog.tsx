@@ -414,7 +414,7 @@ export function JffSvgViewer({
         {error ? (
           <div className="p-4 text-sm text-red-600">{error}</div>
         ) : svg ? (
-           
+          // eslint-disable-next-line react/no-danger
           <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: svg }} />
         ) : (
           <div className="p-4 text-sm text-muted-foreground">Rendering…</div>
