@@ -5,15 +5,16 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Grid, Download, RefreshCw, ImageDown } from 'lucide-react';
+import { Grid, Download, RefreshCw, ImageDown, Copy, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 
 /* ───────────────────────────── Types & consts ───────────────────────────── */
 
 type MachineType = 'fa' | 'pda' | 'tm' | 'unknown';
+type FlowDirection = 'LR' | 'RL';
 
 type Parsed = {
   type: MachineType;
-  states: { id: string; name: string; x?: number; y?: number; initial: boolean; final: boolean }[];
+  states: { id: string; name: string; initial: boolean; final: boolean }[];
   transitions: Array<{
     from: string;
     to: string;
@@ -26,16 +27,16 @@ type Parsed = {
   }>;
 };
 
-const DEFAULT_EPS = 'λ'; // JFLAP-style empty symbol
-const DEFAULT_MARGIN_LR = '0.35,0.00'; // inches: left/right, top/bottom
-const DEFAULT_PAD = 0.2;
+const NODE_FILL = '#fff59d';
+const STROKE = '#1f2937';
+const TEXT = '#111827';
+const EDGE_WIDTH = 1.6;
+const DEFAULT_EPS = 'λ';
 
 /* ────────────────────────────── Parse .jff ─────────────────────────────── */
 
 function parseJflap(xmlText: string): Parsed {
   const doc = new DOMParser().parseFromString(xmlText, 'application/xml');
-
-  // Friendly error if malformed XML
   const parseError = doc.querySelector('parsererror');
   if (parseError) {
     const msg = parseError.textContent?.split('\n')[0]?.trim() || 'XML parse error';
@@ -54,11 +55,9 @@ function parseJflap(xmlText: string): Parsed {
   const states = Array.from(automaton.querySelectorAll('state')).map((s, i) => {
     const id = String(s.getAttribute('id') ?? i).trim();
     const name = s.getAttribute('name') ?? s.querySelector('name')?.textContent ?? `q${i}`;
-    const x = Number(s.querySelector('x')?.textContent ?? NaN);
-    const y = Number(s.querySelector('y')?.textContent ?? NaN);
     const initial = !!s.querySelector('initial');
     const final = !!s.querySelector('final');
-    return { id, name, x: Number.isFinite(x) ? x : undefined, y: Number.isFinite(y) ? y : undefined, initial, final };
+    return { id, name, initial, final };
   });
 
   const transitions = Array.from(automaton.querySelectorAll('transition')).map((t, idx) => {
@@ -77,23 +76,18 @@ function parseJflap(xmlText: string): Parsed {
 
 /* ───────────────────────── Label formatting & wrap ─────────────────────── */
 
-function labelFor(
-  t: Parsed['transitions'][number],
-  type: MachineType,
-  eps: string
-) {
+function labelFor(t: Parsed['transitions'][number], type: MachineType, eps: string) {
   switch (type) {
     case 'pda': {
       const read = t.read || eps;
       const pop  = t.pop  || eps;
       const push = t.push || eps;
-      // JFLAP punctuation: read , pop ; push
       return `${read} , ${pop} ; ${push}`;
     }
     case 'tm': {
       const read = t.read ?? '';
       const write = t.write ?? '';
-      const move = (t.move || 'S').toUpperCase(); // L/R/S
+      const move = (t.move || 'S').toUpperCase();
       return `${read || ' '} → ${write || ' '}, ${move}`;
     }
     case 'fa':
@@ -102,14 +96,12 @@ function labelFor(
   }
 }
 
-/** simple soft-wrap: break long segments on space/comma/semicolon/pipes */
 function wrapLines(lines: string[], maxLen = 26): string[] {
   const out: string[] = [];
   for (const line of lines) {
     if (line.length <= maxLen) { out.push(line); continue; }
     let s = line.trim();
     while (s.length > maxLen) {
-      // find a break opportunity near maxLen
       const slice = s.slice(0, maxLen + 8);
       const idx =
         slice.lastIndexOf(' ') >= 14 ? slice.lastIndexOf(' ') :
@@ -125,14 +117,13 @@ function wrapLines(lines: string[], maxLen = 26): string[] {
   return out;
 }
 
-/** Merge parallel edges; preserve XML order; return HTML labels with <BR/> */
 function bundleEdges(
   transitions: Parsed['transitions'],
   type: MachineType,
   eps: string,
   wrap = true,
   maxLen = 26
-): Array<{ from: string; to: string; htmlLabel: string }> {
+): Array<{ from: string; to: string; label: string }> {
   const map = new Map<string, { idx: number; text: string }[]>();
   for (const tr of transitions) {
     const key = `${tr.from}→${tr.to}`;
@@ -140,201 +131,114 @@ function bundleEdges(
     arr.push({ idx: tr.__idx, text: labelFor(tr, type, eps) });
     map.set(key, arr);
   }
-  const escHtml = (s: string) =>
-    s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
   return Array.from(map.entries()).map(([key, items]) => {
-    items.sort((a,b) => a.idx - b.idx);
+  // JFLAP shows later-entered transitions first; reverse to match its display
+  items.sort((a, b) => b.idx - a.idx);
     const [from, to] = key.split('→');
-
-    // split to individual lines, optionally wrap long lines
     const lines = items.map(i => i.text);
     const finalLines = wrap ? wrapLines(lines, maxLen) : lines;
-
-    // HTML-like label with <BR/> so Graphviz stacks lines cleanly
-    const htmlLabel = `<${finalLines.map(l => escHtml(l)).join('<BR ALIGN="CENTER"/>')}>`;
-    return { from, to, htmlLabel };
+    return { from, to, label: finalLines.join('\n') };
   });
 }
 
-/* ───────────────────────────── DOT generation ─────────────────────────── */
+/* ─────────────────────── Cytoscape + ELK (lazy load) ───────────────────── */
 
-function dotEscape(s: string) {
-  return s.replace(/"/g, '\\"');
+let cyPkg: any = null;
+let initDone = false;
+
+async function ensureCytoscapeReady() {
+  if (!cyPkg) {
+    const cytoscape = (await import('cytoscape')).default;
+    cyPkg = cytoscape;
+  }
+  if (!initDone) {
+    const elk = (await import('cytoscape-elk')).default;
+    const svgExt = (await import('cytoscape-svg')).default;
+    cyPkg.use(elk);
+    cyPkg.use(svgExt);
+    initDone = true;
+  }
+  return cyPkg;
 }
 
-type DotOptions = {
-  eps?: string;
-  marginLR?: string; // e.g., '0.35,0.00'
-  pad?: number;      // e.g., 0.2
-  honorPositions?: boolean;
-  wrapLabels?: boolean;
-  wrapWidth?: number;
-  darkMode?: boolean;
-};
+/* ───────────────────── Convert parsed → Cytoscape elements ───────────────── */
 
-function toDOT(parsed: Parsed, opts: DotOptions = {}): string {
-  const {
-    eps = DEFAULT_EPS,
-    marginLR = DEFAULT_MARGIN_LR,
-    pad = DEFAULT_PAD,
-    honorPositions = false,
-    wrapLabels = true,
-    wrapWidth = 26,
-    darkMode = false,
-  } = opts;
+function toElements(parsed: Parsed, eps: string) {
+  const nodes = parsed.states.map((s) => ({
+    data: { id: s.id, label: s.name, final: s.final ? 1 : 0, initial: s.initial ? 1 : 0 },
+    classes: s.final ? 'final' : '',
+  }));
 
-  const { states, transitions, type } = parsed;
+  const edgesBundled = bundleEdges(parsed.transitions, parsed.type, eps, true, 26);
+  const edges = edgesBundled.map((e, i) => ({
+    data: {
+      id: `e${i}-${e.from}-${e.to}`,
+      source: e.from,
+      target: e.to,
+      label: e.label,
+      isLoop: e.from === e.to ? 1 : 0,
+    },
+  }));
 
-  // If honorPositions is requested but most nodes lack coords, fall back to dot
-  const posCount = states.filter(s => Number.isFinite(s.x) && Number.isFinite(s.y)).length;
-  const honor = honorPositions && posCount >= Math.max(1, Math.floor(states.length * 0.6));
+  const initialStates = parsed.states.filter((s) => s.initial);
+  const startBits = initialStates.flatMap((s, idx) => ([
+    { data: { id: `__start${idx}`, label: '' }, classes: 'start' },
+    { data: { id: `__startEdge${idx}`, source: `__start${idx}`, target: s.id, label: '' }, classes: 'startEdge' }
+  ]));
 
-  const edgeList = bundleEdges(transitions, type, eps, wrapLabels, wrapWidth);
-
-  const stroke = darkMode ? '#e5e7eb' : '#0f172a';
-  const nodeFill = darkMode ? '#0b1220' : '#eef2f7';
-
-  const lines: string[] = [];
-  lines.push('digraph G {');
-  lines.push(`  graph [bgcolor=transparent, margin="${marginLR}", pad=${pad}];`);
-  lines.push(`  layout=${honor ? 'neato' : 'dot'};`);
-  if (honor) {
-    lines.push('  overlap=false;');
-    lines.push('  splines=true;');
-  } else {
-    lines.push('  rankdir=LR;');
-    lines.push('  splines=true;');
-    lines.push('  nodesep=0.5; ranksep=0.9;');
-  }
-  lines.push('  fontname="Inter";');
-  lines.push(`  node [shape=circle, style="filled", fillcolor="${nodeFill}", color="${stroke}", fontname="Inter", fontsize=13, penwidth=2];`);
-  lines.push(`  edge [color="${stroke}", penwidth=2, arrowsize=0.8, fontname="Inter", fontsize=12];`);
-
-  // states (peripheries=2 for final states -> bolder double ring)
-  for (const s of states) {
-    const periph = s.final ? ', peripheries=2' : '';
-    const pos = honor && s.x !== undefined && s.y !== undefined ? `, pos="${s.x},${-s.y}!"` : '';
-    lines.push(`  "${dotEscape(s.id)}" [label="${dotEscape(s.name)}"${periph}${pos}];`);
-  }
-
-  // initial arrow(s)
-  const initials = states.filter((s) => s.initial);
-  initials.forEach((s, i) => {
-    const starter = `__start${i}`;
-    lines.push(`  "${starter}" [shape=point, width=0.1, label=""];`);
-    lines.push(`  "${starter}" -> "${dotEscape(s.id)}" [arrowhead=normal, arrowsize=0.8];`);
-  });
-
-  // edges (self-loops at top; nicer spacing)
-  for (const e of edgeList) {
-    const isSelf = e.from === e.to;
-    const extras = isSelf
-      ? ', headport=n, tailport=n, minlen=2, labeldistance=1.4, labelangle=55'
-      : ', minlen=1';
-    // Use HTML-like label (no quotes) so <BR/> is respected
-    lines.push(`  "${dotEscape(e.from)}" -> "${dotEscape(e.to)}" [label=${e.htmlLabel}${extras}];`);
-  }
-
-  lines.push('}');
-  return lines.join('\n');
+  return [...nodes, ...edges, ...startBits];
 }
 
-/* ─────────────────────────── Graphviz rendering ────────────────────────── */
+/* ────────────────────────────── Export helpers ─────────────────────────── */
 
-// Reuse a single Viz instance for faster re-renders
-let vizSingleton: any | null = null;
-async function getViz() {
-  if (vizSingleton) return vizSingleton;
-  const { default: Viz } = await import('viz.js');
-  const { Module, render } = await import('viz.js/full.render.js');
-  vizSingleton = new (Viz as any)({ Module, render });
-  return vizSingleton;
+async function downloadDataUrl(filename: string, dataUrl: string) {
+  const a = document.createElement('a');
+  a.href = dataUrl;
+  a.download = filename;
+  a.click();
 }
-
-async function renderDotToSVG(dot: string): Promise<string> {
-  const viz = await getViz();
-  let svg: string = await viz.renderString(dot);
-
-  // Make SVG responsive & transparent
-  svg = svg
-    .replace(/\swidth="[^"]*"/, '')
-    .replace(/\sheight="[^"]*"/, '')
-    .replace('<svg', '<svg style="width:100%;height:100%"');
-
-  // Remove Graphviz background polygon/fill if any
-  svg = svg.replace(/<polygon fill="[^"]*" stroke="none" points="[^"]*"\s*\/>/, '');
-  svg = svg.replace(/fill="white"/g, 'fill="transparent"');
-
-  return svg;
+async function copyText(txt: string) {
+  try { await navigator.clipboard.writeText(txt); } catch {}
 }
 
 /* ───────────────────────────── Viewer component ────────────────────────── */
 
-export function JffSvgViewer({
-  src,
-  title,
-  height = '72vh',
-  honorPositions = false,
-  darkMode = false,
-  epsSymbol = DEFAULT_EPS,
-  labelWrapWidth = 26,
+export function JffCytoscapeViewer({
+  src, title, height = '72vh', epsSymbol = DEFAULT_EPS, darkMode = false,
+  flowDirection = 'LR', showGridDefault = false,
 }: {
   src: string;
   title?: string;
   height?: number | string;
-  /** Use coordinates from .jff (x,y), else Graphviz DOT layout */
-  honorPositions?: boolean;
-  /** Optional dark palette (nodes still solid) */
-  darkMode?: boolean;
-  /** Choose which empty symbol to render (e.g., 'λ' or 'ε') */
   epsSymbol?: string;
-  /** Line wrap width for labels */
-  labelWrapWidth?: number;
+  darkMode?: boolean;
+  flowDirection?: FlowDirection;
+  showGridDefault?: boolean;
 }) {
-  const [svg, setSvg] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [grid, setGrid] = useState(true);
-  const [type, setType] = useState<MachineType>('unknown');
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const cyRef = useRef<any | null>(null);
+
+  const [error, setError] = useState<string | null>(null);
+  const [grid, setGrid] = useState(showGridDefault);
+  const [type, setType] = useState<MachineType>('unknown');
+
+  // Debug
+  const [debugOpen, setDebugOpen] = useState(false);
+  const [debugParsed, setDebugParsed] = useState<any>(null);
+  const [debugElements, setDebugElements] = useState<any>(null);
+  const [debugElk, setDebugElk] = useState<any>(null);
 
   const gridBg = grid
     ? 'linear-gradient(#e5e7eb 1px, transparent 1px), linear-gradient(90deg, #e5e7eb 1px, transparent 1px)'
     : 'none';
-
   const backgroundStyle: React.CSSProperties = grid
     ? { backgroundImage: gridBg, backgroundSize: '24px 24px', backgroundPosition: 'center center' }
     : {};
 
-  const downloadSVG = async () => {
-    if (!containerRef.current) return;
-    const el = containerRef.current.querySelector('svg');
-    if (!el) return;
-    const xml = new XMLSerializer().serializeToString(el);
-    const blob = new Blob([xml], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${(title ?? 'automaton').replace(/\s+/g, '_')}.svg`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const downloadPNG = async () => {
-    if (!containerRef.current) return;
-    const el = containerRef.current as HTMLElement;
-    const { toPng } = await import('html-to-image');
-    const dataUrl = await toPng(el, { pixelRatio: 2, cacheBust: true });
-    const a = document.createElement('a');
-    a.href = dataUrl;
-    a.download = `${(title ?? 'automaton').replace(/\s+/g, '_')}.png`;
-    a.click();
-  };
-
   const load = useMemo(
     () => async () => {
       setError(null);
-      setSvg(null);
       try {
         const res = await fetch(src);
         if (!res.ok) throw new Error(`Failed to fetch: ${res.status} ${res.statusText}`);
@@ -342,42 +246,239 @@ export function JffSvgViewer({
 
         const parsed = parseJflap(text);
         setType(parsed.type);
-
-        const dot = toDOT(parsed, {
-          eps: epsSymbol,
-          marginLR: DEFAULT_MARGIN_LR,
-          pad: DEFAULT_PAD,
-          honorPositions,
-          wrapLabels: true,
-          wrapWidth: labelWrapWidth,
-          darkMode,
+        setDebugParsed({
+          type: parsed.type,
+          stateCount: parsed.states.length,
+          states: parsed.states.map(s => ({ id: s.id, name: s.name, initial: s.initial, final: s.final })),
+          transitionCount: parsed.transitions.length
         });
 
-        const svg = await renderDotToSVG(dot);
-        setSvg(svg);
+        const elements = toElements(parsed, epsSymbol);
+        setDebugElements(elements);
+
+        const cytoscape = await ensureCytoscapeReady();
+
+        if (cyRef.current) {
+          cyRef.current.destroy();
+          cyRef.current = null;
+        }
+
+        const cy = cytoscape({
+          container: containerRef.current!,
+          elements,
+          wheelSensitivity: 0.2,
+          style: [
+            /* nodes */
+            {
+              selector: 'node',
+              style: {
+                'background-color': darkMode ? '#0b1220' : NODE_FILL,
+                'border-color': STROKE,
+                'border-width': 2,
+                'label': 'data(label)',
+                'font-family': 'Inter, ui-sans-serif, system-ui',
+                'font-size': 16,
+                'color': TEXT,
+                'text-valign': 'center',
+                'text-halign': 'center',
+                'width': 58,
+                'height': 58,
+                'shape': 'ellipse',
+              }
+            },
+            { selector: 'node.final', style: { 'border-width': 6 } },
+            { selector: 'node.start', style: { 'width': 10, 'height': 10, 'background-opacity': 0, 'border-opacity': 0 } },
+
+            /* edges (default) */
+            {
+              selector: 'edge',
+              style: {
+                'curve-style': 'bezier',
+                'line-color': STROKE,
+                'width': EDGE_WIDTH,
+                'target-arrow-color': STROKE,
+                'source-arrow-color': STROKE,
+                'source-arrow-shape': 'none',
+                'target-arrow-shape': 'triangle',
+                'arrow-scale': 1.1,
+                'label': 'data(label)',
+                'font-family': 'Inter, ui-sans-serif, system-ui',
+                'font-size': 16,
+                'min-zoomed-font-size': 7,
+                'color': TEXT,
+                'text-wrap': 'wrap',
+                'text-max-width': 140,
+                'text-rotation': 'autorotate',
+                'text-margin-y': -12,
+              }
+            },
+            /* self-loops: force loop at TOP with small sweep so both endpoints cluster at top */
+            {
+              selector: 'edge[isLoop = 1]',
+              style: {
+                'curve-style': 'loop',
+                'loop-direction': '0deg',
+                'loop-sweep': '50deg',              // JFLAP-like open arc
+                'control-point-step-size': 48,      // Larger radius for the loop
+                'source-arrow-shape': 'triangle',   // arrow at beginning
+                'target-arrow-shape': 'none',
+                'arrow-scale': 0.95,                // slightly smaller arrow
+                'line-cap': 'round',
+                'text-rotation': 'none',
+                'text-margin-y': -32,               // keep label above loop
+              }
+            },
+
+            /* initial arrow from hidden start node */
+            {
+              selector: 'edge.startEdge',
+              style: {
+                'line-color': STROKE,
+                'target-arrow-color': STROKE,
+                'target-arrow-shape': 'triangle',
+                'arrow-scale': 1.1,
+                'width': EDGE_WIDTH,
+                'label': '',
+              }
+            },
+
+            /* interaction */
+            {
+              selector: '.highlighted',
+              style: {
+                'line-color': '#2563eb',
+                'target-arrow-color': '#2563eb',
+                'source-arrow-color': '#2563eb',
+                'border-color': '#2563eb',
+                'background-color': darkMode ? '#0b1220' : NODE_FILL,
+              }
+            },
+            { selector: '.faded', style: { 'opacity': 0.25 } },
+          ],
+          layout: { name: 'preset' }, // ELK runs after
+        });
+
+        cyRef.current = cy;
+
+        // ELK layout
+        const elkDirection = (flowDirection === 'RL') ? 'LEFT' : 'RIGHT';
+        const elkOptions = {
+          name: 'elk',
+          nodeDimensionsIncludeLabels: true,
+          fit: true,
+          animate: false,
+          elk: {
+            algorithm: 'layered',
+            'elk.direction': elkDirection,
+            'elk.layered.spacing.nodeNodeBetweenLayers': '70',
+            'elk.spacing.nodeNode': '46',
+            'elk.spacing.edgeNode': '22',
+            'elk.spacing.edgeLabel': '12',
+            'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+            'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
+          }
+        };
+        setDebugElk(elkOptions);
+
+        await new Promise<void>((resolve) =>
+          cy.layout(elkOptions).run().on('layoutstop', () => resolve())
+        );
+
+        // 🔧 Reassert loop geometry after layout (ELK can add segments)
+        cy.edges('[isLoop = 1]').forEach((e: any) => {
+          e.style({
+            'curve-style': 'loop',
+            'loop-direction': '0deg',       // 0deg = TOP
+            'loop-sweep': '50deg',
+            'control-point-step-size': 48,
+            'source-arrow-shape': 'triangle',
+            'target-arrow-shape': 'none',
+            'arrow-scale': 0.95,
+            'line-cap': 'round',
+            'text-rotation': 'none',
+            'text-margin-y': -32,
+          });
+        });
+
+        // Click to highlight local neighborhood
+        cy.on('tap', (evt: any) => {
+          if (evt.target === cy) {
+            cy.elements().removeClass('faded highlighted');
+            return;
+          }
+          const ele = evt.target;
+          const neighborhood = ele.closedNeighborhood ? ele.closedNeighborhood() : ele.neighborhood();
+          cy.elements().addClass('faded');
+          neighborhood.addClass('highlighted').removeClass('faded');
+        });
+
+        cy.fit(undefined, 40);
+
       } catch (e: any) {
         console.error(e);
         setError(e?.message || 'Failed to render .jff');
       }
     },
-    [src, honorPositions, darkMode, epsSymbol, labelWrapWidth]
+    [src, epsSymbol, darkMode, flowDirection]
   );
 
   useEffect(() => {
     if (typeof window !== 'undefined') load();
+    return () => {
+      if (cyRef.current) {
+        cyRef.current.destroy();
+        cyRef.current = null;
+      }
+    };
   }, [load]);
+
+  // Toolbar
+  const zoomIn = () => cyRef.current?.zoom({ level: cyRef.current.zoom() * 1.2, renderedPosition: cyRef.current.renderedCenter() });
+  const zoomOut = () => cyRef.current?.zoom({ level: cyRef.current.zoom() / 1.2, renderedPosition: cyRef.current.renderedCenter() });
+  const fitAll = () => cyRef.current?.fit(undefined, 40);
+  const resetHighlight = () => cyRef.current?.elements().removeClass('faded highlighted');
+
+  const downloadSVG = async () => {
+    if (!cyRef.current) return;
+    const svgStr: string = cyRef.current.svg({ scale: 1, full: true });
+    const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    await downloadDataUrl(`${(title ?? 'automaton').replace(/\s+/g, '_')}.svg`, url);
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadPNG = async () => {
+    if (!cyRef.current) return;
+    const dataUrl: string = cyRef.current.png({ scale: 2, full: true, bg: null });
+    await downloadDataUrl(`${(title ?? 'automaton').replace(/\s+/g, '_')}.png`, dataUrl);
+  };
+
+  const copyPNG = async () => {
+    if (!cyRef.current) return;
+    try {
+      const dataUrl: string = cyRef.current.png({ scale: 2, full: true, bg: null });
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      const item = new ClipboardItem({ [blob.type]: blob });
+      await navigator.clipboard.write([item]);
+    } catch {
+      await downloadPNG();
+    }
+  };
+
+  const copyDebug = async () => {
+    const payload = { parsed: debugParsed, elkOptions: debugElk, elements: debugElements };
+    await copyText(JSON.stringify(payload, null, 2));
+  };
 
   const TypeBadge = ({ t }: { t: MachineType }) => {
     const label =
       t === 'fa' ? 'Finite Automaton' : t === 'pda' ? 'Pushdown Automaton' : t === 'tm' ? 'Turing Machine' : 'Unknown';
     const cls =
-      t === 'fa'
-        ? 'bg-orange-100 text-orange-800'
-        : t === 'pda'
-        ? 'bg-purple-100 text-purple-800'
-        : t === 'tm'
-        ? 'bg-sky-100 text-sky-800'
-        : 'bg-gray-100 text-gray-800';
+      t === 'fa' ? 'bg-orange-100 text-orange-800'
+      : t === 'pda' ? 'bg-purple-100 text-purple-800'
+      : t === 'tm' ? 'bg-sky-100 text-sky-800'
+      : 'bg-gray-100 text-gray-800';
     return <Badge variant="outline" className={cls}>{label}</Badge>;
   };
 
@@ -388,38 +489,70 @@ export function JffSvgViewer({
           <div className="truncate text-sm font-medium">{title ?? src}</div>
           <TypeBadge t={type} />
         </div>
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant={grid ? 'default' : 'outline'} onClick={() => setGrid((s) => !s)}>
-            <Grid className="mr-1 h-4 w-4" /> {grid ? 'Hide grid' : 'Show grid'}
+        <div className="flex items-center gap-1 flex-wrap">
+          <Button size="sm" variant={grid ? 'default' : 'outline'} onClick={() => setGrid((s) => !s)} title="Toggle grid">
+            <Grid className="mr-1 h-4 w-4" /> Grid
           </Button>
-          <Button size="sm" variant="outline" onClick={load} title="Re-render">
+          <Button size="sm" variant="outline" onClick={resetHighlight} title="Clear highlight">
             <RefreshCw className="h-4 w-4" />
           </Button>
+          <Button size="sm" variant="outline" onClick={zoomOut} title="Zoom out">
+            <ZoomOut className="h-4 w-4" />
+          </Button>
+          <Button size="sm" variant="outline" onClick={zoomIn} title="Zoom in">
+            <ZoomIn className="h-4 w-4" />
+          </Button>
+          <Button size="sm" variant="outline" onClick={fitAll} title="Fit">
+            <Maximize2 className="h-4 w-4" />
+          </Button>
           <Button size="sm" variant="outline" onClick={downloadSVG} title="Download SVG">
-            <Download className="mr-2 h-4 w-4" />
-            SVG
+            <Download className="mr-2 h-4 w-4" /> SVG
           </Button>
           <Button size="sm" variant="outline" onClick={downloadPNG} title="Download PNG">
-            <ImageDown className="mr-2 h-4 w-4" />
-            PNG
+            <ImageDown className="mr-2 h-4 w-4" /> PNG
+          </Button>
+          <Button size="sm" variant="outline" onClick={copyPNG} title="Copy PNG to clipboard">
+            <Copy className="mr-2 h-4 w-4" /> Copy PNG
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setDebugOpen(true)} title="Debug">
+            {'<>'}
           </Button>
         </div>
       </div>
 
-      <div
-        ref={containerRef}
-        style={{ height, ...backgroundStyle }}
-        className="relative overflow-auto"
-      >
-        {error ? (
-          <div className="p-4 text-sm text-red-600">{error}</div>
-        ) : svg ? (
-          // eslint-disable-next-line react/no-danger
-          <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: svg }} />
-        ) : (
-          <div className="p-4 text-sm text-muted-foreground">Rendering…</div>
-        )}
+      <div ref={containerRef} style={{ height, ...backgroundStyle }} className="relative overflow-hidden">
+        {error ? <div className="p-4 text-sm text-red-600">{error}</div> : null}
       </div>
+
+      {debugOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/40">
+          <div className="absolute inset-x-0 top-10 mx-auto w-[min(980px,92vw)] rounded-lg bg-white p-4 shadow-lg">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="text-sm font-semibold">Debug</div>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={copyDebug} title="Copy debug JSON">
+                  <Copy className="mr-1 h-4 w-4" /> Copy
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setDebugOpen(false)}>Close</Button>
+              </div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded border p-2">
+                <div className="mb-1 text-xs font-medium text-gray-500">Parsed</div>
+                <pre className="max-h-72 overflow-auto text-xs">{JSON.stringify(debugParsed, null, 2)}</pre>
+              </div>
+              <div className="rounded border p-2">
+                <div className="mb-1 text-xs font-medium text-gray-500">Elements</div>
+                <pre className="max-h-72 overflow-auto text-[11px] leading-4">{JSON.stringify(debugElements, null, 2)}</pre>
+              </div>
+              <div className="rounded border p-2 md:col-span-2">
+                <div className="mb-1 text-xs font-medium text-gray-500">ELK Options</div>
+                <pre className="max-h-64 overflow-auto text-[11px] leading-4">{JSON.stringify(debugElk, null, 2)}</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -427,33 +560,19 @@ export function JffSvgViewer({
 /* ───────────────────────────── Dialog wrapper ──────────────────────────── */
 
 export default function JffViewerDialog({
-  open,
-  onOpenChange,
-  src,
-  title,
-  width = '80vw',        // dialog width
-  height = '85vh',       // inner viewer height
-  honorPositions = false,
-  darkMode = false,
-  epsSymbol = DEFAULT_EPS,
-  labelWrapWidth = 26,
+  open, onOpenChange, src, title,
+  width = '80vw', height = '85vh',
+  epsSymbol = DEFAULT_EPS, darkMode = false, flowDirection = 'LR',
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   src: string;
   title?: string;
-  /** CSS length for dialog width (e.g., '80vw', '95vw', '1200px', '100vw') */
   width?: string;
-  /** CSS length for inner viewer height (e.g., '72vh', '85vh', '600px') */
   height?: number | string;
-  /** Honor coordinates from .jff positions if present */
-  honorPositions?: boolean;
-  /** Optional dark palette (nodes remain solid) */
-  darkMode?: boolean;
-  /** Choose which empty symbol to render (e.g., 'λ' or 'ε') */
   epsSymbol?: string;
-  /** Line wrap width for labels */
-  labelWrapWidth?: number;
+  darkMode?: boolean;
+  flowDirection?: FlowDirection;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -462,14 +581,14 @@ export default function JffViewerDialog({
           <DialogTitle className="truncate">{title ?? 'JFLAP Viewer'}</DialogTitle>
         </DialogHeader>
         <div className="h-full p-4 pt-2">
-          <JffSvgViewer
+          <JffCytoscapeViewer
             src={src}
             title={title}
             height={height}
-            honorPositions={honorPositions}
-            darkMode={darkMode}
             epsSymbol={epsSymbol}
-            labelWrapWidth={labelWrapWidth}
+            darkMode={darkMode}
+            flowDirection={flowDirection}
+            showGridDefault={false}
           />
         </div>
       </DialogContent>

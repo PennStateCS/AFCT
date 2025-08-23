@@ -141,10 +141,6 @@ export default function ProblemDetails({
   title={`${problem.originalFileName || problem.fileName} - ${problem.title}`}
   width="70vw"
   height="70vh"
-  honorPositions         // turn on to respect <x>/<y> from .jff
-  // darkMode
-  // epsSymbol="ε"
-  // labelWrapWidth={24}
 />
                 </div>
               </div>
