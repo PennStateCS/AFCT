@@ -133,8 +133,8 @@ function bundleEdges(
   }
 
   return Array.from(map.entries()).map(([key, items]) => {
-  // JFLAP shows later-entered transitions first; reverse to match its display
-  items.sort((a, b) => b.idx - a.idx);
+    // JFLAP shows later-entered transitions first
+    items.sort((a, b) => b.idx - a.idx);
     const [from, to] = key.split('→');
     const lines = items.map(i => i.text);
     const finalLines = wrap ? wrapLines(lines, maxLen) : lines;
@@ -162,7 +162,7 @@ async function ensureCytoscapeReady() {
   return cyPkg;
 }
 
-/* ───────────────────── Convert parsed → Cytoscape elements ───────────────── */
+/* ───────────────────── Convert parsed → Cytoscape elements ─────────────── */
 
 function toElements(parsed: Parsed, eps: string) {
   const nodes = parsed.states.map((s) => ({
@@ -267,6 +267,8 @@ export function JffCytoscapeViewer({
           container: containerRef.current!,
           elements,
           wheelSensitivity: 0.2,
+          minZoom: 0.2,
+          maxZoom: 6,
           style: [
             /* nodes */
             {
@@ -312,20 +314,20 @@ export function JffCytoscapeViewer({
                 'text-margin-y': -12,
               }
             },
-            /* self-loops: force loop at TOP with small sweep so both endpoints cluster at top */
+            /* self-loops on TOP with arrow at start */
             {
               selector: 'edge[isLoop = 1]',
               style: {
                 'curve-style': 'loop',
                 'loop-direction': '0deg',
-                'loop-sweep': '50deg',              // JFLAP-like open arc
-                'control-point-step-size': 48,      // Larger radius for the loop
-                'source-arrow-shape': 'triangle',   // arrow at beginning
+                'loop-sweep': '50deg',
+                'control-point-step-size': 48,
+                'source-arrow-shape': 'triangle',
                 'target-arrow-shape': 'none',
-                'arrow-scale': 0.95,                // slightly smaller arrow
+                'arrow-scale': 0.95,
                 'line-cap': 'round',
                 'text-rotation': 'none',
-                'text-margin-y': -32,               // keep label above loop
+                'text-margin-y': -32,
               }
             },
 
@@ -360,6 +362,11 @@ export function JffCytoscapeViewer({
 
         cyRef.current = cy;
 
+        // make sure zooming/panning are enabled
+        cy.userZoomingEnabled(true);
+        cy.panningEnabled(true);
+        cy.userPanningEnabled(true);
+
         // ELK layout
         const elkDirection = (flowDirection === 'RL') ? 'LEFT' : 'RIGHT';
         const elkOptions = {
@@ -384,11 +391,11 @@ export function JffCytoscapeViewer({
           cy.layout(elkOptions).run().on('layoutstop', () => resolve())
         );
 
-        // 🔧 Reassert loop geometry after layout (ELK can add segments)
+        // reassert loop geometry after layout
         cy.edges('[isLoop = 1]').forEach((e: any) => {
           e.style({
             'curve-style': 'loop',
-            'loop-direction': '0deg',       // 0deg = TOP
+            'loop-direction': '0deg',
             'loop-sweep': '50deg',
             'control-point-step-size': 48,
             'source-arrow-shape': 'triangle',
@@ -400,7 +407,12 @@ export function JffCytoscapeViewer({
           });
         });
 
-        // Click to highlight local neighborhood
+        // keep zooming/panning enabled after layout
+        cy.userZoomingEnabled(true);
+        cy.panningEnabled(true);
+        cy.userPanningEnabled(true);
+
+        // highlight on click
         cy.on('tap', (evt: any) => {
           if (evt.target === cy) {
             cy.elements().removeClass('faded highlighted');
@@ -414,6 +426,12 @@ export function JffCytoscapeViewer({
 
         cy.fit(undefined, 40);
 
+        // keep size/zoom coherent if dialog resizes
+        const onResize = () => { try { cy.resize(); } catch {} };
+        window.addEventListener('resize', onResize, { passive: true });
+        // store to cleanup
+        (cy as any).__onResize = onResize;
+
       } catch (e: any) {
         console.error(e);
         setError(e?.message || 'Failed to render .jff');
@@ -425,17 +443,35 @@ export function JffCytoscapeViewer({
   useEffect(() => {
     if (typeof window !== 'undefined') load();
     return () => {
-      if (cyRef.current) {
-        cyRef.current.destroy();
+      const cy = cyRef.current;
+      if (cy) {
+        if ((cy as any).__onResize) window.removeEventListener('resize', (cy as any).__onResize);
+        cy.destroy();
         cyRef.current = null;
       }
     };
   }, [load]);
 
-  // Toolbar
-  const zoomIn = () => cyRef.current?.zoom({ level: cyRef.current.zoom() * 1.2, renderedPosition: cyRef.current.renderedCenter() });
-  const zoomOut = () => cyRef.current?.zoom({ level: cyRef.current.zoom() / 1.2, renderedPosition: cyRef.current.renderedCenter() });
-  const fitAll = () => cyRef.current?.fit(undefined, 40);
+  /* ── 🔧 zoom helpers (animated, keep center fixed) ─────────────────────── */
+  const animatedZoomTo = (level: number) => {
+    const cy = cyRef.current; if (!cy) return;
+    const min = typeof cy.minZoom === 'function' ? cy.minZoom() : 0.2;
+    const max = typeof cy.maxZoom === 'function' ? cy.maxZoom() : 6;
+    const next = Math.max(min, Math.min(max, level));
+    cy.animate(
+      { zoom: next, renderedPosition: cy.renderedCenter() },
+      { duration: 160, easing: 'ease-in-out' }
+    );
+  };
+  const zoomIn = () => {
+    const cy = cyRef.current; if (!cy) return;
+    animatedZoomTo(cy.zoom() * 1.2);
+  };
+  const zoomOut = () => {
+    const cy = cyRef.current; if (!cy) return;
+    animatedZoomTo(cy.zoom() / 1.2);
+  };
+  const fitAll = () => cyRef.current?.animate({ fit: { eles: cyRef.current.elements(), padding: 40 } }, { duration: 160 });
   const resetHighlight = () => cyRef.current?.elements().removeClass('faded highlighted');
 
   const downloadSVG = async () => {
@@ -459,8 +495,13 @@ export function JffCytoscapeViewer({
       const dataUrl: string = cyRef.current.png({ scale: 2, full: true, bg: null });
       const res = await fetch(dataUrl);
       const blob = await res.blob();
-      const item = new ClipboardItem({ [blob.type]: blob });
-      await navigator.clipboard.write([item]);
+      const ClipboardItemCtor: any = (globalThis as any).ClipboardItem || (window as any).ClipboardItem;
+      if (ClipboardItemCtor && navigator.clipboard && (navigator.clipboard as any).write) {
+        const item = new ClipboardItemCtor({ [blob.type]: blob });
+        await (navigator.clipboard as any).write([item]);
+      } else {
+        throw new Error('ClipboardItem not supported');
+      }
     } catch {
       await downloadPNG();
     }
@@ -562,7 +603,7 @@ export function JffCytoscapeViewer({
 export default function JffViewerDialog({
   open, onOpenChange, src, title,
   width = '80vw', height = '85vh',
-  epsSymbol = DEFAULT_EPS, darkMode = false, flowDirection = 'LR',
+  epsSymbol = DEFAULT_EPS, darkMode = false, flowDirection = 'LR', showGridDefault = true,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -573,6 +614,7 @@ export default function JffViewerDialog({
   epsSymbol?: string;
   darkMode?: boolean;
   flowDirection?: FlowDirection;
+  showGridDefault?: boolean;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -588,7 +630,7 @@ export default function JffViewerDialog({
             epsSymbol={epsSymbol}
             darkMode={darkMode}
             flowDirection={flowDirection}
-            showGridDefault={false}
+            showGridDefault={showGridDefault}
           />
         </div>
       </DialogContent>
