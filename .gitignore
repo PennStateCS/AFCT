@@ -1,15 +1,28 @@
 # Node.js
 node_modules/
 
-# Environment files
+# Environment files (ignore actual secrets, keep templates)
 .env
 .env.local
-.env.production
 .env.*.local
+!.env.development
+!.env.production
+!.env.example
 
-# Database files
-*.db
-*.db-journal
+# Next.js build outputs
+.next/
+out/
+build/
+
+# Docker
+docker-compose.override.yml
+.docker/
+
+# Database (PostgreSQL volumes and data)
+postgres-data/
+db-data/
+*.sql
+*.dump
 
 # Yarn / pnpm / npm logs
 .pnp/
@@ -24,23 +37,11 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Next.js build outputs
-.next/
-out/
-build/
-
 # Vercel deployment
 .vercel/
 
 # Prisma
-prisma/dev.db
-prisma/dev.db-journal
 src/generated/prisma
-
-# Environment variables
-.env
-.env.*.local
-!.env.example
 
 # Testing
 coverage/
@@ -56,7 +57,20 @@ next-env.d.ts
 # SSL keys (never commit these)
 *.pem
 
-# IDE settings (optional)
+# IDE settings
 .vscode/
 .idea/
 *.sw?
+
+# Uploads and user content
+public/uploads/*
+!public/uploads/.gitkeep
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
