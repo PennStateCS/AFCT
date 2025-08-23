@@ -1,0 +1,16 @@
+node_modules
+npm-debug.log
+.next
+.git
+.gitignore
+README.md
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+.env*
+prisma/dev.db*
+coverage
+.nyc_output
+.vscode
+.idea
+*.log
