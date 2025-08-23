@@ -26,7 +26,7 @@ DATABASE_URL="postgresql://afct_user:afct_password@db:5432/afct_dev"
 NEXTAUTH_SECRET="your-nextauth-secret-key"
 NEXTAUTH_URL="http://localhost:3000"
 JWT_SECRET="your-jwt-secret-key"
-CFGANALYZER_LIMIT="10"
+CFGANALYZER_LIMIT="15"
 CFGANALYZER_BINARY="/app/bin/cfganalyzer"
 ```
 
@@ -52,7 +52,7 @@ DATABASE_URL="postgresql://afct_user:secure_password@db:5432/afct_prod"
 NEXTAUTH_SECRET="secure-production-secret"
 NEXTAUTH_URL="https://your-domain.com"
 JWT_SECRET="secure-jwt-secret"
-CFGANALYZER_LIMIT="10"
+CFGANALYZER_LIMIT="15"
 CFGANALYZER_BINARY="/app/bin/cfganalyzer"
 ```
 
