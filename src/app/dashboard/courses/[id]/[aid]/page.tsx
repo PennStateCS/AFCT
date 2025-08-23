@@ -9,7 +9,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, Pencil, Trash2, BookOpen, Code, Package } from "lucide-react";
+import { ChevronDown, Pencil, Trash2, BookOpen, Code, Package, Eye, Download } from "lucide-react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -30,6 +30,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AssignmentSubmissions from "@/components/AssignmentSubmissions";
 import Link from 'next/link';
 import { Problem } from "@prisma/client";
+import JffViewerDialog from "@/components/JffViewerDialog";
 
 const problemTypeLabels: Record<string, string> = {
 	// Add your problem type labels here
@@ -73,6 +74,28 @@ export default function AssignmentDashboardPage() {
 	const [tab, setTab] = useState(searchParams.get("tab") || "problems");
 	const [descOpen, setDescOpen] = useState(false);
 	const [descText, setDescText] = useState<string | null>(null);
+
+	// JFLAP viewer dialog state
+	const [viewerOpen, setViewerOpen] = useState(false);
+	const [viewerSrc, setViewerSrc] = useState<string | null>(null);
+	const [viewerTitle, setViewerTitle] = useState<string | undefined>(undefined);
+
+	// Allow optional file fields even if not in generated Prisma type
+	type ProblemFileFields = Problem & { fileName?: string | null; originalFileName?: string | null };
+
+	const openRenderViewer = (problem: Problem) => {
+		const p = problem as ProblemFileFields;
+		const fileName = p.fileName ?? null;
+		const original = p.originalFileName ?? null;
+		if (!fileName) {
+			showToast.error('No file available to render');
+			return;
+		}
+		const src = `/uploads/problems/${encodeURIComponent(fileName)}`;
+		setViewerSrc(src);
+		setViewerTitle(`${original || fileName} - ${problem.title}`);
+		setViewerOpen(true);
+	};
 
 	const openDescription = (text: string | null) => {
 		setDescText(text);
@@ -312,15 +335,28 @@ export default function AssignmentDashboardPage() {
 																				const fileUrl = row.original.fileName ? `/uploads/problems/${row.original.fileName}` : null;
 																				const fileName = row.original.originalFileName || 'Download';
 																				return fileUrl ? (
-																					<a
-																						href={fileUrl}
-																						download={fileName}
-																						className="text-blue-600 underline hover:text-blue-800"
-																						target="_blank"
-																						rel="noopener noreferrer"
-																					>
-																						{fileName}
-																					</a>
+																					<div className="flex items-center gap-2">
+																						<Button
+																							variant="secondary"
+																							size="sm"
+																							onClick={() => openRenderViewer(row.original)}
+																							title="Render file"
+																							aria-label="Render file"
+																						>
+																							<Eye className="h-4 w-4" />
+																						</Button>
+																						<a
+																							href={fileUrl}
+																							download={fileName}
+																							className="text-blue-600 underline hover:text-blue-800 inline-flex items-center gap-1"
+																							target="_blank"
+																							rel="noopener noreferrer"
+																							title="Download file"
+																						>
+																							<Download className="h-4 w-4" aria-hidden="true" />
+																							<span>{fileName}</span>
+																						</a>
+																					</div>
 																				) : (
 																					<span className="text-muted-foreground">No file</span>
 																				);
@@ -349,6 +385,12 @@ export default function AssignmentDashboardPage() {
 																						className="hover:bg-secondary focus:bg-secondary flex items-center gap-2"
 																					>
 																						<Pencil className="mr-2 h-4 w-4" /> Edit Problem
+																					</DropdownMenuItem>
+																					<DropdownMenuItem
+																						onClick={() => openRenderViewer(row.original)}
+																						className="hover:bg-secondary focus:bg-secondary flex items-center gap-2"
+																					>
+																						<Eye className="mr-2 h-4 w-4" /> Render File
 																					</DropdownMenuItem>
 																					<DropdownMenuSeparator />
 																					<DropdownMenuItem
@@ -388,6 +430,18 @@ export default function AssignmentDashboardPage() {
 					/>
 				</TabsContent>
 			</Tabs>
+			{/* JFLAP Viewer Dialog */}
+			{viewerOpen && viewerSrc && (
+				<JffViewerDialog
+					open={viewerOpen}
+					onOpenChange={setViewerOpen}
+					src={viewerSrc}
+					title={viewerTitle}
+					width="80vw"
+					height="80vh"
+					showGridDefault={true}
+				/>
+			)}
 			{/* Description dialog */}
 			<Dialog open={descOpen} onOpenChange={(v) => setDescOpen(v)}>
 				<DialogContent className="bg-white">
