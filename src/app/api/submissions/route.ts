@@ -68,6 +68,7 @@ export async function POST(req: NextRequest) {
   let fileName: string | null = null;
   let originalFileName: string | null = null;
   let feedback: string | null = null;
+  let correct: boolean | undefined = undefined;
 
   try {
     // 4. Handle file upload
@@ -108,7 +109,7 @@ export async function POST(req: NextRequest) {
             // Check if answer file exists
             if (fs.existsSync(answerFilePath)) {
               // Build command arguments
-              const args = ['-jar', 'afct-evaluator.jar', answerFilePath, filePath];
+              const args = ['-jar', 'afct-evaluator.jar', '--json', answerFilePath, filePath];
 
               // Add optional arguments based on problem type
               if (link.problem.type === 'FA' || link.problem.type === 'PDA') {
@@ -126,7 +127,29 @@ export async function POST(req: NextRequest) {
                 encoding: 'utf-8',
                 timeout: 30000, // 30 second timeout
               });
-              feedback = `Evaluation result: ${result.trim()}`;
+              
+              // Parse the JSON response
+              try {
+                const evaluation = JSON.parse(result.trim());
+                if (evaluation && typeof evaluation === 'object') {
+                  // Extract correct field if present
+                  if (typeof evaluation.correct === 'boolean') {
+                    correct = evaluation.correct;
+                  }
+                  
+                  // Extract feedback if present
+                  if (typeof evaluation.feedback === 'string') {
+                    feedback = evaluation.feedback;
+                  } else {
+                    feedback = `Evaluation completed - correct: ${correct}`;
+                  }
+                } else {
+                  feedback = `ERROR: Invalid JSON response from evaluator: ${result.trim()}`;
+                }
+              } catch (parseErr) {
+                console.error('Failed to parse evaluator JSON:', parseErr);
+                feedback = `ERROR: Failed to parse evaluation result - ${result.trim()}`;
+              }
             } else {
               feedback = 'ERROR: Answer file not found on server.';
             }
@@ -153,6 +176,7 @@ export async function POST(req: NextRequest) {
         fileName,
         originalFileName,
         feedback,
+        correct,
       },
     });
 
