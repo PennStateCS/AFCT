@@ -4,25 +4,6 @@ A modern Next.js course management platform with role-based authentication for f
 
 **Stack**: Next.js 15 • TypeScript • Prisma • NextAuth v5 • Tailwind CSS • PostgreSQL • Docker • Java 21
 
-## 🚀 Performance Optimizations
-
-This application includes extensive performance optimizations for both development and production:
-
-### ⚡ Development Speed Enhancements
-- **18% faster startup time** (9.7s vs 11.8s baseline)
-- **Optimized Docker layer caching** with multi-stage builds
-- **Enhanced database performance** with memory tuning and tmpfs mounts
-- **Next.js Turbo mode** with webpack optimizations
-- **Intelligent file watching** with reduced polling overhead
-- **Memory-optimized containers** (6GB Node.js heap, 1GB PostgreSQL)
-
-### 🔧 Database Performance Features
-- **Advanced PostgreSQL tuning** for development workloads
-- **In-memory storage** (tmpfs) for temporary files and WAL logs
-- **Optimized connection pooling** and query execution
-- **Performance monitoring tools** built-in
-- **Configurable memory allocation** based on workload needs
-
 ## 🚀 Quick Start with Docker
 
 ### Prerequisites
