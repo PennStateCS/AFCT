@@ -81,10 +81,8 @@ services:
       NEXT_TELEMETRY_DISABLED: 1
       # Increase Node.js memory limit and optimize for compilation speed
       NODE_OPTIONS: "--max_old_space_size=6144 --max-semi-space-size=512"
-      # Enable turbo mode and compilation optimizations
-      TURBO: 1
-      # Disable unnecessary features for faster compilation
-      NEXT_EXPERIMENTAL_TURBO: 1
+      # Use webpack mode by default (no turbopack conflicts)
+      # Set TURBOPACK=1 environment variable to enable turbopack mode
     ports:
       - "3000:3000"
     depends_on:

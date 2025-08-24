@@ -29,4 +29,6 @@ RUN npx prisma generate
 RUN java -version || echo "Java check completed"
 
 EXPOSE 3000
-CMD ["npm", "run", "dev:turbo"]
+
+# Dynamic command based on TURBOPACK environment variable
+CMD ["sh", "-c", "if [ \"$TURBOPACK\" = \"1\" ]; then npm run dev:turbo; else npm run dev; fi"]
