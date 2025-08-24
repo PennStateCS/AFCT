@@ -22,7 +22,7 @@ cp .env.example .env.development
 
 2. **Configure environment variables** in `.env.development`:
 ```env
-DATABASE_URL="postgresql://afct_user:afct_password@db:5432/afct_dev"
+DATABASE_URL="postgresql://afct_user:devpassword123@postgres:5432/afct_dev"
 NEXTAUTH_SECRET="your-nextauth-secret-key"
 NEXTAUTH_URL="http://localhost:3000"
 JWT_SECRET="your-jwt-secret-key"
@@ -37,29 +37,35 @@ npm run docker:dev
 
 4. **Access the application**:
 - Visit `http://localhost:3000`
+- Health Check: `http://localhost:3000/api/health`
 - Database Studio: `http://localhost:5555` (run `npm run db:studio` in another terminal)
 
 ### Production Deployment
 
 1. **Setup production environment**:
 ```bash
-cp .env.example .env.production
+cp .env.production.template .env.production
+# Edit .env.production with your secure values
 ```
 
 2. **Configure production variables** in `.env.production`:
 ```env
-DATABASE_URL="postgresql://afct_user:secure_password@db:5432/afct_prod"
-NEXTAUTH_SECRET="secure-production-secret"
+# Generate secure secrets with: openssl rand -base64 32
+POSTGRES_PASSWORD="your_secure_postgres_password_here"
+NEXTAUTH_SECRET="your_long_random_nextauth_secret_here"
 NEXTAUTH_URL="https://your-domain.com"
-JWT_SECRET="secure-jwt-secret"
-CFGANALYZER_LIMIT="15"
-CFGANALYZER_BINARY="/app/bin/cfganalyzer"
+JWT_SECRET="your_long_random_jwt_secret_here"
 ```
 
 3. **Deploy to production**:
 ```bash
 npm run docker:prod
 ```
+
+4. **Access production application**:
+- Visit `http://localhost:3001` (different port to avoid conflicts)
+- Health Check: `http://localhost:3001/api/health`
+- Database: `localhost:5433` (different port to avoid dev conflicts)
 
 ## 📁 JAR Files and Binaries
 
@@ -82,8 +88,9 @@ Location: `bin/`
 **To add your binary**:
 ```bash
 # Copy your CFG analyzer binary to the bin directory
-mkdir -p bin/cfganalyzer
-cp /path/to/your/cfganalyzer bin/cfganalyzer/
+mkdir -p bin
+cp /path/to/your/cfganalyzer bin/cfganalyzer
+chmod +x bin/cfganalyzer  # Make it executable
 ```
 
 ## 🛠️ Available Commands
@@ -131,9 +138,16 @@ After seeding the database, use these credentials:
 ## 🏗️ Architecture Overview
 
 ### Docker Services
-- **app**: Next.js application (ports 3000/3001)
-- **db**: PostgreSQL database (port 5432)
-- **volumes**: Persistent storage for database and uploads
+- **Development**:
+  - `afct-dashboard`: Next.js application (port 3000)
+  - `postgres`: PostgreSQL database (port 5432)
+- **Production**:
+  - `afct-production`: Next.js application (port 3001)
+  - `postgres`: PostgreSQL database (port 5433)
+- **Features**:
+  - Health checks for all services
+  - Automatic restart policies
+  - Volume persistence for data and uploads
 
 ### Environment Detection
 The application automatically detects Docker environment and adjusts:
@@ -157,8 +171,9 @@ The application automatically detects Docker environment and adjusts:
 
 ### Environment Files
 - `.env.development` - Development configuration
-- `.env.production` - Production configuration
-- `.env.example` - Template with all required variables
+- `.env.production` - Production configuration  
+- `.env.production.template` - Secure production template
+- `.env.example` - General template with all required variables
 
 ### Docker Files
 - `Dockerfile` - Production container
@@ -189,11 +204,16 @@ docker volume prune -f
 npm run docker:dev
 ```
 
-**Permission issues (Linux)**:
+**Permission issues (Linux/Mac)**:
 ```bash
 sudo chown -R $USER:$USER .
-chmod +x bin/cfganalyzer/*
+chmod +x bin/cfganalyzer
 ```
+
+**Port conflicts**:
+- Development uses ports 3000 (app) and 5432 (database)
+- Production uses ports 3001 (app) and 5433 (database)
+- Stop other services using these ports if needed
 
 **Java/JAR issues**:
 - Ensure `afct-evaluator.jar` is in the `jars/` directory
@@ -203,13 +223,19 @@ chmod +x bin/cfganalyzer/*
 ### Logs and Debugging
 ```bash
 # View application logs
-docker-compose logs app
+docker-compose logs app              # Production
+docker-compose -f docker-compose.dev.yml logs app  # Development
 
 # View database logs  
-docker-compose logs db
+docker-compose logs postgres
 
 # Interactive shell in container
-docker-compose exec app bash
+docker-compose exec app sh           # Production
+docker exec -it afct-dashboard sh    # Development
+
+# Check health status
+curl http://localhost:3000/api/health  # Development
+curl http://localhost:3001/api/health  # Production
 ```
 
 ## 📚 Documentation
@@ -223,15 +249,30 @@ The `docs/` directory contains additional guides:
 
 Before deploying to production:
 
-- [ ] Update `.env.production` with secure credentials
-- [ ] Add your CFG analyzer binary to `bin/cfganalyzer/`
+- [ ] Copy `.env.production.template` to `.env.production`
+- [ ] Generate secure secrets: `openssl rand -base64 32`
+- [ ] Update all placeholder values in `.env.production`
+- [ ] Add your CFG analyzer binary to `bin/cfganalyzer`
 - [ ] Configure proper domain in `NEXTAUTH_URL`
-- [ ] Set up SSL/TLS certificates
+- [ ] Set up SSL/TLS certificates (reverse proxy recommended)
 - [ ] Configure backup strategy for PostgreSQL
 - [ ] Test JAR file execution in production environment
+- [ ] Verify health checks are working
+- [ ] Set up monitoring and logging
+- [ ] Configure firewall rules for ports 3001 and 5433
+
+## 🔒 Security Notes
+
+- **Environment Variables**: Never commit `.env.production` to version control
+- **Secrets**: Use strong, unique secrets generated with `openssl rand -base64 32`
+- **Database**: Change default passwords and use environment variable substitution
+- **Containers**: Production containers run as non-root user for security
+- **Health Checks**: Monitor `/api/health` endpoint for service status
 
 ---
 
 **Ready to develop?** Run `npm run docker:dev` and visit `http://localhost:3000`
 
-**Need help?** Check the troubleshooting section or review the Docker logs.
+**Ready for production?** Use the template: `cp .env.production.template .env.production`, configure your secrets, then run `npm run docker:prod`
+
+**Need help?** Check the troubleshooting section, review the Docker logs, or visit the health check endpoint.

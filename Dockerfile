@@ -19,8 +19,8 @@ RUN npm run build
 FROM node:18-alpine AS runtime
 WORKDIR /app
 
-# Install Java runtime (OpenJDK) for running .jar files in the final image
-RUN apk add --no-cache openjdk21-jre
+# Install Java runtime and curl for health checks
+RUN apk add --no-cache openjdk21-jre curl
 
 # Install only production dependencies for smaller runtime image
 COPY package*.json ./
@@ -42,6 +42,14 @@ RUN mkdir -p /app/bin && chmod -R 755 /app/bin || true
 
 # Verify Java (non-fatal)
 RUN java -version || true
+
+# Create non-root user for security
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nextjs -u 1001
+
+# Change ownership of app directory
+RUN chown -R nextjs:nodejs /app
+USER nextjs
 
 EXPOSE 3000
 CMD ["npm", "start"]
