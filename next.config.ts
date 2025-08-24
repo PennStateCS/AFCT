@@ -1,25 +1,31 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  // Development optimizations
-  ...(process.env.NODE_ENV === 'development' && {
-    // Optimize for development speed
-    experimental: {
-      // Faster refresh and optimized imports
-      optimizePackageImports: [
-        '@radix-ui/react-icons', 
-        'lucide-react',
-        '@radix-ui/react-avatar',
-        '@radix-ui/react-checkbox',
-        '@radix-ui/react-dialog',
-        '@radix-ui/react-dropdown-menu',
-        '@radix-ui/react-select',
-        '@radix-ui/react-tabs',
-        '@tanstack/react-table'
-      ],
-    },
+  experimental: {
+    // Package optimization works with both webpack and turbopack
+    optimizePackageImports: [
+      '@radix-ui/react-icons', 
+      'lucide-react',
+      '@radix-ui/react-avatar',
+      '@radix-ui/react-checkbox',
+      '@radix-ui/react-dialog',
+      '@radix-ui/react-dropdown-menu',
+      '@radix-ui/react-select',
+      '@radix-ui/react-tabs',
+      '@tanstack/react-table'
+    ],
     
-    // Optimize webpack for faster compilation
+    // Turbopack-specific optimizations (only when turbopack is enabled)
+    ...(process.env.TURBOPACK && {
+      turbo: {
+        // Turbopack-specific rules if needed
+        rules: {},
+      },
+    }),
+  },
+  
+  // Webpack optimizations (only apply when NOT using turbopack)
+  ...(!process.env.TURBOPACK && process.env.NODE_ENV === 'development' && {
     webpack: (config, { dev }) => {
       if (dev) {
         // Better chunk splitting for faster compilation
@@ -68,23 +74,6 @@ const nextConfig: NextConfig = {
       }
       
       return config;
-    },
-  }),
-  
-  // Production optimizations
-  ...(process.env.NODE_ENV === 'production' && {
-    experimental: {
-      optimizePackageImports: [
-        '@radix-ui/react-icons', 
-        'lucide-react',
-        '@radix-ui/react-avatar',
-        '@radix-ui/react-checkbox',
-        '@radix-ui/react-dialog',
-        '@radix-ui/react-dropdown-menu',
-        '@radix-ui/react-select',
-        '@radix-ui/react-tabs',
-        '@tanstack/react-table'
-      ],
     },
   }),
 };
