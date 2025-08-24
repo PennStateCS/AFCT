@@ -6,20 +6,69 @@ services:
       POSTGRES_DB: afct_dev
       POSTGRES_USER: afct_user
       POSTGRES_PASSWORD: devpassword123
+      # Performance tuning environment variables
+      POSTGRES_INITDB_ARGS: "--data-checksums"
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    # Optimized PostgreSQL configuration for development speed
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+      -c maintenance_work_mem=128MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c work_mem=8MB
+      -c min_wal_size=1GB
+      -c max_wal_size=4GB
+      -c max_worker_processes=8
+      -c max_parallel_workers_per_gather=4
+      -c max_parallel_workers=8
+      -c max_parallel_maintenance_workers=4
+      -c checkpoint_timeout=30min
+      -c max_wal_senders=0
+      -c wal_level=minimal
+      -c archive_mode=off
+      -c fsync=off
+      -c synchronous_commit=off
+      -c full_page_writes=off
+      -c wal_compression=on
+      -c log_statement=none
+      -c log_duration=off
+      -c log_lock_waits=off
+      -c log_min_duration_statement=-1
+      -c autovacuum=on
+      -c autovacuum_max_workers=2
+      -c autovacuum_naptime=60s
+      -c shared_preload_libraries=''
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U afct_user -d afct_dev"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    # Add resource limits for better performance
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+    # Use tmpfs for maximum speed
+    tmpfs:
+      - /var/run/postgresql
   app:
     container_name: afct-dashboard
     build:
       context: .
       dockerfile: Dockerfile.dev
+      # Add build cache optimization
+      cache_from:
+        - node:18-alpine
     environment:
       DATABASE_URL: postgresql://afct_user:devpassword123@postgres:5432/afct_dev
       NEXTAUTH_URL: http://localhost:3000
@@ -27,15 +76,32 @@ services:
       # Java/AFCT Evaluator environment variables
       CFGANALYZER_LIMIT: 15
       CFGANALYZER_BINARY: /app/bin/cfganalyzer
+      # Development performance optimizations
+      NODE_ENV: development
+      NEXT_TELEMETRY_DISABLED: 1
+      # Increase Node.js memory limit and optimize for compilation speed
+      NODE_OPTIONS: "--max_old_space_size=6144 --max-semi-space-size=512"
+      # Enable turbo mode and compilation optimizations
+      TURBO: 1
+      # Disable unnecessary features for faster compilation
+      NEXT_EXPERIMENTAL_TURBO: 1
     ports:
       - "3000:3000"
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
-      - .:/app
+      # Optimize volume mounts for better performance
+      - .:/app:cached
       - /app/node_modules
       - /app/.next
-      - ./public/uploads:/app/public/uploads
+      - ./public/uploads:/app/public/uploads:delegated
+    # Add resource limits to prevent resource contention
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
 volumes:
   postgres_dev_data:
