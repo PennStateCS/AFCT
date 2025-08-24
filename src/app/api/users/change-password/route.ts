@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     const userId = session.user.id;
     const userRole = session.user.role;
 
-    console.log(`[CHANGE_PASSWORD] User ${userId} (${userRole}) attempting to change password`);
+  // Change password attempt
 
     // 2. Validate role is permitted
     const ALLOWED_ROLES = ['STUDENT', 'TA', 'FACULTY', 'ADMIN'];
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
       data: { password: hashedPassword },
     });
 
-    console.log(`[CHANGE_PASSWORD] Password successfully updated for user ${userId}`);
+  // Password successfully updated
 
     // 8. Log the password change
     await createEnhancedActivityLog(prisma, req, {

@@ -71,6 +71,21 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
   const type = watch('type');
   const isUnlimited = watch('isUnlimited');
 
+  const fileErrorMessage = (() => {
+    const e = errors.file;
+    if (!e) return '';
+    if (typeof e === 'string') return e;
+    if (typeof e === 'object' && e !== null) {
+      const m = (e as { message?: unknown }).message;
+      if (typeof m === 'string') return m;
+    }
+    try {
+      return JSON.stringify(e);
+    } catch {
+      return String(e);
+    }
+  })();
+
   // Reset when opening/closing (prevents touched/error flicker)
   useEffect(() => {
     if (open) {
@@ -101,18 +116,11 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
 
   const onSubmit = async (raw: FormValues) => {
     try {
-      console.log('Edit problem form data:', raw);
-
       // 1) Normalize with form schema
       const parsed: ParsedValues = ProblemFormSchema.parse(raw);
-      console.log('Parsed form data:', parsed);
 
       // 2) Enforce update contract with id (file stays optional)
-      const payload = UpdateProblemSchema.parse({
-        id: problem.id,
-        ...parsed,
-      });
-      console.log('Payload for submission:', payload);
+      const payload = UpdateProblemSchema.parse({ id: problem.id, ...parsed });
 
       const formData = new FormData();
       formData.append('title', payload.title ?? '');
@@ -136,14 +144,14 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
         formData.append('file', payload.file);
       }
 
-      console.log('Sending PUT request to:', `/api/problems/${problem.id}`);
+  // Sending PUT request
 
       const res = await fetch(`/api/problems/${problem.id}`, {
         method: 'PUT',
         body: formData,
       });
 
-      console.log('Response status:', res.status);
+  // Response status available in res.status
 
       if (!res.ok) {
         const errorText = await res.text();
@@ -168,7 +176,7 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
     } catch (error) {
       console.error('Edit problem submission error:', error);
       if (error instanceof z.ZodError) {
-        console.log('Zod validation errors:', error.errors);
+        // validation errors
       }
     }
   };
@@ -323,7 +331,7 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
                   accept=".txt,.fa,.pda,.cfg,.re"
                   onChange={(e) => field.onChange(e.target.files?.[0])}
                 />
-                {errors.file && <p className="mt-1 text-xs text-red-600">{errors.file.message}</p>}
+                {fileErrorMessage && <p className="mt-1 text-xs text-red-600">{fileErrorMessage}</p>}
               </div>
             )}
           />

@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-const JavaRunner = require('../../../../lib/java-runner');
-const path = require('path');
+import JavaRunner from '../../../../../lib/java-runner';
+import path from 'path';
+
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  try {
+    return String(err);
+  } catch {
+    return 'Unknown error';
+  }
+}
 
 /**
  * API endpoint to execute Java .jar files
@@ -41,12 +50,12 @@ export async function POST(request: NextRequest) {
       exitCode: result.exitCode
     });
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Java execution error:', error);
     return NextResponse.json(
-      { 
+      {
         error: 'Failed to execute Java application',
-        details: error.message 
+        details: getErrorMessage(error),
       },
       { status: 500 }
     );
@@ -65,10 +74,10 @@ export async function GET() {
       javaAvailable: isAvailable,
       javaVersion: version
     });
-  } catch (error) {
+  } catch (error: unknown) {
     return NextResponse.json({
       javaAvailable: false,
-      error: error.message
+      error: getErrorMessage(error),
     });
   }
 }

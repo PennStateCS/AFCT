@@ -30,11 +30,27 @@ export const CreateUserSchema = BaseUserSchema.extend({
   message: 'Passwords must match.',
 });
 
-const ImageFileOptional = z
-  .instanceof(File, { message: 'Invalid file.' })
-  .refine((f) => f.size <= 5 * 1024 * 1024, 'Avatar must be ≤ 5MB.')
-  .refine((f) => f.type.startsWith('image/'), 'Avatar must be an image.')
-  .optional();
+// Server-side safe image file validation
+const createImageFileSchema = () => {
+  // Check if File constructor is available (browser environment)
+  if (typeof File !== 'undefined') {
+    return z
+      .instanceof(File, { message: 'Invalid file.' })
+      .refine((f) => f.size <= 5 * 1024 * 1024, 'Avatar must be ≤ 5MB.')
+      .refine((f) => f.type.startsWith('image/'), 'Avatar must be an image.')
+      .optional();
+  }
+  
+  // Server-side fallback
+  return z.any().refine((f) => {
+    if (f && typeof f === 'object' && 'size' in f && 'type' in f) {
+      return f.size <= 5 * 1024 * 1024 && f.type.startsWith('image/');
+    }
+    return true; // Let server handle validation
+  }, 'Avatar must be a valid image ≤ 5MB').optional();
+};
+
+const ImageFileOptional = createImageFileSchema();
 
 export const UpdateUserSchema = z.object({
   firstName: z.string().trim().min(1, 'First name is required.'),

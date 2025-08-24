@@ -11,7 +11,7 @@ import os from 'os';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 // Import JavaRunner for JAR execution
-const JavaRunner = require('../../../lib/java-runner');
+import JavaRunner from '../../../../lib/java-runner';
 
 export async function POST(req: NextRequest) {
   // 1. Verify token
@@ -209,7 +209,7 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json(submission, { status: 201 });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Submission error:', error);
 
     await createEnhancedActivityLog(prisma, req, {
@@ -219,7 +219,7 @@ export async function POST(req: NextRequest) {
       assignmentId,
       problemId,
       metadata: {
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : String(error),
       },
     });
 

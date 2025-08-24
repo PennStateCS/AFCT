@@ -30,6 +30,8 @@ import {
   type ProblemFormRaw,
 } from '@/schemas/problem';
 
+// Helper: extract a string message for the file error without using `any`
+
 type CreateProblemDialogProps = {
   open: boolean;
   setOpen: (open: boolean) => void;
@@ -79,6 +81,21 @@ export function CreateProblemDialog({
   const type = watch('type');
   const isUnlimited = watch('isUnlimited');
 
+  const fileErrorMessage = (() => {
+    const e = errors.file;
+    if (!e) return '';
+    if (typeof e === 'string') return e;
+    if (typeof e === 'object' && e !== null) {
+      const m = (e as { message?: unknown }).message;
+      if (typeof m === 'string') return m;
+    }
+    try {
+      return JSON.stringify(e);
+    } catch {
+      return String(e);
+    }
+  })();
+
   useEffect(() => {
     if (open) {
       reset(defaults, {
@@ -107,14 +124,7 @@ export function CreateProblemDialog({
 
   const onSubmit = async (raw: FormValues) => {
     try {
-      // Debug: Log the raw form data to see what we're getting
-      console.log('Form data before validation:', {
-        title: raw.title,
-        file: raw.file,
-        fileType: typeof raw.file,
-        fileName: raw.file?.name,
-        fileSize: raw.file?.size,
-      });
+  // Form submission
 
       // Parse with CreateProblemSchema which requires file
       const values: ParsedValues = CreateProblemSchema.parse(raw);
@@ -149,7 +159,6 @@ export function CreateProblemDialog({
       console.error('Form submission error:', error);
       if (error instanceof z.ZodError) {
         // Handle Zod validation errors
-        console.log('Zod validation errors:', error.errors);
       }
     }
   };
@@ -305,13 +314,14 @@ export function CreateProblemDialog({
                   accept=".txt,.fa,.pda,.cfg,.re"
                   ref={ref}
                   onBlur={onBlur}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    console.log('File selected:', file?.name, file?.size);
-                    onChange(file);
-                  }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      onChange(file);
+                    }}
                 />
-                {errors.file && <p className="mt-1 text-xs text-red-600">{errors.file.message}</p>}
+                {fileErrorMessage && (
+                  <p className="mt-1 text-xs text-red-600">{fileErrorMessage}</p>
+                )}
               </div>
             )}
           />

@@ -12,7 +12,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
   const { id } = await context.params;
   const userId = id;
 
-  console.log(`[PATCH] Attempting to update user: ${userId}`);
+  // Attempting to update user: userId
 
   try {
     const session = await auth();
@@ -65,12 +65,12 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       avatarFilename = `${userId}-${Date.now()}-${avatarFile.name}`;
       const uploadPath = path.join(process.cwd(), 'public', 'uploads', avatarFilename);
       await writeFile(uploadPath, bytes);
-      console.log(`[PATCH] Uploaded new avatar: ${avatarFilename}`);
+  // Uploaded new avatar: avatarFilename
 
       if (userRecord?.avatar) {
         const oldPath = path.join(process.cwd(), 'public', 'uploads', userRecord.avatar);
         await unlink(oldPath).catch(() => {});
-        console.log(`[PATCH] Deleted old avatar: ${userRecord.avatar}`);
+  // Deleted old avatar
       }
     }
 
@@ -79,7 +79,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       const oldPath = path.join(process.cwd(), 'public', 'uploads', userRecord.avatar);
       await unlink(oldPath).catch(() => {});
       avatarFilename = null;
-      console.log(`[PATCH] Avatar removed for user: ${userId}`);
+  // Avatar removed
     }
 
     // Prepare data for update
@@ -125,7 +125,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       },
     });
 
-    console.log(`[PATCH] User ${userId} updated by ${currentUser.id}`);
+  // User updated
     return NextResponse.json(updatedUser);
   } catch (error) {
     console.error('[PATCH] Error updating user:', error);
@@ -138,7 +138,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
   const { id } = await context.params;
   const userId = id;
 
-  console.log(`[DELETE] Attempting to delete user: ${userId}`);
+  // Attempting to delete user
 
   try {
     const session = await auth();
@@ -158,7 +158,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     if (user?.avatar) {
       const avatarPath = path.join(process.cwd(), 'public', 'uploads', user.avatar);
       await unlink(avatarPath).catch(() => {});
-      console.log(`[DELETE] Avatar file deleted: ${user.avatar}`);
+  // Avatar file deleted
     }
 
     // Delete user from database
@@ -176,7 +176,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
       },
     });
 
-    console.log(`[DELETE] User ${userId} deleted by ${currentUser.id}`);
+  // User deleted
     return NextResponse.json({ success: true, message: 'User deleted' });
   } catch (error) {
     console.error('[DELETE] Error deleting user:', error);

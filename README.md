@@ -116,12 +116,17 @@ npm run type-check          # TypeScript type checking
 
 ## 🔐 Default Login Credentials
 
-After seeding the database, use these credentials (password: `password123`):
+After seeding the database, use these credentials:
 
-- **Admin**: `admin@example.com`
-- **Faculty**: `faculty@example.com` 
-- **TA**: `ta@example.com`
-- **Student**: `student@example.com`
+- Development seed (default): password `password123`
+  - **Admin**: `admin@example.com`
+  - **Faculty**: `faculty@example.com`
+  - **TA**: `ta@example.com`
+  - **Student**: `student@example.com`
+
+- Production seed: a single admin user will be created with the password `Password123!`.
+  - **Admin**: `admin@example.com` (password `Password123!`)
+  - IMPORTANT: rotate this password immediately after first login or supply a different password via a secure provisioning process.
 
 ## 🏗️ Architecture Overview
 
