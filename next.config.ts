@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+import path from 'path';
 
 const nextConfig: NextConfig = {
   experimental: {
@@ -24,11 +25,41 @@ const nextConfig: NextConfig = {
     }),
   },
   
+  // Fix for CommonJS modules in ESM context
+  transpilePackages: ['jsonwebtoken', 'bcrypt'],
+  
   // Webpack optimizations (only apply when NOT using turbopack)
-  ...(!process.env.TURBOPACK && process.env.NODE_ENV === 'development' && {
-    webpack: (config, { dev }) => {
+  ...(!process.env.TURBOPACK && {
+    webpack: (config, { dev, isServer }) => {
+      // Fix CommonJS/ESM module issues
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+        crypto: false,
+      };
+
+      // Handle CommonJS modules that break in ESM context
+      config.externals = config.externals || [];
+      if (isServer) {
+        config.externals.push({
+          'jsonwebtoken': 'commonjs jsonwebtoken',
+          'bcrypt': 'commonjs bcrypt',
+          'crypto': 'commonjs crypto',
+        });
+      }
+
+      // Ensure proper module handling
+      config.module.rules.push({
+        test: /\.m?js$/,
+        resolve: {
+          fullySpecified: false,
+        },
+      });
+
       if (dev) {
-        // Better chunk splitting for faster compilation
+        // Disable the problematic vendor bundle entirely for development
         config.optimization = {
           ...config.optimization,
           splitChunks: {
@@ -36,18 +67,27 @@ const nextConfig: NextConfig = {
             minSize: 20000,
             maxSize: 244000,
             cacheGroups: {
-              vendor: {
-                test: /[\\/]node_modules[\\/]/,
-                name: 'vendors',
+              // Create separate chunks for different types of modules
+              framework: {
+                test: /[\\/]node_modules[\\/](react|react-dom)[\\/]/,
+                name: 'framework',
                 chunks: 'all',
-                priority: 10,
+                priority: 40,
               },
-              common: {
+              lib: {
+                test: /[\\/]node_modules[\\/]((?!jsonwebtoken|bcrypt|crypto).)*[\\/]/,
+                name: 'lib',
+                chunks: 'all',
+                priority: 30,
+              },
+              commons: {
                 minChunks: 2,
                 chunks: 'all',
-                priority: 5,
+                priority: 20,
                 reuseExistingChunk: true,
               },
+              // Don't bundle problematic packages at all
+              default: false,
             },
           },
         };
@@ -64,12 +104,13 @@ const nextConfig: NextConfig = {
           ],
         };
 
-        // Enable persistent caching
+        // Enable persistent caching with absolute path
         config.cache = {
           type: 'filesystem',
           buildDependencies: {
             config: [__filename],
           },
+          cacheDirectory: path.resolve(process.cwd(), '.next/cache/webpack'),
         };
       }
       
