@@ -32,7 +32,7 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const role = searchParams.get('role');
 
-    console.log(`[USERS_GET] Fetching users${role ? ` with role: ${role}` : ''}`);
+  // Fetching users
 
     // 3. Query users from the database
     const users = await prisma.user.findMany({
@@ -131,7 +131,7 @@ export async function POST(req: Request) {
       },
     });
 
-    console.log(`[USERS_POST] User created: ${newUser.id} (${newUser.email})`);
+  // User created
 
     // 5. Log the creation
     await createEnhancedActivityLog(prisma, req, {

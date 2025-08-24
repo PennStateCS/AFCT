@@ -83,10 +83,7 @@ export default function AssignmentSubmissions({
   const [gradeSaving, setGradeSaving] = useState(false);
   const [gradeError, setGradeError] = useState<string | null>(null);
 
-  const resetGradeUI = () => {
-    setGradeDraft("");
-    setGradeError(null);
-  };
+  // grade UI helpers
 
   const selectedStudent = students[selectedIndex] ?? null;
 

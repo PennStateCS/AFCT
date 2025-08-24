@@ -88,6 +88,21 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
     }
   }, [open, defaults, reset, user.avatar]);
 
+  const avatarFileErrorMessage = (() => {
+    const e = errors.avatarFile;
+    if (!e) return '';
+    if (typeof e === 'string') return e;
+    if (typeof e === 'object' && e !== null) {
+      const m = (e as { message?: unknown }).message;
+      if (typeof m === 'string') return m;
+    }
+    try {
+      return JSON.stringify(e);
+    } catch {
+      return String(e);
+    }
+  })();
+
   // Avatar upload handler: set file in RHF + update local preview + clear delete flag
   const onAvatarPicked = (file?: File) => {
     setValue('avatarFile', file, {
@@ -191,8 +206,8 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
                       <UploadCloud className="h-4 w-4" />
                       Upload Avatar
                     </Button>
-                    {errors.avatarFile && (
-                      <p className="mt-1 text-xs text-red-600">{errors.avatarFile.message}</p>
+                    {avatarFileErrorMessage && (
+                      <p className="mt-1 text-xs text-red-600">{avatarFileErrorMessage}</p>
                     )}
                   </>
                 )}

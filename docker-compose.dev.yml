@@ -12,6 +12,7 @@ services:
     ports:
       - "5432:5432"
   app:
+    container_name: afct-dashboard
     build:
       context: .
       dockerfile: Dockerfile.dev

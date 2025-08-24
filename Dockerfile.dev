@@ -10,8 +10,12 @@ RUN npm install
 COPY . .
 RUN npx prisma generate
 
-# Create bin directory and set permissions for Java binary dependencies
-RUN mkdir -p /app/bin && chmod 755 /app/bin
+# Conditionally copy CFG analyzer binary into the image (safe if missing)
+RUN mkdir -p /app/bin && if [ -f bin/cfganalyzer ]; then cp bin/cfganalyzer /app/bin/cfganalyzer && chmod +x /app/bin/cfganalyzer; fi
+
+# Copy jars directory into image (place your .jar files in repo `jars/`)
+COPY jars /app/jars
+RUN chmod -R 644 /app/jars || true && chmod +x /app/jars/*.jar || true
 
 # Verify Java installation
 RUN java -version

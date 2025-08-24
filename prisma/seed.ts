@@ -7,12 +7,32 @@ const prisma = new PrismaClient();
 
 async function main() {
   console.log('Starting database seeding...');
+  // If running in production, only ensure a single admin exists with the
+  // specified production password and exit. The rest of the sample data is
+  // intended for development only.
+  const isProduction = process.env.NODE_ENV === 'production';
+  if (isProduction) {
+    const prodHashed = await bcrypt.hash('Password123!', 10);
+    await prisma.user.upsert({
+      where: { email: 'admin@example.com' },
+      update: {},
+      create: {
+        email: 'admin@example.com',
+        firstName: 'Admin',
+        lastName: 'User',
+        password: prodHashed,
+        role: 'ADMIN',
+      },
+    });
+    console.log('Production seed complete: created/ensured single admin user (admin@example.com)');
+    return;
+  }
 
-  // Hash password for all users
+  // Hash password for all development users
   const hashedPassword = await bcrypt.hash('password123', 10);
 
-  // Create Admin User
-  const admin = await prisma.user.upsert({
+  // Create Admin User (development)
+  await prisma.user.upsert({
     where: { email: 'admin@example.com' },
     update: {},
     create: {
@@ -50,7 +70,7 @@ async function main() {
     },
   });
 
-  const faculty3 = await prisma.user.upsert({
+  await prisma.user.upsert({
     where: { email: 'faculty1@example.com' },
     update: {},
     create: {
@@ -75,7 +95,7 @@ async function main() {
     },
   });
 
-  const ta2 = await prisma.user.upsert({
+  await prisma.user.upsert({
     where: { email: 'ta2@example.com' },
     update: {},
     create: {

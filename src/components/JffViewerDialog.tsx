@@ -215,6 +215,7 @@ export function JffCytoscapeViewer({
   darkMode?: boolean;
   flowDirection?: FlowDirection;
   showGridDefault?: boolean;
+  honorPositions?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<any | null>(null);
@@ -604,6 +605,7 @@ export default function JffViewerDialog({
   open, onOpenChange, src, title,
   width = '80vw', height = '85vh',
   epsSymbol = DEFAULT_EPS, darkMode = false, flowDirection = 'LR', showGridDefault = true,
+  honorPositions,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -615,6 +617,7 @@ export default function JffViewerDialog({
   darkMode?: boolean;
   flowDirection?: FlowDirection;
   showGridDefault?: boolean;
+  honorPositions?: boolean;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -631,6 +634,7 @@ export default function JffViewerDialog({
             darkMode={darkMode}
             flowDirection={flowDirection}
             showGridDefault={showGridDefault}
+            honorPositions={honorPositions}
           />
         </div>
       </DialogContent>

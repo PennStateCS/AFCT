@@ -25,21 +25,18 @@ export async function POST(
     let body;
     try {
       const requestText = await req.text();
-      console.log('Request body text:', requestText);
-      
+      // Request body text received
       if (!requestText || requestText.trim() === '') {
-        console.log('Empty request body');
         return NextResponse.json({ error: 'Empty request body' }, { status: 400 });
       }
-      
       body = JSON.parse(requestText);
     } catch (parseError) {
       console.error('JSON parse error:', parseError);
       return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
     }
 
-    const problemIds: string[] = Array.isArray(body.problemIds) ? body.problemIds : [];
-    console.log('Parsed problemIds:', problemIds);
+  const problemIds: string[] = Array.isArray(body.problemIds) ? body.problemIds : [];
+  // parsed problemIds available
 
     // Validate that all problems exist and belong to the specified course
     const validProblems = await prisma.problem.findMany({
