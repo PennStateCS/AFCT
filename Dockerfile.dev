@@ -10,8 +10,8 @@ RUN npm install
 COPY . .
 RUN npx prisma generate
 
-# Conditionally copy CFG analyzer binary into the image (safe if missing)
-RUN mkdir -p /app/bin && if [ -f bin/cfganalyzer ]; then cp bin/cfganalyzer /app/bin/cfganalyzer && chmod +x /app/bin/cfganalyzer; fi
+# Conditionally make CFG analyzer binary executable if present in the repo
+RUN mkdir -p /app/bin && if [ -f bin/cfganalyzer ]; then chmod +x bin/cfganalyzer; fi || true
 
 # Copy jars directory into image (place your .jar files in repo `jars/`)
 COPY jars /app/jars
