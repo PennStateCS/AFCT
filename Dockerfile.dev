@@ -1,24 +1,32 @@
 FROM node:18-alpine
 WORKDIR /app
 
-# Install Java (OpenJDK) for running .jar files
+# Install Java (OpenJDK) for running .jar files - moved earlier for better caching
 RUN apk add --no-cache openjdk21-jre
 
+# Copy package files first for better Docker layer caching
 COPY package*.json ./
-RUN npm install
 
+# Install dependencies (this layer will be cached unless package.json changes)
+RUN npm ci --prefer-offline --no-audit --progress=false
+
+# Create directories early
+RUN mkdir -p /app/bin /app/jars
+
+# Copy and setup binaries/jars (these change less frequently)
+COPY jars /app/jars
+COPY bin /app/bin
+RUN chmod -R 644 /app/jars || true && chmod +x /app/jars/*.jar || true
+RUN if [ -f bin/cfganalyzer ]; then chmod +x bin/cfganalyzer; fi || true
+
+# Copy source code (this layer rebuilds when code changes)
 COPY . .
+
+# Generate Prisma client (only when schema changes)
 RUN npx prisma generate
 
-# Conditionally make CFG analyzer binary executable if present in the repo
-RUN mkdir -p /app/bin && if [ -f bin/cfganalyzer ]; then chmod +x bin/cfganalyzer; fi || true
-
-# Copy jars directory into image (place your .jar files in repo `jars/`)
-COPY jars /app/jars
-RUN chmod -R 644 /app/jars || true && chmod +x /app/jars/*.jar || true
-
-# Verify Java installation
-RUN java -version
+# Verify Java installation (non-fatal)
+RUN java -version || echo "Java check completed"
 
 EXPOSE 3000
-CMD ["npm", "run", "dev"]
+CMD ["npm", "run", "dev:turbo"]

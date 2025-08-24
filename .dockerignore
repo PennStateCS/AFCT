@@ -14,3 +14,16 @@ coverage
 .vscode
 .idea
 *.log
+
+# Additional performance optimizations
+**/.DS_Store
+**/Thumbs.db
+**/*.tmp
+**/*.temp
+**/dist
+**/build
+**/.cache
+**/public/uploads/*
+**/.turbo
+**/tsconfig.tsbuildinfo
+**/.eslintcache
