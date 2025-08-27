@@ -30,6 +30,10 @@
     "docker:down:volumes": "docker compose -f docker-compose.dev.yml down -v",
     "docker:nuke": "docker compose -f docker-compose.dev.yml down -v && docker system prune -af --volumes",
 
+    "docker:studio": "docker exec -it afct-dashboard npx prisma studio",
+    "docker:seed": "docker exec -it afct-dashboard npx prisma db seed",
+    "docker:psql": "docker exec -it afct-postgres psql -U afct_user -d afct_dev",
+
 
     "db:performance": "powershell -ExecutionPolicy Bypass -File scripts\\quick-db-check.ps1",
 
