@@ -6,100 +6,91 @@ services:
       POSTGRES_DB: afct_dev
       POSTGRES_USER: afct_user
       POSTGRES_PASSWORD: devpassword123
-      # Performance tuning environment variables
       POSTGRES_INITDB_ARGS: "--data-checksums"
+      TZ: "America/New_York"
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
-    # Optimized PostgreSQL configuration for development speed
-    command: >
-      postgres
-      -c shared_buffers=256MB
-      -c effective_cache_size=1GB
-      -c maintenance_work_mem=128MB
-      -c checkpoint_completion_target=0.9
-      -c wal_buffers=16MB
-      -c default_statistics_target=100
-      -c random_page_cost=1.1
-      -c effective_io_concurrency=200
-      -c work_mem=8MB
-      -c min_wal_size=1GB
-      -c max_wal_size=4GB
-      -c max_worker_processes=8
-      -c max_parallel_workers_per_gather=4
-      -c max_parallel_workers=8
-      -c max_parallel_maintenance_workers=4
-      -c checkpoint_timeout=30min
-      -c max_wal_senders=0
-      -c wal_level=minimal
-      -c archive_mode=off
-      -c fsync=off
-      -c synchronous_commit=off
-      -c full_page_writes=off
-      -c wal_compression=on
-      -c log_statement=none
-      -c log_duration=off
-      -c log_lock_waits=off
-      -c log_min_duration_statement=-1
-      -c autovacuum=on
-      -c autovacuum_max_workers=2
-      -c autovacuum_naptime=60s
-      -c shared_preload_libraries=''
+    command: [
+      "postgres",
+      "-c","shared_buffers=256MB",
+      "-c","effective_cache_size=1GB",
+      "-c","maintenance_work_mem=128MB",
+      "-c","checkpoint_completion_target=0.9",
+      "-c","wal_buffers=16MB",
+      "-c","default_statistics_target=100",
+      "-c","random_page_cost=1.1",
+      "-c","effective_io_concurrency=200",
+      "-c","work_mem=8MB",
+      "-c","min_wal_size=1GB",
+      "-c","max_wal_size=4GB",
+      "-c","max_worker_processes=8",
+      "-c","max_parallel_workers_per_gather=4",
+      "-c","max_parallel_workers=8",
+      "-c","max_parallel_maintenance_workers=4",
+      "-c","checkpoint_timeout=30min",
+      "-c","max_wal_senders=0",
+      "-c","wal_level=minimal",
+      "-c","archive_mode=off",
+      "-c","fsync=off",
+      "-c","synchronous_commit=off",
+      "-c","full_page_writes=off",
+      "-c","wal_compression=on",
+      "-c","log_statement=none",
+      "-c","log_duration=off",
+      "-c","log_lock_waits=off",
+      "-c","log_min_duration_statement=-1",
+      "-c","autovacuum=on",
+      "-c","autovacuum_max_workers=2",
+      "-c","autovacuum_naptime=60s",
+      "-c","shared_preload_libraries="
+    ]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U afct_user -d afct_dev"]
-      interval: 5s
-      timeout: 3s
-      retries: 3
-    # Add resource limits for better performance
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-        reservations:
-          memory: 512M
-    # Use tmpfs for maximum speed
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s   # was 20s; optional
+    mem_limit: 1g
     tmpfs:
-      - /var/run/postgresql
+      - /var/run/postgresql:rw,noexec,nosuid,size=64m
+
   app:
     container_name: afct-dashboard
     build:
       context: .
       dockerfile: Dockerfile.dev
-      # Add build cache optimization
-      cache_from:
-        - node:18-alpine
     environment:
       DATABASE_URL: postgresql://afct_user:devpassword123@postgres:5432/afct_dev
       NEXTAUTH_URL: http://localhost:3000
       NEXTAUTH_SECRET: dev-secret-key
-      # Java/AFCT Evaluator environment variables
       CFGANALYZER_LIMIT: 15
       CFGANALYZER_BINARY: /app/bin/cfganalyzer
-      # Development performance optimizations
       NODE_ENV: development
-      NEXT_TELEMETRY_DISABLED: 1
-      # Increase Node.js memory limit and optimize for compilation speed
-      NODE_OPTIONS: "--max_old_space_size=6144 --max-semi-space-size=512"
-      # Use webpack mode by default (no turbopack conflicts)
-      # Set TURBOPACK=1 environment variable to enable turbopack mode
+      NEXT_TELEMETRY_DISABLED: "1"
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+      # WATCHPACK_POLLING_INTERVAL: "1000"
+      # CHOKIDAR_INTERVAL: "1000"
     ports:
       - "3000:3000"
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
-      # Optimize volume mounts for better performance
       - .:/app:cached
       - /app/node_modules
-      - /app/.next
       - ./public/uploads:/app/public/uploads:delegated
-    # Add resource limits to prevent resource contention
-    deploy:
-      resources:
-        limits:
-          memory: 4G
-        reservations:
-          memory: 2G
+    tmpfs:
+      - /app/.next:rw,uid=1000,gid=1000,size=256m
+    command: >
+      sh -lc '
+        set -e;
+        npx prisma migrate deploy || npx prisma migrate dev --name init;
+        npm run seed;
+        exec npm run dev
+      '
+
 volumes:
   postgres_dev_data:
