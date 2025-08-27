@@ -3,24 +3,25 @@
  * Note: This requires the enhanced ActivityLog schema with foreign keys
  */
 
+import { Prisma, PrismaClient } from '@prisma/client';
 import { getClientIp } from './ip-utils';
 
-export type ActivityCategory = 
+export type ActivityCategory =
   | 'SYSTEM'      // Login, logout, session extend
-  | 'USER'        // User CRUD, password changes  
+  | 'USER'        // User CRUD, password changes
   | 'COURSE'      // Course CRUD, enrollment
   | 'ASSIGNMENT'  // Assignment CRUD, publishing
   | 'PROBLEM'     // Problem CRUD
   | 'SUBMISSION'; // Submission CRUD, grading
 
 export interface EnhancedActivityLogData {
-  userId?: string;
+  userId?: string | null;
   action: string;
   category?: ActivityCategory;
-  courseId?: string;
-  assignmentId?: string;
-  problemId?: string;
-  submissionId?: string;
+  courseId?: string | null;
+  assignmentId?: string | null;
+  problemId?: string | null;
+  submissionId?: string | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -29,7 +30,7 @@ export interface EnhancedActivityLogData {
  */
 export function getActivityCategory(action: string): ActivityCategory {
   const upperAction = action.toUpperCase();
-  
+
   if (upperAction.includes('LOGIN') || upperAction.includes('LOGOUT') || upperAction.includes('SESSION')) {
     return 'SYSTEM';
   }
@@ -48,21 +49,20 @@ export function getActivityCategory(action: string): ActivityCategory {
   if (upperAction.includes('SUBMISSION') || upperAction.includes('GRADE')) {
     return 'SUBMISSION';
   }
-  
+
   return 'SYSTEM'; // Default fallback
 }
 
 /**
  * Query builders for common activity log filters
- * These will work once the schema migration is complete and Prisma client is regenerated
  */
 export const ActivityLogQueries = {
   // Get all activities for a course
   forCourse: (courseId: string, limit = 50) => ({
     where: { courseId },
-    include: { 
+    include: {
       user: { select: { firstName: true, lastName: true, email: true, avatar: true } },
-      course: { select: { name: true, code: true } }
+      course: { select: { name: true, code: true } },
     },
     orderBy: { timestamp: 'desc' as const },
     take: limit,
@@ -71,9 +71,9 @@ export const ActivityLogQueries = {
   // Get activities for an assignment
   forAssignment: (assignmentId: string, limit = 50) => ({
     where: { assignmentId },
-    include: { 
+    include: {
       user: { select: { firstName: true, lastName: true, email: true, avatar: true } },
-      assignment: { select: { title: true } }
+      assignment: { select: { title: true } },
     },
     orderBy: { timestamp: 'desc' as const },
     take: limit,
@@ -82,10 +82,10 @@ export const ActivityLogQueries = {
   // Get user activities in a course
   forUserInCourse: (userId: string, courseId: string, limit = 50) => ({
     where: { userId, courseId },
-    include: { 
+    include: {
       course: { select: { name: true, code: true } },
       assignment: { select: { title: true } },
-      problem: { select: { title: true } }
+      problem: { select: { title: true } },
     },
     orderBy: { timestamp: 'desc' as const },
     take: limit,
@@ -94,8 +94,8 @@ export const ActivityLogQueries = {
   // Get activities by category
   byCategory: (category: ActivityCategory, limit = 50) => ({
     where: { category },
-    include: { 
-      user: { select: { firstName: true, lastName: true, email: true, avatar: true } }
+    include: {
+      user: { select: { firstName: true, lastName: true, email: true, avatar: true } },
     },
     orderBy: { timestamp: 'desc' as const },
     take: limit,
@@ -103,16 +103,20 @@ export const ActivityLogQueries = {
 
   // Get recent system activities (logins, etc.)
   systemActivities: (limit = 100) => ({
-    where: { category: 'SYSTEM' },
-    include: { 
-      user: { select: { firstName: true, lastName: true, email: true, avatar: true } }
+    where: { category: 'SYSTEM' as const },
+    include: {
+      user: { select: { firstName: true, lastName: true, email: true, avatar: true } },
     },
     orderBy: { timestamp: 'desc' as const },
     take: limit,
   }),
 
   // Get activities with date range
-  inDateRange: (startDate: Date, endDate: Date, filters?: { courseId?: string; category?: ActivityCategory }) => ({
+  inDateRange: (
+    startDate: Date,
+    endDate: Date,
+    filters?: { courseId?: string; category?: ActivityCategory }
+  ) => ({
     where: {
       timestamp: {
         gte: startDate,
@@ -120,11 +124,11 @@ export const ActivityLogQueries = {
       },
       ...filters,
     },
-    include: { 
+    include: {
       user: { select: { firstName: true, lastName: true, email: true, avatar: true } },
       course: { select: { name: true, code: true } },
       assignment: { select: { title: true } },
-      problem: { select: { title: true } }
+      problem: { select: { title: true } },
     },
     orderBy: { timestamp: 'desc' as const },
   }),
@@ -132,32 +136,57 @@ export const ActivityLogQueries = {
 
 /**
  * Enhanced activity log creation helper
- * Automatically extracts IP address and categorizes the activity
+ * - Categorizes the action
+ * - Extracts IP/UA
+ * - Verifies userId exists (if provided); if not, logs with userId: null
+ * - Swallows FK violations (P2003) to avoid 500s in dev
  */
 export async function createEnhancedActivityLog(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  prisma: any,
+  prisma: PrismaClient,
   req: Request,
   data: EnhancedActivityLogData
 ): Promise<void> {
   const category = data.category || getActivityCategory(data.action);
   const ipAddress = getClientIp(req);
   const userAgent = req.headers.get('user-agent') || undefined;
-  
-  await prisma.activityLog.create({
-    data: {
-      userId: data.userId,
-      action: data.action,
-      category,
-      courseId: data.courseId,
-      assignmentId: data.assignmentId,
-      problemId: data.problemId,
-      submissionId: data.submissionId,
-      ipAddress,
-      userAgent,
-      metadata: data.metadata,
+
+  // Verify user exists if a userId was provided
+  let safeUserId: string | null = data.userId ?? null;
+  if (safeUserId) {
+    const exists = await prisma.user.findUnique({
+      where: { id: safeUserId },
+      select: { id: true },
+    });
+    if (!exists) {
+      // Drop the FK so the log still records without crashing
+      safeUserId = null;
     }
-  });
+  }
+
+  try {
+    await prisma.activityLog.create({
+      data: {
+        userId: safeUserId,
+        action: data.action,
+        category,
+        courseId: data.courseId ?? null,
+        assignmentId: data.assignmentId ?? null,
+        problemId: data.problemId ?? null,
+        submissionId: data.submissionId ?? null,
+        ipAddress,
+        userAgent,
+        metadata: data.metadata ?? {},
+      },
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003') {
+      // Foreign key violation (e.g., race or another stale FK) — log and continue
+      console.warn('[ActivityLog] FK violation skipped (P2003):', err.meta);
+      return;
+    }
+    // Other errors should surface
+    throw err;
+  }
 }
 
 /**
@@ -201,5 +230,5 @@ export const ExampleUsage = {
       },
       include: { user: true, assignment: true, course: true }
     });
-  `
+  `,
 };

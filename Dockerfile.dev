@@ -1,40 +1,33 @@
 # syntax=docker/dockerfile:1.7
 FROM node:20-alpine
 
-# Base OS deps you need
 RUN apk add --no-cache libc6-compat openssl python3 make g++ git openjdk21-jre tini
 
 ENV NODE_ENV=development
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PATH="/app/bin:${PATH}"
 
-# Run as the 'node' user
 USER node
 WORKDIR /app
 
-# Install deps first for caching
 COPY --chown=node:node package.json package-lock.json ./
-# Cache npm directory and ensure it's owned by node (uid/gid 1000)
 RUN --mount=type=cache,id=npm-cache-node20,target=/home/node/.npm,uid=1000,gid=1000 \
     npm ci --prefer-offline --no-audit --progress=false
 
-# Tools / jars
 COPY --chown=node:node jars /app/jars
 COPY --chown=node:node bin  /app/bin
 RUN if [ -f /app/bin/cfganalyzer ]; then chmod +x /app/bin/cfganalyzer; fi
 
-# App source
 COPY --chown=node:node . .
-
-# Generate Prisma client with a cache for engines
 RUN --mount=type=cache,id=prisma-cache-node20,target=/home/node/.cache/prisma,uid=1000,gid=1000 \
     npx prisma generate || true
 
-# Sanity: don't fail the build if Java can't print its version
 RUN java -version || true
 
-EXPOSE 3000
+# add entrypoint AFTER files are copied
+COPY --chown=node:node entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# Keep tini as PID 1 for proper signal handling, but
-# **do not** include CMD here; let docker-compose supply the command.
-ENTRYPOINT ["/sbin/tini","-g","--"]
+EXPOSE 3000
+ENTRYPOINT ["/sbin/tini","-g","--","/usr/local/bin/entrypoint.sh"]
+# no CMD here; compose supplies it
