@@ -1,33 +1,44 @@
 # AFCT Dashboard
 
-A modern Next.js dashboard for AFCT.
+A modern **Next.js 15** dashboard for the **Automated Feedback for CS Theory (AFCT)** system.  
+Built with **PostgreSQL, Prisma, NextAuth.js, Tailwind, and Docker**.
+
+---
+
+![Node.js](https://img.shields.io/badge/Node.js-20%2B-brightgreen?logo=node.js)
+![Docker](https://img.shields.io/badge/Docker-ready-blue?logo=docker)
+![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=next.js)
+![Prisma](https://img.shields.io/badge/Prisma-ORM-blue?logo=prisma)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue?logo=typescript)
+
+---
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- **Docker Desktop** (recommended)
-- **Node.js 20+** (for local development)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (recommended)
+- [Node.js 20+](https://nodejs.org/en) (if developing outside Docker)
 
 ### Development Setup
 
 1. **Clone the repository**
-```bash
-git clone <repository-url>
-cd afct
-```
+   ```bash
+   git clone <repository-url>
+   cd afct
+   ```
 
-2. **Start development environment**
-```bash
-# Option 1: With live logs (recommended for debugging)
-npm run docker:dev
+2. **Start the dev environment**
+   ```bash
+   # With live logs (recommended for debugging)
+   npm run docker:dev
 
-# Option 2: In background (detached mode)
-npm run docker:dev:detached
-```
+   # Detached/background mode
+   npm run docker:dev:detached
+   ```
 
-3. **Open the application**
-- Visit: http://localhost:3000
-- Database will be automatically migrated and seeded
+3. **Open the app**
+   - Visit: [http://localhost:3000](http://localhost:3000)  
+   - Database is automatically migrated and seeded on startup
 
 ---
 
@@ -35,111 +46,62 @@ npm run docker:dev:detached
 
 ### Main Commands
 ```bash
-# Start development environment
-npm run docker:dev                  # With live logs
-npm run docker:dev:detached         # In background
-
-# Stop containers
-npm run docker:down                 # Graceful stop
-Ctrl+C                              # If using live logs mode
-
-# Clean restart (removes data)
-npm run docker:down:volumes         # Remove data volumes
-npm run docker:nuke                 # Nuclear option - remove everything
+npm run docker:dev          # Start with live logs
+npm run docker:dev:detached # Start in background
+npm run docker:down         # Stop containers
+npm run docker:clean        # Prune unused Docker data
 ```
 
-### What Happens Automatically
-- ✅ PostgreSQL database starts and is configured
-- ✅ Database migrations run automatically
-- ✅ Sample data is seeded
-- ✅ Next.js development server starts with hot reload
-- ✅ File uploads directory is created
+### Reset Options
+```bash
+npm run docker:down:volumes # Stop + remove database volume (reset data)
+npm run docker:nuke         # Remove containers, volumes, images (full reset)
+```
+
+### What Happens on Startup
+- ✅ PostgreSQL container starts  
+- ✅ Prisma migrations applied  
+- ✅ Seed data inserted (users + courses)  
+- ✅ Next.js dev server launched with hot reload  
+- ✅ Uploads directory initialized  
 
 ---
 
 ## 💻 Local Development (Alternative)
 
-### Setup Local PostgreSQL
-```bash
-# Install PostgreSQL locally, then:
-createdb afct_dev
-export DATABASE_URL="postgresql://username:password@localhost:5432/afct_dev"
-```
+1. **Run PostgreSQL locally**
+   ```bash
+   createdb afct_dev
+   export DATABASE_URL="postgresql://username:password@localhost:5432/afct_dev"
+   ```
 
-### Run Development Server
-```bash
-npm install
-npm run db:generate               # Generate Prisma client
-npm run db:migrate                # Run database migrations
-npm run seed                      # Seed sample data
-npm run dev                       # Start Next.js dev server
-```
+2. **Install & start**
+   ```bash
+   npm install
+   npm run db:generate
+   npm run db:migrate
+   npm run seed
+   npm run dev
+   ```
 
 ---
 
 ## 🗄️ Database Management
 
-### Prisma Commands
+### Prisma
 ```bash
-# Generate Prisma client (after schema changes)
-npm run db:generate
-
-# Create and run new migration
-npm run db:migrate
-
-# Open Prisma Studio (database GUI)
-npm run db:studio
-
-# Reset database (⚠️ destroys all data)
-npm run db:reset
-
-# Seed database with sample data
-npm run seed
-
-# Check database performance
-npm run db:performance
+npm run db:generate   # Generate client after schema changes
+npm run db:migrate    # Create/run migrations
+npm run db:studio     # Open Prisma Studio
+npm run db:reset      # Drop + recreate database
+npm run seed          # Seed sample data
 ```
 
-### Docker Database Commands
+### Inside Docker
 ```bash
-# Run Prisma Studio inside Docker container
-npm run docker:studio
-
-# Seed database inside Docker container
-npm run docker:seed
-
-# Connect directly to PostgreSQL
-npm run docker:psql
-```
-
----
-
-## 🛠️ Development Tools
-
-### Code Quality
-```bash
-npm run lint                      # Check for linting errors
-npm run lint:fix                  # Auto-fix linting issues
-npm run typecheck                 # TypeScript type checking
-```
-
-### Build & Analysis
-```bash
-npm run build                     # Production build
-npm run build:analyze             # Build with bundle analysis
-npm run start                     # Start production server
-npm run start:prod                # Start production server with PORT
-```
-
-### Container Management
-```bash
-npm run docker:clean              # Clean Docker system
-npm run docker:studio             # Open Prisma Studio in container
-npm run docker:seed               # Seed database in container
-npm run docker:psql               # Connect to PostgreSQL in container
-docker ps                         # List running containers
-docker logs afct-dashboard        # View app logs
-docker logs afct-postgres         # View database logs
+npm run docker:studio # Prisma Studio in container
+npm run docker:seed   # Seed database in container
+npm run docker:psql   # Connect to Postgres directly
 ```
 
 ---
@@ -148,187 +110,130 @@ docker logs afct-postgres         # View database logs
 
 ```
 afct/
-├── src/
-│   ├── app/                     # Next.js 15 App Router
-│   ├── components/              # React components
-│   ├── lib/                     # Utilities and configurations
-│   └── types/                   # TypeScript type definitions
+├── src/                 # Application code
+│   ├── app/             # Next.js App Router
+│   ├── components/      # UI components
+│   ├── lib/             # Utilities & configs
+│   └── types/           # TypeScript types
 ├── prisma/
-│   ├── schema.prisma            # Database schema
-│   ├── migrations/              # Database migrations
-│   └── seed.ts                  # Sample data seeder
+│   ├── schema.prisma    # Database schema
+│   ├── migrations/      # Migration history
+│   └── seed.ts          # Seeder script
 ├── public/
-│   └── uploads/                 # File upload storage
-├── docker-compose.dev.yml       # Development environment
-├── Dockerfile.dev               # Development container
-└── package.json                 # Dependencies and scripts
+│   └── uploads/         # File uploads
+├── Dockerfile.dev       # Dev container
+├── docker-compose.dev.yml
+└── package.json
 ```
 
 ---
 
-## ⚙️ Java/JAR Configuration
+## ⚙️ Java & Binaries
 
-AFCT Dashboard integrates with Java-based code analysis tools for automated grading and feedback. The system includes support for JAR files and native binaries.
+The dashboard integrates with Java-based tools (JARs) and native binaries for automated grading/analysis.
 
-### JAR Files Location
+### Layout
 ```
 jars/
-├── afct-evaluator.jar           # Main evaluation engine (if present)
-└── [other-jar-files]            # Additional Java tools
-```
+├── afct-evaluator.jar     # Evaluation engine
+└── other-jar-files…
 
-### Binary Files Location
-```
 bin/
-├── cfganalyzer                  # CFG analysis binary (user-provided)
-└── README.md                    # Binary documentation
+├── cfganalyzer            # CFG analyzer binary
+└── README.md
 ```
 
-### Configuration Variables
-
-The following environment variables control Java/JAR execution:
-
+### Configuration
 ```env
-# Java/JAR Configuration
-CFGANALYZER_LIMIT="15"           # Maximum analysis time limit (seconds)
-CFGANALYZER_BINARY="/app/bin/cfganalyzer"  # Path to CFG analyzer binary
+CFGANALYZER_LIMIT=15
+CFGANALYZER_BINARY=/app/bin/cfganalyzer
 ```
 
-### Setting Up Binaries
-
-1. **Add your CFG analyzer binary:**
+### Setup
 ```bash
-# Copy your binary to the bin directory
-cp /path/to/your/cfganalyzer bin/cfganalyzer
-chmod +x bin/cfganalyzer  # Make executable (Linux/Mac)
+cp /path/to/cfganalyzer bin/cfganalyzer
+chmod +x bin/cfganalyzer
 ```
 
-2. **Verify binary path in environment:**
-```bash
-# In .env.development
-CFGANALYZER_BINARY="/app/bin/cfganalyzer"
-```
-
-3. **Test binary execution (inside Docker):**
-```bash
-# Connect to container
-npm run docker:psql
-# Or manually: docker exec -it afct-dashboard sh
-
-# Test binary
-ls -la /app/bin/cfganalyzer
-/app/bin/cfganalyzer --version  # (if supported)
-```
-
-### Java Runtime
-
-- **Docker**: Java 21 (OpenJDK) is included in Docker containers
-- **Local development**: Requires Java 21+ installed locally
-- **JAR execution**: Handled automatically by the application
-
-### Usage in Application
-
-The Java tools are integrated into:
-- **Submission evaluation**: Automated grading of student code
-- **Code analysis**: Control flow graph generation
-- **Feedback generation**: Detailed analysis reports
+- Docker includes **Java 21 (OpenJDK)** by default  
+- Local dev requires **Java 21+**
 
 ---
 
 ## 🔧 Environment Variables
 
-Create `.env.development` for local development:
-```env
-# Database Configuration
-DATABASE_URL="postgresql://afct_user:devpassword123@localhost:5432/afct_dev"
+Create `.env.development`:
 
-# Authentication Configuration
-NEXTAUTH_URL="http://localhost:3000"
-NEXTAUTH_SECRET="your-secret-key"
-
-# Java/JAR Configuration
-CFGANALYZER_LIMIT="15"
-CFGANALYZER_BINARY="/app/bin/cfganalyzer"
-
-# File Upload Configuration
-UPLOAD_DIR="./public/uploads"
-MAX_FILE_SIZE="10485760"
-
-# Node Environment
-NODE_ENV="development"
-```
+| Variable             | Purpose                                |
+|----------------------|----------------------------------------|
+| `DATABASE_URL`       | Postgres connection string             |
+| `NEXTAUTH_URL`       | Base URL for NextAuth                  |
+| `NEXTAUTH_SECRET`    | Secret for NextAuth JWT/session        |
+| `CFGANALYZER_LIMIT`  | Max analysis time (seconds)            |
+| `CFGANALYZER_BINARY` | Path to CFG analyzer binary            |
+| `UPLOAD_DIR`         | File upload directory                  |
+| `MAX_FILE_SIZE`      | Upload size limit (bytes)              |
+| `NODE_ENV`           | Node environment (`development`)       |
 
 ---
 
 ## 📝 Development Workflow
 
-### Daily Development
-1. **Start containers**: `npm run docker:dev:detached`
-2. **Code changes**: Edit files - hot reload handles updates automatically
-3. **Database changes**: 
-   - Edit `prisma/schema.prisma`
-   - Run `docker exec -it afct-dashboard npx prisma db push` for quick updates
-   - Or `npm run db:migrate` for proper migrations
-4. **Stop when done**: `npm run docker:down`
+### Typical Day
+1. Start containers: `npm run docker:dev:detached`  
+2. Code — hot reload handles changes  
+3. Update schema → run `npm run db:migrate`  
+4. Done? Stop with `npm run docker:down`
 
-### When to Restart Docker
-- New dependencies added to `package.json`
-- Environment variable changes
-- Docker configuration changes
-- After major updates
+### Restart Needed When:
+- Added new dependencies
+- Changed env vars
+- Edited Dockerfiles or compose
+- Major updates
 
 ---
 
 ## 🔍 Troubleshooting
 
-### Common Issues
-
-**Port already in use:**
+**Port already in use**
 ```bash
-npm run docker:down              # Stop existing containers
-docker ps                        # Check for running containers
+npm run docker:down
+docker ps
 ```
 
-**Database connection errors:**
+**Database connection issues**
 ```bash
-docker logs afct-postgres        # Check PostgreSQL logs
+docker logs afct-postgres
 docker exec -it afct-postgres pg_isready -U afct_user
 ```
 
-**Permission errors:**
+**Build failures**
 ```bash
-# Windows/PowerShell: Enable execution policy
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-```
-
-**Container build errors:**
-```bash
-npm run docker:clean             # Clean Docker system
-docker system prune -af          # Nuclear option
+npm run docker:clean
+docker system prune -af   # Hard reset
 ```
 
 ---
 
-## 📚 Technology Stack
+## 📚 Tech Stack
 
-- **Framework**: Next.js 15 (App Router)
-- **Database**: PostgreSQL 15
-- **ORM**: Prisma
-- **UI**: Tailwind CSS + Radix UI
-- **Auth**: NextAuth.js v5
-- **Language**: TypeScript
-- **Container**: Docker + Docker Compose
+- **Framework**: Next.js 15 (App Router)  
+- **DB**: PostgreSQL 15 + Prisma ORM  
+- **UI**: Tailwind CSS, Radix UI  
+- **Auth**: NextAuth.js v5  
+- **Lang**: TypeScript  
+- **Containers**: Docker + Compose  
 
 ---
 
 ## 🤝 Contributing
 
-1. Create a feature branch
-2. Make changes
-3. Test with `npm run docker:dev`
-4. Run quality checks: `npm run lint && npm run typecheck`
-5. Submit pull request
+1. Create a feature branch  
+2. Make changes  
+3. Run with `npm run docker:dev`  
+4. Lint & typecheck: `npm run lint && npm run typecheck`  
+5. Open a pull request  
 
 ---
 
-*For production deployment instructions, see the production documentation (coming soon).*
+✨ *For production deployment, see [Production Docs](./docs/production.md) (coming soon).*
