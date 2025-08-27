@@ -1,5 +1,4 @@
 // prisma/seed.ts
-
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 
@@ -15,8 +14,11 @@ async function main() {
     return;
   }
 
-  // If running in production, only ensure a single admin exists
   const isProduction = process.env.NODE_ENV === 'production';
+
+  // ===========================
+  // Production seeding
+  // ===========================
   if (isProduction) {
     const prodHashed = await bcrypt.hash('Password123!', 10);
     await prisma.user.upsert({
@@ -31,18 +33,18 @@ async function main() {
       },
     });
     console.log(
-      'Production seed complete: created/ensured single admin user (admin@example.com)'
+      'Production seed complete: created/ensured single admin user (admin@example.com)',
     );
     return;
   }
 
   // ===========================
-  // 🔽 Development seeding 🔽
+  // Development seeding 
   // ===========================
 
   const hashedPassword = await bcrypt.hash('password123', 10);
 
-  // Create Admin User (development)
+  // Admin user
   await prisma.user.upsert({
     where: { email: 'admin@example.com' },
     update: {},
@@ -55,8 +57,8 @@ async function main() {
     },
   });
 
-  // Faculty Users
-  const faculty1 = await prisma.user.upsert({
+  // Faculty users
+  await prisma.user.upsert({
     where: { email: 'faculty@example.com' },
     update: {},
     create: {
@@ -65,12 +67,10 @@ async function main() {
       lastName: 'Chiampi',
       password: hashedPassword,
       role: 'FACULTY',
-      avatar:
-        'cmdc7t2vy0001lvu0zgeec2g2_1753058269605_8285cd86-ad03-4cc4-8a36-9753173d9ad3.jpg',
     },
   });
 
-  const faculty2 = await prisma.user.upsert({
+  await prisma.user.upsert({
     where: { email: 'faculty2@example.com' },
     update: {},
     create: {
@@ -82,20 +82,8 @@ async function main() {
     },
   });
 
+  // TA users
   await prisma.user.upsert({
-    where: { email: 'faculty1@example.com' },
-    update: {},
-    create: {
-      email: 'faculty1@example.com',
-      firstName: 'Clark',
-      lastName: 'Kent',
-      password: hashedPassword,
-      role: 'FACULTY',
-    },
-  });
-
-  // TA Users
-  const ta1 = await prisma.user.upsert({
     where: { email: 'ta1@example.com' },
     update: {},
     create: {
@@ -120,15 +108,8 @@ async function main() {
   });
 
   // Students
-  const students: any[] = [];
   const studentData = [
-    {
-      email: 'student@example.com',
-      firstName: 'Oliver',
-      lastName: 'Green',
-      avatar:
-        'cmdc7t2xq0007lvu0v3e504di_1753582590136_a9b637f5-e376-4e56-80c9-4f5f94ae795c.avif',
-    },
+    { email: 'student@example.com', firstName: 'Oliver', lastName: 'Green',},
     { email: 'student1@example.com', firstName: 'Peter', lastName: 'Parker' },
     { email: 'student2@example.com', firstName: 'Tony', lastName: 'Stark' },
     { email: 'student3@example.com', firstName: 'Steve', lastName: 'Rogers' },
@@ -146,52 +127,32 @@ async function main() {
     { email: 'student15@example.com', firstName: "T'Challa", lastName: 'Wakanda' },
     { email: 'student16@example.com', firstName: 'Shuri', lastName: 'Wakanda' },
     { email: 'student17@example.com', firstName: 'Kurt', lastName: 'Wagner' },
-    {
-      email: 'student18@example.com',
-      firstName: 'Jean',
-      lastName: 'Gray',
-      avatar:
-        'cmdc7t2xu000glvu06d3gotwx_1753583314285_c9b3ca75-5fcc-4fea-9e18-def9e438024c.jpg',
-    },
+    { email: 'student18@example.com', firstName: 'Jean', lastName: 'Gray' },
     { email: 'student19@example.com', firstName: 'Logan', lastName: 'Howlett' },
     { email: 'student20@example.com', firstName: 'Ororo', lastName: 'Monroe' },
     { email: 'student21@example.com', firstName: 'Remy', lastName: 'LeBeau' },
-    {
-      email: 'student22@example.com',
-      firstName: 'Bruce',
-      lastName: 'Banner',
-      avatar:
-        'cmdc7t2y0000rlvu0j92i2qx1_1753583537015_57f649b2-6363-4eae-a809-8c8307717e02.jpg',
-    },
+    { email: 'student22@example.com', firstName: 'Bruce', lastName: 'Banner' },
     { email: 'student23@example.com', firstName: 'Hank', lastName: 'McCoy' },
-    {
-      email: 'student24@example.com',
-      firstName: 'Miles',
-      lastName: 'Morales',
-      avatar:
-        'cmdc7t2y9000tlvu0hdcfufh2_1753583866075_43e50ce3-e083-43f1-9a14-a0ff19198e73.jpg',
-    },
+    { email: 'student24@example.com', firstName: 'Miles', lastName: 'Morales' },
     { email: 'student25@example.com', firstName: 'Gwen', lastName: 'Stacy' },
   ];
 
-  for (const studentInfo of studentData) {
-    const student = await prisma.user.upsert({
-      where: { email: studentInfo.email },
+  for (const s of studentData) {
+    await prisma.user.upsert({
+      where: { email: s.email },
       update: {},
       create: {
-        email: studentInfo.email,
-        firstName: studentInfo.firstName,
-        lastName: studentInfo.lastName,
+        email: s.email,
+        firstName: s.firstName,
+        lastName: s.lastName,
         password: hashedPassword,
         role: 'STUDENT',
-        avatar: studentInfo.avatar || null,
       },
     });
-    students.push(student);
   }
 
   // Courses
-  const course1 = await prisma.course.upsert({
+  await prisma.course.upsert({
     where: { id: 'cmdnw26cf0000lv14s4q5v73b' },
     update: {},
     create: {
@@ -207,7 +168,7 @@ async function main() {
     },
   });
 
-  const course2 = await prisma.course.upsert({
+  await prisma.course.upsert({
     where: { id: 'cmdoowaql0000lvesz3qanxph' },
     update: {},
     create: {
@@ -223,10 +184,7 @@ async function main() {
     },
   });
 
-  // Rosters, Problems, Assignments …
-  // (all your existing roster, problem, and assignment upserts go here unchanged)
-
-  console.log('Database seeded successfully!');
+  console.log('Development seed complete: users (all) and courses created.');
 }
 
 main()
