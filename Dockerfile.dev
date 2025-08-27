@@ -1,34 +1,40 @@
-FROM node:18-alpine
+# syntax=docker/dockerfile:1.7
+FROM node:20-alpine
+
+# Base OS deps you need
+RUN apk add --no-cache libc6-compat openssl python3 make g++ git openjdk21-jre tini
+
+ENV NODE_ENV=development
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PATH="/app/bin:${PATH}"
+
+# Run as the 'node' user
+USER node
 WORKDIR /app
 
-# Install Java (OpenJDK) for running .jar files - moved earlier for better caching
-RUN apk add --no-cache openjdk21-jre
+# Install deps first for caching
+COPY --chown=node:node package.json package-lock.json ./
+# Cache npm directory and ensure it's owned by node (uid/gid 1000)
+RUN --mount=type=cache,id=npm-cache-node20,target=/home/node/.npm,uid=1000,gid=1000 \
+    npm ci --prefer-offline --no-audit --progress=false
 
-# Copy package files first for better Docker layer caching
-COPY package*.json ./
+# Tools / jars
+COPY --chown=node:node jars /app/jars
+COPY --chown=node:node bin  /app/bin
+RUN if [ -f /app/bin/cfganalyzer ]; then chmod +x /app/bin/cfganalyzer; fi
 
-# Install dependencies (this layer will be cached unless package.json changes)
-RUN npm ci --prefer-offline --no-audit --progress=false
+# App source
+COPY --chown=node:node . .
 
-# Create directories early
-RUN mkdir -p /app/bin /app/jars
+# Generate Prisma client with a cache for engines
+RUN --mount=type=cache,id=prisma-cache-node20,target=/home/node/.cache/prisma,uid=1000,gid=1000 \
+    npx prisma generate || true
 
-# Copy and setup binaries/jars (these change less frequently)
-COPY jars /app/jars
-COPY bin /app/bin
-RUN chmod -R 644 /app/jars || true && chmod +x /app/jars/*.jar || true
-RUN if [ -f bin/cfganalyzer ]; then chmod +x bin/cfganalyzer; fi || true
-
-# Copy source code (this layer rebuilds when code changes)
-COPY . .
-
-# Generate Prisma client (only when schema changes)
-RUN npx prisma generate
-
-# Verify Java installation (non-fatal)
-RUN java -version || echo "Java check completed"
+# Sanity: don't fail the build if Java can't print its version
+RUN java -version || true
 
 EXPOSE 3000
 
-# Dynamic command based on TURBOPACK environment variable
-CMD ["sh", "-c", "if [ \"$TURBOPACK\" = \"1\" ]; then npm run dev:turbo; else npm run dev; fi"]
+# Keep tini as PID 1 for proper signal handling, but
+# **do not** include CMD here; let docker-compose supply the command.
+ENTRYPOINT ["/sbin/tini","-g","--"]

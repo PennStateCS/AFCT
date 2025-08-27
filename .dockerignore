@@ -1,29 +1,58 @@
+# Node / Next.js build artifacts
 node_modules
-npm-debug.log
 .next
-.git
-.gitignore
-README.md
-Dockerfile*
-docker-compose*.yml
-.dockerignore
-.env*
-prisma/dev.db*
 coverage
 .nyc_output
-.vscode
-.idea
-*.log
+**/dist
+**/build
+**/.cache
+**/.turbo
+**/tsconfig.tsbuildinfo
+**/.eslintcache
 
-# Additional performance optimizations
+# Logs & OS/editor junk
+*.log
+npm-debug.log
 **/.DS_Store
 **/Thumbs.db
 **/*.tmp
 **/*.temp
-**/dist
-**/build
-**/.cache
+*.swp
+*.swo
+
+# VCS / docs
+.git
+.gitignore
+.github
+README.md
+
+# Docker / Compose (not needed in build context)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Env files (keep examples by unignoring)
+.env*
+!.env.example
+
+# Prisma: ignore local dev DB, keep schema & migrations
+prisma/dev.db*
+!prisma/schema.prisma
+!prisma/migrations/**
+
+# Uploads: ignore runtime data but keep placeholder so dir exists
 **/public/uploads/*
-**/.turbo
-**/tsconfig.tsbuildinfo
-**/.eslintcache
+!public/uploads/.gitkeep
+
+# IDE
+.vscode
+.idea
+
+# Optional: ignore tests if not needed in image
+**/__tests__/**
+**/*.test.*
+**/*.spec.*
+
+# Optional: package managers (if unused)
+# .pnpm-store
+# yarn.lock
