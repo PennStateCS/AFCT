@@ -1,6 +1,8 @@
+
 services:
   postgres:
     image: postgres:15-alpine
+    container_name: afct-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: afct_dev
@@ -51,7 +53,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 6
-      start_period: 30s   # was 20s; optional
+      start_period: 30s
     mem_limit: 1g
     tmpfs:
       - /var/run/postgresql:rw,noexec,nosuid,size=64m
@@ -65,14 +67,15 @@ services:
       DATABASE_URL: postgresql://afct_user:devpassword123@postgres:5432/afct_dev
       NEXTAUTH_URL: http://localhost:3000
       NEXTAUTH_SECRET: dev-secret-key
+      AUTH_TRUST_HOST: "true"
       CFGANALYZER_LIMIT: 15
       CFGANALYZER_BINARY: /app/bin/cfganalyzer
       NODE_ENV: development
       NEXT_TELEMETRY_DISABLED: "1"
       CHOKIDAR_USEPOLLING: "true"
       WATCHPACK_POLLING: "true"
-      # WATCHPACK_POLLING_INTERVAL: "1000"
-      # CHOKIDAR_INTERVAL: "1000"
+      MIGRATE_ON_START: "true"
+      SEED_ON_START: "true"
     ports:
       - "3000:3000"
     depends_on:
@@ -84,13 +87,10 @@ services:
       - ./public/uploads:/app/public/uploads:delegated
     tmpfs:
       - /app/.next:rw,uid=1000,gid=1000,size=256m
-    command: >
-      sh -lc '
-        set -e;
-        npx prisma migrate deploy || npx prisma migrate dev --name init;
-        npm run seed;
-        exec npm run dev
-      '
+    entrypoint: ["/sbin/tini","-g","--","/usr/local/bin/entrypoint.sh"]
+    command: ["npm","run","dev"]
+
+
 
 volumes:
   postgres_dev_data:

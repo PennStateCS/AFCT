@@ -20,13 +20,16 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:deploy": "prisma migrate deploy",
-    "db:reset": "prisma migrate reset",
+    "db:reset": "prisma migrate reset --force --skip-generate",
 
     "docker:dev": "docker compose -f docker-compose.dev.yml up --build",
     "docker:dev:detached": "docker compose -f docker-compose.dev.yml up --build -d",
     "docker:prod": "docker compose up --build -d",
     "docker:down": "docker compose down",
     "docker:clean": "docker compose down && docker system prune -f",
+    "docker:down:volumes": "docker compose -f docker-compose.dev.yml down -v",
+    "docker:nuke": "docker compose -f docker-compose.dev.yml down -v && docker system prune -af --volumes",
+
 
     "db:performance": "powershell -ExecutionPolicy Bypass -File scripts\\quick-db-check.ps1",
 
