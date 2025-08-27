@@ -1,6 +1,19 @@
 # AFCT Dashboard
 
-A modern Next.js course management platform with role-based authentication for faculty, TAs, and students. Fully containerized with Docker and optimized for high-performance development and production deployment.
+A modern Next.js course manageme5. **Monitor performance** (optional):
+```bash
+# Quick database performance check
+npm run db:performance
+
+# Monitor container resources
+docker stats afct-dashboard afct-postgres-1
+```
+
+### Production Deployment
+
+**Prerequisites**: Make sure Docker Desktop is running before starting!
+
+1. **Setup production environment:**with role-based authentication for faculty, TAs, and students. Fully containerized with Docker.
 
 **Stack**: Next.js 15 • TypeScript • Prisma • NextAuth v5 • Tailwind CSS • PostgreSQL • Docker • Java 21
 
@@ -10,6 +23,8 @@ A modern Next.js course management platform with role-based authentication for f
 - Docker Desktop (Windows/Mac) or Docker Engine (Linux)
 - Docker Compose
 - Git
+
+> **⚠️ Important**: Make sure Docker Desktop is running before using any Docker commands below!
 
 ### Development Setup
 
@@ -30,33 +45,85 @@ CFGANALYZER_LIMIT="15"
 CFGANALYZER_BINARY="/app/bin/cfganalyzer"
 ```
 
-3. **Start development environment**:
+3. **Start Docker Desktop first:**
 ```bash
-# Fast startup (recommended for development)
-npm run docker:dev:fast
+# Windows: Start Docker Desktop application
+start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
 
-# Full rebuild if needed
-npm run docker:dev:rebuild
+# Mac: Start Docker Desktop application  
+open -a Docker
 
-# Alternative: standard startup
+# Linux: Start Docker service
+sudo systemctl start docker
+```
+
+4. **Start development environment:**
+```bash
+# Development startup (builds and starts containers)
 npm run docker:dev
 ```
 
-4. **Access the application**:
+5. **Access the application:**
 - Visit `http://localhost:3000`
 - Health Check: `http://localhost:3000/api/health`
 - Database Studio: `http://localhost:5555` (run `npm run db:studio` in another terminal)
 
-5. **Monitor performance** (optional):
-```bash
-# Quick database performance check
-npm run db:performance
+## 💻 Developer Workflow
 
-# Monitor container resources
-docker stats afct-dashboard afct-postgres-1
+### **Recommended Daily Development**
+```bash
+# Option 1: Standard mode with live logs (Recommended)
+npm run docker:dev
+
+# Option 2: Detached mode (runs in background)
+npm run docker:dev:detached
+
+# Code all day! 🔥
+# ✅ Hot reload - changes appear instantly in browser
+# ✅ Database stays persistent - your data remains
+# ✅ No need to restart - just save files and see changes
+
+# Evening: Stop when done for the day
+Ctrl+C                    # (if using standard mode)
+npm run docker:down       # (if using detached mode or to stop all)
 ```
 
-### Production Deployment
+### **Alternative Development Options**
+
+**Option 1: Standard Mode (Recommended)**
+- Start with `npm run docker:dev`
+- View live logs in terminal
+- Stop with `Ctrl+C`
+
+**Option 2: Detached Mode (Background)**
+- Start with `npm run docker:dev:detached`
+- Runs in background without logs
+- Stop with `npm run docker:down`
+
+**Option 3: Local Development (No Docker)**
+```bash
+# Requires local PostgreSQL setup
+npm run dev
+# Runs Next.js directly on your machine
+```
+
+**Option 4: Database Only in Docker**
+```bash
+# Run just PostgreSQL in Docker
+docker-compose -f docker-compose.dev.yml up postgres
+
+# Then run app locally in another terminal
+npm run dev
+```
+
+### **When to Restart Docker**
+You typically only need to restart `npm run docker:dev` when:
+- Adding new dependencies to package.json
+- Changing Docker configuration files
+- Updating environment variables
+- After a fresh git pull with significant changes
+
+## Production Deployment
 
 1. **Setup production environment**:
 ```bash
@@ -112,19 +179,19 @@ chmod +x bin/cfganalyzer  # Make it executable
 ## 🛠️ Available Commands
 
 ### Docker Commands
+
+**⚠️ Prerequisites**: Ensure Docker Desktop is running before using these commands!
+
 ```bash
 # Development
-npm run docker:dev          # Standard development startup
-npm run docker:dev:fast     # Fast startup (recommended)
-npm run docker:dev:turbo    # Development with turbo mode
-npm run docker:dev:rebuild  # Full rebuild with cache clearing
+npm run docker:dev          # Build and start development environment
 
 # Production
-npm run docker:prod         # Start production deployment
+npm run docker:prod         # Build and start production environment (background)
 
 # Management
 npm run docker:down         # Stop all containers
-npm run docker:clean        # Stop containers and clean system
+npm run docker:clean        # Stop containers and clean up system
 ```
 
 ### Database Commands
@@ -239,29 +306,31 @@ The application automatically detects Docker environment and adjusts:
 
 **Slow startup/compilation**:
 ```bash
-# Use optimized startup
-npm run docker:dev:fast
+# Use standard startup
+npm run docker:dev
 
 # Check performance
 npm run db:performance
 
 # Full clean rebuild if needed
 npm run docker:clean
-npm run docker:dev:rebuild
+npm run docker:dev
 ```
 
 **Containers won't start**:
 ```bash
+# Make sure Docker Desktop is running first!
+# Then try:
 docker-compose down
 docker system prune -f
-npm run docker:dev:fast
+npm run docker:dev
 ```
 
 **Database connection issues**:
 ```bash
 npm run docker:down
 docker volume prune -f
-npm run docker:dev:fast
+npm run docker:dev
 ```
 
 **Performance issues**:
@@ -351,13 +420,9 @@ Before deploying to production:
 
 ---
 
-**Ready to develop?** Run `npm run docker:dev:fast` and visit `http://localhost:3000`
+**Ready to develop?** Make sure Docker Desktop is running, then run `npm run docker:dev` and visit `http://localhost:3000`
 
-**Need maximum performance?** The development environment includes extensive optimizations:
-- 18% faster startup times
-- Optimized database configuration  
-- Memory-efficient containers
-- Built-in performance monitoring
+**Need maximum performance?** The development environment includes essential optimizations for reliable development.
 
 **Ready for production?** Use the template: `cp .env.production.template .env.production`, configure your secrets, then run `npm run docker:prod`
 
