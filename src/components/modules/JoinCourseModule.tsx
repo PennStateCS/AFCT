@@ -61,6 +61,14 @@ export function JoinCourseModule() {
           <InputOTP
             maxLength={6}
             value={code.toUpperCase()}
+            onPaste={
+              (e) => {
+                e.preventDefault();
+                const pastedData = e.clipboardData.getData('text/plain');
+                const processedData = pastedData.replace(/[^A-Z0-9a-z]/g, '');
+                setCode(processedData);
+              }
+            }
             onChange={setCode}
             pattern="[A-Z0-9a-z]"
             containerClassName="justify-start"
