@@ -63,10 +63,10 @@ export function JoinCourseModule() {
             value={code.toUpperCase()}
             onPaste={
               (e) => {
-                e.preventDefault();
-                const pastedData = e.clipboardData.getData('text/plain');
-                const processedData = pastedData.replace(/[^A-Z0-9a-z]/g, '');
-                setCode(processedData);
+                e.preventDefault(); // Prevent the typical pasteing-in of data
+                const pastedData = e.clipboardData.getData('text/plain'); // Get what the user is trying to paste
+                const processedData = pastedData.replace(/[^A-Z0-9a-z]/g, ''); // Replace all characters that are not A-Z0-9a-z with whitespace
+                setCode(processedData); // Set the processed data to the box
               }
             }
             onChange={setCode}
