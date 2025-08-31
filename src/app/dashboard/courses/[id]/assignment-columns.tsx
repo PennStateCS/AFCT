@@ -165,14 +165,14 @@ export function useAssignmentColumns(
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <Link href={`/dashboard/courses/${row.original.courseId}/${row.original.id}`}>
-                  <DropdownMenuItem className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2">
+                  <DropdownMenuItem className="hover:bg-secondary flex items-center gap-2">
                     <BookOpen className="mr-2 h-4 w-4" />
                     View Assignment
                   </DropdownMenuItem>
                 </Link>
                 <DropdownMenuItem
                   onClick={() => handleAssignmentEditClick(row.original)}
-                  className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2"
+                  className="hover:bg-secondary flex items-center gap-2"
                 >
                   <Pencil className="mr-2 h-4 w-4" />
                   Edit Assignment
@@ -185,7 +185,7 @@ export function useAssignmentColumns(
                     handleAssignmentDeleteClick(row.original.id);
                   }}
                   title={title}
-                  className={`flex items-center gap-2 ${disabled ? 'opacity-50 cursor-not-allowed text-gray-500' : 'hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground text-red-600'}`}
+                  className={`flex items-center gap-2 ${disabled ? 'opacity-50 cursor-not-allowed text-gray-500' : '"hover:bg-secondary focus:text-red-600 text-red-600'}`}
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
                   Delete Assignment

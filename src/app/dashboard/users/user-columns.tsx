@@ -212,7 +212,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: User; onUserUpdate: () 
 
           <DropdownMenuItem
             onClick={() => setEditOpen(true)}
-            className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2"
+            className="hover:bg-secondary flex items-center gap-2"
           >
             <Pencil className="h-4 w-4" />
             Edit User Profile
@@ -220,7 +220,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: User; onUserUpdate: () 
 
           <DropdownMenuItem
             onClick={() => setResetOpen(true)}
-            className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2"
+            className="hover:bg-secondary flex items-center gap-2"
           >
             <Lock className="h-4 w-4" />
             Reset Password
@@ -230,7 +230,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: User; onUserUpdate: () 
 
           <DropdownMenuItem
             onClick={() => setConfirmOpen(true)}
-            className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2"
+            className="hover:bg-secondary focus:text-red-600 flex items-center gap-2 text-red-600"
           >
             <Trash2 className="h-4 w-4" />
             Delete User
