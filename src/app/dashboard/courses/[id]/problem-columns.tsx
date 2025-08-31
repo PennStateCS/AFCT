@@ -109,7 +109,7 @@ export const problemColumns = ({
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => onEdit(row.original)}
-              className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2"
+              className="hover:bg-secondary flex items-center gap-2"
             >
               <Pencil className="mr-2 h-4 w-4" />
               Edit Problem
@@ -122,7 +122,7 @@ export const problemColumns = ({
               }}
               disabled={disabled}
               title={disabled ? 'Problem is used by an assignment and cannot be deleted' : undefined}
-              className={`hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2 text-red-600 ${
+              className={`hover:bg-secondary focus:text-red-600 flex items-center gap-2 text-red-600 ${
                 disabled ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >

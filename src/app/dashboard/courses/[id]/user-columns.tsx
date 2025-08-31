@@ -85,7 +85,7 @@ function ActionsCell({ user, onChange, courseId, facultyCount }: ActionsCellProp
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={() => setOpen(true)}
-            className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2"
+            className="hover:bg-secondary flex items-center gap-2"
           >
             <Pencil className="mr-2 h-4 w-4" />
             Edit User
@@ -103,7 +103,7 @@ function ActionsCell({ user, onChange, courseId, facultyCount }: ActionsCellProp
                     setConfirmOpen(true);
                   }}
                   disabled={disabled}
-                  className={`hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2 text-red-600 ${
+                  className={`hover:bg-secondary focus:text-red-600 flex items-center gap-2 text-red-600 ${
                     disabled ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
                   title={disabled ? 'User has submissions for this course and cannot be removed' : undefined}

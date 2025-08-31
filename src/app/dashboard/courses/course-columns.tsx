@@ -181,14 +181,14 @@ function CourseActionsCell({
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <Link href={`/dashboard/courses/${course.id}`} passHref>
-            <DropdownMenuItem className="hover:bg-secondary focus:bg-secondary flex items-center gap-2">
+            <DropdownMenuItem className="hover:bg-secondary flex items-center gap-2">
               <BookOpen className="mr-2 h-4 w-4" />
               View Course
             </DropdownMenuItem>
           </Link>
           <DropdownMenuItem
             onClick={() => setEditOpen(true)}
-            className="hover:bg-secondary focus:bg-secondary flex items-center gap-2"
+            className="hover:bg-secondary flex items-center gap-2"
           >
             <Pencil className="mr-2 h-4 w-4" />
             Edit Course
@@ -196,7 +196,7 @@ function CourseActionsCell({
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={() => setConfirmOpen(true)}
-            className="hover:bg-secondary focus:bg-secondary flex items-center gap-2 text-red-600"
+            className="hover:bg-secondary focus:text-red-600 flex items-center gap-2 text-red-600"
           >
             <Trash2 className="mr-2 h-4 w-4" />
             Delete Course
