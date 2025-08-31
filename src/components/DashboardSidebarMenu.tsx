@@ -293,10 +293,8 @@ export default function DashboardSidebarMenu() {
           });
           if (!res.ok) {
             const { error } = await res.json();
-            toast.error(error || 'Failed to change password');
             throw new Error(error || 'Failed to change password');
           }
-          toast.success('Password changed!');
         }}
       />
       <EditProfileDialog open={editProfileOpen} setOpen={setEditProfileOpen} />
