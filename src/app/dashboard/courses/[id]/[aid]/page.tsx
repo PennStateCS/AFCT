@@ -9,7 +9,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, Pencil, Trash2, BookOpen, Code, Package, Eye, Download } from "lucide-react";
+import { ChevronDown, Pencil, Trash2, NotebookText, FileText, Package, Eye, Download } from "lucide-react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -236,7 +236,7 @@ export default function AssignmentDashboardPage() {
 						className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white"
 						value="problems"
 					>
-            <Code className="h-4 w-4" />
+            <FileText className="h-4 w-4" />
 						Problems
 					</TabsTrigger>
 					<TabsTrigger
@@ -254,7 +254,7 @@ export default function AssignmentDashboardPage() {
 					<Card className="w-full">
 						<CardHeader className="text-2xl">
 							<div className="flex items-center justify-between w-full">
-								<CardTitle  className="flex items-center gap-2 text-2xl"><Code className="w-6 h-6" />Problems</CardTitle>
+								<CardTitle  className="flex items-center gap-2 text-2xl"><FileText className="w-6 h-6" />Problems</CardTitle>
 								<Button
 									variant="default"
 									aria-label="Add Existing Problem"
@@ -376,26 +376,26 @@ export default function AssignmentDashboardPage() {
 																				</DropdownMenuTrigger>
 																				<DropdownMenuContent align="end">
 																					<DropdownMenuLabel className="flex items-center gap-2">
-																						<BookOpen className="h-4 w-4" />
+																						<NotebookText className="h-4 w-4" />
 																						{row.original.title}
 																					</DropdownMenuLabel>
 																					<DropdownMenuSeparator />
 																					<DropdownMenuItem
 																						onClick={() => handleEditProblem(row.original)}
-																						className="hover:bg-secondary focus:bg-secondary flex items-center gap-2"
+																						className="flex items-center gap-2"
 																					>
 																						<Pencil className="mr-2 h-4 w-4" /> Edit Problem
 																					</DropdownMenuItem>
 																					<DropdownMenuItem
 																						onClick={() => openRenderViewer(row.original)}
-																						className="hover:bg-secondary focus:bg-secondary flex items-center gap-2"
+																						className="flex items-center gap-2"
 																					>
 																						<Eye className="mr-2 h-4 w-4" /> Render File
 																					</DropdownMenuItem>
 																					<DropdownMenuSeparator />
 																					<DropdownMenuItem
 																						onClick={() => setProblemToRemove(row.original)}
-																						className="hover:bg-secondary focus:bg-secondary flex items-center gap-2 text-red-600"
+																						className="focus:text-red-600 flex items-center gap-2 text-red-600"
 																					>
 																						<Trash2 className="mr-2 h-4 w-4" /> Remove Problem
 																					</DropdownMenuItem>
