@@ -10,7 +10,7 @@ import { signOut } from 'next-auth/react';
 import {
   LayoutDashboard,
   Book,
-  User,
+  Users,
   UserRound,
   LogOut,
   LockKeyhole,
@@ -55,7 +55,7 @@ type Course = {
 
 const adminMenu = [
   { title: 'Courses', url: '/dashboard/courses', icon: Book },
-  { title: 'User Accounts', url: '/dashboard/users', icon: User },
+  { title: 'User Accounts', url: '/dashboard/users', icon: Users },
 ];
 
 function getCoursesForUser(
