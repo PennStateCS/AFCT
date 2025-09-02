@@ -18,7 +18,7 @@ export function JoinCourseModule() {
 
   const handleJoin = async () => {
     if (code.length !== 6) {
-      toast.error('Please enter a valid 6-character course code.');
+      toast.error('Please enter a valid 6-character registration code.');
       return;
     }
 
@@ -55,7 +55,7 @@ export function JoinCourseModule() {
       <CardContent>
         <div>
           <Label htmlFor="course-code" className="mb-2 text-sm">
-            Enter a course code below:
+            Enter a registration code below:
           </Label>
 
           <InputOTP
