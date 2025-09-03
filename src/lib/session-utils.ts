@@ -21,10 +21,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' }
       },
-      async authorize(credentials) {
+    async authorize(credentials) {
         try {
-          const email = (credentials?.email || '').toLowerCase().trim()
-          const password = (credentials?.password || '').trim()
+      const creds = credentials as { email?: string; password?: string } | undefined
+      const email = String(creds?.email ?? '').toLowerCase().trim()
+      const password = String(creds?.password ?? '').trim()
 
           if (!email || !password) {
             dbg('missing email or password')
