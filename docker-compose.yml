@@ -1,11 +1,15 @@
 services:
   postgres:
     image: postgres:15-alpine
+    container_name: afct-postgres-prod
     restart: unless-stopped
+    env_file:
+      - .env.production
     environment:
       POSTGRES_DB: afct
       POSTGRES_USER: afct_user
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme123}
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+      TZ: "America/New_York"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -15,6 +19,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
   app:
     container_name: afct-production
     build:
@@ -22,11 +27,7 @@ services:
       dockerfile: Dockerfile
     env_file:
       - .env.production
-    environment:
-      DATABASE_URL: postgresql://afct_user:${POSTGRES_PASSWORD:-changeme123}@postgres:5432/afct
-      # Override any env file values if needed
-      CFGANALYZER_LIMIT: 15
-      CFGANALYZER_BINARY: /app/bin/cfganalyzer
+    # All required environment variables are sourced from .env.production
     ports:
       - "3001:3000"  # Different port to avoid conflicts with dev
     depends_on:
