@@ -1,6 +1,10 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
+  // Don’t fail production builds on ESLint issues; enforce via CI instead
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   // Fix for CommonJS modules in ESM context
   transpilePackages: ['jsonwebtoken', 'bcrypt'],
   

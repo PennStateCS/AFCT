@@ -22,7 +22,8 @@ export interface EnhancedActivityLogData {
   assignmentId?: string | null;
   problemId?: string | null;
   submissionId?: string | null;
-  metadata?: Record<string, unknown>;
+  // Prisma JSON input type for flexible structured metadata
+  metadata?: Prisma.InputJsonValue | null;
 }
 
 /**
@@ -175,7 +176,8 @@ export async function createEnhancedActivityLog(
         submissionId: data.submissionId ?? null,
         ipAddress,
         userAgent,
-        metadata: data.metadata ?? {},
+  // Ensure a Prisma-compatible JSON value; default to empty object
+  metadata: (data.metadata ?? {}) as Prisma.InputJsonValue,
       },
     });
   } catch (err) {

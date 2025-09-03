@@ -39,6 +39,7 @@ Built with **PostgreSQL, Prisma, NextAuth.js, Tailwind, and Docker**.
 3. **Open the app**
    - Visit: [http://localhost:3000](http://localhost:3000)  
    - Database is automatically migrated and seeded on startup
+   - Dev database: postgres://afct_user:devpassword123@localhost:5432/afct_dev
 
 ---
 
@@ -67,7 +68,61 @@ npm run docker:nuke         # Remove containers, volumes, images (full reset)
 
 ---
 
-## 💻 Local Development (Alternative)
+## � Production (Docker)
+
+Ensure `.env.production` is configured with your secrets. The app runs on http://localhost:3001 and Postgres on port 5433.
+
+Minimal `.env.production` example:
+```env
+# Postgres
+POSTGRES_PASSWORD=change-me
+DATABASE_URL=postgresql://afct_user:${POSTGRES_PASSWORD}@postgres:5432/afct
+
+# NextAuth
+NEXTAUTH_URL=http://localhost:3001
+NEXTAUTH_SECRET=change-me
+AUTH_TRUST_HOST=true
+
+# Analyzer and uploads
+CFGANALYZER_LIMIT=15
+CFGANALYZER_BINARY=/app/bin/cfganalyzer
+UPLOAD_DIR=/app/public/uploads
+MAX_FILE_SIZE=10485760
+NODE_ENV=production
+```
+
+### Main Commands
+```bash
+npm run docker:prod          # Build and start in background
+npm run docker:prod:nobuild  # Start already-built images
+npm run docker:prod:down     # Stop containers
+npm run docker:prod:restart  # Restart without rebuilding
+```
+
+### Observe & Operate
+```bash
+npm run docker:prod:ps          # Show status
+npm run docker:prod:logs        # Tail all logs
+npm run docker:prod:logs:app    # Tail app logs only
+npm run docker:prod:logs:db     # Tail DB logs only
+npm run docker:prod:exec:app    # Shell into app container
+npm run docker:prod:exec:db     # psql into database
+```
+
+### Database
+```bash
+npm run docker:prod:migrate   # Apply migrations in production
+npm run docker:prod:seed      # Run prisma/seed.ts in production
+```
+
+Notes:
+- App: http://localhost:3001  (mapped from container port 3000)
+- Postgres: localhost:5433 (user: afct_user; db: afct)
+- Uploads volume persists at `uploads_data`
+
+---
+
+## �💻 Local Development (Alternative)
 
 1. **Run PostgreSQL locally**
    ```bash
@@ -92,6 +147,7 @@ npm run docker:nuke         # Remove containers, volumes, images (full reset)
 ```bash
 npm run db:generate   # Generate client after schema changes
 npm run db:migrate    # Create/run migrations
+npm run db:deploy     # Apply pending migrations without creating new ones
 npm run db:studio     # Open Prisma Studio
 npm run db:reset      # Drop + recreate database
 npm run seed          # Seed sample data
@@ -122,7 +178,10 @@ afct/
 ├── public/
 │   └── uploads/         # File uploads
 ├── Dockerfile.dev       # Dev container
+├── Dockerfile           # Production container
 ├── docker-compose.dev.yml
+├── docker-compose.yml   # Production compose file
+├── prisma.config.ts     # Prisma config (includes seed command)
 └── package.json
 ```
 

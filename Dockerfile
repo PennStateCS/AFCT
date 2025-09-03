@@ -1,8 +1,11 @@
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Install Java (OpenJDK) for running .jar files during build if needed
 RUN apk add --no-cache openjdk21-jre
+
+# Ensure Next.js ignores ESLint during production build (mirrors next.config setting)
+ENV NEXTJS_IGNORE_ESLINT=1
 
 # Install all dependencies (including dev) for the build step
 COPY package*.json ./
@@ -16,21 +19,23 @@ RUN npx prisma generate
 # Build the Next.js app (requires devDependencies like Tailwind plugins)
 RUN npm run build
 
-FROM node:18-alpine AS runtime
+FROM node:20-alpine AS runtime
 WORKDIR /app
 
 # Install Java runtime and curl for health checks
 RUN apk add --no-cache openjdk21-jre curl
 
-# Install only production dependencies for smaller runtime image
 COPY package*.json ./
+# Ensure Prisma schema exists before postinstall so prisma generate can run if needed
+COPY --from=builder /app/prisma ./prisma
+# Install only production dependencies for smaller runtime image
 RUN npm ci --omit=dev
 
 # Copy build output and static assets from the builder stage
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/next.config.ts ./next.config.ts
+COPY --from=builder /app/scripts ./scripts
 
 # Copy jars directory from builder into runtime image (builder ensures dir exists)
 COPY --from=builder /app/jars /app/jars
