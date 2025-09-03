@@ -1,7 +1,7 @@
 'use client';
 
 import { ColumnDef } from '@tanstack/react-table';
-import { Delete, Pencil, ChevronDown, BookOpen } from 'lucide-react';
+import { Delete, Pencil, ChevronDown, UserRound } from 'lucide-react';
 import { User } from '@prisma/client';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { EditUserDialog } from '@/components/dialogs/EditUserDialog';
@@ -79,13 +79,13 @@ function ActionsCell({ user, onChange, courseId, facultyCount }: ActionsCellProp
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuLabel className="flex items-center gap-2">
-            <BookOpen className="h-4 w-4" />
+            <UserRound className="h-4 w-4" />
             {user.firstName} {user.lastName}
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={() => setOpen(true)}
-            className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2"
+            className="flex items-center gap-2"
           >
             <Pencil className="mr-2 h-4 w-4" />
             Edit User
@@ -103,7 +103,7 @@ function ActionsCell({ user, onChange, courseId, facultyCount }: ActionsCellProp
                     setConfirmOpen(true);
                   }}
                   disabled={disabled}
-                  className={`hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2 text-red-600 ${
+                  className={`focus:text-red-600 flex items-center gap-2 text-red-600 ${
                     disabled ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
                   title={disabled ? 'User has submissions for this course and cannot be removed' : undefined}

@@ -9,7 +9,7 @@ import { userColumns } from '@/app/dashboard/courses/[id]/user-columns';
 import { useAssignmentColumns } from '@/app/dashboard/courses/[id]/assignment-columns';
 import { problemColumns } from '@/app/dashboard/courses/[id]/problem-columns';
 import { FullCourse, TabType } from '@/types/course';
-import { FileText, Code, Users, GraduationCap, Activity } from 'lucide-react';
+import { NotebookText, FileText, Users, GraduationCap, Activity } from 'lucide-react';
 import { Assignment, Problem } from '@prisma/client';
 
 interface AdminCourseViewProps {
@@ -58,31 +58,31 @@ export function AdminCourseView({
     <Tabs defaultValue="assignments" value={tab} onValueChange={onTabChange}>
       <TabsList className="bg-card border-border h-12 rounded-md border p-1 shadow-sm">
         <TabsTrigger
-          className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white"
+          className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white hover:bg-gray-200"
           value="assignments"
         >
-          <div className="flex items-center gap-2"><FileText className="h-4 w-4" />Assignments</div>
+          <div className="flex items-center gap-2"><NotebookText className="h-4 w-4" />Assignments</div>
         </TabsTrigger>
         <TabsTrigger
-          className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white"
+          className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white hover:bg-gray-200"
           value="problems"
         >
-          <div className="flex items-center gap-2"><Code className="h-4 w-4" />Problems</div>
+          <div className="flex items-center gap-2"><FileText className="h-4 w-4" />Problems</div>
         </TabsTrigger>
         <TabsTrigger
-          className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white"
+          className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white hover:bg-gray-200"
           value="roster"
         >
           <div className="flex items-center gap-2"><Users className="h-4 w-4" />Roster</div>
         </TabsTrigger>
         <TabsTrigger
-          className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white"
+          className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white hover:bg-gray-200"
           value="grades"
         >
           <div className="flex items-center gap-2"><GraduationCap className="h-4 w-4" />Grades</div>
         </TabsTrigger>
         <TabsTrigger
-          className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white"
+          className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white hover:bg-gray-200"
           value="activity"
         >
           <div className="flex items-center gap-2"><Activity className="h-4 w-4" />Activity</div>

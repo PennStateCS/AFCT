@@ -311,7 +311,7 @@ export function CreateProblemDialog({
                   id="answer-file"
                   name={name}
                   type="file"
-                  accept=".txt,.fa,.pda,.cfg,.re"
+                  accept=".txt,.fa,.pda,.cfg,.re,.jff"
                   ref={ref}
                   onBlur={onBlur}
                     onChange={(e) => {

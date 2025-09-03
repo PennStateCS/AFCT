@@ -1,7 +1,7 @@
 // problem-columns.tsx
 import { ColumnDef } from '@tanstack/react-table';
 import type { Problem } from '@prisma/client';
-import { ChevronDown, Pencil, Trash2, Notebook } from 'lucide-react';
+import { ChevronDown, Pencil, Trash2, FileText } from 'lucide-react';
 import { Badge } from '@/components/ui/RoleBadge';
 import { Button } from '@/components/ui/button';
 import {
@@ -103,13 +103,13 @@ export const problemColumns = ({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel className="flex items-center gap-2">
-              <Notebook className="h-4 w-4" />
+              <FileText className="h-4 w-4" />
               {row.original.title}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => onEdit(row.original)}
-              className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2"
+              className="flex items-center gap-2"
             >
               <Pencil className="mr-2 h-4 w-4" />
               Edit Problem
@@ -122,7 +122,7 @@ export const problemColumns = ({
               }}
               disabled={disabled}
               title={disabled ? 'Problem is used by an assignment and cannot be deleted' : undefined}
-              className={`hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2 text-red-600 ${
+              className={`focus:text-red-600 flex items-center gap-2 text-red-600 ${
                 disabled ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
