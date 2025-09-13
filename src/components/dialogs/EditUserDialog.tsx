@@ -38,7 +38,7 @@ type EditUserDialogProps = {
 export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogProps) {
   // Local preview state (keep separate from RHF file)
   const [avatarPreview, setAvatarPreview] = useState<string>(
-    user.avatar ? `/uploads/${user.avatar}` : '/default-avatar.png',
+    user.avatar ? `/uploads/pfps/${user.avatar}` : '/default-avatar.png',
   );
 
   // RHF defaults – email is read-only so it isn't in the schema
@@ -77,7 +77,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
         keepValues: true,
       });
       // Reset preview from current user
-      setAvatarPreview(user.avatar ? `/uploads/${user.avatar}` : '/default-avatar.png');
+      setAvatarPreview(user.avatar ? `/uploads/pfps/${user.avatar}` : '/default-avatar.png');
     } else {
       reset(defaults, {
         keepDirty: false,

@@ -63,12 +63,12 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     if (avatarFile && avatarFile.size > 0) {
       const bytes = Buffer.from(await avatarFile.arrayBuffer());
       avatarFilename = `${userId}-${Date.now()}-${avatarFile.name}`;
-      const uploadPath = path.join(process.cwd(), 'public', 'uploads', avatarFilename);
+      const uploadPath = path.join(process.cwd(), 'public', 'uploads', 'pfps', avatarFilename);
       await writeFile(uploadPath, bytes);
   // Uploaded new avatar: avatarFilename
 
       if (userRecord?.avatar) {
-        const oldPath = path.join(process.cwd(), 'public', 'uploads', userRecord.avatar);
+        const oldPath = path.join(process.cwd(), 'public', 'uploads', 'pfps', userRecord.avatar);
         await unlink(oldPath).catch(() => {});
   // Deleted old avatar
       }
@@ -76,7 +76,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
 
     // Delete avatar if requested
     if (deleteAvatar && userRecord?.avatar) {
-      const oldPath = path.join(process.cwd(), 'public', 'uploads', userRecord.avatar);
+      const oldPath = path.join(process.cwd(), 'public', 'uploads', 'pfps', userRecord.avatar);
       await unlink(oldPath).catch(() => {});
       avatarFilename = null;
   // Avatar removed
@@ -156,7 +156,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     });
 
     if (user?.avatar) {
-      const avatarPath = path.join(process.cwd(), 'public', 'uploads', user.avatar);
+      const avatarPath = path.join(process.cwd(), 'public', 'uploads', 'pfps', user.avatar);
       await unlink(avatarPath).catch(() => {});
   // Avatar file deleted
     }

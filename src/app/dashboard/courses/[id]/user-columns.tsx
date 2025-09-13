@@ -139,7 +139,7 @@ export const userColumns = (onChange: () => void, courseId: string, facultyCount
     cell: ({ row }) => {
       const user = row.original;
       const initials = `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase();
-      const avatarUrl = user.avatar ? `/uploads/${user.avatar}` : undefined;
+      const avatarUrl = user.avatar ? `/uploads/pfps/${user.avatar}` : undefined;
       
       return (
         <Avatar className="h-10 w-10">
