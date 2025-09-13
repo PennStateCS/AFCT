@@ -62,7 +62,7 @@ export function EditProfileDialog({ open, setOpen }: Props) {
           },
         );
         setEmail(data.email ?? '');
-        setAvatar(data.avatar ? `/uploads/${data.avatar}?t=${Date.now()}` : '/default-avatar.png');
+        setAvatar(data.avatar ? `/uploads/pfps/${data.avatar}?t=${Date.now()}` : '/default-avatar.png');
         setAvatarFile(null);
         setDeleteAvatar(false);
       } catch {
