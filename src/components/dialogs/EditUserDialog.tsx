@@ -105,12 +105,15 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
 
   // Avatar upload handler: set file in RHF + update local preview + clear delete flag
   const onAvatarPicked = (file?: File) => {
+    // Update RHF state and local state
     setValue('avatarFile', file, {
       shouldDirty: true,
       shouldTouch: true,
       shouldValidate: true,
     });
     setValue('deleteAvatar', false, { shouldDirty: true });
+
+    // Set preview Avatar
     if (file) {
       const reader = new FileReader();
       reader.onload = () => setAvatarPreview(reader.result as string);

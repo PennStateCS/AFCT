@@ -38,10 +38,11 @@ export function EditProfileDialog({ open, setOpen }: Props) {
     control,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<UpdateProfileInput>({
     resolver: zodResolver(UpdateProfileSchema),
-    defaultValues: { firstName: '', lastName: '' },
+    defaultValues: { firstName: '', lastName: '', deleteAvatar: false },
     mode: 'onBlur',
     reValidateMode: 'onChange',
   });
@@ -73,14 +74,43 @@ export function EditProfileDialog({ open, setOpen }: Props) {
     if (open && status === 'authenticated') fetchProfile();
   }, [open, status, reset]);
 
+  // Avatar error message extraction
+  const avatarFileErrorMessage = (() => {
+    const e = errors.avatarFile;
+    if (!e) return '';
+    if (typeof e === 'string') return e;
+    if (typeof e === 'object' && e !== null) {
+      const m = (e as { message?: unknown }).message;
+      if (typeof m === 'string') return m;
+    }
+    try {
+      return JSON.stringify(e);
+    } catch {
+      return String(e);
+    }
+  })();
+
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Update RHF state
+      setValue('avatarFile', file, {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      });
+      setValue('deleteAvatar', false, { shouldDirty: true });
+
+      // Update Local state
       setAvatarFile(file);
       setDeleteAvatar(false);
-      const reader = new FileReader();
-      reader.onload = () => setAvatar(reader.result as string);
-      reader.readAsDataURL(file);
+
+      // Set preview Avatar
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = () => setAvatar(reader.result as string);
+        reader.readAsDataURL(file);
+      }
     }
   };
 
@@ -88,6 +118,8 @@ export function EditProfileDialog({ open, setOpen }: Props) {
     setAvatar('/default-avatar.png');
     setAvatarFile(null);
     setDeleteAvatar(true);
+    setValue('avatarFile', undefined, { shouldDirty: true });
+    setValue('deleteAvatar', true, { shouldDirty: true });
   };
 
   const onSubmit = async (values: UpdateProfileInput) => {
@@ -168,22 +200,33 @@ export function EditProfileDialog({ open, setOpen }: Props) {
             </Avatar>
 
             <div className="flex flex-col gap-2">
-              <input
-                id="avatar-upload"
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleAvatarUpload}
+              <Controller
+                control={control}
+                name="avatarFile"
+                render={() => (
+                  <>
+                    <input
+                      id="avatar-upload"
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleAvatarUpload}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => document.getElementById('avatar-upload')?.click()}
+                      className="flex items-center gap-2"
+                    >
+                      <UploadCloud className="h-4 w-4" />
+                      Upload Avatar
+                    </Button>
+                    {avatarFileErrorMessage && (
+                      <p className="mt-1 text-xs text-red-600">{avatarFileErrorMessage}</p>
+                    )}
+                  </>
+                )}
               />
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => document.getElementById('avatar-upload')?.click()}
-                className="flex items-center gap-2"
-              >
-                <UploadCloud className="h-4 w-4" />
-                Upload Avatar
-              </Button>
 
               {avatar && avatar !== '/default-avatar.png' && (
                 <Button
