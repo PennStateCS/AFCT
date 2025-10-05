@@ -166,7 +166,7 @@ export default function DashboardSidebar() {
     email?.split('@')[0] ||
     'User';
   const initials = (firstName?.[0] ?? '') + (lastName?.[0] ?? '') || resolvedName[0] || 'U';
-  const avatarUrl = avatar && avatar.trim() !== '' ? `/uploads/${avatar}` : '/default-avatar.png';
+  const avatarUrl = avatar && avatar.trim() !== '' ? avatar : 'default-avatar.png';
 
   const user = {
     id,
