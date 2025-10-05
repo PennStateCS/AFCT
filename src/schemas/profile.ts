@@ -23,13 +23,8 @@ const createImageFileSchema = () => {
 
 const ImageFileOptional = createImageFileSchema();
 
-export const UpdateProfileSchema = z
-  .object({
-    firstName: z
-      .string()
-      .trim()
-      .min(1, 'First name is required.')
-      .max(60, 'First name is too long.'),
+export const UpdateProfileSchema = z.object({
+    firstName: z.string().trim().min(1, 'First name is required.').max(60, 'First name is too long.'),
     lastName: z.string().trim().min(1, 'Last name is required.').max(60, 'Last name is too long.'),
     // Email is read-only in the dialog; we don't validate it here.
     avatarFile: ImageFileOptional, // Optional file upload
@@ -38,3 +33,4 @@ export const UpdateProfileSchema = z
   .strict();
 
 export type UpdateProfileInput = z.infer<typeof UpdateProfileSchema>;
+export type UpdateProfileRaw = z.infer<typeof UpdateProfileSchema>;

@@ -73,7 +73,7 @@ const Navbar: React.FC = () => {
 
   const { firstName, lastName, role, avatar } = data.user;
   const roleDisplay = role || 'STUDENT';
-  const avatarUrl = avatar ? `/uploads/pfps/${avatar}` : '/default-avatar.png';
+  const avatarUrl = avatar ? `/uploads/pfps/${avatar}` : '/uploads/pfps/default-avatar.png';
   
   // Use session.user.name first (which is built from firstName + lastName in auth)
   // Then fallback to building it from individual fields, then fallback to 'User'
