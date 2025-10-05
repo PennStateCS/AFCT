@@ -38,7 +38,7 @@ type EditUserDialogProps = {
 export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogProps) {
   // Local preview state (keep separate from RHF file)
   const [avatarPreview, setAvatarPreview] = useState<string>(
-    user.avatar ? `/uploads/pfps/${user.avatar}` : '/default-avatar.png',
+    user.avatar ? `/uploads/pfps/${user.avatar}` : '/uploads/pfps/default-avatar.png',
   );
 
   // RHF defaults – email is read-only so it isn't in the schema
@@ -77,7 +77,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
         keepValues: true,
       });
       // Reset preview from current user
-      setAvatarPreview(user.avatar ? `/uploads/pfps/${user.avatar}` : '/default-avatar.png');
+      setAvatarPreview(user.avatar ? `/uploads/pfps/${user.avatar}` : '/uploads/pfps/default-avatar.png');
     } else {
       reset(defaults, {
         keepDirty: false,
@@ -122,7 +122,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
   };
 
   const onDeleteAvatar = () => {
-    setAvatarPreview('/default-avatar.png');
+    setAvatarPreview('/uploads/pfps/default-avatar.png');
     setValue('avatarFile', undefined, { shouldDirty: true });
     setValue('deleteAvatar', true, { shouldDirty: true });
   };
@@ -216,7 +216,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
                 )}
               />
 
-              {avatarPreview && avatarPreview !== '/default-avatar.png' && (
+              {avatarPreview && avatarPreview !== '/uploads/pfps/default-avatar.png' && (
                 <Button
                   type="button"
                   variant="outline"

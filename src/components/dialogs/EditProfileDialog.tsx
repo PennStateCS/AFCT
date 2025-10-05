@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { use, useEffect, useMemo, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -6,73 +6,79 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { UploadCloud, Trash2 } from 'lucide-react';
-import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
 
 import InputGroup from '@/components/ui/InputGroup';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { UpdateProfileSchema, type UpdateProfileInput } from '@/schemas/profile';
 
-type Props = {
+import type { User } from '@prisma/client';
+import { UpdateProfileSchema, type UpdateProfileRaw, type UpdateProfileInput } from '@/schemas/profile';
+
+type EditProfileDialog = {
+  user: User;
   open: boolean;
   setOpen: (open: boolean) => void;
+  onSave?: (updatedUser: Partial<User>) => Promise<void>;
 };
 
-export function EditProfileDialog({ open, setOpen }: Props) {
-  const { status, update } = useSession();
+export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDialog) {
+  // Local preview state (keep separate from RHF file)
+  const [avatarPreview, setAvatarPreview] = useState<string>(
+    user.avatar ? `/uploads/pfps/${user.avatar}` : '/uploads/pfps/default-avatar.png',
+  );
 
-  // Avatar/file/UI state
-  const [email, setEmail] = useState('');
-  const [avatar, setAvatar] = useState<string>('');
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [deleteAvatar, setDeleteAvatar] = useState(false);
-  const [loading, setLoading] = useState(false);
-
+  // RHF defaults – email is read-only so it isn't in the schema
+  const defaults: UpdateProfileRaw = useMemo(
+    () => ({
+      firstName: user.firstName ?? '',
+      lastName: user.lastName ?? '',
+      avatarFile: undefined,
+      deleteAvatar: false,
+    }),
+    [user],
+  );
+  
   // RHF with Zod
   const {
     control,
     handleSubmit,
     reset,
+    watch,
     setValue,
-    formState: { errors, isSubmitting, isDirty },
-  } = useForm<UpdateProfileInput>({
+    formState: { errors, isSubmitting, isValid, isDirty },
+  } = useForm<UpdateProfileRaw>({
     resolver: zodResolver(UpdateProfileSchema),
-    defaultValues: { firstName: '', lastName: '', deleteAvatar: false },
+    defaultValues: defaults,
     mode: 'onBlur',
     reValidateMode: 'onChange',
   });
 
   // Load profile on open
   useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const res = await fetch('/api/profile');
-        if (!res.ok) throw new Error('Failed to load profile');
-        const data = await res.json();
-        reset(
-          { firstName: data.firstName ?? '', lastName: data.lastName ?? '' },
-          {
-            keepDirty: false,
-            keepErrors: false,
-            keepTouched: false,
-          },
-        );
-        setEmail(data.email ?? '');
-        setAvatar(data.avatar ? `/uploads/pfps/${data.avatar}?t=${Date.now()}` : '/default-avatar.png');
-        setAvatarFile(null);
-        setDeleteAvatar(false);
-      } catch {
-        toast.error('Failed to load profile.');
-      }
-    };
-
-    if (open && status === 'authenticated') fetchProfile();
-  }, [open, status, reset]);
+    if (open) {
+      reset(defaults, {
+        keepDirty: false,
+        keepErrors: false,
+        keepTouched: false,
+        keepValues: false,
+      });
+        // Reset preview from current user
+      setAvatarPreview(user.avatar ? `/uploads/pfps/${user.avatar}` : '/uploads/pfps/default-avatar.png');
+    } else {
+      reset(defaults, {
+        keepDirty: false,
+        keepTouched: false,
+        keepErrors: false,
+        keepValues: false,
+      });
+    }
+  }, [open, defaults, reset, user.avatar]);
 
   // Avatar error message extraction
   const avatarFileErrorMessage = (() => {
@@ -90,58 +96,51 @@ export function EditProfileDialog({ open, setOpen }: Props) {
     }
   })();
 
-  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleAvatarUpload = (file?: File) => {
+    // Update RHF state and local state
+    setValue('avatarFile', file, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+    setValue('deleteAvatar', false, { shouldDirty: true });
+
+    // Set preview Avatar
     if (file) {
-      // Update RHF state
-      setValue('avatarFile', file, {
-        shouldDirty: true,
-        shouldTouch: true,
-        shouldValidate: true,
-      });
-      setValue('deleteAvatar', false, { shouldDirty: true });
-
-      // Update Local state
-      setAvatarFile(file);
-      setDeleteAvatar(false);
-
-      // Set preview Avatar
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = () => setAvatar(reader.result as string);
-        reader.readAsDataURL(file);
-      }
+      const reader = new FileReader();
+      reader.onload = () => setAvatarPreview(reader.result as string);
+      reader.readAsDataURL(file);
     }
   };
 
   const handleDeleteAvatar = () => {
-    setAvatar('/default-avatar.png');
-    setAvatarFile(null);
-    setDeleteAvatar(true);
+    setAvatarPreview('/uploads/pfps/default-avatar.png');
     setValue('avatarFile', undefined, { shouldDirty: true });
     setValue('deleteAvatar', true, { shouldDirty: true });
   };
 
+  const resetForm = () =>
+    reset(defaults, { keepDirty: false, keepTouched: false, keepErrors: false, keepValues: false });
+
   const onSubmit = async (values: UpdateProfileInput) => {
-    setLoading(true);
+    const parsed: UpdateProfileInput = UpdateProfileSchema.parse(values);
+    
     const formData = new FormData();
-    formData.append('firstName', values.firstName.trim());
-    formData.append('lastName', values.lastName.trim());
-    if (avatarFile) formData.append('avatar', avatarFile);
-    if (deleteAvatar) formData.append('deleteAvatar', 'true');
+    formData.append('firstName', parsed.firstName);
+    formData.append('lastName', parsed.lastName);
+    if (parsed.avatarFile) formData.append('avatar', parsed.avatarFile);
+    if (parsed.deleteAvatar) formData.append('deleteAvatar', 'true');
 
     try {
+      // Post new profile data to database
       const res = await fetch('/api/profile', { method: 'POST', body: formData });
       if (!res.ok) throw new Error('Failed to update profile');
 
-      const updatedUser = await res.json();
-
       // Use NextAuth's update function to immediately update the session
-      await update({
-        firstName: updatedUser.firstName,
-        lastName: updatedUser.lastName,
-        avatar: updatedUser.avatar,
-        name: `${updatedUser.firstName || ''} ${updatedUser.lastName || ''}`.trim()
+      await onSave?.({
+        firstName: parsed.firstName,
+        lastName: parsed.lastName,
+        avatar: parsed.deleteAvatar ? null : user.avatar,
       });
       
       toast.success('Profile updated!');
@@ -149,7 +148,8 @@ export function EditProfileDialog({ open, setOpen }: Props) {
     } catch {
       toast.error('Failed to update profile.');
     } finally {
-      setLoading(false);
+      console.log('resetting form');
+      resetForm();
     }
   };
 
@@ -157,16 +157,9 @@ export function EditProfileDialog({ open, setOpen }: Props) {
     <Dialog
       open={open}
       onOpenChange={(val) => {
-        // Prevent “red fields on cancel”: clear RHF UI state on close
-        if (!val) {
-          reset(undefined, {
-            keepDirty: false,
-            keepTouched: false,
-            keepErrors: false,
-            keepValues: true, // keep what user typed until re-open fetch refreshes it
-          });
-        }
         setOpen(val);
+        // Prevent “red fields on cancel”: clear RHF UI state on close
+        if (!val) { resetForm(); }
       }}
     >
       <DialogContent className="bg-card max-w-lg">
@@ -179,23 +172,10 @@ export function EditProfileDialog({ open, setOpen }: Props) {
           {/* Avatar */}
           <div className="flex items-center gap-4">
             <Avatar className="h-20 w-20">
-              <AvatarImage src={avatar || '/default-avatar.png'} alt="Avatar" />
-              <AvatarFallback>
-                {/* fallback initials update as user types */}
-                <Controller
-                  name="firstName"
-                  control={control}
-                  render={({ field }) => (
-                    <>
-                      {field.value?.[0] || ''}
-                      <Controller
-                        name="lastName"
-                        control={control}
-                        render={({ field: lf }) => <>{lf.value?.[0] || ''}</>}
-                      />
-                    </>
-                  )}
-                />
+              <AvatarImage src={avatarPreview} alt="User Avatar" />
+              <AvatarFallback className="bg-secondary text-secondary-foreground">
+                {(watch('firstName') || user.firstName || '?').charAt(0)}
+                {(watch('lastName') || user.lastName || '?').charAt(0)}
               </AvatarFallback>
             </Avatar>
 
@@ -210,7 +190,7 @@ export function EditProfileDialog({ open, setOpen }: Props) {
                       type="file"
                       accept="image/*"
                       className="hidden"
-                      onChange={handleAvatarUpload}
+                      onChange={(e) => handleAvatarUpload(e.target.files?.[0])}
                     />
                     <Button
                       type="button"
@@ -228,7 +208,7 @@ export function EditProfileDialog({ open, setOpen }: Props) {
                 )}
               />
 
-              {avatar && avatar !== '/default-avatar.png' && (
+              {avatarPreview && avatarPreview !== '/uploads/pfps/default-avatar.png' && (
                 <Button
                   type="button"
                   variant="outline"
@@ -274,31 +254,33 @@ export function EditProfileDialog({ open, setOpen }: Props) {
           <InputGroup
             label="Email"
             name="email"
-            value={email}
+            value={user.email}
             type="email"
             disabled
             description="Email cannot be changed."
           />
 
-          <DialogFooter className="mt-4">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                reset(undefined, {
-                  keepDirty: false,
-                  keepTouched: false,
-                  keepErrors: false,
-                });
-                setOpen(false);
-              }}
-              disabled={loading || isSubmitting}
-            >
-              Cancel
-            </Button>
+          {/* Hidden deleteAvatar flag (driven by Delete button) */}
+          <Controller control={control} name="deleteAvatar" render={() => <></>} />
 
-            <Button type="submit" disabled={loading || isSubmitting || !isDirty}>
-              {loading || isSubmitting ? 'Saving...' : 'Save Changes'}
+          <DialogFooter className="mt-4">
+            <DialogClose asChild>
+              <Button type="button" variant="secondary" onClick={resetForm} disabled={isSubmitting}>
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button
+              type="submit"
+              disabled={!isValid || !isDirty || isSubmitting}
+              title={
+                !isValid
+                  ? 'Fix validation errors to save'
+                  : !isDirty
+                    ? 'No changes to save'
+                    : undefined
+              }
+            >
+              {isSubmitting ? 'Saving...' : 'Save Changes'}
             </Button>
           </DialogFooter>
         </form>
