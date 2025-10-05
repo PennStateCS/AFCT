@@ -53,8 +53,8 @@ const createImageFileSchema = () => {
 const ImageFileOptional = createImageFileSchema();
 
 export const UpdateUserSchema = z.object({
-  firstName: z.string().trim().min(1, 'First name is required.'),
-  lastName: z.string().trim().min(1, 'Last name is required.'),
+  firstName: z.string().trim().min(1, 'First name is required.').max(60, 'First name is too long.'),
+  lastName: z.string().trim().min(1, 'Last name is required.').max(60, 'Last name is too long.'),
   role: RoleEnum,
   /** optional new avatar file */
   avatarFile: ImageFileOptional,

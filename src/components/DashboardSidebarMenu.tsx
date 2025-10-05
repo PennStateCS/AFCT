@@ -116,15 +116,21 @@ export default function DashboardSidebarMenu() {
     email?.split('@')[0] ||
     'User';
   const initials = (firstName?.[0] ?? '') + (lastName?.[0] ?? '') || resolvedName[0] || 'U';
-  const avatarUrl = avatar?.trim() !== '' ? `/uploads/${avatar}` : '/default-avatar.png';
+  const avatarUrl = avatar?.trim() !== '' ? avatar : 'default-avatar.png';
 
   const user = {
     id,
+    firstName: firstName,
+    lastName: lastName,
     name: resolvedName,
     email,
-    avatarUrl,
+    avatar: avatarUrl,
     initials,
     role: (role?.toUpperCase?.() || 'STUDENT') as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT',
+    password: '', // password is not exposed from session
+    inactive: false, // inactive status is not exposed from session
+    createdAt: new Date(), // createdAt is not exposed from session
+    updatedAt: new Date(), // updatedAt is not exposed from session
   };
 
   const filteredCourses = getCoursesForUser(user, courses);
@@ -293,11 +299,13 @@ export default function DashboardSidebarMenu() {
           });
           if (!res.ok) {
             const { error } = await res.json();
+            toast.error(error || 'Failed to change password');
             throw new Error(error || 'Failed to change password');
           }
+          toast.success('Password changed!');
         }}
       />
-      <EditProfileDialog open={editProfileOpen} setOpen={setEditProfileOpen} />
+      <EditProfileDialog user={user} open={editProfileOpen} setOpen={setEditProfileOpen} />
     </>
   );
 }
