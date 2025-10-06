@@ -116,7 +116,7 @@ export default function DashboardSidebarMenu() {
     email?.split('@')[0] ||
     'User';
   const initials = (firstName?.[0] ?? '') + (lastName?.[0] ?? '') || resolvedName[0] || 'U';
-  const avatarUrl = avatar?.trim() !== '' ? avatar : 'default-avatar.png';
+  const avatarUrl = avatar?.trim() !== '' ? avatar : null;
 
   const user = {
     id,
