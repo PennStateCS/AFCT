@@ -70,7 +70,7 @@ export function JoinCourseModule() {
               }
             }
             onChange={setCode}
-            pattern="[A-Z0-9a-z]"
+            pattern="[A-Z0-9a-z]+$"
             containerClassName="justify-start"
             className="mb-2"
           >
