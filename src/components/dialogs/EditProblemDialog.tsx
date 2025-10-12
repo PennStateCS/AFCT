@@ -328,7 +328,7 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
                 <Input
                   id="answer-file"
                   type="file"
-                  accept=".txt,.fa,.pda,.cfg,.re"
+                  accept=".txt,.fa,.pda,.cfg,.re,.jff"
                   onChange={(e) => field.onChange(e.target.files?.[0])}
                 />
                 {fileErrorMessage && <p className="mt-1 text-xs text-red-600">{fileErrorMessage}</p>}
