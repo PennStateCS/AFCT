@@ -251,7 +251,7 @@ export const activityColumns: ColumnDef<ActivityLog>[] = [
       return (
         <Avatar className="h-10 w-10">
           <AvatarImage 
-            src={activity.user?.avatar ? `/uploads/pfps/${activity.user.avatar}` : undefined}
+            src={activity.user?.avatar ? `/uploads/pfps/${activity.user.avatar}` : `/uploads/pfps/default-avatar.png`}
             alt={`${activity.user?.firstName} ${activity.user?.lastName}`}
           />
           <AvatarFallback className="text-xs bg-secondary text-secondary-foreground">
