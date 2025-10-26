@@ -50,7 +50,7 @@ export function getUserColumns(onUserUpdate: () => void): ColumnDef<User>[] {
         return (
           <Avatar className="h-12 w-12">
             <AvatarImage
-              src={user.avatar ? `/uploads/pfps/${user.avatar}` : undefined}
+              src={user.avatar ? `/uploads/pfps/${user.avatar}` : `/uploads/pfps/default-avatar.png`}
               alt={`${user.firstName} ${user.lastName}`}
             />
             <AvatarFallback className="bg-secondary text-secondary-foreground">
