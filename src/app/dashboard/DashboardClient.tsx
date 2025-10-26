@@ -94,8 +94,8 @@ export default function DashboardClient({ sessionUser, courses }: Props) {
                       </div>
                       <div>
                         <span className="font-semibold">Dates:</span>{' '}
-                        {format(new Date(course.startDate), 'M-d-yyyy p')} to{' '}
-                        {format(new Date(course.endDate), 'M-d-yyyy p')}
+                        {format(new Date(course.startDate), 'M/d/yyyy p')} to{' '}
+                        {format(new Date(course.endDate), 'M/d/yyyy p')}
                       </div>
                     </div>
                   </div>

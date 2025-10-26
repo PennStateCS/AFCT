@@ -59,7 +59,7 @@ export const problemColumns = ({
       if (!file || !fileName) return '—';
       return (
         <a
-          href={`/api/solutions/${fileName}`}
+          href={`/uploads/problems/${fileName}`}
           download={file}
           className="text-sm break-all text-blue-600 hover:underline"
         >
