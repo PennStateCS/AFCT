@@ -31,11 +31,17 @@ export default function ViewCoursesPage() {
   const [open, setOpen] = useState(false);
 
   const fetchCourses = async () => {
-    setLoading(true);
-    const res = await fetch('/api/courses');
-    const data: CourseWithRoster[] = await res.json();
-    setCourses(data);
-    setLoading(false);
+    try {
+      setLoading(true);
+      const res = await fetch('/api/courses');
+      if (!res.ok) throw new Error('Failed to fetch users');
+      const data: CourseWithRoster[] = await res.json();
+      setCourses(data);
+    } catch (error) {
+      console.error('Error loading users:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {

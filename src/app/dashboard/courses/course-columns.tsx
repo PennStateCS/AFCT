@@ -34,7 +34,7 @@ export const columns = (
       const course = row.original;
       return (
         <Link href={`/dashboard/courses/${course.id}`} className="text-blue-600 hover:underline">
-          {course.name}
+          {course.name.substring(0, 46) + (course.name.length > 47 ? "..." : "")}
         </Link>
       );
     },
@@ -71,7 +71,7 @@ export const columns = (
     header: 'Start Date',
     cell: ({ row }) => {
       const date = new Date(row.original.startDate);
-      return format(date, "M/d/yyyy 'at' p");
+      return format(date, "M/d/yyyy");
     },
   },
   {
@@ -80,7 +80,7 @@ export const columns = (
     header: 'End Date',
     cell: ({ row }) => {
       const date = new Date(row.original.endDate);
-      return format(date, "M/d/yyyy 'at' p");
+      return format(date, "M/d/yyyy");
     },
   },
   {
