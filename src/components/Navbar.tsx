@@ -50,11 +50,20 @@ const Navbar: React.FC = () => {
       setCourseName(null);
     }
 
-    // If on an assignment page, fetch assignment name
+    // If a teacher on an assignment page, fetch assignment name
     if (segments[1] === 'courses' && segments[2] && segments[3]) {
       const courseId = segments[2];
       const assignmentId = segments[3];
       fetch(`/api/courses/${courseId}/${assignmentId}`)
+        .then((res) => res.json())
+        .then((data) => setAssignmentName(data.title || data.name))
+        .catch(() => setAssignmentName(null));
+    }
+
+    // If a student is on an assignment page, fetch assignment name
+    else if (segments[1] === `assignments` && segments[2]) {
+      const assignmentId = segments[2];
+      fetch(`/api/assignments/${assignmentId}`)
         .then((res) => res.json())
         .then((data) => setAssignmentName(data.title || data.name))
         .catch(() => setAssignmentName(null));
@@ -97,8 +106,13 @@ const Navbar: React.FC = () => {
               if (segments[1] === 'courses' && index === 2 && courseName) {
                 label = courseName;
               }
-              // Show assignment name instead of aid
+              // Show assignment name instead of aid (teacher view)
               if (segments[1] === 'courses' && index === 3 && assignmentName) {
+                label = assignmentName;
+              }
+
+              // Show assignment name instead of aid (student view)
+              if (segments[1] === 'assignments' && index === 2 && assignmentName) {
                 label = assignmentName;
               }
 
