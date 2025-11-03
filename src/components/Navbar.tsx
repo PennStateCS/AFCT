@@ -39,38 +39,54 @@ const Navbar: React.FC = () => {
 
   // Fetch course and assignment names for breadcrumbs
   useEffect(() => {
-    // If on a course page (or assignment page), fetch course name
-    if (segments[1] === 'courses' && segments[2]) {
-      const courseId = segments[2];
-      fetch(`/api/courses/${courseId}`)
-        .then((res) => res.json())
-        .then((data) => setCourseName(data.name))
-        .catch(() => setCourseName(null));
-    } else {
+    // Function to fetch data
+    const fetchData = async (url: string) => {
+      try {
+        const dataReq = await fetch(url);
+        if (dataReq.ok) {
+          const instData = await dataReq.json();
+          return instData.name;
+        }
+      } catch (err) {
+        console.log("Error fetching navbar: ", err)
+        setCourseName(null);
+        setAssignmentName(null);
+      }
+    }
+
+    const loadNames = async () => {
+      // Reset course and assignment
       setCourseName(null);
-    }
-
-    // If a teacher on an assignment page, fetch assignment name
-    if (segments[1] === 'courses' && segments[2] && segments[3]) {
-      const courseId = segments[2];
-      const assignmentId = segments[3];
-      fetch(`/api/courses/${courseId}/${assignmentId}`)
-        .then((res) => res.json())
-        .then((data) => setAssignmentName(data.title || data.name))
-        .catch(() => setAssignmentName(null));
-    }
-
-    // If a student is on an assignment page, fetch assignment name
-    else if (segments[1] === `assignments` && segments[2]) {
-      const assignmentId = segments[2];
-      fetch(`/api/assignments/${assignmentId}`)
-        .then((res) => res.json())
-        .then((data) => setAssignmentName(data.title || data.name))
-        .catch(() => setAssignmentName(null));
-    } else {
       setAssignmentName(null);
-    }
-  }, [segments]);
+      
+      // Set base url for an easy call
+      const baseUrl = '/api';
+    
+      // If on a course page (or assignment page), fetch course name, and assignment name appropriately
+      if (segments[1] === 'courses' && segments[2]) {
+        const courseId = segments[2];
+        const decodedCourse = await fetchData(`${baseUrl}/courses/${courseId}`);
+        setCourseName(decodedCourse);
+
+        if (segments[3]) {
+          const assignmentId = segments[3];
+          const decodedAssignment = await fetchData(`${baseUrl}/courses/${courseId}/${assignmentId}`);
+          console.log(decodedAssignment);
+          setAssignmentName(decodedAssignment);
+        }
+      } 
+
+      // If a student is on an assignment page, fetch assignment name
+      else if (segments[1] === `assignments` && segments[2]) {
+        const assignmentId = segments[2];
+        const decodedAssignment = await fetchData(`${baseUrl}/assignments/${assignmentId}`);
+        console.log(decodedAssignment);
+        setAssignmentName(decodedAssignment);
+      }
+    };
+
+    loadNames();
+  }, [segments.join('/')]);
 
   if (status === 'loading') {
     return (
