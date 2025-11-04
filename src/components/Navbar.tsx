@@ -45,7 +45,7 @@ const Navbar: React.FC = () => {
         const dataReq = await fetch(url);
         if (dataReq.ok) {
           const instData = await dataReq.json();
-          return instData.name;
+          return instData.title || instData.name;
         }
       } catch (err) {
         console.log("Error fetching navbar: ", err)
@@ -68,10 +68,10 @@ const Navbar: React.FC = () => {
         const decodedCourse = await fetchData(`${baseUrl}/courses/${courseId}`);
         setCourseName(decodedCourse);
 
+        // Assignment in a course
         if (segments[3]) {
           const assignmentId = segments[3];
           const decodedAssignment = await fetchData(`${baseUrl}/courses/${courseId}/${assignmentId}`);
-          console.log(decodedAssignment);
           setAssignmentName(decodedAssignment);
         }
       } 
@@ -80,7 +80,6 @@ const Navbar: React.FC = () => {
       else if (segments[1] === `assignments` && segments[2]) {
         const assignmentId = segments[2];
         const decodedAssignment = await fetchData(`${baseUrl}/assignments/${assignmentId}`);
-        console.log(decodedAssignment);
         setAssignmentName(decodedAssignment);
       }
     };

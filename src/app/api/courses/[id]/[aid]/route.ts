@@ -53,8 +53,8 @@ export async function GET(_: Request, context: { params: Promise<{ id: string; a
         type: ap.problem.type,
         maxStates: ap.problem.maxStates,
         isDeterministic: ap.problem.isDeterministic,
-  fileName: ap.problem.fileName,
-  originalFileName: ap.problem.originalFileName,
+        fileName: ap.problem.fileName,
+        originalFileName: ap.problem.originalFileName,
       },
     }));
 
