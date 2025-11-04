@@ -61,8 +61,8 @@ export default function AssignmentDashboardPage() {
 	const searchParams = useSearchParams();
 	const router = useRouter();
 
-		// Use a more flexible type for assignment to allow course details if available
-		const [assignment, setAssignment] = useState<AssignmentWithDetails | null>(null);
+	// Use a more flexible type for assignment to allow course details if available
+	const [assignment, setAssignment] = useState<AssignmentWithDetails | null>(null);
 	const [allProblems, setAllProblems] = useState<Problem[]>([]);
 	const [problemsLoading, setProblemsLoading] = useState(false);
 	const [problemToRemove, setProblemToRemove] = useState<Problem | null>(null);
