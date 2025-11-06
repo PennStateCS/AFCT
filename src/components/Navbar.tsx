@@ -34,6 +34,9 @@ const Navbar: React.FC = () => {
   const pathname = usePathname();
   const segments = pathname.split('/').filter(Boolean);
 
+  const [courseId, setCourseId] = useState<string | null>(null);
+  const [assignmentId, setAssignmentId] = useState<string | null>(null);
+
   const [courseName, setCourseName] = useState<string | null>(null);
   const [assignmentName, setAssignmentName] = useState<string | null>(null);
 
@@ -45,7 +48,7 @@ const Navbar: React.FC = () => {
         const dataReq = await fetch(url);
         if (dataReq.ok) {
           const instData = await dataReq.json();
-          return instData.title || instData.name;
+          return instData;
         }
       } catch (err) {
         console.log("Error fetching navbar: ", err)
@@ -56,6 +59,8 @@ const Navbar: React.FC = () => {
 
     const loadNames = async () => {
       // Reset course and assignment
+      setCourseId(null);
+      setAssignmentId(null);
       setCourseName(null);
       setAssignmentName(null);
       
@@ -64,23 +69,38 @@ const Navbar: React.FC = () => {
     
       // If on a course page (or assignment page), fetch course name, and assignment name appropriately
       if (segments[1] === 'courses' && segments[2]) {
-        const courseId = segments[2];
-        const decodedCourse = await fetchData(`${baseUrl}/courses/${courseId}`);
-        setCourseName(decodedCourse);
+        const cid = segments[2];
+        setCourseId(cid);
+
+        const courseJson = (await fetchData(`${baseUrl}/courses/${cid}`)); // Returns JSON data of course from API call
+        setCourseName(courseJson.name);
 
         // Assignment in a course
         if (segments[3]) {
-          const assignmentId = segments[3];
-          const decodedAssignment = await fetchData(`${baseUrl}/courses/${courseId}/${assignmentId}`);
-          setAssignmentName(decodedAssignment);
+          const aid = segments[3];
+          setAssignmentId(aid);
+
+          const assignmentJson = (await fetchData(`${baseUrl}/courses/${cid}/${aid}`)); // Returns JSON data of assignment from API call
+          setAssignmentName(assignmentJson.title);
         }
       } 
 
       // If a student is on an assignment page, fetch assignment name
       else if (segments[1] === `assignments` && segments[2]) {
-        const assignmentId = segments[2];
-        const decodedAssignment = await fetchData(`${baseUrl}/assignments/${assignmentId}`);
-        setAssignmentName(decodedAssignment);
+        const aid = segments[2];
+        // Set assignment id
+        setAssignmentId(aid);
+
+        // Get JSON of both assignment and course
+        const assignmentJson = (await fetchData(`${baseUrl}/assignments/${aid}`)); // Returns JSON data of assignment from API call
+        const courseJson = (await fetchData(`${baseUrl}/courses/${assignmentJson.courseId}`)); // Returns JSON data of course from API call
+
+        // Set the course id
+        setCourseId(assignmentJson.courseId);
+
+        // Set both the assignment title and the course name
+        setAssignmentName(assignmentJson.title);
+        setCourseName(courseJson.name);
       }
     };
 
@@ -105,31 +125,42 @@ const Navbar: React.FC = () => {
     [firstName, lastName].filter(Boolean).join(' ') || 
     'User';
 
+  // Generate a displSegments variable that is used to display the segments. Changes non-existent paths to proper ones.
+  const displSegments = segments.map((segment, index) => {
+    // Show assignment name instead of aid (student view)
+    if (segments[1] === 'assignments' && index === 1 && courseId) { return courseId; }
+
+    // Else return the segment
+    return segment;
+  });
+
   return (
     <nav className="bg-secondary bordery mb-4 flex h-16 items-center justify-between rounded-lg p-4 text-white shadow-sm">
       <div className="flex items-center gap-4">
         <EnhancedSidebarTrigger />
         <Breadcrumb>
           <BreadcrumbList className="text-sm">
-            {segments.map((segment, index) => {
-              const isLast = index === segments.length - 1;
-              const href = '/' + segments.slice(0, index + 1).join('/');
+            {displSegments.map((segment, index) => {
+              // Code segment iterates through the map for each index
+              const isLast = index === displSegments.length - 1;
 
-              let label = segment.charAt(0).toUpperCase() + segment.slice(1);
+              let href = '/' + displSegments.slice(0, index + 1).join('/');
+              let label = (segment ? segment : "ERROR").charAt(0).toUpperCase() + (segment ? segment : "ERROR").slice(1);
 
               // Show course name instead of id
-              if (segments[1] === 'courses' && index === 2 && courseName) {
-                label = courseName;
-              }
+              if (segments[1] === 'courses' && index === 2 && courseName) { label = courseName; }
+
               // Show assignment name instead of aid (teacher view)
-              if (segments[1] === 'courses' && index === 3 && assignmentName) {
-                label = assignmentName;
+              else if (segments[1] === 'courses' && index === 3 && assignmentName) { label = assignmentName; }
+              
+              // Show course name instead of assignments (student view)
+              else if (segments[1] === 'assignments' && index === 1 && courseName) {
+                label = courseName;
+                href = `${href.split('/').splice(0, 2).join('/')}/courses/${courseId}`;
               }
 
               // Show assignment name instead of aid (student view)
-              if (segments[1] === 'assignments' && index === 2 && assignmentName) {
-                label = assignmentName;
-              }
+              else if (segments[1] === 'assignments' && index === 2 && assignmentName) { label = assignmentName; }
 
               return (
                 <React.Fragment key={href}>
