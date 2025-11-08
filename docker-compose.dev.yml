@@ -58,6 +58,18 @@ services:
     tmpfs:
       - /var/run/postgresql:rw,noexec,nosuid,size=64m
 
+  prisma-studio:
+      build:
+        context: . # Directory containing your Dockerfile
+        dockerfile: Dockerfile.dev
+      ports:
+        - "5555:5555" # Map Prisma Studio port
+      depends_on:
+        - postgres # Ensure database starts before Prisma Studio
+      environment:
+        DATABASE_URL: postgresql://afct_user:devpassword123@postgres:5432/afct_dev
+        # Ensure 'database' matches the service name of your database container
+
   app:
     container_name: afct-dashboard
     build:
