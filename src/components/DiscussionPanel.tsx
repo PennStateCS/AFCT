@@ -159,7 +159,7 @@ export default function DiscussionPanel({
                             {comment.content}
                           </p>
 
-                          <div className="mt-1 flex items-center justify-between">
+                          <div className="mt-1 flex items-center justify-between gap-1 overflow-hidden whitespace-nowrap">
                             <span className="truncate text-xs text-muted-foreground">
                               {name}
                             </span>
