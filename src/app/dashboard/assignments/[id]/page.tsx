@@ -98,8 +98,11 @@ export default function StudentAssignmentPage() {
     for (const assignmentProblem of assignment.problems) {
       const problemId = assignmentProblem.problem.id;
       
+      // Make sure user id is not null
+      if (!session?.user?.id) return [];
+
       try {
-        const response = await fetch(`/api/problems/${problemId}/comments`);
+        const response = await fetch(`/api/problems/${problemId}/comments?problemId=${problemId}&studentId=${session.user.id}`);
         if (response.ok) {
           const problemComments = await response.json();
           commentsData[problemId] = problemComments;
@@ -169,9 +172,12 @@ export default function StudentAssignmentPage() {
       // Clear the input
       setNewComment(prev => ({ ...prev, [problemId]: '' }));
       
+      // Make sure user id is not null
+      if (!session?.user?.id) return [];
+
       // Refresh comments for this problem
       try {
-        const commentsResponse = await fetch(`/api/problems/${problemId}/comments`);
+        const commentsResponse = await fetch(`/api/problems/${problemId}/comments?problemId=${problemId}&studentId=${session.user.id}`);
         if (commentsResponse.ok) {
           const updatedComments = await commentsResponse.json();
           setComments(prev => ({
