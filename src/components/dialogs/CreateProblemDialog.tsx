@@ -29,6 +29,7 @@ import {
   type CreateProblemInput,
   type ProblemFormRaw,
 } from '@/schemas/problem';
+import { showToast } from '@/lib/toast';
 
 // Helper: extract a string message for the file error without using `any`
 
@@ -80,6 +81,7 @@ export function CreateProblemDialog({
 
   const type = watch('type');
   const isUnlimited = watch('isUnlimited');
+  const file = watch('file');
 
   const fileErrorMessage = (() => {
     const e = errors.file;
@@ -159,6 +161,8 @@ export function CreateProblemDialog({
       console.error('Form submission error:', error);
       if (error instanceof z.ZodError) {
         // Handle Zod validation errors
+        const message = error.errors?.map((e) => e.message).join();
+        showToast.error(`Error: ${message}`);
       }
     }
   };
@@ -332,7 +336,7 @@ export function CreateProblemDialog({
                 Cancel
               </Button>
             </DialogClose>
-            <Button type="submit" disabled={!isValid || isSubmitting}>
+            <Button type="submit" disabled={!isValid || isSubmitting || !file }>
               {isSubmitting ? 'Creating…' : 'Create Problem'}
             </Button>
           </DialogFooter>
