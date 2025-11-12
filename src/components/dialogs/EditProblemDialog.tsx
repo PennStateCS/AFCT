@@ -59,7 +59,7 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
     handleSubmit,
     reset,
     watch,
-    formState: { errors, isSubmitting, isValid },
+    formState: { errors, isSubmitting, isValid, isDirty },
   } = useForm<FormValues>({
     resolver: zodResolver(ProblemFormSchema),
     defaultValues: defaults,
@@ -208,6 +208,7 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
                 error={errors.title?.message}
                 showStatus
                 isValid={!errors.title && !!field.value}
+
               />
             )}
           />
@@ -344,11 +345,11 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
             </DialogClose>
             <Button
               type="submit"
-              disabled={!isValid || isSubmitting}
+              disabled={!isValid || isSubmitting || !isDirty }
               title={
                 !isValid
                   ? 'Fix validation errors to save'
-                  : isSubmitting
+                  : !isDirty
                     ? 'Submitting...'
                     : undefined
               }
