@@ -22,6 +22,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Course not found' }, { status: 404 });
   }
 
+  // Handle courses not published
+  if (!course.isPublished && session.user.role == 'ADMIN' || session.user.role == 'FACULTY') { // Notify admin or faculty that the course was not publihsed
+    return NextResponse.json({ error: 'Course not published' }, { status: 403 }); 
+  }
+
+  if (!course.isPublished) { // Do not tell student course was not published, say it does not exist
+    return NextResponse.json({ error: 'Course not found' }, { status: 404 }); 
+  }
+
   const userId = session.user.id;
   const role = session.user.role as Role;
 
