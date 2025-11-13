@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { toast } from 'sonner';
 import InputGroup from '@/components/ui/InputGroup';
 
 import { useForm, Controller } from 'react-hook-form';
@@ -104,8 +105,9 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
       resetForm();
       setOpen(false);
     } else {
-      const text = await res.text().catch(() => null);
+      const text = JSON.parse(await res.text().catch(() => '{"error":"Unexpected Error"}'));
       console.error('Failed to create user:', text);
+      toast.error(text.error);
     }
   };
 
