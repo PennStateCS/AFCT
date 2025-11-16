@@ -60,6 +60,7 @@ export const UpdateUserSchema = z.object({
   avatarFile: ImageFileOptional,
   /** if true, server should delete current avatar */
   deleteAvatar: z.boolean().default(false),
+  inactive: z.boolean(),
 });
 
 export type CreateUserInput = z.infer<typeof CreateUserSchema>;

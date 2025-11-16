@@ -6,6 +6,7 @@ import { writeFile, unlink } from 'fs/promises';
 import path from 'path';
 import { Role } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { activityColumns } from '@/app/dashboard/courses/[id]/activity-columns';
 
 // PATCH: Update a user's profile
 export async function PATCH(req: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -149,7 +150,19 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    // Check if user is in any courses
+    const inCourse = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { rosterEntries: true },
+    });
+    if (inCourse?.rosterEntries.length) { // inCourse?.rosterEntries is an array which is always truthly, .length is not always truthly
+      console.log(inCourse.rosterEntries);
+      return NextResponse.json({ error: 'Failed: User is in a course'}, { status: 409 });
+    }
+
+    // Valid to delete
     // Delete avatar file if exists
+    // Select user
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { avatar: true },
@@ -158,8 +171,13 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     if (user?.avatar) {
       const avatarPath = path.join(process.cwd(), 'public', 'uploads', 'pfps', user.avatar);
       await unlink(avatarPath).catch(() => {});
-  // Avatar file deleted
+      // Avatar file deleted
     }
+
+    // Delete from activity if exists
+    await prisma.activityLog.deleteMany({
+      where: { userId },
+    });
 
     // Delete user from database
     await prisma.user.delete({

@@ -6,6 +6,7 @@ import { format } from 'date-fns';
 import { User } from '@prisma/client';
 
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import { Badge } from '@/components/ui/RoleBadge';
 import { EditUserDialog } from '@/components/dialogs/EditUserDialog';
 import { AdminResetPasswordDialog } from '@/components/dialogs/AdminResetPasswordDialog';
@@ -145,13 +146,19 @@ function UserActionsCell({ user, onUserUpdate }: { user: User; onUserUpdate: () 
         method: 'DELETE',
       });
 
-      if (!res.ok) throw new Error('Delete failed');
+      if (!res.ok) {
+        const body = await res.json();
+        const errorMsg = body?.error || "Unexpected Error: Failed to delete user";
+
+        showToast.error(errorMsg);
+        return;
+      }
 
       showToast.success('User deleted successfully.');
       setConfirmOpen(false);
       onUserUpdate();
-    } catch {
-      showToast.error('Failed to delete user.');
+    } catch (err) {
+      showToast.error("Unexpected Error: Failed to delete user");
     }
   }
 

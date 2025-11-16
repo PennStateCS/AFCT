@@ -49,6 +49,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
       role: (user.role as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT') ?? 'STUDENT',
       avatarFile: undefined,
       deleteAvatar: false,
+      inactive: user.inactive ?? false,
     }),
     [user],
   );
@@ -139,6 +140,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
     formData.append('role', parsed.role);
     if (parsed.avatarFile instanceof File) formData.append('avatar', parsed.avatarFile);
     if (parsed.deleteAvatar) formData.append('deleteAvatar', 'true');
+    formData.append('inactive', parsed.inactive ? 'true' : 'false');
 
     const res = await fetch(`/api/users/${user.id}`, { method: 'PATCH', body: formData });
 
@@ -156,6 +158,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
       role: parsed.role as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT',
       // If you want to immediately clear avatar in UI on delete:
       avatar: parsed.deleteAvatar ? null : user.avatar,
+      inactive: parsed.inactive,
     });
 
     resetForm();
@@ -289,6 +292,27 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
                   </SelectContent>
                 </Select>
                 {errors.role && <p className="mt-1 text-xs text-red-600">{errors.role.message}</p>}
+              </div>
+            )}
+          />
+
+          {/* Inactive */}
+          <Controller
+            control={control}
+            name="inactive"
+            render={({ field }) => (
+              <div>
+                <label className="mb-2 block text-sm font-medium">Status</label>
+                <Select value={field.value ? 'true' : 'false'} onValueChange={(v) => field.onChange(v === 'true')}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select activity type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="false">Active</SelectItem>
+                    <SelectItem value="true">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+                {errors.inactive && <p className="mt-1 text-xs text-red-600">{errors.inactive.message}</p>}
               </div>
             )}
           />
