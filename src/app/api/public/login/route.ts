@@ -37,6 +37,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 
+    // If user is not active, state user is not active
+    if (auth.user.inactive) {
+      console.warn(`Login failed for ${email}: Inactive user`);
+      await createEnhancedActivityLog(prisma, req, {
+        action: 'LOGIN_FAILED',
+        category: 'SYSTEM',
+        metadata: { reason: 'Inactive user', email },
+      });
+
+      return NextResponse.json({ error: 'Inactive user' }, { status: 401 });
+    }
+
     // Log successful login
     await createEnhancedActivityLog(prisma, req, {
       userId: auth.user.id,
