@@ -19,11 +19,15 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
   // Look up the user and retrieve their global role
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, role: true },
+    select: { id: true, role: true, inactive: true },
   });
 
   if (!user) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 });
+  }
+
+  if (user.inactive == true) {
+    return NextResponse.json({ error: 'User is inactive'}, { status: 401 })
   }
 
   try {
