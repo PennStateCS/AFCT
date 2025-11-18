@@ -62,6 +62,7 @@ model Course {
   startDate   DateTime
   endDate     DateTime
   isPublished Boolean  @default(false)
+  isArchived Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

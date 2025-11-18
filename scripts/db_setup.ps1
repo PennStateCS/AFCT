@@ -2,7 +2,7 @@
 # For linux users run the following in your terminal: export $(grep -v '^#' [yourEnvFile])
 
 # Get the path and content of working .env file
-$env_path = "PATH_HERE" # Replace this path your your path to your designated env file
+$env_path = ".\.env.development" # Replace this path your your path to your designated env file
 $env_content = Get-Content $env_path
 
 # Iterate though each line in env
@@ -22,3 +22,5 @@ foreach ($line in $env_content) {
         }
     }
 }
+
+echo "db_setup has finished"
