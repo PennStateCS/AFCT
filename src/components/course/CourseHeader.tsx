@@ -26,6 +26,7 @@ interface CourseHeaderProps {
   onEditClick: () => void;
   onDuplicate?: () => void;
   onPublishToggle: (checked: boolean) => void;
+  onArchiveToggle: (checked: boolean) => void;
 }
 
 export function CourseHeader({
@@ -34,6 +35,7 @@ export function CourseHeader({
   onEditClick,
   onDuplicate,
   onPublishToggle,
+  onArchiveToggle,
 }: CourseHeaderProps) {
   // -- helpers ---------------------------------------------------------------
   const formatRange = (start?: string | Date | null, end?: string | Date | null) => {
@@ -254,6 +256,16 @@ export function CourseHeader({
                       checked={course.isPublished}
                       onCheckedChange={onPublishToggle}
                       aria-label="Toggle course visibility"
+                    />
+                  </div>
+
+                  {/* Archived */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-muted-foreground">Archived:</span>
+                    <Switch
+                      checked={course.isArchived}
+                      onCheckedChange={onArchiveToggle}
+                      aria-label="Toggle course archive"
                     />
                   </div>
                 </div>
