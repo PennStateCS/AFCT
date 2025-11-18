@@ -23,7 +23,7 @@ export async function POST(req: Request) {
   }
 
   // Handle courses not published
-  if (!course.isPublished && session.user.role == 'ADMIN' || session.user.role == 'FACULTY') { // Notify admin or faculty that the course was not publihsed
+  if (!course.isPublished && (session.user.role == 'ADMIN' || session.user.role == 'FACULTY')) { // Notify admin or faculty that the course was not publihsed
     return NextResponse.json({ error: 'Course not published' }, { status: 403 }); 
   }
 
