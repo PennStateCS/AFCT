@@ -72,6 +72,10 @@ export function useDialogStates() {
   // Publish confirm
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
   const [pendingPublish, setPendingPublish] = useState<boolean | null>(null);
+  
+  // Archive confirm
+  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
+  const [pendingArchive, setPendingArchive] = useState<boolean | null>(null);
 
   // Enroll user
   const [enrollOpen, setEnrollOpen] = useState(false);
@@ -80,12 +84,14 @@ export function useDialogStates() {
   return {
     editOpen,
     setEditOpen,
+
     problemOpen,
     setProblemOpen,
     editProblemOpen,
     setEditProblemOpen,
     selectedProblem,
     setSelectedProblem,
+
     editAssignmentOpen,
     setEditAssignmentOpen,
     selectedAssignment,
@@ -96,10 +102,17 @@ export function useDialogStates() {
     setConfirmOpen,
     pendingDelete,
     setPendingDelete,
+
     publishConfirmOpen,
     setPublishConfirmOpen,
     pendingPublish,
     setPendingPublish,
+
+    archiveConfirmOpen,
+    setArchiveConfirmOpen,
+    pendingArchive,
+    setPendingArchive,
+    
     enrollOpen,
     setEnrollOpen,
     allUsers,
