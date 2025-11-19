@@ -12,6 +12,7 @@ import {
   updateCourseAfterProblemCreate,
   updateAssignmentPublishStatus,
   updateCoursePublishStatus,
+  updateCourseArchiveStatus,
   saveCourse,
 } from '@/lib/course-utils';
 
@@ -115,18 +116,35 @@ export function useCourseHandlers(
     }
   }, [course, setCourse]);
 
+  // Course archive handler
+const handleCourseArchiveToggle = useCallback(async (isArchived: boolean) => {
+    if (!course) return;
+
+        
+    try {
+      const updated = await updateCourseArchiveStatus(course.id, isArchived);
+      setCourse((prev) => (prev ? { ...prev, isArchived: updated.isArchived } : prev));
+      showToast.success(isArchived ? 'Course archived' : 'Course not archived');
+    } catch {
+      showToast.error('Error updating archive status');
+    }
+  }, [course, setCourse]);
+
   return {
     handleAssignmentEditClick,
     handleAssignmentDeleteClick,
     handleAssignmentSave,
     handleAssignmentPublishToggle,
     handleAssignmentCreate,
+
     handleProblemEditClick,
     handleProblemDeleteClick,
     handleProblemCreated,
     handleProblemSaved,
+
     handleDelete,
     handleCourseSave,
     handleCoursePublishToggle,
+    handleCourseArchiveToggle,
   };
 }

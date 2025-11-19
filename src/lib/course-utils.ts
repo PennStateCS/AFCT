@@ -131,6 +131,20 @@ export async function updateCoursePublishStatus(
   return res.json();
 }
 
+export async function updateCourseArchiveStatus(
+  courseId: string,
+  isArchived: boolean
+): Promise<Course> {
+  const res = await fetch(`/api/courses/${courseId}/archive`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ isArchived }),
+  });
+  
+  if (!res.ok) throw new Error('Failed to update publish status');
+  return res.json();
+}
+
 export async function saveCourse(course: Course): Promise<Course> {
   const res = await fetch(`/api/courses/${course.id}`, {
     method: 'PUT',

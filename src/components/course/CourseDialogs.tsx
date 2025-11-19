@@ -46,6 +46,12 @@ interface CourseDialogsProps {
   pendingPublish: boolean | null;
   onPublishConfirm: () => void;
   onPublishCancel: () => void;
+
+  // Archive confirm
+  archiveConfirmOpen: boolean;
+  pendingArchive: boolean | null;
+  onArchiveConfirm: () => void;
+  onArchiveCancel: () => void;
   
   // Enroll user
   enrollOpen: boolean;
@@ -62,6 +68,7 @@ export function CourseDialogs({
   editOpen,
   setEditOpen,
   onCourseSave,
+
   problemOpen,
   setProblemOpen,
   editProblemOpen,
@@ -70,6 +77,7 @@ export function CourseDialogs({
   setSelectedProblem,
   onProblemCreated,
   onProblemSaved,
+
   editAssignmentOpen,
   setEditAssignmentOpen,
   selectedAssignment,
@@ -81,10 +89,17 @@ export function CourseDialogs({
   pendingDelete,
   onConfirm,
   onCancel,
+  
   publishConfirmOpen,
   pendingPublish,
   onPublishConfirm,
   onPublishCancel,
+
+  archiveConfirmOpen,
+  pendingArchive,
+  onArchiveConfirm,
+  onArchiveCancel,
+
   enrollOpen,
   setEnrollOpen,
   allUsers,
@@ -155,6 +170,19 @@ export function CourseDialogs({
         }
         onConfirm={onPublishConfirm}
         onCancel={onPublishCancel}
+      />
+
+      <ConfirmDialog
+        open={archiveConfirmOpen}
+        confirmText={pendingArchive ? 'Archive' : 'Unarchive'}
+        title={pendingArchive ? 'Archive Course?' : 'Unarchive Course?'}
+        description={
+          pendingArchive
+            ? 'Are you sure you want to archive this course?'
+            : 'Are you sure you want to unarchive this course?'
+        }
+        onConfirm={onArchiveConfirm}
+        onCancel={onArchiveCancel}
       />
 
       <EnrollUserDialog
