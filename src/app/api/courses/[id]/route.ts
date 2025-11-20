@@ -115,6 +115,7 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
       startDate: course.startDate,
       endDate: course.endDate,
       isPublished: course.isPublished,
+      isArchived: course.isArchived,
       createdAt: course.createdAt,
       updatedAt: course.updatedAt,
   faculty,
@@ -159,6 +160,7 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
         startDate: new Date(body.startDate),
         endDate: new Date(body.endDate),
         isPublished: body.isPublished,
+        isArchived: body.isArchived,
       },
       include: {
         problems: true,
@@ -238,6 +240,7 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
       startDate: updatedCourse.startDate,
       endDate: updatedCourse.endDate,
       isPublished: updatedCourse.isPublished,
+      isArchived: updatedCourse.isArchived,
       createdAt: updatedCourse.createdAt,
       updatedAt: updatedCourse.updatedAt,
       faculty,
