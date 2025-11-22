@@ -265,3 +265,8 @@ model ActivityLog {
   @@index([userId, courseId])
   @@index([timestamp, category])
 }
+
+generator erd {
+  provider = "prisma-erd-generator"
+  output   = "ERD.svg"
+}
