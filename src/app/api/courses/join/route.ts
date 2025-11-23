@@ -56,6 +56,7 @@ export async function POST(req: Request) {
   }
 
   // Create roster entry
+  console.log(userId);
   await prisma.roster.create({
     data: {
       courseId: course.id,

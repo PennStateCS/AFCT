@@ -62,7 +62,7 @@ model Course {
   startDate   DateTime
   endDate     DateTime
   isPublished Boolean  @default(false)
-  isArchived Boolean @default(false)
+  isArchived  Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -80,7 +80,7 @@ model Roster {
   id   String     @id @default(cuid())
   role CourseRole // Role for the user in this course
 
-  course   Course @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
   courseId String
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
@@ -108,7 +108,7 @@ model Assignment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  course   Course @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
   courseId String
 
   problems AssignmentProblem[]
@@ -135,7 +135,7 @@ model Problem {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  course   Course @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
   courseId String
 
   assignments AssignmentProblem[]
@@ -239,13 +239,13 @@ model ActivityLog {
 
   // Normalized foreign keys for fast filtering
   courseId     String?
-  course       Course?     @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  course       Course?     @relation(fields: [courseId], references: [id], onDelete: SetNull)
   assignmentId String?
-  assignment   Assignment? @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  assignment   Assignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
   problemId    String?
-  problem      Problem?    @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  problem      Problem?    @relation(fields: [problemId], references: [id], onDelete: SetNull)
   submissionId String?
-  submission   Submission? @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  submission   Submission? @relation(fields: [submissionId], references: [id], onDelete: SetNull)
 
   // Additional categorization
   category    String? // SYSTEM, COURSE, ASSIGNMENT, PROBLEM, SUBMISSION, USER

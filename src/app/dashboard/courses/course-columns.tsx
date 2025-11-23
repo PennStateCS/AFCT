@@ -123,12 +123,20 @@ function CourseActionsCell({
 
   const handleDelete = async () => {
     try {
-      const res = await fetch(`/api/courses/${course.id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Delete failed');
-      showToast.success('Course deleted');
+      const res = await fetch(`/api/courses/${course.id}`, { 
+        method: 'DELETE',
+        body: JSON.stringify(course),
+       })
+      if (!res.ok) {
+          const json = await res.json().catch(() => null);
+          const serverMessage = json?.error || "Error deleting course";
+          throw new Error(serverMessage);
+      };
+      showToast.success('Course successfully deleted');
       setConfirmOpen(false);
-    } catch {
-      showToast.error('Failed to delete course');
+    } catch (e: any) {
+      const msg = e?.message || 'Network error';
+      showToast.error(msg);
     }
   };
 
