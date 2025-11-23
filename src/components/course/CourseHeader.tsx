@@ -180,7 +180,7 @@ export function CourseHeader({
                 <TooltipContent>Edit course</TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            <Button variant="secondary" className="hidden sm:inline-flex" onClick={onEditClick}>
+            <Button variant="secondary" className="hidden sm:inline-flex" onClick={onEditClick} disabled={course.isArchived}>
               <Pencil className="mr-2 h-4 w-4" />
               Edit Course
             </Button>
@@ -256,6 +256,7 @@ export function CourseHeader({
                       checked={course.isPublished}
                       onCheckedChange={onPublishToggle}
                       aria-label="Toggle course visibility"
+                      disabled={course.isArchived}
                     />
                   </div>
 
