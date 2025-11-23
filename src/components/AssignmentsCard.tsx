@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
 import { Plus, NotebookText } from 'lucide-react';
-import type { FullCourse } from '@/types/course';
 
 type AssignmentWithProblemCount = Assignment & {
   problemCount: number;
@@ -16,14 +15,12 @@ interface AssignmentsCardProps {
   assignments: AssignmentWithProblemCount[];
   assignmentColumns: ColumnDef<AssignmentWithProblemCount>[];
   onCreateAssignment: () => void;
-  course?: FullCourse | null;
 }
 
 export function AssignmentsCard({ 
   assignments, 
   assignmentColumns, 
   onCreateAssignment,
-  course = null
 }: AssignmentsCardProps) {
   return (
     <Card>
@@ -35,7 +32,6 @@ export function AssignmentsCard({
             color: 'var(--color-primary-foreground)',
           }}
           onClick={onCreateAssignment}
-          disabled={course?.isArchived}
         >
           <Plus /> Create Assignment
         </Button>
