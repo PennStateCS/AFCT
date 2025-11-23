@@ -22,21 +22,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Course not found' }, { status: 404 });
   }
 
-  // Handle courses not published
-  if (!course.isPublished && (session.user.role == 'ADMIN' || session.user.role == 'FACULTY')) { // Notify admin or faculty that the course was not publihsed
-    return NextResponse.json({ error: 'Course not published' }, { status: 403 }); 
-  }
-
-  if (!course.isPublished) { // Do not tell student course was not published, say it does not exist
-    return NextResponse.json({ error: 'Course not found' }, { status: 404 }); 
-  }
-
   const userId = session.user.id;
   const role = session.user.role as Role;
-
-  if (role === 'ADMIN') {
-    return NextResponse.json({ error: 'Admins cannot register for courses' }, { status: 400 });
-  }
 
   // Check if user is already in roster
   const existing = await prisma.roster.findUnique({
@@ -48,15 +35,30 @@ export async function POST(req: Request) {
     },
   });
 
+  // Handle courses not published or archived
+  if (!course.isPublished && (role == 'ADMIN' || role == 'FACULTY')) { // Notify admin or faculty that the course was not publihsed
+    return NextResponse.json({ error: 'Course not published' }, { status: 403 }); 
+  }
+
+  if (course.isArchived && (role === 'ADMIN' || role == 'FACULTY')) { // Notify admin or faculty that the course is archived)
+    return NextResponse.json({ error: 'Course archived' }, { status: 403 }); 
+  }
+
+  if (!course.isPublished || course.isArchived) { // Do not tell student course was not published, say it does not exist
+    return NextResponse.json({ error: 'Course not found' }, { status: 404 }); 
+  }
+
+  if (role === 'ADMIN') {
+    return NextResponse.json({ error: 'Admins cannot register for courses' }, { status: 400 });
+  }
+
   if (existing) {
     return NextResponse.json(
       { error: `You are already registered for this course as ${existing.role}` },
       { status: 400 },
     );
   }
-
   // Create roster entry
-  console.log(userId);
   await prisma.roster.create({
     data: {
       courseId: course.id,
