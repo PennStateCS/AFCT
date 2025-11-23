@@ -125,8 +125,9 @@ const handleCourseArchiveToggle = useCallback(async (isArchived: boolean) => {
       const updated = await updateCourseArchiveStatus(course.id, isArchived);
       setCourse((prev) => (prev ? { ...prev, isArchived: updated.isArchived } : prev));
       showToast.success(isArchived ? 'Course archived' : 'Course not archived');
-    } catch {
-      showToast.error('Error updating archive status');
+    } catch (error: any) {
+      const msg = error?.message || 'Failed to archive course';
+      showToast.error(msg);
     }
   }, [course, setCourse]);
 
