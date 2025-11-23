@@ -141,7 +141,16 @@ export async function updateCourseArchiveStatus(
     body: JSON.stringify({ isArchived }),
   });
   
-  if (!res.ok) throw new Error('Failed to update publish status');
+  if (!res.ok) {
+    let msg = 'Failed to archive course';
+    try {
+      const body = await res.json();
+      msg = body?.error || body?.message || msg;
+    } catch {
+      // ignore JSON parse errors
+    }
+    throw new Error(msg);
+  }
   return res.json();
 }
 
