@@ -197,9 +197,9 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
     // Attach problem counts to assignments
     const assignmentsWithProblemCount = await Promise.all(
       updatedCourse.assignments.map(async (assignment) => {
-  const submissionCount = await prisma.submission.count({ where: { assignmentId: assignment.id } });
-  const commentCount = await prisma.comment.count({ where: { assignmentId: assignment.id } });
-  const hasSubmissionsOrComments = submissionCount > 0 || commentCount > 0;
+        const submissionCount = await prisma.submission.count({ where: { assignmentId: assignment.id } });
+        const commentCount = await prisma.comment.count({ where: { assignmentId: assignment.id } });
+        const hasSubmissionsOrComments = submissionCount > 0 || commentCount > 0;
 
         return {
           id: assignment.id,
@@ -252,5 +252,56 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
   } catch (error) {
     console.error('PUT /api/courses/[id] error:', error);
     return NextResponse.json({ error: 'Failed to update course' }, { status: 500 });
+  }
+}
+
+// DELETE: Delete a course (Faculty/Admin/TA only, course must be archived)
+export async function DELETE(req: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
+
+  if (!id) {
+    return NextResponse.json({ error: 'Missing course ID' }, { status: 400 });
+  }
+
+  // Get authenticated user session
+  const session = await auth();
+  const user = session?.user;
+
+  if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  }
+
+  // Make sure the course isArchived
+  const courseIsArchived = await prisma.course.findFirst({
+    where: { id },
+    select: { isArchived: true }
+  });
+
+  if (courseIsArchived === null || courseIsArchived.isArchived === false) {
+    return NextResponse.json({ error: 'Course must be archived' }, { status: 403 });
+  }
+
+  const body = await req.json();
+
+  try {
+    // Deleting course code
+    const deletedCourse = await prisma.course.delete({
+      where: {
+        id,
+        isArchived: true,
+      } 
+    });
+
+    // Log the update action to ActivityLog
+    await createEnhancedActivityLog(prisma, req, {
+      userId: user.id,
+      action: 'DELETE_COURSE',
+      category: 'COURSE',
+      metadata: { "courseName": deletedCourse.name },
+    });
+    return NextResponse.json({ status: 204 });
+  } catch (error) {
+    console.error('DELETE /api/courses/[id] error:', error);
+    return NextResponse.json({ error: error }, { status: 500 });
   }
 }
