@@ -249,13 +249,13 @@ export function EditCourseDialog({ course, open, setOpen, onSave }: EditCourseDi
             </DialogClose>
             <Button
               type="submit"
-              disabled={!isValid || !isDirty}
+              disabled={!isValid || !isDirty || course.isArchived}
               title={
                 !isValid
                   ? 'Fix validation errors to save'
                   : !isDirty
                     ? 'No changes to save'
-                    : undefined
+                    : "Course is not archived"
               }
             >
               Save Changes
