@@ -27,6 +27,31 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
+    // Make sure course is published and after end date or has no students
+    const courseInfo = await prisma.course.findFirst({
+      where: { id: courseId },
+      select: {
+        isPublished: true,
+        endDate: true,
+        _count: { select: { roster: { where: { role: "STUDENT" } } } }
+      }
+    })
+
+    // Set variables for checking
+    const studentCount = courseInfo?._count?.roster ?? 0;
+    const hasStudents = studentCount > 0;
+
+    // Check archiving conditions if archiniving
+    if (isArchived) {
+      if (hasStudents && !courseInfo?.isPublished ) {
+        return NextResponse.json({ error: 'Active course must be published before archiving' }, { status: 403 });
+      }
+
+      if (hasStudents && courseInfo?.endDate && courseInfo?.endDate >= new Date()) {
+        return NextResponse.json({ error: 'Active course must have ended before archiving' }, { status: 403 });
+      }
+    }
+
     // Update course archive status
     const updated = await prisma.course.update({
       where: { id: courseId },
@@ -55,7 +80,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     // Respond with the updated course
     return NextResponse.json(updated);
   } catch (error) {
-    console.error('PATCH /api/courses/[id]/archive error:', error);
-    return new NextResponse('Failed to update archive status', { status: 500 });
+    console.error('Failed PATCH /api/courses/[id]/archive error:', error);
+    return NextResponse.json('Failed to update archive status', { status: 500 });
   }
 }
