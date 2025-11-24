@@ -19,7 +19,8 @@ export async function GET(_: Request, context: { params: Promise<{ email: string
       where: {
         roster: {
           some:{ user: { email } }
-        }
+        },
+        isArchived: false
       },
 
       // Select the course's id and name
