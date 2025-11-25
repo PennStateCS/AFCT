@@ -36,13 +36,18 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     // 4. Fetch all published assignments
     const assignments = await prisma.assignment.findMany({
       where: {
-        courseId,
+        courseId: courseId,
         isPublished: true,
       },
       select: {
         id: true,
         title: true,
         dueDate: true,
+        grades: {
+          select: {
+            grade: true
+          },
+        },
       },
       orderBy: {
         dueDate: 'asc',
