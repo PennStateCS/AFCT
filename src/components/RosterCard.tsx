@@ -12,6 +12,7 @@ type UserWithRole = User & {
 };
 
 interface RosterCardProps {
+  courseIsArchived: boolean;
   faculty: User[];
   tas: User[];
   students: User[];
@@ -21,12 +22,13 @@ interface RosterCardProps {
 }
 
 export function RosterCard({ 
+  courseIsArchived,
   faculty, 
   tas, 
   students, 
   userColumns, 
-  onEnrollUser 
-  , onBulkEnroll
+  onEnrollUser,
+  onBulkEnroll,
 }: RosterCardProps) {
   const rosterData: UserWithRole[] = [
     ...faculty.map((u) => ({ ...u, _role: 'Faculty' })),
@@ -39,10 +41,10 @@ export function RosterCard({
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-2xl flex items-center gap-2"><Users className="h-5 w-5" />Roster</CardTitle>
         <div className="flex items-center gap-2">
-          <Button variant="default" onClick={onEnrollUser}>
+          <Button variant="default" onClick={onEnrollUser} disabled={courseIsArchived}>
             <Plus />Enroll User
           </Button>
-          <Button variant="default" onClick={() => onBulkEnroll?.()}>
+          <Button variant="default" onClick={() => onBulkEnroll?.()} disabled={courseIsArchived}>
             <Users className="mr-1" />Bulk Enroll
           </Button>
         </div>
