@@ -95,6 +95,8 @@ export function AdminCourseView({
       >
         <div className="space-y-6 mb-8">
           <AssignmentsCard
+            courseId={course.id}
+            courseIsArchived={course.isArchived}
             assignments={course.assignments}
             assignmentColumns={assignmentColumns}
             onCreateAssignment={onCreateAssignment}
@@ -108,6 +110,8 @@ export function AdminCourseView({
       >
         <div className="space-y-6 mb-8">
           <ProblemsCard
+            courseId={course.id}
+            courseIsArchived={course.isArchived}
             problems={course.problems}
             problemColumns={problemCols}
             onCreateProblem={onCreateProblem}
@@ -118,6 +122,7 @@ export function AdminCourseView({
       <TabsContent value="roster" className="animate-fade-in-up transition-opacity duration-300">
         <div className="space-y-6 mb-8">
           <RosterCard
+            courseIsArchived={course.isArchived}
             faculty={course.faculty}
             tas={course.tas}
             students={course.students}

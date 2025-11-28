@@ -120,6 +120,7 @@ export function CourseDialogs({
         open={problemOpen}
         setOpen={setProblemOpen}
         courseId={course.id}
+        courseIsArchived={course.isArchived}
         onCreated={onProblemCreated}
       />
 
@@ -148,6 +149,7 @@ export function CourseDialogs({
         open={createAssignmentOpen}
         setOpen={setCreateAssignmentOpen}
         courseId={course.id}
+        courseIsArchived={course.isArchived}
         onCreate={onAssignmentCreate}
       />
       
@@ -188,12 +190,18 @@ export function CourseDialogs({
       <EnrollUserDialog
         open={enrollOpen}
         setOpen={setEnrollOpen}
+        courseIsArchived={course.isArchived}
         users={allUsers}
         onEnroll={onEnrollUser}
       />
 
       {setBulkEnrollOpen && (
-        <BulkEnrollDialog open={!!bulkEnrollOpen} setOpen={(v) => setBulkEnrollOpen?.(v)} courseId={course.id} onComplete={() => { /* noop */ }} />
+        <BulkEnrollDialog
+          open={!!bulkEnrollOpen}
+          setOpen={(v) => setBulkEnrollOpen?.(v)}
+          courseId={course.id}
+          courseIsArchived={course.isArchived}
+          onComplete={() => { /* noop */ }} />
       )}
     </>
   );

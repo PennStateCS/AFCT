@@ -37,6 +37,7 @@ type CreateProblemDialogProps = {
   open: boolean;
   setOpen: (open: boolean) => void;
   courseId: string;
+  courseIsArchived: boolean;
   onCreated?: (created?: Problem) => void;
 };
 
@@ -50,6 +51,7 @@ export function CreateProblemDialog({
   open,
   setOpen,
   courseId,
+  courseIsArchived,
   onCreated,
 }: CreateProblemDialogProps) {
   const defaults: FormValues = useMemo(
@@ -61,7 +63,8 @@ export function CreateProblemDialog({
       maxStates: 100,
       isDeterministic: false,
       file: undefined,
-      courseId,
+      courseId: courseId,
+      courseIsArchived: courseIsArchived,
     }),
     [courseId],
   );
@@ -336,7 +339,7 @@ export function CreateProblemDialog({
                 Cancel
               </Button>
             </DialogClose>
-            <Button type="submit" disabled={!isValid || isSubmitting || !file }>
+            <Button type="submit" disabled={!isValid || isSubmitting || !file || courseIsArchived }>
               {isSubmitting ? 'Creating…' : 'Create Problem'}
             </Button>
           </DialogFooter>
