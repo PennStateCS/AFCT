@@ -21,11 +21,18 @@ type Props = {
   open: boolean;
   setOpen: (v: boolean) => void;
   courseId: string;
+  courseIsArchived: boolean;
   // callback after enrollments complete
   onComplete?: () => void;
 };
 
-export default function BulkEnrollDialog({ open, setOpen, courseId, onComplete }: Props) {
+export default function BulkEnrollDialog({
+  open,
+  setOpen,
+  courseId,
+  courseIsArchived,
+  onComplete,
+}: Props) {
   const [step, setStep] = useState(1);
   const [rawText, setRawText] = useState('');
   const [found, setFound] = useState<EnrollableUser[]>([]);
@@ -170,7 +177,7 @@ export default function BulkEnrollDialog({ open, setOpen, courseId, onComplete }
           </DialogClose>
 
           {step === 1 && (
-            <Button onClick={handleNextFromPaste} disabled={isLoading || !rawText.trim()}>Next</Button>
+            <Button onClick={handleNextFromPaste} disabled={isLoading || !rawText.trim() || courseIsArchived}>Next</Button>
           )}
 
           {step === 2 && (

@@ -12,12 +12,15 @@ type AssignmentWithProblemCount = Assignment & {
 };
 
 interface AssignmentsCardProps {
+  courseId: string;
+  courseIsArchived: boolean;
   assignments: AssignmentWithProblemCount[];
   assignmentColumns: ColumnDef<AssignmentWithProblemCount>[];
   onCreateAssignment: () => void;
 }
 
 export function AssignmentsCard({ 
+  courseIsArchived,
   assignments, 
   assignmentColumns, 
   onCreateAssignment,
@@ -32,6 +35,7 @@ export function AssignmentsCard({
             color: 'var(--color-primary-foreground)',
           }}
           onClick={onCreateAssignment}
+          disabled={courseIsArchived}
         >
           <Plus /> Create Assignment
         </Button>

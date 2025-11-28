@@ -29,11 +29,18 @@ const roleDisplayNames: Record<string, string> = {
 type EnrollUserDialogProps = {
   open: boolean;
   setOpen: (open: boolean) => void;
+  courseIsArchived: boolean;
   users: EnrollableUser[]; // NOT already in the course
   onEnroll: (user: EnrollableUser) => void;
 };
 
-export function EnrollUserDialog({ open, setOpen, users, onEnroll }: EnrollUserDialogProps) {
+export function EnrollUserDialog({
+  open,
+  setOpen,
+  courseIsArchived,
+  users,
+  onEnroll,
+}: EnrollUserDialogProps) {
   const [search, setSearch] = React.useState('');
   const [selectedIdx, setSelectedIdx] = React.useState<number>(-1);
 
@@ -84,7 +91,7 @@ export function EnrollUserDialog({ open, setOpen, users, onEnroll }: EnrollUserD
       e.preventDefault();
       setSelectedIdx((prev) => (prev > 0 ? prev - 1 : filteredUsers.length - 1));
     } else if (e.key === 'Enter') {
-      if (selectedIdx >= 0 && filteredUsers[selectedIdx]) {
+      if (selectedIdx >= 0 && filteredUsers[selectedIdx] && !courseIsArchived) {
         handleEnroll(filteredUsers[selectedIdx]);
       }
     }
@@ -93,7 +100,7 @@ export function EnrollUserDialog({ open, setOpen, users, onEnroll }: EnrollUserD
   // Enroll the user
   const handleEnroll = (user?: EnrollableUser) => {
     const userToEnroll = user ?? (selectedIdx >= 0 ? filteredUsers[selectedIdx] : undefined);
-    if (userToEnroll) {
+    if (userToEnroll && !courseIsArchived) {
       onEnroll(userToEnroll);
       setOpen(false);
     }
@@ -155,7 +162,7 @@ export function EnrollUserDialog({ open, setOpen, users, onEnroll }: EnrollUserD
               Cancel
             </Button>
           </DialogClose>
-          <Button type="button" onClick={() => handleEnroll()} disabled={selectedIdx < 0}>
+          <Button type="button" onClick={() => handleEnroll()} disabled={selectedIdx < 0 || courseIsArchived}>
             Enroll
           </Button>
         </DialogFooter>

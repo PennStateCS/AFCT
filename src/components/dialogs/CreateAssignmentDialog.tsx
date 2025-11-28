@@ -20,8 +20,6 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 
-import { useCourseData } from '@/hooks/use-course';
-
 // ✅ Import assignment schemas directly to avoid barrel/cycle issues
 import { CreateAssignmentFormSchema, CreateAssignmentSchema } from '@/schemas/assignment';
 
@@ -34,6 +32,7 @@ type CreateAssignmentDialogProps = {
   open: boolean;
   setOpen: (open: boolean) => void;
   courseId: string;
+  courseIsArchived: boolean;
   onCreate?: (assignment: Assignment) => void;
 };
 
@@ -59,11 +58,9 @@ export function CreateAssignmentDialog({
   open,
   setOpen,
   courseId,
+  courseIsArchived,
   onCreate,
 }: CreateAssignmentDialogProps) {
-  // Call hook
-  const { course } = useCourseData(courseId);
-  const effectiveCourseId = course?.id ?? courseId;
 
   // Form defaults (strings for datetime-local fields)
   const defaults: FormValues = useMemo(
@@ -73,9 +70,10 @@ export function CreateAssignmentDialog({
       maxPoints: '100',
       dueDate: defaultDueLocalString(),
       isPublished: false,
-      courseId: effectiveCourseId,
+      courseId: courseId,
+      courseIsArchived: courseIsArchived,
     }),
-    [effectiveCourseId],
+    [courseId],
   );
 
   const {
@@ -257,6 +255,7 @@ export function CreateAssignmentDialog({
                   onCheckedChange={(checked) => field.onChange(!!checked)}
                 />
               )}
+              disabled={courseIsArchived}
             />
           </div>
 
@@ -272,7 +271,7 @@ export function CreateAssignmentDialog({
               </Button>
             </DialogClose>
 
-            <Button type="submit" disabled={!isValid || isSubmitting || !!course?.isArchived}>
+            <Button type="submit" disabled={!isValid || isSubmitting || courseIsArchived}>
               {isSubmitting ? 'Creating…' : 'Create Assignment'}
             </Button>
           </DialogFooter>

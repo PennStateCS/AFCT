@@ -29,7 +29,7 @@ type AssignmentWithProblemCount = Assignment & {
 // Component for the publish switch with confirmation dialog
 function PublishSwitchCell({ 
   assignment, 
-  onPublishToggle 
+  onPublishToggle, 
 }: { 
   assignment: AssignmentWithProblemCount; 
   onPublishToggle: (assignmentId: string, newValue: boolean) => void;
