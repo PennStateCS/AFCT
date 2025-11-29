@@ -33,13 +33,14 @@ import {
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-import { Book, Users, UserRound, LogOut, LockKeyhole, UserPen, ChevronUp, BookPlus } from 'lucide-react';
+import { Archive, Book, Users, UserRound, LogOut, LockKeyhole, UserPen, ChevronUp, BookPlus } from 'lucide-react';
 
 type Course = {
   id: string;
   name: string;
   code: string;
   isPublished: boolean;
+  isArchived: boolean;
   faculty: { id: string }[];
   tas: { id: string }[];
   students: { id: string }[];
@@ -191,7 +192,7 @@ export default function DashboardSidebarMenu() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {filteredCourses.map((course) => (
+              {filteredCourses.map((course) => !course.isArchived && (
                 <SidebarMenuItem key={course.id}>
                   <TooltipProvider delayDuration={100}>
                     <Tooltip open={collapsed ? undefined : false}>
@@ -200,8 +201,8 @@ export default function DashboardSidebarMenu() {
                           asChild
                           isActive={pathname.startsWith(`/dashboard/courses/${course.id}`)}
                           className={cn(
-                            'hover:bg-secondary focus:bg-secondary text-sidebar-foreground',
-                            'data-[active=true]:bg-secondary',
+                            "hover:bg-secondary focus:bg-secondary text-sidebar-foreground",
+                            "data-[active=true]:bg-secondary",
                           )}
                         >
                           <Link
@@ -228,6 +229,30 @@ export default function DashboardSidebarMenu() {
               ))}
             </SidebarMenu>
           </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Archived Courses */}
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-sidebar-foreground text-sm">
+            Archive
+          </SidebarGroupLabel>
+          <SidebarMenuButton
+            asChild           
+            isActive={pathname == "/dashboard/archive"}                
+            className={cn(
+              "hover:bg-secondary focus:bg-secondary text-sidebar-foreground",
+              "data-[active=true]:bg-secondary",
+            )}>
+              <Link
+                href="/dashboard/archive"
+                className="flex min-w-0 items-center gap-2"
+              >
+                <Archive className="h-4 w-4 shrink-0" />
+                <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+                  Archived Courses
+                </span>
+              </Link>
+          </SidebarMenuButton>
         </SidebarGroup>
       </SidebarContent>
 

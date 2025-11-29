@@ -10,6 +10,7 @@ type Props = {
     id: string;
     role: string;
   };
+  title: string;
   courses: (Course & {
     students?: User[];
     faculty?: User[];
@@ -17,7 +18,7 @@ type Props = {
   })[];
 };
 
-export default function DashboardClient({ sessionUser, courses }: Props) {
+export default function DashboardClient({ sessionUser, courses, title }: Props) {
   const { role } = sessionUser;
   const isPrivileged = role === 'ADMIN' || role === 'FACULTY' || role === 'TA';
   const now = new Date();
@@ -28,7 +29,7 @@ export default function DashboardClient({ sessionUser, courses }: Props) {
   return (
     <Card className="flex h-full">
       <CardHeader>
-        <CardTitle className="text-2xl font-semibold tracking-tight">Course List</CardTitle>
+        <CardTitle className="text-2xl font-semibold tracking-tight">{title}</CardTitle>
       </CardHeader>
 
       <CardContent>
