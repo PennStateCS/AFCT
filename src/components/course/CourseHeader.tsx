@@ -249,13 +249,13 @@ export function CourseHeader({
                     </div>
                   </div>
 
-                  {/* Visibility */}
+                  {/* Published */}
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-muted-foreground">Visibility:</span>
+                    <span className="text-[11px] text-muted-foreground">Published:</span>
                     <Switch
                       checked={course.isPublished}
                       onCheckedChange={onPublishToggle}
-                      aria-label="Toggle course visibility"
+                      aria-label="Toggle course publishability"
                       disabled={course.isArchived}
                     />
                   </div>
