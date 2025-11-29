@@ -114,6 +114,7 @@ export async function POST(req: Request) {
           startDate: data.startDate, // Date object is fine
           endDate: data.endDate,
           isPublished: data.isPublished ?? false,
+          isArchived: false,
         },
       });
 
@@ -159,6 +160,7 @@ export async function POST(req: Request) {
           startDate: created.course.startDate,
           endDate: created.course.endDate,
           isPublished: created.course.isPublished,
+          isArchived: created.course.isArchived,
           faculty: created.faculty,
         },
       },
