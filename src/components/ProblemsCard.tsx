@@ -25,7 +25,7 @@ export function ProblemsCard({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-2xl flex items-center gap-2"><FileText className="h-5 w-5" />Problems</CardTitle>
-        <Button variant="default" onClick={onCreateProblem} disabled={courseIsArchived}>
+        <Button variant="default" onClick={onCreateProblem} hidden={courseIsArchived}>
           <Plus /> Create Problem
         </Button>
       </CardHeader>

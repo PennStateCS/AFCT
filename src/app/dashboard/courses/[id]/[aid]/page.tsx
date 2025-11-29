@@ -200,7 +200,7 @@ export default function AssignmentDashboardPage() {
 						aria-label="Edit Assignment"
 						onClick={handleEditAssignment}
 						className="absolute right-6 top-6"
-						disabled={courseIsArchived}
+						hidden={courseIsArchived}
 					>
 						Edit Assignment
 					</Button>
@@ -265,12 +265,13 @@ export default function AssignmentDashboardPage() {
                     variant="default"
                     aria-label="Add Existing Problem"
                     onClick={handleAddExistingProblem}
-                    disabled={problemsLoading || courseIsArchived}
+                    disabled={problemsLoading}
+					hidden={courseIsArchived}
                   >
                     Add Existing Problem
                   </Button>
                 </div>
-                <p className="mt-2 text-muted-foreground text-sm">
+                <p className="mt-2 text-muted-foreground text-sm" hidden={courseIsArchived}>
                   This assignment is made up of the following problems. You can add an existing problem from this course by clicking on the <strong>Add Existing Problem</strong> button in the upper right hand corner.
                 </p>
               </CardHeader>
@@ -393,7 +394,7 @@ export default function AssignmentDashboardPage() {
                             <DropdownMenuItem
                               onClick={() => handleEditProblem(row.original)}
                               className="flex items-center gap-2"
-							  disabled={courseIsArchived}
+							  hidden={courseIsArchived}
                             >
                               <Pencil className="mr-2 h-4 w-4" /> Edit Problem
                             </DropdownMenuItem>
@@ -407,7 +408,7 @@ export default function AssignmentDashboardPage() {
                             <DropdownMenuItem
                               onClick={() => setProblemToRemove(row.original)}
                               className="focus:text-red-600 flex items-center gap-2 text-red-600"
-							  disabled={courseIsArchived}
+							  hidden={courseIsArchived}
                             >
                               <Trash2 className="mr-2 h-4 w-4" /> Remove Problem
                             </DropdownMenuItem>
@@ -427,6 +428,7 @@ export default function AssignmentDashboardPage() {
           </TabsContent>
           <TabsContent value="submissions">
             <AssignmentSubmissions
+			  courseIsArchived={courseIsArchived}
               courseId={id}
               assignmentId={aid}
               problems={assignment.problems.map((ap: { problem: Problem }) => ({

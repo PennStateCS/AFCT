@@ -41,10 +41,10 @@ export function RosterCard({
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-2xl flex items-center gap-2"><Users className="h-5 w-5" />Roster</CardTitle>
         <div className="flex items-center gap-2">
-          <Button variant="default" onClick={onEnrollUser} disabled={courseIsArchived}>
+          <Button variant="default" onClick={onEnrollUser} hidden={courseIsArchived}>
             <Plus />Enroll User
           </Button>
-          <Button variant="default" onClick={() => onBulkEnroll?.()} disabled={courseIsArchived}>
+          <Button variant="default" onClick={() => onBulkEnroll?.()} hidden={courseIsArchived}>
             <Users className="mr-1" />Bulk Enroll
           </Button>
         </div>

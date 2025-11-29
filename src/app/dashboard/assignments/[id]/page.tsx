@@ -582,7 +582,7 @@ export default function StudentAssignmentPage() {
                               <Button
                                 size="sm"
                                 onClick={() => handleSubmitComment(problemId)}
-                                disabled={!newComment[problemId]?.trim() || submittingComment[problemId]}
+                                disabled={!newComment[problemId]?.trim() || submittingComment[problemId] || assignment.course.isArchived}
                               >
                                 {submittingComment[problemId] ? (
                                   'Submitting...'
