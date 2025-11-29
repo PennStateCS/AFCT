@@ -43,6 +43,7 @@ type AssignmentWithDetails = {
 	courseId: string;
 	courseName?: string;
 	courseCode?: string;
+	courseIsArchived?: boolean;
 	dueDate: string | Date;
 	maxPoints: number;
 	isPublished: boolean;
@@ -53,6 +54,7 @@ type AssignmentWithDetails = {
 		id: string;
 		name: string;
 		code?: string;
+		isArchived?: boolean;
 	};
 };
 
@@ -74,6 +76,7 @@ export default function AssignmentDashboardPage() {
 	const [tab, setTab] = useState(searchParams.get("tab") || "problems");
 	const [descOpen, setDescOpen] = useState(false);
 	const [descText, setDescText] = useState<string | null>(null);
+	const courseIsArchived = assignment?.course?.isArchived ?? false;
 
 	// JFLAP viewer dialog state
 	const [viewerOpen, setViewerOpen] = useState(false);
@@ -197,6 +200,7 @@ export default function AssignmentDashboardPage() {
 						aria-label="Edit Assignment"
 						onClick={handleEditAssignment}
 						className="absolute right-6 top-6"
+						disabled={courseIsArchived}
 					>
 						Edit Assignment
 					</Button>
@@ -231,205 +235,213 @@ export default function AssignmentDashboardPage() {
 					</div>
 				</div>
 			<Tabs value={tab} onValueChange={handleTabChange}>
-				<TabsList className="bg-card border-border h-12 rounded-md border p-1 shadow-sm">
-					<TabsTrigger
-						className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white"
-						value="problems"
-					>
-            <FileText className="h-4 w-4" />
-						Problems
-					</TabsTrigger>
-					<TabsTrigger
-						className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white"
-						value="submissions"
-					>
-            <Package className="h-4 w-4" />
-					Submissions
-					</TabsTrigger>
-				</TabsList>
-				<TabsContent
-					value="problems"
-					className="animate-fade-in-up transition-opacity duration-300"
-				>
-					<Card className="w-full">
-						<CardHeader className="text-2xl">
-							<div className="flex items-center justify-between w-full">
-								<CardTitle  className="flex items-center gap-2 text-2xl"><FileText className="w-6 h-6" />Problems</CardTitle>
-								<Button
-									variant="default"
-									aria-label="Add Existing Problem"
-									onClick={handleAddExistingProblem}
-									disabled={problemsLoading}
-								>
-									Add Existing Problem
-								</Button>
-							</div>
-							<p className="mt-2 text-muted-foreground text-sm">
-								This assignment is made up of the following problems. You can add an existing problem from this course by clicking on the <strong>Add Existing Problem</strong> button in the upper right hand corner.
-							</p>
-						</CardHeader>
-						<CardContent>
-							<DataTable
-												columns={[
-													{
-														id: 'number',
-														header: '#',
-														cell: ({ row }: { row: { index: number } }) => row.index + 1,
-														meta: { priority: 1 },
-														enableSorting: false,
-													},
-													{
-														accessorKey: 'title',
-														header: 'Title',
-														cell: ({ row }: { row: { original: Problem } }) => row.original.title,
-														meta: { priority: 1 },
-														enableSorting: true,
-													},
-													{
-														id: 'description_col',
-														header: 'Description',
-														cell: ({ row }: { row: { original: Problem } }) => {
-															const desc = row.original.description;
-															return desc ? (
-																<button
-																	type="button"
-																	onClick={() => openDescription(desc)}
-																	className="text-blue-600 underline hover:text-blue-800"
-																	title="View description"
-																>
-																	View
-																</button>
-															) : (
-																<span className="text-muted-foreground text-xs">—</span>
-															);
-														},
-														meta: { priority: 2 },
-														enableSorting: false,
-													},
-													{
-														accessorKey: 'type',
-														header: 'Type',
-														cell: ({ row }: { row: { original: Problem } }) => problemTypeLabels[row.original.type as string] || row.original.type,
-														meta: { priority: 1 },
-														enableSorting: true,
-													},
-													{
-														accessorKey: 'maxStates',
-														header: 'Max States',
-														cell: ({ row }: { row: { original: Problem } }) => row.original.maxStates === -1 ? 'Unlimited' : row.original.maxStates,
-														meta: { priority: 2 },
-														enableSorting: true,
-													},
-													{
-														accessorKey: 'isDeterministic',
-														header: 'Deterministic',
-														cell: ({ row }: { row: { original: Problem } }) => row.original.isDeterministic ? 'Yes' : 'No',
-														meta: { priority: 2 },
-														enableSorting: true,
-													},
-																		{
-																			id: 'answerFile',
-																			header: 'Answer File',
-																			cell: ({ row }: { row: { original: Problem } }) => {
-																				// Problem solution files are stored under public/uploads/solutions
-																				const fileUrl = row.original.fileName ? `/uploads/problems/${row.original.fileName}` : null;
-																				const fileName = row.original.originalFileName || 'Download';
-																				return fileUrl ? (
-																					<div className="flex items-center gap-2">
-																						<Button
-																							variant="secondary"
-																							size="sm"
-																							onClick={() => openRenderViewer(row.original)}
-																							title="Render file"
-																							aria-label="Render file"
-																						>
-																							<Eye className="h-4 w-4" />
-																						</Button>
-																						<a
-																							href={fileUrl}
-																							download={fileName}
-																							className="text-blue-600 underline hover:text-blue-800 inline-flex items-center gap-1"
-																							target="_blank"
-																							rel="noopener noreferrer"
-																							title="Download file"
-																						>
-																							<Download className="h-4 w-4" aria-hidden="true" />
-																							<span>{fileName}</span>
-																						</a>
-																					</div>
-																				) : (
-																					<span className="text-muted-foreground">No file</span>
-																				);
-																			},
-																			meta: { priority: 2 },
-																			enableSorting: false,
-																		},
-																	{
-																		id: 'actions',
-																		header: 'Actions',
-																		cell: ({ row }: { row: { original: Problem } }) => (
-																			<DropdownMenu>
-																				<DropdownMenuTrigger asChild>
-																					<Button variant="secondary" size="sm">
-																						<ChevronDown className="mr-1 h-4 w-4" /> Manage
-																					</Button>
-																				</DropdownMenuTrigger>
-																				<DropdownMenuContent align="end">
-																					<DropdownMenuLabel className="flex items-center gap-2">
-																						<NotebookText className="h-4 w-4" />
-																						{row.original.title}
-																					</DropdownMenuLabel>
-																					<DropdownMenuSeparator />
-																					<DropdownMenuItem
-																						onClick={() => handleEditProblem(row.original)}
-																						className="flex items-center gap-2"
-																					>
-																						<Pencil className="mr-2 h-4 w-4" /> Edit Problem
-																					</DropdownMenuItem>
-																					<DropdownMenuItem
-																						onClick={() => openRenderViewer(row.original)}
-																						className="flex items-center gap-2"
-																					>
-																						<Eye className="mr-2 h-4 w-4" /> Render File
-																					</DropdownMenuItem>
-																					<DropdownMenuSeparator />
-																					<DropdownMenuItem
-																						onClick={() => setProblemToRemove(row.original)}
-																						className="focus:text-red-600 flex items-center gap-2 text-red-600"
-																					>
-																						<Trash2 className="mr-2 h-4 w-4" /> Remove Problem
-																					</DropdownMenuItem>
-																				</DropdownMenuContent>
-																			</DropdownMenu>
-																		),
-																		meta: { priority: 1 },
-																	},
-												]}
-																	data={assignment.problems.map((ap: { problem: Problem }) => ({
-																		...ap.problem,
-																		description: ap.problem.description ?? null,
-																	}))}
-							/>
-						</CardContent>
-					</Card>
-				</TabsContent>
-				<TabsContent value="submissions">
-					<AssignmentSubmissions
-						courseId={id}
-						assignmentId={aid}
-						problems={assignment.problems.map((ap: { problem: Problem }) => ({
-							id: ap.problem.id,
-							title: ap.problem.title,
-							description: ap.problem.description ?? undefined,
-							type: ap.problem.type ? String(ap.problem.type) : undefined,
-							maxStates: ap.problem.maxStates ?? undefined,
-							isDeterministic: ap.problem.isDeterministic ?? undefined,
-							fileName: ap.problem.fileName ?? undefined,
-							originalFileName: ap.problem.originalFileName ?? undefined,
-						}))}
-					/>
-				</TabsContent>
-			</Tabs>
+          <TabsList className="bg-card border-border h-12 rounded-md border p-1 shadow-sm">
+            <TabsTrigger
+              className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white"
+              value="problems"
+            >
+              <FileText className="h-4 w-4" />
+              Problems
+            </TabsTrigger>
+            <TabsTrigger
+              className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white"
+              value="submissions"
+            >
+              <Package className="h-4 w-4" />
+              Submissions
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent
+            value="problems"
+            className="animate-fade-in-up transition-opacity duration-300"
+          >
+            <Card className="w-full">
+              <CardHeader className="text-2xl">
+                <div className="flex items-center justify-between w-full">
+                  <CardTitle className="flex items-center gap-2 text-2xl">
+                    <FileText className="w-6 h-6" />Problems
+                  </CardTitle>
+                  <Button
+                    variant="default"
+                    aria-label="Add Existing Problem"
+                    onClick={handleAddExistingProblem}
+                    disabled={problemsLoading || courseIsArchived}
+                  >
+                    Add Existing Problem
+                  </Button>
+                </div>
+                <p className="mt-2 text-muted-foreground text-sm">
+                  This assignment is made up of the following problems. You can add an existing problem from this course by clicking on the <strong>Add Existing Problem</strong> button in the upper right hand corner.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <DataTable
+                  columns={[
+                    {
+                      id: 'number',
+                      header: '#',
+                      cell: ({ row }: { row: { index: number } }) => row.index + 1,
+                      meta: { priority: 1 },
+                      enableSorting: false,
+                    },
+                    {
+                      accessorKey: 'title',
+                      header: 'Title',
+                      cell: ({ row }: { row: { original: Problem } }) => row.original.title,
+                      meta: { priority: 1 },
+                      enableSorting: true,
+                    },
+                    {
+                      id: 'description_col',
+                      header: 'Description',
+                      cell: ({ row }: { row: { original: Problem } }) => {
+                        const desc = row.original.description;
+                        return desc ? (
+                          <button
+                            type="button"
+                            onClick={() => openDescription(desc)}
+                            className="text-blue-600 underline hover:text-blue-800"
+                            title="View description"
+                          >
+                            View
+                          </button>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        );
+                      },
+                      meta: { priority: 2 },
+                      enableSorting: false,
+                    },
+                    {
+                      accessorKey: 'type',
+                      header: 'Type',
+                      cell: ({ row }: { row: { original: Problem } }) =>
+                        problemTypeLabels[row.original.type as string] || row.original.type,
+                      meta: { priority: 1 },
+                      enableSorting: true,
+                    },
+                    {
+                      accessorKey: 'maxStates',
+                      header: 'Max States',
+                      cell: ({ row }: { row: { original: Problem } }) =>
+                        row.original.maxStates === -1 ? 'Unlimited' : row.original.maxStates,
+                      meta: { priority: 2 },
+                      enableSorting: true,
+                    },
+                    {
+                      accessorKey: 'isDeterministic',
+                      header: 'Deterministic',
+                      cell: ({ row }: { row: { original: Problem } }) =>
+                        row.original.isDeterministic ? 'Yes' : 'No',
+                      meta: { priority: 2 },
+                      enableSorting: true,
+                    },
+                    {
+                      id: 'answerFile',
+                      header: 'Answer File',
+                      cell: ({ row }: { row: { original: Problem } }) => {
+                        const fileUrl = row.original.fileName
+                          ? `/uploads/problems/${row.original.fileName}`
+                          : null;
+                        const fileName = row.original.originalFileName || 'Download';
+                        return fileUrl ? (
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => openRenderViewer(row.original)}
+                              title="Render file"
+                              aria-label="Render file"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <a
+                              href={fileUrl}
+                              download={fileName}
+                              className="text-blue-600 underline hover:text-blue-800 inline-flex items-center gap-1"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Download file"
+                            >
+                              <Download className="h-4 w-4" aria-hidden="true" />
+                              <span>{fileName}</span>
+                            </a>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">No file</span>
+                        );
+                      },
+                      meta: { priority: 2 },
+                      enableSorting: false,
+                    },
+                    {
+                      id: 'actions',
+                      header: 'Actions',
+                      cell: ({ row }: { row: { original: Problem } }) => (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="secondary" size="sm">
+                              <ChevronDown className="mr-1 h-4 w-4" /> Manage
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel className="flex items-center gap-2">
+                              <NotebookText className="h-4 w-4" />
+                              {row.original.title}
+                            </DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => handleEditProblem(row.original)}
+                              className="flex items-center gap-2"
+							  disabled={courseIsArchived}
+                            >
+                              <Pencil className="mr-2 h-4 w-4" /> Edit Problem
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => openRenderViewer(row.original)}
+                              className="flex items-center gap-2"
+                            >
+                              <Eye className="mr-2 h-4 w-4" /> Render File
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => setProblemToRemove(row.original)}
+                              className="focus:text-red-600 flex items-center gap-2 text-red-600"
+							  disabled={courseIsArchived}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" /> Remove Problem
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ),
+                      meta: { priority: 1 },
+                    },
+                  ]}
+                  data={assignment.problems.map((ap: { problem: Problem }) => ({
+                    ...ap.problem,
+                    description: ap.problem.description ?? null,
+                  }))}
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+          <TabsContent value="submissions">
+            <AssignmentSubmissions
+              courseId={id}
+              assignmentId={aid}
+              problems={assignment.problems.map((ap: { problem: Problem }) => ({
+                id: ap.problem.id,
+                title: ap.problem.title,
+                description: ap.problem.description ?? undefined,
+                type: ap.problem.type ? String(ap.problem.type) : undefined,
+                maxStates: ap.problem.maxStates ?? undefined,
+                isDeterministic: ap.problem.isDeterministic ?? undefined,
+                fileName: ap.problem.fileName ?? undefined,
+                originalFileName: ap.problem.originalFileName ?? undefined,
+              }))}
+            />
+          </TabsContent>
+        </Tabs>
 			{/* JFLAP Viewer Dialog */}
 			{viewerOpen && viewerSrc && (
 				<JffViewerDialog
@@ -459,6 +471,7 @@ export default function AssignmentDashboardPage() {
 			<AssociateProblemsDialog
 				open={addProblemDialogOpen}
 				onClose={() => setAddProblemDialogOpen(false)}
+				courseIsArchived={courseIsArchived}
 				allProblems={allProblems.map((p: Problem) => ({
 					...p,
 					description: p.description ?? undefined,
@@ -482,6 +495,7 @@ export default function AssignmentDashboardPage() {
 			/>
 			{assignment && (
 				<EditAssignmentDialog
+					courseIsArchived={courseIsArchived}
 					open={editAssignmentOpen}
 					setOpen={setEditAssignmentOpen}
 					assignment={{
@@ -502,6 +516,7 @@ export default function AssignmentDashboardPage() {
 			)}
 			{problemToEdit && (
 				<EditProblemDialog
+					courseIsArchived={courseIsArchived}
 					open={editProblemDialogOpen}
 					setOpen={setEditProblemDialogOpen}
 					problem={problemToEdit ? {

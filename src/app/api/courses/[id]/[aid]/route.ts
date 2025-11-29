@@ -73,6 +73,7 @@ export async function GET(_: Request, context: { params: Promise<{ id: string; a
         id: courseId,
         name: course.name,
         code: course.code,
+        isArchived: course.isArchived,
         roster: roster.map((r) => ({
           user: r.user,
           role: r.role,

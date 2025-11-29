@@ -25,6 +25,7 @@ import type { Problem } from '@prisma/client';
 import { ProblemFormSchema, UpdateProblemSchema, ProblemTypeEnum } from '@/schemas/problem';
 
 type EditProblemDialogProps = {
+  courseIsArchived: boolean;
   problem: Problem;
   open: boolean;
   setOpen: (open: boolean) => void;
@@ -35,7 +36,7 @@ type EditProblemDialogProps = {
 type FormValues = z.input<typeof ProblemFormSchema>;
 type ParsedValues = z.output<typeof ProblemFormSchema>;
 
-export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProblemDialogProps) {
+export function EditProblemDialog({ courseIsArchived, problem, open, setOpen, onSaved }: EditProblemDialogProps) {
   
   const defaults: FormValues = useMemo(
     () => ({
@@ -345,7 +346,7 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
             </DialogClose>
             <Button
               type="submit"
-              disabled={!isValid || isSubmitting || !isDirty }
+              disabled={!isValid || isSubmitting || !isDirty || courseIsArchived }
               title={
                 !isValid
                   ? 'Fix validation errors to save'

@@ -126,6 +126,7 @@ export function CourseDialogs({
 
       {selectedAssignment && (
         <EditAssignmentDialog
+          courseIsArchived={course.isArchived}
           assignment={selectedAssignment}
           open={editAssignmentOpen}
           setOpen={setEditAssignmentOpen}
@@ -135,6 +136,7 @@ export function CourseDialogs({
 
       {selectedProblem && (
         <EditProblemDialog
+          courseIsArchived={course.isArchived}
           problem={selectedProblem}
           open={editProblemOpen}
           setOpen={(val) => {
