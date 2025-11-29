@@ -180,7 +180,7 @@ export function CourseHeader({
                 <TooltipContent>Edit course</TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            <Button variant="secondary" className="hidden sm:inline-flex" onClick={onEditClick} disabled={course.isArchived}>
+            <Button variant="secondary" className="hidden sm:inline-flex" onClick={onEditClick} hidden={course.isArchived}>
               <Pencil className="mr-2 h-4 w-4" />
               Edit Course
             </Button>

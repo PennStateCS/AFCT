@@ -35,7 +35,7 @@ export function AssignmentsCard({
             color: 'var(--color-primary-foreground)',
           }}
           onClick={onCreateAssignment}
-          disabled={courseIsArchived}
+          hidden={courseIsArchived}
         >
           <Plus /> Create Assignment
         </Button>

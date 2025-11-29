@@ -112,7 +112,7 @@ export const useProblemColumns = ({
             <DropdownMenuItem
               onClick={() => onEdit(row.original)}
               className="flex items-center gap-2"
-              disabled={courseIsArchived}
+              hidden={courseIsArchived}
             >
               <Pencil className="mr-2 h-4 w-4" />
               Edit Problem
@@ -123,7 +123,8 @@ export const useProblemColumns = ({
                 if (disabled) return;
                 onDelete(problemWithMeta.id);
               }}
-              disabled={disabled || courseIsArchived}
+              disabled={disabled}
+              hidden={courseIsArchived}
               title={disabled ? 'Problem is used by an assignment and cannot be deleted' : undefined}
               className={`focus:text-red-600 flex items-center gap-2 text-red-600 ${
                 disabled ? 'opacity-50 cursor-not-allowed' : ''
