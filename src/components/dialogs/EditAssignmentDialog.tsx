@@ -40,6 +40,7 @@ function toDateTimeLocalString(date: Date | string): string {
 }
 
 type EditAssignmentDialogProps = {
+  courseIsArchived: boolean;
   assignment: Assignment;
   open: boolean;
   setOpen: (open: boolean) => void;
@@ -50,6 +51,7 @@ type EditAssignmentDialogProps = {
 type FormValues = z.infer<typeof AssignmentFormSchema>;
 
 export function EditAssignmentDialog({
+  courseIsArchived,
   assignment,
   open,
   setOpen,
@@ -255,13 +257,16 @@ export function EditAssignmentDialog({
             </DialogClose>
             <Button
               type="submit"
-              disabled={!isValid || !isDirty || isSubmitting}
+              disabled={!isValid || !isDirty || isSubmitting || courseIsArchived}
               title={
                 !isValid
-                  ? 'Fix validation errors to save'
+                ? 'Fix validation errors to save'
                   : !isDirty
-                    ? 'No changes to save'
-                    : undefined
+                  ? 'No changes to save'
+                    : isSubmitting
+                    ? 'Already submitting'
+                      : courseIsArchived ?
+                      'Course is archived' : undefined
               }
             >
               {isSubmitting ? 'Saving…' : 'Save Changes'}

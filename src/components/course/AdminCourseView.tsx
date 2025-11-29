@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ActivityCard } from '@/components/ActivityCard';
 import { AssignmentsCard } from '@/components/AssignmentsCard';
@@ -7,7 +6,7 @@ import { RosterCard } from '@/components/RosterCard';
 import GradesCard from '@/components/GradesCard';
 import { userColumns } from '@/app/dashboard/courses/[id]/user-columns';
 import { useAssignmentColumns } from '@/app/dashboard/courses/[id]/assignment-columns';
-import { problemColumns } from '@/app/dashboard/courses/[id]/problem-columns';
+import { useProblemColumns } from '@/app/dashboard/courses/[id]/problem-columns';
 import { FullCourse, TabType } from '@/types/course';
 import { NotebookText, FileText, Users, GraduationCap, Activity } from 'lucide-react';
 import { Assignment, Problem } from '@prisma/client';
@@ -44,15 +43,17 @@ export function AdminCourseView({
   onBulkEnroll,
 }: AdminCourseViewProps) {
   const assignmentColumns = useAssignmentColumns(
+    course.isArchived,
     onAssignmentDelete,
     onAssignmentEdit,
     onAssignmentPublishToggle,
   );
 
-  const problemCols = useMemo(
-    () => problemColumns({ onEdit: onProblemEdit, onDelete: onProblemDelete }),
-    [onProblemEdit, onProblemDelete],
-  );
+  const problemColumns = useProblemColumns({
+    courseIsArchived: course.isArchived,
+    onEdit: onProblemEdit,
+    onDelete: onProblemDelete,
+  });
 
   return (
     <Tabs defaultValue="assignments" value={tab} onValueChange={onTabChange}>
@@ -113,7 +114,7 @@ export function AdminCourseView({
             courseId={course.id}
             courseIsArchived={course.isArchived}
             problems={course.problems}
-            problemColumns={problemCols}
+            problemColumns={problemColumns}
             onCreateProblem={onCreateProblem}
           />
         </div>
