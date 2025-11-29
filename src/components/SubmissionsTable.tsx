@@ -40,7 +40,7 @@ export default function SubmissionsTable({
   const filtered = [...submissions].sort(
     (a, b) =>
       new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime()
-  );
+  ).reverse();
 
   if (filtered.length === 0) {
     return (
@@ -70,7 +70,7 @@ export default function SubmissionsTable({
         <TableBody>
           {filtered.map((submission, index) => (
             <TableRow key={submission.id}>
-              <TableCell>{index + 1}</TableCell>
+              <TableCell>{filtered.length - index}</TableCell>
               <TableCell>{formatDateTime(submission.submittedAt)}</TableCell>
               <TableCell>
                 {submission.correct !== null && submission.correct !== undefined ? (
