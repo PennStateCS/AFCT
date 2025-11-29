@@ -576,13 +576,15 @@ export default function StudentAssignmentPage() {
                               placeholder="Add a comment or question about this problem..."
                               value={newComment[problemId] || ''}
                               onChange={(e) => setNewComment(prev => ({ ...prev, [problemId]: e.target.value }))}
+                              hidden={assignment.course.isArchived}
                               className="min-h-[80px]"
                             />
                             <div className="flex justify-end">
                               <Button
                                 size="sm"
                                 onClick={() => handleSubmitComment(problemId)}
-                                disabled={!newComment[problemId]?.trim() || submittingComment[problemId] || assignment.course.isArchived}
+                                disabled={!newComment[problemId]?.trim() || submittingComment[problemId]}
+                                hidden={assignment.course.isArchived}
                               >
                                 {submittingComment[problemId] ? (
                                   'Submitting...'
