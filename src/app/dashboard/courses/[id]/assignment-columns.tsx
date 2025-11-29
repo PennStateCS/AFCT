@@ -30,14 +30,17 @@ type AssignmentWithProblemCount = Assignment & {
 function PublishSwitchCell({ 
   assignment, 
   onPublishToggle, 
+  disabled,
 }: { 
   assignment: AssignmentWithProblemCount; 
   onPublishToggle: (assignmentId: string, newValue: boolean) => void;
+  disabled: boolean
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingValue, setPendingValue] = useState(false);
 
   const handleSwitchChange = (checked: boolean) => {
+    if (disabled) return;
     setPendingValue(checked);
     setConfirmOpen(true);
   };
@@ -59,6 +62,7 @@ function PublishSwitchCell({
       <Switch
         checked={assignment.isPublished}
         onCheckedChange={handleSwitchChange}
+        disabled={disabled}
       />
       <ConfirmDialog
         open={confirmOpen}
@@ -74,6 +78,7 @@ function PublishSwitchCell({
 }
 
 export function useAssignmentColumns(
+  courseIsArchived: boolean,
   handleAssignmentDeleteClick: (id: string) => void,
   handleAssignmentEditClick: (assignment: Assignment) => void,
   handlePublishToggle: (assignmentId: string, newValue: boolean) => void,
@@ -139,6 +144,7 @@ export function useAssignmentColumns(
         <PublishSwitchCell
           assignment={row.original}
           onPublishToggle={handlePublishToggle}
+          disabled={courseIsArchived}
         />
       ),
     },
@@ -146,8 +152,8 @@ export function useAssignmentColumns(
       id: 'actions',
       header: '',
       cell: ({ row }) => {
-  const disabled = !!(row.original.hasSubmissionsOrComments);
-        const title = disabled ? 'Cannot delete: assignment has submissions or comments' : undefined;
+  const disabled = !!(row.original.hasSubmissionsOrComments) || courseIsArchived;
+        const title = disabled ? 'Cannot delete' : undefined;
 
         return (
           <>
@@ -173,6 +179,7 @@ export function useAssignmentColumns(
                 <DropdownMenuItem
                   onClick={() => handleAssignmentEditClick(row.original)}
                   className="flex items-center gap-2"
+                  disabled={courseIsArchived}
                 >
                   <Pencil className="mr-2 h-4 w-4" />
                   Edit Assignment

@@ -22,6 +22,7 @@ type Problem = {
 type AddProblemModalProps = {
   open: boolean;
   onClose: () => void;
+  courseIsArchived: boolean;
   allProblems: Problem[];
   usedProblems: Problem[];
   onAddProblems: (problemIds: string[]) => void;
@@ -38,6 +39,7 @@ const TYPE_COLORS: Record<string, string> = {
 export function AssociateProblemsDialog({
   open,
   onClose,
+  courseIsArchived,
   allProblems,
   usedProblems,
   onAddProblems,
@@ -151,7 +153,7 @@ export function AssociateProblemsDialog({
           <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="default" disabled={movedProblems.length === 0} onClick={handleAdd}>
+          <Button variant="default" disabled={movedProblems.length === 0 || courseIsArchived} onClick={handleAdd}>
             Save Changes
           </Button>
         </DialogFooter>
