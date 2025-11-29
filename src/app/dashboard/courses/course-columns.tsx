@@ -197,6 +197,7 @@ function CourseActionsCell({
           <DropdownMenuItem
             onClick={() => setEditOpen(true)}
             className="hover:bg-secondary flex items-center gap-2"
+            disabled={course.isArchived}
           >
             <Pencil className="mr-2 h-4 w-4" />
             Edit Course
@@ -205,9 +206,10 @@ function CourseActionsCell({
           <DropdownMenuItem
             onClick={() => setConfirmOpen(true)}
             className="hover:bg-secondary focus:text-red-600 flex items-center gap-2 text-red-600"
+            disabled={!course.isArchived}
           >
             <Trash2 className="mr-2 h-4 w-4" />
-            Delete Course
+            Delete Archived Course
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
