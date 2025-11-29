@@ -36,6 +36,7 @@ type Problem = {
 type SubmissionData = Submission[] | { submissions: Submission[] };
 
 type Props = {
+  courseIsArchived: boolean;
   courseId: string;
   assignmentId: string;
   problems: Problem[];
@@ -54,6 +55,7 @@ const extractSubs = (raw?: SubmissionData): Submission[] => {
 // ---------------- component ----------------
 
 export default function AssignmentSubmissions({
+  courseIsArchived,
   courseId,
   assignmentId,
   problems,
@@ -526,6 +528,7 @@ export default function AssignmentSubmissions({
 
                         {/* discussion: adjustable width */}
                         <DiscussionPanel
+                          courseIsArchived={courseIsArchived}
                           comments={comments[problem.id] || []}
                           commentText={commentTexts[problem.id] || ""}
                           onCommentTextChange={(text) =>
