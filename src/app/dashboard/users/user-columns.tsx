@@ -237,10 +237,11 @@ function UserActionsCell({ user, onUserUpdate }: { user: User; onUserUpdate: () 
 
           <DropdownMenuItem
             onClick={() => setConfirmOpen(true)}
+            disabled={!user.inactive}
             className="hover:bg-secondary focus:text-red-600 flex items-center gap-2 text-red-600"
           >
             <Trash2 className="h-4 w-4" />
-            Delete User
+            Delete Inactive User
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
