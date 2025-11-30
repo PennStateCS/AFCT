@@ -71,7 +71,6 @@ export function CreateAssignmentDialog({
       dueDate: defaultDueLocalString(),
       isPublished: false,
       courseId: courseId,
-      courseIsArchived: courseIsArchived,
     }),
     [courseId],
   );
@@ -91,10 +90,12 @@ export function CreateAssignmentDialog({
   // Refresh defaults on open; also clear state on close to avoid flicker
   useEffect(() => {
     if (open) {
-      reset(
-        { ...defaults, dueDate: defaultDueLocalString() },
-        { keepDirty: false, keepTouched: false, keepErrors: false, keepValues: false },
-      );
+      reset(defaults, {
+        keepDirty: false,
+        keepTouched: false,
+        keepErrors: false,
+        keepValues: false,
+      });
     } else {
       reset(defaults, {
         keepDirty: false,
@@ -255,7 +256,6 @@ export function CreateAssignmentDialog({
                   onCheckedChange={(checked) => field.onChange(!!checked)}
                 />
               )}
-              disabled={courseIsArchived}
             />
           </div>
 
