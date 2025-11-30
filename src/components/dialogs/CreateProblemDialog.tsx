@@ -64,7 +64,6 @@ export function CreateProblemDialog({
       isDeterministic: false,
       file: undefined,
       courseId: courseId,
-      courseIsArchived: courseIsArchived,
     }),
     [courseId],
   );
