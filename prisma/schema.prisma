@@ -83,7 +83,7 @@ model Roster {
   course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
   courseId String
 
-  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId String
 
   createdAt DateTime @default(now())
@@ -148,9 +148,9 @@ model Problem {
 }
 
 model AssignmentProblem {
-  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   assignmentId String
-  problem      Problem    @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  problem      Problem    @relation(fields: [problemId], references: [id], onDelete: Cascade)
   problemId    String
 
   submissions Submission[]
@@ -170,11 +170,11 @@ model Submission {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  assignmentProblem AssignmentProblem @relation(fields: [assignmentId, problemId], references: [assignmentId, problemId], onDelete: Restrict)
+  assignmentProblem AssignmentProblem @relation(fields: [assignmentId, problemId], references: [assignmentId, problemId], onDelete: Cascade)
   assignmentId      String
   problemId         String
 
-  student   User   @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  student   User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   studentId String
 
   activityLogs ActivityLog[]
@@ -192,10 +192,10 @@ model AssignmentGrade {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   assignmentId String
 
-  student   User   @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  student   User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   studentId String
 
   @@unique([assignmentId, studentId]) // One grade per student per assignment
@@ -208,16 +208,16 @@ model Comment {
   content   String
   createdAt DateTime @default(now())
 
-  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   assignmentId String
 
-  problem   Problem @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  problem   Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
   problemId String
 
-  roster   Roster @relation(fields: [rosterId], references: [id], onDelete: Restrict)
+  roster   Roster @relation(fields: [rosterId], references: [id], onDelete: Cascade)
   rosterId String
 
-  aboutStudent   User?   @relation("CommentsAboutStudent", fields: [aboutStudentId], references: [id], onDelete: Restrict)
+  aboutStudent   User?   @relation("CommentsAboutStudent", fields: [aboutStudentId], references: [id], onDelete: Cascade)
   aboutStudentId String?
 
   @@index([assignmentId])
@@ -231,7 +231,7 @@ model Comment {
 
 model ActivityLog {
   id        String   @id @default(cuid())
-  user      User?    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   userId    String?
   action    String
   timestamp DateTime @default(now())
