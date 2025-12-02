@@ -150,16 +150,6 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Check if user is in any courses
-    const inCourse = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { rosterEntries: true },
-    });
-    if (inCourse?.rosterEntries.length) { // inCourse?.rosterEntries is an array which is always truthly, .length is not always truthly
-      console.log(inCourse.rosterEntries);
-      return NextResponse.json({ error: 'Failed: User is in a course'}, { status: 409 });
-    }
-
     // Valid to delete
     // Delete avatar file if exists
     // Select user
