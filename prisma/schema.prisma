@@ -55,7 +55,7 @@ model User {
 model Course {
   id          String   @id @default(cuid())
   name        String
-  code        String   @unique
+  code        String
   regCode     String?  @unique
   semester    String
   credits     Int

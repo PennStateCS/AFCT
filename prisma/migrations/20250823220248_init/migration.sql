@@ -167,9 +167,6 @@ CREATE INDEX "User_inactive_idx" ON "public"."User"("inactive");
 CREATE INDEX "User_createdAt_idx" ON "public"."User"("createdAt");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Course_code_key" ON "public"."Course"("code");
-
--- CreateIndex
 CREATE UNIQUE INDEX "Course_regCode_key" ON "public"."Course"("regCode");
 
 -- CreateIndex
