@@ -17,6 +17,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { CourseFormSchema } from '@/schemas/course';
 import { FullCourse } from '@/types/course';
+import { isValid } from 'date-fns';
 
 // Build a form schema: base fields + copy mode
 const DuplicateFormSchema = CourseFormSchema.extend({
@@ -51,10 +52,10 @@ export default function DuplicateCourseDialog({ open, setOpen, course, onSuccess
   copyTAs: false,
   };
 
-  const { control, handleSubmit, reset, trigger, getValues, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const { control, handleSubmit, reset, trigger, getValues, formState: { errors, isSubmitting, isValid } } = useForm<FormValues>({
     resolver: zodResolver(DuplicateFormSchema),
     defaultValues: defaults,
-    mode: 'onBlur',
+    mode: 'onChange',
   });
 
   const [step, setStep] = useState<number>(1);
@@ -140,27 +141,27 @@ export default function DuplicateCourseDialog({ open, setOpen, course, onSuccess
           {step === 1 && (
             <>
               <Controller control={control} name="name" render={({ field }) => (
-                <InputGroup label="Course Name" name="name" fieldProps={field} error={errors.name?.message as string | undefined} />
+                <InputGroup label="Course Name" name="name" isValid={!!field.value} fieldProps={field} error={errors.name?.message as string | undefined} />
               )} />
 
               <Controller control={control} name="code" render={({ field }) => (
-                <InputGroup label="Course Code" name="code" fieldProps={field} error={errors.code?.message as string | undefined} />
+                <InputGroup label="Course Code" name="code" isValid={!!field.value} fieldProps={field} error={errors.code?.message as string | undefined} />
               )} />
 
               <Controller control={control} name="semester" render={({ field }) => (
-                <InputGroup label="Semester" name="semester" fieldProps={field} error={errors.semester?.message as string | undefined} />
+                <InputGroup label="Semester" name="semester" isValid={!!field.value} fieldProps={field} error={errors.semester?.message as string | undefined} />
               )} />
 
               <Controller control={control} name="credits" render={({ field }) => (
-                <InputGroup label="Credits" name="credits" type="number" fieldProps={field} min={1} max={6} />
+                <InputGroup label="Credits" name="credits" type="number" isValid={!!field.value} fieldProps={field} min={1} max={6} />
               )} />
 
               <Controller control={control} name="startDate" render={({ field }) => (
-                <InputGroup label="Start Date & Time" name="startDate" type="datetime-local" fieldProps={{ ...field, value: field.value ?? '' }} />
+                <InputGroup label="Start Date & Time" name="startDate" type="datetime-local" isValid={!!field.value} fieldProps={{ ...field, value: field.value ?? '' }} />
               )} />
 
               <Controller control={control} name="endDate" render={({ field }) => (
-                <InputGroup label="End Date & Time" name="endDate" type="datetime-local" fieldProps={{ ...field, value: field.value ?? '' }} />
+                <InputGroup label="End Date & Time" name="endDate" type="datetime-local" isValid={!!field.value} fieldProps={{ ...field, value: field.value ?? '' }} />
               )} />
 
             </>
@@ -260,10 +261,9 @@ export default function DuplicateCourseDialog({ open, setOpen, course, onSuccess
             )}
 
             {step < 3 ? (
-              <Button type="button" onClick={async () => {
-                const ok = await trigger(fieldsForStep(step));
-                if (ok) setStep((s) => Math.min(3, s + 1));
-              }}>Next</Button>
+              <Button type="button" disabled={!isValid} onClick={async () => {setStep((s) => Math.min(3, s + 1));}}>
+                Next
+              </Button>
             ) : (
               <Button type="submit" disabled={isSubmitting || !confirmChecked}>{isSubmitting ? 'Copying…' : 'Duplicate Course'}</Button>
             )}
