@@ -50,6 +50,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const body = await req.json();
     const {
       title,
+      code,
       semester,
       startDate,
       endDate,
@@ -92,12 +93,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const newCourse = await tx.course.create({
         data: {
           name: title,
-          code: `${title.slice(0,3).toUpperCase()}-${Date.now().toString().slice(-4)}`,
+          code,
           semester,
           credits: Number(credits) || 0,
           startDate: start,
           endDate: end,
           isPublished: false,
+          isArchived: false,
           regCode,
         },
       });

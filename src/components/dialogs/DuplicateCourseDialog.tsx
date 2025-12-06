@@ -85,6 +85,7 @@ export default function DuplicateCourseDialog({ open, setOpen, course, onSuccess
     const mode = raw.copyMode ?? 'assignments_with_problems';
     const payload = {
       title: raw.name,
+      code: raw.code,
       semester: raw.semester,
       startDate: new Date(raw.startDate).toISOString(),
       endDate: new Date(raw.endDate).toISOString(),
@@ -243,7 +244,7 @@ export default function DuplicateCourseDialog({ open, setOpen, course, onSuccess
               <div className="pt-2 text-xs text-muted-foreground">The duplicated course will be created as unpublished and the current user will be added as faculty. Submissions will not be copied.</div>
 
               <label className="flex items-center gap-2 mt-2">
-                <input type="checkbox" checked={confirmChecked} onChange={(e) => setConfirmChecked(e.target.checked)} />
+                <input type="checkbox" checked={confirmChecked} disabled={isSubmitting} onChange={(e) => setConfirmChecked(e.target.checked)} />
                 <span className="text-sm">I confirm I want to duplicate this course with the options above</span>
               </label>
             </div>
@@ -251,11 +252,11 @@ export default function DuplicateCourseDialog({ open, setOpen, course, onSuccess
 
           <DialogFooter>
             <DialogClose asChild>
-              <Button type="button" variant="secondary" onClick={() => { setStep(1); reset(defaults); }}>Cancel</Button>
+              <Button type="button" variant="secondary" disabled={isSubmitting} onClick={() => { setStep(1); reset(defaults); }}>Cancel</Button>
             </DialogClose>
 
             {step > 1 && (
-              <Button type="button" variant="default" onClick={() => setStep((s) => Math.max(1, s - 1))}>Back</Button>
+              <Button type="button" variant="default" disabled={isSubmitting} onClick={() => setStep((s) => Math.max(1, s - 1))}>Back</Button>
             )}
 
             {step < 3 ? (
