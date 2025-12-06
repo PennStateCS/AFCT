@@ -63,8 +63,8 @@ next-env.d.ts
 *.sw?
 
 # Uploads and user content
-# public/uploads/*
-# !public/uploads/.gitkeep
+public/uploads/*
+!public/uploads/.gitkeep
 
 # Logs
 logs/
