@@ -29,6 +29,13 @@ const DuplicateFormSchema = CourseFormSchema.extend({
   copyTAs: z.boolean().optional(),
 });
 
+function toDateTimeLocalString(date: Date | string): string {
+  const d = new Date(date);
+  const offset = d.getTimezoneOffset();
+  const localDate = new Date(d.getTime() - offset * 60000);
+  return localDate.toISOString().slice(0, 16);
+}
+
 type FormValues = z.infer<typeof DuplicateFormSchema>;
 
 interface Props {
@@ -44,22 +51,26 @@ export default function DuplicateCourseDialog({ open, setOpen, course, onSuccess
     code: course?.code ?? '',
     semester: course?.semester ?? '',
     credits: String(course?.credits ?? 3),
-    startDate: course ? new Date(course.startDate).toISOString().slice(0,16) : '',
-    endDate: course ? new Date(course.endDate).toISOString().slice(0,16) : '',
+    startDate: course ? toDateTimeLocalString(course.startDate) : '',
+    endDate: course ? toDateTimeLocalString(course.endDate) : '',
   copyMode: 'assignments_with_problems',
   copyFaculty: false,
   copyTAs: false,
   };
 
-  const { control, handleSubmit, reset, trigger, getValues, formState: { errors, isSubmitting, isValid } } = useForm<FormValues>({
+  const { control, handleSubmit, reset, trigger, watch, getValues, formState: { errors, isSubmitting, isValid } } = useForm<FormValues>({
     resolver: zodResolver(DuplicateFormSchema),
     defaultValues: defaults,
-    mode: 'onChange',
+    mode: 'onBlur',
+    reValidateMode: 'onChange',
   });
 
   const [step, setStep] = useState<number>(1);
 
   const [confirmChecked, setConfirmChecked] = useState(false);
+
+  // Keep min (end) in sync with start
+  const startDateStr = watch('startDate');
 
   useEffect(() => {
     if (!open) return;
@@ -87,8 +98,8 @@ export default function DuplicateCourseDialog({ open, setOpen, course, onSuccess
       title: raw.name,
       code: raw.code,
       semester: raw.semester,
-      startDate: new Date(raw.startDate).toISOString(),
-      endDate: new Date(raw.endDate).toISOString(),
+      startDate: toDateTimeLocalString(raw.startDate),
+      endDate: toDateTimeLocalString(raw.endDate),
       credits: Number(raw.credits),
       copyAssignments: mode === 'assignments' || mode === 'assignments_with_problems',
       copyProblems: mode === 'problems' || mode === 'assignments_with_problems',
@@ -125,6 +136,8 @@ export default function DuplicateCourseDialog({ open, setOpen, course, onSuccess
     return [];
   };
 
+  console.log(errors);
+
   return (
     <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { reset(defaults); setStep(1); } }}>
       <DialogContent className="bg-card max-w-2xl">
@@ -140,27 +153,27 @@ export default function DuplicateCourseDialog({ open, setOpen, course, onSuccess
           {step === 1 && (
             <>
               <Controller control={control} name="name" render={({ field }) => (
-                <InputGroup label="Course Name" name="name" isValid={!!field.value} fieldProps={field} error={errors.name?.message as string | undefined} />
+                <InputGroup label="Course Name" name="name" isValid={!field.value} fieldProps={field} error={errors.name?.message as string | undefined} />
               )} />
 
               <Controller control={control} name="code" render={({ field }) => (
-                <InputGroup label="Course Code" name="code" isValid={!!field.value} fieldProps={field} error={errors.code?.message as string | undefined} />
+                <InputGroup label="Course Code" name="code" isValid={!field.value} fieldProps={field} error={errors.code?.message as string | undefined} />
               )} />
 
               <Controller control={control} name="semester" render={({ field }) => (
-                <InputGroup label="Semester" name="semester" isValid={!!field.value} fieldProps={field} error={errors.semester?.message as string | undefined} />
+                <InputGroup label="Semester" name="semester" isValid={!field.value} fieldProps={field} error={errors.semester?.message as string | undefined} />
               )} />
 
               <Controller control={control} name="credits" render={({ field }) => (
-                <InputGroup label="Credits" name="credits" type="number" isValid={!!field.value} fieldProps={field} min={1} max={6} />
+                <InputGroup label="Credits" name="credits" type="number" isValid={!field.value} fieldProps={field} min={1} max={6} error={errors.credits?.message as string | undefined} />
               )} />
 
               <Controller control={control} name="startDate" render={({ field }) => (
-                <InputGroup label="Start Date & Time" name="startDate" type="datetime-local" isValid={!!field.value} fieldProps={{ ...field, value: field.value ?? '' }} />
+                <InputGroup label="Start Date & Time" name="startDate" type="datetime-local" isValid={!field.value} fieldProps={{ ...field, value: field.value ?? '' }} error={errors.startDate?.message as string | undefined} />
               )} />
 
               <Controller control={control} name="endDate" render={({ field }) => (
-                <InputGroup label="End Date & Time" name="endDate" type="datetime-local" isValid={!!field.value} fieldProps={{ ...field, value: field.value ?? '' }} />
+                <InputGroup label="End Date & Time" name="endDate" type="datetime-local" isValid={!field.value} fieldProps={{ ...field, value: field.value ?? '' }} error={errors.endDate?.message as string | undefined} min={startDateStr || undefined}/>
               )} />
 
             </>
@@ -252,18 +265,46 @@ export default function DuplicateCourseDialog({ open, setOpen, course, onSuccess
 
           <DialogFooter>
             <DialogClose asChild>
-              <Button type="button" variant="secondary" disabled={isSubmitting} onClick={() => { setStep(1); reset(defaults); }}>Cancel</Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={isSubmitting}
+                onClick={() => { setStep(1); reset(defaults, {keepErrors: false}); }}
+              >
+                  Cancel
+              </Button>
             </DialogClose>
 
             {step > 1 && (
-              <Button type="button" variant="default" disabled={isSubmitting} onClick={() => setStep((s) => Math.max(1, s - 1))}>Back</Button>
+              <Button
+                type="button"
+                variant="default"
+                disabled={isSubmitting}
+                onClick={() => setStep((s) => Math.max(1, s - 1))}
+              >
+                Back
+              </Button>
             )}
 
-            {step < 3 ? (
-              <Button type="button" disabled={!isValid} onClick={async () => {setStep((s) => Math.min(3, s + 1));}}>
+            {step < 3 && (
+              <Button
+                type="button"
+                disabled={!isValid}
+                onClick={async () => {
+                  const fields = fieldsForStep(step);
+                  const valid = await trigger(fields);
+
+                  if (valid) {
+                    setConfirmChecked(false);
+                    setStep((s) => Math.min(3, s + 1));
+                  }
+                }}
+              >
                 Next
               </Button>
-            ) : (
+            )}
+
+            {step == 3 && (
               <Button type="submit" disabled={isSubmitting || !confirmChecked}>{isSubmitting ? 'Copying…' : 'Duplicate Course'}</Button>
             )}
           </DialogFooter>
