@@ -17,7 +17,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { CourseFormSchema } from '@/schemas/course';
 import { FullCourse } from '@/types/course';
-import { isValid } from 'date-fns';
 
 // Build a form schema: base fields + copy mode
 const DuplicateFormSchema = CourseFormSchema.extend({
