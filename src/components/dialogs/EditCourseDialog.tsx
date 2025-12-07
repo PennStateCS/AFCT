@@ -62,7 +62,7 @@ export function EditCourseDialog({ course, open, setOpen, onSave }: EditCourseDi
     reValidateMode: 'onChange',
   });
 
-  // Keep min(end) in sync with start
+  // Keep min (end) in sync with start
   const startDateStr = watch('startDate');
 
   // Reset to current course when opened; also clear on close from outside
