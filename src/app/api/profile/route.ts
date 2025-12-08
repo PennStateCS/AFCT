@@ -98,8 +98,9 @@ export async function POST(req: Request) {
     action: 'PROFILE_UPDATED',
     category: 'USER',
     metadata: {
-      firstName,
-      lastName,
+      userId: session.user.id,
+      userFirstName: firstName,
+      userLastName: lastName,
       avatarUpdated: !!avatar,
       avatarDeleted: deleteAvatar,
     },

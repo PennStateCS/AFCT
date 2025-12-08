@@ -59,6 +59,8 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
       category: 'COURSE',
       courseId,
       metadata: {
+        userId: actingUser?.id,
+        courseId: courseId,
         enrolledUserId: userId,
         role: 'STUDENT',
       },

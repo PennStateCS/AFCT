@@ -50,7 +50,12 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
       action: 'REMOVE_FROM_COURSE',
       category: 'COURSE',
       courseId,
-      metadata: { removedUserId: userId, count: deleted.count },
+      metadata: {
+        userId: currentUser.id,
+        courseId: courseId,
+        removedUserId: userId, 
+        count: deleted.count
+      },
     });
 
     return NextResponse.json({ success: true, removed: deleted.count });

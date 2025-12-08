@@ -47,8 +47,10 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
       category: 'COURSE',
       courseId,
       metadata: {
+        userId: user.id,
+        courseId: courseId,
         courseName: updated.name,
-        isPublished,
+        isPublished: isPublished,
       },
     });
 

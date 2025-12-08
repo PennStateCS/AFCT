@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
       await createEnhancedActivityLog(prisma, req, {
         action: 'LOGIN_FAILED',
         category: 'SYSTEM',
-        metadata: { reason: 'Missing credentials', email },
+        metadata: { reason: 'Missing credentials', email: email },
       });
 
       return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
       await createEnhancedActivityLog(prisma, req, {
         action: 'LOGIN_FAILED',
         category: 'SYSTEM',
-        metadata: { reason: 'Invalid credentials', email },
+        metadata: { reason: 'Invalid credentials', email: email },
       });
 
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
       await createEnhancedActivityLog(prisma, req, {
         action: 'LOGIN_FAILED',
         category: 'SYSTEM',
-        metadata: { reason: 'Inactive user', email },
+        metadata: { reason: 'Inactive user', email: email },
       });
 
       return NextResponse.json({ error: 'Inactive user' }, { status: 401 });
@@ -55,6 +55,7 @@ export async function POST(req: NextRequest) {
       action: 'LOGIN_SUCCESS',
       category: 'SYSTEM',
       metadata: {
+        userId: auth.user.id,
         email: auth.user.email,
         role: auth.user.role,
       },

@@ -194,7 +194,7 @@ export const DuplicateFormSchema = BaseCourseFormObject.extend({
 }).refine((d) => d.startDate <= d.endDate, {
   path: ['endDate'],
   message: 'End date/time must be on or after the start date/time.',
-});;
+});
 
 /** Types */
 export type CreateCourseInput = z.infer<typeof CreateCourseSchema>;

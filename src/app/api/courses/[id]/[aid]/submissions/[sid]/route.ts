@@ -118,6 +118,9 @@ export async function GET(
         courseId,
         assignmentId,
         metadata: {
+          userId: user.id,
+          courseId: courseId,
+          assignmentId: assignmentId,
           viewedStudentId: studentId,
         },
       });
