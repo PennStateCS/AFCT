@@ -121,6 +121,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       action: 'UPDATE_USER',
       category: 'USER',
       metadata: {
+        userId: currentUser.id,
         targetUserId: userId,
         updatedFields: Object.keys(dataToUpdate),
       },
@@ -180,6 +181,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
       action: 'DELETE_USER',
       category: 'USER',
       metadata: {
+        userId: currentUser.id,
         deletedUserId: userId,
       },
     });

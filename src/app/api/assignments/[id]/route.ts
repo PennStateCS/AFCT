@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
-// import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 // Get a single assignment by ID
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -98,16 +98,19 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       },
     });
 
-    // await createEnhancedActivityLog(prisma, req, {
-    //   userId: session.user.id,
-    //   action: 'UPDATE_ASSIGNMENT',
-    //   category: 'ASSIGNMENT',
-    //   courseId: updated.courseId,
-    //   assignmentId: id,
-    //   metadata: {
-    //     updatedFields: Object.keys(data),
-    //   },
-    // });
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session.user.id,
+      action: 'UPDATE_ASSIGNMENT',
+      category: 'ASSIGNMENT',
+      courseId: updated.courseId,
+      assignmentId: id,
+      metadata: {
+        userId: session.user.id,
+        courseId: updated.courseId,
+        assignmentId: id,
+        updatedFields: Object.keys(data),
+      },
+    });
 
     return NextResponse.json(updated);
   } catch (error) {
@@ -149,16 +152,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       data: updateData,
     });
 
-    // await createEnhancedActivityLog(prisma, req, {
-    //   userId: session.user.id,
-    //   action: 'UPDATE_ASSIGNMENT',
-    //   category: 'ASSIGNMENT',
-    //   courseId: updated.courseId,
-    //   assignmentId: id,
-    //   metadata: {
-    //     updatedFields: Object.keys(updateData),
-    //   },
-    // });
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session.user.id,
+      action: 'UPDATE_ASSIGNMENT',
+      category: 'ASSIGNMENT',
+      courseId: updated.courseId,
+      assignmentId: id,
+      metadata: {
+        userId: session.user.id,
+        courseId: updated.courseId,
+        assignmentId: id,
+        updatedFields: Object.keys(updateData),
+      },
+    });
 
     return NextResponse.json(updated);
   } catch (error) {
@@ -193,17 +199,20 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // await createEnhancedActivityLog(prisma, req, {
-    //   userId: session.user.id,
-    //   action: 'CREATE_ASSIGNMENT',
-    //   category: 'ASSIGNMENT',
-    //   courseId: created.courseId,
-    //   assignmentId: created.id,
-    //   metadata: {
-    //     title: created.title,
-    //     maxPoints: created.maxPoints,
-    //   },
-    // });
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session.user.id,
+      action: 'CREATE_ASSIGNMENT',
+      category: 'ASSIGNMENT',
+      courseId: created.courseId,
+      assignmentId: created.id,
+      metadata: {
+        userId: session.user.id,
+        courseId: created.courseId,
+        assignmentId: created.id,
+        title: created.title,
+        maxPoints: created.maxPoints,
+      },
+    });
 
     return NextResponse.json(created, { status: 201 });
   } catch (error) {
@@ -248,14 +257,18 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     // Log the deletion
     try {
-      const { createEnhancedActivityLog } = await import('@/lib/activity-log-utils');
       await createEnhancedActivityLog(prisma, req as unknown as Request, {
         userId: session.user.id,
         action: 'DELETE_ASSIGNMENT',
         category: 'ASSIGNMENT',
         courseId: deleted.courseId,
         assignmentId: id,
-        metadata: { title: deleted.title }
+        metadata: {
+          userId: session.user.id,
+          courseId: deleted.courseId,
+          assignmentId: id,
+          title: deleted.title
+        }
       });
     } catch (logErr) {
       console.error('Failed to write activity log for assignment deletion', logErr);

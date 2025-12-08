@@ -122,6 +122,9 @@ export async function POST(
         courseId,
         assignmentId,
         metadata: {
+          userId: user.id,
+          courseId: courseId,
+          assignmentId: assignmentId,
           addedProblemIds: newProblemIds,
           protectedProblemIds: protectedProblemIds,
           finalProblemIds: finalProblemIds,

@@ -226,6 +226,8 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
       category: 'COURSE',
       courseId: updatedCourse.id,
       metadata: {
+        userId: user.id,
+        courseId: updatedCourse.id,
         updatedFields: Object.keys(body),
       },
     });

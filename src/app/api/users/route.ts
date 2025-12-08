@@ -57,6 +57,7 @@ export async function GET(req: Request) {
       action: 'VIEW_USERS',
       category: 'USER',
       metadata: {
+        userId: session.user.id,
         filterRole: role,
       },
     });
@@ -139,6 +140,7 @@ export async function POST(req: Request) {
       action: 'CREATE_USER',
       category: 'USER',
       metadata: {
+        userId: session.user.id,
         createdUserId: newUser.id,
         createdUserEmail: newUser.email,
         createdUserRole: newUser.role,
