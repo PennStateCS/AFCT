@@ -89,9 +89,13 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       courseId,
       problemId: problem.id,
       metadata: {
-        fileName,
-        originalFileName,
-        type,
+        userId: user.id,
+        courseId: courseId,
+        probleId: problem.id,
+        problemTitle: problem.title,
+        fileName: fileName,
+        originalFileName: originalFileName,
+        type: type,
       },
     });
 

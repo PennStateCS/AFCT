@@ -93,7 +93,11 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
         category: 'ASSIGNMENT',
         assignmentId,
         courseId,
-        metadata: {},
+        metadata: {
+          userId: userId,
+          assignmentId: assignmentId,
+          courseId: courseId,
+        },
       });
     } catch (logErr) {
       console.error('[problems] activityLog.create failed:', logErr);

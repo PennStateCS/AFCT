@@ -85,6 +85,7 @@ export async function POST(req: NextRequest) {
       action: 'CHANGE_PASSWORD',
       category: 'USER',
       metadata: {
+        userId: userId,
         role: userRole,
       },
     });

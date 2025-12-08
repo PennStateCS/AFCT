@@ -38,7 +38,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       action: 'BULK_ENROLL_USERS',
       category: 'COURSE',
       courseId,
-      metadata: { enrolledCount: userIds.length },
+      metadata: { 
+        userId: session?.user.id,
+        courseId: courseId,
+        enrolledIds: userIds,
+        enrolledCount: userIds.length,
+      },
     });
 
     return NextResponse.json({ success: true, enrolled: userIds.length }, { status: 200 });

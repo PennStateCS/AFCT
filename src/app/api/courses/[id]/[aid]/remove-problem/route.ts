@@ -73,7 +73,13 @@ export async function POST(
       courseId,
       assignmentId,
       problemId,
-      metadata: {},
+      metadata: {
+        userId: user.id,
+        courseId: courseId,
+        assignmentId: assignmentId,
+        problemId: problemId,
+        problemTitle: problem.title,
+      },
     });
 
     // Return the updated list of problems

@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
       userId: undefined,
       action: 'SUBMISSION_UNAUTHORIZED',
       category: 'SUBMISSION',
-      metadata: {},
+      metadata: { userId: undefined },
     });
 
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
 
   // 2. Parse multipart form data
   const formData = await req.formData();
+  const courseId = formData.get('courseId')?.toString();
   const assignmentId = formData.get('assignmentId')?.toString();
   const problemId = formData.get('problemId')?.toString();
   const file = formData.get('file') as File | null;
@@ -200,11 +201,17 @@ export async function POST(req: NextRequest) {
       userId: decoded.userId,
       action: 'SUBMISSION_CREATED',
       category: 'SUBMISSION',
+      courseId,
       assignmentId,
       problemId,
       submissionId: submission.id,
       metadata: {
-        fileName,
+        userId: decoded.userId,
+        courseId: courseId,
+        assignmentId: assignmentId,
+        problemId: problemId,
+        submissionId: submission.id,
+        fileName: fileName,
       },
     });
 
@@ -216,9 +223,14 @@ export async function POST(req: NextRequest) {
       userId: decoded.userId,
       action: 'SUBMISSION_ERROR',
       category: 'SUBMISSION',
+      courseId,
       assignmentId,
       problemId,
       metadata: {
+        userId: decoded.userId,
+        courseId: courseId,
+        assignmentId: assignmentId,
+        problemId: problemId,
         error: error instanceof Error ? error.message : String(error),
       },
     });
