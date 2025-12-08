@@ -91,6 +91,9 @@ export const CreateCourseSchema = BaseCourseObject.extend({
   isPublished: z.boolean().default(false),
   facultyIds: z.array(z.string()).default([]),
 }).refine((d) => d.startDate <= d.endDate, {
+  path: ['startDate'],
+  message: 'Start date/time must be on or before the end date/time.',
+}).refine((d) => d.startDate <= d.endDate, {
   path: ['endDate'],
   message: 'End date/time must be on or after the start date/time.',
 }).superRefine((d, ctx) => {
@@ -137,6 +140,11 @@ export const CreateCourseFormSchema = BaseCourseFormObject.extend({
   if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime()) && startDate > endDate) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
+      path: ['startDate'],
+      message: 'Start date/time must be on or before the end date/time.',
+    });
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
       path: ['endDate'],
       message: 'End date/time must be on or after the start date/time.',
     });
@@ -161,7 +169,32 @@ export const UpdateCourseSchema = BaseCourseObject.partial().extend({
 /**
  * Export form-only schema for use in Add/Edit forms.
  */
-export const CourseFormSchema = BaseCourseFormObject;
+export const CourseFormSchema = BaseCourseFormObject.refine((d) => d.startDate <= d.endDate, {
+  path: ['startDate'],
+  message: 'Start date/time must be on or before the end date/time.',
+}).refine((d) => d.startDate <= d.endDate, {
+  path: ['endDate'],
+  message: 'End date/time must be on or after the start date/time.',
+});
+
+/**
+ * Export form-only schema for use in Duplicate forms.
+ */
+export const DuplicateFormSchema = BaseCourseFormObject.extend({
+  copyMode: z.enum([
+    'assignments',
+    'assignments_with_problems',
+    'problems',
+  ]).optional(),
+  copyFaculty: z.boolean().optional(),
+  copyTAs: z.boolean().optional(),
+}).refine((d) => d.startDate <= d.endDate, {
+  path: ['startDate'],
+  message: 'Start date/time must be on or before the end date/time.',
+}).refine((d) => d.startDate <= d.endDate, {
+  path: ['endDate'],
+  message: 'End date/time must be on or after the start date/time.',
+});;
 
 /** Types */
 export type CreateCourseInput = z.infer<typeof CreateCourseSchema>;

@@ -15,19 +15,8 @@ import InputGroup from '@/components/ui/InputGroup';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { CourseFormSchema } from '@/schemas/course';
+import { DuplicateFormSchema } from '@/schemas/course';
 import { FullCourse } from '@/types/course';
-
-// Build a form schema: base fields + copy mode
-const DuplicateFormSchema = CourseFormSchema.extend({
-  copyMode: z.enum([
-    'assignments',
-    'assignments_with_problems',
-    'problems',
-  ]).optional(),
-  copyFaculty: z.boolean().optional(),
-  copyTAs: z.boolean().optional(),
-});
 
 function toDateTimeLocalString(date: Date | string): string {
   const d = new Date(date);
@@ -53,9 +42,9 @@ export default function DuplicateCourseDialog({ open, setOpen, course, onSuccess
     credits: String(course?.credits ?? 3),
     startDate: course ? toDateTimeLocalString(course.startDate) : '',
     endDate: course ? toDateTimeLocalString(course.endDate) : '',
-  copyMode: 'assignments_with_problems',
-  copyFaculty: false,
-  copyTAs: false,
+    copyMode: 'assignments_with_problems',
+    copyFaculty: false,
+    copyTAs: false,
   };
 
   const { control, handleSubmit, reset, trigger, watch, getValues, formState: { errors, isSubmitting, isValid } } = useForm<FormValues>({
@@ -80,8 +69,8 @@ export default function DuplicateCourseDialog({ open, setOpen, course, onSuccess
       code: course?.code ?? '',
       semester: course?.semester ?? '',
       credits: String(course?.credits ?? 3),
-      startDate: course ? new Date(course.startDate).toISOString().slice(0,16) : '',
-      endDate: course ? new Date(course.endDate).toISOString().slice(0,16) : '',
+      startDate: course ? toDateTimeLocalString(course.startDate) : '',
+      endDate: course ? toDateTimeLocalString(course.endDate) : '',
       copyMode: 'assignments_with_problems',
       copyFaculty: false,
       copyTAs: false,
@@ -136,8 +125,6 @@ export default function DuplicateCourseDialog({ open, setOpen, course, onSuccess
     return [];
   };
 
-  console.log(errors);
-
   return (
     <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { reset(defaults); setStep(1); } }}>
       <DialogContent className="bg-card max-w-2xl">
@@ -146,7 +133,7 @@ export default function DuplicateCourseDialog({ open, setOpen, course, onSuccess
             <Copy className="size-4 text-muted-foreground" />
             <DialogTitle>Duplicate Course</DialogTitle>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">Step {step} of 3 — {step === 1 ? 'Course details' : step === 2 ? 'What to copy' : 'Roster copy options'}</p>
+          <p className="mt-1 text-sm text-muted-foreground">Step {step} of 3 - {step === 1 ? 'Course details' : step === 2 ? 'What to copy' : 'Roster copy options'}</p>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
