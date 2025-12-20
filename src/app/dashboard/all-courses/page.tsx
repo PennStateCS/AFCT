@@ -1,8 +1,6 @@
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import DashboardClient from './DashboardClient';
-import { DueDateModule } from '@/components/modules/DueDateModule';
-import { JoinCourseModule } from '@/components/modules/JoinCourseModule';
+import DashboardClient from '../DashboardClient';
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -15,16 +13,12 @@ export default async function DashboardPage() {
     );
   }
 
-  // Get user's id
   const { id } = session.user;
 
   // Get all courses for the user via roster entries
   const rosterEntries = await prisma.roster.findMany({
     where: { 
         userId: id,
-        course: {
-            isArchived: false,
-        },
     },
     include: {
       course: {
@@ -53,40 +47,9 @@ export default async function DashboardPage() {
     };
   });
 
-  const courseIds = courses.map((c) => c.id);
-
-  // Get upcoming assignments for all user's courses
-  const assignments = await prisma.assignment.findMany({
-    where: {
-      courseId: { in: courseIds },
-      isPublished: true,
-      dueDate: { gt: new Date() },
-    },
-    select: {
-      id: true,
-      title: true,
-      dueDate: true,
-      courseId: true,
-    },
-    orderBy: { dueDate: 'asc' },
-  });
-
   return (
-    <div className="flex h-full w-full flex-col lg:flex-row">
-      {/* Left (Big Column) */}
-      <div className="w-full lg:w-3/4">
-        <DashboardClient sessionUser={session.user} courses={courses} title={"Current Courses"}/>
-      </div>
-
-      {/* Right (Skinny Column) */}
-      <div className="w-full pt-4 lg:w-1/4 lg:pt-0 lg:pl-4">
-        <div className="pb-4">
-          <JoinCourseModule />
-        </div>
-        <div>
-          <DueDateModule assignments={assignments} />
-        </div>
-      </div>
+    <div className="h-full w-full flex-col lg:flex-row">
+        <DashboardClient sessionUser={session.user} courses={courses} title={"All Courses"} />
     </div>
   );
 }

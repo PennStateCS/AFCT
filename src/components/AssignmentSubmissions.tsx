@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -11,7 +11,7 @@ import {
   Package,
 } from "lucide-react";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input"; // grade box
+import { Input } from "./ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Submission, User } from "@prisma/client";
@@ -39,11 +39,11 @@ type Props = {
   courseIsArchived: boolean;
   courseId: string;
   assignmentId: string;
+  maxAssignmentGrade: number;
   problems: Problem[];
 };
 
-// ---------------- helpers ----------------
-
+// Helpers
 const extractSubs = (raw?: SubmissionData): Submission[] => {
   if (!raw) return [];
   if (Array.isArray(raw)) return raw;
@@ -52,40 +52,30 @@ const extractSubs = (raw?: SubmissionData): Submission[] => {
   return [];
 };
 
-// ---------------- component ----------------
-
 export default function AssignmentSubmissions({
   courseIsArchived,
   courseId,
   assignmentId,
+  maxAssignmentGrade,
   problems,
 }: Props) {
   const [students, setStudents] = useState<Person[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
-
-  const [submissions, setSubmissions] = useState<Record<string, SubmissionData>>(
-    {}
-  );
+  const [submissions, setSubmissions] = useState<Record<string, SubmissionData>>({});
   const [comments, setComments] = useState<Record<string, DiscussionComment[]>>({});
   const [commentTexts, setCommentTexts] = useState<Record<string, string>>({});
-  const [savingComments, setSavingComments] = useState<
-    Record<string, boolean>
-  >({});
-  const [deletingComments, setDeletingComments] = useState<
-    Record<string, boolean>
-  >({});
-  const [expandedProblems, setExpandedProblems] = useState<
-    Record<string, boolean>
-  >({});
-
-  const [leftPanelWidth, setLeftPanelWidth] = useState(66.67); // 2/3 as percentage
+  const [savingComments, setSavingComments] = useState<Record<string, boolean>>({});
+  const [deletingComments, setDeletingComments] = useState<Record<string, boolean>>({});
+  const [expandedProblems, setExpandedProblems] = useState<Record<string, boolean>>({});
+  const [leftPanelWidth, setLeftPanelWidth] = useState(66.67);
   const [isDragging, setIsDragging] = useState(false);
-
-  const [gradeDraft, setGradeDraft] = useState<string>("");
-  const [gradeSaving, setGradeSaving] = useState(false);
+  // Grade editing state (robust, GradesCard style)
+  const [editingGrade, setEditingGrade] = useState<string>("");
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSavingGrade, setIsSavingGrade] = useState(false);
   const [gradeError, setGradeError] = useState<string | null>(null);
-
-  // grade UI helpers
+  const [userGrade, setUserGrade] = useState<number | null>(null);
+  const [isLoadingGrade, setIsLoadingGrade] = useState(false);
 
   const selectedStudent = students[selectedIndex] ?? null;
 
@@ -102,7 +92,6 @@ export default function AssignmentSubmissions({
     const rect = container.getBoundingClientRect();
     const newWidth = ((e.clientX - rect.left) / rect.width) * 100;
     
-    // Constrain between 30% and 80%
     if (newWidth >= 30 && newWidth <= 80) {
       setLeftPanelWidth(newWidth);
     }
@@ -130,72 +119,128 @@ export default function AssignmentSubmissions({
     };
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
+  // Fetch students
   useEffect(() => {
-    fetch(`/api/courses/${courseId}/students`)
-      .then((res) => res.json())
-      .then((data: Person[]) => {
+    const fetchStudents = async () => {
+      try {
+        const res = await fetch(`/api/courses/${courseId}/students`);
+        if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load students');
+        const data: Person[] = await res.json();
         setStudents(data);
         if (data.length > 0) setSelectedIndex(0);
-      })
-      .catch(() => setStudents([]));
+      } catch (err) {
+        console.error('Fetch students error:', err);
+        showToast.error('Failed to load students');
+        setStudents([]);
+      }
+    };
+    fetchStudents();
   }, [courseId]);
 
+  // Fetch submissions for selected student
   useEffect(() => {
-    if (!selectedStudent) return;
-    fetch(
-      `/api/courses/${courseId}/${assignmentId}/submissions/${selectedStudent.id}`
-    )
-      .then((res) => res.json())
-      .then((data) => setSubmissions(data || {}))
-      .catch(() => setSubmissions({}));
+    const fetchSubmissions = async () => {
+      if (!selectedStudent) {
+        setSubmissions({});
+        return;
+      }
+      try {
+        const res = await fetch(
+          `/api/courses/${courseId}/${assignmentId}/submissions/${selectedStudent.id}`
+        );
+        if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load submissions');
+        const data = await res.json();
+        setSubmissions(data || {});
+      } catch (err) {
+        console.error('Fetch submissions error:', err);
+        showToast.error('Failed to load submissions');
+        setSubmissions({});
+      }
+    };
+    fetchSubmissions();
   }, [courseId, assignmentId, selectedStudent]);
 
+  // Fetch comments for all problems
   useEffect(() => {
     const loadComments = async () => {
       if (!selectedStudent) {
         setComments({});
         return;
       }
-      const entries = await Promise.all(
-        problems.map(async (p) => {
-          try {
-            const r = await fetch(
-              `/api/comments?assignmentId=${assignmentId}&problemId=${p.id}&studentId=${selectedStudent.id}`
-            );
-            const list = r.ok ? await r.json() : [];
-            return [p.id, list as Comment[]] as const;
-          } catch {
-            return [p.id, []] as const;
-          }
-        })
-      );
-      setComments(Object.fromEntries(entries));
+      try {
+        const entries = await Promise.all(
+          problems.map(async (p) => {
+            try {
+              const res = await fetch(
+                `/api/comments?assignmentId=${assignmentId}&problemId=${p.id}&studentId=${selectedStudent.id}`
+              );
+              if (!res.ok) throw new Error('Failed to load comments');
+              const list = await res.json();
+              return [p.id, list as DiscussionComment[]] as const;
+            } catch (err) {
+              console.error(`Fetch comments error for problem ${p.id}:`, err);
+              return [p.id, []] as const;
+            }
+          })
+        );
+        setComments(Object.fromEntries(entries));
+      } catch (err) {
+        console.error('Load comments error:', err);
+        showToast.error('Failed to load comments');
+      }
     };
     if (problems.length > 0) loadComments();
   }, [assignmentId, problems, selectedStudent]);
 
+  // Fetch grade for selected student
   useEffect(() => {
-    setGradeDraft("");
+    if (!selectedStudent) {
+      setUserGrade(null);
+      setEditingGrade("");
+      setIsEditing(false);
+      setGradeError(null);
+      setIsLoadingGrade(false);
+      return;
+    }
+    setIsLoadingGrade(true);
+    setUserGrade(null);
+    setEditingGrade("");
+    setIsEditing(false);
     setGradeError(null);
-    if (!selectedStudent) return;
-    (async () => {
+    const fetchGrade = async () => {
       try {
-        const r = await fetch(
+        const res = await fetch(
           `/api/courses/${courseId}/${assignmentId}/grade/${selectedStudent.id}`
         );
-        if (r.ok) {
-          const { grade } = await r.json();
-          if (typeof grade === "number") {
-            setGradeDraft(String(grade));
-          }
+        if (res.ok) {
+          const { grade } = await res.json();
+          setUserGrade(typeof grade === "number" ? grade : null);
+          setEditingGrade(typeof grade === "number" ? String(grade) : "");
+          setIsEditing(false);
+          setGradeError(null);
+        } else {
+          setUserGrade(null);
+          setEditingGrade("");
+          setIsEditing(false);
+          setGradeError(null);
         }
-      } catch {}
-    })();
+      } catch (err) {
+        setUserGrade(null);
+        setEditingGrade("");
+        setIsEditing(false);
+        setGradeError(null);
+        console.error('Fetch grade error:', err);
+      } finally {
+        setIsLoadingGrade(false);
+      }
+    };
+    fetchGrade();
   }, [courseId, assignmentId, selectedStudent]);
 
-  const saveComment = async (problemId: string) => {
+  const saveComment = useCallback(async (problemId: string) => {
     const commentText = commentTexts[problemId]?.trim();
     if (!commentText || !selectedStudent) return;
+    
     setSavingComments((prev) => ({ ...prev, [problemId]: true }));
     try {
       const response = await fetch("/api/comments", {
@@ -208,37 +253,102 @@ export default function AssignmentSubmissions({
           studentId: selectedStudent.id,
         }),
       });
-      if (response.ok) {
-        const newComment = await response.json();
-        setComments((prev) => ({
-          ...prev,
-          [problemId]: [...(prev[problemId] || []), newComment],
-        }));
-        setCommentTexts((prev) => ({ ...prev, [problemId]: "" }));
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error?.error || 'Failed to save comment');
       }
-    } catch {}
-    setSavingComments((prev) => ({ ...prev, [problemId]: false }));
-  };
+      const newComment = await response.json();
+      setComments((prev) => ({
+        ...prev,
+        [problemId]: [...(prev[problemId] || []), newComment],
+      }));
+      setCommentTexts((prev) => ({ ...prev, [problemId]: "" }));
+      showToast.success('Comment saved successfully');
+    } catch (err) {
+      console.error('Save comment error:', err);
+      showToast.error(err instanceof Error ? err.message : 'Failed to save comment');
+    } finally {
+      setSavingComments((prev) => ({ ...prev, [problemId]: false }));
+    }
+  }, [commentTexts, selectedStudent, assignmentId]);
 
-  const deleteComment = async (commentId: string, problemId: string) => {
+  const deleteComment = useCallback(async (commentId: string, problemId: string) => {
     setDeletingComments((prev) => ({ ...prev, [commentId]: true }));
     try {
       const response = await fetch(`/api/comments?commentId=${commentId}`, {
         method: "DELETE",
       });
-      if (response.ok) {
-        setComments((prev) => ({
-          ...prev,
-          [problemId]:
-            prev[problemId]?.filter((c) => c.id !== commentId) || [],
-        }));
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error?.error || 'Failed to delete comment');
       }
-    } catch {}
-    setDeletingComments((prev) => ({ ...prev, [commentId]: false }));
-  };
+      setComments((prev) => ({
+        ...prev,
+        [problemId]: prev[problemId]?.filter((c) => c.id !== commentId) || [],
+      }));
+      showToast.success('Comment deleted successfully');
+    } catch (err) {
+      console.error('Delete comment error:', err);
+      showToast.error(err instanceof Error ? err.message : 'Failed to delete comment');
+    } finally {
+      setDeletingComments((prev) => ({ ...prev, [commentId]: false }));
+    }
+  }, []);
+
+
+  // Save grade (robust, GradesCard style)
+  const saveGrade = useCallback(async () => {
+    if (!selectedStudent) return;
+    // Only disable Save button while saving
+    if (isSavingGrade) return;
+    // Only validate if value changed
+    const trimmed = editingGrade.trim();
+    const numericValue = trimmed === '' ? null : Number(trimmed);
+    if (numericValue !== null && (isNaN(numericValue) || numericValue < 0 || numericValue > maxAssignmentGrade)) {
+      setGradeError(`Grade must be a number between 0 and ${maxAssignmentGrade}`);
+      showToast.error(`Grade must be a number between 0 and ${maxAssignmentGrade}`);
+      return;
+    }
+    // If value is unchanged, do nothing
+    if ((userGrade === null && (numericValue === null || numericValue === undefined)) || userGrade === numericValue) {
+      setGradeError(null);
+      return;
+    }
+    setIsSavingGrade(true);
+    setGradeError(null);
+    try {
+      const res = await fetch(
+        `/api/courses/${courseId}/${assignmentId}/grade/${selectedStudent.id}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ grade: numericValue }),
+        }
+      );
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error?.error || 'Failed to save grade');
+      }
+      // Do not re-fetch grade, just update state
+      setUserGrade(numericValue);
+      setEditingGrade(numericValue !== null && numericValue !== undefined ? String(numericValue) : "");
+      setGradeError(null);
+      showToast.success(
+        `Grade ${numericValue ?? 'cleared'} saved for ${selectedStudent.firstName} ${selectedStudent.lastName}`
+      );
+    } catch (err) {
+      console.error('Save grade error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save grade';
+      setGradeError(errorMessage);
+      showToast.error(errorMessage);
+    } finally {
+      setIsSavingGrade(false);
+    }
+  }, [selectedStudent, courseId, assignmentId, maxAssignmentGrade, editingGrade, userGrade, isSavingGrade]);
 
   const toggleProblemExpansion = (problemId: string) =>
     setExpandedProblems((prev) => ({ ...prev, [problemId]: !prev[problemId] }));
+
   const toggleAllProblems = () => {
     const allExpanded = problems.every((p) => expandedProblems[p.id]);
     const next: Record<string, boolean> = {};
@@ -250,64 +360,9 @@ export default function AssignmentSubmissions({
     const index = students.findIndex((s) => s.id === id);
     if (index !== -1) setSelectedIndex(index);
   };
-  const goPrev = () => setSelectedIndex((prev) => Math.max(0, prev - 1));
-  const goNext = () =>
-    setSelectedIndex((prev) => Math.min(students.length - 1, prev + 1));
 
-  // grade
-  const onGradeChange = (v: string) => {
-    setGradeDraft(v);
-    setGradeError(null);
-  };
-  const validateGrade = (v: string) => {
-    if (v.trim() === "") return "Enter a grade.";
-    const n = Number(v);
-    if (!Number.isFinite(n)) return "Grade must be a number.";
-    if (n < 0 || n > 100) return "Grade must be between 0 and 100.";
-    return null;
-  };
-  const saveGrade = async () => {
-    if (!selectedStudent) return;
-    const err = validateGrade(gradeDraft);
-    if (err) {
-      setGradeError(err);
-      showToast.error(err);
-      return;
-    }
-    setGradeSaving(true);
-    try {
-      const res = await fetch(
-        `/api/courses/${courseId}/${assignmentId}/grade`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            studentId: selectedStudent.id,
-            grade: Number(gradeDraft),
-          }),
-        }
-      );
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        const errorMessage = json?.error || "Failed to save grade";
-        setGradeError(errorMessage);
-        showToast.error(errorMessage);
-      } else {
-        showToast.success(`Grade ${gradeDraft} saved for ${selectedStudent.firstName} ${selectedStudent.lastName}`);
-        setGradeError(null);
-      }
-    } catch {
-      const errorMessage = "Network error while saving grade";
-      setGradeError(errorMessage);
-      showToast.error(errorMessage);
-    } finally {
-      setGradeSaving(false);
-    }
-  };
-  const clearGrade = () => {
-    setGradeDraft("");
-    setGradeError(null);
-  };
+  const goPrev = () => setSelectedIndex((prev) => Math.max(0, prev - 1));
+  const goNext = () => setSelectedIndex((prev) => Math.min(students.length - 1, prev + 1));
 
   return (
     <div>
@@ -318,9 +373,8 @@ export default function AssignmentSubmissions({
               <Package className="h-6 w-6" /> Submissions
             </CardTitle>
 
-            {/* Top bar: student nav + filters + grade */}
             <div className="mt-4 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-              {/* left: student nav */}
+              {/* Student nav */}
               <div className="flex items-center gap-2">
                 <Button
                   variant="secondary"
@@ -355,7 +409,7 @@ export default function AssignmentSubmissions({
                 </span>
               </div>
 
-              {/* center: filters */}
+              {/* Filters */}
               <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
                 <Button
                   variant="outline"
@@ -375,50 +429,62 @@ export default function AssignmentSubmissions({
                 </Button>
               </div>
 
-              {/* right: grade box */}
-
-                  <div className="flex items-center gap-2 border p-2">
-                    <div className="text-sm text-black">Student Grade:</div>
-                    <div className="relative">
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        min={0}
-                        max={100}
-                        step="0.5"
-                        value={gradeDraft}
-                        onChange={(e) => onGradeChange(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            saveGrade();
-                          } else if (e.key === "Escape") {
-                            e.preventDefault();
-                            clearGrade();
-                          }
-                        }}
-                        className={`bg-white h-9 w-[90px] pr-8 ${
-                          gradeError ? "border-red-300 focus-visible:ring-red-400" : ""
-                        }`}
-                        placeholder="0–100"
-                        aria-label="Grade (0–100)"
-                      />
-                      <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-                        /100
-                      </span>
-                    </div>
-                    <Button
-                      size="sm"
-                      onClick={saveGrade}
-                      disabled={
-                        gradeSaving || !!gradeError || gradeDraft.trim() === ""
+              {/* Grade box: always-visible input, robust logic */}
+              <div className="flex items-center gap-2 border p-2">
+                <div className="text-sm text-black">Student Grade:</div>
+                <div className="relative">
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    max={maxAssignmentGrade}
+                    step="1.0"
+                    value={editingGrade === "" ? "" : editingGrade}
+                    onChange={e => {
+                      setEditingGrade(e.target.value);
+                      setGradeError(null);
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        saveGrade();
+                      } else if (e.key === "Escape") {
+                        e.preventDefault();
+                        setEditingGrade(userGrade !== null && userGrade !== undefined ? String(userGrade) : "");
+                        setGradeError(null);
                       }
-                      variant="secondary"
-                    >
-                      {gradeSaving ? "Saving…" : "Save Grade"}
-                    </Button>
-                  </div>
-
+                    }}
+                    className={`bg-white h-9 w-[90px] pr-8 ${gradeError ? "border-red-300 focus-visible:ring-red-400" : ""}`}
+                    placeholder={isLoadingGrade ? '-' : (userGrade === null || userGrade === undefined ? '-' : String(userGrade))}
+                    aria-label={`Grade (0-${maxAssignmentGrade})`}
+                    disabled={isLoadingGrade}
+                  />
+                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                    /{maxAssignmentGrade}
+                  </span>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={saveGrade}
+                  disabled={
+                    isSavingGrade ||
+                    (() => {
+                      const trimmed = editingGrade.trim();
+                      const numericValue = trimmed === '' ? null : Number(trimmed);
+                      return (
+                        (userGrade === null && (numericValue === null || numericValue === undefined)) ||
+                        userGrade === numericValue
+                      );
+                    })()
+                  }
+                  variant="secondary"
+                >
+                  {isSavingGrade ? "Saving…" : "Save Grade"}
+                </Button>
+                {gradeError && (
+                  <span className="ml-2 text-sm text-red-500">{gradeError}</span>
+                )}
+              </div>
             </div>
           </CardHeader>
 
@@ -427,11 +493,9 @@ export default function AssignmentSubmissions({
               {problems.map((problem, idx) => {
                 const subsAll = extractSubs(submissions[problem.id]);
                 const isExpanded = expandedProblems[problem.id] || false;
-
                 const hasAny = subsAll.length > 0;
                 const anyCorrect = subsAll.some((s) => s.correct === true);
 
-                // Border color based on problem type
                 const getBorderClass = (type: string | null) => {
                   const borderMap: Record<string, string> = {
                     PDA: "border-l-purple-500",
@@ -443,7 +507,6 @@ export default function AssignmentSubmissions({
                 };
                 const typeBorderClass = getBorderClass(problem.type ?? null);
 
-                // filtered submissions per controls
                 const filtered = [...subsAll].sort(
                   (a, b) =>
                     new Date(b.submittedAt).getTime() -
@@ -455,7 +518,6 @@ export default function AssignmentSubmissions({
                     key={problem.id}
                     className={`rounded-lg border border-l-4 p-4 ${typeBorderClass}`}
                   >
-                    {/* header */}
                     <div className="mb-4 flex items-start justify-between">
                       <div className="flex-1">
                         <h3 className="flex items-center gap-2 text-lg font-semibold">
@@ -485,48 +547,39 @@ export default function AssignmentSubmissions({
                           </p>
                         )}
                       </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => toggleProblemExpansion(problem.id)}
-                        >
-                          {isExpanded ? (
-                            <>
-                              <EyeOff className="mr-2 h-4 w-4" /> Hide Details
-                            </>
-                          ) : (
-                            <>
-                              <Eye className="mr-2 h-4 w-4" /> Show Details
-                            </>
-                          )}
-                        </Button>
-                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => toggleProblemExpansion(problem.id)}
+                      >
+                        {isExpanded ? (
+                          <>
+                            <EyeOff className="mr-2 h-4 w-4" /> Hide Details
+                          </>
+                        ) : (
+                          <>
+                            <Eye className="mr-2 h-4 w-4" /> Show Details
+                          </>
+                        )}
+                      </Button>
                     </div>
 
-                    {/* details */}
                     {isExpanded && (
                       <div className="resize-container flex gap-4">
-                        {/* submissions: adjustable width */}
                         <section 
                           className="min-w-0" 
                           style={{ width: `${leftPanelWidth}%` }}
                         >
-                          {/* Problem Information Card */}
                           <ProblemDetails problem={problem} submissionCount={subsAll.length} className="mb-4"/>
-                          
-                          {/* Submissions Table */}
                           <SubmissionsTable submissions={filtered} />
                         </section>
 
-                        {/* Draggable resize handle */}
                         <div
                           className="w-1 bg-gray-300 hover:bg-gray-400 cursor-col-resize transition-colors"
                           onMouseDown={handleMouseDown}
                           title="Drag to resize"
                         />
 
-                        {/* discussion: adjustable width */}
                         <DiscussionPanel
                           courseIsArchived={courseIsArchived}
                           comments={comments[problem.id] || []}

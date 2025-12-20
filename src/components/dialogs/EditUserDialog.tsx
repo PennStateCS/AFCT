@@ -10,6 +10,7 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { showToast } from '@/lib/toast';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import {
   Select,
@@ -142,27 +143,33 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
     if (parsed.deleteAvatar) formData.append('deleteAvatar', 'true');
     formData.append('inactive', parsed.inactive ? 'true' : 'false');
 
-    const res = await fetch(`/api/users/${user.id}`, { method: 'PATCH', body: formData });
+    const res = await fetch(`/api/users/${user.id}`, {
+      method: 'PATCH',
+      body: formData,
+    });
 
+    // Read the response body
+    const body = await res.json();
+
+    // End if there was an error
     if (!res.ok) {
-      const text = await res.text().catch(() => null);
-      console.error('Failed to update user:', text);
+      showToast.error(body?.error || "Failed to update user.");
       return;
     }
 
-    // Let parent refresh or patch its state
+    // Backend succeeded, now notify parent
     await onSave?.({
       ...user,
       firstName: parsed.firstName,
       lastName: parsed.lastName,
       role: parsed.role as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT',
-      // If you want to immediately clear avatar in UI on delete:
       avatar: parsed.deleteAvatar ? null : user.avatar,
       inactive: parsed.inactive,
     });
 
     resetForm();
     setOpen(false);
+    showToast.success("User updated successfully.");
   };
 
   return (

@@ -2,7 +2,6 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { CreateCourseSchema } from '@/schemas';
 import { validationResponse } from '@/lib/zod-error';
 
 // ----------------------------------------
@@ -82,14 +81,12 @@ export async function GET() {
 // ----------------------------------------
 export async function POST(req: Request) {
   try {
+    // 1) Parse payload of information
     const json = await req.json();
-
-    // 1) Validate with the shared Zod schema (async supports future async refinements)
-    const data = await CreateCourseSchema.parseAsync(json);
 
     // 2) Optional uniqueness check (code + semester)
     const exists = await prisma.course.findFirst({
-      where: { code: data.code, semester: data.semester },
+      where: { code: json.code, semester: json.semester },
       select: { id: true },
     });
     if (exists) {
@@ -106,21 +103,21 @@ export async function POST(req: Request) {
     const created = await prisma.$transaction(async (tx) => {
       const course = await tx.course.create({
         data: {
-          name: data.name,
-          code: data.code,
+          name: json.name,
+          code: json.code,
           regCode,
-          semester: data.semester,
-          credits: data.credits,
-          startDate: data.startDate, // Date object is fine
-          endDate: data.endDate,
-          isPublished: data.isPublished ?? false,
+          semester: json.semester,
+          credits: json.credits,
+          startDate: json.startDate, // Date object is fine
+          endDate: json.endDate,
+          isPublished: json.isPublished ?? false,
           isArchived: false,
         },
       });
 
-      if (data.facultyIds.length > 0) {
+      if (json.facultyIds.length > 0) {
         await tx.roster.createMany({
-          data: data.facultyIds.map((userId: string) => ({
+          data: json.facultyIds.map((userId: string) => ({
             userId,
             courseId: course.id,
             role: 'FACULTY',

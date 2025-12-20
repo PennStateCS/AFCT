@@ -66,12 +66,12 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       avatarFilename = `${userId}-${Date.now()}-${avatarFile.name}`;
       const uploadPath = path.join(process.cwd(), 'public', 'uploads', 'pfps', avatarFilename);
       await writeFile(uploadPath, bytes);
-  // Uploaded new avatar: avatarFilename
+      // Uploaded new avatar: avatarFilename
 
       if (userRecord?.avatar) {
         const oldPath = path.join(process.cwd(), 'public', 'uploads', 'pfps', userRecord.avatar);
         await unlink(oldPath).catch(() => {});
-  // Deleted old avatar
+        // Deleted old avatar
       }
     }
 
@@ -80,7 +80,37 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       const oldPath = path.join(process.cwd(), 'public', 'uploads', 'pfps', userRecord.avatar);
       await unlink(oldPath).catch(() => {});
       avatarFilename = null;
-  // Avatar removed
+      // Avatar removed
+    }
+
+    // Make sure the user is not in any active courses if changing active status
+    if (inactive){ // Note logic appears swapped, but that is because inactive is the next state
+      // Generate the current date and time
+      const currTime = new Date();
+
+      // Find if the user is in an active coruse
+      const activeCourses = await prisma.roster.findMany({
+        where: { 
+          userId: userId,
+          course: {
+            endDate: {
+              gte: currTime
+            }
+          }
+        },
+        select: { course: { select: { isArchived: true, isPublished: true } } },
+      })
+      
+      // Return an error if the user is in an active course
+      if (activeCourses){
+        // Make sure the active course is not archived
+        for (const activeCourse of activeCourses) {
+          if (!activeCourse.course.isArchived && activeCourse.course.isPublished) {
+            console.error('[PATCH] Error updating user: User in an unarchived active course cannot be inactive');
+            return NextResponse.json({ error: 'Users in an active course cannot be inactive' }, { status: 403 });
+          }
+        }
+      }
     }
 
     // Prepare data for update
@@ -127,7 +157,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       },
     });
 
-  // User updated
+    // User updated
     return NextResponse.json(updatedUser);
   } catch (error) {
     console.error('[PATCH] Error updating user:', error);

@@ -162,6 +162,12 @@ const Navbar: React.FC = () => {
               // Show assignment name instead of aid (student view)
               else if (segments[1] === 'assignments' && index === 2 && assignmentName) { label = assignmentName; }
 
+              // Split dashes by space
+              else {
+                const words = label.split("-");
+                label = words.map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
+              }
+
               return (
                 <React.Fragment key={href}>
                   <BreadcrumbItem>
