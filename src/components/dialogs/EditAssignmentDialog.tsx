@@ -18,6 +18,7 @@ import InputGroup from '@/components/ui/InputGroup';
 
 import { useEffect, useMemo, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
+import { showToast } from '@/lib/toast';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 
@@ -63,6 +64,7 @@ export function EditAssignmentDialog({
       description: assignment.description ?? '',
       maxPoints: String(assignment.maxPoints ?? 100),
       dueDate: toDateTimeLocalString(assignment.dueDate), // string for input
+      isPublished: assignment.isPublished ?? '',
       courseId: assignment.courseId,
     }),
     [assignment],
@@ -119,28 +121,37 @@ export function EditAssignmentDialog({
     const payload = UpdateAssignmentSchema.parse({
       id: assignment.id,
       ...raw, // Keep maxPoints as string for schema validation
-      isPublished: typeof isPublished === 'boolean' ? isPublished : assignment.isPublished,
     });
 
-    const res = await fetch(`/api/assignments/${assignment.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...payload,
-        maxPoints: Number(payload.maxPoints), // Convert to number for API
-        dueDate: payload.dueDate,
-      }),
-    });
-    if (!res.ok) {
-      const msg = await safeMessage(res);
-      throw new Error(msg ?? 'Failed to update assignment');
+    try{
+      const res = await fetch(`/api/assignments/${assignment.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...payload,
+          maxPoints: Number(payload.maxPoints), // Convert to number for API
+          dueDate: payload.dueDate,
+        }),
+      });
+      if (!res.ok) {
+        // try to read message from server
+        const data = await res.json().catch(() => ({}));
+        const msg = data?.error || data?.message || `Server returned ${res.status}`;
+        showToast.error(msg || 'Failed to edit assignment');
+        console.error('[DELETE] server error', msg, data);
+        return;
+      }
+
+      const updated = (await res.json()) as Assignment;
+      // reset before closing to avoid any flash
+      resetForm();
+      onSave?.(updated);
+      setOpen(false);
+    } catch (err) {
+      // network or fetch error
+      console.error('[PUT] error', err);
+      showToast.error(`Network error editing assignment: ${(err as Error).message || err}`);
     }
-
-    const updated = (await res.json()) as Assignment;
-    // reset before closing to avoid any flash
-    resetForm();
-    onSave?.(updated);
-    setOpen(false);
   };
 
   const onSubmitWrapper = (e: React.FormEvent<HTMLFormElement>) => {
@@ -239,10 +250,23 @@ export function EditAssignmentDialog({
           />
 
           {/* Published switch (kept outside the form schema) */}
-          <div className="flex items-center justify-between">
-            <Label htmlFor="isPublished">Published</Label>
-            <Switch id="isPublished" checked={isPublished} onCheckedChange={setIsPublished} />
-          </div>
+          {/* Published switch (controlled by RHF) */}
+          <Controller
+            name="isPublished"
+            control={control}
+            render={({ field }) => (
+              <div className="flex items-center justify-between">
+                <Label htmlFor="isPublished">Published</Label>
+                <Switch
+                  id="isPublished"
+                  checked={!!field.value}
+                  onCheckedChange={field.onChange}
+                  onBlur={field.onBlur}
+                  // RHF expects boolean
+                />
+              </div>
+            )}
+          />
 
           <DialogFooter className="mt-4">
             <DialogClose asChild>

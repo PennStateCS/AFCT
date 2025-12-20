@@ -59,7 +59,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const { grade, feedback } = await req.json();
 
-    // Validate grade: must be null (to clear) or a number between 0-100
+    // Validate grade: must be null (to clear) or a number between 0 and the max grade possible
     if (grade !== null && (typeof grade !== 'number' || grade < 0 || grade > 100)) {
       return NextResponse.json({ error: 'Invalid grade value' }, { status: 400 });
     }

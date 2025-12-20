@@ -86,6 +86,27 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const data = await req.json();
 
+  // Make sure the assignment does not have any submissions or grades when unpublishing
+  if (data.isPublished === false) { // Note logic appears swapped for isPublished, but that is because isPublished is the next state
+    const hasSubmission = !!await prisma.assignmentProblem.findFirst({
+      where: { assignmentId: id, submissions: { some: {} } },
+      select: { assignmentId: true }
+    });
+
+    const hasGrade = !!await prisma.assignmentGrade.findFirst({
+      where: { assignmentId: id},
+      select: { assignmentId: true }
+    });
+
+    if (hasSubmission) {
+      return NextResponse.json({ error: 'Assignment must not have any submissions' }, { status: 403 });
+    }
+
+    if (hasGrade) {
+      return NextResponse.json({ error: 'Assignment must not have any grades' }, { status: 403 });
+    }
+  }
+
   try {
     const updated = await prisma.assignment.update({
       where: { id },
@@ -131,6 +152,27 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const data = await req.json();
 
+  // Make sure the assignment does not have any submissions or grades when unpublishing
+  if (!data.isPublished) { // Note logic appears swapped for isPublished, but that is because isPublished is the next state
+    const hasSubmission = !!await prisma.assignmentProblem.findFirst({
+      where: { assignmentId: id, submissions: { some: {} } },
+      select: { assignmentId: true }
+    });
+
+    const hasGrade = !!await prisma.assignmentGrade.findFirst({
+      where: { assignmentId: id},
+      select: { assignmentId: true }
+    });
+
+    if (hasSubmission) {
+      return NextResponse.json({ error: 'Assignment must not have any submissions' }, { status: 403 });
+    }
+
+    if (hasGrade) {
+      return NextResponse.json({ error: 'Assignment must not have any grades' }, { status: 403 });
+    }
+  }
+  
   try {
     // Build update data object with only provided fields
     const updateData: {

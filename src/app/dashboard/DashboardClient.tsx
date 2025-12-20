@@ -69,15 +69,52 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
                           {course.code} • {course.semester} • {course.credits} credits
                         </div>
                       </div>
-                      {course.isPublished ? (
-                        <span className="inline-block rounded bg-green-700 px-2 py-1 text-sm text-white shadow-sm ring-1 ring-green-900/30">
-                          Published
-                        </span>
-                      ) : (
-                        <span className="inline-block rounded bg-yellow-700 px-2 py-1 text-sm text-white shadow-sm ring-1 ring-yellow-900/30">
-                          Not Published
-                        </span>
-                      )}
+
+                      {(() => {
+                        let status = '';
+                        let bgColor = '';
+
+                        // Archived
+                        if (course.isArchived) {
+                          status = 'Archived';
+                          bgColor = 'bg-gray-700';
+                        } 
+                        
+                        // Unpublished
+                        else if (!course.isPublished) {
+                          status = 'Not Published';
+                          bgColor = 'bg-yellow-700';
+                        }
+
+                        // Published
+                        else {
+                          // Upcomming
+                          if (new Date(course.startDate) > new Date()) {
+                            status = 'Upcoming';
+                            bgColor = 'bg-cyan-700';
+                          } 
+                          
+                          // Ended
+                          else if (new Date(course.endDate) <= new Date()) {
+                            status = 'Ended';
+                            bgColor = 'bg-red-700';
+                          }
+                          
+                          // Published
+                          else {
+                            status = 'Published';
+                            bgColor = 'bg-green-700';
+                          }
+                        }
+
+                        return (
+                          <span
+                            className={`inline-block rounded ${bgColor} px-2 py-1 text-sm text-white shadow-sm ring-1 ring-gray-900/30`}
+                          >
+                            {status}
+                          </span>
+                        );
+                      })()}
                     </div>
 
                     <div className="space-y-1 text-sm">

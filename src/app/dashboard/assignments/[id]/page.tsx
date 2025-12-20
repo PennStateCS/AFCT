@@ -405,9 +405,9 @@ export default function StudentAssignmentPage() {
                 <p className="text-sm font-medium text-muted-foreground mb-1">Your Grade</p>
                 {assignmentGrade !== null ? (
                   <>
-                    <p className="text-2xl font-bold text-foreground">{assignmentGrade}</p>
+                    <p className="text-2xl font-bold text-foreground">{Math.round((assignmentGrade / assignment.maxPoints) * 100)}%</p>
                     <p className="text-sm text-muted-foreground">
-                      {Math.round((assignmentGrade / assignment.maxPoints) * 100)}% earned
+                      {assignmentGrade} points earned
                     </p>
                   </>
                 ) : (

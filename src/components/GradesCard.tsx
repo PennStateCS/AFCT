@@ -20,6 +20,7 @@ type StudentRow = {
 };
 
 type Assignment = {
+  maxPoints: number;
   id: string;
   title: string;
   dueDate?: string;
@@ -91,15 +92,15 @@ export default function GradesCard({ courseId }: { courseId: string }) {
     setEditingValue(currentValue === null || currentValue === undefined ? '' : String(currentValue));
   }, []);
 
-  const handleGradeSave = useCallback(async (studentId: string, assignmentId: string) => {
+  const handleGradeSave = useCallback(async (studentId: string, assignmentId: string, assignmentMaxGrade: number) => {
     const gradeKey = `${studentId}-${assignmentId}`;
     setSavingGrades(prev => new Set(prev).add(gradeKey));
     
     try {
       // Validate grade
       const numericValue = editingValue.trim() === '' ? null : Number(editingValue);
-      if (numericValue !== null && (isNaN(numericValue) || numericValue < 0 || numericValue > 100)) {
-        showToast.error('Grade must be a number between 0 and 100');
+      if (numericValue !== null && (isNaN(numericValue) || numericValue < 0 || numericValue > assignmentMaxGrade)) {
+        showToast.error(  `Grade must be a number between 0 and ${assignmentMaxGrade}`);
         // cleanup saving flag
         setSavingGrades(prev => {
           const newSet = new Set(prev);
@@ -204,7 +205,7 @@ export default function GradesCard({ courseId }: { courseId: string }) {
         };
       }
 
-      const average = grades.reduce((sum, grade) => sum + grade, 0) / grades.length;
+      const average = 100 * grades.reduce((sum, grade) => sum + grade, 0) / (grades.length * assignment.maxPoints);
       
       return {
         assignmentId: assignment.id,
@@ -216,12 +217,21 @@ export default function GradesCard({ courseId }: { courseId: string }) {
     });
 
     const overallGrades = students.map(student => {
-      const studentGrades = assignments
-        .map(assignment => student[assignment.id])
-        .filter((grade): grade is number => typeof grade === 'number');
+      // Pair each grade with its assignment's maxPoints
+      const gradePairs = assignments
+        .map(assignment => {
+          const grade = student[assignment.id];
+          return typeof grade === 'number' ? { grade, maxPoints: assignment.maxPoints } : null;
+        })
+        .filter((pair): pair is { grade: number; maxPoints: number } => pair !== null);
+
+      if (gradePairs.length === 0) return null;
       
-      if (studentGrades.length === 0) return null;
-      return studentGrades.reduce((sum, grade) => sum + grade, 0) / studentGrades.length;
+      // Calculate the student's average as a percentage of their possible points
+      const totalEarned = gradePairs.reduce((sum, pair) => sum + pair.grade, 0);
+      const totalPossible = gradePairs.reduce((sum, pair) => sum + pair.maxPoints, 0);
+      if (totalPossible === 0) return null;
+      return (totalEarned / totalPossible) * 100;
     }).filter((avg): avg is number => avg !== null);
 
     const overallAverage = overallGrades.length > 0 
@@ -282,38 +292,30 @@ export default function GradesCard({ courseId }: { courseId: string }) {
                 <Input
                   type="number"
                   min={0}
-                  max={100}
-                  step="0.5"
+                  max={a.maxPoints}
+                  step="1.0"
                   value={editingValue}
                   onChange={(e) => setEditingValue(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
-                      handleGradeSave(studentId, a.id);
+                      handleGradeSave(studentId, a.id, a.maxPoints);
                     } else if (e.key === 'Escape') {
                       e.preventDefault();
                       handleGradeCancel();
                     }
                   }}
-                  className="h-8 w-16 text-center"
-                  placeholder="0-100"
+                  className="h-full w-full text-center"
+                  placeholder={`0-${a.maxPoints}`}
                   autoFocus
                 />
-                <Button
-                  size="sm"
-                  onClick={() => handleGradeSave(studentId, a.id)}
-                  disabled={isSaving}
-                  className="h-6 w-6 p-0"
-                >
-                  {isSaving ? '...' : '✓'}
-                </Button>
               </div>
             );
           }
 
           return (
             <div
-              className="cursor-pointer hover:bg-muted rounded px-2 py-1 min-h-[2rem] flex items-center justify-center"
+              className="cursor-pointer hover:bg-neutral-300 rounded px-2 py-1 h-full w-full flex items-center justify-center"
               onClick={() => handleGradeEdit(studentId, a.id, val)}
               title="Click to edit grade"
             >
@@ -369,7 +371,7 @@ export default function GradesCard({ courseId }: { courseId: string }) {
       <CardContent className="space-y-6">
         {/* Grade Statistics */}
         {gradeStats && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-zinc-200 rounded-lg">
             <div className="flex items-center gap-2">
               <TrendingUp className="h-4 w-4 text-blue-600" />
               <div>

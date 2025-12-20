@@ -139,15 +139,17 @@ export function CourseHeader({
               <span className="mr-2 text-muted-foreground">{course.code}</span>
               {course.name}
             </CardTitle>
-            {!isStudent && (
-              <span
-                className={`inline-flex items-center justify-center rounded-md px-3 py-1 text-sm font-medium ${
-                  course.isPublished ? 'bg-green-500 text-white' : 'bg-amber-500 text-white'
-                }`}
-              >
-                {course.isPublished ? 'Published' : 'Draft'}
-              </span>
-            )}
+              {/* Course status tag (shared logic) */}
+              {(() => {
+                const { status, bgColor } = require('@/lib/course-status').getCourseStatusTag(course);
+                return (
+                  <span
+                    className={`inline-block rounded ${bgColor} px-2 py-1 text-sm text-white shadow-sm ring-1 ring-gray-900/30`}
+                  >
+                    {status}
+                  </span>
+                );
+              })()}
           </div>
 
           {/* meta row */}

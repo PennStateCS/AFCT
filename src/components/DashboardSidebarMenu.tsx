@@ -33,7 +33,7 @@ import {
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-import { Archive, Book, Users, UserRound, LogOut, LockKeyhole, UserPen, ChevronUp, BookPlus } from 'lucide-react';
+import { Archive, Library, Book, Users, UserRound, LogOut, LockKeyhole, UserPen, ChevronUp, BookPlus } from 'lucide-react';
 
 type Course = {
   id: string;
@@ -96,7 +96,7 @@ export default function DashboardSidebarMenu() {
       }
     };
     fetchCourses();
-  }, []);
+  }, [courses]);
 
   if (!session?.user) return null;
 
@@ -233,26 +233,85 @@ export default function DashboardSidebarMenu() {
 
         {/* Archived Courses */}
         <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground text-sm">
-            Archive
+          <SidebarGroupLabel className="text-sidebar-foreground text-sm">            The Archive
           </SidebarGroupLabel>
-          <SidebarMenuButton
-            asChild           
-            isActive={pathname == "/dashboard/archive"}                
-            className={cn(
-              "hover:bg-secondary focus:bg-secondary text-sidebar-foreground",
-              "data-[active=true]:bg-secondary",
-            )}>
-              <Link
-                href="/dashboard/archive"
-                className="flex min-w-0 items-center gap-2"
-              >
-                <Archive className="h-4 w-4 shrink-0" />
-                <span className="overflow-hidden text-ellipsis whitespace-nowrap">
-                  Archived Courses
-                </span>
-              </Link>
-          </SidebarMenuButton>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <TooltipProvider delayDuration={100}>
+                <Tooltip open={collapsed ? undefined : false}>
+                  <TooltipTrigger asChild>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={pathname === "/dashboard/archive"}
+                      className={cn(
+                        "hover:bg-secondary focus:bg-secondary text-sidebar-foreground",
+                        "data-[active=true]:bg-secondary",
+                      )}
+                    >
+                      <Link
+                        href="/dashboard/archive"
+                        className="flex min-w-0 items-center gap-2"
+                      >
+                        <Archive className="h-4 w-4 shrink-0" />
+                        <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+                          Archived Courses
+                        </span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </TooltipTrigger>
+                  <TooltipContent
+                    side="right"
+                    className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
+                    sideOffset={10}
+                  >
+                    Archived Courses
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarGroup>
+
+        {/* All Courses */}
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-sidebar-foreground text-sm">
+            All Courses
+          </SidebarGroupLabel>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <TooltipProvider delayDuration={100}>
+                <Tooltip open={collapsed ? undefined : false}>
+                  <TooltipTrigger asChild>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={pathname === "/dashboard/all-courses"}
+                      className={cn(
+                        "hover:bg-secondary focus:bg-secondary text-sidebar-foreground",
+                        "data-[active=true]:bg-secondary",
+                      )}
+                    >
+                      <Link
+                        href="/dashboard/all-courses"
+                        className="flex min-w-0 items-center gap-2"
+                      >
+                        <Library className="h-4 w-4 shrink-0" />
+                        <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+                          All Courses
+                        </span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </TooltipTrigger>
+                  <TooltipContent
+                    side="right"
+                    className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
+                    sideOffset={10}
+                  >
+                    All Courses
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </SidebarMenuItem>
+          </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
 

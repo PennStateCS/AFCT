@@ -218,11 +218,41 @@ export default function AssignmentDashboardPage() {
 								{assignment.course?.code ? ` (${assignment.course.code})` : assignment.courseCode ? ` (${assignment.courseCode})` : ""}
 							</Link>
 							<span className="text-muted-foreground">•</span>
-							{assignment.isPublished ? (
-								<span className="font-semibold text-green-600">Published</span>
-							) : (
-								<span className="font-semibold text-yellow-500">Unpublished</span>
-							)}
+
+							{(() => {
+								let status = '';
+								let txtColor = '';
+								
+								// Published
+								if (assignment.isPublished) {								
+									// Ended
+									if (new Date(assignment.dueDate) <= new Date()) {
+										status = 'Past Due';
+										txtColor = 'text-red-600';
+									}
+								
+									// Published
+									else {
+										status = 'Published';
+										txtColor = 'text-green-600';
+									}
+								}
+
+								// Not Published
+								else {
+									status = 'Not Published';
+									txtColor = 'text-yellow-600';
+								}
+
+								return (
+								<span
+									className={`font-semibold ${txtColor}`}
+								>
+									{status}
+								</span>
+								);
+							})()}
+
 							<span className="text-muted-foreground">•</span>
 							<span className="text-sm"><span className="font-semibold">Max Points:</span> {assignment.maxPoints}</span>
 							<span className="text-muted-foreground">•</span>
@@ -431,6 +461,7 @@ export default function AssignmentDashboardPage() {
 			  courseIsArchived={courseIsArchived}
               courseId={id}
               assignmentId={aid}
+			  maxAssignmentGrade={assignment.maxPoints}
               problems={assignment.problems.map((ap: { problem: Problem }) => ({
                 id: ap.problem.id,
                 title: ap.problem.title,
