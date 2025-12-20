@@ -6,7 +6,6 @@ import { format } from 'date-fns';
 import { User } from '@prisma/client';
 
 import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
 import { Badge } from '@/components/ui/RoleBadge';
 import { EditUserDialog } from '@/components/dialogs/EditUserDialog';
 import { AdminResetPasswordDialog } from '@/components/dialogs/AdminResetPasswordDialog';
@@ -168,21 +167,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: User; onUserUpdate: () 
         user={user}
         open={editOpen}
         setOpen={setEditOpen}
-        onSave={async (updatedUser) => {
-          try {
-            const res = await fetch(`/api/users/${updatedUser.id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(updatedUser),
-            });
-            if (!res.ok) throw new Error();
-            showToast.success('User updated successfully.');
-            setEditOpen(false);
-            onUserUpdate();
-          } catch {
-            showToast.error('Failed to update user.');
-          }
-        }}
+        onSave={async () => { onUserUpdate(); }}
       />
 
       <AdminResetPasswordDialog

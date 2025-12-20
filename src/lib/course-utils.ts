@@ -114,7 +114,17 @@ export async function updateAssignmentPublishStatus(
     body: JSON.stringify({ isPublished }),
   });
   
-  if (!res.ok) throw new Error('Failed to update assignment');
+  if (!res.ok) {
+    let msg = 'Failed to publish course';
+    try {
+      const body = await res.json();
+      msg = body?.error || body?.message || msg;
+    } catch {
+      // ignore JSON parse errors
+    }
+    throw new Error(msg);
+  }
+  return res.json();
 }
 
 export async function updateCoursePublishStatus(
@@ -127,18 +137,29 @@ export async function updateCoursePublishStatus(
     body: JSON.stringify({ isPublished }),
   });
   
-  if (!res.ok) throw new Error('Failed to update publish status');
+  if (!res.ok) {
+    let msg = 'Failed to publish course';
+    try {
+      const body = await res.json();
+      msg = body?.error || body?.message || msg;
+    } catch {
+      // ignore JSON parse errors
+    }
+    throw new Error(msg);
+  }
   return res.json();
 }
 
 export async function updateCourseArchiveStatus(
   courseId: string,
-  isArchived: boolean
+  startDate: Date,
+  endDate: Date,
+  isArchived: boolean,
 ): Promise<Course> {
   const res = await fetch(`/api/courses/${courseId}/archive`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ isArchived }),
+    body: JSON.stringify({ "isArchived": isArchived, "startDate": startDate, "endDate": endDate}),
   });
   
   if (!res.ok) {

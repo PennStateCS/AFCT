@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { boolean, z } from 'zod';
 
 /**
  * Accepts <input type="datetime-local"> like "2025-08-15T23:59"
@@ -72,6 +72,7 @@ const BaseAssignmentFormSchema = z
       .or(z.literal('')),
     maxPoints: z.string().min(1, 'Max points are required.'),
     dueDate: DateTimeLocalForm,
+    isPublished: z.boolean(),
     courseId: z.string().min(1, 'Course id is required.'),
   })
   .strict();

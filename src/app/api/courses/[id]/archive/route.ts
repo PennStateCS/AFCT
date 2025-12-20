@@ -5,13 +5,16 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
-export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
+export async function PATCH(
+  req: Request,
+  context: { params: Promise<{ id: string }> }
+) {
   try {
-    // Extract course ID from route params
+    // Extract params
     const { id: courseId } = await context.params;
 
     // Parse JSON body
-    const { isArchived } = await req.json();
+    const { startDate, endDate, isArchived } = await req.json();
 
     // Validate input
     if (typeof isArchived !== 'boolean') {
@@ -22,33 +25,47 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     const session = await auth();
     const user = session?.user;
 
-    // Allow only ADMIN, FACULTY, or TA to toggle archive status
-    if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    // Allow only ADMIN or FACULTY to toggle archive status
+    if (!user || !['ADMIN', 'FACULTY'].includes(user.role)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    // Make sure course is published and after end date or has no students
-    const courseInfo = await prisma.course.findFirst({
-      where: { id: courseId },
-      select: {
-        isPublished: true,
-        endDate: true,
-        _count: { select: { roster: { where: { role: "STUDENT" } } } }
-      }
-    })
-
-    // Set variables for checking
-    const studentCount = courseInfo?._count?.roster ?? 0;
-    const hasStudents = studentCount > 0;
+    // Check if the course is in session
+    const inSession = new Date(startDate) <= new Date() && new Date() <= new Date(endDate);
 
     // Check archiving conditions if archiniving
-    if (isArchived) {
-      if (hasStudents && !courseInfo?.isPublished ) {
-        return NextResponse.json({ error: 'Active course must be published before archiving' }, { status: 403 });
+    if (isArchived && inSession) { // Note logic appears swapped for isArchived, but that is because isArchived is the next state
+      // Get info to make sure no student submissions and no student grades exist
+      const hasSubmission = await prisma.submission.findFirst({
+        where: {
+          assignmentProblem: {
+            assignment: {
+              courseId: courseId,
+            },
+          },
+        },
+        select: { id: true },
+      });
+      
+      const hasGrade = await prisma.assignmentGrade.findFirst({
+        where: {
+          assignment: {
+            courseId: courseId,
+          },
+        },
+        select: { id: true },
+      });
+
+      const atLeastOneSubmission = !!hasSubmission;
+      const atLeastOneGrade = !!hasGrade;
+
+      if (atLeastOneSubmission) {
+        return NextResponse.json({ error: 'Course must not have any submitted problems or not in session to archive' }, { status: 403 });
       }
 
-      if (hasStudents && courseInfo?.endDate && courseInfo?.endDate >= new Date()) {
-        return NextResponse.json({ error: 'Active course must have ended before archiving' }, { status: 403 });
+      if (atLeastOneGrade) {
+        console.log(atLeastOneGrade)
+        return NextResponse.json({ error: 'Course must not have any graded assignments or not in session to archive' }, { status: 403 });
       }
     }
 

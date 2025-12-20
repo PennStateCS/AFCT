@@ -22,11 +22,47 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     const session = await auth();
     const user = session?.user;
 
-    // Allow only ADMIN, FACULTY, or TA to toggle publish status
-    if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    // Allow only ADMIN or FACULTY to toggle publish status
+    if (!user || !['ADMIN', 'FACULTY'].includes(user.role)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
+    // Check publishing conditions if publishing
+    if (!isPublished) { // Note logic appears swapped, but that is because isPublished is the next state
+      // Get info to make sure no student submissions and no student grades exist
+      const hasSubmission = await prisma.submission.findFirst({
+        where: {
+          assignmentProblem: {
+            assignment: {
+              courseId: courseId,
+            },
+          },
+        },
+        select: { id: true },
+      });
+      
+      const hasGrade = await prisma.assignmentGrade.findFirst({
+        where: {
+          assignment: {
+            courseId: courseId,
+          },
+        },
+        select: { id: true },
+      });
+
+      const atLeastOneSubmission = !!hasSubmission;
+      const atLeastOneGrade = !!hasGrade;
+
+      if (atLeastOneSubmission) {
+        return NextResponse.json({ error: 'Course must not have any submitted problems to unpublish' }, { status: 403 });
+      }
+
+      if (atLeastOneGrade) {
+        console.log(atLeastOneGrade)
+        return NextResponse.json({ error: 'Course must not have any graded assignments to unpublish' }, { status: 403 });
+      }
+    }
+     
     // Update course publish status
     const updated = await prisma.course.update({
       where: { id: courseId },
