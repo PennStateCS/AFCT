@@ -96,7 +96,7 @@ export default function DashboardSidebarMenu() {
       }
     };
     fetchCourses();
-  }, [courses]);
+  }, []);
 
   if (!session?.user) return null;
 

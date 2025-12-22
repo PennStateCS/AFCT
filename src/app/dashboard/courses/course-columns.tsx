@@ -23,8 +23,16 @@ type CourseWithFaculty = Course & {
   faculty: { firstName: string | null; lastName: string | null }[];
 };
 
+// Cell for course actions (edit/delete)
+type CourseActionsCellProps = {
+  course: CourseWithFaculty;
+  onCourseUpdated: (updated: CourseWithFaculty) => void; // Called when a course is updated (edit/save)
+  onCourseDeleted: () => void; // Called after a course is deleted (triggers parent reload)
+}
+
 export const columns = (
   onCourseUpdated: (updated: CourseWithFaculty) => void,
+  onCourseDeleted: () => void,
 ): ColumnDef<CourseWithFaculty>[] => [
   {
     accessorKey: 'name',
@@ -105,38 +113,34 @@ export const columns = (
     meta: { priority: 1 },
     cell: ({ row }) => {
       const course = row.original;
-      return <CourseActionsCell course={course} onCourseUpdated={onCourseUpdated} />;
+      return <CourseActionsCell course={course} onCourseUpdated={onCourseUpdated} onCourseDeleted={onCourseDeleted} />;
     },
   },
 ];
 
-// Extract the cell component to fix React hooks violation
-function CourseActionsCell({
-  course,
-  onCourseUpdated,
-}: {
-  course: CourseWithFaculty;
-  onCourseUpdated: (updated: CourseWithFaculty) => void;
-}) {
+function CourseActionsCell({ course, onCourseUpdated, onCourseDeleted }: CourseActionsCellProps) {
   const [editOpen, setEditOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const handleDelete = async () => {
     try {
-      const res = await fetch(`/api/courses/${course.id}`, { 
+      const res = await fetch(`/api/courses/${course.id}`, {
         method: 'DELETE',
         body: JSON.stringify(course),
-       })
+      });
       if (!res.ok) {
-          const json = await res.json().catch(() => null);
-          const serverMessage = json?.error || "Error deleting course";
-          throw new Error(serverMessage);
-      };
+        const json = await res.json().catch(() => null);
+        const serverMessage = json?.error || 'Error deleting course';
+        throw new Error(serverMessage);
+      }
       showToast.success('Course successfully deleted');
       setConfirmOpen(false);
+      if (onCourseDeleted) onCourseDeleted();
     } catch (e: any) {
       const msg = e?.message || 'Network error';
       showToast.error(msg);
+    } finally {
+      setEditOpen(false);
     }
   };
 
