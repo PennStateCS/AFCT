@@ -38,9 +38,9 @@ export function getCourseStatusTag(course: {
       bgColor = 'bg-red-700';
     }
     
-    // Published
+    // Active
     else {
-      status = 'Published';
+      status = 'Active';
       bgColor = 'bg-green-700';
     }
   }

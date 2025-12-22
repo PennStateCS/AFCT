@@ -2,8 +2,10 @@
 
 import { format } from 'date-fns';
 import Link from 'next/link';
+
 import type { Course, User } from '@prisma/client';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { getCourseStatusTag } from '@/lib/course-status';
 
 type Props = {
   sessionUser: {
@@ -71,42 +73,7 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
                       </div>
 
                       {(() => {
-                        let status = '';
-                        let bgColor = '';
-
-                        // Archived
-                        if (course.isArchived) {
-                          status = 'Archived';
-                          bgColor = 'bg-gray-700';
-                        } 
-                        
-                        // Unpublished
-                        else if (!course.isPublished) {
-                          status = 'Not Published';
-                          bgColor = 'bg-yellow-700';
-                        }
-
-                        // Published
-                        else {
-                          // Upcomming
-                          if (new Date(course.startDate) > new Date()) {
-                            status = 'Upcoming';
-                            bgColor = 'bg-cyan-700';
-                          } 
-                          
-                          // Ended
-                          else if (new Date(course.endDate) <= new Date()) {
-                            status = 'Ended';
-                            bgColor = 'bg-red-700';
-                          }
-                          
-                          // Published
-                          else {
-                            status = 'Published';
-                            bgColor = 'bg-green-700';
-                          }
-                        }
-
+                        const { status, bgColor } = getCourseStatusTag(course);
                         return (
                           <span
                             className={`inline-block rounded ${bgColor} px-2 py-1 text-sm text-white shadow-sm ring-1 ring-gray-900/30`}
