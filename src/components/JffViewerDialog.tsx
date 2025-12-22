@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Grid, Download, RefreshCw, ImageDown, Copy, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { Grid, Waypoints, Download, ImageDown, Copy, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 
 /* ───────────────────────────── Types & consts ───────────────────────────── */
 
@@ -14,7 +14,7 @@ type FlowDirection = 'LR' | 'RL';
 
 type Parsed = {
   type: MachineType;
-  states: { id: string; name: string; initial: boolean; final: boolean }[];
+  states: { id: string; name: string; xPos: number, yPos: number, initial: boolean; final: boolean }[];
   transitions: Array<{
     from: string;
     to: string;
@@ -55,9 +55,11 @@ function parseJflap(xmlText: string): Parsed {
   const states = Array.from(automaton.querySelectorAll('state')).map((s, i) => {
     const id = String(s.getAttribute('id') ?? i).trim();
     const name = s.getAttribute('name') ?? s.querySelector('name')?.textContent ?? `q${i}`;
+    const xPos = parseInt(s.querySelector('x')?.textContent ?? '0');
+    const yPos = parseInt(s.querySelector('y')?.textContent ?? '0');
     const initial = !!s.querySelector('initial');
     const final = !!s.querySelector('final');
-    return { id, name, initial, final };
+    return { id, name, xPos, yPos, initial, final };
   });
 
   const transitions = Array.from(automaton.querySelectorAll('transition')).map((t, idx) => {
@@ -164,11 +166,22 @@ async function ensureCytoscapeReady() {
 
 /* ───────────────────── Convert parsed → Cytoscape elements ─────────────── */
 
-function toElements(parsed: Parsed, eps: string) {
-  const nodes = parsed.states.map((s) => ({
-    data: { id: s.id, label: s.name, final: s.final ? 1 : 0, initial: s.initial ? 1 : 0 },
-    classes: s.final ? 'final' : '',
-  }));
+function toElements(parsed: Parsed, eps: string, honorPositions?: boolean) {
+  const nodes = parsed.states.map((s) => {
+    const base = {
+      data: { id: s.id, label: s.name, final: s.final ? 1 : 0, initial: s.initial ? 1 : 0 },
+      classes: s.final ? 'final' : '',
+    };
+    if (honorPositions) {
+      return {
+        ...base,
+        position: { x: s.xPos, y: s.yPos },
+        locked: false,
+        grabbable: true,
+      };
+    }
+    return base;
+  });
 
   const edgesBundled = bundleEdges(parsed.transitions, parsed.type, eps, true, 26);
   const edges = edgesBundled.map((e, i) => ({
@@ -206,7 +219,7 @@ async function copyText(txt: string) {
 
 export function JffCytoscapeViewer({
   src, title, height = '72vh', epsSymbol = DEFAULT_EPS, darkMode = false,
-  flowDirection = 'LR', showGridDefault = false,
+  flowDirection = 'LR', showGridDefault = false, honorPositionsDefault = false,
 }: {
   src: string;
   title?: string;
@@ -215,13 +228,14 @@ export function JffCytoscapeViewer({
   darkMode?: boolean;
   flowDirection?: FlowDirection;
   showGridDefault?: boolean;
-  honorPositions?: boolean;
+  honorPositionsDefault?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<any | null>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [grid, setGrid] = useState(showGridDefault);
+  const [honorPositions, setHonorPositions] = useState(honorPositionsDefault);
   const [type, setType] = useState<MachineType>('unknown');
 
   // Debug
@@ -250,11 +264,11 @@ export function JffCytoscapeViewer({
         setDebugParsed({
           type: parsed.type,
           stateCount: parsed.states.length,
-          states: parsed.states.map(s => ({ id: s.id, name: s.name, initial: s.initial, final: s.final })),
+          states: parsed.states.map(s => ({ id: s.id, name: s.name, x: s.xPos, y: s.yPos, initial: s.initial, final: s.final })),
           transitionCount: parsed.transitions.length
         });
 
-        const elements = toElements(parsed, epsSymbol);
+        const elements = toElements(parsed, epsSymbol, honorPositions);
         setDebugElements(elements);
 
         const cytoscape = await ensureCytoscapeReady();
@@ -358,7 +372,7 @@ export function JffCytoscapeViewer({
             },
             { selector: '.faded', style: { 'opacity': 0.25 } },
           ],
-          layout: { name: 'preset' }, // ELK runs after
+          layout: { name: 'preset' },
         });
 
         cyRef.current = cy;
@@ -368,31 +382,35 @@ export function JffCytoscapeViewer({
         cy.panningEnabled(true);
         cy.userPanningEnabled(true);
 
-        // ELK layout
-        const elkDirection = (flowDirection === 'RL') ? 'LEFT' : 'RIGHT';
-        const elkOptions = {
-          name: 'elk',
-          nodeDimensionsIncludeLabels: true,
-          fit: true,
-          animate: false,
-          elk: {
-            algorithm: 'layered',
-            'elk.direction': elkDirection,
-            'elk.layered.spacing.nodeNodeBetweenLayers': '70',
-            'elk.spacing.nodeNode': '46',
-            'elk.spacing.edgeNode': '22',
-            'elk.spacing.edgeLabel': '12',
-            'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
-            'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
-          }
-        };
-        setDebugElk(elkOptions);
+        if (!honorPositions) {
+          // ELK layout
+          const elkDirection = (flowDirection === 'RL') ? 'LEFT' : 'RIGHT';
+          const elkOptions = {
+            name: 'elk',
+            nodeDimensionsIncludeLabels: true,
+            fit: true,
+            animate: false,
+            elk: {
+              algorithm: 'layered',
+              'elk.direction': elkDirection,
+              'elk.layered.spacing.nodeNodeBetweenLayers': '70',
+              'elk.spacing.nodeNode': '46',
+              'elk.spacing.edgeNode': '22',
+              'elk.spacing.edgeLabel': '20',
+              'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+              'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
+            }
+          };
+          setDebugElk(elkOptions);
 
-        await new Promise<void>((resolve) =>
-          cy.layout(elkOptions).run().on('layoutstop', () => resolve())
-        );
+          await new Promise<void>((resolve) =>
+            cy.layout(elkOptions).run().on('layoutstop', () => resolve())
+          );
+        } else {
+          setDebugElk({ name: 'preset', usedPositions: true });
+        }
 
-        // reassert loop geometry after layout
+        // reassert loop geometry after layout or preset
         cy.edges('[isLoop = 1]').forEach((e: any) => {
           e.style({
             'curve-style': 'loop',
@@ -438,7 +456,7 @@ export function JffCytoscapeViewer({
         setError(e?.message || 'Failed to render .jff');
       }
     },
-    [src, epsSymbol, darkMode, flowDirection]
+    [src, epsSymbol, darkMode, honorPositions, flowDirection]
   );
 
   useEffect(() => {
@@ -533,10 +551,10 @@ export function JffCytoscapeViewer({
         </div>
         <div className="flex items-center gap-1 flex-wrap">
           <Button size="sm" variant={grid ? 'default' : 'outline'} onClick={() => setGrid((s) => !s)} title="Toggle grid">
-            <Grid className="mr-1 h-4 w-4" /> Grid
+            <Grid className="mr-2 h-4 w-4" /> Grid
           </Button>
-          <Button size="sm" variant="outline" onClick={resetHighlight} title="Clear highlight">
-            <RefreshCw className="h-4 w-4" />
+          <Button size="sm" variant={honorPositions ? 'default' : 'outline'} onClick={() => setHonorPositions((p) => !p)} title="Original Positions">
+            <Waypoints className="mr-2 h-4 w-4" />Original Positions
           </Button>
           <Button size="sm" variant="outline" onClick={zoomOut} title="Zoom out">
             <ZoomOut className="h-4 w-4" />
@@ -605,7 +623,7 @@ export default function JffViewerDialog({
   open, onOpenChange, src, title,
   width = '80vw', height = '85vh',
   epsSymbol = DEFAULT_EPS, darkMode = false, flowDirection = 'LR', showGridDefault = true,
-  honorPositions,
+  honorPositionsDefault = true,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -617,7 +635,7 @@ export default function JffViewerDialog({
   darkMode?: boolean;
   flowDirection?: FlowDirection;
   showGridDefault?: boolean;
-  honorPositions?: boolean;
+  honorPositionsDefault?: boolean;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -634,7 +652,7 @@ export default function JffViewerDialog({
             darkMode={darkMode}
             flowDirection={flowDirection}
             showGridDefault={showGridDefault}
-            honorPositions={honorPositions}
+            honorPositionsDefault={honorPositionsDefault}
           />
         </div>
       </DialogContent>
