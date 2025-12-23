@@ -10,7 +10,6 @@ import { Grid, Waypoints, Download, ImageDown, Copy, ZoomIn, ZoomOut, Maximize2 
 /* ───────────────────────────── Types & consts ───────────────────────────── */
 
 type MachineType = 'fa' | 'pda' | 'tm' | 'unknown';
-type FlowDirection = 'LR' | 'RL';
 
 type Parsed = {
   type: MachineType;
@@ -218,15 +217,13 @@ async function copyText(txt: string) {
 /* ───────────────────────────── Viewer component ────────────────────────── */
 
 export function JffCytoscapeViewer({
-  src, title, height = '72vh', epsSymbol = DEFAULT_EPS, darkMode = false,
-  flowDirection = 'LR', showGridDefault = false, honorPositionsDefault = false,
+  src, title, height = '72vh', epsSymbol = DEFAULT_EPS, darkMode = false, showGridDefault = false, honorPositionsDefault = false,
 }: {
   src: string;
   title?: string;
   height?: number | string;
   epsSymbol?: string;
   darkMode?: boolean;
-  flowDirection?: FlowDirection;
   showGridDefault?: boolean;
   honorPositionsDefault?: boolean;
 }) {
@@ -381,24 +378,19 @@ export function JffCytoscapeViewer({
         cy.userZoomingEnabled(true);
         cy.panningEnabled(true);
         cy.userPanningEnabled(true);
-
+        
         if (!honorPositions) {
           // ELK layout
-          const elkDirection = (flowDirection === 'RL') ? 'LEFT' : 'RIGHT';
+          const elkAspectRatio = (!containerRef.current?.clientWidth || !containerRef.current?.clientHeight) ? '1.6f' :  `${containerRef.current?.clientWidth / containerRef.current?.clientHeight}f`;
           const elkOptions = {
             name: 'elk',
             nodeDimensionsIncludeLabels: true,
             fit: true,
             animate: false,
             elk: {
-              algorithm: 'layered',
-              'elk.direction': elkDirection,
-              'elk.layered.spacing.nodeNodeBetweenLayers': '70',
-              'elk.spacing.nodeNode': '46',
-              'elk.spacing.edgeNode': '22',
-              'elk.spacing.edgeLabel': '20',
-              'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
-              'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
+              algorithm: 'force',
+              'elk.aspectRatio': elkAspectRatio,
+              'elk.spacing.nodeNode': '50',
             }
           };
           setDebugElk(elkOptions);
@@ -456,7 +448,7 @@ export function JffCytoscapeViewer({
         setError(e?.message || 'Failed to render .jff');
       }
     },
-    [src, epsSymbol, darkMode, honorPositions, flowDirection]
+    [src, epsSymbol, darkMode, honorPositions]
   );
 
   useEffect(() => {
@@ -622,7 +614,7 @@ export function JffCytoscapeViewer({
 export default function JffViewerDialog({
   open, onOpenChange, src, title,
   width = '80vw', height = '85vh',
-  epsSymbol = DEFAULT_EPS, darkMode = false, flowDirection = 'LR', showGridDefault = true,
+  epsSymbol = DEFAULT_EPS, darkMode = false, showGridDefault = true,
   honorPositionsDefault = true,
 }: {
   open: boolean;
@@ -633,7 +625,6 @@ export default function JffViewerDialog({
   height?: number | string;
   epsSymbol?: string;
   darkMode?: boolean;
-  flowDirection?: FlowDirection;
   showGridDefault?: boolean;
   honorPositionsDefault?: boolean;
 }) {
@@ -650,7 +641,6 @@ export default function JffViewerDialog({
             height={height}
             epsSymbol={epsSymbol}
             darkMode={darkMode}
-            flowDirection={flowDirection}
             showGridDefault={showGridDefault}
             honorPositionsDefault={honorPositionsDefault}
           />
