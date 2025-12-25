@@ -194,10 +194,19 @@ function toElements(parsed: Parsed, eps: string, honorPositions?: boolean) {
   }));
 
   const initialStates = parsed.states.filter((s) => s.initial);
-  const startBits = initialStates.flatMap((s, idx) => ([
-    { data: { id: `__start${idx}`, label: '' }, classes: 'start' },
-    { data: { id: `__startEdge${idx}`, source: `__start${idx}`, target: s.id, label: '' }, classes: 'startEdge' }
-  ]));
+  const nodeDiameter = 58;
+  const startBits = initialStates.flatMap((s, idx) => {
+    // Calculate start node position one diameter away from initial node
+    let pos = undefined;
+    if (honorPositions && typeof s.xPos === 'number' && typeof s.yPos === 'number') {
+      // Place start node to the left of initial node
+      pos = { x: s.xPos - 1.5*nodeDiameter, y: s.yPos }; // The radius of the initial node is the .5
+    }
+    return [
+      { data: { id: `__start${idx}`, label: '' }, classes: 'start', ...(pos ? { position: pos } : {}) },
+      { data: { id: `__startEdge${idx}`, source: `__start${idx}`, target: s.id, label: '' }, classes: 'startEdge' }
+    ];
+  });
 
   return [...nodes, ...edges, ...startBits];
 }
@@ -215,6 +224,15 @@ async function copyText(txt: string) {
 }
 
 /* ───────────────────────────── Viewer component ────────────────────────── */
+
+// Debounce utility for resize
+function debounce(fn: () => void, ms: number) {
+  let timer: any;
+  return () => {
+    clearTimeout(timer);
+    timer = setTimeout(fn, ms);
+  };
+}
 
 export function JffCytoscapeViewer({
   src, title, height = '72vh', epsSymbol = DEFAULT_EPS, darkMode = false, showGridDefault = false, honorPositionsDefault = false,
@@ -236,17 +254,80 @@ export function JffCytoscapeViewer({
   const [type, setType] = useState<MachineType>('unknown');
 
   // Debug
-  const [debugOpen, setDebugOpen] = useState(false);
-  const [debugParsed, setDebugParsed] = useState<any>(null);
-  const [debugElements, setDebugElements] = useState<any>(null);
-  const [debugElk, setDebugElk] = useState<any>(null);
+  // Debug states (can be removed if not needed)
+  // const [debugOpen, setDebugOpen] = useState(false);
+  // const [debugParsed, setDebugParsed] = useState<any>(null);
+  // const [debugElements, setDebugElements] = useState<any>(null);
+  // const [debugElk, setDebugElk] = useState<any>(null);
 
-  const gridBg = grid
-    ? 'linear-gradient(#e5e7eb 1px, transparent 1px), linear-gradient(90deg, #e5e7eb 1px, transparent 1px)'
-    : 'none';
   const backgroundStyle: React.CSSProperties = grid
-    ? { backgroundImage: gridBg, backgroundSize: '24px 24px', backgroundPosition: 'center center' }
+    ? { backgroundImage: 'linear-gradient(#e5e7eb 1px, transparent 1px), linear-gradient(90deg, #e5e7eb 1px, transparent 1px)', backgroundSize: '24px 24px', backgroundPosition: 'center center' }
     : {};
+
+  // Customization variables
+  const NODE_DIAMETER = 58;
+  const FIT_PADDING = 40;
+  // Expose onResize for Fit button
+  const onResizeRef = useRef<(() => void) | null>(null);
+
+  // Utility: Reposition start nodes for !honorPositions
+  function repositionStartNodes(cy: any) {
+    // For each initial node, find the least cluttered direction
+    cy.nodes().filter((n: any) => n.data('initial')).forEach((node: any, idx: number) => {
+      const nodePos = node.position();
+      const directions = Array.from({ length: 8 }, (_, i) => i * (Math.PI / 4)); // 0, 45, ..., 315 deg
+      const radius = 1.5 * NODE_DIAMETER;
+      // Gather positions of all other nodes
+      const otherNodes = cy.nodes().filter((n2: any) => n2.id() !== node.id());
+      const otherNodePositions = otherNodes.map((n2: any) => n2.position());
+      // Gather incoming edge angles
+      const incomingEdges = node.incomers('edge');
+      const incomingAngles = incomingEdges.map((e: any) => {
+        const src = e.source().position();
+        return Math.atan2(nodePos.y - src.y, nodePos.x - src.x);
+      });
+      // For each direction, compute a clutter score
+      const scores = directions.map((angle) => {
+        // Position where start node would be placed
+        const testX = nodePos.x + Math.cos(angle) * radius;
+        const testY = nodePos.y + Math.sin(angle) * radius;
+        // Score: sum of inverse distances to other nodes (closer = higher score)
+        let score = 0;
+        for (const pos of otherNodePositions) {
+          const dx = testX - pos.x;
+          const dy = testY - pos.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < NODE_DIAMETER * 1.1) score += 1000; // heavy penalty for overlap
+          else score += 1 / dist;
+        }
+        // Penalty for being close to incoming edge directions
+        for (const edgeAngle of incomingAngles) {
+          let diff = Math.abs(angle - edgeAngle);
+          if (diff > Math.PI) diff = 2 * Math.PI - diff;
+          if (diff < Math.PI / 6) score += 10; // penalty for being within 30deg of an incoming edge
+        }
+        return score;
+      });
+      // Find the direction with the lowest score
+      let bestIdx = 0;
+      let bestScore = scores[0];
+      for (let i = 1; i < scores.length; ++i) {
+        if (scores[i] < bestScore) {
+          bestScore = scores[i];
+          bestIdx = i;
+        }
+      }
+      const bestAngle = directions[bestIdx];
+      const pos = {
+        x: nodePos.x + Math.cos(bestAngle) * radius,
+        y: nodePos.y + Math.sin(bestAngle) * radius,
+      };
+      const startNode = cy.getElementById(`__start${idx}`);
+      if (startNode) {
+        startNode.position(pos);
+      }
+    });
+  }
 
   const load = useMemo(
     () => async () => {
@@ -258,15 +339,7 @@ export function JffCytoscapeViewer({
 
         const parsed = parseJflap(text);
         setType(parsed.type);
-        setDebugParsed({
-          type: parsed.type,
-          stateCount: parsed.states.length,
-          states: parsed.states.map(s => ({ id: s.id, name: s.name, x: s.xPos, y: s.yPos, initial: s.initial, final: s.final })),
-          transitionCount: parsed.transitions.length
-        });
-
         const elements = toElements(parsed, epsSymbol, honorPositions);
-        setDebugElements(elements);
 
         const cytoscape = await ensureCytoscapeReady();
 
@@ -343,16 +416,21 @@ export function JffCytoscapeViewer({
               }
             },
 
-            /* initial arrow from hidden start node */
+            /* initial arrow from hidden start node - make it only node diameter away */
             {
               selector: 'edge.startEdge',
               style: {
+                'curve-style': 'straight',
                 'line-color': STROKE,
                 'target-arrow-color': STROKE,
                 'target-arrow-shape': 'triangle',
                 'arrow-scale': 1.1,
                 'width': EDGE_WIDTH,
                 'label': '',
+                'source-endpoint': 'outside-to-node',
+                'target-endpoint': 'outside-to-node',
+                'segment-distances': 58, // node diameter
+                'segment-weights': 1,
               }
             },
 
@@ -393,13 +471,17 @@ export function JffCytoscapeViewer({
               'elk.spacing.nodeNode': '50',
             }
           };
-          setDebugElk(elkOptions);
+          // (debug code removed)
 
           await new Promise<void>((resolve) =>
             cy.layout(elkOptions).run().on('layoutstop', () => resolve())
           );
+          repositionStartNodes(cy);
+          // Ensure resize logic (fit, etc) is run after initial layout
+          setTimeout(() => { onResizeRef.current?.(); }, 0);
         } else {
-          setDebugElk({ name: 'preset', usedPositions: true });
+          // (debug code removed)
+          setTimeout(() => { onResizeRef.current?.(); }, 0);
         }
 
         // reassert loop geometry after layout or preset
@@ -438,10 +520,67 @@ export function JffCytoscapeViewer({
         cy.fit(undefined, 40);
 
         // keep size/zoom coherent if dialog resizes
-        const onResize = () => { try { cy.resize(); } catch {} };
+        // Debounced resize handler to avoid layout thrashing
+        const onResize = debounce(async () => {
+          try {
+            cy.resize();
+            const elkAspectRatio = (!containerRef.current?.clientWidth || !containerRef.current?.clientHeight)
+              ? '1.6f'
+              : `${containerRef.current.clientWidth / containerRef.current.clientHeight}f`;
+            let layoutOptions;
+            if (!honorPositions) {
+              layoutOptions = {
+                name: 'elk',
+                nodeDimensionsIncludeLabels: true,
+                fit: true,
+                animate: false,
+                elk: {
+                  algorithm: 'force',
+                  'elk.aspectRatio': elkAspectRatio,
+                  'elk.spacing.nodeNode': '50',
+                }
+              };
+            } else {
+              layoutOptions = {
+                name: 'preset',
+                usedPositions: true
+              };
+            }
+            // (debug code removed)
+            await new Promise<void>(resolve =>
+              cy.layout(layoutOptions).run().on('layoutstop', () => resolve())
+            );
+            // reassert loop geometry after layout
+            cy.edges('[isLoop = 1]').forEach((e: any) => {
+              e.style({
+                'curve-style': 'loop',
+                'loop-direction': '0deg',
+                'loop-sweep': '50deg',
+                'control-point-step-size': 48,
+                'source-arrow-shape': 'triangle',
+                'target-arrow-shape': 'none',
+                'arrow-scale': 0.95,
+                'line-cap': 'round',
+                'text-rotation': 'none',
+                'text-margin-y': -32,
+              });
+            });
+            if (!honorPositions) {
+              repositionStartNodes(cy);
+            }
+            fitAll();
+          } catch {}
+        }, 160);
         window.addEventListener('resize', onResize, { passive: true });
         // store to cleanup
         (cy as any).__onResize = onResize;
+        // Expose onResize for Fit button
+        onResizeRef.current = onResize;
+
+        // Call onResize after initial load to ensure fit, but only for honorPositions
+        if (honorPositions) {
+          setTimeout(() => { onResizeRef.current?.(); }, 0);
+        }
 
       } catch (e: any) {
         console.error(e);
@@ -463,7 +602,7 @@ export function JffCytoscapeViewer({
     };
   }, [load]);
 
-  /* ── 🔧 zoom helpers (animated, keep center fixed) ─────────────────────── */
+  /* ── zoom helpers (animated, keep center fixed) ─────────────────────── */
   const animatedZoomTo = (level: number) => {
     const cy = cyRef.current; if (!cy) return;
     const min = typeof cy.minZoom === 'function' ? cy.minZoom() : 0.2;
@@ -482,8 +621,31 @@ export function JffCytoscapeViewer({
     const cy = cyRef.current; if (!cy) return;
     animatedZoomTo(cy.zoom() / 1.2);
   };
-  const fitAll = () => cyRef.current?.animate({ fit: { eles: cyRef.current.elements(), padding: 40 } }, { duration: 160 });
-  const resetHighlight = () => cyRef.current?.elements().removeClass('faded highlighted');
+  const fitAll = () => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    const nodes = cy.nodes();
+    if (nodes.length === 0) return;
+    // Get bounding box of all nodes
+    const bb = nodes.boundingBox();
+    const bbWidth = bb.w + 2 * FIT_PADDING;
+    const bbHeight = bb.h + 2 * FIT_PADDING;
+    // Calculate scale to fit all nodes in viewport
+    const scaleX = cy.width() / bbWidth;
+    const scaleY = cy.height() / bbHeight;
+    const fitZoom = Math.min(scaleX, scaleY, cy.maxZoom ? cy.maxZoom() : 6);
+    // Center point of bounding box
+    const centerX = bb.x1 + bb.w / 2;
+    const centerY = bb.y1 + bb.h / 2;
+    // Animate to fit and center
+    cy.animate({
+      zoom: fitZoom,
+      pan: {
+        x: cy.width() / 2 - centerX * fitZoom,
+        y: cy.height() / 2 - centerY * fitZoom
+      }
+    }, { duration: 160 });
+  };
 
   const downloadSVG = async () => {
     if (!cyRef.current) return;
@@ -518,10 +680,7 @@ export function JffCytoscapeViewer({
     }
   };
 
-  const copyDebug = async () => {
-    const payload = { parsed: debugParsed, elkOptions: debugElk, elements: debugElements };
-    await copyText(JSON.stringify(payload, null, 2));
-  };
+
 
   const TypeBadge = ({ t }: { t: MachineType }) => {
     const label =
@@ -536,12 +695,12 @@ export function JffCytoscapeViewer({
 
   return (
     <div className="w-full rounded-md border bg-white">
-      <div className="flex items-center justify-between gap-2 border-b p-2">
+      <div className="flex items-center justify-between gap-2 border-b p-2 overflow-x-auto">
         <div className="flex items-center gap-2 min-w-0">
           <div className="truncate text-sm font-medium">{title ?? src}</div>
           <TypeBadge t={type} />
         </div>
-        <div className="flex items-center gap-1 flex-wrap">
+        <div className="flex items-center gap-1">
           <Button size="sm" variant={grid ? 'default' : 'outline'} onClick={() => setGrid((s) => !s)} title="Toggle grid">
             <Grid className="mr-2 h-4 w-4" /> Grid
           </Button>
@@ -554,7 +713,7 @@ export function JffCytoscapeViewer({
           <Button size="sm" variant="outline" onClick={zoomIn} title="Zoom in">
             <ZoomIn className="h-4 w-4" />
           </Button>
-          <Button size="sm" variant="outline" onClick={fitAll} title="Fit">
+          <Button size="sm" variant="outline" onClick={() => { onResizeRef.current?.(); }} title="Fit">
             <Maximize2 className="h-4 w-4" />
           </Button>
           <Button size="sm" variant="outline" onClick={downloadSVG} title="Download SVG">
@@ -566,9 +725,7 @@ export function JffCytoscapeViewer({
           <Button size="sm" variant="outline" onClick={copyPNG} title="Copy PNG to clipboard">
             <Copy className="mr-2 h-4 w-4" /> Copy PNG
           </Button>
-          <Button size="sm" variant="outline" onClick={() => setDebugOpen(true)} title="Debug">
-            {'<>'}
-          </Button>
+
         </div>
       </div>
 
@@ -576,35 +733,7 @@ export function JffCytoscapeViewer({
         {error ? <div className="p-4 text-sm text-red-600">{error}</div> : null}
       </div>
 
-      {debugOpen && (
-        <div className="fixed inset-0 z-[100] bg-black/40">
-          <div className="absolute inset-x-0 top-10 mx-auto w-[min(980px,92vw)] rounded-lg bg-white p-4 shadow-lg">
-            <div className="mb-2 flex items-center justify-between">
-              <div className="text-sm font-semibold">Debug</div>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" onClick={copyDebug} title="Copy debug JSON">
-                  <Copy className="mr-1 h-4 w-4" /> Copy
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => setDebugOpen(false)}>Close</Button>
-              </div>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded border p-2">
-                <div className="mb-1 text-xs font-medium text-gray-500">Parsed</div>
-                <pre className="max-h-72 overflow-auto text-xs">{JSON.stringify(debugParsed, null, 2)}</pre>
-              </div>
-              <div className="rounded border p-2">
-                <div className="mb-1 text-xs font-medium text-gray-500">Elements</div>
-                <pre className="max-h-72 overflow-auto text-[11px] leading-4">{JSON.stringify(debugElements, null, 2)}</pre>
-              </div>
-              <div className="rounded border p-2 md:col-span-2">
-                <div className="mb-1 text-xs font-medium text-gray-500">ELK Options</div>
-                <pre className="max-h-64 overflow-auto text-[11px] leading-4">{JSON.stringify(debugElk, null, 2)}</pre>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 }
