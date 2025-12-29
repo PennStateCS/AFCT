@@ -37,7 +37,7 @@ export async function GET(req: Request) {
     // 3. Query users from the database
     const users = await prisma.user.findMany({
       where: role ? { role: role as Role } : undefined,
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ role: 'asc' }, { lastName: 'asc'}],
       select: {
         id: true,
         email: true,
