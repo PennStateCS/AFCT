@@ -8,6 +8,7 @@ import { EditUserDialog } from '@/components/dialogs/EditUserDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/RoleBadge';
+import { roleSortingFn } from '@/lib/role-sorting';
 import { showToast } from '@/lib/toast';
 import { useState } from 'react';
 import {
@@ -21,12 +22,13 @@ import {
 
 type ActionsCellProps = {
   user: User;
-  onChange: () => void; // ✅ callback to refresh data
+  onChange: () => void;
   courseId: string;
+  courseIsArchived: boolean;
   facultyCount?: number;
 };
 
-function ActionsCell({ user, onChange, courseId, facultyCount }: ActionsCellProps) {
+function ActionsCell({ user, onChange, courseId, courseIsArchived, facultyCount }: ActionsCellProps) {
   const [open, setOpen] = useState(false);
 
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -102,11 +104,11 @@ function ActionsCell({ user, onChange, courseId, facultyCount }: ActionsCellProp
                     if (disabled) return;
                     setConfirmOpen(true);
                   }}
-                  disabled={disabled}
+                  disabled={courseIsArchived || disabled}
                   className={`focus:text-red-600 flex items-center gap-2 text-red-600 ${
                     disabled ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
-                  title={disabled ? 'User has submissions for this course and cannot be removed' : undefined}
+                  title={courseIsArchived ? 'Cannot delete user from archived course' : disabled ? 'User has submissions for this course and cannot be removed' : undefined}
                 >
                   <Delete className="mr-2 h-4 w-4" />
                   Drop User
@@ -132,7 +134,7 @@ function ActionsCell({ user, onChange, courseId, facultyCount }: ActionsCellProp
   );
 }
 
-export const userColumns = (onChange: () => void, courseId: string, facultyCount?: number): ColumnDef<User>[] => [
+export const userColumns = (onChange: () => void, courseId: string, courseIsArchived: boolean, facultyCount?: number): ColumnDef<User>[] => [
   {
     id: 'avatar',
     header: '',
@@ -178,10 +180,11 @@ export const userColumns = (onChange: () => void, courseId: string, facultyCount
     accessorKey: 'role',
     header: 'Role',
     cell: ({ row }) => <Badge role={row.original.role} className="w-20" />,
+    sortingFn: roleSortingFn,
   },
   {
     id: 'actions',
     header: '',
-  cell: ({ row }) => <ActionsCell user={row.original} onChange={onChange} courseId={courseId} facultyCount={facultyCount} />,
+  cell: ({ row }) => <ActionsCell user={row.original} onChange={onChange} courseId={courseId} courseIsArchived={courseIsArchived} facultyCount={facultyCount} />,
   },
 ];
