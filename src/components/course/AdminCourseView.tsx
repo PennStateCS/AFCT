@@ -127,7 +127,7 @@ export function AdminCourseView({
             faculty={course.faculty}
             tas={course.tas}
             students={course.students}
-            userColumns={userColumns(onRefreshCourse, course.id, course.faculty?.length ?? 0)}
+            userColumns={userColumns(onRefreshCourse, course.id, course.isArchived, course.faculty?.length ?? 0)}
             onEnrollUser={onEnrollUser}
             onBulkEnroll={onBulkEnroll}
           />

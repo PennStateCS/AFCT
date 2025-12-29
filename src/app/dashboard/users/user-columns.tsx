@@ -1,6 +1,7 @@
 'use client';
 
 import { ColumnDef } from '@tanstack/react-table';
+import { roleSortingFn } from '@/lib/role-sorting';
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { User } from '@prisma/client';
@@ -24,21 +25,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 export function getUserColumns(onUserUpdate: () => void): ColumnDef<User>[] {
-  function formatRole(role: string): string {
-    switch (role) {
-      case 'STUDENT':
-        return 'Student';
-      case 'FACULTY':
-        return 'Faculty';
-      case 'TA':
-        return 'TA';
-      case 'ADMIN':
-        return 'Admin';
-      default:
-        return role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
-    }
-  }
-
   return [
     {
       id: 'avatar',
@@ -87,7 +73,8 @@ export function getUserColumns(onUserUpdate: () => void): ColumnDef<User>[] {
       accessorKey: 'role',
       header: 'Role',
       meta: { priority: 3 },
-      cell: ({ row }) => <Badge role={row.original.role}>{formatRole(row.original.role)}</Badge>,
+      cell: ({ row }) => <Badge role={row.original.role} className="w-20" />,
+      sortingFn: roleSortingFn,
     },
     {
       accessorKey: 'inactive',

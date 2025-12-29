@@ -43,6 +43,7 @@ export function EnrollUserDialog({
 }: EnrollUserDialogProps) {
   const [search, setSearch] = React.useState('');
   const [selectedIdx, setSelectedIdx] = React.useState<number>(-1);
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
 
   const filteredUsers = React.useMemo(() => {
     const q = search.toLowerCase();
@@ -97,11 +98,19 @@ export function EnrollUserDialog({
     }
   };
 
-  // Enroll the user
+  // Enroll the user(s)
   const handleEnroll = (user?: EnrollableUser) => {
-    const userToEnroll = user ?? (selectedIdx >= 0 ? filteredUsers[selectedIdx] : undefined);
-    if (userToEnroll && !courseIsArchived) {
-      onEnroll(userToEnroll);
+    // If a user is passed (single click), enroll just that user
+    if (user && !courseIsArchived) {
+      onEnroll(user);
+      setOpen(false);
+      return;
+    }
+    // Otherwise, enroll all selected users
+    if (selectedIds.size > 0 && !courseIsArchived) {
+      filteredUsers.forEach((u) => {
+        if (selectedIds.has(u.id)) onEnroll(u);
+      });
       setOpen(false);
     }
   };
@@ -137,19 +146,38 @@ export function EnrollUserDialog({
                     ref={(el) => {
                       itemRefs.current[idx] = el;
                     }}
-                    className={`hover:bg-primary/10 flex cursor-pointer items-center gap-2 rounded px-3 py-2 ${
-                      selectedIdx === idx ? 'bg-primary/10' : ''
-                    }`}
-                    onClick={() => handleEnroll(user)}
-                    onMouseEnter={() => setSelectedIdx(idx)}
                   >
-                    <span className="flex flex-1 flex-col">
-                      <span className="text-s">
-                        {user.firstName} {user.lastName}
+                    <label
+                      htmlFor={`enroll-checkbox-${user.id}`}
+                      className={`hover:bg-primary/10 flex cursor-pointer items-center gap-2 rounded px-3 py-2 w-full ${
+                        selectedIdx === idx ? 'bg-primary/10' : ''
+                      }`}
+                      onMouseEnter={() => setSelectedIdx(idx)}
+                      tabIndex={0}
+                    >
+                      <input
+                        id={`enroll-checkbox-${user.id}`}
+                        type="checkbox"
+                        className="mr-2"
+                        checked={selectedIds.has(user.id)}
+                        onChange={(e) => {
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev);
+                            if (e.target.checked) next.add(user.id);
+                            else next.delete(user.id);
+                            return next;
+                          });
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <span className="flex flex-1 flex-col">
+                        <span className="text-s">
+                          {user.firstName} {user.lastName}
+                        </span>
+                        <span className="text-muted-foreground text-xs">{user.email}</span>
                       </span>
-                      <span className="text-muted-foreground text-xs">{user.email}</span>
-                    </span>
-                    <Badge role={user.role}>{roleDisplayNames[user.role] || user.role}</Badge>
+                      <Badge role={user.role}>{roleDisplayNames[user.role] || user.role}</Badge>
+                    </label>
                   </li>
                 ))}
               </ul>
@@ -162,7 +190,11 @@ export function EnrollUserDialog({
               Cancel
             </Button>
           </DialogClose>
-          <Button type="button" onClick={() => handleEnroll()} disabled={selectedIdx < 0 || courseIsArchived}>
+          <Button
+            type="button"
+            onClick={() => handleEnroll()}
+            disabled={selectedIds.size === 0 || courseIsArchived}
+          >
             Enroll
           </Button>
         </DialogFooter>
