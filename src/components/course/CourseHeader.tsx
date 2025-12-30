@@ -38,6 +38,8 @@ export function CourseHeader({
   onArchiveToggle,
 }: CourseHeaderProps) {
   // -- helpers ---------------------------------------------------------------
+  // Get course status tag at the top
+  const { status, bgColor } = require('@/lib/course-status').getCourseStatusTag(course);
   const formatRange = (start?: string | Date | null, end?: string | Date | null) => {
     const toDate = (v?: string | Date | null) =>
       !v ? null : v instanceof Date ? v : new Date(v);
@@ -140,16 +142,11 @@ export function CourseHeader({
               {course.name}
             </CardTitle>
               {/* Course status tag (shared logic) */}
-              {(() => {
-                const { status, bgColor } = require('@/lib/course-status').getCourseStatusTag(course);
-                return (
-                  <span
-                    className={`inline-block rounded ${bgColor} px-2 py-1 text-sm text-white shadow-sm ring-1 ring-gray-900/30`}
-                  >
-                    {status}
-                  </span>
-                );
-              })()}
+              <span
+                className={`inline-block rounded ${bgColor} px-2 py-1 text-sm text-white shadow-sm ring-1 ring-gray-900/30`}
+              >
+                {status}
+              </span>
           </div>
 
           {/* meta row */}

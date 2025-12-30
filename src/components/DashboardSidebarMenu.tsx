@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import useSWR from 'swr';
 import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils';
@@ -75,28 +76,21 @@ function getCoursesForUser(
 export default function DashboardSidebarMenu() {
   const pathname = usePathname();
   const { data: session } = useSession();
-  const [courses, setCourses] = useState<Course[]>([]);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
 
+  // Use SWR for client-side data fetching and revalidation
+  const fetcher = (url: string) => fetch(url).then(res => {
+    if (!res.ok) throw new Error('Failed to fetch courses');
+    return res.json();
+  });
+  const { data: courses = [] } = useSWR<Course[]>('/api/courses', fetcher, {
+    refreshInterval: 6000, // revalidate every 6s
+    revalidateOnFocus: true, // revalidate when window/tab is focused
+  });
+
   const { state } = useSidebar();
   const collapsed = state === 'collapsed';
-
-  // Fetch all courses (used for sidebar display)
-  useEffect(() => {
-    const fetchCourses = async () => {
-      try {
-        const res = await fetch('/api/courses');
-        if (!res.ok) throw new Error('Failed to fetch courses');
-        const data = await res.json();
-        setCourses(data);
-      } catch (err) {
-        console.error('Sidebar fetch error:', err);
-        setCourses([]);
-      }
-    };
-    fetchCourses();
-  }, []);
 
   if (!session?.user) return null;
 
