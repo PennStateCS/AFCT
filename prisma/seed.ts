@@ -168,7 +168,7 @@ async function main() {
       semester: 'Fall 2025',
       credits: 4,
       startDate: new Date('2025-08-15T03:59:00.000Z'),
-      endDate: new Date('2025-12-15T03:59:00.000Z'),
+      endDate: new Date('2026-01-15T03:59:00.000Z'),
       isPublished: true,
       isArchived: false,
     },
