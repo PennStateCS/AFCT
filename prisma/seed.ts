@@ -49,10 +49,10 @@ async function main() {
   });
 
   const faculty3 = await prisma.user.upsert({
-    where: { email: 'faculty1@example.com' },
+    where: { email: 'faculty3@example.com' },
     update: {},
     create: {
-      email: 'faculty1@example.com',
+      email: 'faculty3@example.com',
       firstName: 'Clark',
       lastName: 'Kent',
       password: hashedPassword,
@@ -657,17 +657,32 @@ async function main() {
     },
   });
 
+  // Count entities for scalable logging
+  const userCount = await prisma.user.count();
+  const adminCount = await prisma.user.count({ where: { role: 'ADMIN' } });
+  const facultyCount = await prisma.user.count({ where: { role: 'FACULTY' } });
+  const taCount = await prisma.user.count({ where: { role: 'TA' } });
+  const studentCount = await prisma.user.count({ where: { role: 'STUDENT' } });
+  const courseCount = await prisma.course.count();
+  const problemCount = await prisma.problem.count();
+  const assignmentCount = await prisma.assignment.count();
+  const rosterCount = await prisma.roster.count();
+  const assignmentProblemCount = await prisma.assignmentProblem.count();
+  const commentCount = await prisma.comment.count();
+
   console.log('Database seeded successfully!');
-  console.log(`Created:`);
-  console.log(`- 1 Admin user`);
-  console.log(`- 3 Faculty users`);
-  console.log(`- 2 TA users`);
-  console.log(`- ${students.length} Student users`);
-  console.log(`- 2 Courses`);
-  console.log(`- 2 Problems`);
-  console.log(`- 3 Assignments`);
-  console.log(`- Course roster memberships`);
-  console.log(`- Assignment-Problem linkages`);
+  console.log('Created:');
+  console.log(`- ${adminCount} Admin user(s)`);
+  console.log(`- ${facultyCount} Faculty user(s)`);
+  console.log(`- ${taCount} TA user(s)`);
+  console.log(`- ${studentCount} Student user(s)`);
+  console.log(`- ${userCount} Total user(s)`);
+  console.log(`- ${courseCount} Course(s)`);
+  console.log(`- ${problemCount} Problem(s)`);
+  console.log(`- ${assignmentCount} Assignment(s)`);
+  console.log(`- ${rosterCount} Course roster membership(s)`);
+  console.log(`- ${assignmentProblemCount} Assignment-Problem linkage(s)`);
+  console.log(`- ${commentCount} Comment(s)`);
 }
 
 main()
