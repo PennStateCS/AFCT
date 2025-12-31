@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canArchiveCourse, canUnpublishCourse } from '@/lib/course-status-checks';
 
 // GET: Fetch a course by ID with full metadata
 export async function GET(_: Request, context: { params: Promise<{ id: string }> }) {
@@ -142,11 +143,29 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
   const session = await auth();
   const user = session?.user;
 
-  if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+  // Allow only ADMIN or FACULTY to toggle archive status
+  if (!user || !['ADMIN', 'FACULTY'].includes(user.role)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
+  // Parse request
   const body = await req.json();
+
+  // Centralized check for archiving
+  if (body.isArchived) {
+    const { canArchive, reason } = await canArchiveCourse(prisma, body.courseId, body.startDate, body.endDate);
+    if (!canArchive) {
+      return NextResponse.json({ error: reason }, { status: 403 });
+    }
+  }
+
+  // Centralized check for unpublishing
+  if (!body.isPublished) {
+    const { canUnpublish, reason } = await canUnpublishCourse(prisma, body.courseId);
+    if (!canUnpublish) {
+      return NextResponse.json({ error: reason }, { status: 403 });
+    }
+  }
 
   try {
     // Update the course
