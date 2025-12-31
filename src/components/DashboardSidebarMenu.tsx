@@ -225,11 +225,11 @@ export default function DashboardSidebarMenu() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Archived Courses */}
+        { /* Course Displays */ }
         <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground text-sm">            The Archive
-          </SidebarGroupLabel>
+          <SidebarGroupLabel className="text-sidebar-foreground text-sm">Course Displays</SidebarGroupLabel>
           <SidebarMenu>
+            { /* The Archive */ }
             <SidebarMenuItem>
               <TooltipProvider delayDuration={100}>
                 <Tooltip open={collapsed ? undefined : false}>
@@ -263,15 +263,8 @@ export default function DashboardSidebarMenu() {
                 </Tooltip>
               </TooltipProvider>
             </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarGroup>
 
-        {/* All Courses */}
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground text-sm">
-            All Courses
-          </SidebarGroupLabel>
-          <SidebarMenu>
+            {/* All Courses */}
             <SidebarMenuItem>
               <TooltipProvider delayDuration={100}>
                 <Tooltip open={collapsed ? undefined : false}>
