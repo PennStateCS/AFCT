@@ -160,9 +160,8 @@ export default function DuplicateCourseDialog({ open, setOpen, course, onSuccess
               )} />
 
               <Controller control={control} name="endDate" render={({ field }) => (
-                <InputGroup label="End Date & Time" name="endDate" type="datetime-local" isValid={!field.value} fieldProps={{ ...field, value: field.value ?? '' }} error={errors.endDate?.message as string | undefined} min={startDateStr || undefined}/>
+                <InputGroup label="End Date & Time" name="endDate" type="datetime-local" isValid={!field.value} fieldProps={{ ...field, value: field.value ?? '' }} error={errors.endDate?.message as string | undefined} min={startDateStr || undefined} />
               )} />
-
             </>
           )}
 

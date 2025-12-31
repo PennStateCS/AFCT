@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canArchiveCourse } from '@/lib/course-status-checks';
 
 export async function PATCH(
   req: Request,
@@ -30,42 +31,11 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    // Check if the course is in session
-    const inSession = new Date(startDate) <= new Date() && new Date() <= new Date(endDate);
-
-    // Check archiving conditions if archiniving
-    if (isArchived && inSession) { // Note logic appears swapped for isArchived, but that is because isArchived is the next state
-      // Get info to make sure no student submissions and no student grades exist
-      const hasSubmission = await prisma.submission.findFirst({
-        where: {
-          assignmentProblem: {
-            assignment: {
-              courseId: courseId,
-            },
-          },
-        },
-        select: { id: true },
-      });
-      
-      const hasGrade = await prisma.assignmentGrade.findFirst({
-        where: {
-          assignment: {
-            courseId: courseId,
-          },
-        },
-        select: { id: true },
-      });
-
-      const atLeastOneSubmission = !!hasSubmission;
-      const atLeastOneGrade = !!hasGrade;
-
-      if (atLeastOneSubmission) {
-        return NextResponse.json({ error: 'Course must not have any submitted problems or not in session to archive' }, { status: 403 });
-      }
-
-      if (atLeastOneGrade) {
-        console.log(atLeastOneGrade)
-        return NextResponse.json({ error: 'Course must not have any graded assignments or not in session to archive' }, { status: 403 });
+    // Centralized check for archiving
+    if (isArchived) {
+      const { canArchive, reason } = await canArchiveCourse(prisma, courseId, startDate, endDate);
+      if (!canArchive) {
+        return NextResponse.json({ error: reason }, { status: 403 });
       }
     }
 
