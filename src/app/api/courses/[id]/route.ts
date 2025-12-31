@@ -151,9 +151,14 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
   // Parse request
   const body = await req.json();
 
+  // Validate input
+  if (typeof body.isArchived !== 'boolean') {
+    return NextResponse.json({ error: 'isArchived must be a boolean' }, { status: 400 });
+  }
+
   // Centralized check for archiving
   if (body.isArchived) {
-    const { canArchive, reason } = await canArchiveCourse(prisma, body.courseId, body.startDate, body.endDate);
+    const { canArchive, reason } = await canArchiveCourse(prisma, id, body.startDate, body.endDate);
     if (!canArchive) {
       return NextResponse.json({ error: reason }, { status: 403 });
     }
@@ -161,7 +166,7 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
 
   // Centralized check for unpublishing
   if (!body.isPublished) {
-    const { canUnpublish, reason } = await canUnpublishCourse(prisma, body.courseId);
+    const { canUnpublish, reason } = await canUnpublishCourse(prisma, id);
     if (!canUnpublish) {
       return NextResponse.json({ error: reason }, { status: 403 });
     }
