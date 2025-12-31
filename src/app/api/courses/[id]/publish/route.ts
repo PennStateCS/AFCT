@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canUnpublishCourse } from '@/lib/course-status-checks';
 
 export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
   try {
@@ -27,39 +28,11 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    // Check publishing conditions if publishing
-    if (!isPublished) { // Note logic appears swapped, but that is because isPublished is the next state
-      // Get info to make sure no student submissions and no student grades exist
-      const hasSubmission = await prisma.submission.findFirst({
-        where: {
-          assignmentProblem: {
-            assignment: {
-              courseId: courseId,
-            },
-          },
-        },
-        select: { id: true },
-      });
-      
-      const hasGrade = await prisma.assignmentGrade.findFirst({
-        where: {
-          assignment: {
-            courseId: courseId,
-          },
-        },
-        select: { id: true },
-      });
-
-      const atLeastOneSubmission = !!hasSubmission;
-      const atLeastOneGrade = !!hasGrade;
-
-      if (atLeastOneSubmission) {
-        return NextResponse.json({ error: 'Course must not have any submitted problems to unpublish' }, { status: 403 });
-      }
-
-      if (atLeastOneGrade) {
-        console.log(atLeastOneGrade)
-        return NextResponse.json({ error: 'Course must not have any graded assignments to unpublish' }, { status: 403 });
+    // Centralized check for unpublishing
+    if (!isPublished) {
+      const { canUnpublish, reason } = await canUnpublishCourse(prisma, courseId);
+      if (!canUnpublish) {
+        return NextResponse.json({ error: reason }, { status: 403 });
       }
     }
      
