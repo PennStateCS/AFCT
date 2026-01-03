@@ -34,7 +34,7 @@ import {
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-import { Archive, Library, Book, Users, UserRound, LogOut, LockKeyhole, UserPen, ChevronUp, BookPlus } from 'lucide-react';
+import { Archive, Calendar, Library, Book, Users, UserRound, LogOut, LockKeyhole, UserPen, ChevronUp, BookPlus } from 'lucide-react';
 
 type Course = {
   id: string;
@@ -221,6 +221,43 @@ export default function DashboardSidebarMenu() {
                   </TooltipProvider>
                 </SidebarMenuItem>
               ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Features */}
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-sidebar-foreground text-sm">Features</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem key="features-calendar">
+                <TooltipProvider delayDuration={100}>
+                  <Tooltip open={collapsed ? undefined : false}>
+                    <TooltipTrigger asChild>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={pathname === "/dashboard/calendar"}
+                        className={cn(
+                          'hover:bg-secondary focus:bg-secondary text-sidebar-foreground',
+                          'data-[active=true]:bg-secondary',
+                        )}
+                      >
+                        <Link href="/dashboard/calendar" className="flex min-w-0 items-center gap-2">
+                          <Calendar className="h-4 w-4 shrink-0" />
+                          <span className="overflow-hidden text-ellipsis whitespace-nowrap">Calendar</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="right"
+                      className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
+                      sideOffset={10}
+                    >
+                      Calendar
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
