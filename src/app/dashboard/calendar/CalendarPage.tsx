@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import useVisibleItemCount from '@/hooks/useVisibleItemCount';
 import { Calendar } from "@/components/ui/calendar";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -95,6 +96,11 @@ export default function CalendarPage() {
                 const dayAssignments = (assignmentsByDate[dateStr] || [])
                   .slice()
                   .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+
+                // Ref and state to compute how many of the first few assignment links fit without overflowing
+                const dayContentRef = useRef<HTMLDivElement | null>(null);
+                const visibleCount = useVisibleItemCount(dayContentRef, dayAssignments.length, { conservativeMargin: 10, sampleText: dayAssignments[0]?.title });
+
                 return (
                   <div
                     role="button"
@@ -115,21 +121,21 @@ export default function CalendarPage() {
                     className="w-full grid grid-rows-[auto_1fr] min-w-0 min-h-0 border border-gray-400/60 bg-white dark:bg-neutral-900 dark:border-neutral-700 overflow-hidden box-border"
                     style={{ aspectRatio: '1 / 1' }}
                   >
-                    <span className="grid p-1 select-none">{props.day.date.getDate()}</span>
-                    <div onClick={() => openDayDialog(new Date(props.day.date.getFullYear(), props.day.date.getMonth(), props.day.date.getDate()), dayAssignments)} className="grid content-start gap-1 w-full p-1 overflow-hidden min-h-0 min-w-0 cursor-default">
-                      {dayAssignments.slice(0, 3).map((a: any) => (
+                    <span className="grid p-1 select-none text-xs">{props.day.date.getDate()}</span>
+                    <div ref={dayContentRef} onClick={() => openDayDialog(new Date(props.day.date.getFullYear(), props.day.date.getMonth(), props.day.date.getDate()), dayAssignments)} className="grid content-start gap-1 w-full p-1 overflow-hidden min-h-0 min-w-0 cursor-default">
+                      {dayAssignments.slice(0, visibleCount).map((a: any) => (
                         <Link
                           key={a.id}
                           href={`/dashboard/courses/${a.courseId}/assignments/${a.id}`}
-                          className="block w-full min-w-0 box-border bg-sky-700 hover:bg-sky-800 dark:bg-sky-600 dark:hover:bg-sky-700 text-left text-white text-xs rounded py-0.5 pl-1 truncate whitespace-nowrap overflow-hidden leading-tight cursor-pointer"
+                          className="assignment-link block w-full min-w-0 min-h-[1rem] box-border bg-sky-700 hover:bg-sky-800 dark:bg-sky-600 dark:hover:bg-sky-700 text-left text-white text-xs rounded py-0.5 pl-1 truncate whitespace-nowrap overflow-hidden leading-tight cursor-pointer"
                           title={`${a.course?.code ?? a.courseName ?? ''} - ${a.title}`}
                           onClick={(e:any) => e.stopPropagation()}
                         >
                           {`${a.course?.code ?? a.courseName ?? ''} - ${a.title}`}
                         </Link>
                       ))}
-                      {dayAssignments.length > 3 && (
-                        <div className="w-2 h-2 bg-blue-500 rounded-full justify-self-start"></div>
+                      {dayAssignments.length > visibleCount && (
+                        <div aria-hidden={true} className="w-2 h-2 bg-blue-500 rounded-full justify-self-center self-center"></div>
                       )}
                     </div>
                   </div>
