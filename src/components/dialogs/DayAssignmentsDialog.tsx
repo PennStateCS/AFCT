@@ -78,10 +78,10 @@ export default function DayAssignmentsDialog({ open, onOpenChange, date, assignm
 
         <DialogFooter className="grid grid-cols-2 items-center w-full gap-2">
           <div className="flex items-center gap-2">
-            <Button size="sm" onClick={handlePrev} aria-label="Previous day" disabled={!parsedDate} className="bg-sky-800 text-white hover:bg-sky-900">
+            <Button size="sm" variant="default" onClick={handlePrev} aria-label="Previous day" disabled={!parsedDate}>
               <ChevronLeft className="w-4 h-4" />
             </Button>
-            <Button size="sm" onClick={handleNext} aria-label="Next day" disabled={!parsedDate} className="bg-sky-800 text-white hover:bg-sky-900">
+            <Button size="sm" variant="default" onClick={handleNext} aria-label="Next day" disabled={!parsedDate}>
               <ChevronRight className="w-4 h-4" />
             </Button>
           </div>
