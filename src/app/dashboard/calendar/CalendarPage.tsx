@@ -79,6 +79,15 @@ export default function CalendarPage() {
     assignmentsByDate[dateStr].push(a);
   });
 
+  // Navigate to a different day in the dialog (previous/next)
+  const navigateDay = (date: Date) => {
+    const key = localDateKey(date);
+    const dayAssignments = assignmentsByDate[key] || [];
+    setDialogDate(date);
+    setDialogAssignments(dayAssignments);
+    setDayDialogOpen(true);
+  };
+
   return (
     <div className="flex flex-col items-center justify-start min-h-screen overflow-hidden bg-white">
       <h1 className="text-2xl font-bold p-4">Calendar</h1>
@@ -151,6 +160,7 @@ export default function CalendarPage() {
         date={dialogDate}
         assignments={dialogAssignments}
         onClose={closeDayDialog}
+        onNavigate={navigateDay}
       />
     </div>
   );
