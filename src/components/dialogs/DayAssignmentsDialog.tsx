@@ -43,7 +43,7 @@ export default function DayAssignmentsDialog({ open, onOpenChange, date, assignm
               {assignments.map((a: any) => (
                 <li key={a.id}>
                   <Link
-                    href={`/dashboard/courses/${a.courseId}/assignments/${a.id}`}
+                    href={`/dashboard/courses/${a.courseId}/${a.id}`}
                     className="block w-full bg-sky-700 hover:bg-sky-800 dark:bg-sky-600 dark:hover:bg-sky-700 text-white rounded-md p-3 cursor-pointer"
                     title={`${a.course?.code ?? a.courseName ?? ''} - ${a.title}`}
                     onClick={() => { onClose?.(); }}
