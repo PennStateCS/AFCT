@@ -41,7 +41,7 @@ type Comment = {
 };
 
 export default function StudentAssignmentPage() {
-  const { id } = useParams();
+  const { id, aid } = useParams();
   const { data: session } = useSession();
   const router = useRouter();
   const [assignment, setAssignment] = useState<AssignmentWithDetails | null>(null);
@@ -208,7 +208,7 @@ export default function StudentAssignmentPage() {
   useEffect(() => {
     const fetchAssignment = async () => {
       try {
-        const res = await fetch(`/api/assignments/${id}`);
+        const res = await fetch(`/api/assignments/${aid}`);
         if (!res.ok) {
           if (res.status === 404) {
             console.error('Assignment not found - Response:', await res.text());
@@ -229,11 +229,11 @@ export default function StudentAssignmentPage() {
     };
 
     const fetchStudentData = async () => {
-      if (!isStudent || !id) return;
+      if (!isStudent || !aid) return;
       
       try {
         // Fetch assignment grade if available
-        const gradeResponse = await fetch(`/api/assignments/${id}/grade?userId=${session?.user?.id}`);
+        const gradeResponse = await fetch(`/api/assignments/${aid}/grade?userId=${session?.user?.id}`);
         if (gradeResponse.ok) {
           const gradeData = await gradeResponse.json();
           setAssignmentGrade(gradeData.grade);
@@ -246,13 +246,13 @@ export default function StudentAssignmentPage() {
         // Fallback to mock data
         setAssignmentGrade(85);
       }
-    };
+    }; 
 
-    if (id && session) {
+    if (aid && session) {
       fetchAssignment();
       fetchStudentData();
     }
-  }, [id, router, session, isStudent]);
+  }, [aid, router, session, isStudent]);
 
   // Load real comments and submissions when assignment is available
   useEffect(() => {

@@ -32,7 +32,7 @@ export function StudentCourseView({ course }: StudentCourseViewProps) {
                     <div 
                       key={assignment.id} 
                       className="group border-border bg-card flex h-full cursor-pointer overflow-hidden rounded-lg border shadow transition-all hover:bg-gray-50 hover:shadow-md"
-                      onClick={() => router.push(`/dashboard/assignments/${assignment.id}`)}
+                      onClick={() => router.push(`/dashboard/courses/${course.id}/${assignment.id}`)}
                     >
                       {/* Vertical colored bar - blue for assignments */}
                       <div className="w-[15px] bg-primary" />
