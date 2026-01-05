@@ -1,6 +1,7 @@
 "use client"
 
 import Link from 'next/link'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -18,21 +19,38 @@ type Props = {
   date?: string | Date | null
   assignments: any[]
   onClose?: () => void
+  onNavigate?: (date: Date) => void
 }
 
-export default function DayAssignmentsDialog({ open, onOpenChange, date, assignments, onClose }: Props) {
+export default function DayAssignmentsDialog({ open, onOpenChange, date, assignments, onClose, onNavigate }: Props) {
   // Use the provided `date` prop directly. If it's a string, fall back to `new Date(date)`.
   const parsedDate = date instanceof Date ? date : (date ? new Date(date) : undefined);
+
+  const handlePrev = () => {
+    if (!parsedDate) return;
+    const prev = new Date(parsedDate);
+    prev.setDate(prev.getDate() - 1);
+    onNavigate?.(prev);
+  };
+
+  const handleNext = () => {
+    if (!parsedDate) return;
+    const next = new Date(parsedDate);
+    next.setDate(next.getDate() + 1);
+    onNavigate?.(next);
+  };
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose?.(); onOpenChange(o); }}>
       <DialogContent className="bg-card max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{parsedDate ? `${parsedDate.toLocaleDateString()}` : 'Assignments'}</DialogTitle>
-          {parsedDate && (
-            <div className="text-sm text-muted-foreground">{parsedDate.toLocaleDateString(undefined, { weekday: 'long' })}</div>
-          )}
-          <DialogDescription className="truncate text-sm text-muted-foreground mt-1">{assignments.length} assignment{assignments.length !== 1 ? 's' : ''}</DialogDescription>
+        <DialogHeader className="flex items-start justify-between gap-4">
+          <div>
+            <DialogTitle>{parsedDate ? `${parsedDate.toLocaleDateString()}` : 'Assignments'}</DialogTitle>
+            {parsedDate && (
+              <div className="text-sm text-muted-foreground">{parsedDate.toLocaleDateString(undefined, { weekday: 'long' })}</div>
+            )}
+            <DialogDescription className="truncate text-sm text-muted-foreground mt-1">{assignments.length} assignment{assignments.length !== 1 ? 's' : ''}</DialogDescription>
+          </div>
         </DialogHeader>
 
         <div className="mt-2">
@@ -58,10 +76,20 @@ export default function DayAssignmentsDialog({ open, onOpenChange, date, assignm
           )}
         </div>
 
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button type="button" variant="secondary">Close</Button>
-          </DialogClose>
+        <DialogFooter className="grid grid-cols-2 items-center w-full gap-2">
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={handlePrev} aria-label="Previous day" disabled={!parsedDate} className="bg-sky-800 text-white hover:bg-sky-900">
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <Button size="sm" onClick={handleNext} aria-label="Next day" disabled={!parsedDate} className="bg-sky-800 text-white hover:bg-sky-900">
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+          <div className="justify-self-end">
+            <DialogClose asChild>
+              <Button type="button" variant="secondary">Close</Button>
+            </DialogClose>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
