@@ -23,6 +23,7 @@ import InputGroup from '@/components/ui/InputGroup';
 import { UploadCloud, Trash2 } from 'lucide-react';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
@@ -41,6 +42,8 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
   const [avatarPreview, setAvatarPreview] = useState<string>(
     user.avatar ? `/uploads/pfps/${user.avatar}` : '/uploads/pfps/default-avatar.png',
   );
+
+  const { data: session } = useSession();
 
   // RHF defaults – email is read-only so it isn't in the schema
   const defaults: UpdateUserRaw = useMemo(
@@ -280,27 +283,31 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
             />
           </div>
 
-          {/* Role */}
+          {/* Role (global) - only visible to ADMIN */}
           <Controller
             control={control}
             name="role"
-            render={({ field }) => (
-              <div>
-                <label className="mb-2 block text-sm font-medium">Role</label>
-                <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v)}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select a role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ADMIN">Admin</SelectItem>
-                    <SelectItem value="FACULTY">Faculty</SelectItem>
-                    <SelectItem value="TA">TA</SelectItem>
-                    <SelectItem value="STUDENT">Student</SelectItem>
-                  </SelectContent>
-                </Select>
-                {errors.role && <p className="mt-1 text-xs text-red-600">{errors.role.message}</p>}
-              </div>
-            )}
+            render={({ field }) => {
+              const { data: session } = useSession();
+              if (session?.user?.role !== 'ADMIN') return <></>;
+              return (
+                <div>
+                  <label className="mb-2 block text-sm font-medium">Role</label>
+                  <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select a role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ADMIN">Admin</SelectItem>
+                      <SelectItem value="FACULTY">Faculty</SelectItem>
+                      <SelectItem value="TA">TA</SelectItem>
+                      <SelectItem value="STUDENT">Student</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {errors.role && <p className="mt-1 text-xs text-red-600">{errors.role.message}</p>}
+                </div>
+              );
+            }}
           />
 
           {/* Inactive */}

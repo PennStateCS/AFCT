@@ -24,8 +24,9 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const isAdmin = ['ADMIN', 'FACULTY', 'TA'].includes(currentUser.role);
-    if (!isAdmin && currentUser.id !== userId) {
+    const isAdminOnly = currentUser.role === 'ADMIN';
+    const canEdit = isAdminOnly || currentUser.id === userId || ['FACULTY','TA'].includes(currentUser.role);
+    if (!canEdit) {
       console.warn(`[PATCH] Forbidden: ${currentUser.id} tried to update user ${userId}`);
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -125,7 +126,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       lastName: lastName ?? undefined,
       avatar: avatarFilename !== undefined ? avatarFilename : undefined,
     };
-    if (isAdmin) {
+    if (isAdminOnly) {
       dataToUpdate.role = (role as Role) ?? undefined;
       dataToUpdate.inactive = inactive ?? undefined;
     }

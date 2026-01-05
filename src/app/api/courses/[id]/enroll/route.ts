@@ -31,7 +31,22 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
   }
 
   try {
-    // Upsert the user into the course roster as STUDENT (always)
+    // Map global role to course role
+    const mapRole = (r: string | null | undefined) => {
+        switch (r) {
+        case 'FACULTY':
+        case 'ADMIN':
+          return 'FACULTY';
+        case 'TA':
+          return 'TA';
+        default:
+          return 'STUDENT';
+      }
+    };
+
+    // Upsert the user into the course roster inheriting their global role
+    const roleToAssign = mapRole(user.role);
+
     await prisma.roster.upsert({
       where: {
         courseId_userId: {
@@ -42,10 +57,10 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
       create: {
         courseId,
         userId,
-        role: 'STUDENT',
+        role: roleToAssign,
       },
       update: {
-        role: 'STUDENT',
+        role: roleToAssign,
       },
     });
 
@@ -62,7 +77,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
         userId: actingUser?.id,
         courseId: courseId,
         enrolledUserId: userId,
-        role: 'STUDENT',
+        role: roleToAssign,
       },
     });
 
