@@ -126,7 +126,7 @@ export default function CalendarPage() {
                       {dayAssignments.slice(0, visibleCount).map((a: any) => (
                         <Link
                           key={a.id}
-                          href={`/dashboard/courses/${a.courseId}/assignments/${a.id}`}
+                          href={`/dashboard/courses/${a.courseId}/${a.id}`}
                           className="assignment-link block w-full min-w-0 min-h-[1rem] box-border bg-sky-700 hover:bg-sky-800 dark:bg-sky-600 dark:hover:bg-sky-700 text-left text-white text-xs rounded py-0.5 pl-1 truncate whitespace-nowrap overflow-hidden leading-tight cursor-pointer"
                           title={`${a.course?.code ?? a.courseName ?? ''} - ${a.title}`}
                           onClick={(e:any) => e.stopPropagation()}
