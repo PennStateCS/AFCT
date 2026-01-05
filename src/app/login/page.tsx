@@ -193,17 +193,17 @@ export default function LoginPage() {
           <span className="mb-2 text-xs font-semibold text-gray-600 dark:text-gray-300">
             Test Logins
           </span>
-          {['faculty', 'student', 'admin', 'TA'].map((role) => (
+          {['admin', 'faculty', 'ta', 'student'].map((role) => (
             <button
               key={role}
               className={`rounded px-3 py-1 text-xs font-medium transition ${
-                role === 'faculty'
-                  ? 'bg-blue-100 text-blue-900 hover:bg-blue-200'
-                  : role === 'student'
-                    ? 'bg-green-100 text-green-900 hover:bg-green-200'
-                    : role === 'admin'
-                      ? 'bg-purple-100 text-purple-900 hover:bg-purple-200'
-                      : 'bg-yellow-100 text-yellow-900 hover:bg-yellow-200'
+                role === 'admin'
+                  ? 'bg-red-100 text-red-900 border border-red-900 hover:bg-red-200'
+                  : role === 'faculty'
+                    ? 'bg-blue-100 text-blue-900 border border-blue-900 hover:bg-blue-200'
+                    : role === 'ta'
+                      ? 'bg-slate-100 text-slate-900 border border-slate-900 hover:bg-slate-200'
+                      : 'bg-green-100 text-green-900 border border-green-900 hover:bg-green-200'
               }`}
               onClick={() => {
                 setLoginEmail(`${role}@example.com`);
@@ -212,7 +212,7 @@ export default function LoginPage() {
                 setTimeout(() => document.getElementById('login-email')?.focus(), 10);
               }}
             >
-              {role.charAt(0).toUpperCase() + role.slice(1)}
+              {role === 'ta' ? 'TA' : role.charAt(0).toUpperCase() + role.slice(1)}
             </button>
           ))}
         </div>

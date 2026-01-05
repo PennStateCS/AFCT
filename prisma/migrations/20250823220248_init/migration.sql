@@ -2,7 +2,7 @@
 CREATE TYPE "public"."Role" AS ENUM ('ADMIN', 'FACULTY', 'TA', 'STUDENT');
 
 -- CreateEnum
-CREATE TYPE "public"."CourseRole" AS ENUM ('ADMIN', 'FACULTY', 'TA', 'STUDENT');
+CREATE TYPE "public"."CourseRole" AS ENUM ('COURSE_ADMIN', 'FACULTY', 'TA', 'STUDENT');
 
 -- CreateEnum
 CREATE TYPE "public"."ProblemType" AS ENUM ('PDA', 'RE', 'CFG', 'FA');

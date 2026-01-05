@@ -48,9 +48,9 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
-    // Group roster users by role
-    const faculty = course.roster.filter((r) => r.role === 'FACULTY').map((r) => r.user);
-    const tas = course.roster.filter((r) => r.role === 'TA').map((r) => r.user);
+    // Group roster users by role and attach course role into the user object
+    const faculty = course.roster.filter((r) => r.role === 'FACULTY').map((r) => ({ ...r.user, role: r.role }));
+    const tas = course.roster.filter((r) => r.role === 'TA').map((r) => ({ ...r.user, role: r.role }));
     // For students, compute whether they have any submissions for this course
     const studentRoster = course.roster.filter((r) => r.role === 'STUDENT');
     const students = await Promise.all(
@@ -69,7 +69,7 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
           });
           hasSubmissions = !!found;
         }
-        return { ...user, hasSubmissions };
+        return { ...user, hasSubmissions, role: r.role };
       }),
     );
 
@@ -106,7 +106,17 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
 
   const problemsWithLink = course.problems.map((p) => ({ ...p, usedByAssignment: linkedSet.has(p.id) }));
 
-  return NextResponse.json({
+    // Determine viewer's course role if authenticated
+    const session = await auth();
+    let viewerRole: string | null = null;
+    let viewerDefaultRole: string | null = null;
+    if (session?.user) {
+      const viewerRoster = await prisma.roster.findFirst({ where: { courseId: course.id, userId: session.user.id }, select: { role: true } });
+      viewerRole = viewerRoster?.role ?? null;
+      viewerDefaultRole = session.user.role ?? null;
+    }
+
+    return NextResponse.json({
       id: course.id,
       name: course.name,
       code: course.code,
@@ -119,11 +129,13 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
       isArchived: course.isArchived,
       createdAt: course.createdAt,
       updatedAt: course.updatedAt,
-  faculty,
-  tas,
-  students,
-  problems: problemsWithLink,
+      faculty,
+      tas,
+      students,
+      problems: problemsWithLink,
       assignments: assignmentsWithProblemCount,
+      viewerRole,
+      viewerDefaultRole,
     });
   } catch (error) {
     console.error('GET /api/courses/[id] error:', error);
@@ -214,9 +226,9 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
     });
 
     // Group roster users by role
-    const faculty = updatedCourse.roster.filter((r) => r.role === 'FACULTY').map((r) => r.user);
-    const tas = updatedCourse.roster.filter((r) => r.role === 'TA').map((r) => r.user);
-    const students = updatedCourse.roster.filter((r) => r.role === 'STUDENT').map((r) => r.user);
+    const faculty = updatedCourse.roster.filter((r) => r.role === 'FACULTY').map((r) => ({ ...r.user, role: r.role }));
+    const tas = updatedCourse.roster.filter((r) => r.role === 'TA').map((r) => ({ ...r.user, role: r.role }));
+    const students = updatedCourse.roster.filter((r) => r.role === 'STUDENT').map((r) => ({ ...r.user, role: r.role }));
 
     // Attach problem counts to assignments
     const assignmentsWithProblemCount = await Promise.all(
@@ -256,6 +268,16 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
       },
     });
 
+    // Determine viewer's course role if authenticated
+    const session = await auth();
+    let viewerRole: string | null = null;
+    let viewerDefaultRole: string | null = null;
+    if (session?.user) {
+      const viewerRoster = await prisma.roster.findFirst({ where: { courseId: updatedCourse.id, userId: session.user.id }, select: { role: true } });
+      viewerRole = viewerRoster?.role ?? null;
+      viewerDefaultRole = session.user.role ?? null;
+    }
+
     return NextResponse.json({
       id: updatedCourse.id,
       name: updatedCourse.name,
@@ -274,6 +296,8 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
       students,
       problems: updatedCourse.problems,
       assignments: assignmentsWithProblemCount,
+      viewerRole,
+      viewerDefaultRole,
     });
   } catch (error) {
     console.error('PUT /api/courses/[id] error:', error);
