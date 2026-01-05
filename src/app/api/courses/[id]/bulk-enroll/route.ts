@@ -19,15 +19,33 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const userIds: string[] = (body?.userIds ?? []).map((s: string) => String(s)).filter(Boolean);
     if (!userIds.length) return NextResponse.json({ message: 'No users provided' }, { status: 400 });
 
-    // Enroll all users in a transaction
+    // Map global role to course role
+    const mapRole = (r: string | null | undefined) => {
+      switch (r) {
+        case 'FACULTY':
+        case 'ADMIN':
+          return 'FACULTY';
+        case 'TA':
+          return 'TA';
+        default:
+          return 'STUDENT';
+      }
+    };
+
+    // Fetch all users to get their global roles in a single query
+    const users = await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, role: true } });
+    const roleMap = new Map(users.map(u => [u.id, mapRole(u.role)]));
+
+    // Enroll all users in a transaction using their inherited roles
     await prisma.$transaction(async (tx) => {
       for (const uid of userIds) {
+        const roleToAssign = roleMap.get(uid) ?? 'STUDENT';
         const existing = await tx.roster.findFirst({ where: { courseId, userId: uid } });
         if (existing) {
-          // update to student to be consistent
-          await tx.roster.update({ where: { id: existing.id }, data: { role: 'STUDENT' } });
+          // update role to inherited role
+          await tx.roster.update({ where: { id: existing.id }, data: { role: roleToAssign } });
         } else {
-          await tx.roster.create({ data: { courseId, userId: uid, role: 'STUDENT' } });
+          await tx.roster.create({ data: { courseId, userId: uid, role: roleToAssign } });
         }
       }
     });
@@ -45,7 +63,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         enrolledCount: userIds.length,
       },
     });
-
     return NextResponse.json({ success: true, enrolled: userIds.length }, { status: 200 });
   } catch (err) {
     console.error('bulk-enroll error', err);

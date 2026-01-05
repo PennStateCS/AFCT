@@ -11,6 +11,10 @@ export type FullCourse = Course & {
   students: User[];
   assignments: AssignmentWithProblemCount[];
   problems: Problem[];
+  // viewer's role in this course (COURSE_ADMIN | FACULTY | TA | STUDENT) or null
+  viewerRole?: string | null;
+  // viewer's global default role (ADMIN | FACULTY | TA | STUDENT) or null
+  viewerDefaultRole?: string | null;
 };
 
 export type DeleteTarget = {

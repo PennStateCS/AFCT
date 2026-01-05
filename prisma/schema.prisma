@@ -15,7 +15,7 @@ enum Role {
 }
 
 enum CourseRole {
-  ADMIN
+  COURSE_ADMIN
   FACULTY
   TA
   STUDENT
