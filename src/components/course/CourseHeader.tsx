@@ -19,6 +19,7 @@ import {
   Layers as DuplicateIcon,
 } from 'lucide-react';
 import type { FullCourse } from '@/types/course';
+import { formatInstructorNames, getStudentCount } from '@/lib/course-utils';
 
 interface CourseHeaderProps {
   course: FullCourse;
@@ -77,15 +78,13 @@ export function CourseHeader({
     }
   };
 
-  const facultyNames =
-    course.faculty.length > 0
-      ? course.faculty.map((f) => `${f.firstName ?? ''} ${f.lastName ?? ''}`.trim()).join(', ')
-      : 'None assigned';
+  const enrolled = course.enrolled ?? [];
+  // Use helpers for clarity and reuse
+  const facultyNames = formatInstructorNames(enrolled as any);
 
-  const taNames =
-    course.tas.length > 0
-      ? course.tas.map((t) => `${t.firstName ?? ''} ${t.lastName ?? ''}`.trim()).join(', ')
-      : 'None assigned';
+  const taNames = (enrolled as any[]).filter((u:any) => u.courseRole === 'TA').length > 0
+    ? (enrolled as any[]).filter((u:any) => u.courseRole === 'TA').map((t:any) => `${t.firstName ?? ''} ${t.lastName ?? ''}`.trim()).join(', ')
+    : 'None assigned';
 
   // derive metrics from the course object where possible
   type AssignmentCounts = {
@@ -100,7 +99,7 @@ export function CourseHeader({
   const metrics = (() => {
     const assignments = Array.isArray(course.assignments) ? course.assignments.length : 0;
     const problems = Array.isArray(course.problems) ? course.problems.length : 0;
-    const students = Array.isArray(course.students) ? course.students.length : 0;
+    const students = getStudentCount(enrolled as any[]);
 
     const submissions = Array.isArray(course.assignments)
       ? course.assignments.reduce(
@@ -108,7 +107,6 @@ export function CourseHeader({
           0,
         )
       : 0;
-
     const comments = Array.isArray(course.assignments)
       ? course.assignments.reduce(
           (sum, a) => sum + (Number((a as unknown as AssignmentCounts).commentCount) || 0),

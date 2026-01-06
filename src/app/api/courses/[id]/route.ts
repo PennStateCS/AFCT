@@ -48,29 +48,27 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
-    // Group roster users by role and attach course role into the user object
-    const faculty = course.roster.filter((r) => r.role === 'FACULTY').map((r) => ({ ...r.user, role: r.role }));
-    const tas = course.roster.filter((r) => r.role === 'TA').map((r) => ({ ...r.user, role: r.role }));
-    // For students, compute whether they have any submissions for this course
-    const studentRoster = course.roster.filter((r) => r.role === 'STUDENT');
-    const students = await Promise.all(
-      studentRoster.map(async (r) => {
+    // Build a single enrolled array (user objects plus courseRole), and compute student submission flags as needed.
+    const enrolled = await Promise.all(
+      course.roster.map(async (r) => {
         const user = r.user;
-        // gather assignment ids for this course
-        const assignmentIds = course.assignments.map((a) => a.id);
+        const courseRole = r.role;
+
+        // For students only, compute hasSubmissions flag
         let hasSubmissions = false;
-        if (assignmentIds.length > 0) {
-          const found = await prisma.submission.findFirst({
-            where: {
-              studentId: user.id,
-              assignmentId: { in: assignmentIds },
-            },
-            select: { id: true },
-          });
-          hasSubmissions = !!found;
+        if (courseRole === 'STUDENT') {
+          const assignmentIds = course.assignments.map((a) => a.id);
+          if (assignmentIds.length > 0) {
+            const found = await prisma.submission.findFirst({
+              where: { studentId: user.id, assignmentId: { in: assignmentIds } },
+              select: { id: true },
+            });
+            hasSubmissions = !!found;
+          }
         }
-        return { ...user, hasSubmissions, role: r.role };
-      }),
+
+        return { ...user, courseRole, hasSubmissions };
+      })
     );
 
     // Attach problem counts and safety flags to assignments
@@ -129,9 +127,8 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
       isArchived: course.isArchived,
       createdAt: course.createdAt,
       updatedAt: course.updatedAt,
-      faculty,
-      tas,
-      students,
+      // Only include a single enrolled array (user objects with courseRole)
+      enrolled,
       problems: problemsWithLink,
       assignments: assignmentsWithProblemCount,
       viewerRole,
@@ -225,8 +222,9 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
       },
     });
 
-    // Group roster users by role
-    const faculty = updatedCourse.roster.filter((r) => r.role === 'FACULTY').map((r) => ({ ...r.user, role: r.role }));
+    // Group roster users by role (include INSTRUCTOR alongside FACULTY)
+    const instructors = updatedCourse.roster.filter((r) => (r.role as string) === 'INSTRUCTOR').map((r) => ({ ...r.user, role: r.role }));
+    const faculty = updatedCourse.roster.filter((r) => (r.role as string) === 'FACULTY' || (r.role as string) === 'INSTRUCTOR').map((r) => ({ ...r.user, role: r.role }));
     const tas = updatedCourse.roster.filter((r) => r.role === 'TA').map((r) => ({ ...r.user, role: r.role }));
     const students = updatedCourse.roster.filter((r) => r.role === 'STUDENT').map((r) => ({ ...r.user, role: r.role }));
 
@@ -291,9 +289,8 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
       isArchived: updatedCourse.isArchived,
       createdAt: updatedCourse.createdAt,
       updatedAt: updatedCourse.updatedAt,
-      faculty,
-      tas,
-      students,
+      // Only include a single enrolled array (user objects with courseRole)
+      enrolled: updatedCourse.roster.map((r) => ({ ...r.user, courseRole: r.role })),
       problems: updatedCourse.problems,
       assignments: assignmentsWithProblemCount,
       viewerRole,

@@ -8,6 +8,7 @@ import useSWR from 'swr';
 import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils';
+import { isEnrolled } from '@/lib/course-utils';
 
 import { ChangePasswordDialog } from './dialogs/ChangePasswordDialog';
 import { EditProfileDialog } from './dialogs/EditProfileDialog';
@@ -42,9 +43,8 @@ type Course = {
   code: string;
   isPublished: boolean;
   isArchived: boolean;
-  faculty: { id: string }[];
-  tas: { id: string }[];
-  students: { id: string }[];
+  // enrolled is a list of user objects (with `courseRole`) for all roster members
+  enrolled?: ({ id: string; firstName?: string | null; lastName?: string | null; email?: string | null; avatar?: string | null; courseRole?: string })[];
 };
 
 // Static admin menu items
@@ -59,18 +59,18 @@ function getCoursesForUser(
   user: { id: string; role: 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT' },
   courses: Course[],
 ) {
-  switch (user.role) {
-    case 'ADMIN':
-      return courses.filter((c) => c.isPublished);
-    case 'FACULTY':
-      return courses.filter((c) => c.faculty.some((f) => f.id === user.id));
-    case 'TA':
-      return courses.filter((c) => c.tas.some((t) => t.id === user.id));
-    case 'STUDENT':
-      return courses.filter((c) => c.isPublished && c.students.some((s) => s.id === user.id));
-    default:
-      return [];
-  }
+  // Site admins see published courses
+  if (user.role === 'ADMIN') return courses.filter((c) => c.isPublished);
+
+  // For all other users: if they are enrolled in the course show it; do not iterate over individual role arrays.
+  // Students should only see published courses even if enrolled.
+  return courses.filter((c) => {
+    const enrolled = c.enrolled ?? [];
+    const isEnr = isEnrolled(enrolled as any, user.id);
+    if (!isEnr) return false;
+    if (user.role === 'STUDENT') return c.isPublished;
+    return true;
+  });
 }
 
 export default function DashboardSidebarMenu() {

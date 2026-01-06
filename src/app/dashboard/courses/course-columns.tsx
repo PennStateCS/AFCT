@@ -17,10 +17,12 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { Course } from '@prisma/client';
 import { EditCourseDialog } from '@/components/dialogs/EditCourseDialog';
+import { getInstructors } from '@/lib/course-utils';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 
 type CourseWithFaculty = Course & {
-  faculty: { firstName: string | null; lastName: string | null }[];
+  // Enrolled list (user objects with courseRole and flags)
+  enrolled?: ({ id: string; firstName?: string | null; lastName?: string | null; email?: string | null; avatar?: string | null; courseRole?: string; hasSubmissions?: boolean })[];
 };
 
 // Cell for course actions (edit/delete)
@@ -93,17 +95,16 @@ export const columns = (
   },
   {
     id: 'faculty',
-    accessorFn: (row) =>
-      row.faculty.map((f) => `${f.firstName ?? ''} ${f.lastName ?? ''}`.trim()).join(', '),
+    accessorFn: (row) => formatInstructorNames(row.enrolled as any[]),
     meta: { priority: 1 },
     enableSorting: true,
     header: 'Faculty',
     cell: ({ row }) => {
-      const facultyList = row.original.faculty;
-      if (!facultyList || facultyList.length === 0) {
+      const instructors = getInstructors(row.original.enrolled as any[]);
+      if (!instructors || instructors.length === 0) {
         return <span className="text-muted-foreground italic">None</span>;
       }
-      return facultyList.map((f) => `${f.firstName ?? ''} ${f.lastName ?? ''}`.trim()).join(', ');
+      return instructors.map((f: any) => `${f.firstName ?? ''} ${f.lastName ?? ''}`.trim()).join(', ');
     },
   },
   {

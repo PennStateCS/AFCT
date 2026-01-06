@@ -118,11 +118,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const originalRoster = await tx.roster.findMany({ where: { courseId } });
         for (const r of originalRoster) {
           if (r.userId === session.user.id) continue; // already added
-          if (r.role === 'FACULTY' && copyFaculty) {
-            await tx.roster.create({ data: { courseId: newCourse.id, userId: r.userId, role: 'FACULTY' } });
+          if (((r.role as string) === 'FACULTY' || (r.role as string) === 'INSTRUCTOR') && copyFaculty) {
+            await tx.roster.create({ data: { courseId: newCourse.id, userId: r.userId, role: r.role } });
           }
           if (r.role === 'TA' && copyTAs) {
-            await tx.roster.create({ data: { courseId: newCourse.id, userId: r.userId, role: 'TA' } });
+            await tx.roster.create({ data: { courseId: newCourse.id, userId: r.userId, role: r.role } });
           }
         }
       }

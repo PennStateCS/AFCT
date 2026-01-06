@@ -8,6 +8,7 @@ import { userColumns } from '@/app/dashboard/courses/[id]/user-columns';
 import { useAssignmentColumns } from '@/app/dashboard/courses/[id]/assignment-columns';
 import { useProblemColumns } from '@/app/dashboard/courses/[id]/problem-columns';
 import { FullCourse, TabType } from '@/types/course';
+import { getInstructors } from '@/lib/course-utils';
 import { NotebookText, FileText, Users, GraduationCap, Activity } from 'lucide-react';
 import { Assignment, Problem } from '@prisma/client';
 
@@ -124,10 +125,16 @@ export function AdminCourseView({
         <div className="space-y-6 mb-8">
           <RosterCard
             courseIsArchived={course.isArchived}
-            faculty={course.faculty}
-            tas={course.tas}
-            students={course.students}
-            userColumns={userColumns(onRefreshCourse, course.id, course.isArchived, course.faculty?.length ?? 0, course.viewerRole, course.viewerDefaultRole)}
+            enrolled={course.enrolled}
+            userColumns={userColumns(
+              onRefreshCourse,
+              course.id,
+              course.isArchived,
+              // compute faculty count from enrolled
+              getInstructors(course.enrolled as any[]).length,
+              course.viewerRole,
+              course.viewerDefaultRole
+            )}
             onEnrollUser={onEnrollUser}
             onBulkEnroll={onBulkEnroll}
           />

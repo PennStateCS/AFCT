@@ -58,15 +58,14 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
     });
 
-    // Group roster by role
+    // Group roster by role (treat INSTRUCTOR like FACULTY for display and permissions)
     const formatted = courses.map((c) => {
-      const faculty = c.roster.filter((r) => r.role === 'FACULTY').map((r) => r.user);
-      const tas = c.roster.filter((r) => r.role === 'TA').map((r) => r.user);
-      const students = c.roster.filter((r) => r.role === 'STUDENT').map((r) => r.user);
+      // Build single `enrolled` list (user objects with courseRole). Do not construct role-specific arrays here.
+      const enrolled = c.roster.map((r) => ({ ...r.user, courseRole: r.role }));
 
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { roster, ...rest } = c;
-      return { ...rest, faculty, tas, students };
+      return { ...rest, enrolled };
     });
 
     return NextResponse.json(formatted, { status: 200 });
@@ -115,7 +114,7 @@ export async function POST(req: Request) {
         },
       });
 
-      if (json.facultyIds.length > 0) {
+      if (Array.isArray(json.facultyIds) && json.facultyIds.length > 0) {
         await tx.roster.createMany({
           data: json.facultyIds.map((userId: string) => ({
             userId,
@@ -140,7 +139,7 @@ export async function POST(req: Request) {
       const faculty =
         withRoster?.roster.filter((r) => r.role === 'FACULTY').map((r) => r.user) ?? [];
 
-      return { course, faculty };
+      return { course, faculty, withRoster };
     });
 
     return NextResponse.json(
@@ -158,7 +157,7 @@ export async function POST(req: Request) {
           endDate: created.course.endDate,
           isPublished: created.course.isPublished,
           isArchived: created.course.isArchived,
-          faculty: created.faculty,
+          enrolled: created.withRoster?.roster.map((r: any) => ({ ...r.user, courseRole: r.role })) ?? [],
         },
       },
       { status: 201 },
