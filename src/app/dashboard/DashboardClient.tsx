@@ -6,6 +6,7 @@ import Link from 'next/link';
 import type { Course, User } from '@prisma/client';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { getCourseStatusTag } from '@/lib/course-status';
+import { formatInstructorNames, getStudentCount } from '@/lib/course-utils';
 
 type Props = {
   sessionUser: {
@@ -14,9 +15,7 @@ type Props = {
   };
   title: string;
   courses: (Course & {
-    students?: User[];
-    faculty?: User[];
-    tas?: User[];
+    enrolled?: (User & { courseRole?: string; hasSubmissions?: boolean })[];
   })[];
 };
 
@@ -88,14 +87,12 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
                       {isPrivileged && (
                         <div>
                           <span className="font-semibold">Enrollment:</span>{' '}
-                          {(course.students ?? []).length}
+                          {getStudentCount(course.enrolled as any[])}
                         </div>
                       )}
                       <div>
                         <span className="font-semibold">Instructor:</span>{' '}
-                        {(course.faculty ?? [])
-                          .map((f) => `${f.firstName ?? ''} ${f.lastName ?? ''}`)
-                          .join(', ') || 'TBA'}
+                        {(Array.isArray(course.enrolled) ? course.enrolled.filter((u:any) => u.courseRole === 'FACULTY' || u.courseRole === 'INSTRUCTOR').map((f:any) => `${f.firstName ?? ''} ${f.lastName ?? ''}`).join(', ') : '') || 'TBA'}
                       </div>
                       <div>
                         <span className="font-semibold">Dates:</span>{' '}

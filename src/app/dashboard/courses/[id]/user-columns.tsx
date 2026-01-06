@@ -38,7 +38,7 @@ function ActionsCell({ user, onChange, courseId, courseIsArchived, facultyCount,
 
   // Treat site ADMIN as having course management privileges
   const isSiteAdmin = viewerDefaultRole === 'ADMIN';
-  const isCourseAdmin = currentCourseRole === 'COURSE_ADMIN' || isSiteAdmin;
+  const isCourseAdmin = currentCourseRole === 'INSTRUCTOR' || isSiteAdmin;
 
   const handleDelete = async () => {
     try {
@@ -85,10 +85,10 @@ function ActionsCell({ user, onChange, courseId, courseIsArchived, facultyCount,
     // Site admin can remove anyone
     if (isSiteAdmin) return true;
     if (!viewer) return false;
-    // Course admin can remove anyone except other course admins
-    if (viewer === 'COURSE_ADMIN') return target !== 'COURSE_ADMIN';
-    // Faculty can remove anyone except course admins and other faculty
-    if (viewer === 'FACULTY') return target !== 'COURSE_ADMIN' && target !== 'FACULTY';
+    // Instructors can remove anyone except other instructors
+    if (viewer === 'INSTRUCTOR') return target !== 'INSTRUCTOR';
+    // Faculty can remove anyone except instructors and other faculty
+    if (viewer === 'FACULTY') return target !== 'INSTRUCTOR' && target !== 'FACULTY';
     return false;
   };
 
@@ -100,7 +100,7 @@ function ActionsCell({ user, onChange, courseId, courseIsArchived, facultyCount,
 
   const deleteDescription = viewerCanDelete
     ? `This will remove the user from the roster for this course. This action cannot be undone.`
-    : 'Contact the course admin to remove this user.';
+    : 'Contact the instructor to remove this user.';
   // compute UI flags used in JSX
   const removeDisabled = courseIsArchived || hasSubmissions || !viewerCanDelete;
   const removeTitle = courseIsArchived
@@ -116,7 +116,7 @@ function ActionsCell({ user, onChange, courseId, courseIsArchived, facultyCount,
     <div className="flex gap-2 items-center">
       <EditUserDialog user={user} open={open} setOpen={setOpen} onSave={handleSave} />
 
-      {/* Edit button: visible to course admins or site ADMINs */}
+      {/* Edit button: visible to instructors or site ADMINs */}
       {isCourseAdmin && (
         <Button
           variant="secondary"
@@ -129,7 +129,7 @@ function ActionsCell({ user, onChange, courseId, courseIsArchived, facultyCount,
         </Button>
       )}
 
-      {/* Inline delete button for Faculty only (Manage dropdown provides remove action for admins/course admins) */}
+      {/* Inline delete button for Faculty only (Manage dropdown provides remove action for instructors) */}
       {currentCourseRole === "FACULTY" && (
         <Button
           variant="destructive"
@@ -188,7 +188,7 @@ function ActionsCell({ user, onChange, courseId, courseIsArchived, facultyCount,
 export const userColumns = (onChange: () => void, courseId: string, courseIsArchived: boolean, facultyCount?: number, viewerRole?: string | null, viewerDefaultRole?: string | null): ColumnDef<User>[] => {
   const currentCourseRole = viewerRole ?? null;
   const isSiteAdmin = viewerDefaultRole === 'ADMIN';
-  const viewerHasActions = isSiteAdmin || currentCourseRole === 'COURSE_ADMIN' || currentCourseRole === 'FACULTY';
+  const viewerHasActions = isSiteAdmin || currentCourseRole === 'INSTRUCTOR' || currentCourseRole === 'FACULTY';
 
   const cols: ColumnDef<User>[] = [
     {

@@ -41,9 +41,8 @@ export default async function DashboardPage() {
     return {
       ...course,
       userRole: entry.role,
-      students: course.roster.filter((r) => r.role === 'STUDENT').map((r) => r.user),
-      faculty: course.roster.filter((r) => r.role === 'FACULTY').map((r) => r.user),
-      tas: course.roster.filter((r) => r.role === 'TA').map((r) => r.user),
+      // Only include enrolled list (user objects with courseRole) — do not construct role-specific arrays
+      enrolled: course.roster.map((r) => ({ ...r.user, courseRole: r.role })),
     };
   });
 

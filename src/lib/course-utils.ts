@@ -185,3 +185,83 @@ export async function saveCourse(course: Course): Promise<Course> {
   if (!res.ok) throw new Error('Failed to save course');
   return res.json();
 }
+
+// -------------------------
+// Enrolled / roster helpers
+// -------------------------
+import { roleOrder } from '@/lib/role-sorting';
+
+export type EnrolledUser = {
+  id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+  avatar?: string | null;
+  role?: string; // global role
+  courseRole?: string; // course-specific role
+  hasSubmissions?: boolean;
+};
+
+export function getEnrolledIds(enrolled: (string | EnrolledUser)[] | undefined): string[] {
+  if (!enrolled) return [];
+  return enrolled.map((e) => (typeof e === 'string' ? e : e.id));
+}
+
+export function isEnrolled(enrolled: (string | EnrolledUser)[] | undefined, userId: string): boolean {
+  const ids = getEnrolledIds(enrolled);
+  return ids.includes(userId);
+}
+
+export function getInstructors(enrolled: EnrolledUser[] | undefined): EnrolledUser[] {
+  if (!Array.isArray(enrolled)) return [];
+  return enrolled.filter((u) => u.courseRole === 'FACULTY' || u.courseRole === 'INSTRUCTOR');
+}
+
+export function getTAs(enrolled: EnrolledUser[] | undefined): EnrolledUser[] {
+  if (!Array.isArray(enrolled)) return [];
+  return enrolled.filter((u) => u.courseRole === 'TA');
+}
+
+export function getStudents(enrolled: EnrolledUser[] | undefined): EnrolledUser[] {
+  if (!Array.isArray(enrolled)) return [];
+  return enrolled.filter((u) => u.courseRole === 'STUDENT');
+}
+
+export function getStudentCount(enrolled: EnrolledUser[] | undefined): number {
+  return getStudents(enrolled).length;
+}
+
+export function formatInstructorNames(enrolled: EnrolledUser[] | undefined): string {
+  const instructors = getInstructors(enrolled);
+  if (instructors.length === 0) return 'TBA';
+  return instructors.map((f) => `${f.firstName ?? ''} ${f.lastName ?? ''}`.trim()).join(', ');
+}
+
+export function deriveRoleSlices(enrolled: EnrolledUser[] | undefined) {
+  const instructors = getInstructors(enrolled);
+  const tas = getTAs(enrolled);
+  const students = getStudents(enrolled);
+  return {
+    instructors,
+    tas,
+    students,
+    counts: { instructors: instructors.length, tas: tas.length, students: students.length },
+  };
+}
+
+// Return a sorted roster array (shallow copies) based on courseRole ordering and last name
+export function sortRoster(enrolled: EnrolledUser[] | undefined): EnrolledUser[] {
+  if (!Array.isArray(enrolled)) return [];
+  // Build a role priority using roleOrder but favor courseRole when present
+  return enrolled.slice().sort((a, b) => {
+    const aRole = (a.courseRole ?? a.role ?? '').toUpperCase();
+    const bRole = (b.courseRole ?? b.role ?? '').toUpperCase();
+    const diff = (roleOrder[aRole] ?? 99) - (roleOrder[bRole] ?? 99);
+    if (diff !== 0) return diff;
+    const aLast = (a.lastName || '').toLowerCase();
+    const bLast = (b.lastName || '').toLowerCase();
+    if (aLast < bLast) return -1;
+    if (aLast > bLast) return 1;
+    return 0;
+  });
+}

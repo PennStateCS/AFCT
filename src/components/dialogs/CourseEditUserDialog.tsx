@@ -184,9 +184,9 @@ export default function CourseEditUserDialog({ open, setOpen, courseId, userId, 
                   <div className="text-xs text-muted-foreground">{roster.user.email}</div>
                 </div>
 
-                {/* Delete avatar button: visible to course FACULTY, COURSE_ADMIN, or site ADMIN */}
+                {/* Delete avatar button: visible to course FACULTY, INSTRUCTOR, or site ADMIN */}
                 <div className="ml-auto">
-                  {((viewerCourseRole === 'FACULTY') || (viewerCourseRole === 'COURSE_ADMIN') || (viewerDefaultRole === 'ADMIN')) && (
+                  {((viewerCourseRole === 'FACULTY') || (viewerCourseRole === 'INSTRUCTOR') || (viewerDefaultRole === 'ADMIN')) && (
                     <Button
                       variant="outline"
                       className="flex items-center gap-2 border-red-600 text-red-600 hover:bg-red-50"
@@ -226,7 +226,7 @@ export default function CourseEditUserDialog({ open, setOpen, courseId, userId, 
                 <Select value={roster.role} onValueChange={(v) => setRoster({ ...roster, role: v })}>
                   <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="COURSE_ADMIN">Course Admin</SelectItem>
+                    <SelectItem value="INSTRUCTOR">Instructor</SelectItem>
                     <SelectItem value="FACULTY">Faculty</SelectItem>
                     <SelectItem value="TA">TA</SelectItem>
                     <SelectItem value="STUDENT">Student</SelectItem>
@@ -243,8 +243,8 @@ export default function CourseEditUserDialog({ open, setOpen, courseId, userId, 
                     const targetRole = roster.role ?? null;
                     let viewerCanDelete = false;
                     if (isSiteAdmin) viewerCanDelete = true;
-                    else if (viewerCourse === 'COURSE_ADMIN') viewerCanDelete = targetRole !== 'COURSE_ADMIN';
-                    else if (viewerCourse === 'FACULTY') viewerCanDelete = targetRole !== 'COURSE_ADMIN' && targetRole !== 'FACULTY';
+                    else if (viewerCourse === 'INSTRUCTOR') viewerCanDelete = targetRole !== 'INSTRUCTOR';
+                    else if (viewerCourse === 'FACULTY') viewerCanDelete = targetRole !== 'INSTRUCTOR' && targetRole !== 'FACULTY';
                     const removeDisabled = !viewerCanDelete;
                     const removeTitle = removeDisabled ? 'You do not have permission to remove this user' : undefined;
 

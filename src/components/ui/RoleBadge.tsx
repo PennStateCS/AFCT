@@ -3,12 +3,12 @@ import React from 'react';
 
 export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   variant?: 'default' | 'destructive' | 'outline';
-  role?: 'ADMIN' | 'COURSE_ADMIN' | 'FACULTY' | 'TA' | 'STUDENT';
+  role?: 'ADMIN' | 'INSTRUCTOR' | 'FACULTY' | 'TA' | 'STUDENT';
 }
 
 const roleStyles: Record<string, string> = {
   ADMIN: 'bg-red-800 text-white',
-  COURSE_ADMIN: 'bg-purple-800 text-white',
+  INSTRUCTOR: 'bg-purple-800 text-white',
   FACULTY: 'bg-blue-800 text-white',
   TA: 'bg-slate-800 text-white',
   STUDENT: 'bg-green-800 text-white',

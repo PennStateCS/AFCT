@@ -1,5 +1,6 @@
 # This file sets up the environment variables for development
 # For linux users run the following in your terminal: export $(grep -v '^#' [yourEnvFile])
+# .\scripts\db_setup.ps1
 
 # Get the path and content of working .env file
 $env_path = ".\.env.development" # Replace this path your your path to your designated env file

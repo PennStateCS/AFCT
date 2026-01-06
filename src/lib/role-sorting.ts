@@ -2,6 +2,7 @@
 export const roleOrder: Record<string, number> = {
   ADMIN: 1,
   FACULTY: 2,
+  INSTRUCTOR: 2,
   TA: 3,
   STUDENT: 4,
 };
