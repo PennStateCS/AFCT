@@ -110,10 +110,15 @@ export default function CalendarPage() {
                 const dayContentRef = useRef<HTMLDivElement | null>(null);
                 const visibleCount = useVisibleItemCount(dayContentRef, dayAssignments.length, { conservativeMargin: 10, sampleText: dayAssignments[0]?.title });
 
+                const todayDate = new Date();
+                const dayDate = props.day.date;
+                const isToday = dayDate.getFullYear() === todayDate.getFullYear() && dayDate.getMonth() === todayDate.getMonth() && dayDate.getDate() === todayDate.getDate();
+
                 return (
                   <div
                     role="button"
                     tabIndex={0}
+                    aria-current={isToday ? 'date' : undefined}
                     onClick={(e) => {
                       const dayOnly = new Date(props.day.date.getFullYear(), props.day.date.getMonth(), props.day.date.getDate());
                       openDayDialog(dayOnly, dayAssignments);
@@ -127,7 +132,11 @@ export default function CalendarPage() {
                         props.onClick?.(e as any);
                       }
                     }}
-                    className="w-full grid grid-rows-[auto_1fr] min-w-0 min-h-0 border border-gray-400/60 bg-white dark:bg-neutral-900 dark:border-neutral-700 overflow-hidden box-border"
+                    className={cn(
+                      "w-full grid grid-rows-[auto_1fr] min-w-0 min-h-0 border border-gray-400/60 overflow-hidden box-border",
+                      isToday ? "bg-gray-200 dark:bg-neutral-800" : "bg-white dark:bg-neutral-900",
+                      "dark:border-neutral-700"
+                    )}
                     style={{ aspectRatio: '1 / 1' }}
                   >
                     <span className="grid p-1 select-none text-xs">{props.day.date.getDate()}</span>
@@ -136,7 +145,10 @@ export default function CalendarPage() {
                         <Link
                           key={a.id}
                           href={`/dashboard/courses/${a.courseId}/${a.id}`}
-                          className="assignment-link block w-full min-w-0 min-h-[1rem] box-border bg-sky-700 hover:bg-sky-800 dark:bg-sky-600 dark:hover:bg-sky-700 text-left text-white text-xs rounded py-0.5 pl-1 truncate whitespace-nowrap overflow-hidden leading-tight cursor-pointer"
+                          className={cn(
+                            "assignment-link block w-full min-w-0 min-h-[1rem] box-border bg-sky-700 hover:bg-sky-800 dark:bg-sky-600 dark:hover:bg-sky-700 text-left text-white text-xs rounded py-0.5 pl-1 truncate whitespace-nowrap overflow-hidden leading-tight cursor-pointer",
+                            a.crossedOut && "line-through opacity-80"
+                          )}
                           title={`${a.course?.code ?? a.courseName ?? ''} - ${a.title}`}
                           onClick={(e:any) => e.stopPropagation()}
                         >
