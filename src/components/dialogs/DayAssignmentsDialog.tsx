@@ -12,6 +12,7 @@ import {
   DialogClose,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 type Props = {
   open: boolean
@@ -62,7 +63,10 @@ export default function DayAssignmentsDialog({ open, onOpenChange, date, assignm
                 <li key={a.id}>
                   <Link
                     href={`/dashboard/courses/${a.courseId}/${a.id}`}
-                    className="block w-full bg-sky-700 hover:bg-sky-800 dark:bg-sky-600 dark:hover:bg-sky-700 text-white rounded-md p-3 cursor-pointer"
+                    className={cn(
+                      "block w-full bg-sky-700 hover:bg-sky-800 dark:bg-sky-600 dark:hover:bg-sky-700 text-white rounded-md p-3 cursor-pointer",
+                      a.crossedOut && "line-through opacity-80"
+                    )}
                     title={`${a.course?.code ?? a.courseName ?? ''} - ${a.title}`}
                     onClick={() => { onClose?.(); }}
                   >
