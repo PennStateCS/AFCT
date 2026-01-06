@@ -442,7 +442,6 @@ export default function AssignmentSubmissions({
                     value={editingGrade === "" ? "" : editingGrade}
                     onChange={e => {
                       setEditingGrade(e.target.value);
-                      setGradeError(null);
                     }}
                     onKeyDown={e => {
                       if (e.key === "Enter") {
@@ -451,10 +450,9 @@ export default function AssignmentSubmissions({
                       } else if (e.key === "Escape") {
                         e.preventDefault();
                         setEditingGrade(userGrade !== null && userGrade !== undefined ? String(userGrade) : "");
-                        setGradeError(null);
                       }
                     }}
-                    className={`bg-white h-9 w-[90px] pr-8 ${gradeError ? "border-red-300 focus-visible:ring-red-400" : ""}`}
+                    className="bg-white h-9 w-[90px] pr-8"
                     placeholder={isLoadingGrade ? '-' : (userGrade === null || userGrade === undefined ? '-' : String(userGrade))}
                     aria-label={`Grade (0-${maxAssignmentGrade})`}
                     disabled={isLoadingGrade}
@@ -481,9 +479,7 @@ export default function AssignmentSubmissions({
                 >
                   {isSavingGrade ? "Saving…" : "Save Grade"}
                 </Button>
-                {gradeError && (
-                  <span className="ml-2 text-sm text-red-500">{gradeError}</span>
-                )}
+
               </div>
             </div>
           </CardHeader>
