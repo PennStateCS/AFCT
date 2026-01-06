@@ -16,8 +16,8 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     const currentRoster = await prisma.roster.findFirst({ where: { courseId, userId: currentUser.id }, select: { role: true } });
     const currentCourseRole = currentRoster?.role ?? null;
 
-    // Only global ADMIN or course-level COURSE_ADMIN/FACULTY/TA may attempt removal
-    if (currentUser.role !== 'ADMIN' && !['COURSE_ADMIN','FACULTY','TA'].includes(currentCourseRole ?? '')) {
+    // Only global ADMIN or course-level INSTRUCTOR/FACULTY/TA may attempt removal
+    if (currentUser.role !== 'ADMIN' && !['INSTRUCTOR','FACULTY','TA'].includes(currentCourseRole ?? '')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -29,13 +29,13 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     // Get the target's roster entry to check role constraints
     const targetRoster = await prisma.roster.findFirst({ where: { courseId, userId }, select: { role: true } });
 
-    // Faculty may not remove COURSE_ADMIN or other FACULTY
-    if (currentCourseRole === 'FACULTY' && targetRoster && (targetRoster.role === 'COURSE_ADMIN' || targetRoster.role === 'FACULTY')) {
+    // Faculty may not remove INSTRUCTOR or other FACULTY
+    if (currentCourseRole === 'FACULTY' && targetRoster && (targetRoster.role === 'INSTRUCTOR' || targetRoster.role === 'FACULTY')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Course admin may not remove other course admins
-    if (currentCourseRole === 'COURSE_ADMIN' && targetRoster && targetRoster.role === 'COURSE_ADMIN') {
+    // Instructors may not remove other instructors
+    if (currentCourseRole === 'INSTRUCTOR' && targetRoster && targetRoster.role === 'INSTRUCTOR') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -132,12 +132,12 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
 
     const body = await req.json();
     const newRole = body?.role;
-    const allowedRoles = ['COURSE_ADMIN', 'FACULTY', 'TA', 'STUDENT'];
+    const allowedRoles = ['INSTRUCTOR', 'FACULTY', 'TA', 'STUDENT'];
     if (!allowedRoles.includes(newRole)) return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
 
-    // Check permissions: ADMIN or course's COURSE_ADMIN
+    // Check permissions: ADMIN or course's INSTRUCTOR
     const currentRoster = await prisma.roster.findFirst({ where: { courseId, userId: currentUser.id } });
-    const isAllowed = currentUser.role === 'ADMIN' || currentRoster?.role === 'COURSE_ADMIN';
+    const isAllowed = currentUser.role === 'ADMIN' || currentRoster?.role === 'INSTRUCTOR';
     if (!isAllowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     // Ensure roster entry exists

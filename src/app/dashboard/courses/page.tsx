@@ -16,13 +16,11 @@ type UserSummary = {
 };
 
 type CourseWithRoster = Course & {
-  faculty: UserSummary[];
-  tas: UserSummary[];
-  students: UserSummary[];
+  enrolled?: ({ id: string; firstName?: string | null; lastName?: string | null; email?: string | null; avatar?: string | null; courseRole?: string; hasSubmissions?: boolean })[];
 };
 
 type CourseWithFaculty = Course & {
-  faculty: { firstName: string | null; lastName: string | null }[];
+  enrolled?: ({ id: string; firstName?: string | null; lastName?: string | null; email?: string | null; avatar?: string | null; courseRole?: string; hasSubmissions?: boolean })[];
 };
 
 export default function ViewCoursesPage() {
@@ -57,7 +55,7 @@ export default function ViewCoursesPage() {
         (refreshedCourse: CourseWithFaculty) => {
           setCourses((prev) =>
             prev.map((c) =>
-              c.id === refreshedCourse.id ? { ...c, ...refreshedCourse, faculty: c.faculty } : c,
+              c.id === refreshedCourse.id ? { ...c, ...refreshedCourse, enrolled: refreshedCourse.enrolled ?? c.enrolled } : c,
             ),
           );
         },

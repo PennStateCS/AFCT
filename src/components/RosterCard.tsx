@@ -2,6 +2,7 @@
 
 
 import { User } from '@prisma/client';
+import { sortRoster } from '@/lib/course-utils';
 import { ColumnDef } from '@tanstack/react-table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,9 +11,8 @@ import { Plus, Users } from 'lucide-react';
 
 interface RosterCardProps {
   courseIsArchived: boolean;
-  faculty: User[];
-  tas: User[];
-  students: User[];
+  // enrolled: list of users with courseRole and optional flags
+  enrolled?: ({ id: string; firstName?: string | null; lastName?: string | null; email?: string | null; avatar?: string | null; role?: string } & { courseRole?: string; hasSubmissions?: boolean })[];
   userColumns: ColumnDef<User>[];
   onEnrollUser: () => void;
   onBulkEnroll?: () => void;
@@ -21,35 +21,15 @@ interface RosterCardProps {
 
 export function RosterCard({
   courseIsArchived,
-  faculty,
-  tas,
-  students,
+  enrolled = [],
   userColumns,
   onEnrollUser,
   onBulkEnroll,
   loading = false,
 }: RosterCardProps) {
 
-  const unsortedRosterData: User[] = [
-    ...faculty.map((u) => ({ ...u })),
-    ...tas.map((u) => ({ ...u })),
-    ...students.map((u) => ({ ...u })),
-  ];
-  const rolePriority: Record<string, number> = { 'ADMIN': 0, 'FACULTY': 1, 'TA': 2, 'STUDENT': 3 };
-  const rosterData: User[] = unsortedRosterData.slice().sort((a, b) => {
-    const roleA = rolePriority[a.role] ?? 99;
-    const roleB = rolePriority[b.role] ?? 99;
-    if (roleA !== roleB) {
-      return roleA - roleB;
-    }
-    
-    // If roles are equal, sort by last name (case-insensitive)
-    const lastA = (a.lastName || '').toLowerCase();
-    const lastB = (b.lastName || '').toLowerCase();
-    if (lastA < lastB) return -1;
-    if (lastA > lastB) return 1;
-    return 0;
-  });
+  // Use a shared sort helper to keep ordering consistent
+  const rosterData = sortRoster(enrolled as any[]).map((u) => ({ ...u, role: (u.courseRole ?? u.role) as any }));
 
   return (
     <Card className="p-4">
