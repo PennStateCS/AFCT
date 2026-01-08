@@ -26,10 +26,7 @@ export async function GET(_: Request, context: { params: Promise<{ email: string
       // Select the course's id and name
       select: {
         id: true,
-        name: true,
-        roster: {
-          include: { user: true } 
-        },
+        name: true
       }
     })
 
