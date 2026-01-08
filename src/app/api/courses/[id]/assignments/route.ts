@@ -48,6 +48,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
             grade: true
           },
         },
+        description: true,
       },
       orderBy: {
         dueDate: 'asc',
