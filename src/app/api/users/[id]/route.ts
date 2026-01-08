@@ -7,6 +7,7 @@ import path from 'path';
 import { Role } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { activityColumns } from '@/app/dashboard/courses/[id]/activity-columns';
+import { parseRole } from '@/lib/roles';
 
 // PATCH: Update a user's profile
 export async function PATCH(req: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -35,7 +36,8 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     const contentType = req.headers.get('content-type') || '';
     let firstName: string | undefined;
     let lastName: string | undefined;
-    let role: string | undefined;
+    let rawRole: string | undefined;
+    let role: Role | undefined;
     let inactive: boolean | undefined;
     let avatarFile: File | null = null;
     let deleteAvatar = false;
@@ -44,14 +46,18 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       const formData = await req.formData();
       firstName = formData.get('firstName') as string;
       lastName = formData.get('lastName') as string;
-      role = formData.get('role') as string;
+      rawRole = formData.get('role') as string;
       inactive = formData.get('inactive') === 'true';
       avatarFile = formData.get('avatar') as File;
       deleteAvatar = formData.get('deleteAvatar') === 'true';
     } else {
       const body = await req.json();
-      ({ firstName, lastName, role, inactive } = body);
+      ({ firstName, lastName, inactive } = body);
+      rawRole = body.role;
     }
+
+    // Parse/validate role using shared helper
+    role = parseRole(rawRole);
 
     // Retrieve current user record
     const userRecord = await prisma.user.findUnique({

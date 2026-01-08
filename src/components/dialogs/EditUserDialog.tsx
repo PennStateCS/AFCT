@@ -29,6 +29,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 
 import type { User } from '@prisma/client';
 import { UpdateUserSchema, type UpdateUserRaw, type UpdateUserInput } from '@/schemas/user';
+import { roleOptions, formatRole } from '@/lib/roles';
 
 type EditUserDialogProps = {
   user: User;
@@ -42,8 +43,6 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
   const [avatarPreview, setAvatarPreview] = useState<string>(
     user.avatar ? `/uploads/pfps/${user.avatar}` : '/uploads/pfps/default-avatar.png',
   );
-
-  const { data: session } = useSession();
 
   // RHF defaults – email is read-only so it isn't in the schema
   const defaults: UpdateUserRaw = useMemo(
@@ -283,7 +282,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
             />
           </div>
 
-          {/* Role (global) - only visible to ADMIN */}
+          {/* Default Role */}
           <Controller
             control={control}
             name="role"
@@ -292,16 +291,17 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
               if (session?.user?.role !== 'ADMIN') return <></>;
               return (
                 <div>
-                  <label className="mb-2 block text-sm font-medium">Role</label>
+                  <label className="mb-2 block text-sm font-medium">Default Role</label>
                   <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v)}>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select a role" />
+                      <SelectValue placeholder="Select a default role" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="ADMIN">Admin</SelectItem>
-                      <SelectItem value="FACULTY">Faculty</SelectItem>
-                      <SelectItem value="TA">TA</SelectItem>
-                      <SelectItem value="STUDENT">Student</SelectItem>
+                      {roleOptions.map((r) => (
+                        <SelectItem key={r} value={r}>
+                          {formatRole(r)}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   {errors.role && <p className="mt-1 text-xs text-red-600">{errors.role.message}</p>}
