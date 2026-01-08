@@ -17,7 +17,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { Course } from '@prisma/client';
 import { EditCourseDialog } from '@/components/dialogs/EditCourseDialog';
-import { getInstructors } from '@/lib/course-utils';
+import { getInstructors, formatInstructorNames } from '@/lib/course-utils';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 
 type CourseWithFaculty = Course & {
@@ -94,11 +94,11 @@ export const columns = (
     },
   },
   {
-    id: 'faculty',
+    id: 'instructor',
     accessorFn: (row) => formatInstructorNames(row.enrolled as any[]),
     meta: { priority: 1 },
     enableSorting: true,
-    header: 'Faculty',
+    header: 'Instructor',
     cell: ({ row }) => {
       const instructors = getInstructors(row.original.enrolled as any[]);
       if (!instructors || instructors.length === 0) {

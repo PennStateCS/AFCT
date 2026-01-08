@@ -16,6 +16,7 @@ import { showToast } from '@/lib/toast';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Trash2, Delete } from 'lucide-react';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
+import { courseRoleOptions, formatCourseRole } from '@/lib/roles';
 
 type Props = {
   open: boolean;
@@ -226,10 +227,11 @@ export default function CourseEditUserDialog({ open, setOpen, courseId, userId, 
                 <Select value={roster.role} onValueChange={(v) => setRoster({ ...roster, role: v })}>
                   <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="INSTRUCTOR">Instructor</SelectItem>
-                    <SelectItem value="FACULTY">Faculty</SelectItem>
-                    <SelectItem value="TA">TA</SelectItem>
-                    <SelectItem value="STUDENT">Student</SelectItem>
+                    {courseRoleOptions.map((r) => (
+                      <SelectItem key={r} value={r}>
+                        {formatCourseRole(r)}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
