@@ -214,7 +214,7 @@ export function isEnrolled(enrolled: (string | EnrolledUser)[] | undefined, user
 
 export function getInstructors(enrolled: EnrolledUser[] | undefined): EnrolledUser[] {
   if (!Array.isArray(enrolled)) return [];
-  return enrolled.filter((u) => u.courseRole === 'FACULTY' || u.courseRole === 'INSTRUCTOR');
+  return enrolled.filter((u) => u.courseRole === 'INSTRUCTOR');
 }
 
 export function getTAs(enrolled: EnrolledUser[] | undefined): EnrolledUser[] {

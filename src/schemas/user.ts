@@ -2,6 +2,7 @@
 import { z } from 'zod';
 
 export const RoleEnum = z.enum(['ADMIN', 'FACULTY', 'TA', 'STUDENT']);
+export const CourseRoleEnum = z.enum(['INSTRUCTOR', 'FACULTY', 'TA', 'STUDENT']);
 
 export const StrongPassword = z
   .string()
