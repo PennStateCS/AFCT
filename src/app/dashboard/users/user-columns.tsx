@@ -1,7 +1,7 @@
 'use client';
 
 import { ColumnDef } from '@tanstack/react-table';
-import { roleSortingFn } from '@/lib/role-sorting';
+import { roleSortingFn } from '@/lib/roles';
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { User } from '@prisma/client';

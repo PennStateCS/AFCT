@@ -189,7 +189,7 @@ export async function saveCourse(course: Course): Promise<Course> {
 // -------------------------
 // Enrolled / roster helpers
 // -------------------------
-import { roleOrder } from '@/lib/role-sorting';
+import { roleOrder } from '@/lib/roles';
 
 export type EnrolledUser = {
   id: string;
