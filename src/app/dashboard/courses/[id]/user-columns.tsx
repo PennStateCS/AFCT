@@ -8,7 +8,7 @@ import { EditUserDialog } from '@/components/dialogs/EditUserDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/RoleBadge';
-import { roleSortingFn } from '@/lib/role-sorting';
+import { roleSortingFn } from '@/lib/roles';
 import { showToast } from '@/lib/toast';
 import { useState } from 'react';
 import CourseEditUserDialog from '@/components/dialogs/CourseEditUserDialog';

@@ -25,6 +25,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 import { CreateUserSchema, type CreateUserRaw, type CreateUserInput } from '@/schemas/user';
+import { roleOptions, formatRole } from '@/lib/roles';
 
 // For the checklist UI only
 const passwordRules = [
@@ -43,15 +44,18 @@ type CreateUserDialogProps = {
 
 export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogProps) {
   const defaults: CreateUserRaw = useMemo(
-    () => ({
-      firstName: '',
-      lastName: '',
-      email: '',
-      password: '',
-      confirmPassword: '',
-      role: 'STUDENT' as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT', // Default to STUDENT
-    }),
-    [],
+    () => {
+      const defaultRole = roleOptions.includes('STUDENT' as any) ? 'STUDENT' : (roleOptions[0] ?? 'STUDENT');
+      return ({
+        firstName: '',
+        lastName: '',
+        email: '',
+        password: '',
+        confirmPassword: '',
+        role: defaultRole as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT',
+      });
+    },
+    [roleOptions],
   );
 
   const {
@@ -215,16 +219,17 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
             name="role"
             render={({ field }) => (
               <div>
-                <label className="mb-2 block text-sm font-medium">Role</label>
+                <label className="mb-2 block text-sm font-medium">Default Role</label>
                 <Select onValueChange={(v) => field.onChange(v)} value={field.value ?? ''}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select a role" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ADMIN">Admin</SelectItem>
-                    <SelectItem value="FACULTY">Faculty</SelectItem>
-                    <SelectItem value="TA">TA</SelectItem>
-                    <SelectItem value="STUDENT">Student</SelectItem>
+                    {roleOptions.map((r) => (
+                      <SelectItem key={r} value={r}>
+                        {formatRole(r)}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 {errors.role && <p className="mt-1 text-xs text-red-600">{errors.role.message}</p>}
@@ -233,13 +238,13 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
           />
 
           {/* Password checklist (UI helper) */}
-          <div className="text-muted-foreground pt-1 text-sm">
-            Password must include:
+          <div className="text-muted-foreground pt-1 text-xs">
+            <div className="text-xs">Password must include:</div>
             <ul className="ml-4 list-disc">
               {passwordRules.map((rule) => {
                 const ok = rule.test(pw ?? '');
                 return (
-                  <li key={rule.label} className={ok ? 'text-green-600' : 'text-red-500'}>
+                  <li key={rule.label} className={ok ? 'text-green-600 text-xs' : 'text-red-500 text-xs'}>
                     {rule.label}
                   </li>
                 );
