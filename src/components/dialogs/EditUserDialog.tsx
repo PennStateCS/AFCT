@@ -23,7 +23,6 @@ import InputGroup from '@/components/ui/InputGroup';
 import { UploadCloud, Trash2 } from 'lucide-react';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useSession } from 'next-auth/react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
@@ -49,7 +48,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
     () => ({
       firstName: user.firstName ?? '',
       lastName: user.lastName ?? '',
-      role: (user.role as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT') ?? 'STUDENT',
+      role: user.role,
       avatarFile: undefined,
       deleteAvatar: false,
       inactive: user.inactive ?? false,
@@ -287,12 +286,10 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
             control={control}
             name="role"
             render={({ field }) => {
-              const { data: session } = useSession();
-              if (session?.user?.role !== 'ADMIN') return <></>;
               return (
                 <div>
                   <label className="mb-2 block text-sm font-medium">Default Role</label>
-                  <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v)}>
+                  <Select value={field.value} onValueChange={(v) => field.onChange(v)}>
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Select a default role" />
                     </SelectTrigger>
