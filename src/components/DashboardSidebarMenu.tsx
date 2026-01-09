@@ -126,6 +126,7 @@ export default function DashboardSidebarMenu() {
   };
 
   const filteredCourses = getCoursesForUser(user, courses);
+  const visibleCourses = filteredCourses.filter((c) => !c.isArchived);
 
   return (
     <>
@@ -134,7 +135,7 @@ export default function DashboardSidebarMenu() {
         {/* Admin menu */}
         {(user.role === 'ADMIN' || user.role === 'FACULTY') && (
           <SidebarGroup>
-            <SidebarGroupLabel className="text-sidebar-foreground text-sm">
+            <SidebarGroupLabel aria-hidden={collapsed} className={collapsed ? "hidden" : "text-sidebar-foreground text-sm"}>
               Admin Menu
             </SidebarGroupLabel>
             <SidebarGroupContent>
@@ -154,7 +155,7 @@ export default function DashboardSidebarMenu() {
                           >
                             <Link href={url} className="flex min-w-0 items-center gap-2">
                               <Icon className="h-4 w-4 shrink-0" />
-                              <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+                              <span aria-hidden={collapsed} className={collapsed ? "hidden" : "overflow-hidden text-ellipsis whitespace-nowrap"}>
                                 {title}
                               </span>
                             </Link>
@@ -177,54 +178,69 @@ export default function DashboardSidebarMenu() {
         )}
 
         {/* Courses menu */}
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground text-sm">
-            Current Courses
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {filteredCourses.map((course) => !course.isArchived && (
-                <SidebarMenuItem key={course.id}>
-                  <TooltipProvider delayDuration={100}>
-                    <Tooltip open={collapsed ? undefined : false}>
-                      <TooltipTrigger asChild>
-                        <SidebarMenuButton
-                          asChild
-                          isActive={pathname.startsWith(`/dashboard/courses/${course.id}`)}
-                          className={cn(
-                            "hover:bg-secondary focus:bg-secondary text-sidebar-foreground",
-                            "data-[active=true]:bg-secondary",
-                          )}
-                        >
-                          <Link
-                            href={`/dashboard/courses/${course.id}`}
-                            className="flex min-w-0 items-center gap-2"
+        {!(collapsed && visibleCourses.length === 0) && (
+          <SidebarGroup>
+            <SidebarGroupLabel aria-hidden={collapsed} className={collapsed ? "hidden" : "text-sidebar-foreground text-sm"}>
+              Current Courses
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {visibleCourses.length === 0 ? (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild aria-disabled={true} className={cn('cursor-default text-sidebar-foreground/60')}>
+                      <div className={cn("flex w-full items-center gap-2")}>
+                        <Book className="h-4 w-4 shrink-0" />
+                        <span aria-hidden={collapsed} className={collapsed ? "hidden" : "overflow-hidden text-ellipsis whitespace-nowrap"}>
+                          No courses
+                        </span>
+                      </div>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ) : (
+                  visibleCourses.map((course) => (
+                    <SidebarMenuItem key={course.id}>
+                      <TooltipProvider delayDuration={100}>
+                        <Tooltip open={collapsed ? undefined : false}>
+                          <TooltipTrigger asChild>
+                            <SidebarMenuButton
+                              asChild
+                              isActive={pathname.startsWith(`/dashboard/courses/${course.id}`)}
+                              className={cn(
+                                'hover:bg-secondary focus:bg-secondary text-sidebar-foreground',
+                                'data-[active=true]:bg-secondary',
+                              )}
+                            >
+                              <Link
+                                href={`/dashboard/courses/${course.id}`}
+                                className="flex min-w-0 items-center gap-2"
+                              >
+                                <Book className="h-4 w-4 shrink-0" />
+                              <span aria-hidden={collapsed} className={collapsed ? "hidden" : "overflow-hidden text-ellipsis whitespace-nowrap"}>
+                                  {course.code}
+                                </span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </TooltipTrigger>
+                          <TooltipContent
+                            side="right"
+                            className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
+                            sideOffset={10}
                           >
-                            <Book className="h-4 w-4 shrink-0" />
-                            <span className="overflow-hidden text-ellipsis whitespace-nowrap">
-                              {course.code}
-                            </span>
-                          </Link>
-                        </SidebarMenuButton>
-                      </TooltipTrigger>
-                      <TooltipContent
-                        side="right"
-                        className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
-                        sideOffset={10}
-                      >
-                        {course.code}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+                            {course.code}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </SidebarMenuItem>
+                  ))
+                )}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         {/* Features */}
         <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground text-sm">Features</SidebarGroupLabel>
+          <SidebarGroupLabel aria-hidden={collapsed} className={collapsed ? "hidden" : "text-sidebar-foreground text-sm"}>Features</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem key="features-calendar">
@@ -241,7 +257,9 @@ export default function DashboardSidebarMenu() {
                       >
                         <Link href="/dashboard/calendar" className="flex min-w-0 items-center gap-2">
                           <Calendar className="h-4 w-4 shrink-0" />
-                          <span className="overflow-hidden text-ellipsis whitespace-nowrap">Calendar</span>
+                          <span aria-hidden={collapsed} className={collapsed ? "hidden" : "overflow-hidden text-ellipsis whitespace-nowrap"}>
+                            Calendar
+                          </span>
                         </Link>
                       </SidebarMenuButton>
                     </TooltipTrigger>
@@ -261,7 +279,7 @@ export default function DashboardSidebarMenu() {
 
         { /* Course Displays */ }
         <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground text-sm">Course Displays</SidebarGroupLabel>
+          <SidebarGroupLabel aria-hidden={collapsed} className={collapsed ? "hidden" : "text-sidebar-foreground text-sm"}>Course Displays</SidebarGroupLabel>
           <SidebarMenu>
             { /* The Archive */ }
             <SidebarMenuItem>
@@ -281,7 +299,7 @@ export default function DashboardSidebarMenu() {
                         className="flex min-w-0 items-center gap-2"
                       >
                         <Archive className="h-4 w-4 shrink-0" />
-                        <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+                        <span aria-hidden={collapsed} className={collapsed ? "hidden" : "overflow-hidden text-ellipsis whitespace-nowrap"}>
                           Archived Courses
                         </span>
                       </Link>
@@ -316,7 +334,7 @@ export default function DashboardSidebarMenu() {
                         className="flex min-w-0 items-center gap-2"
                       >
                         <Library className="h-4 w-4 shrink-0" />
-                        <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+                        <span aria-hidden={collapsed} className={collapsed ? "hidden" : "overflow-hidden text-ellipsis whitespace-nowrap"}>
                           All Courses
                         </span>
                       </Link>

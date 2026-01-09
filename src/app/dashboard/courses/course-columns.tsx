@@ -98,13 +98,18 @@ export const columns = (
     accessorFn: (row) => formatInstructorNames(row.enrolled as any[]),
     meta: { priority: 1 },
     enableSorting: true,
-    header: 'Instructor',
+    header: 'Instructor(s)',
     cell: ({ row }) => {
       const instructors = getInstructors(row.original.enrolled as any[]);
       if (!instructors || instructors.length === 0) {
         return <span className="text-muted-foreground italic">None</span>;
       }
-      return instructors.map((f: any) => `${f.firstName ?? ''} ${f.lastName ?? ''}`.trim()).join(', ');
+      if (instructors.length === 1) {
+        const f = instructors[0];
+        return `${f.firstName ?? ''} ${f.lastName ?? ''}`.trim();
+      }
+      const f = instructors[0];
+      return `${(f.firstName ?? '') + (f.lastName ? ' ' + f.lastName : '')}`.trim() + ', ...';
     },
   },
   {
