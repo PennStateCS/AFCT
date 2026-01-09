@@ -145,10 +145,10 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     if (!target) return NextResponse.json({ error: 'Roster entry not found' }, { status: 404 });
 
     // Prevent demoting the only faculty member
-    if (target.role === 'FACULTY' && newRole !== 'FACULTY') {
-      const facultyCount = await prisma.roster.count({ where: { courseId, role: 'FACULTY' } });
-      if (facultyCount <= 1) {
-        return NextResponse.json({ error: 'Cannot demote the only faculty member' }, { status: 400 });
+    if (target.role === 'INSTRUCTOR' && newRole !== 'INSTRUCTOR') {
+      const instructorCount = await prisma.roster.count({ where: { courseId, role: 'INSTRUCTOR' } });
+      if (instructorCount <= 1) {
+        return NextResponse.json({ error: 'Cannot demote the only instructor' }, { status: 400 });
       }
     }
 

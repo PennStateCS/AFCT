@@ -131,11 +131,9 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       firstName: firstName ?? undefined,
       lastName: lastName ?? undefined,
       avatar: avatarFilename !== undefined ? avatarFilename : undefined,
+      role: role,
+      inactive: inactive,
     };
-    if (isAdminOnly) {
-      dataToUpdate.role = (role as Role) ?? undefined;
-      dataToUpdate.inactive = inactive ?? undefined;
-    }
 
     // Perform the update
     const updatedUser = await prisma.user.update({

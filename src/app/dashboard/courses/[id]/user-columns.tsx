@@ -111,7 +111,6 @@ function ActionsCell({ user, onChange, courseId, courseIsArchived, facultyCount,
     ? 'This user cannot be removed from the course'
     : undefined;
 
-  const canInlineDelete = viewerCanDelete && !hasSubmissions && !courseIsArchived;
   return (
     <div className="flex gap-2 items-center">
       <EditUserDialog user={user} open={open} setOpen={setOpen} onSave={handleSave} />
