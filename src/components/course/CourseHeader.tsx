@@ -82,9 +82,12 @@ export function CourseHeader({
   // Use helpers for clarity and reuse
   const facultyNames = formatInstructorNames(enrolled as any);
 
-  const taNames = (enrolled as any[]).filter((u:any) => u.courseRole === 'TA').length > 0
-    ? (enrolled as any[]).filter((u:any) => u.courseRole === 'TA').map((t:any) => `${t.firstName ?? ''} ${t.lastName ?? ''}`.trim()).join(', ')
-    : 'None assigned';
+  const taList = (enrolled as any[]).filter((u:any) => u.courseRole === 'TA');
+  const taNames = taList.length === 0
+    ? 'None assigned'
+    : taList.length === 1
+      ? `${taList[0].firstName ?? ''} ${taList[0].lastName ?? ''}`.trim()
+      : `${(taList[0].firstName ?? '') + (taList[0].lastName ? ' ' + taList[0].lastName : '')}`.trim() + ', ...';
 
   // derive metrics from the course object where possible
   type AssignmentCounts = {
@@ -278,7 +281,7 @@ export function CourseHeader({
               <div className="px-2.5 pb-2.5 pt-2">
                 <dl className="mt-1 grid gap-1.5 text-sm">
                   <div className="grid grid-cols-[90px_1fr] gap-1.5">
-                    <dt className="text-xs text-muted-foreground">Faculty</dt>
+                    <dt className="text-xs text-muted-foreground">Instructor(s)</dt>
                     <dd className="text-xs">{facultyNames}</dd>
                   </div>
                   <div className="grid grid-cols-[90px_1fr] gap-1.5">

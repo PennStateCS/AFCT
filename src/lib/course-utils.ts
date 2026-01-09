@@ -234,7 +234,9 @@ export function getStudentCount(enrolled: EnrolledUser[] | undefined): number {
 export function formatInstructorNames(enrolled: EnrolledUser[] | undefined): string {
   const instructors = getInstructors(enrolled);
   if (instructors.length === 0) return 'TBA';
-  return instructors.map((f) => `${f.firstName ?? ''} ${f.lastName ?? ''}`.trim()).join(', ');
+  if (instructors.length === 1) return `${instructors[0].firstName ?? ''} ${instructors[0].lastName ?? ''}`.trim();
+  // Multiple instructors: show the first instructor followed by an ellipsis
+  return `${(instructors[0].firstName ?? '') + (instructors[0].lastName ? ' ' + instructors[0].lastName : '')}`.trim() + ', ...';
 }
 
 export function deriveRoleSlices(enrolled: EnrolledUser[] | undefined) {
