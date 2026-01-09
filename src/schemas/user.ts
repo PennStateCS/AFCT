@@ -57,9 +57,7 @@ export const UpdateUserSchema = z.object({
   firstName: z.string().trim().min(1, 'First name is required.').max(60, 'First name is too long.'),
   lastName: z.string().trim().min(1, 'Last name is required.').max(60, 'Last name is too long.'),
   role: RoleEnum,
-  /** optional new avatar file */
   avatarFile: ImageFileOptional,
-  /** if true, server should delete current avatar */
   deleteAvatar: z.boolean().default(false),
   inactive: z.boolean(),
 });

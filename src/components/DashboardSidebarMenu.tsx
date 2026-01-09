@@ -59,11 +59,8 @@ function getCoursesForUser(
   user: { id: string; role: 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT' },
   courses: Course[],
 ) {
-  // Site admins see published courses
-  if (user.role === 'ADMIN') return courses.filter((c) => c.isPublished);
 
-  // For all other users: if they are enrolled in the course show it; do not iterate over individual role arrays.
-  // Students should only see published courses even if enrolled.
+  // Should only see published courses even if enrolled.
   return courses.filter((c) => {
     const enrolled = c.enrolled ?? [];
     const isEnr = isEnrolled(enrolled as any, user.id);

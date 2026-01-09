@@ -245,8 +245,8 @@ export default function CourseEditUserDialog({ open, setOpen, courseId, userId, 
                     const targetRole = roster.role ?? null;
                     let viewerCanDelete = false;
                     if (isSiteAdmin) viewerCanDelete = true;
-                    else if (viewerCourse === 'INSTRUCTOR') viewerCanDelete = targetRole !== 'INSTRUCTOR';
-                    else if (viewerCourse === 'FACULTY') viewerCanDelete = targetRole !== 'INSTRUCTOR' && targetRole !== 'FACULTY';
+                    else if (viewerCourse === 'INSTRUCTOR') viewerCanDelete = (targetRole !== 'INSTRUCTOR');
+                    else if (viewerCourse === 'FACULTY') viewerCanDelete = (targetRole !== 'INSTRUCTOR' && targetRole !== 'FACULTY');
                     const removeDisabled = !viewerCanDelete;
                     const removeTitle = removeDisabled ? 'You do not have permission to remove this user' : undefined;
 
