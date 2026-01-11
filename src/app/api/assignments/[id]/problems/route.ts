@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, JwtPayload } from '@/app/utils/jwt';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { ProblemTypeEnum } from '@/schemas/problem';
+import { z } from 'zod';
 
 export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   // Await params if it is a Promise (some environments do this)
@@ -54,7 +56,28 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     }
 
     // ---- Load problems ----
-    const assignmentProblems = await prisma.assignmentProblem.findMany({
+    // 1. Define the base Problem shape
+    interface Problem {
+      id: string;
+      title: string;
+      description: string | null;
+      type: z.infer<typeof ProblemTypeEnum> | null;
+      maxStates: number | null;
+      isDeterministic: boolean | null;
+    }
+
+    // 2. Use 'extends' or Intersection for the target interface
+    interface ProblemWithSolved extends Problem {
+      solved: boolean;
+    }
+
+    // 3. Define the database result shape
+    interface AssignmentProblemResult {
+      problem: Problem;
+      submissions: { id: string }[];
+    }
+
+    const assignmentProblems: AssignmentProblemResult[] = await prisma.assignmentProblem.findMany({
       where: { assignmentId: assignmentId },
       include: {
         problem: {
@@ -80,7 +103,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       },
     });
 
-    const problems = assignmentProblems.map((ap) => ({
+    const problems: ProblemWithSolved[] = assignmentProblems.map(ap => ({
       ...ap.problem,
       solved: ap.submissions.length > 0,
     }));
