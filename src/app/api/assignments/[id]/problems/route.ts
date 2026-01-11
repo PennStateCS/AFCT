@@ -11,6 +11,25 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
   const params = await context.params;
   const assignmentId = params?.id;
 
+  // Types
+  interface Problem {
+    id: string;
+    title: string;
+    description: string | null;
+    type: z.infer<typeof ProblemTypeEnum> | null;
+    maxStates: number | null;
+    isDeterministic: boolean | null;
+  }
+
+  interface ProblemWithSolved extends Problem {
+    solved: boolean;
+  }
+
+  interface AssignmentProblemResult {
+    problem: Problem;
+    submissions: { id: string }[];
+  }
+
   try {
     // ---- Auth header / token ----
     const authHeader = req.headers.get('authorization');
@@ -56,27 +75,6 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     }
 
     // ---- Load problems ----
-    // 1. Define the base Problem shape
-    interface Problem {
-      id: string;
-      title: string;
-      description: string | null;
-      type: z.infer<typeof ProblemTypeEnum> | null;
-      maxStates: number | null;
-      isDeterministic: boolean | null;
-    }
-
-    // 2. Use 'extends' or Intersection for the target interface
-    interface ProblemWithSolved extends Problem {
-      solved: boolean;
-    }
-
-    // 3. Define the database result shape
-    interface AssignmentProblemResult {
-      problem: Problem;
-      submissions: { id: string }[];
-    }
-
     const assignmentProblems: AssignmentProblemResult[] = await prisma.assignmentProblem.findMany({
       where: { assignmentId: assignmentId },
       include: {
