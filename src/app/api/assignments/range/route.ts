@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
-export async function POST(req: NextRequest) {
   // Types
   interface Course {
     courseId: string
@@ -34,7 +33,8 @@ export async function POST(req: NextRequest) {
     assignmentId: string;
     _count: { _all: number };
   }
-
+  
+export async function POST(req: NextRequest) {
   try {
     const session = await auth();
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
