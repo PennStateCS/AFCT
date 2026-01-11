@@ -139,7 +139,7 @@ export default function SubmissionsTable({
           title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
           width="70vw"
           height="70vh"
-          honorPositions // turn on to respect <x>/<y> from .jff
+          // honorPositions
           // darkMode
           // epsSymbol="ε"
           // labelWrapWidth={24}
