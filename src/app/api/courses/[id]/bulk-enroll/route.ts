@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import type { CourseRole } from '@prisma/client';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const resolved = await params;
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!userIds.length) return NextResponse.json({ message: 'No users provided' }, { status: 400 });
 
     // Map global role to course role
-    const mapRole = (r: string | null | undefined) => {
+    const mapRole = (r: string | null | undefined): CourseRole => {
       switch (r) {
         case 'FACULTY':
         case 'ADMIN':

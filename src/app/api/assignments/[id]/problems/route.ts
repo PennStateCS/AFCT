@@ -82,7 +82,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
 
     const problems = assignmentProblems.map((ap) => ({
       ...ap.problem,
-      solved: ap.submissions.length > 0
+      solved: ap.submissions.length > 0,
     }));
 
     // ---- Activity log ----
