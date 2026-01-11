@@ -14,7 +14,8 @@ RUN npm ci
 # Copy sources and generate Prisma client
 COPY . .
 RUN mkdir -p /app/bin /app/jars || true
-RUN npx prisma generate
+# ENV DISABLE_ERD=true
+# RUN npm run db:erd
 
 # Build the Next.js app (requires devDependencies like Tailwind plugins)
 RUN npm run build
