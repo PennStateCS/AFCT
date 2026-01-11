@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { showToast } from '@/lib/toast';
-import { ArrowLeft, Clock, BookOpen, Target, FileText, Trophy, MessageSquare, Send, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, Clock, BookOpen, Target, FileText, Trophy, MessageSquare, Send, Eye, EyeOff, Download } from 'lucide-react';
 import { Badge as RoleBadge } from '@/components/ui/RoleBadge';
 import JffViewerDialog from '@/components/JffViewerDialog';
 
@@ -508,6 +508,7 @@ export default function StudentAssignmentPage() {
                                     <TableHead>Status</TableHead>
                                     <TableHead>Grade</TableHead>
                                     <TableHead>Feedback</TableHead>
+                                    <TableHead>Download</TableHead>
                                     <TableHead>Submission</TableHead>
                                   </TableRow>
                                 </TableHeader>
@@ -538,6 +539,23 @@ export default function StudentAssignmentPage() {
                                           <span className="text-sm">{submission.feedback}</span>
                                         ) : (
                                           <span className="text-muted-foreground">No feedback</span>
+                                        )}
+                                      </TableCell>
+                                      <TableCell>
+                                        {submission.fileName ? (
+                                          <a
+                                            href={`/uploads/submissions/${encodeURIComponent(submission.fileName)}`}
+                                            download={submission.originalFileName || 'Download'}
+                                            className="text-blue-600 underline hover:text-blue-800 inline-flex items-center gap-1"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            title="Download file"
+                                          >
+                                            <Download className="h-4 w-4" aria-hidden="true" />
+                                            <span>{submission.originalFileName || 'Download'}</span>
+                                          </a>
+                                        ) : (
+                                          <span className="text-muted-foreground text-sm">No file</span>
                                         )}
                                       </TableCell>
                                       <TableCell>
