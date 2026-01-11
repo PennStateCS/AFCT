@@ -50,7 +50,7 @@ export function AdminCourseView({
     onAssignmentPublishToggle,
   );
 
-  const problemColumns = useProblemColumns({
+  const { columns: problemColumns, viewDialog: problemViewDialog } = useProblemColumns({
     courseIsArchived: course.isArchived,
     onEdit: onProblemEdit,
     onDelete: onProblemDelete,
@@ -118,6 +118,8 @@ export function AdminCourseView({
             problemColumns={problemColumns}
             onCreateProblem={onCreateProblem}
           />
+
+          {problemViewDialog}
         </div>
       </TabsContent>
 

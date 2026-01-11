@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { showToast } from '@/lib/toast';
 import { ArrowLeft, Clock, BookOpen, Target, FileText, Trophy, MessageSquare, Send, Eye, EyeOff } from 'lucide-react';
 import { Badge as RoleBadge } from '@/components/ui/RoleBadge';
+import JffViewerDialog from '@/components/JffViewerDialog';
 
 type AssignmentProblem = {
   problem: Problem;
@@ -29,6 +30,9 @@ type Submission = {
   feedback: string | null;
   problemId: string;
   status: 'SUBMITTED' | 'GRADED' | 'LATE';
+  fileName?: string | null;
+  originalFileName?: string | null;
+  correct?: boolean | null;
 };
 
 type Comment = {
@@ -204,6 +208,8 @@ export default function StudentAssignmentPage() {
       [problemId]: !prev[problemId]
     }));
   };
+
+  const [openDialog, setOpenDialog] = useState<{ open: boolean; submission: Submission | null }>({ open: false, submission: null });
 
   useEffect(() => {
     const fetchAssignment = async () => {
@@ -502,6 +508,7 @@ export default function StudentAssignmentPage() {
                                     <TableHead>Status</TableHead>
                                     <TableHead>Grade</TableHead>
                                     <TableHead>Feedback</TableHead>
+                                    <TableHead>Submission</TableHead>
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -532,6 +539,18 @@ export default function StudentAssignmentPage() {
                                         ) : (
                                           <span className="text-muted-foreground">No feedback</span>
                                         )}
+                                      </TableCell>
+                                      <TableCell>
+                                        <div className="flex items-center gap-2">
+                                          {submission.fileName ? (
+                                            <Button size="sm" variant="secondary" onClick={() => setOpenDialog({ open: true, submission })} className="flex items-center gap-1">
+                                              <Eye className="w-4 h-4 mr-2" />
+                                              View
+                                            </Button>
+                                          ) : (
+                                            <span className="text-muted-foreground text-sm">No file</span>
+                                          )}
+                                        </div>
                                       </TableCell>
                                     </TableRow>
                                   ))}
@@ -616,6 +635,18 @@ export default function StudentAssignmentPage() {
             </p>
           </CardContent>
         </Card>
+      )}
+
+      {/* JffViewerDialog for viewing submitted files */}
+      {openDialog.submission && (
+        <JffViewerDialog
+          open={openDialog.open}
+          onOpenChange={(open) => setOpenDialog({ open, submission: null })}
+          src={`/uploads/submissions/${encodeURIComponent(openDialog.submission.fileName ?? '')}`}
+          title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
+          width="70vw"
+          height="70vh"
+        />
       )}
     </div>
   );

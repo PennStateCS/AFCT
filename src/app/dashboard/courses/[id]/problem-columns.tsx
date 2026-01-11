@@ -1,9 +1,11 @@
 // problem-columns.tsx
 import { ColumnDef } from '@tanstack/react-table';
 import type { Problem } from '@prisma/client';
-import { ChevronDown, Pencil, Trash2, FileText } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronDown, Pencil, Trash2, FileText, Eye } from 'lucide-react';
 import { Badge } from '@/components/ui/RoleBadge';
 import { Button } from '@/components/ui/button';
+import JffViewerDialog from '@/components/JffViewerDialog';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -28,7 +30,10 @@ export const useProblemColumns = ({
   onEdit: (p: Problem) => void;
   onDelete: (id: string) => void;
   courseIsArchived: boolean;
-}): ColumnDef<Problem>[] => [
+}): { columns: ColumnDef<Problem>[]; viewDialog: JSX.Element | null } => {
+  const [openDialog, setOpenDialog] = useState<{ open: boolean; problem: Problem | null }>({ open: false, problem: null });
+
+  const columns: ColumnDef<Problem>[] = [
   {
     accessorKey: 'title',
     header: 'Title',
@@ -110,6 +115,17 @@ export const useProblemColumns = ({
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem
+              onClick={() => {
+                if (!row.original.fileName) return;
+                setOpenDialog({ open: true, problem: row.original });
+              }}
+              className="flex items-center gap-2"
+              disabled={!row.original.fileName}
+            >
+              <Eye className="mr-2 h-4 w-4" />
+              View Answer
+            </DropdownMenuItem>
+            <DropdownMenuItem
               onClick={() => onEdit(row.original)}
               className="flex items-center gap-2"
               hidden={courseIsArchived}
@@ -117,7 +133,7 @@ export const useProblemColumns = ({
               <Pencil className="mr-2 h-4 w-4" />
               Edit Problem
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
+            <DropdownMenuSeparator hidden={courseIsArchived} />
             <DropdownMenuItem
               onClick={() => {
                 if (disabled) return;
@@ -137,5 +153,19 @@ export const useProblemColumns = ({
         </DropdownMenu>
       );
     },
-  },
-];
+}
+  ];
+
+  const viewDialog = openDialog.problem ? (
+    <JffViewerDialog
+      open={openDialog.open}
+      onOpenChange={(open) => setOpenDialog({ open, problem: open ? openDialog.problem : null })}
+      src={`/uploads/problems/${encodeURIComponent(openDialog.problem.fileName ?? '')}`}
+      title={`${openDialog.problem.originalFileName || openDialog.problem.fileName} - Problem`}
+      width="70vw"
+      height="70vh"
+    />
+  ) : null;
+
+  return { columns, viewDialog };
+}
