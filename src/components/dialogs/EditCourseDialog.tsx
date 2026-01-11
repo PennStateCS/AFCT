@@ -58,7 +58,7 @@ export function EditCourseDialog({ course, open, setOpen, onSave }: EditCourseDi
     handleSubmit,
     reset,
     watch,
-    formState: { isDirty, isValid, errors },
+    formState: { isDirty, isValid, errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(CourseFormSchema),
     defaultValues,
@@ -297,7 +297,7 @@ export function EditCourseDialog({ course, open, setOpen, onSave }: EditCourseDi
             </DialogClose>
             <Button
               type="submit"
-              disabled={!isValid || !isDirty || course.isArchived}
+              disabled={!isValid || !isDirty || isSubmitting || course.isArchived}
               title={
                 !isValid
                   ? 'Fix validation errors to save'
@@ -306,7 +306,7 @@ export function EditCourseDialog({ course, open, setOpen, onSave }: EditCourseDi
                     : "Course is not archived"
               }
             >
-              Save Changes
+              {isSubmitting ? 'Saving...' : 'Save Changes'}
             </Button>
           </DialogFooter>
         </form>

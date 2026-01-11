@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -9,7 +9,14 @@ import {
   CheckCircle,
   XCircle,
   Package,
+  ChevronDown,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "./ui/dropdown-menu";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -77,6 +84,27 @@ export default function AssignmentSubmissions({
   const [userGrade, setUserGrade] = useState<number | null>(null);
   const [isLoadingGrade, setIsLoadingGrade] = useState(false);
 
+  // Student search/filter
+  const [studentFilter, setStudentFilter] = useState<string>('');
+  const [menuOpen, setMenuOpen] = useState<boolean>(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const filteredStudents = useMemo(() => {
+    const f = studentFilter.trim().toLowerCase();
+    if (!f) return students;
+    return students.filter((s) => {
+      const full = `${s.firstName ?? ''} ${s.lastName ?? ''}`.toLowerCase();
+      return full.includes(f) || (s.firstName ?? '').toLowerCase().includes(f) || (s.lastName ?? '').toLowerCase().includes(f);
+    });
+  }, [students, studentFilter]);
+
+  useEffect(() => {
+    if (menuOpen) {
+      // Focus the search input when the menu opens
+      setTimeout(() => inputRef.current?.focus(), 0);
+    }
+  }, [menuOpen]);
+
   const selectedStudent = students[selectedIndex] ?? null;
 
   // Handle draggable resize
@@ -126,6 +154,18 @@ export default function AssignmentSubmissions({
         const res = await fetch(`/api/courses/${courseId}/students`);
         if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load students');
         const data: Person[] = await res.json();
+        // Sort students alphabetically by last name, then first name (case-insensitive)
+        data.sort((a, b) => {
+          const aLast = (a.lastName ?? '').toLowerCase();
+          const bLast = (b.lastName ?? '').toLowerCase();
+          if (aLast < bLast) return -1;
+          if (aLast > bLast) return 1;
+          const aFirst = (a.firstName ?? '').toLowerCase();
+          const bFirst = (b.firstName ?? '').toLowerCase();
+          if (aFirst < bFirst) return -1;
+          if (aFirst > bFirst) return 1;
+          return 0;
+        });
         setStudents(data);
         if (data.length > 0) setSelectedIndex(0);
       } catch (err) {
@@ -384,18 +424,62 @@ export default function AssignmentSubmissions({
                 >
                   <ChevronLeft className="h-4 w-4" /> Previous
                 </Button>
-                <select
-                  className="w-[220px] rounded border px-3 py-2"
-                  onChange={(e) => handleSelectChange(e.target.value)}
-                  value={selectedStudent?.id ?? ""}
-                  aria-label="Select student"
-                >
-                  {students.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.firstName} {s.lastName}
-                    </option>
-                  ))}
-                </select>
+                <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="flex items-center gap-2 w-[320px] justify-between bg-white text-foreground border border-gray-200 hover:bg-slate-50 focus:ring-2 focus:ring-offset-1 focus:ring-primary-300">
+                      <span className="truncate">{selectedStudent ? `${selectedStudent.firstName} ${selectedStudent.lastName}` : 'Select student'}</span>
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-[320px] p-2 bg-white text-foreground border border-gray-200 shadow-lg rounded-md">
+                    <Input
+                      ref={inputRef}
+                      placeholder="Search students..."
+                      value={studentFilter}
+                      onChange={(e) => setStudentFilter(e.target.value)}
+                      className="mb-2 bg-gray-50 border border-gray-200"
+                      aria-label="Search students by name"
+                      onKeyDown={(e) => {
+                        // Prevent any keyboard event from bubbling up to the DropdownMenu
+                        e.stopPropagation();
+                        // Enter selects the first filtered student (if any)
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          if (filteredStudents.length > 0) {
+                            const pick = filteredStudents[0];
+                            handleSelectChange(pick.id);
+                            setStudentFilter('');
+                            setMenuOpen(false);
+                          }
+                          return;
+                        }
+                        // Allow Escape to clear the filter
+                        if (e.key === 'Escape') {
+                          setStudentFilter('');
+                        }
+                      }}
+                    />
+                    <div className="max-h-64 overflow-auto">
+                      {filteredStudents.length === 0 ? (
+                        <div className="text-sm text-muted-foreground p-2">No students found</div>
+                      ) : (
+                        filteredStudents.map((s) => (
+                          <DropdownMenuItem
+                            key={s.id}
+                            className="hover:bg-slate-100"
+                            onClick={() => {
+                              handleSelectChange(s.id);
+                              setStudentFilter('');
+                              setMenuOpen(false);
+                            }}
+                          >
+                            <span className="truncate">{s.firstName} {s.lastName}</span>
+                          </DropdownMenuItem>
+                        ))
+                      )}
+                    </div>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <Button
                   variant="secondary"
                   onClick={goNext}
