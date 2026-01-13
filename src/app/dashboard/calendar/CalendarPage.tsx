@@ -98,7 +98,7 @@ export default function CalendarPage() {
             selected={selected}
             onSelect={setSelected}
             onMonthChange={(month: Date) => fetchForMonth(month)}
-            className="w-full h-full text-black"
+            className="w-full h-full text-foreground"
             components={{
               DayButton: (props: any) => {
                 const dateStr = localDateKey(props.day.date);
