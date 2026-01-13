@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import * as Popover from '@radix-ui/react-popover';
 import { Info } from 'lucide-react';
 import InputGroup from '@/components/ui/InputGroup';
+import { Session } from 'node:inspector/promises';
 
 // Simple validators
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -186,10 +187,11 @@ export default function LoginPage() {
       {' '}
       <div className="bg-card relative z-10 mx-2 w-full max-w-[400px] rounded-2xl border px-5 py-8 shadow-2xl">
         {/* Floating Login Test Menu */}
-        <div
-          style={{ right: '-150px' }}
-          className="absolute top-1/2 z-50 flex -translate-y-1/2 flex-col gap-2 rounded-xl border bg-white/90 p-4 shadow-lg dark:border-gray-700 dark:bg-gray-800/90"
-        >
+        {process.env.NODE_ENV !== 'production' && (
+          <div
+            style={{ right: '-150px' }}
+            className="absolute top-1/2 z-50 flex -translate-y-1/2 flex-col gap-2 rounded-xl border bg-white/90 p-4 shadow-lg dark:border-gray-700 dark:bg-gray-800/90"
+          >
           <span className="mb-2 text-xs font-semibold text-gray-600 dark:text-gray-300">
             Test Logins
           </span>
@@ -215,7 +217,8 @@ export default function LoginPage() {
               {role === 'ta' ? 'TA' : role.charAt(0).toUpperCase() + role.slice(1)}
             </button>
           ))}
-        </div>
+          </div>
+        )}
 
         <h1 className="p-2 text-center text-2xl font-bold text-gray-900">AFCT Dashboard</h1>
 
