@@ -1158,7 +1158,7 @@ model AssignmentGrade {
   student   User   @relation(fields: [studentId], references: [id], onDelete: Restrict)
   studentId String
 
-  @@unique([assignmentId, studentId])
+  @@unique([assignmentId, studentId], name: "assignmentId_studentId")
   @@index([assignmentId])
   @@index([studentId])
   @@index([syncedToCanvas])
@@ -1304,15 +1304,19 @@ No additional dependencies required! The implementation uses:
 ### Step 5: Implement Canvas API Service
 
 1. Create `/src/lib/canvas-api.ts` with the code from the examples above
-2. Test the connection:
+2. Test the connection (after building):
    ```bash
+   # First, build the project
+   npm run build
+   
+   # Then test with a simple script
    node -e "
-   const { CanvasAPI } = require('./src/lib/canvas-api.ts');
-   const api = new CanvasAPI({
-     baseUrl: 'https://yourschool.instructure.com/api/v1',
-     accessToken: 'your_token'
-   });
-   api.getCourses().then(console.log);
+   fetch('https://yourschool.instructure.com/api/v1/courses', {
+     headers: { 'Authorization': 'Bearer your_token' }
+   })
+   .then(res => res.json())
+   .then(console.log)
+   .catch(console.error);
    "
    ```
 
