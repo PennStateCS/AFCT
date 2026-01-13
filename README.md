@@ -96,6 +96,7 @@ NEXTAUTH_URL="http://localhost:3000"
 - [Development Setup Guide](docs/development-setup.md) - Windows & Linux setup instructions
 - [PostgreSQL Setup Guide](docs/postgresql-ubuntu-setup.md)
 - [Database Troubleshooting](docs/database-troubleshooting.md)
+- [Canvas LMS Integration](docs/canvas-lms-integration.md) - Guide for integrating with Canvas LMS
 
 ---
 
