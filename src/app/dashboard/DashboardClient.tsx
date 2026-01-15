@@ -50,7 +50,7 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
                 >
                   <div
                     role="link"
-                    className="group border-border bg-card flex h-full cursor-pointer overflow-hidden rounded-lg border shadow transition-all hover:bg-gray-50 hover:shadow-md"
+                    className="group border-border bg-card flex h-full cursor-pointer overflow-hidden rounded-lg border shadow transition-all hover:bg-accent hover:shadow-md"
                   >
                     {/* Vertical colored bar */}
                     <div
