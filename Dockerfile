@@ -40,7 +40,7 @@ COPY --from=builder /app/scripts ./scripts
 
 # Copy jars directory from builder into runtime image (builder ensures dir exists)
 COPY --from=builder /app/jars /app/jars
-RUN chmod -R 644 /app/jars || true && chmod +x /app/jars/*.jar || true
+RUN chmod -R 755 /app/jars || true && chmod +x /app/jars/*.jar || true
 
 # Copy bin directory from builder (may be empty) and ensure permissions
 COPY --from=builder /app/bin /app/bin
