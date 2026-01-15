@@ -32,7 +32,7 @@ export function AssignmentsCard({
         <Button
           style={{
             backgroundColor: 'var(--color-primary)',
-            color: 'var(--color-primary-foreground)',
+            color: 'var(--color-secondary-foreground)',
           }}
           onClick={onCreateAssignment}
           hidden={courseIsArchived}
