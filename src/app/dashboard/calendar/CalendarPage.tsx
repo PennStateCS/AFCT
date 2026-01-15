@@ -89,16 +89,16 @@ export default function CalendarPage() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-start min-h-screen overflow-hidden bg-white">
+    <div className="flex flex-col items-center justify-start min-h-screen overflow-hidden bg-background">
       <h1 className="text-2xl font-bold p-4">Calendar</h1>
-      <div className="w-full max-w-6xl border border-gray-200 rounded-lg shadow bg-white flex flex-col items-center p-4 flex-1" style={{ boxSizing: 'border-box', minHeight: 480 }}>
+      <div className="w-full max-w-6xl border border-gray-200 rounded-lg shadow bg-background flex flex-col items-center p-4 flex-1" style={{ boxSizing: 'border-box', minHeight: 480 }}>
         <div className="w-full h-full overflow-auto">
           <Calendar
             mode="single"
             selected={selected}
             onSelect={setSelected}
             onMonthChange={(month: Date) => fetchForMonth(month)}
-            className="w-full h-full text-black"
+            className="w-full h-full text-foreground"
             components={{
               DayButton: (props: any) => {
                 const dateStr = localDateKey(props.day.date);

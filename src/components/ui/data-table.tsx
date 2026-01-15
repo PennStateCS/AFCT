@@ -351,7 +351,7 @@ export function DataTable<TData, TValue>({
             >
               <TableCell colSpan={columns.length}>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="bg-header-background flex items-center gap-2 font-normal">
+                  <div className="bg-header-background flex items-center gap-2 font-normal text-foreground">
                     <span>
                       Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
                       &nbsp;&nbsp;&nbsp;
