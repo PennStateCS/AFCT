@@ -43,7 +43,7 @@ export async function POST(req: Request) {
     const buffer = Buffer.from(await file.arrayBuffer());
     const fileName = `${Date.now()}-${file.name}`;
     const fullPath = path.join(uploadsDir, fileName);
-    fs.writeFileSync(fullPath, buffer);
+    fs.writeFileSync(fullPath, buffer, {mode: 0o755});
 
     // Create the problem record in the database
     const problem = await prisma.problem.create({
