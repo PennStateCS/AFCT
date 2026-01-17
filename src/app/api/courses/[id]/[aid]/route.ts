@@ -2,6 +2,39 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { ProblemTypeEnum } from '@/schemas/problem';
+import { RoleEnum } from '@/schemas/user';
+import { z } from 'zod';
+
+// Types
+interface AssignmentWithProblemsAndCourse {
+  problems: {
+    problem: {
+      id: string;
+      title: string;
+      description: string | null;
+      type: z.infer<typeof ProblemTypeEnum> | null;
+      maxStates: number | null;
+      isDeterministic: boolean | null;
+      fileName: string | null;
+      originalFileName: string | null;
+    }
+  }[]
+
+  course: {
+    name: string;
+    code: string;
+    isArchived: boolean;
+    roster: {
+      role: z.infer<typeof RoleEnum> | null;
+      user: {
+        id: string;
+        firstName: string;
+        lastName: string;
+      }
+    }[]
+  }
+}
 
 // GET: Fetch a specific assignment and related data within a course
 export async function GET(_: Request, context: { params: Promise<{ id: string; aid: string }> }) {
@@ -11,33 +44,48 @@ export async function GET(_: Request, context: { params: Promise<{ id: string; a
   try {
     // Query the assignment from the database
     const assignment = await prisma.assignment.findFirst({
-      where: {
-        id: assignmentId,
-        courseId, // Ensure the assignment belongs to the specified course
-      },
-      include: {
-        problems: {
-          include: {
-            problem: true, // Join AssignmentProblem → Problem
+    where: {
+      id: assignmentId,
+      courseId,
+    },
+    include: {
+      problems: {
+        select: {
+          problem: {
+            select: {
+              id: true,
+              title: true,
+              description: true,
+              type: true,
+              maxStates: true,
+              isDeterministic: true,
+              fileName: true,
+              originalFileName: true,
+            },
           },
         },
-        course: {
-          include: {
-            roster: {
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                  },
+      },
+      course: {
+        select: {
+          name: true,
+          code: true,
+          isArchived: true,
+          roster: {
+            select: {
+              role: true,
+              user: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
                 },
               },
             },
           },
         },
       },
-    });
+    },
+  }) as AssignmentWithProblemsAndCourse | null;
 
     // Return 404 if no matching assignment was found
     if (!assignment) {
