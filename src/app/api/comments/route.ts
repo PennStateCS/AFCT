@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
           },
         },
       },
-    }) as unknown as CommentDB;
+    }) as CommentDB;
 
     await createEnhancedActivityLog(prisma, request, {
       userId: user.id,
@@ -230,9 +230,9 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: { createdAt: 'asc' },
-    }) as unknown as CommentDB[];
+    }) as CommentDB[];
 
-    const formatted: CommentResponse[] = comments.map((c: CommentDB) => ({
+    const formatted: CommentResponse[] = comments.map((c) => ({
       id: c.id,
       content: c.content,
       createdAt: c.createdAt,
@@ -243,7 +243,7 @@ export async function GET(request: NextRequest) {
         avatar: c.roster.user.avatar ?? null,
         role: c.roster.role ?? c.roster.user.role ?? null,
       },
-    })) as unknown as CommentResponse[];
+    })) as CommentResponse[];
 
     return NextResponse.json(formatted);
   } catch (error) {

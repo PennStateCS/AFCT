@@ -89,7 +89,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       orderBy: {
         problemId: 'asc'
       },
-    }) as unknown as AssignmentProblemResult[];
+    }) as AssignmentProblemResult[];
 
     const problems: ProblemWithSolved[] = assignmentProblems.map(ap => ({
       ...ap.problem,

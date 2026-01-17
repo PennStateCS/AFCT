@@ -4,6 +4,21 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { ProblemTypeEnum } from '@/schemas/problem';
+import { z } from 'zod';
+
+// Types
+interface Id {
+  id: string;
+};
+
+interface AssignmentProblemCount {
+  _count: {
+    submissions: number;
+  };
+  assignmentId: string;
+  problemId: string;
+}
 
 // POST: Replace problems for a given assignment in a specific course
 export async function POST(
@@ -45,9 +60,9 @@ export async function POST(
         courseId,
       },
       select: { id: true },
-    });
+    }) as Id[];
 
-    const validIds = validProblems.map((p) => p.id);
+    const validIds = validProblems.map((p) => p.id );
 
     // Get existing assignment-problem links
     const existingLinks = await prisma.assignmentProblem.findMany({
@@ -64,7 +79,7 @@ export async function POST(
           },
         },
       },
-    });
+    }) as AssignmentProblemCount[];
 
     // Separate links with and without submissions
     const linksWithSubmissions = existingLinks.filter(link => link._count.submissions > 0);
@@ -87,7 +102,7 @@ export async function POST(
     const protectedProblemIds = linksWithSubmissions.map(link => link.problemId);
     
     // Add new links for problems that aren't already linked
-    const newProblemIds = validIds.filter(id => !existingProblemIds.includes(id));
+    const newProblemIds = validIds.filter(id => !existingProblemIds.includes(id)) as string[];
     
     if (newProblemIds.length > 0) {
       await prisma.assignmentProblem.createMany({
