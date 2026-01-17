@@ -5,6 +5,17 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
+// Types
+interface Submission {
+  id: string,
+  submittedAt: Date,
+  feedback: string,
+  correct: boolean,
+  fileName: string,
+  originalFileName: string,
+  problemId: string,
+}
+
 export async function GET(
   req: Request,
   context: { params: Promise<{ id: string; aid: string; sid: string }> },
@@ -68,7 +79,7 @@ export async function GET(
         originalFileName: true,
         problemId: true,
       },
-    });
+    }) as Submission[];
 
     // Group submissions by problemId and attach related problem metadata
     const result: Record<
