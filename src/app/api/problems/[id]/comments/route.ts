@@ -55,7 +55,7 @@ export async function GET(
     });
 
     // Transform comments to match the expected format
-    const transformedComments = comments.map(comment => ({
+    const transformedComments = comments.map((comment: (typeof comments)[number]) => ({
       id: comment.id,
       content: comment.content,
       createdAt: comment.createdAt.toISOString(),

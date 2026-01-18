@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+// Route handler for course grades
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -27,12 +28,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       orderBy: { createdAt: 'asc' }
     });
 
-    const students = roster.map((r) => ({ id: r.user.id, firstName: r.user.firstName, lastName: r.user.lastName, email: r.user.email, avatar: r.user.avatar }));
+    const students = roster.map(
+      (r: (typeof roster)[number]) => ({
+        id: r.user.id,
+        firstName: r.user.firstName,
+        lastName: r.user.lastName,
+        email: r.user.email,
+        avatar: r.user.avatar,
+      }),
+    );
 
     // Get assignments for the course
     const assignments = await prisma.assignment.findMany({ where: { courseId: id }, orderBy: { dueDate: 'asc' } });
-    const assignmentIds = assignments.map((a) => a.id);
-    const studentIds = students.map((s) => s.id);
+    const assignmentIds = assignments.map((a: (typeof assignments)[number]) => a.id);
+    const studentIds = students.map((s: (typeof students)[number]) => s.id);
 
     // Fetch all assignment grades for these students and assignments
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

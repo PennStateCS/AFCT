@@ -93,7 +93,7 @@ export async function GET(_: Request, context: { params: Promise<{ id: string; a
     }
 
     // Keep problems in the structure that the frontend expects
-    const problemsWithRelation = assignment.problems.map((ap) => ({
+      const problemsWithRelation = assignment.problems.map((ap: (typeof assignment.problems)[number]) => ({
       problem: {
         id: ap.problem.id,
         title: ap.problem.title,
@@ -122,7 +122,7 @@ export async function GET(_: Request, context: { params: Promise<{ id: string; a
         name: course.name,
         code: course.code,
         isArchived: course.isArchived,
-        roster: roster.map((r) => ({
+        roster: roster.map((r: (typeof roster)[number]) => ({
           user: r.user,
           role: r.role,
         })),

@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validationResponse } from '@/lib/zod-error';
+import type { Prisma } from '@prisma/client';
 
 // ----------------------------------------
 // Utilities
@@ -59,9 +60,9 @@ export async function GET() {
     });
 
     // Group roster by role (treat INSTRUCTOR like FACULTY for display and permissions)
-    const formatted = courses.map((c) => {
+    const formatted = courses.map((c: (typeof courses)[number]) => {
       // Build single `enrolled` list (user objects with courseRole). Do not construct role-specific arrays here.
-      const enrolled = c.roster.map((r) => ({ ...r.user, courseRole: r.role }));
+      const enrolled = c.roster.map((r: (typeof c.roster)[number]) => ({ ...r.user, courseRole: r.role }));
 
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { roster, ...rest } = c;
@@ -99,7 +100,7 @@ export async function POST(req: Request) {
     const regCode = await generateUniqueCourseCode();
 
     // 4) Create course (and roster rows for faculty) in a transaction for consistency
-    const created = await prisma.$transaction(async (tx) => {
+    const created = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const course = await tx.course.create({
         data: {
           name: json.name,
@@ -137,7 +138,7 @@ export async function POST(req: Request) {
       });
 
       const faculty =
-        withRoster?.roster.filter((r) => r.role === 'FACULTY').map((r) => r.user) ?? [];
+        withRoster?.roster.filter((r: NonNullable<typeof withRoster>['roster'][number]) => r.role === 'FACULTY').map((r: NonNullable<typeof withRoster>['roster'][number]) => r.user) ?? [];
 
       return { course, faculty, withRoster };
     });
