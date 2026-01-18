@@ -1,5 +1,9 @@
+
 FROM node:20-alpine AS builder
 WORKDIR /app
+
+ENV DISABLE_ERD=true
+ENV SKIP_PRISMA_GENERATE=1
 
 # Install Java (OpenJDK) for running .jar files during build if needed
 RUN apk add --no-cache openjdk21-jre
@@ -14,10 +18,11 @@ RUN npm ci
 # Copy sources and generate Prisma client
 COPY . .
 RUN mkdir -p /app/bin /app/jars || true
-# ENV DISABLE_ERD=true
 # RUN npm run db:erd
 
 # Build the Next.js app (requires devDependencies like Tailwind plugins)
+
+RUN npx prisma generate
 RUN npm run build
 
 FROM node:20-alpine AS runtime

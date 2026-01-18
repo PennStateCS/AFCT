@@ -90,7 +90,7 @@ export async function POST(
       },
     }) as AssignmentWithProblems | null;
 
-    const problems = updated?.problems.map((ap) => ap.problem) || [];
+    const problems = updated?.problems.map((ap: NonNullable<typeof updated>['problems'][number]) => ap.problem) || [];
 
     // Log the removal action
     await createEnhancedActivityLog(prisma, req, {

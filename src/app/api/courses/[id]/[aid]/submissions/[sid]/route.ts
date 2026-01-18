@@ -106,10 +106,10 @@ export async function GET(
     > = {};
 
     for (const { problem } of assignmentProblems) {
-      const subsForProblem = submissions.filter((s) => s.problemId === problem.id);
+      const subsForProblem = submissions.filter((s: (typeof submissions)[number]) => s.problemId === problem.id);
       result[problem.id] = {
         problem,
-        submissions: subsForProblem.map((s) => ({
+        submissions: subsForProblem.map((s: (typeof subsForProblem)[number]) => ({
           id: s.id,
           submittedAt: s.submittedAt,
           feedback: s.feedback,
