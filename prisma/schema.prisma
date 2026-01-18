@@ -269,4 +269,6 @@ model ActivityLog {
 generator erd {
   provider = "prisma-erd-generator"
   output   = "ERD.svg"
+  // Only run locally when explicitly enabled
+  disabled = env("DISABLE_ERD")
 }

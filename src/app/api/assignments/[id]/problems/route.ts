@@ -91,7 +91,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       },
     }) as AssignmentProblemResult[];
 
-    const problems: ProblemWithSolved[] = assignmentProblems.map(ap => ({
+    const problems: ProblemWithSolved[] = assignmentProblems.map((ap: (typeof assignmentProblems)[number]) => ({
       ...ap.problem,
       solved: ap.submissions.length > 0,
     }));

@@ -1,7 +1,8 @@
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { NextResponse } from 'next/server';
-import { Role } from '@prisma/client';
+
+type Role = 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT';
 
 export async function POST(req: Request) {
   const session = await auth();

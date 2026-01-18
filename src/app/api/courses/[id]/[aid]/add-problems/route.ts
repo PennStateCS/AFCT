@@ -62,7 +62,7 @@ export async function POST(
       select: { id: true },
     }) as Id[];
 
-    const validIds = validProblems.map((p) => p.id );
+    const validIds = validProblems.map((p: (typeof validProblems)[number]) => p.id );
 
     // Get existing assignment-problem links
     const existingLinks = await prisma.assignmentProblem.findMany({
@@ -82,9 +82,9 @@ export async function POST(
     }) as AssignmentProblemCount[];
 
     // Separate links with and without submissions
-    const linksWithSubmissions = existingLinks.filter(link => link._count.submissions > 0);
-    const linksWithoutSubmissions = existingLinks.filter(link => link._count.submissions === 0);
-    const existingProblemIds = existingLinks.map(link => link.problemId);
+    const linksWithSubmissions = existingLinks.filter((link: (typeof existingLinks)[number]) => link._count.submissions > 0);
+    const linksWithoutSubmissions = existingLinks.filter((link: (typeof existingLinks)[number]) => link._count.submissions === 0);
+    const existingProblemIds = existingLinks.map((link: (typeof existingLinks)[number]) => link.problemId);
 
     // Only remove links that have no submissions
     if (linksWithoutSubmissions.length > 0) {
@@ -99,14 +99,14 @@ export async function POST(
     }
 
     // Keep existing problem IDs that have submissions
-    const protectedProblemIds = linksWithSubmissions.map(link => link.problemId);
+    const protectedProblemIds = linksWithSubmissions.map((link: (typeof linksWithSubmissions)[number]) => link.problemId);
     
     // Add new links for problems that aren't already linked
-    const newProblemIds = validIds.filter(id => !existingProblemIds.includes(id)) as string[];
+    const newProblemIds = validIds.filter((id: string) => !existingProblemIds.includes(id)) as string[];
     
     if (newProblemIds.length > 0) {
       await prisma.assignmentProblem.createMany({
-        data: newProblemIds.map((pid) => ({
+        data: newProblemIds.map((pid: string) => ({
           assignmentId,
           problemId: pid,
         })),
@@ -126,7 +126,9 @@ export async function POST(
       },
     });
 
-    const problems = updated?.problems.map((ap) => ap.problem) || [];
+    const problems = updated?.problems.map(
+      (ap: NonNullable<typeof updated>['problems'][number]) => ap.problem,
+    ) || [];
 
     // Log the action to the ActivityLog
     try {
