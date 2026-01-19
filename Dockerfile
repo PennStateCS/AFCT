@@ -37,7 +37,6 @@ COPY --from=builder /app/prisma ./prisma
 # Install only production dependencies for smaller runtime image
 RUN npm ci --omit=dev
 
-
 # Copy generated Prisma client artifacts into runtime image to ensure @prisma/client is available
 COPY --from=builder /app/node_modules/@prisma /app/node_modules/@prisma
 COPY --from=builder /app/node_modules/.prisma /app/node_modules/.prisma
