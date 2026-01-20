@@ -6,11 +6,14 @@ export type AssignmentWithProblemCount = Assignment & {
 };
 
 export type FullCourse = Course & {
-  faculty: User[];
-  tas: User[];
-  students: User[];
+  // enrolled is a list of course members as User objects augmented with their course role and flags
+  enrolled?: (User & { courseRole?: string; hasSubmissions?: boolean })[];
   assignments: AssignmentWithProblemCount[];
   problems: Problem[];
+  // viewer's role in this course (INSTRUCTOR | FACULTY | TA | STUDENT) or null
+  viewerRole?: string | null;
+  // viewer's global default role (ADMIN | FACULTY | TA | STUDENT) or null
+  viewerDefaultRole?: string | null;
 };
 
 export type DeleteTarget = {

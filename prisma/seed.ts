@@ -1,5 +1,3 @@
-// prisma/seed.ts
-
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 
@@ -51,10 +49,10 @@ async function main() {
   });
 
   const faculty3 = await prisma.user.upsert({
-    where: { email: 'faculty1@example.com' },
+    where: { email: 'faculty3@example.com' },
     update: {},
     create: {
-      email: 'faculty1@example.com',
+      email: 'faculty3@example.com',
       firstName: 'Clark',
       lastName: 'Kent',
       password: hashedPassword,
@@ -64,10 +62,10 @@ async function main() {
 
   // Create TA Users
   const ta1 = await prisma.user.upsert({
-    where: { email: 'ta1@example.com' },
+    where: { email: 'ta@example.com' },
     update: {},
     create: {
-      email: 'ta1@example.com',
+      email: 'ta@example.com',
       firstName: 'Diana',
       lastName: 'Prince',
       password: hashedPassword,
@@ -154,36 +152,61 @@ async function main() {
     students.push(student);
   }
 
+  // ===========================
   // Create Courses
-  const course1 = await prisma.course.upsert({
-    where: { id: 'cmdnw26cf0000lv14s4q5v73b' },
-    update: {},
-    create: {
-      id: 'cmdnw26cf0000lv14s4q5v73b',
-      name: 'Programming and Computation I: Fundamentals',
-      code: 'CMPSC 131',
-      regCode: 'VSU053',
-      semester: 'Spring 2026',
-      credits: 3,
-      startDate: new Date('2025-07-10T03:59:00.000Z'),
-      endDate: new Date('2025-09-18T03:59:00.000Z'),
-      isPublished: true,
-    },
-  });
+  // ===========================
 
-  const course2 = await prisma.course.upsert({
+  // Course 1 (Published, Not Archived, Has Stuff)
+  const course1 = await prisma.course.upsert({
     where: { id: 'cmdoowaql0000lvesz3qanxph' },
     update: {},
     create: {
       id: 'cmdoowaql0000lvesz3qanxph',
-      name: 'Computer Science Foundations',
-      code: 'CS 101',
+      name: 'Introduction to Digital Systems',
+      code: 'CMPEN 271',
       regCode: 'ABC123',
       semester: 'Fall 2025',
       credits: 4,
       startDate: new Date('2025-08-15T03:59:00.000Z'),
+      endDate: new Date('2026-01-15T03:59:00.000Z'),
+      isPublished: true,
+      isArchived: false,
+    },
+  });
+
+  // Course 2 (Published, Archived, Has Stuff)
+  const course2 = await prisma.course.upsert({
+    where: { id: 'cmdqx47bn0003tp19s8vzo52m' },
+    update: {},
+    create: {
+      id: 'cmdqx47bn0003tp19s8vzo52m',
+      name: 'Introduction to Digital Systems',
+      code: 'CMPEN 271',
+      regCode: 'DEF456',
+      semester: 'Spring 2025',
+      credits: 4,
+      startDate: new Date('2025-01-15T03:59:00.000Z'),
+      endDate: new Date('2025-05-15T03:59:00.000Z'),
+      isPublished: true,
+      isArchived: true,
+    },
+  });
+
+   // Course 3 (Published, Not Archived, Empty)
+  const course3 = await prisma.course.upsert({
+    where: { id: 'cmdnw83cr0007kv24t5xha91p' },
+    update: {},
+    create: {
+      id: 'cmdnw83cr0007kv24t5xha91p',
+      name: 'Programming and Computation I: Fundamentals',
+      code: 'CMPSC 131',
+      regCode: 'VSU053',
+      semester: 'Fall 2025',
+      credits: 3,
+      startDate: new Date('2025-08-15T03:59:00.000Z'),
       endDate: new Date('2025-12-15T03:59:00.000Z'),
       isPublished: true,
+      isArchived: false,
     },
   });
 
@@ -193,19 +216,41 @@ async function main() {
     update: {},
     create: {
       id: 'cmdnw26cm0001lv14v5vxo26o',
-      role: 'FACULTY',
+      role: 'INSTRUCTOR',
       courseId: course1.id,
       userId: faculty1.id,
     },
   });
 
   await prisma.roster.upsert({
-    where: { id: 'cmdnwnlp4000blvowamx2a2z9' },
+    where: { id: 'cmdjg25vm0002gw68m4bqe73x' },
     update: {},
     create: {
-      id: 'cmdnwnlp4000blvowamx2a2z9',
+      id: 'cmdjg25vm0002gw68m4bqe73x',
       role: 'TA',
       courseId: course1.id,
+      userId: ta1.id,
+    },
+  });
+
+  await prisma.roster.upsert({
+    where: { id: 'cmdnw44cm2201lv14v5vox44x' },
+    update: {},
+    create: {
+      id: 'cmdnw44cm2201lv14v5vox44x',
+      role: 'INSTRUCTOR',
+      courseId: course2.id,
+      userId: faculty1.id,
+    },
+  });
+
+  await prisma.roster.upsert({
+    where: { id: 'cmdfr61qd0009rx21t7wmo48j' },
+    update: {},
+    create: {
+      id: 'cmdfr61qd0009rx21t7wmo48j',
+      role: 'TA',
+      courseId: course2.id,
       userId: ta1.id,
     },
   });
@@ -215,15 +260,16 @@ async function main() {
     update: {},
     create: {
       id: 'cmdoowaqx0001lvesqduvsw2v',
-      role: 'FACULTY',
-      courseId: course2.id,
+      role: 'INSTRUCTOR',
+      courseId: course3.id,
       userId: faculty2.id,
     },
   });
 
   // Add some students to courses (check for existing entries first)
   const studentsInCourse1 = students.slice(0, 5);
-  const studentsInCourse2 = students.slice(5, 10);
+  const studentsInCourse2 = students.slice(5, 9);
+  const studentsInCourse3 = students.slice(5, 8);
 
   let rosterIdCounter = 1;
   for (const student of studentsInCourse1) {
@@ -272,50 +318,178 @@ async function main() {
     rosterIdCounter++;
   }
 
+  for (const student of studentsInCourse3) {
+    const existingRoster = await prisma.roster.findUnique({
+      where: {
+        courseId_userId: {
+          courseId: course3.id,
+          userId: student.id,
+        },
+      },
+    });
+
+    if (!existingRoster) {
+      await prisma.roster.create({
+        data: {
+          id: `roster_${rosterIdCounter}`,
+          role: 'STUDENT',
+          courseId: course3.id,
+          userId: student.id,
+        },
+      });
+    }
+    rosterIdCounter++;
+  }
+
+  // ===========================
   // Create Problems
+  // ===========================
+
+ // Couse 1
   const problem1 = await prisma.problem.upsert({
-    where: { id: 'cmdqm15uk0001lvdgybyjred8' },
+    where: { id: 'cmioqr2yw000fru6re5kqrm4w' },
     update: {},
     create: {
-      id: 'cmdqm15uk0001lvdgybyjred8',
-      title: 'Test',
-      description: '123',
-      fileName: '1753918906842-fake_solution.txt',
-      originalFileName: 'fake_solution.txt',
+      id: 'cmioqr2yw000fru6re5kqrm4w',
+      title: 'D Flip-Flop',
+      description: 'Design the finite automation machine involving a D flip-flop with "q0" being the initial state.',
+      fileName: '1764689813955-d_flip-flop.jff',
+      originalFileName: 'd_flip-flop.jff',
       type: 'FA',
-      maxStates: -1,
-      isDeterministic: false,
+      maxStates: 2,
+      isDeterministic: true,
       courseId: course1.id,
     },
   });
 
   const problem2 = await prisma.problem.upsert({
-    where: { id: 'cme36maxh000hlvp8eq6ik0ae' },
+    where: { id: 'cmioqqpb10007ru6rgv934ig5' },
     update: {},
     create: {
-      id: 'cme36maxh000hlvp8eq6ik0ae',
-      title: '1.1',
-      description: 'Test',
-      fileName: '1754679079632-fake_solution.txt',
-      originalFileName: 'fake_solution.txt',
+      id: 'cmioqqpb10007ru6rgv934ig5',
+      title: 'Toggle Flip-Flop',
+      description: 'Design the finite automation machine involving a toggle flip-flop with "q0" being the initial state.',
+      fileName: '1764689796246-toggle_flip-flop.jff',
+      originalFileName: 'toggle_flip-flop.jff',
       type: 'FA',
-      maxStates: 5,
+      maxStates: 2,
+      isDeterministic: true,
+      courseId: course1.id,
+    },
+  });
+
+  const problem3 = await prisma.problem.upsert({
+    where: { id: 'cmioqq1tj0003ru6rmf0vvl4u' },
+    update: {},
+    create: {
+      id: 'cmioqq1tj0003ru6rmf0vvl4u',
+      title: 'Traffic Light',
+      description: 'Design a traffic light with the states "Green", "Yellow", and "Red" with the "Green" State being the initial state and a high signal causing a change in the light.',
+      fileName: '1764689765806-traffic_light.jff',
+      originalFileName: 'traffic_light.jff',
+      type: 'FA',
+      maxStates: 3,
+      isDeterministic: false,
+      courseId: course1.id,
+    },
+  });
+
+  const problem4 = await prisma.problem.upsert({
+    where: { id: 'cmioqqwvg000bru6re8nk7ko6' },
+    update: {},
+    create: {
+      id: 'cmioqqwvg000bru6re8nk7ko6',
+      title: 'Three Consecutive 1s',
+      description: 'With "q0" being the initial state, create the finite automation with mininum number of states required to detect three consecutive ones.',
+      fileName: '1764689806055-three_consecutive.jff',
+      originalFileName: 'three_consecutive.jff',
+      type: 'FA',
+      maxStates: 4,
+      isDeterministic: true,
+      courseId: course1.id,
+    },
+  });
+
+  // Cousre 2
+  const problem5 = await prisma.problem.upsert({
+    where: { id: 'cmdtv39kl0004lt85v2zpa60n' },
+    update: {},
+    create: {
+      id: 'cmdtv39kl0004lt85v2zpa60n',
+      title: 'D Flip-Flop',
+      description: 'Design the finite automation machine involving a D flip-flop with "q0" being the initial state.',
+      fileName: '1764689813955-d_flip-flop.jff',
+      originalFileName: 'd_flip-flop.jff',
+      type: 'FA',
+      maxStates: 2,
       isDeterministic: true,
       courseId: course2.id,
     },
   });
 
+  const problem6 = await prisma.problem.upsert({
+    where: { id: 'cmdpb74cs0006hp33s1mxe92c' },
+    update: {},
+    create: {
+      id: 'cmdpb74cs0006hp33s1mxe92c',
+      title: 'Toggle Flip-Flop',
+      description: 'Design the finite automation machine involving a toggle flip-flop with "q0" being the initial state.',
+      fileName: '1764689796246-toggle_flip-flop.jff',
+      originalFileName: 'toggle_flip-flop.jff',
+      type: 'FA',
+      maxStates: 2,
+      isDeterministic: true,
+      courseId: course2.id,
+    },
+  });
+
+  const problem7 = await prisma.problem.upsert({
+    where: { id: 'cmdlh58rt0008jy40p6xsa19u' },
+    update: {},
+    create: {
+      id: 'cmdlh58rt0008jy40p6xsa19u',
+      title: 'Traffic Light',
+      description: 'Design a traffic light with the states "Green", "Yellow", and "Red" with the "Green" State being the initial state and a high signal causing a change in the light.',
+      fileName: '1764689765806-traffic_light.jff',
+      originalFileName: 'traffic_light.jff',
+      type: 'FA',
+      maxStates: 3,
+      isDeterministic: false,
+      courseId: course2.id,
+    },
+  });
+
+  const problem8 = await prisma.problem.upsert({
+    where: { id: 'cmdwv12pm0005fz77r3qhd84t' },
+    update: {},
+    create: {
+      id: 'cmdwv12pm0005fz77r3qhd84t',
+      title: 'Three Consecutive 1s',
+      description: 'With "q0" being the initial state, create the finite automation with mininum number of states required to detect three consecutive ones.',
+      fileName: '1764689806055-three_consecutive.jff',
+      originalFileName: 'three_consecutive.jff',
+      type: 'FA',
+      maxStates: 4,
+      isDeterministic: true,
+      courseId: course2.id,
+    },
+  });
+
+  // ===========================
   // Create Assignments
+  // ===========================
+
+  // Course 1
   const assignment1 = await prisma.assignment.upsert({
     where: { id: 'cmdnwyb8k0000lvjcjctu5em3' },
     update: {},
     create: {
       id: 'cmdnwyb8k0000lvjcjctu5em3',
-      title: 'Chapter 1',
+      title: 'Flip Flops',
       description:
-        'For this Chapter 1 homework, you will review the key concepts introduced in the first chapter, including basic terminology and foundational principles. The assignment consists of a mix problems. No submissions will be accepted late.',
-      dueDate: new Date('2026-06-29T03:59:00.000Z'),
-      maxPoints: 100,
+        'For this assignment, you will be creating finite automation machines for varying types of flip-flops.',
+      dueDate: new Date('2025-09-29T03:59:00.000Z'),
+      maxPoints: 20,
       isPublished: true,
       courseId: course1.id,
     },
@@ -326,30 +500,50 @@ async function main() {
     update: {},
     create: {
       id: 'cmdp906y10001lviwgpo84uwd',
-      title: 'Chapter 2',
-      description: 'This is a test description.',
-      dueDate: new Date('2025-09-30T03:59:00.000Z'),
-      maxPoints: 100,
-      isPublished: false,
+      title: 'Real Life Examples',
+      description: 'For this assignment, you will be creating finite automation machines solving real world problems.',
+      dueDate: new Date('2025-11-30T03:59:00.000Z'),
+      maxPoints: 20,
+      isPublished: true,
       courseId: course1.id,
     },
   });
 
+    // Course 2
   const assignment3 = await prisma.assignment.upsert({
-    where: { id: 'cme36mhff000jlvp8rfgql6mh' },
+    where: { id: 'cmdks90ng0001bw54k8yvo36s' },
     update: {},
     create: {
-      id: 'cme36mhff000jlvp8rfgql6mh',
-      title: 'Homework 1',
-      description: 'Basic automata problems',
-      dueDate: new Date('2025-12-01T03:59:00.000Z'),
-      maxPoints: 50,
+      id: 'cmdks90ng0001bw54k8yvo36s',
+      title: 'Flip Flops',
+      description:
+        'For this assignment, you will be creating finite automation machines for varying types of flip-flops.',
+      dueDate: new Date('2025-02-15T03:59:00.000Z'),
+      maxPoints: 20,
       isPublished: true,
       courseId: course2.id,
     },
   });
 
+  const assignment4 = await prisma.assignment.upsert({
+    where: { id: 'cmdhz44xf0003lv28v5xro67q' },
+    update: {},
+    create: {
+      id: 'cmdhz44xf0003lv28v5xro67q',
+      title: 'Real Life Examples',
+      description: 'For this assignment, you will be creating finite automation machines solving real world problems.',
+      dueDate: new Date('2025-04-30T03:59:00.000Z'),
+      maxPoints: 20,
+      isPublished: true,
+      courseId: course2.id,
+    },
+  });
+
+  // ===========================
   // Link Problems to Assignments
+  // ===========================
+
+  // Course 1
   await prisma.assignmentProblem.upsert({
     where: {
       assignmentId_problemId: {
@@ -367,14 +561,57 @@ async function main() {
   await prisma.assignmentProblem.upsert({
     where: {
       assignmentId_problemId: {
+        assignmentId: assignment1.id,
+        problemId: problem2.id,
+      },
+    },
+    update: {},
+    create: {
+      assignmentId: assignment1.id,
+      problemId: problem2.id,
+    },
+  });
+
+  await prisma.assignmentProblem.upsert({
+    where: {
+      assignmentId_problemId: {
         assignmentId: assignment2.id,
-        problemId: problem1.id,
+        problemId: problem3.id,
       },
     },
     update: {},
     create: {
       assignmentId: assignment2.id,
-      problemId: problem1.id,
+      problemId: problem3.id,
+    },
+  });
+
+  await prisma.assignmentProblem.upsert({
+    where: {
+      assignmentId_problemId: {
+        assignmentId: assignment2.id,
+        problemId: problem4.id,
+      },
+    },
+    update: {},
+    create: {
+      assignmentId: assignment2.id,
+      problemId: problem4.id,
+    },
+  });
+
+  // Course 2
+  await prisma.assignmentProblem.upsert({
+    where: {
+      assignmentId_problemId: {
+        assignmentId: assignment3.id,
+        problemId: problem5.id,
+      },
+    },
+    update: {},
+    create: {
+      assignmentId: assignment3.id,
+      problemId: problem5.id,
     },
   });
 
@@ -382,27 +619,70 @@ async function main() {
     where: {
       assignmentId_problemId: {
         assignmentId: assignment3.id,
-        problemId: problem2.id,
+        problemId: problem6.id,
       },
     },
     update: {},
     create: {
       assignmentId: assignment3.id,
-      problemId: problem2.id,
+      problemId: problem6.id,
     },
   });
 
+  await prisma.assignmentProblem.upsert({
+    where: {
+      assignmentId_problemId: {
+        assignmentId: assignment4.id,
+        problemId: problem7.id,
+      },
+    },
+    update: {},
+    create: {
+      assignmentId: assignment4.id,
+      problemId: problem7.id,
+    },
+  });
+
+  await prisma.assignmentProblem.upsert({
+    where: {
+      assignmentId_problemId: {
+        assignmentId: assignment4.id,
+        problemId: problem8.id,
+      },
+    },
+    update: {},
+    create: {
+      assignmentId: assignment4.id,
+      problemId: problem8.id,
+    },
+  });
+
+  // Count entities for scalable logging
+  const userCount = await prisma.user.count();
+  const adminCount = await prisma.user.count({ where: { role: 'ADMIN' } });
+  const facultyCount = await prisma.user.count({ where: { role: 'FACULTY' } });
+  const taCount = await prisma.user.count({ where: { role: 'TA' } });
+  const studentCount = await prisma.user.count({ where: { role: 'STUDENT' } });
+  const courseCount = await prisma.course.count();
+  const problemCount = await prisma.problem.count();
+  const assignmentCount = await prisma.assignment.count();
+  const rosterCount = await prisma.roster.count();
+  const assignmentProblemCount = await prisma.assignmentProblem.count();
+  const commentCount = await prisma.comment.count();
+
   console.log('Database seeded successfully!');
-  console.log(`Created:`);
-  console.log(`- 1 Admin user`);
-  console.log(`- 3 Faculty users`);
-  console.log(`- 2 TA users`);
-  console.log(`- ${students.length} Student users`);
-  console.log(`- 2 Courses`);
-  console.log(`- 2 Problems`);
-  console.log(`- 3 Assignments`);
-  console.log(`- Course roster memberships`);
-  console.log(`- Assignment-Problem linkages`);
+  console.log('Created:');
+  console.log(`- ${adminCount} Admin user(s)`);
+  console.log(`- ${facultyCount} Faculty user(s)`);
+  console.log(`- ${taCount} TA user(s)`);
+  console.log(`- ${studentCount} Student user(s)`);
+  console.log(`- ${userCount} Total user(s)`);
+  console.log(`- ${courseCount} Course(s)`);
+  console.log(`- ${problemCount} Problem(s)`);
+  console.log(`- ${assignmentCount} Assignment(s)`);
+  console.log(`- ${rosterCount} Course roster membership(s)`);
+  console.log(`- ${assignmentProblemCount} Assignment-Problem linkage(s)`);
+  console.log(`- ${commentCount} Comment(s)`);
 }
 
 main()

@@ -3,7 +3,6 @@ import { prisma } from '@/lib/prisma';
 
 export async function POST() {
   try {
-    console.log('Test grade creation endpoint called');
     
   // Create a test grade
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -16,12 +15,11 @@ export async function POST() {
       }
     });
     
-    console.log('Test grade created:', result);
     
     // Count total grades
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const count = await (prisma as any).assignmentGrade.count();
-    console.log('Total grades in database:', count);
+  // Test grade creation endpoint
     
     return NextResponse.json({ 
       success: true, 

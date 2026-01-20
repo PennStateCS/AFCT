@@ -1,6 +1,7 @@
 'use client';
 
 import { ColumnDef } from '@tanstack/react-table';
+import { roleSortingFn } from '@/lib/roles';
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { User } from '@prisma/client';
@@ -24,21 +25,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 export function getUserColumns(onUserUpdate: () => void): ColumnDef<User>[] {
-  function formatRole(role: string): string {
-    switch (role) {
-      case 'STUDENT':
-        return 'Student';
-      case 'FACULTY':
-        return 'Faculty';
-      case 'TA':
-        return 'TA';
-      case 'ADMIN':
-        return 'Admin';
-      default:
-        return role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
-    }
-  }
-
   return [
     {
       id: 'avatar',
@@ -50,7 +36,7 @@ export function getUserColumns(onUserUpdate: () => void): ColumnDef<User>[] {
         return (
           <Avatar className="h-12 w-12">
             <AvatarImage
-              src={user.avatar ? `/uploads/${user.avatar}` : undefined}
+              src={user.avatar ? `/uploads/pfps/${user.avatar}` : `/uploads/pfps/default-avatar.png`}
               alt={`${user.firstName} ${user.lastName}`}
             />
             <AvatarFallback className="bg-secondary text-secondary-foreground">
@@ -87,7 +73,8 @@ export function getUserColumns(onUserUpdate: () => void): ColumnDef<User>[] {
       accessorKey: 'role',
       header: 'Role',
       meta: { priority: 3 },
-      cell: ({ row }) => <Badge role={row.original.role}>{formatRole(row.original.role)}</Badge>,
+      cell: ({ row }) => <Badge role={row.original.role} className="w-20" />,
+      sortingFn: roleSortingFn,
     },
     {
       accessorKey: 'inactive',
@@ -145,13 +132,19 @@ function UserActionsCell({ user, onUserUpdate }: { user: User; onUserUpdate: () 
         method: 'DELETE',
       });
 
-      if (!res.ok) throw new Error('Delete failed');
+      if (!res.ok) {
+        const body = await res.json();
+        const errorMsg = body?.error || "Unexpected Error: Failed to delete user";
+
+        showToast.error(errorMsg);
+        return;
+      }
 
       showToast.success('User deleted successfully.');
       setConfirmOpen(false);
       onUserUpdate();
-    } catch {
-      showToast.error('Failed to delete user.');
+    } catch (err) {
+      showToast.error("Unexpected Error: Failed to delete user");
     }
   }
 
@@ -161,21 +154,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: User; onUserUpdate: () 
         user={user}
         open={editOpen}
         setOpen={setEditOpen}
-        onSave={async (updatedUser) => {
-          try {
-            const res = await fetch(`/api/users/${updatedUser.id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(updatedUser),
-            });
-            if (!res.ok) throw new Error();
-            showToast.success('User updated successfully.');
-            setEditOpen(false);
-            onUserUpdate();
-          } catch {
-            showToast.error('Failed to update user.');
-          }
-        }}
+        onSave={async () => { onUserUpdate(); }}
       />
 
       <AdminResetPasswordDialog
@@ -212,7 +191,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: User; onUserUpdate: () 
 
           <DropdownMenuItem
             onClick={() => setEditOpen(true)}
-            className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2"
+            className="hover:bg-secondary flex items-center gap-2"
           >
             <Pencil className="h-4 w-4" />
             Edit User Profile
@@ -220,7 +199,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: User; onUserUpdate: () 
 
           <DropdownMenuItem
             onClick={() => setResetOpen(true)}
-            className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2"
+            className="hover:bg-secondary flex items-center gap-2"
           >
             <Lock className="h-4 w-4" />
             Reset Password
@@ -230,10 +209,11 @@ function UserActionsCell({ user, onUserUpdate }: { user: User; onUserUpdate: () 
 
           <DropdownMenuItem
             onClick={() => setConfirmOpen(true)}
-            className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2"
+            disabled={!user.inactive}
+            className="hover:bg-secondary focus:text-red-600 flex items-center gap-2 text-red-600"
           >
             <Trash2 className="h-4 w-4" />
-            Delete User
+            Delete Inactive User
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

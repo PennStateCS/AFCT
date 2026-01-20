@@ -5,7 +5,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Assignment } from '@prisma/client';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { Pencil, Trash2, ChevronDown, BookOpen } from 'lucide-react';
+import { NotebookText, Pencil, Trash2, ChevronDown, BookOpen } from 'lucide-react';
 import { format } from 'date-fns';
 import Link from 'next/link';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
@@ -29,15 +29,18 @@ type AssignmentWithProblemCount = Assignment & {
 // Component for the publish switch with confirmation dialog
 function PublishSwitchCell({ 
   assignment, 
-  onPublishToggle 
+  onPublishToggle, 
+  disabled,
 }: { 
   assignment: AssignmentWithProblemCount; 
   onPublishToggle: (assignmentId: string, newValue: boolean) => void;
+  disabled: boolean
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingValue, setPendingValue] = useState(false);
 
   const handleSwitchChange = (checked: boolean) => {
+    if (disabled) return;
     setPendingValue(checked);
     setConfirmOpen(true);
   };
@@ -59,6 +62,7 @@ function PublishSwitchCell({
       <Switch
         checked={assignment.isPublished}
         onCheckedChange={handleSwitchChange}
+        disabled={disabled}
       />
       <ConfirmDialog
         open={confirmOpen}
@@ -74,6 +78,7 @@ function PublishSwitchCell({
 }
 
 export function useAssignmentColumns(
+  courseIsArchived: boolean,
   handleAssignmentDeleteClick: (id: string) => void,
   handleAssignmentEditClick: (assignment: Assignment) => void,
   handlePublishToggle: (assignmentId: string, newValue: boolean) => void,
@@ -139,6 +144,7 @@ export function useAssignmentColumns(
         <PublishSwitchCell
           assignment={row.original}
           onPublishToggle={handlePublishToggle}
+          disabled={courseIsArchived}
         />
       ),
     },
@@ -146,8 +152,8 @@ export function useAssignmentColumns(
       id: 'actions',
       header: '',
       cell: ({ row }) => {
-  const disabled = !!(row.original.hasSubmissionsOrComments);
-        const title = disabled ? 'Cannot delete: assignment has submissions or comments' : undefined;
+  const disabled = !!(row.original.hasSubmissionsOrComments) || courseIsArchived;
+        const title = disabled ? 'Cannot delete' : undefined;
 
         return (
           <>
@@ -160,19 +166,20 @@ export function useAssignmentColumns(
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel className="flex items-center gap-2">
-                  <BookOpen className="h-4 w-4" />
+                  <NotebookText className="h-4 w-4" />
                   {row.original.title}
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <Link href={`/dashboard/courses/${row.original.courseId}/${row.original.id}`}>
-                  <DropdownMenuItem className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2">
+                  <DropdownMenuItem className="flex items-center gap-2">
                     <BookOpen className="mr-2 h-4 w-4" />
                     View Assignment
                   </DropdownMenuItem>
                 </Link>
                 <DropdownMenuItem
                   onClick={() => handleAssignmentEditClick(row.original)}
-                  className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2"
+                  className="flex items-center gap-2"
+                  hidden={courseIsArchived}
                 >
                   <Pencil className="mr-2 h-4 w-4" />
                   Edit Assignment
@@ -184,8 +191,9 @@ export function useAssignmentColumns(
                     if (disabled) return;
                     handleAssignmentDeleteClick(row.original.id);
                   }}
+                  hidden={courseIsArchived}
                   title={title}
-                  className={`flex items-center gap-2 ${disabled ? 'opacity-50 cursor-not-allowed text-gray-500' : 'hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground text-red-600'}`}
+                  className={`flex items-center gap-2 ${disabled ? 'opacity-50 cursor-not-allowed text-gray-500' : 'focus:text-red-600 text-red-600'}`}
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
                   Delete Assignment

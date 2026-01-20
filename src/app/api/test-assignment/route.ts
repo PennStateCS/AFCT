@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Missing assignment ID' }, { status: 400 });
     }
 
-    console.log('Testing assignment fetch for ID:', id);
+  // Testing assignment fetch for ID
 
     const assignment = await prisma.assignment.findUnique({
       where: { id },
@@ -25,16 +25,9 @@ export async function GET(req: NextRequest) {
     });
 
     if (!assignment) {
-      console.log('Assignment not found in database');
+      // Assignment not found in database
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
-
-    console.log('Assignment found:', {
-      id: assignment.id,
-      title: assignment.title,
-      courseId: assignment.courseId,
-      isPublished: assignment.isPublished
-    });
 
     return NextResponse.json({
       id: assignment.id,

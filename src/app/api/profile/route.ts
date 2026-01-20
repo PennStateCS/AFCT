@@ -9,7 +9,7 @@ import { existsSync } from 'fs';
 import { randomUUID } from 'crypto';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
-const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'pfps');
 
 // Utility to delete a file if it exists
 async function deleteFileIfExists(filename: string) {
@@ -98,8 +98,9 @@ export async function POST(req: Request) {
     action: 'PROFILE_UPDATED',
     category: 'USER',
     metadata: {
-      firstName,
-      lastName,
+      userId: session.user.id,
+      userFirstName: firstName,
+      userLastName: lastName,
       avatarUpdated: !!avatar,
       avatarDeleted: deleteAvatar,
     },

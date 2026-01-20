@@ -66,7 +66,7 @@ export default function ProblemDetails({
 }: Props) {
   const typeProps = getProblemTypeBadgeProps(problem.type ?? null);
   const [open, setOpen] = useState(false);
-  console.log(problem);
+  // problem data available via prop
   return (
     <div className={`rounded-md border overflow-hidden ${className}`}>
       <header className="flex items-center gap-2 border-b bg-primary px-3 py-2 text-white rounded-t-md">

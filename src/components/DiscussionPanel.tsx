@@ -23,6 +23,7 @@ export type Comment = {
 };
 
 type Props = {
+  courseIsArchived: boolean;
   comments: Comment[];
   commentText: string;
   onCommentTextChange: (text: string) => void;
@@ -61,6 +62,7 @@ const formatDateTime = (iso: string | Date) => {
 };
 
 export default function DiscussionPanel({
+  courseIsArchived,
   comments,
   commentText,
   onCommentTextChange,
@@ -151,6 +153,7 @@ export default function DiscussionPanel({
                             className="absolute top-1 right-1 h-4 w-4 rounded-full hover:bg-red-100 text-gray-500 hover:text-red-600 flex items-center justify-center text-xs transition-colors opacity-70 hover:opacity-100"
                             title="Delete comment"
                             disabled={deletingComments[comment.id]}
+                            hidden={courseIsArchived}
                           >
                             <X className="h-3 w-3 stroke-2" />
                           </button>
@@ -159,7 +162,7 @@ export default function DiscussionPanel({
                             {comment.content}
                           </p>
 
-                          <div className="mt-1 flex items-center justify-between">
+                          <div className="mt-1 flex items-center justify-between gap-1 overflow-hidden whitespace-nowrap">
                             <span className="truncate text-xs text-muted-foreground">
                               {name}
                             </span>
@@ -195,12 +198,14 @@ export default function DiscussionPanel({
               }}
               className="min-h-[80px] bg-white"
               aria-label="Add comment"
+              hidden={courseIsArchived}
             />
             <div className="flex justify-end">
               <Button
                 size="sm"
                 onClick={onSaveComment}
                 disabled={!commentText.trim() || isSaving}
+                hidden={courseIsArchived}
               >
                 {isSaving ? (
                   "Submitting…"

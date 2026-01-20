@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Course } from '@prisma/client';
 import { columns } from './course-columns';
 import { DataTable } from '@/components/ui/data-table';
@@ -16,13 +16,11 @@ type UserSummary = {
 };
 
 type CourseWithRoster = Course & {
-  faculty: UserSummary[];
-  tas: UserSummary[];
-  students: UserSummary[];
+  enrolled?: ({ id: string; firstName?: string | null; lastName?: string | null; email?: string | null; avatar?: string | null; courseRole?: string; hasSubmissions?: boolean })[];
 };
 
 type CourseWithFaculty = Course & {
-  faculty: { firstName: string | null; lastName: string | null }[];
+  enrolled?: ({ id: string; firstName?: string | null; lastName?: string | null; email?: string | null; avatar?: string | null; courseRole?: string; hasSubmissions?: boolean })[];
 };
 
 export default function ViewCoursesPage() {
@@ -31,16 +29,44 @@ export default function ViewCoursesPage() {
   const [open, setOpen] = useState(false);
 
   const fetchCourses = async () => {
-    setLoading(true);
-    const res = await fetch('/api/courses');
-    const data: CourseWithRoster[] = await res.json();
-    setCourses(data);
-    setLoading(false);
+    try {
+      setLoading(true);
+      const res = await fetch('/api/courses');
+      if (!res.ok) throw new Error('Failed to fetch users');
+      const data: CourseWithRoster[] = await res.json();
+      setCourses(data);
+    } catch (error) {
+      console.error('Error loading users:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     fetchCourses();
   }, []);
+
+  // Memoize columns to avoid unnecessary re-renders
+  // Passes update and delete callbacks to columns definition
+  const columnsMemo = useMemo(
+    () =>
+      columns(
+        // Called when a course is updated (edit/save)
+        (refreshedCourse: CourseWithFaculty) => {
+          setCourses((prev) =>
+            prev.map((c) =>
+              c.id === refreshedCourse.id ? { ...c, ...refreshedCourse, enrolled: refreshedCourse.enrolled ?? c.enrolled } : c,
+            ),
+          );
+        },
+        
+        // Called after a course is deleted (triggers reload)
+        () => {
+          fetchCourses();
+        }
+      ),
+    [setCourses],
+  );
 
   return (
     <Card className="p-4">
@@ -53,13 +79,7 @@ export default function ViewCoursesPage() {
 
       <CardContent>
         <DataTable
-          columns={columns((refreshedCourse: CourseWithFaculty) => {
-            setCourses((prev) =>
-              prev.map((c) =>
-                c.id === refreshedCourse.id ? { ...c, ...refreshedCourse, faculty: c.faculty } : c,
-              ),
-            );
-          })}
+          columns={columnsMemo}
           data={courses}
           loading={loading}
         />

@@ -53,8 +53,8 @@ export async function GET(_: Request, context: { params: Promise<{ id: string; a
         type: ap.problem.type,
         maxStates: ap.problem.maxStates,
         isDeterministic: ap.problem.isDeterministic,
-  fileName: ap.problem.fileName,
-  originalFileName: ap.problem.originalFileName,
+        fileName: ap.problem.fileName,
+        originalFileName: ap.problem.originalFileName,
       },
     }));
 
@@ -73,6 +73,7 @@ export async function GET(_: Request, context: { params: Promise<{ id: string; a
         id: courseId,
         name: course.name,
         code: course.code,
+        isArchived: course.isArchived,
         roster: roster.map((r) => ({
           user: r.user,
           role: r.role,

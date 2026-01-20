@@ -17,14 +17,24 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { Course } from '@prisma/client';
 import { EditCourseDialog } from '@/components/dialogs/EditCourseDialog';
+import { getInstructors, formatInstructorNames } from '@/lib/course-utils';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 
 type CourseWithFaculty = Course & {
-  faculty: { firstName: string | null; lastName: string | null }[];
+  // Enrolled list (user objects with courseRole and flags)
+  enrolled?: ({ id: string; firstName?: string | null; lastName?: string | null; email?: string | null; avatar?: string | null; courseRole?: string; hasSubmissions?: boolean })[];
 };
+
+// Cell for course actions (edit/delete)
+type CourseActionsCellProps = {
+  course: CourseWithFaculty;
+  onCourseUpdated: (updated: CourseWithFaculty) => void; // Called when a course is updated (edit/save)
+  onCourseDeleted: () => void; // Called after a course is deleted (triggers parent reload)
+}
 
 export const columns = (
   onCourseUpdated: (updated: CourseWithFaculty) => void,
+  onCourseDeleted: () => void,
 ): ColumnDef<CourseWithFaculty>[] => [
   {
     accessorKey: 'name',
@@ -34,7 +44,7 @@ export const columns = (
       const course = row.original;
       return (
         <Link href={`/dashboard/courses/${course.id}`} className="text-blue-600 hover:underline">
-          {course.name}
+          {course.name.substring(0, 46) + (course.name.length > 47 ? "..." : "")}
         </Link>
       );
     },
@@ -71,7 +81,7 @@ export const columns = (
     header: 'Start Date',
     cell: ({ row }) => {
       const date = new Date(row.original.startDate);
-      return format(date, "M/d/yyyy 'at' p");
+      return format(date, "M/d/yyyy");
     },
   },
   {
@@ -80,22 +90,26 @@ export const columns = (
     header: 'End Date',
     cell: ({ row }) => {
       const date = new Date(row.original.endDate);
-      return format(date, "M/d/yyyy 'at' p");
+      return format(date, "M/d/yyyy");
     },
   },
   {
-    id: 'faculty',
-    accessorFn: (row) =>
-      row.faculty.map((f) => `${f.firstName ?? ''} ${f.lastName ?? ''}`.trim()).join(', '),
+    id: 'instructor',
+    accessorFn: (row) => formatInstructorNames(row.enrolled as any[]),
     meta: { priority: 1 },
     enableSorting: true,
-    header: 'Faculty',
+    header: 'Instructor(s)',
     cell: ({ row }) => {
-      const facultyList = row.original.faculty;
-      if (!facultyList || facultyList.length === 0) {
+      const instructors = getInstructors(row.original.enrolled as any[]);
+      if (!instructors || instructors.length === 0) {
         return <span className="text-muted-foreground italic">None</span>;
       }
-      return facultyList.map((f) => `${f.firstName ?? ''} ${f.lastName ?? ''}`.trim()).join(', ');
+      if (instructors.length === 1) {
+        const f = instructors[0];
+        return `${f.firstName ?? ''} ${f.lastName ?? ''}`.trim();
+      }
+      const f = instructors[0];
+      return `${(f.firstName ?? '') + (f.lastName ? ' ' + f.lastName : '')}`.trim() + ', ...';
     },
   },
   {
@@ -105,30 +119,34 @@ export const columns = (
     meta: { priority: 1 },
     cell: ({ row }) => {
       const course = row.original;
-      return <CourseActionsCell course={course} onCourseUpdated={onCourseUpdated} />;
+      return <CourseActionsCell course={course} onCourseUpdated={onCourseUpdated} onCourseDeleted={onCourseDeleted} />;
     },
   },
 ];
 
-// Extract the cell component to fix React hooks violation
-function CourseActionsCell({
-  course,
-  onCourseUpdated,
-}: {
-  course: CourseWithFaculty;
-  onCourseUpdated: (updated: CourseWithFaculty) => void;
-}) {
+function CourseActionsCell({ course, onCourseUpdated, onCourseDeleted }: CourseActionsCellProps) {
   const [editOpen, setEditOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const handleDelete = async () => {
     try {
-      const res = await fetch(`/api/courses/${course.id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Delete failed');
-      showToast.success('Course deleted');
+      const res = await fetch(`/api/courses/${course.id}`, {
+        method: 'DELETE',
+        body: JSON.stringify(course),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        const serverMessage = json?.error || 'Error deleting course';
+        throw new Error(serverMessage);
+      }
+      showToast.success('Course successfully deleted');
       setConfirmOpen(false);
-    } catch {
-      showToast.error('Failed to delete course');
+      if (onCourseDeleted) onCourseDeleted();
+    } catch (e: any) {
+      const msg = e?.message || 'Network error';
+      showToast.error(msg);
+    } finally {
+      setEditOpen(false);
     }
   };
 
@@ -181,14 +199,15 @@ function CourseActionsCell({
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <Link href={`/dashboard/courses/${course.id}`} passHref>
-            <DropdownMenuItem className="hover:bg-secondary focus:bg-secondary flex items-center gap-2">
+            <DropdownMenuItem className="hover:bg-secondary flex items-center gap-2">
               <BookOpen className="mr-2 h-4 w-4" />
               View Course
             </DropdownMenuItem>
           </Link>
           <DropdownMenuItem
             onClick={() => setEditOpen(true)}
-            className="hover:bg-secondary focus:bg-secondary flex items-center gap-2"
+            className="hover:bg-secondary flex items-center gap-2"
+            disabled={course.isArchived}
           >
             <Pencil className="mr-2 h-4 w-4" />
             Edit Course
@@ -196,10 +215,11 @@ function CourseActionsCell({
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={() => setConfirmOpen(true)}
-            className="hover:bg-secondary focus:bg-secondary flex items-center gap-2 text-red-600"
+            className="hover:bg-secondary focus:text-red-600 flex items-center gap-2 text-red-600"
+            disabled={!course.isArchived}
           >
             <Trash2 className="mr-2 h-4 w-4" />
-            Delete Course
+            Delete Archived Course
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

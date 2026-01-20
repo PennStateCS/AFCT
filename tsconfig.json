@@ -14,6 +14,7 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
+    "tsBuildInfoFile": ".next/cache/tsconfig.tsbuildinfo",
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"]
@@ -22,7 +23,7 @@
       "src/types",
       "node_modules/@types"
     ],
-    "types": ["next-auth", "node"], // ensure next-auth and node types
+    "types": ["next-auth", "node"],
     "plugins": [
       {
         "name": "next"
@@ -36,5 +37,9 @@
     ".next/types/**/*.ts",
     "src/types/**/*.d.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules"],
+  "ts-node": {
+    "esm": true,
+    "experimentalSpecifierResolution": "node"
+  }
 }
