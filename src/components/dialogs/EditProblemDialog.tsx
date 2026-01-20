@@ -25,6 +25,7 @@ import type { Problem } from '@prisma/client';
 import { ProblemFormSchema, UpdateProblemSchema, ProblemTypeEnum } from '@/schemas/problem';
 
 type EditProblemDialogProps = {
+  courseIsArchived: boolean;
   problem: Problem;
   open: boolean;
   setOpen: (open: boolean) => void;
@@ -35,7 +36,7 @@ type EditProblemDialogProps = {
 type FormValues = z.input<typeof ProblemFormSchema>;
 type ParsedValues = z.output<typeof ProblemFormSchema>;
 
-export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProblemDialogProps) {
+export function EditProblemDialog({ courseIsArchived, problem, open, setOpen, onSaved }: EditProblemDialogProps) {
   
   const defaults: FormValues = useMemo(
     () => ({
@@ -59,7 +60,7 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
     handleSubmit,
     reset,
     watch,
-    formState: { errors, isSubmitting, isValid },
+    formState: { errors, isSubmitting, isValid, isDirty },
   } = useForm<FormValues>({
     resolver: zodResolver(ProblemFormSchema),
     defaultValues: defaults,
@@ -70,6 +71,21 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
   // Drive conditional UI
   const type = watch('type');
   const isUnlimited = watch('isUnlimited');
+
+  const fileErrorMessage = (() => {
+    const e = errors.file;
+    if (!e) return '';
+    if (typeof e === 'string') return e;
+    if (typeof e === 'object' && e !== null) {
+      const m = (e as { message?: unknown }).message;
+      if (typeof m === 'string') return m;
+    }
+    try {
+      return JSON.stringify(e);
+    } catch {
+      return String(e);
+    }
+  })();
 
   // Reset when opening/closing (prevents touched/error flicker)
   useEffect(() => {
@@ -101,18 +117,11 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
 
   const onSubmit = async (raw: FormValues) => {
     try {
-      console.log('Edit problem form data:', raw);
-
       // 1) Normalize with form schema
       const parsed: ParsedValues = ProblemFormSchema.parse(raw);
-      console.log('Parsed form data:', parsed);
 
       // 2) Enforce update contract with id (file stays optional)
-      const payload = UpdateProblemSchema.parse({
-        id: problem.id,
-        ...parsed,
-      });
-      console.log('Payload for submission:', payload);
+      const payload = UpdateProblemSchema.parse({ id: problem.id, ...parsed });
 
       const formData = new FormData();
       formData.append('title', payload.title ?? '');
@@ -136,14 +145,14 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
         formData.append('file', payload.file);
       }
 
-      console.log('Sending PUT request to:', `/api/problems/${problem.id}`);
+  // Sending PUT request
 
       const res = await fetch(`/api/problems/${problem.id}`, {
         method: 'PUT',
         body: formData,
       });
 
-      console.log('Response status:', res.status);
+  // Response status available in res.status
 
       if (!res.ok) {
         const errorText = await res.text();
@@ -168,7 +177,7 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
     } catch (error) {
       console.error('Edit problem submission error:', error);
       if (error instanceof z.ZodError) {
-        console.log('Zod validation errors:', error.errors);
+        // validation errors
       }
     }
   };
@@ -200,6 +209,7 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
                 error={errors.title?.message}
                 showStatus
                 isValid={!errors.title && !!field.value}
+
               />
             )}
           />
@@ -320,10 +330,10 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
                 <Input
                   id="answer-file"
                   type="file"
-                  accept=".txt,.fa,.pda,.cfg,.re"
+                  accept=".txt,.fa,.pda,.cfg,.re,.jff"
                   onChange={(e) => field.onChange(e.target.files?.[0])}
                 />
-                {errors.file && <p className="mt-1 text-xs text-red-600">{errors.file.message}</p>}
+                {fileErrorMessage && <p className="mt-1 text-xs text-red-600">{fileErrorMessage}</p>}
               </div>
             )}
           />
@@ -336,11 +346,11 @@ export function EditProblemDialog({ problem, open, setOpen, onSaved }: EditProbl
             </DialogClose>
             <Button
               type="submit"
-              disabled={!isValid || isSubmitting}
+              disabled={!isValid || isSubmitting || !isDirty || courseIsArchived }
               title={
                 !isValid
                   ? 'Fix validation errors to save'
-                  : isSubmitting
+                  : !isDirty
                     ? 'Submitting...'
                     : undefined
               }

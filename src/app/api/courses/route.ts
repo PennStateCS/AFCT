@@ -2,7 +2,6 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { CreateCourseSchema } from '@/schemas';
 import { validationResponse } from '@/lib/zod-error';
 
 // ----------------------------------------
@@ -59,15 +58,14 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
     });
 
-    // Group roster by role
+    // Group roster by role (treat INSTRUCTOR like FACULTY for display and permissions)
     const formatted = courses.map((c) => {
-      const faculty = c.roster.filter((r) => r.role === 'FACULTY').map((r) => r.user);
-      const tas = c.roster.filter((r) => r.role === 'TA').map((r) => r.user);
-      const students = c.roster.filter((r) => r.role === 'STUDENT').map((r) => r.user);
+      // Build single `enrolled` list (user objects with courseRole). Do not construct role-specific arrays here.
+      const enrolled = c.roster.map((r) => ({ ...r.user, courseRole: r.role }));
 
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { roster, ...rest } = c;
-      return { ...rest, faculty, tas, students };
+      return { ...rest, enrolled };
     });
 
     return NextResponse.json(formatted, { status: 200 });
@@ -82,14 +80,12 @@ export async function GET() {
 // ----------------------------------------
 export async function POST(req: Request) {
   try {
+    // 1) Parse payload of information
     const json = await req.json();
-
-    // 1) Validate with the shared Zod schema (async supports future async refinements)
-    const data = await CreateCourseSchema.parseAsync(json);
 
     // 2) Optional uniqueness check (code + semester)
     const exists = await prisma.course.findFirst({
-      where: { code: data.code, semester: data.semester },
+      where: { code: json.code, semester: json.semester },
       select: { id: true },
     });
     if (exists) {
@@ -106,20 +102,21 @@ export async function POST(req: Request) {
     const created = await prisma.$transaction(async (tx) => {
       const course = await tx.course.create({
         data: {
-          name: data.name,
-          code: data.code,
+          name: json.name,
+          code: json.code,
           regCode,
-          semester: data.semester,
-          credits: data.credits,
-          startDate: data.startDate, // Date object is fine
-          endDate: data.endDate,
-          isPublished: data.isPublished ?? false,
+          semester: json.semester,
+          credits: json.credits,
+          startDate: json.startDate, // Date object is fine
+          endDate: json.endDate,
+          isPublished: json.isPublished ?? false,
+          isArchived: false,
         },
       });
 
-      if (data.facultyIds.length > 0) {
+      if (Array.isArray(json.facultyIds) && json.facultyIds.length > 0) {
         await tx.roster.createMany({
-          data: data.facultyIds.map((userId: string) => ({
+          data: json.facultyIds.map((userId: string) => ({
             userId,
             courseId: course.id,
             role: 'FACULTY',
@@ -142,7 +139,7 @@ export async function POST(req: Request) {
       const faculty =
         withRoster?.roster.filter((r) => r.role === 'FACULTY').map((r) => r.user) ?? [];
 
-      return { course, faculty };
+      return { course, faculty, withRoster };
     });
 
     return NextResponse.json(
@@ -159,7 +156,8 @@ export async function POST(req: Request) {
           startDate: created.course.startDate,
           endDate: created.course.endDate,
           isPublished: created.course.isPublished,
-          faculty: created.faculty,
+          isArchived: created.course.isArchived,
+          enrolled: created.withRoster?.roster.map((r: any) => ({ ...r.user, courseRole: r.role })) ?? [],
         },
       },
       { status: 201 },

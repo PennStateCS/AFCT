@@ -19,15 +19,34 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
   // Look up the user and retrieve their global role
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, role: true },
+    select: { id: true, role: true, inactive: true },
   });
 
   if (!user) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 });
   }
 
+  if (user.inactive == true) {
+    return NextResponse.json({ error: 'User is inactive'}, { status: 401 })
+  }
+
   try {
-    // Upsert the user into the course roster as STUDENT (always)
+    // Map global role to course role
+    const mapRole = (r: string | null | undefined) => {
+        switch (r) {
+        case 'FACULTY':
+        case 'ADMIN':
+          return 'FACULTY';
+        case 'TA':
+          return 'TA';
+        default:
+          return 'STUDENT';
+      }
+    };
+
+    // Upsert the user into the course roster inheriting their global role
+    const roleToAssign = mapRole(user.role);
+
     await prisma.roster.upsert({
       where: {
         courseId_userId: {
@@ -38,10 +57,10 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
       create: {
         courseId,
         userId,
-        role: 'STUDENT',
+        role: roleToAssign,
       },
       update: {
-        role: 'STUDENT',
+        role: roleToAssign,
       },
     });
 
@@ -55,8 +74,10 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
       category: 'COURSE',
       courseId,
       metadata: {
+        userId: actingUser?.id,
+        courseId: courseId,
         enrolledUserId: userId,
-        role: 'STUDENT',
+        role: roleToAssign,
       },
     });
 

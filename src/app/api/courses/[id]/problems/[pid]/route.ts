@@ -68,6 +68,10 @@ export async function DELETE(
       courseId,
       problemId,
       metadata: {
+        userId: user.id,
+        courseId: courseId,
+        problemId: problemId,
+        problemTitle: problem.title,
         fileName: problem.fileName || null,
       },
     });

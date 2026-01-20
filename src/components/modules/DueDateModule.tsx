@@ -20,7 +20,14 @@ export function DueDateModule({ assignments }: Props) {
 
   const upcoming = assignments
     .filter((a) => new Date(a.dueDate) > now)
-    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+    .sort((a, b) => {
+      const aTime = new Date(a.dueDate).getTime();
+      const bTime = new Date(b.dueDate).getTime();
+      if (isNaN(aTime) && isNaN(bTime)) return 0;
+      if (isNaN(aTime)) return 1;
+      if (isNaN(bTime)) return -1;
+      return aTime - bTime;
+    });
 
   return (
     <Card className="w-full">

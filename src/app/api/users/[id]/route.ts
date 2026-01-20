@@ -6,13 +6,15 @@ import { writeFile, unlink } from 'fs/promises';
 import path from 'path';
 import { Role } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { activityColumns } from '@/app/dashboard/courses/[id]/activity-columns';
+import { parseRole } from '@/lib/roles';
 
 // PATCH: Update a user's profile
 export async function PATCH(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   const userId = id;
 
-  console.log(`[PATCH] Attempting to update user: ${userId}`);
+  // Attempting to update user: userId
 
   try {
     const session = await auth();
@@ -23,8 +25,9 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const isAdmin = ['ADMIN', 'FACULTY', 'TA'].includes(currentUser.role);
-    if (!isAdmin && currentUser.id !== userId) {
+    const isAdminOnly = currentUser.role === 'ADMIN';
+    const canEdit = isAdminOnly || currentUser.id === userId || ['FACULTY','TA'].includes(currentUser.role);
+    if (!canEdit) {
       console.warn(`[PATCH] Forbidden: ${currentUser.id} tried to update user ${userId}`);
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -33,7 +36,8 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     const contentType = req.headers.get('content-type') || '';
     let firstName: string | undefined;
     let lastName: string | undefined;
-    let role: string | undefined;
+    let rawRole: string | undefined;
+    let role: Role | undefined;
     let inactive: boolean | undefined;
     let avatarFile: File | null = null;
     let deleteAvatar = false;
@@ -42,14 +46,18 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       const formData = await req.formData();
       firstName = formData.get('firstName') as string;
       lastName = formData.get('lastName') as string;
-      role = formData.get('role') as string;
+      rawRole = formData.get('role') as string;
       inactive = formData.get('inactive') === 'true';
       avatarFile = formData.get('avatar') as File;
       deleteAvatar = formData.get('deleteAvatar') === 'true';
     } else {
       const body = await req.json();
-      ({ firstName, lastName, role, inactive } = body);
+      ({ firstName, lastName, inactive } = body);
+      rawRole = body.role;
     }
+
+    // Parse/validate role using shared helper
+    role = parseRole(rawRole);
 
     // Retrieve current user record
     const userRecord = await prisma.user.findUnique({
@@ -63,23 +71,53 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     if (avatarFile && avatarFile.size > 0) {
       const bytes = Buffer.from(await avatarFile.arrayBuffer());
       avatarFilename = `${userId}-${Date.now()}-${avatarFile.name}`;
-      const uploadPath = path.join(process.cwd(), 'public', 'uploads', avatarFilename);
+      const uploadPath = path.join(process.cwd(), 'public', 'uploads', 'pfps', avatarFilename);
       await writeFile(uploadPath, bytes);
-      console.log(`[PATCH] Uploaded new avatar: ${avatarFilename}`);
+      // Uploaded new avatar: avatarFilename
 
       if (userRecord?.avatar) {
-        const oldPath = path.join(process.cwd(), 'public', 'uploads', userRecord.avatar);
+        const oldPath = path.join(process.cwd(), 'public', 'uploads', 'pfps', userRecord.avatar);
         await unlink(oldPath).catch(() => {});
-        console.log(`[PATCH] Deleted old avatar: ${userRecord.avatar}`);
+        // Deleted old avatar
       }
     }
 
     // Delete avatar if requested
     if (deleteAvatar && userRecord?.avatar) {
-      const oldPath = path.join(process.cwd(), 'public', 'uploads', userRecord.avatar);
+      const oldPath = path.join(process.cwd(), 'public', 'uploads', 'pfps', userRecord.avatar);
       await unlink(oldPath).catch(() => {});
       avatarFilename = null;
-      console.log(`[PATCH] Avatar removed for user: ${userId}`);
+      // Avatar removed
+    }
+
+    // Make sure the user is not in any active courses if changing active status
+    if (inactive){ // Note logic appears swapped, but that is because inactive is the next state
+      // Generate the current date and time
+      const currTime = new Date();
+
+      // Find if the user is in an active coruse
+      const activeCourses = await prisma.roster.findMany({
+        where: { 
+          userId: userId,
+          course: {
+            endDate: {
+              gte: currTime
+            }
+          }
+        },
+        select: { course: { select: { isArchived: true, isPublished: true } } },
+      })
+      
+      // Return an error if the user is in an active course
+      if (activeCourses){
+        // Make sure the active course is not archived
+        for (const activeCourse of activeCourses) {
+          if (!activeCourse.course.isArchived && activeCourse.course.isPublished) {
+            console.error('[PATCH] Error updating user: User in an unarchived active course cannot be inactive');
+            return NextResponse.json({ error: 'Users in an active course cannot be inactive' }, { status: 403 });
+          }
+        }
+      }
     }
 
     // Prepare data for update
@@ -93,11 +131,9 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       firstName: firstName ?? undefined,
       lastName: lastName ?? undefined,
       avatar: avatarFilename !== undefined ? avatarFilename : undefined,
+      role: role,
+      inactive: inactive,
     };
-    if (isAdmin) {
-      dataToUpdate.role = (role as Role) ?? undefined;
-      dataToUpdate.inactive = inactive ?? undefined;
-    }
 
     // Perform the update
     const updatedUser = await prisma.user.update({
@@ -120,12 +156,13 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       action: 'UPDATE_USER',
       category: 'USER',
       metadata: {
+        userId: currentUser.id,
         targetUserId: userId,
         updatedFields: Object.keys(dataToUpdate),
       },
     });
 
-    console.log(`[PATCH] User ${userId} updated by ${currentUser.id}`);
+    // User updated
     return NextResponse.json(updatedUser);
   } catch (error) {
     console.error('[PATCH] Error updating user:', error);
@@ -138,7 +175,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
   const { id } = await context.params;
   const userId = id;
 
-  console.log(`[DELETE] Attempting to delete user: ${userId}`);
+  // Attempting to delete user
 
   try {
     const session = await auth();
@@ -149,17 +186,24 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    // Valid to delete
     // Delete avatar file if exists
+    // Select user
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { avatar: true },
     });
 
     if (user?.avatar) {
-      const avatarPath = path.join(process.cwd(), 'public', 'uploads', user.avatar);
+      const avatarPath = path.join(process.cwd(), 'public', 'uploads', 'pfps', user.avatar);
       await unlink(avatarPath).catch(() => {});
-      console.log(`[DELETE] Avatar file deleted: ${user.avatar}`);
+      // Avatar file deleted
     }
+
+    // Delete from activity if exists
+    await prisma.activityLog.deleteMany({
+      where: { userId },
+    });
 
     // Delete user from database
     await prisma.user.delete({
@@ -172,11 +216,12 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
       action: 'DELETE_USER',
       category: 'USER',
       metadata: {
+        userId: currentUser.id,
         deletedUserId: userId,
       },
     });
 
-    console.log(`[DELETE] User ${userId} deleted by ${currentUser.id}`);
+  // User deleted
     return NextResponse.json({ success: true, message: 'User deleted' });
   } catch (error) {
     console.error('[DELETE] Error deleting user:', error);

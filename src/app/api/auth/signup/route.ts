@@ -69,8 +69,9 @@ export async function POST(req: Request) {
       action: 'USER_SIGNUP',
       category: 'USER',
       metadata: {
-        email,
-        role,
+        userId: newUser.id,
+        email: email,
+        role: role,
       },
     });
 

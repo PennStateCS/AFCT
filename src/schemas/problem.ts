@@ -6,18 +6,34 @@ export const ProblemTypeEnum = z.enum(['FA', 'PDA', 'CFG', 'RE']);
 /** Allowed upload types (adjust as needed) */
 const allowedExt = ['txt', 'fa', 'pda', 'cfg', 're', 'jff'];
 
-const FileRequired = z
-  .instanceof(File, { message: 'Answer file is required.' })
-  .refine((f) => f.size > 0, 'Answer file is required.')
-  .refine(
-    (f) => {
-      const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
-      return allowedExt.includes(ext);
-    },
-    { message: `Allowed: .${allowedExt.join(',.')}` },
-  )
-  // ~5MB default max — tweak if you like
-  .refine((f) => f.size <= 5 * 1024 * 1024, 'File must be ≤ 5MB');
+// Server-side safe file validation
+const createFileSchema = () => {
+  // Check if File constructor is available (browser environment)
+  if (typeof File !== 'undefined') {
+    return z
+      .instanceof(File, { message: 'Answer file is required.' })
+      .refine((f) => f.size > 0, 'Answer file is required.')
+      .refine(
+        (f) => {
+          const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
+          return allowedExt.includes(ext);
+        },
+        { message: `Allowed: .${allowedExt.join(',.')}` },
+      )
+      .refine((f) => f.size <= 5 * 1024 * 1024, 'File must be ≤ 5MB');
+  }
+  
+  // Server-side fallback - accept any for server-side processing
+  return z.any().refine((f) => {
+    // Server-side validation for FormData files
+    if (f && typeof f === 'object' && 'size' in f && 'name' in f) {
+      return f.size > 0 && f.size <= 5 * 1024 * 1024;
+    }
+    return true; // Let server handle validation
+  }, 'File must be valid and ≤ 5MB');
+};
+
+const FileRequired = createFileSchema();
 
 /**
  * Base object schema for add/edit Problem (without effects)
@@ -32,7 +48,7 @@ const BaseProblemObject = z.object({
     .optional(),
   isDeterministic: z.boolean().default(false),
   courseId: z.string().min(1, 'Course id is required.'),
-  file: z.instanceof(File).optional(),
+  file: typeof File !== 'undefined' ? z.instanceof(File).optional() : z.any().optional(),
 }).strict();
 
 /**

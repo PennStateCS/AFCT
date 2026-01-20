@@ -13,8 +13,10 @@ import { Button } from '@/components/ui/button';
 import { Course } from '@prisma/client';
 import { useEffect, useMemo } from 'react';
 import InputGroup from '@/components/ui/InputGroup';
+import { Switch } from '@/components/ui/switch';
 
 import { useForm, Controller } from 'react-hook-form';
+import { showToast } from '@/lib/toast';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CourseFormSchema, UpdateCourseSchema } from '@/schemas/course';
@@ -45,6 +47,8 @@ export function EditCourseDialog({ course, open, setOpen, onSave }: EditCourseDi
       credits: String(course.credits ?? 3),
       startDate: toDateTimeLocalString(course.startDate),
       endDate: toDateTimeLocalString(course.endDate),
+      isPublished: course.isPublished ?? false,
+      isArchived: course.isArchived ?? false,
     }),
     [course],
   );
@@ -54,7 +58,7 @@ export function EditCourseDialog({ course, open, setOpen, onSave }: EditCourseDi
     handleSubmit,
     reset,
     watch,
-    formState: { isDirty, isValid, errors },
+    formState: { isDirty, isValid, errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(CourseFormSchema),
     defaultValues,
@@ -62,7 +66,7 @@ export function EditCourseDialog({ course, open, setOpen, onSave }: EditCourseDi
     reValidateMode: 'onChange',
   });
 
-  // Keep min(end) in sync with start
+  // Keep min (end) in sync with start
   const startDateStr = watch('startDate');
 
   // Reset to current course when opened; also clear on close from outside
@@ -72,7 +76,7 @@ export function EditCourseDialog({ course, open, setOpen, onSave }: EditCourseDi
     }
   }, [open, defaultValues, reset]);
 
-  const onSubmit = (raw: FormValues) => {
+  const onSubmit = async (raw: FormValues) => {
     // Convert form values to the format expected by the API
     const formData = {
       ...raw,
@@ -82,23 +86,33 @@ export function EditCourseDialog({ course, open, setOpen, onSave }: EditCourseDi
 
     const payload = UpdateCourseSchema.parse({ id: course.id, ...formData });
 
-    onSave?.({
-      ...course,
-      name: payload.name,
-      code: payload.code,
-      semester: payload.semester,
-      credits: Number(payload.credits),
-      startDate: payload.startDate,
-      endDate: payload.endDate,
-    });
-    // Optional: reset before close to avoid any flicker
-    reset(defaultValues, {
-      keepDirty: false,
-      keepTouched: false,
-      keepErrors: false,
-      keepValues: false,
-    });
-    setOpen(false);
+    try {
+      const res = await fetch(`/api/courses/${course.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const msg = data?.error || data?.message || `Server returned ${res.status}`;
+        showToast.error(msg || 'Failed to edit course');
+        console.error('[COURSE UPDATE] server error', msg, data);
+        return;
+      }
+      const updated = await res.json();
+      reset(defaultValues, {
+        keepDirty: false,
+        keepTouched: false,
+        keepErrors: false,
+        keepValues: false,
+      });
+      onSave?.(updated);
+      setOpen(false);
+    } catch (err) {
+      // network or fetch error
+      console.error('[PUT] error', err);
+      showToast.error(`Network error editing course: ${(err as Error).message || err}`);
+    }
   };
 
   const onSubmitWrapper = (e: React.FormEvent<HTMLFormElement>) => {
@@ -234,6 +248,40 @@ export function EditCourseDialog({ course, open, setOpen, onSave }: EditCourseDi
             )}
           />
 
+          {/* PUBLISH STATUS TOGGLE */}
+          <Controller
+            name="isPublished"
+            control={control}
+            render={({ field }) => (
+              <div className="flex items-center justify-between">
+                <label className="pb-2 text-sm leading-none font-medium select-none" htmlFor="isPublished-switch">Published</label>
+                <Switch
+                  id="isPublished-switch"
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  aria-label="Published"
+                />
+              </div>
+            )}
+          />
+
+          {/* ARCHIVE STATUS TOGGLE */}
+          <Controller
+            name="isArchived"
+            control={control}
+            render={({ field }) => (
+              <div className="flex items-center justify-between">
+                <label className="pb-2 text-sm leading-none font-medium select-none" htmlFor="isArchived-switch">Archived</label>
+                <Switch
+                  id="isArchived-switch"
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  aria-label="Archived"
+                />
+              </div>
+            )}
+          />
+
           <DialogFooter className="mt-4">
             <DialogClose asChild>
               <Button
@@ -249,16 +297,16 @@ export function EditCourseDialog({ course, open, setOpen, onSave }: EditCourseDi
             </DialogClose>
             <Button
               type="submit"
-              disabled={!isValid || !isDirty}
+              disabled={!isValid || !isDirty || isSubmitting || course.isArchived}
               title={
                 !isValid
                   ? 'Fix validation errors to save'
                   : !isDirty
                     ? 'No changes to save'
-                    : undefined
+                    : "Course is not archived"
               }
             >
-              Save Changes
+              {isSubmitting ? 'Saving...' : 'Save Changes'}
             </Button>
           </DialogFooter>
         </form>

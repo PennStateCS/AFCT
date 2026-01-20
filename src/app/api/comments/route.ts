@@ -92,6 +92,10 @@ export async function POST(request: NextRequest) {
       assignmentId,
       problemId,
       metadata: {
+        userId: user.id,
+        courseId: assignment.courseId,
+        assignmentId: assignmentId,
+        problemId: problemId,
         commentId: comment.id,
         aboutStudentId: studentId || null,
         contentLength: content.length,
@@ -256,12 +260,15 @@ export async function DELETE(request: NextRequest) {
       courseId: comment.assignment.courseId,
       assignmentId: comment.assignmentId,
       problemId: comment.problemId,
-      metadata: {
+      metadata: 
+      {
+        userId: user.id,
+        action: 'DELETE_COMMENT',
+        category: 'ASSIGNMENT',
+        courseId: comment.assignment.courseId,
+        assignmentId: comment.assignmentId,
+        problemId: comment.problemId,
         commentId: comment.id,
-        deletedCommentAuthor: {
-          id: comment.roster.user.id,
-          name: `${comment.roster.user.firstName} ${comment.roster.user.lastName}`,
-        },
         aboutStudentId: comment.aboutStudentId,
         isOwnerDeleting: comment.roster.user.id === user.id,
       },

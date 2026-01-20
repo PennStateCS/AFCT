@@ -29,11 +29,15 @@ import {
   type CreateProblemInput,
   type ProblemFormRaw,
 } from '@/schemas/problem';
+import { showToast } from '@/lib/toast';
+
+// Helper: extract a string message for the file error without using `any`
 
 type CreateProblemDialogProps = {
   open: boolean;
   setOpen: (open: boolean) => void;
   courseId: string;
+  courseIsArchived: boolean;
   onCreated?: (created?: Problem) => void;
 };
 
@@ -47,6 +51,7 @@ export function CreateProblemDialog({
   open,
   setOpen,
   courseId,
+  courseIsArchived,
   onCreated,
 }: CreateProblemDialogProps) {
   const defaults: FormValues = useMemo(
@@ -58,7 +63,7 @@ export function CreateProblemDialog({
       maxStates: 100,
       isDeterministic: false,
       file: undefined,
-      courseId,
+      courseId: courseId,
     }),
     [courseId],
   );
@@ -78,6 +83,22 @@ export function CreateProblemDialog({
 
   const type = watch('type');
   const isUnlimited = watch('isUnlimited');
+  const file = watch('file');
+
+  const fileErrorMessage = (() => {
+    const e = errors.file;
+    if (!e) return '';
+    if (typeof e === 'string') return e;
+    if (typeof e === 'object' && e !== null) {
+      const m = (e as { message?: unknown }).message;
+      if (typeof m === 'string') return m;
+    }
+    try {
+      return JSON.stringify(e);
+    } catch {
+      return String(e);
+    }
+  })();
 
   useEffect(() => {
     if (open) {
@@ -107,14 +128,7 @@ export function CreateProblemDialog({
 
   const onSubmit = async (raw: FormValues) => {
     try {
-      // Debug: Log the raw form data to see what we're getting
-      console.log('Form data before validation:', {
-        title: raw.title,
-        file: raw.file,
-        fileType: typeof raw.file,
-        fileName: raw.file?.name,
-        fileSize: raw.file?.size,
-      });
+  // Form submission
 
       // Parse with CreateProblemSchema which requires file
       const values: ParsedValues = CreateProblemSchema.parse(raw);
@@ -149,7 +163,8 @@ export function CreateProblemDialog({
       console.error('Form submission error:', error);
       if (error instanceof z.ZodError) {
         // Handle Zod validation errors
-        console.log('Zod validation errors:', error.errors);
+        const message = error.errors?.map((e) => e.message).join();
+        showToast.error(`Error: ${message}`);
       }
     }
   };
@@ -302,16 +317,17 @@ export function CreateProblemDialog({
                   id="answer-file"
                   name={name}
                   type="file"
-                  accept=".txt,.fa,.pda,.cfg,.re"
+                  accept=".txt,.fa,.pda,.cfg,.re,.jff"
                   ref={ref}
                   onBlur={onBlur}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    console.log('File selected:', file?.name, file?.size);
-                    onChange(file);
-                  }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      onChange(file);
+                    }}
                 />
-                {errors.file && <p className="mt-1 text-xs text-red-600">{errors.file.message}</p>}
+                {fileErrorMessage && (
+                  <p className="mt-1 text-xs text-red-600">{fileErrorMessage}</p>
+                )}
               </div>
             )}
           />
@@ -322,7 +338,7 @@ export function CreateProblemDialog({
                 Cancel
               </Button>
             </DialogClose>
-            <Button type="submit" disabled={!isValid || isSubmitting}>
+            <Button type="submit" disabled={!isValid || isSubmitting || !file || courseIsArchived }>
               {isSubmitting ? 'Creating…' : 'Create Problem'}
             </Button>
           </DialogFooter>

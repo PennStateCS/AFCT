@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canUnpublishCourse } from '@/lib/course-status-checks';
 
 export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
   try {
@@ -22,11 +23,19 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     const session = await auth();
     const user = session?.user;
 
-    // Allow only ADMIN, FACULTY, or TA to toggle publish status
-    if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    // Allow only ADMIN or FACULTY to toggle publish status
+    if (!user || !['ADMIN', 'FACULTY'].includes(user.role)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
+    // Centralized check for unpublishing
+    if (!isPublished) {
+      const { canUnpublish, reason } = await canUnpublishCourse(prisma, courseId);
+      if (!canUnpublish) {
+        return NextResponse.json({ error: reason }, { status: 403 });
+      }
+    }
+     
     // Update course publish status
     const updated = await prisma.course.update({
       where: { id: courseId },
@@ -47,8 +56,10 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
       category: 'COURSE',
       courseId,
       metadata: {
+        userId: user.id,
+        courseId: courseId,
         courseName: updated.name,
-        isPublished,
+        isPublished: isPublished,
       },
     });
 

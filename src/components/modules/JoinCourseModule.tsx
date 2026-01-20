@@ -18,7 +18,7 @@ export function JoinCourseModule() {
 
   const handleJoin = async () => {
     if (code.length !== 6) {
-      toast.error('Please enter a valid 6-character course code.');
+      toast.error('Please enter a valid 6-character registration code.');
       return;
     }
 
@@ -55,14 +55,22 @@ export function JoinCourseModule() {
       <CardContent>
         <div>
           <Label htmlFor="course-code" className="mb-2 text-sm">
-            Enter a course code below:
+            Enter a registration code below:
           </Label>
 
           <InputOTP
             maxLength={6}
             value={code.toUpperCase()}
+            onPaste={
+              (e) => {
+                e.preventDefault(); // Prevent the typical pasteing-in of data
+                const pastedData = e.clipboardData.getData('text/plain'); // Get what the user is trying to paste
+                const processedData = pastedData.replace(/[^A-Z0-9a-z]/g, ''); // Replace all characters that are not A-Z0-9a-z with whitespace
+                setCode(processedData); // Set the processed data to the box
+              }
+            }
             onChange={setCode}
-            pattern="[A-Z0-9a-z]"
+            pattern="[A-Z0-9a-z]+$"
             containerClassName="justify-start"
             className="mb-2"
           >

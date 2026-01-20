@@ -49,6 +49,7 @@ export async function POST(req: Request) {
       action: 'RESET_PASSWORD',
       category: 'USER',
       metadata: {
+        userId: session.user.id,
         targetUserId: userId,
       },
     });

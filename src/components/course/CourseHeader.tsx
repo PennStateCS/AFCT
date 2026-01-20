@@ -19,6 +19,7 @@ import {
   Layers as DuplicateIcon,
 } from 'lucide-react';
 import type { FullCourse } from '@/types/course';
+import { formatInstructorNames, getStudentCount } from '@/lib/course-utils';
 
 interface CourseHeaderProps {
   course: FullCourse;
@@ -26,6 +27,7 @@ interface CourseHeaderProps {
   onEditClick: () => void;
   onDuplicate?: () => void;
   onPublishToggle: (checked: boolean) => void;
+  onArchiveToggle: (checked: boolean) => void;
 }
 
 export function CourseHeader({
@@ -34,8 +36,11 @@ export function CourseHeader({
   onEditClick,
   onDuplicate,
   onPublishToggle,
+  onArchiveToggle,
 }: CourseHeaderProps) {
   // -- helpers ---------------------------------------------------------------
+  // Get course status tag at the top
+  const { status, bgColor } = require('@/lib/course-status').getCourseStatusTag(course);
   const formatRange = (start?: string | Date | null, end?: string | Date | null) => {
     const toDate = (v?: string | Date | null) =>
       !v ? null : v instanceof Date ? v : new Date(v);
@@ -73,15 +78,16 @@ export function CourseHeader({
     }
   };
 
-  const facultyNames =
-    course.faculty.length > 0
-      ? course.faculty.map((f) => `${f.firstName ?? ''} ${f.lastName ?? ''}`.trim()).join(', ')
-      : 'None assigned';
+  const enrolled = course.enrolled ?? [];
+  // Use helpers for clarity and reuse
+  const facultyNames = formatInstructorNames(enrolled as any);
 
-  const taNames =
-    course.tas.length > 0
-      ? course.tas.map((t) => `${t.firstName ?? ''} ${t.lastName ?? ''}`.trim()).join(', ')
-      : 'None assigned';
+  const taList = (enrolled as any[]).filter((u:any) => u.courseRole === 'TA');
+  const taNames = taList.length === 0
+    ? 'None assigned'
+    : taList.length === 1
+      ? `${taList[0].firstName ?? ''} ${taList[0].lastName ?? ''}`.trim()
+      : `${(taList[0].firstName ?? '') + (taList[0].lastName ? ' ' + taList[0].lastName : '')}`.trim() + ', ...';
 
   // derive metrics from the course object where possible
   type AssignmentCounts = {
@@ -96,7 +102,7 @@ export function CourseHeader({
   const metrics = (() => {
     const assignments = Array.isArray(course.assignments) ? course.assignments.length : 0;
     const problems = Array.isArray(course.problems) ? course.problems.length : 0;
-    const students = Array.isArray(course.students) ? course.students.length : 0;
+    const students = getStudentCount(enrolled as any[]);
 
     const submissions = Array.isArray(course.assignments)
       ? course.assignments.reduce(
@@ -104,7 +110,6 @@ export function CourseHeader({
           0,
         )
       : 0;
-
     const comments = Array.isArray(course.assignments)
       ? course.assignments.reduce(
           (sum, a) => sum + (Number((a as unknown as AssignmentCounts).commentCount) || 0),
@@ -137,15 +142,12 @@ export function CourseHeader({
               <span className="mr-2 text-muted-foreground">{course.code}</span>
               {course.name}
             </CardTitle>
-            {!isStudent && (
+              {/* Course status tag (shared logic) */}
               <span
-                className={`inline-flex items-center justify-center rounded-md px-3 py-1 text-sm font-medium ${
-                  course.isPublished ? 'bg-green-500 text-white' : 'bg-amber-500 text-white'
-                }`}
+                className={`inline-block rounded ${bgColor} px-2 py-1 text-sm text-white shadow-sm ring-1 ring-gray-900/30`}
               >
-                {course.isPublished ? 'Published' : 'Draft'}
+                {status}
               </span>
-            )}
           </div>
 
           {/* meta row */}
@@ -178,7 +180,7 @@ export function CourseHeader({
                 <TooltipContent>Edit course</TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            <Button variant="secondary" className="hidden sm:inline-flex" onClick={onEditClick}>
+            <Button variant="secondary" className="hidden sm:inline-flex" onClick={onEditClick} hidden={course.isArchived}>
               <Pencil className="mr-2 h-4 w-4" />
               Edit Course
             </Button>
@@ -247,13 +249,24 @@ export function CourseHeader({
                     </div>
                   </div>
 
-                  {/* Visibility */}
+                  {/* Published */}
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-muted-foreground">Visibility:</span>
+                    <span className="text-[11px] text-muted-foreground">Published:</span>
                     <Switch
                       checked={course.isPublished}
                       onCheckedChange={onPublishToggle}
-                      aria-label="Toggle course visibility"
+                      aria-label="Toggle course publishability"
+                      disabled={course.isArchived}
+                    />
+                  </div>
+
+                  {/* Archived */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-muted-foreground">Archived:</span>
+                    <Switch
+                      checked={course.isArchived}
+                      onCheckedChange={onArchiveToggle}
+                      aria-label="Toggle course archive"
                     />
                   </div>
                 </div>
@@ -268,7 +281,7 @@ export function CourseHeader({
               <div className="px-2.5 pb-2.5 pt-2">
                 <dl className="mt-1 grid gap-1.5 text-sm">
                   <div className="grid grid-cols-[90px_1fr] gap-1.5">
-                    <dt className="text-xs text-muted-foreground">Faculty</dt>
+                    <dt className="text-xs text-muted-foreground">Instructor(s)</dt>
                     <dd className="text-xs">{facultyNames}</dd>
                   </div>
                   <div className="grid grid-cols-[90px_1fr] gap-1.5">

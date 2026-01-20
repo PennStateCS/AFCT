@@ -55,7 +55,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
 
     // ---- Load problems ----
     const assignmentProblems = await prisma.assignmentProblem.findMany({
-      where: { assignmentId },
+      where: { assignmentId: assignmentId },
       include: {
         problem: {
           select: {
@@ -67,11 +67,23 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
             isDeterministic: true,
           },
         },
+        submissions: {
+          where: {
+            studentId: userId,
+            correct: true,
+          },
+          select: { id: true },
+        },
       },
-      orderBy: { problemId: 'asc' },
+      orderBy: {
+        problemId: 'asc'
+      },
     });
 
-    const problems = assignmentProblems.map((ap) => ap.problem);
+    const problems = assignmentProblems.map((ap) => ({
+      ...ap.problem,
+      solved: ap.submissions.length > 0
+    }));
 
     // ---- Activity log ----
     try {
@@ -81,7 +93,11 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
         category: 'ASSIGNMENT',
         assignmentId,
         courseId,
-        metadata: {},
+        metadata: {
+          userId: userId,
+          assignmentId: assignmentId,
+          courseId: courseId,
+        },
       });
     } catch (logErr) {
       console.error('[problems] activityLog.create failed:', logErr);

@@ -56,7 +56,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
     handleSubmit,
     reset,
     watch,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isValid },
   } = useForm<FormValues>({
     resolver: zodResolver(CreateCourseFormSchema),
     defaultValues: defaults,
@@ -171,7 +171,6 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
                 placeholder="e.g., CMPSC 221"
                 error={errors.code?.message}
                 showStatus
-                isValid={!errors.code && !!field.value}
               />
             )}
           />
@@ -318,7 +317,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
               </Button>
             </DialogClose>
 
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting || !isValid}>
               {isSubmitting ? 'Creating…' : 'Create Course'}
             </Button>
           </DialogFooter>

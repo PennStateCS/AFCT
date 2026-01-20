@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { showToast } from '@/lib/toast';
 import { FullCourse, DeleteTarget, EnrollableUser, TabType } from '@/types/course';
+import { getEnrolledIds } from '@/lib/course-utils';
 import { Assignment, Problem, User } from '@prisma/client';
 
 export function useCourseData(courseId: string) {
@@ -14,9 +15,8 @@ export function useCourseData(courseId: string) {
       const data = await res.json();
       setCourse({
         ...data,
-        faculty: data.faculty || [],
-        tas: data.tas || [],
-        students: data.students || [],
+        // normalize to `enrolled` representation (user objects with courseRole)
+        enrolled: data.enrolled || [],
         assignments: data.assignments || [],
         problems: data.problems || [],
       });
@@ -72,6 +72,10 @@ export function useDialogStates() {
   // Publish confirm
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
   const [pendingPublish, setPendingPublish] = useState<boolean | null>(null);
+  
+  // Archive confirm
+  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
+  const [pendingArchive, setPendingArchive] = useState<boolean | null>(null);
 
   // Enroll user
   const [enrollOpen, setEnrollOpen] = useState(false);
@@ -80,12 +84,14 @@ export function useDialogStates() {
   return {
     editOpen,
     setEditOpen,
+
     problemOpen,
     setProblemOpen,
     editProblemOpen,
     setEditProblemOpen,
     selectedProblem,
     setSelectedProblem,
+
     editAssignmentOpen,
     setEditAssignmentOpen,
     selectedAssignment,
@@ -96,10 +102,17 @@ export function useDialogStates() {
     setConfirmOpen,
     pendingDelete,
     setPendingDelete,
+
     publishConfirmOpen,
     setPublishConfirmOpen,
     pendingPublish,
     setPendingPublish,
+
+    archiveConfirmOpen,
+    setArchiveConfirmOpen,
+    pendingArchive,
+    setPendingArchive,
+    
     enrollOpen,
     setEnrollOpen,
     allUsers,
@@ -117,11 +130,7 @@ export function useEnrollment(course: FullCourse | null) {
       const users: User[] = await res.json();
       
       if (course) {
-        const inCourseIds = new Set([
-          ...course.students.map((u) => u.id),
-          ...course.faculty.map((u) => u.id),
-          ...course.tas.map((u) => u.id),
-        ]);
+        const inCourseIds = new Set(getEnrolledIds(course.enrolled as any[]));
         setAllUsers(users.filter((u) => !inCourseIds.has(u.id)));
       }
     } catch (error) {

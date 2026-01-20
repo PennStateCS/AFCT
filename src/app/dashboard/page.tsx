@@ -15,11 +15,17 @@ export default async function DashboardPage() {
     );
   }
 
+  // Get user's id
   const { id } = session.user;
 
   // Get all courses for the user via roster entries
   const rosterEntries = await prisma.roster.findMany({
-    where: { userId: id },
+    where: { 
+        userId: id,
+        course: {
+            isArchived: false,
+        },
+    },
     include: {
       course: {
         include: {
@@ -41,9 +47,8 @@ export default async function DashboardPage() {
     return {
       ...course,
       userRole: entry.role,
-      students: course.roster.filter((r) => r.role === 'STUDENT').map((r) => r.user),
-      faculty: course.roster.filter((r) => r.role === 'FACULTY').map((r) => r.user),
-      tas: course.roster.filter((r) => r.role === 'TA').map((r) => r.user),
+      // Only include enrolled list (user objects with courseRole) — do not construct role-specific arrays
+      enrolled: course.roster.map((r) => ({ ...r.user, courseRole: r.role })),
     };
   });
 
@@ -69,7 +74,7 @@ export default async function DashboardPage() {
     <div className="flex h-full w-full flex-col lg:flex-row">
       {/* Left (Big Column) */}
       <div className="w-full lg:w-3/4">
-        <DashboardClient sessionUser={session.user} courses={courses} />
+        <DashboardClient sessionUser={session.user} courses={courses} title={"Current Courses"}/>
       </div>
 
       {/* Right (Skinny Column) */}
@@ -77,7 +82,7 @@ export default async function DashboardPage() {
         <div className="pb-4">
           <JoinCourseModule />
         </div>
-        <div className="pb-4">
+        <div>
           <DueDateModule assignments={assignments} />
         </div>
       </div>

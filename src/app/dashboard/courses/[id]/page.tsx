@@ -117,6 +117,25 @@ export default function AdminCoursePage() {
     dialogStates.setPendingPublish(null);
   }, [dialogStates]);
 
+  // Archive handler
+  const handleArchiveToggle = useCallback((checked: boolean) => {
+    dialogStates.setPendingArchive(checked);
+    dialogStates.setArchiveConfirmOpen(true);
+  }, [dialogStates]);
+
+  const handleArchiveConfirm = useCallback(async () => {
+    if (dialogStates.pendingArchive !== null) {
+      await handlers.handleCourseArchiveToggle(dialogStates.pendingArchive);
+    }
+    dialogStates.setArchiveConfirmOpen(false);
+    dialogStates.setPendingArchive(null);
+  }, [dialogStates, handlers]);
+
+  const handleArchiveCancel = useCallback(() => {
+    dialogStates.setArchiveConfirmOpen(false);
+    dialogStates.setPendingArchive(null);
+  }, [dialogStates]);
+
   // Enrollment handler
   const handleEnrollUserWrapper = useCallback(async (user: EnrollableUser) => {
     if (!courseId) return;
@@ -141,6 +160,7 @@ export default function AdminCoursePage() {
         onEditClick={() => dialogStates.setEditOpen(true)}
         onDuplicate={openDuplicate}
         onPublishToggle={handlePublishToggle}
+        onArchiveToggle={handleArchiveToggle}
       />
 
       {/* Main Content */}
@@ -171,6 +191,7 @@ export default function AdminCoursePage() {
           editOpen={dialogStates.editOpen}
           setEditOpen={dialogStates.setEditOpen}
           onCourseSave={handlers.handleCourseSave}
+
           problemOpen={dialogStates.problemOpen}
           setProblemOpen={dialogStates.setProblemOpen}
           editProblemOpen={dialogStates.editProblemOpen}
@@ -179,6 +200,7 @@ export default function AdminCoursePage() {
           setSelectedProblem={dialogStates.setSelectedProblem}
           onProblemCreated={handlers.handleProblemCreated}
           onProblemSaved={handlers.handleProblemSaved}
+          
           editAssignmentOpen={dialogStates.editAssignmentOpen}
           setEditAssignmentOpen={dialogStates.setEditAssignmentOpen}
           selectedAssignment={dialogStates.selectedAssignment}
@@ -190,10 +212,17 @@ export default function AdminCoursePage() {
           pendingDelete={dialogStates.pendingDelete}
           onConfirm={handleConfirm}
           onCancel={handleCancel}
+
           publishConfirmOpen={dialogStates.publishConfirmOpen}
           pendingPublish={dialogStates.pendingPublish}
           onPublishConfirm={handlePublishConfirm}
           onPublishCancel={handlePublishCancel}
+
+          archiveConfirmOpen={dialogStates.archiveConfirmOpen}
+          pendingArchive={dialogStates.pendingArchive}
+          onArchiveConfirm={handleArchiveConfirm}
+          onArchiveCancel={handleArchiveCancel}
+
           enrollOpen={dialogStates.enrollOpen}
           setEnrollOpen={dialogStates.setEnrollOpen}
           allUsers={allUsers}

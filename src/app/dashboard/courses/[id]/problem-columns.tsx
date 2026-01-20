@@ -1,9 +1,11 @@
 // problem-columns.tsx
 import { ColumnDef } from '@tanstack/react-table';
 import type { Problem } from '@prisma/client';
-import { ChevronDown, Pencil, Trash2, Notebook } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronDown, Pencil, Trash2, FileText, Eye } from 'lucide-react';
 import { Badge } from '@/components/ui/RoleBadge';
 import { Button } from '@/components/ui/button';
+import JffViewerDialog from '@/components/JffViewerDialog';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -20,13 +22,18 @@ const typeLabels: Record<string, string> = {
   RE: 'Regular Expression',
 };
 
-export const problemColumns = ({
+export const useProblemColumns = ({
+  courseIsArchived,
   onEdit,
   onDelete,
 }: {
   onEdit: (p: Problem) => void;
   onDelete: (id: string) => void;
-}): ColumnDef<Problem>[] => [
+  courseIsArchived: boolean;
+}): { columns: ColumnDef<Problem>[]; viewDialog: JSX.Element | null } => {
+  const [openDialog, setOpenDialog] = useState<{ open: boolean; problem: Problem | null }>({ open: false, problem: null });
+
+  const columns: ColumnDef<Problem>[] = [
   {
     accessorKey: 'title',
     header: 'Title',
@@ -59,7 +66,7 @@ export const problemColumns = ({
       if (!file || !fileName) return '—';
       return (
         <a
-          href={`/api/solutions/${fileName}`}
+          href={`/uploads/problems/${fileName}`}
           download={file}
           className="text-sm break-all text-blue-600 hover:underline"
         >
@@ -103,26 +110,39 @@ export const problemColumns = ({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel className="flex items-center gap-2">
-              <Notebook className="h-4 w-4" />
+              <FileText className="h-4 w-4" />
               {row.original.title}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem
+              onClick={() => {
+                if (!row.original.fileName) return;
+                setOpenDialog({ open: true, problem: row.original });
+              }}
+              className="flex items-center gap-2"
+              disabled={!row.original.fileName}
+            >
+              <Eye className="mr-2 h-4 w-4" />
+              View Answer
+            </DropdownMenuItem>
+            <DropdownMenuItem
               onClick={() => onEdit(row.original)}
-              className="hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2"
+              className="flex items-center gap-2"
+              hidden={courseIsArchived}
             >
               <Pencil className="mr-2 h-4 w-4" />
               Edit Problem
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
+            <DropdownMenuSeparator hidden={courseIsArchived} />
             <DropdownMenuItem
               onClick={() => {
                 if (disabled) return;
                 onDelete(problemWithMeta.id);
               }}
               disabled={disabled}
+              hidden={courseIsArchived}
               title={disabled ? 'Problem is used by an assignment and cannot be deleted' : undefined}
-              className={`hover:bg-secondary focus:bg-secondary focus:text-secondary-foreground flex items-center gap-2 text-red-600 ${
+              className={`focus:text-red-600 flex items-center gap-2 text-red-600 ${
                 disabled ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -133,5 +153,19 @@ export const problemColumns = ({
         </DropdownMenu>
       );
     },
-  },
-];
+}
+  ];
+
+  const viewDialog = openDialog.problem ? (
+    <JffViewerDialog
+      open={openDialog.open}
+      onOpenChange={(open) => setOpenDialog({ open, problem: open ? openDialog.problem : null })}
+      src={`/uploads/problems/${encodeURIComponent(openDialog.problem.fileName ?? '')}`}
+      title={`${openDialog.problem.originalFileName || openDialog.problem.fileName} - Problem`}
+      width="70vw"
+      height="70vh"
+    />
+  ) : null;
+
+  return { columns, viewDialog };
+}
