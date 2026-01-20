@@ -1,8 +1,29 @@
 // /src/app/api/assignments/[id]/problems/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, JwtPayload } from '@/app/utils/jwt';
+import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { ProblemTypeEnum } from '@/schemas/problem';
+import { z } from 'zod';
+
+// Types
+interface Problem {
+  id: string;
+  title: string;
+  description: string | null;
+  type: z.infer<typeof ProblemTypeEnum> | null;
+  maxStates: number | null;
+  isDeterministic: boolean | null;
+}
+
+interface ProblemWithSolved extends Problem {
+  solved: boolean;
+}
+
+interface AssignmentProblemResult {
+  problem: Problem;
+  submissions: { id: string }[];
+}
 
 export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   // Await params if it is a Promise (some environments do this)
@@ -10,20 +31,10 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
   const assignmentId = params?.id;
 
   try {
-    // ---- Auth header / token ----
-    const authHeader = req.headers.get('authorization');
-    const token = authHeader?.split(' ')[1];
-
-    if (!token) {
-      return NextResponse.json({ error: 'Missing token' }, { status: 401 });
-    }
-
-    // ---- Verify token ----
-    let decoded: JwtPayload | null;
-    try {
-      decoded = verifyToken(token);
-    } catch {
-      return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
+    // ---- Auth ----
+    const session = await auth();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // ---- Assignment lookup ----
@@ -36,10 +47,10 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 
-    // ---- UserId from token ----
-    const userId = decoded?.userId;
+    // ---- UserId from session ----
+    const userId = session.user.id;
     if (!userId) {
-      return NextResponse.json({ error: 'Invalid token payload' }, { status: 401 });
+      return NextResponse.json({ error: 'Invalid session payload' }, { status: 401 });
     }
 
     // ---- Enrollment check (any role) ----
@@ -78,11 +89,11 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       orderBy: {
         problemId: 'asc'
       },
-    });
+    }) as AssignmentProblemResult[];
 
-    const problems = assignmentProblems.map((ap) => ({
+    const problems: ProblemWithSolved[] = assignmentProblems.map((ap: (typeof assignmentProblems)[number]) => ({
       ...ap.problem,
-      solved: ap.submissions.length > 0
+      solved: ap.submissions.length > 0,
     }));
 
     // ---- Activity log ----

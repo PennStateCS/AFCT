@@ -34,7 +34,7 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
     });
 
     // Filter users with STUDENT role
-    const students = rosterEntries.filter((r) => r.role === 'STUDENT').map((r) => r.user);
+    const students = rosterEntries.filter((r: (typeof rosterEntries)[number]) => r.role === 'STUDENT').map((r: (typeof rosterEntries)[number]) => r.user);
 
     return NextResponse.json(students);
   } catch (err) {
