@@ -4,6 +4,22 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { ProblemTypeEnum } from '@/schemas/problem';
+import { z } from 'zod';
+
+// Types
+interface AssignmentWithProblems {
+  problems: {
+    problem: {
+      id: string;
+      title: string;
+      description: string | null;
+      type: z.infer<typeof ProblemTypeEnum> | null;
+      maxStates: number | null;
+      isDeterministic: boolean | null;
+    }
+  }[]
+}
 
 export async function POST(
   req: Request,
@@ -56,14 +72,25 @@ export async function POST(
     // Retrieve updated problem list for this assignment
     const updated = await prisma.assignment.findUnique({
       where: { id: assignmentId },
-      include: {
+      select: {
         problems: {
-          include: { problem: true },
+          select: {
+            problem: {           
+              select: {
+                id: true,
+                title: true,
+                description: true,
+                type: true,
+                maxStates: true,
+                isDeterministic: true,
+              }
+            }
+          },
         },
       },
-    });
+    }) as AssignmentWithProblems | null;
 
-    const problems = updated?.problems.map((ap) => ap.problem) || [];
+    const problems = updated?.problems.map((ap: NonNullable<typeof updated>['problems'][number]) => ap.problem) || [];
 
     // Log the removal action
     await createEnhancedActivityLog(prisma, req, {

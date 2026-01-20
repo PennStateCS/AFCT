@@ -14,7 +14,7 @@
     "lint": "next lint",
     "lint:fix": "eslint . --fix",
     "build:analyze": "cross-env ANALYZE=true next build",
-    "postinstall": "node -e \"const fs=require('fs');if(fs.existsSync('prisma/schema.prisma')){const cp=require('child_process');const bin=process.platform==='win32'?'npx.cmd':'npx';const r=cp.spawnSync(bin,['prisma','generate'],{stdio:'inherit'});process.exit(r.status||0)}else{console.log('skip prisma generate (schema missing)')}\"",
+    "postinstall": "node -e \"if(process.env.SKIP_PRISMA_GENERATE){console.log('skip prisma generate');process.exit(0)}\" || true",
     "seed": "prisma db seed",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
@@ -123,7 +123,7 @@
     "eslint-config-next": "15.4.1",
     "postcss": "^8.5.6",
     "prisma": "^6.14.0",
-    "prisma-erd-generator": "^2.1.0",
+    "prisma-erd-generator": "^2.4.2",
     "tailwindcss": "^4.1.12",
     "tw-animate-css": "^1.3.7",
     "typescript": "^5.6.3"

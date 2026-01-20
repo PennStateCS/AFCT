@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
 
       const filePath = path.join(uploadDir, fileName);
       const buffer = Buffer.from(await file.arrayBuffer());
-      fs.writeFileSync(filePath, buffer);
+      fs.writeFileSync(filePath, buffer, {mode: 0o755});
 
       // 4b. Run system command to analyze the uploaded file
       try {

@@ -50,14 +50,14 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
 
     // Build a single enrolled array (user objects plus courseRole), and compute student submission flags as needed.
     const enrolled = await Promise.all(
-      course.roster.map(async (r) => {
+      course.roster.map(async (r: (typeof course.roster)[number]) => {
         const user = r.user;
         const courseRole = r.role;
 
         // For students only, compute hasSubmissions flag
         let hasSubmissions = false;
         if (courseRole === 'STUDENT') {
-          const assignmentIds = course.assignments.map((a) => a.id);
+          const assignmentIds = course.assignments.map((a: (typeof course.assignments)[number]) => a.id);
           if (assignmentIds.length > 0) {
             const found = await prisma.submission.findFirst({
               where: { studentId: user.id, assignmentId: { in: assignmentIds } },
@@ -73,7 +73,7 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
 
     // Attach problem counts and safety flags to assignments
     const assignmentsWithProblemCount = await Promise.all(
-      course.assignments.map(async (assignment) => {
+      course.assignments.map(async (assignment: (typeof course.assignments)[number]) => {
         // Check for submissions and comments
   const submissionCount = await prisma.submission.count({ where: { assignmentId: assignment.id } });
   const commentCount = await prisma.comment.count({ where: { assignmentId: assignment.id } });
@@ -98,11 +98,11 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
     );
 
   // Determine whether each problem is linked to any assignment via assignmentProblem
-  const problemIds = course.problems.map((p) => p.id);
+    const problemIds = course.problems.map((p: (typeof course.problems)[number]) => p.id);
   const linked = await prisma.assignmentProblem.findMany({ where: { problemId: { in: problemIds } }, select: { problemId: true } });
-  const linkedSet = new Set(linked.map((l) => l.problemId));
+const linkedSet = new Set(linked.map((l: (typeof linked)[number]) => l.problemId));
 
-  const problemsWithLink = course.problems.map((p) => ({ ...p, usedByAssignment: linkedSet.has(p.id) }));
+const problemsWithLink = course.problems.map((p: (typeof course.problems)[number]) => ({ ...p, usedByAssignment: linkedSet.has(p.id) }));
 
     // Determine viewer's course role if authenticated
     const session = await auth();
@@ -223,14 +223,14 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
     });
 
     // Group roster users by role (include INSTRUCTOR alongside FACULTY)
-    const instructors = updatedCourse.roster.filter((r) => (r.role as string) === 'INSTRUCTOR').map((r) => ({ ...r.user, role: r.role }));
-    const faculty = updatedCourse.roster.filter((r) => (r.role as string) === 'FACULTY' || (r.role as string) === 'INSTRUCTOR').map((r) => ({ ...r.user, role: r.role }));
-    const tas = updatedCourse.roster.filter((r) => r.role === 'TA').map((r) => ({ ...r.user, role: r.role }));
-    const students = updatedCourse.roster.filter((r) => r.role === 'STUDENT').map((r) => ({ ...r.user, role: r.role }));
+    const instructors = updatedCourse.roster.filter((r: (typeof updatedCourse.roster)[number]) => (r.role as string) === 'INSTRUCTOR').map((r: (typeof updatedCourse.roster)[number]) => ({ ...r.user, role: r.role }));
+    const faculty = updatedCourse.roster.filter((r: (typeof updatedCourse.roster)[number]) => (r.role as string) === 'FACULTY' || (r.role as string) === 'INSTRUCTOR').map((r: (typeof updatedCourse.roster)[number]) => ({ ...r.user, role: r.role }));
+    const tas = updatedCourse.roster.filter((r: (typeof updatedCourse.roster)[number]) => r.role === 'TA').map((r: (typeof updatedCourse.roster)[number]) => ({ ...r.user, role: r.role }));
+    const students = updatedCourse.roster.filter((r: (typeof updatedCourse.roster)[number]) => r.role === 'STUDENT').map((r: (typeof updatedCourse.roster)[number]) => ({ ...r.user, role: r.role }));
 
     // Attach problem counts to assignments
     const assignmentsWithProblemCount = await Promise.all(
-      updatedCourse.assignments.map(async (assignment) => {
+      updatedCourse.assignments.map(async (assignment: (typeof updatedCourse.assignments)[number]) => {
         const submissionCount = await prisma.submission.count({ where: { assignmentId: assignment.id } });
         const commentCount = await prisma.comment.count({ where: { assignmentId: assignment.id } });
         const hasSubmissionsOrComments = submissionCount > 0 || commentCount > 0;
@@ -290,7 +290,7 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
       createdAt: updatedCourse.createdAt,
       updatedAt: updatedCourse.updatedAt,
       // Only include a single enrolled array (user objects with courseRole)
-      enrolled: updatedCourse.roster.map((r) => ({ ...r.user, courseRole: r.role })),
+      enrolled: updatedCourse.roster.map((r: (typeof updatedCourse.roster)[number]) => ({ ...r.user, courseRole: r.role })),
       problems: updatedCourse.problems,
       assignments: assignmentsWithProblemCount,
       viewerRole,

@@ -371,7 +371,7 @@ export default function GradesCard({ courseId }: { courseId: string }) {
       <CardContent className="space-y-6">
         {/* Grade Statistics */}
         {gradeStats && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-zinc-200 rounded-lg">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-card border rounded-lg">
             <div className="flex items-center gap-2">
               <TrendingUp className="h-4 w-4 text-blue-600" />
               <div>

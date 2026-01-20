@@ -216,7 +216,7 @@ async function main() {
     update: {},
     create: {
       id: 'cmdnw26cm0001lv14v5vxo26o',
-      role: 'FACULTY',
+      role: 'INSTRUCTOR',
       courseId: course1.id,
       userId: faculty1.id,
     },
@@ -238,7 +238,7 @@ async function main() {
     update: {},
     create: {
       id: 'cmdnw44cm2201lv14v5vox44x',
-      role: 'FACULTY',
+      role: 'INSTRUCTOR',
       courseId: course2.id,
       userId: faculty1.id,
     },
@@ -260,7 +260,7 @@ async function main() {
     update: {},
     create: {
       id: 'cmdoowaqx0001lvesqduvsw2v',
-      role: 'FACULTY',
+      role: 'INSTRUCTOR',
       courseId: course3.id,
       userId: faculty2.id,
     },

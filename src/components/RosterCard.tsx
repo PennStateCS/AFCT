@@ -2,7 +2,7 @@
 
 
 import { User } from '@prisma/client';
-import { sortRoster } from '@/lib/course-utils';
+import { sortRoster, type EnrolledUser } from '@/lib/course-utils';
 import { ColumnDef } from '@tanstack/react-table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,7 @@ import { Plus, Users } from 'lucide-react';
 interface RosterCardProps {
   courseIsArchived: boolean;
   // enrolled: list of users with courseRole and optional flags
-  enrolled?: ({ id: string; firstName?: string | null; lastName?: string | null; email?: string | null; avatar?: string | null; role?: string } & { courseRole?: string; hasSubmissions?: boolean })[];
+  enrolled?: EnrolledUser[];
   userColumns: ColumnDef<User>[];
   onEnrollUser: () => void;
   onBulkEnroll?: () => void;
@@ -29,7 +29,7 @@ export function RosterCard({
 }: RosterCardProps) {
 
   // Use a shared sort helper to keep ordering consistent
-  const rosterData = sortRoster(enrolled as any[]).map((u) => ({ ...u, role: (u.courseRole ?? u.role) as any }));
+  const rosterData = sortRoster(enrolled).map((u) => ({ ...u, role: u.courseRole ?? u.role }));
 
   return (
     <Card className="p-4">
@@ -47,7 +47,7 @@ export function RosterCard({
         </div>
       </CardHeader>
       <CardContent>
-        <DataTable columns={userColumns as ColumnDef<User>[]} data={rosterData} loading={loading} />
+        <DataTable columns={userColumns as ColumnDef<User>[]} data={rosterData as unknown as User[]} loading={loading} />
       </CardContent>
     </Card>
   );
