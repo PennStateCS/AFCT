@@ -426,18 +426,18 @@ export default function AssignmentSubmissions({
                 </Button>
                 <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="flex items-center gap-2 w-[320px] justify-between bg-white text-foreground border border-gray-200 hover:bg-slate-50 focus:ring-2 focus:ring-offset-1 focus:ring-primary-300">
+                    <Button variant="outline" className="flex items-center gap-2 w-[320px] justify-between bg-card text-foreground border border-border hover:bg-input focus:ring-2 focus:ring-offset-1 focus:ring-primary-300">
                       <span className="truncate">{selectedStudent ? `${selectedStudent.firstName} ${selectedStudent.lastName}` : 'Select student'}</span>
                       <ChevronDown className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-[320px] p-2 bg-white text-foreground border border-gray-200 shadow-lg rounded-md">
+                  <DropdownMenuContent className="w-[320px] p-2 bg-card text-foreground border border-border shadow-lg rounded-md">
                     <Input
                       ref={inputRef}
                       placeholder="Search students..."
                       value={studentFilter}
                       onChange={(e) => setStudentFilter(e.target.value)}
-                      className="mb-2 bg-gray-50 border border-gray-200"
+                      className="mb-2 bg-input border-border"
                       aria-label="Search students by name"
                       onKeyDown={(e) => {
                         // Prevent any keyboard event from bubbling up to the DropdownMenu
@@ -466,7 +466,7 @@ export default function AssignmentSubmissions({
                         filteredStudents.map((s) => (
                           <DropdownMenuItem
                             key={s.id}
-                            className="hover:bg-slate-100"
+                            className="hover:bg-input"
                             onClick={() => {
                               handleSelectChange(s.id);
                               setStudentFilter('');
@@ -514,8 +514,7 @@ export default function AssignmentSubmissions({
               </div>
 
               {/* Grade box: always-visible input, robust logic */}
-              <div className="flex items-center gap-2 border p-2">
-                <div className="text-sm text-black">Student Grade:</div>
+              <div className="flex items-center gap-2">
                 <div className="relative">
                   <Input
                     type="number"
@@ -536,7 +535,7 @@ export default function AssignmentSubmissions({
                         setEditingGrade(userGrade !== null && userGrade !== undefined ? String(userGrade) : "");
                       }
                     }}
-                    className="bg-white h-9 w-[90px] pr-8"
+                    className="bg-input h-9 w-[90px] pr-8"
                     placeholder={isLoadingGrade ? '-' : (userGrade === null || userGrade === undefined ? '-' : String(userGrade))}
                     aria-label={`Grade (0-${maxAssignmentGrade})`}
                     disabled={isLoadingGrade}
@@ -655,7 +654,7 @@ export default function AssignmentSubmissions({
                         </section>
 
                         <div
-                          className="w-1 bg-gray-300 hover:bg-gray-400 cursor-col-resize transition-colors"
+                          className="w-1 bg-muted hover:bg-border cursor-col-resize transition-colors"
                           onMouseDown={handleMouseDown}
                           title="Drag to resize"
                         />

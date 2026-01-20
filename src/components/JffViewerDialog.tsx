@@ -26,9 +26,9 @@ type Parsed = {
   }>;
 };
 
-const NODE_FILL = '#fff59d';
-const STROKE = '#1f2937';
-const TEXT = '#111827';
+const NODE_FILL = getComputedStyle(document.documentElement).getPropertyValue('--node-color').trim();
+const STROKE = getComputedStyle(document.documentElement).getPropertyValue('--foreground').trim();
+const TEXT_COLOR = getComputedStyle(document.documentElement).getPropertyValue('--foreground').trim();
 const EDGE_WIDTH = 1.6;
 const DEFAULT_EPS = 'λ';
 
@@ -369,13 +369,13 @@ export function JffCytoscapeViewer({
             {
               selector: 'node',
               style: {
-                'background-color': darkMode ? '#0b1220' : NODE_FILL,
+                'background-color': NODE_FILL,
                 'border-color': STROKE,
                 'border-width': 2,
                 'label': 'data(label)',
                 'font-family': 'Inter, ui-sans-serif, system-ui',
                 'font-size': 16,
-                'color': TEXT,
+                'color': TEXT_COLOR,
                 'text-valign': 'center',
                 'text-halign': 'center',
                 'width': 58,
@@ -402,7 +402,7 @@ export function JffCytoscapeViewer({
                 'font-family': 'Inter, ui-sans-serif, system-ui',
                 'font-size': 16,
                 'min-zoomed-font-size': 7,
-                'color': TEXT,
+                'color': TEXT_COLOR,
                 'text-wrap': 'wrap',
                 'text-max-width': 140,
                 'text-rotation': 'autorotate',
@@ -769,7 +769,7 @@ export function JffCytoscapeViewer({
   };
 
   return (
-    <div className="w-full rounded-md border bg-white">
+    <div className="w-full rounded-md border bg-background">
       <div className="flex items-center justify-between gap-2 border-b p-2 overflow-x-auto">
         <div className="flex items-center gap-2 min-w-0">
           <div className="truncate text-sm font-medium">{title ?? src}</div>
