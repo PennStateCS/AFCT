@@ -9,7 +9,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import * as Popover from '@radix-ui/react-popover';
 import { Info } from 'lucide-react';
 import InputGroup from '@/components/ui/InputGroup';
-import { Session } from 'node:inspector/promises';
 
 // Simple validators
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);

@@ -88,15 +88,13 @@ export default function DiscussionPanel({
 
   return (
     <>
-      <section className={`rounded-md border overflow-hidden ${className}`}>
-        <header className="flex items-center gap-2 border-b bg-primary px-3 py-2 text-white rounded-t-md">
-          <MessageSquare className="h-4 w-4" />
-          <h4 className="text-sm font-medium text-white">
-            {title} ({comments.length})
-          </h4>
+      <section className={`rounded-md border border-border overflow-hidden ${className}`}>
+        <header className="flex items-center gap-2 border-b border-border bg-primary px-3 py-2 rounded-t-md">
+          <MessageSquare className="h-4 w-4 text-white" />
+          <h4 className="text-sm font-medium text-white">{title} ({comments.length})</h4>
         </header>
 
-        <div className="bg-gray-50 p-3">
+        <div className="bg-card p-3">
           {comments.length > 0 ? (
             <ul className="mb-3 space-y-3">
               {comments
@@ -143,14 +141,14 @@ export default function DiscussionPanel({
 
                         {/* bubble */}
                         <div
-                          className={`min-w-0 min-w-[65%] w-fit max-w-[90%] sm:max-w-[85%] lg:max-w-[75%] break-words rounded-lg border px-3 py-2 shadow bg-card border-gray-400 relative ${
+                          className={`min-w-0 min-w-[65%] w-fit max-w-[90%] sm:max-w-[85%] lg:max-w-[75%] break-words rounded-lg border border-border px-3 py-2 shadow bg-card relative ${
                             isMine ? "ml-auto" : ""
                           }`}
                         >
                           {/* Delete button - inside bubble top right */}
                           <button
                             onClick={() => setCommentToDelete(comment.id)}
-                            className="absolute top-1 right-1 h-4 w-4 rounded-full hover:bg-red-100 text-gray-500 hover:text-red-600 flex items-center justify-center text-xs transition-colors opacity-70 hover:opacity-100"
+                            className="absolute top-1 right-1 h-4 w-4 rounded-full hover:bg-red-100 text-muted-foreground hover:text-red-600 flex items-center justify-center text-xs transition-colors opacity-70 hover:opacity-100"
                             title="Delete comment"
                             disabled={deletingComments[comment.id]}
                             hidden={courseIsArchived}
@@ -179,7 +177,7 @@ export default function DiscussionPanel({
                 })}
             </ul>
           ) : (
-            <div className="mb-3 flex items-center justify-center rounded-md border border-dashed bg-white py-8 text-muted-foreground">
+            <div className="mb-3 flex items-center justify-center rounded-md border border-dashed border-border bg-card py-8 text-muted-foreground">
               <MessageSquare className="mr-2 h-5 w-5 opacity-50" />
               <span>No comments yet.</span>
             </div>
@@ -196,7 +194,7 @@ export default function DiscussionPanel({
                   onSaveComment();
                 }
               }}
-              className="min-h-[80px] bg-white"
+              className="min-h-[80px] bg-input"
               aria-label="Add comment"
               hidden={courseIsArchived}
             />
