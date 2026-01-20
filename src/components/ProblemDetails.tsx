@@ -68,28 +68,28 @@ export default function ProblemDetails({
   const [open, setOpen] = useState(false);
   // problem data available via prop
   return (
-    <div className={`rounded-md border overflow-hidden ${className}`}>
-      <header className="flex items-center gap-2 border-b bg-primary px-3 py-2 text-white rounded-t-md">
-        <Package className="h-4 w-4" />
+    <div className={`rounded-md border border-border overflow-hidden bg-card ${className}`}>
+      <header className="flex items-center gap-2 border-b border-border bg-primary px-3 py-2 rounded-t-md">
+        <Package className="h-4 w-4 text-white" />
         <h4 className="text-sm font-medium text-white">Problem Details</h4>
       </header>
-      <div className="bg-gray-50 p-3">
+      <div className="bg-card p-3">
         <div className="grid gap-y-2 gap-x-6 sm:grid-cols-2">
           <div className="flex items-center justify-between text-sm">
-            <span className="text-gray-600">Type:</span>
+            <span className="text-muted-foreground">Type:</span>
             <Badge
               variant="outline"
-              className={typeProps?.className || "bg-gray-100 text-gray-800"}
+              className={typeProps?.className || "bg-muted text-muted-foreground border-border"}
             >
               {typeProps?.label || problem.type || "Unknown"}
             </Badge>
           </div>
           <div className="flex items-center justify-between text-sm">
-            <span className="text-gray-600">Submissions:</span>
+            <span className="text-muted-foreground">Submissions:</span>
             <span className="font-medium">{submissionCount}</span>
           </div>
           <div className="flex items-center justify-between text-sm">
-            <span className="text-gray-600">Max States:</span>
+            <span className="text-muted-foreground">Max States:</span>
             <span className="font-medium">
               {problem.maxStates === undefined
                 ? "N/A"
@@ -99,7 +99,7 @@ export default function ProblemDetails({
             </span>
           </div>
           <div className="flex items-center justify-between text-sm">
-            <span className="text-gray-600">Deterministic:</span>
+            <span className="text-muted-foreground">Deterministic:</span>
             <span className="font-medium">
               {problem.isDeterministic === undefined
                 ? "N/A"
@@ -108,8 +108,8 @@ export default function ProblemDetails({
                 : "No"}
             </span>
           </div>
-          <div className=" flex items-center justify-between text-sm">
-            <span className="text-gray-600">Answer File:</span>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Answer File:</span>
 
             {problem.fileName && problem.originalFileName ? (
               <div className="flex items-center gap-2">
@@ -117,7 +117,7 @@ export default function ProblemDetails({
                   href={`/uploads/problems/${problem.fileName}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-blue-600 hover:text-blue-700 underline"
+                  className="flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline"
                 >
                   <Download className="h-3 w-3" />
                   {problem.originalFileName}
@@ -134,22 +134,21 @@ export default function ProblemDetails({
                     <Eye className="h-3 w-3" />
                     View
                   </Button>
-<JffViewerDialog
-  open={open}
-  onOpenChange={setOpen}
-  src={`/uploads/problems/${encodeURIComponent(problem.fileName ?? '')}`}
-  title={`${problem.originalFileName || problem.fileName} - ${problem.title}`}
-  width="70vw"
-  height="70vh"
-  showGridDefault={true}
-/>
+                  <JffViewerDialog
+                    open={open}
+                    onOpenChange={setOpen}
+                    src={`/uploads/problems/${encodeURIComponent(problem.fileName ?? '')}`}
+                    title={`${problem.originalFileName || problem.fileName} - ${problem.title}`}
+                    width="70vw"
+                    height="70vh"
+                    showGridDefault={true}
+                  />
                 </div>
               </div>
             ) : (
-              <span className="text-gray-500 text-sm">No answer file</span>
+              <span className="text-muted-foreground text-sm">No answer file</span>
             )}
           </div>
-          
         </div>
       </div>
     </div>
