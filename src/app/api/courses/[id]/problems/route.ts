@@ -6,8 +6,9 @@ import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { auth } from '@/lib/auth';
-import { ProblemType } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+
+type ProblemType = 'PDA' | 'RE' | 'CFG' | 'FA';
 
 // Create solution upload directory if it doesn't exist
 async function ensureDirExists(dir: string) {
