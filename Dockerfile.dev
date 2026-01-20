@@ -1,0 +1,40 @@
+# syntax=docker/dockerfile:1.7
+FROM node:20-alpine
+
+RUN apk add --no-cache libc6-compat openssl python3 make g++ git openjdk21-jre tini
+
+ENV NODE_ENV=development
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PATH="/app/bin:${PATH}"
+
+USER node
+WORKDIR /app
+
+COPY --chown=node:node package.json package-lock.json ./
+RUN --mount=type=cache,id=npm-cache-node20,target=/home/node/.npm,uid=1000,gid=1000 \
+    npm ci --prefer-offline --no-audit --progress=false
+
+COPY --chown=node:node jars /app/jars
+COPY --chown=node:node bin  /app/bin
+RUN if [ -f /app/bin/cfganalyzer ]; then chmod +x /app/bin/cfganalyzer; fi
+
+COPY --chown=node:node . .
+RUN --mount=type=cache,id=prisma-cache-node20,target=/home/node/.cache/prisma,uid=1000,gid=1000 \
+    npx prisma generate || true
+
+# Handles Prisma Studio
+# Expose the default Prisma Studio port
+EXPOSE 5555
+
+# Command to run Prisma Studio
+CMD ["npx", "prisma", "studio"]
+
+RUN java -version || true
+
+# add entrypoint AFTER files are copied
+COPY --chown=node:node entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+EXPOSE 3000
+ENTRYPOINT ["/sbin/tini","-g","--","/usr/local/bin/entrypoint.sh"]
+# no CMD here; compose supplies it

@@ -5,16 +5,15 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Grid, Download, RefreshCw, ImageDown, Copy, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { Grid, Waypoints, Download, ImageDown, Copy, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 
 /* ───────────────────────────── Types & consts ───────────────────────────── */
 
 type MachineType = 'fa' | 'pda' | 'tm' | 'unknown';
-type FlowDirection = 'LR' | 'RL';
 
 type Parsed = {
   type: MachineType;
-  states: { id: string; name: string; initial: boolean; final: boolean }[];
+  states: { id: string; name: string; xPos: number, yPos: number, initial: boolean; final: boolean }[];
   transitions: Array<{
     from: string;
     to: string;
@@ -55,9 +54,11 @@ function parseJflap(xmlText: string): Parsed {
   const states = Array.from(automaton.querySelectorAll('state')).map((s, i) => {
     const id = String(s.getAttribute('id') ?? i).trim();
     const name = s.getAttribute('name') ?? s.querySelector('name')?.textContent ?? `q${i}`;
+    const xPos = parseInt(s.querySelector('x')?.textContent ?? '0');
+    const yPos = parseInt(s.querySelector('y')?.textContent ?? '0');
     const initial = !!s.querySelector('initial');
     const final = !!s.querySelector('final');
-    return { id, name, initial, final };
+    return { id, name, xPos, yPos, initial, final };
   });
 
   const transitions = Array.from(automaton.querySelectorAll('transition')).map((t, idx) => {
@@ -164,11 +165,22 @@ async function ensureCytoscapeReady() {
 
 /* ───────────────────── Convert parsed → Cytoscape elements ─────────────── */
 
-function toElements(parsed: Parsed, eps: string) {
-  const nodes = parsed.states.map((s) => ({
-    data: { id: s.id, label: s.name, final: s.final ? 1 : 0, initial: s.initial ? 1 : 0 },
-    classes: s.final ? 'final' : '',
-  }));
+function toElements(parsed: Parsed, eps: string, honorPositions?: boolean) {
+  const nodes = parsed.states.map((s) => {
+    const base = {
+      data: { id: s.id, label: s.name, final: s.final ? 1 : 0, initial: s.initial ? 1 : 0 },
+      classes: s.final ? 'final' : '',
+    };
+    if (honorPositions) {
+      return {
+        ...base,
+        position: { x: s.xPos, y: s.yPos },
+        locked: false,
+        grabbable: true,
+      };
+    }
+    return base;
+  });
 
   const edgesBundled = bundleEdges(parsed.transitions, parsed.type, eps, true, 26);
   const edges = edgesBundled.map((e, i) => ({
@@ -180,14 +192,7 @@ function toElements(parsed: Parsed, eps: string) {
       isLoop: e.from === e.to ? 1 : 0,
     },
   }));
-
-  const initialStates = parsed.states.filter((s) => s.initial);
-  const startBits = initialStates.flatMap((s, idx) => ([
-    { data: { id: `__start${idx}`, label: '' }, classes: 'start' },
-    { data: { id: `__startEdge${idx}`, source: `__start${idx}`, target: s.id, label: '' }, classes: 'startEdge' }
-  ]));
-
-  return [...nodes, ...edges, ...startBits];
+  return [...nodes, ...edges];
 }
 
 /* ────────────────────────────── Export helpers ─────────────────────────── */
@@ -198,43 +203,142 @@ async function downloadDataUrl(filename: string, dataUrl: string) {
   a.download = filename;
   a.click();
 }
-async function copyText(txt: string) {
-  try { await navigator.clipboard.writeText(txt); } catch {}
-}
 
 /* ───────────────────────────── Viewer component ────────────────────────── */
 
+// Debounce utility for resize
+function debounce(fn: () => void, ms: number) {
+  let timer: any;
+  return () => {
+    clearTimeout(timer);
+    timer = setTimeout(fn, ms);
+  };
+}
+
 export function JffCytoscapeViewer({
-  src, title, height = '72vh', epsSymbol = DEFAULT_EPS, darkMode = false,
-  flowDirection = 'LR', showGridDefault = false,
+  src, title, height = '72vh', epsSymbol = DEFAULT_EPS, darkMode = false, showGridDefault = false, honorPositionsDefault = false,
 }: {
   src: string;
   title?: string;
   height?: number | string;
   epsSymbol?: string;
   darkMode?: boolean;
-  flowDirection?: FlowDirection;
   showGridDefault?: boolean;
+  honorPositionsDefault?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<any | null>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [grid, setGrid] = useState(showGridDefault);
+  const [honorPositions, setHonorPositions] = useState(honorPositionsDefault);
   const [type, setType] = useState<MachineType>('unknown');
 
-  // Debug
-  const [debugOpen, setDebugOpen] = useState(false);
-  const [debugParsed, setDebugParsed] = useState<any>(null);
-  const [debugElements, setDebugElements] = useState<any>(null);
-  const [debugElk, setDebugElk] = useState<any>(null);
+  //
 
-  const gridBg = grid
-    ? 'linear-gradient(#e5e7eb 1px, transparent 1px), linear-gradient(90deg, #e5e7eb 1px, transparent 1px)'
-    : 'none';
   const backgroundStyle: React.CSSProperties = grid
-    ? { backgroundImage: gridBg, backgroundSize: '24px 24px', backgroundPosition: 'center center' }
+    ? { backgroundImage: 'linear-gradient(#e5e7eb 1px, transparent 1px), linear-gradient(90deg, #e5e7eb 1px, transparent 1px)', backgroundSize: '24px 24px', backgroundPosition: 'center center' }
     : {};
+
+  // Customization variables
+  const NODE_DIAMETER = 58;
+  const FIT_PADDING = 80;
+
+  // Expose onResize for Fit button
+  const onResizeRef = useRef<(() => void) | null>(null);
+
+  // Utility: Reposition start nodes for !honorPositions
+  function repositionStartNodes(cy: any) {
+    // For each initial node, ensure a start node and edge exist, and position the start node
+    cy.nodes().filter((n: any) => n.data('initial')).forEach((node: any, idx: number) => {
+      const nodePos = node.position();
+      const directions = Array.from({ length: 8 }, (_, i) => i * (Math.PI / 4)); // 0, 45, ..., 315 deg
+      const radius = 1.5 * NODE_DIAMETER;
+
+      // Exclude both the current node and its corresponding start node from the calculation
+      const startNodeId = `__start${idx}`;
+      const otherNodes = cy.nodes().filter((n2: any) => n2.id() !== node.id() && n2.id() !== startNodeId);
+      const otherNodePositions = otherNodes.map((n2: any) => n2.position());
+
+      // Gather incoming edge angles
+      const incomingEdges = node.incomers('edge');
+      const incomingAngles = incomingEdges.map((e: any) => {
+        const src = e.source().position();
+        return Math.atan2(nodePos.y - src.y, nodePos.x - src.x);
+      });
+
+      // For each direction, compute a clutter score
+      const scores = directions.map((angle) => {
+        // Position where start node would be placed
+        const testX = nodePos.x + Math.cos(angle) * radius;
+        const testY = nodePos.y + Math.sin(angle) * radius;
+
+        // Score: sum of inverse distances to other nodes (closer = higher score)
+        let score = 0;
+        for (const pos of otherNodePositions) {
+          const dx = testX - pos.x;
+          const dy = testY - pos.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < NODE_DIAMETER * 1.1) score += 1000; // heavy penalty for overlap
+          else score += 1 / dist;
+        }
+
+        // Penalty for being close to incoming edge directions
+        for (const edgeAngle of incomingAngles) {
+          let diff = Math.abs(angle - edgeAngle);
+          if (diff > Math.PI) diff = 2 * Math.PI - diff;
+          if (diff < Math.PI / 6) score += 10; // penalty for being within 30deg of an incoming edge
+        }
+        return score;
+      });
+
+      // Find the direction with the lowest score
+      let bestIdx = 0;
+      let bestScore = scores[0];
+      for (let i = 1; i < scores.length; ++i) {
+        if (scores[i] < bestScore) {
+          bestScore = scores[i];
+          bestIdx = i;
+        }
+      }
+
+      // Apply best angle
+      const bestAngle = directions[bestIdx];
+      const pos = {
+        x: nodePos.x + Math.cos(bestAngle) * radius,
+        y: nodePos.y + Math.sin(bestAngle) * radius,
+      };
+      
+      let startNode = cy.getElementById(`__start${idx}`);
+      if (!startNode || startNode.empty()) {
+        // Create the start node if it doesn't exist
+        cy.add({
+          group: 'nodes',
+          data: { id: `__start${idx}` },
+          position: pos,
+          classes: 'start',
+        });
+        startNode = cy.getElementById(`__start${idx}`);
+      } else {
+        startNode.position(pos);
+      }
+      // Ensure the start edge exists
+      const startEdgeId = `__startEdge${idx}`;
+      let startEdge = cy.getElementById(startEdgeId);
+      if (!startEdge || startEdge.empty()) {
+        cy.add({
+          group: 'edges',
+          data: {
+            id: startEdgeId,
+            source: `__start${idx}`,
+            target: node.id(),
+            label: '',
+          },
+          classes: 'startEdge',
+        });
+      }
+    });
+  }
 
   const load = useMemo(
     () => async () => {
@@ -246,15 +350,7 @@ export function JffCytoscapeViewer({
 
         const parsed = parseJflap(text);
         setType(parsed.type);
-        setDebugParsed({
-          type: parsed.type,
-          stateCount: parsed.states.length,
-          states: parsed.states.map(s => ({ id: s.id, name: s.name, initial: s.initial, final: s.final })),
-          transitionCount: parsed.transitions.length
-        });
-
-        const elements = toElements(parsed, epsSymbol);
-        setDebugElements(elements);
+        const elements = toElements(parsed, epsSymbol, honorPositions);
 
         const cytoscape = await ensureCytoscapeReady();
 
@@ -266,7 +362,6 @@ export function JffCytoscapeViewer({
         const cy = cytoscape({
           container: containerRef.current!,
           elements,
-          wheelSensitivity: 0.2,
           minZoom: 0.2,
           maxZoom: 6,
           style: [
@@ -289,7 +384,7 @@ export function JffCytoscapeViewer({
               }
             },
             { selector: 'node.final', style: { 'border-width': 6 } },
-            { selector: 'node.start', style: { 'width': 10, 'height': 10, 'background-opacity': 0, 'border-opacity': 0 } },
+            { selector: 'node.start', style: { 'width': 4, 'height': 4, 'background-opacity': 0, 'border-opacity': 0 } },
 
             /* edges (default) */
             {
@@ -311,7 +406,6 @@ export function JffCytoscapeViewer({
                 'text-wrap': 'wrap',
                 'text-max-width': 140,
                 'text-rotation': 'autorotate',
-                'text-margin-y': -12,
               }
             },
             /* self-loops on TOP with arrow at start */
@@ -327,20 +421,24 @@ export function JffCytoscapeViewer({
                 'arrow-scale': 0.95,
                 'line-cap': 'round',
                 'text-rotation': 'none',
-                'text-margin-y': -32,
               }
             },
 
-            /* initial arrow from hidden start node */
+            /* initial arrow from hidden start node - make it only node diameter away */
             {
               selector: 'edge.startEdge',
               style: {
+                'curve-style': 'straight',
                 'line-color': STROKE,
                 'target-arrow-color': STROKE,
                 'target-arrow-shape': 'triangle',
                 'arrow-scale': 1.1,
                 'width': EDGE_WIDTH,
                 'label': '',
+                'source-endpoint': 'outside-to-node',
+                'target-endpoint': 'outside-to-node',
+                'segment-distances': 58, // node diameter
+                'segment-weights': 1,
               }
             },
 
@@ -357,8 +455,124 @@ export function JffCytoscapeViewer({
             },
             { selector: '.faded', style: { 'opacity': 0.25 } },
           ],
-          layout: { name: 'preset' }, // ELK runs after
+          layout: { name: 'preset' },
         });
+
+        // Function to set label margins based on edge angle
+        async function updateEdgeLabelMargins() {
+          cy.edges().forEach((edge: any) => {
+            const src = edge.source().position();
+            const tgt = edge.target().position();
+            const dx = tgt.x - src.x;
+            const dy = tgt.y - src.y;
+            const angle = Math.atan2(dy, dx); // radians
+
+            // Project margin away from the midpoint, perpendicular to the edge
+            const marginDistance = 12;
+            const marginX = Math.round(Math.cos(angle + Math.PI / 2) * marginDistance);
+            const marginY = Math.round(Math.sin(angle + Math.PI / 2) * marginDistance);
+            edge.style({
+              'text-margin-x': marginX,
+              'text-margin-y': marginY,
+            });
+          });
+        }
+
+        // Function to update the self-loop geometry of the transition label
+        async function selfLoopGeometry() {
+          cy.edges('[isLoop = 1]').forEach((e: any) => {
+            e.style({
+              'curve-style': 'loop',
+              'loop-direction': '0deg',
+              'loop-sweep': '50deg',
+              'control-point-step-size': 48,
+              'source-arrow-shape': 'triangle',
+              'target-arrow-shape': 'none',
+              'arrow-scale': 0.95,
+              'line-cap': 'round',
+              'text-rotation': 'none',
+              'text-margin-y': -12,
+            });
+          }
+        )};
+
+        // Function to fit and resize frame
+        async function fitAndResize(){
+          if (!cyRef.current) return;
+
+          const cy = cyRef.current;
+          try {
+            cy.resize();
+            const elkAspectRatio = (!containerRef.current?.clientWidth || !containerRef.current?.clientHeight)
+              ? '1.6f'
+              : `${containerRef.current.clientWidth / containerRef.current.clientHeight}f`;
+            let layoutOptions;
+            if (!honorPositions) {
+              layoutOptions = {
+                name: 'elk',
+                nodeDimensionsIncludeLabels: true,
+                elk: {
+                  algorithm: 'force',
+                  'elk.aspectRatio': elkAspectRatio,
+                  'elk.spacing.nodeNode': '50',
+                }
+              };
+            } else {
+              layoutOptions = {
+                name: 'preset',
+                positions: undefined
+              };
+            }
+
+            // Load the new layout properly based on the layout option
+            if (layoutOptions.name === 'preset') { // honorPositions
+              cy.layout(layoutOptions).run();
+            } else {
+              await new Promise(resolve => { // !honorPositions
+                const layout = cy.layout(layoutOptions);
+                layout.run();
+                layout.on('layoutstop', resolve);
+              });
+            }
+
+            await updateEdgeLabelMargins();
+            await selfLoopGeometry();
+            repositionStartNodes(cy);
+
+            // Fit and center using cy.center(cy.nodes())
+            const nodes = cy.nodes();
+            if (nodes.length === 0) return;
+
+            // Calculate fit zoom (preserve previous logic for zoom, but use cy.center for center)
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            nodes.forEach((n: any) => {
+              const pos = n.position();
+              if (pos.x < minX) minX = pos.x;
+              if (pos.y < minY) minY = pos.y;
+              if (pos.x > maxX) maxX = pos.x;
+              if (pos.y > maxY) maxY = pos.y;
+            });
+
+            // Add padding
+            minX -= FIT_PADDING;
+            minY -= FIT_PADDING;
+            maxX += FIT_PADDING;
+            maxY += FIT_PADDING;
+
+            const fitWidth = maxX - minX;
+            const fitHeight = maxY - minY;
+            const scaleX = cy.width() / fitWidth;
+            const scaleY = cy.height() / fitHeight;
+            const fitZoom = Math.min(scaleX, scaleY, cy.maxZoom ? cy.maxZoom() : 6);
+
+            // Use cy.center(cy.nodes()) to get the center position
+            const center = cy.center(cy.nodes());
+            cy.animate(
+              { zoom: fitZoom, center },
+              { duration: 120 }
+            );
+          } catch {}
+        }
 
         cyRef.current = cy;
 
@@ -367,45 +581,17 @@ export function JffCytoscapeViewer({
         cy.panningEnabled(true);
         cy.userPanningEnabled(true);
 
-        // ELK layout
-        const elkDirection = (flowDirection === 'RL') ? 'LEFT' : 'RIGHT';
-        const elkOptions = {
-          name: 'elk',
-          nodeDimensionsIncludeLabels: true,
-          fit: true,
-          animate: false,
-          elk: {
-            algorithm: 'layered',
-            'elk.direction': elkDirection,
-            'elk.layered.spacing.nodeNodeBetweenLayers': '70',
-            'elk.spacing.nodeNode': '46',
-            'elk.spacing.edgeNode': '22',
-            'elk.spacing.edgeLabel': '12',
-            'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
-            'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
-          }
-        };
-        setDebugElk(elkOptions);
+        // Expose fitAndResize for Fit button and initial layout
+        onResizeRef.current = fitAndResize;
+        setTimeout(() => { onResizeRef.current?.(); }, 0);
 
-        await new Promise<void>((resolve) =>
-          cy.layout(elkOptions).run().on('layoutstop', () => resolve())
-        );
+        // keep size/zoom coherent if dialog resizes
+        const debouncedFitAndResize = debounce(fitAndResize, 160);
+        window.addEventListener('resize', debouncedFitAndResize, { passive: true });
+        (cy as any).__onResize = debouncedFitAndResize;
 
-        // reassert loop geometry after layout
-        cy.edges('[isLoop = 1]').forEach((e: any) => {
-          e.style({
-            'curve-style': 'loop',
-            'loop-direction': '0deg',
-            'loop-sweep': '50deg',
-            'control-point-step-size': 48,
-            'source-arrow-shape': 'triangle',
-            'target-arrow-shape': 'none',
-            'arrow-scale': 0.95,
-            'line-cap': 'round',
-            'text-rotation': 'none',
-            'text-margin-y': -32,
-          });
-        });
+        // Adjust the layout of the transitions
+        await updateEdgeLabelMargins();
 
         // keep zooming/panning enabled after layout
         cy.userZoomingEnabled(true);
@@ -424,20 +610,80 @@ export function JffCytoscapeViewer({
           neighborhood.addClass('highlighted').removeClass('faded');
         });
 
-        cy.fit(undefined, 40);
+        // Update self-loop geometry, edge label margins, and start node position when a node is moved
+        cy.on('position', async (evt: any) => {
+          // Only update if a node was moved
+          if (evt.target && evt.target.isNode && evt.target.isNode()) {
+            await updateEdgeLabelMargins();
+            await selfLoopGeometry();
 
-        // keep size/zoom coherent if dialog resizes
-        const onResize = () => { try { cy.resize(); } catch {} };
-        window.addEventListener('resize', onResize, { passive: true });
-        // store to cleanup
-        (cy as any).__onResize = onResize;
-
+            // If the moved node is an initial node, update its corresponding __start node position
+            if (evt.target.data('initial')) {
+              // Find the index of this initial node among all initial nodes
+              const initialNodes = cy.nodes().filter((n: any) => n.data('initial'));
+              let idx = -1;
+              initialNodes.forEach((n: any, i: number) => {
+                if (n.id() === evt.target.id()) idx = i;
+              });
+              if (idx !== -1) {
+                // Recompute the best position for the __start node
+                const node = evt.target;
+                const nodePos = node.position();
+                const directions = Array.from({ length: 8 }, (_, i) => i * (Math.PI / 4));
+                const radius = 1.5 * 58; // NODE_DIAMETER
+                const startNodeId = `__start${idx}`;
+                const otherNodes = cy.nodes().filter((n2: any) => n2.id() !== node.id() && n2.id() !== startNodeId);
+                const otherNodePositions = otherNodes.map((n2: any) => n2.position());
+                const incomingEdges = node.incomers('edge');
+                const incomingAngles = incomingEdges.map((e: any) => {
+                  const src = e.source().position();
+                  return Math.atan2(nodePos.y - src.y, nodePos.x - src.x);
+                });
+                const scores = directions.map((angle) => {
+                  const testX = nodePos.x + Math.cos(angle) * radius;
+                  const testY = nodePos.y + Math.sin(angle) * radius;
+                  let score = 0;
+                  for (const pos of otherNodePositions) {
+                    const dx = testX - pos.x;
+                    const dy = testY - pos.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < 58 * 1.1) score += 1000;
+                    else score += 1 / dist;
+                  }
+                  for (const edgeAngle of incomingAngles) {
+                    let diff = Math.abs(angle - edgeAngle);
+                    if (diff > Math.PI) diff = 2 * Math.PI - diff;
+                    if (diff < Math.PI / 6) score += 10;
+                  }
+                  return score;
+                });
+                let bestIdx = 0;
+                let bestScore = scores[0];
+                for (let i = 1; i < scores.length; ++i) {
+                  if (scores[i] < bestScore) {
+                    bestScore = scores[i];
+                    bestIdx = i;
+                  }
+                }
+                const bestAngle = directions[bestIdx];
+                const pos = {
+                  x: nodePos.x + Math.cos(bestAngle) * radius,
+                  y: nodePos.y + Math.sin(bestAngle) * radius,
+                };
+                let startNode = cy.getElementById(startNodeId);
+                if (startNode && !startNode.empty()) {
+                  startNode.position(pos);
+                }
+              }
+            }
+          }
+        });
       } catch (e: any) {
         console.error(e);
         setError(e?.message || 'Failed to render .jff');
       }
     },
-    [src, epsSymbol, darkMode, flowDirection]
+    [src, epsSymbol, darkMode, honorPositions]
   );
 
   useEffect(() => {
@@ -452,27 +698,29 @@ export function JffCytoscapeViewer({
     };
   }, [load]);
 
-  /* ── 🔧 zoom helpers (animated, keep center fixed) ─────────────────────── */
+  /* ── zoom helpers (animated, keep center fixed) ─────────────────────── */
   const animatedZoomTo = (level: number) => {
     const cy = cyRef.current; if (!cy) return;
     const min = typeof cy.minZoom === 'function' ? cy.minZoom() : 0.2;
     const max = typeof cy.maxZoom === 'function' ? cy.maxZoom() : 6;
     const next = Math.max(min, Math.min(max, level));
+    // Use cy.center(cy.nodes()) to get the center position
+    const center = cy.center(cy.nodes());
     cy.animate(
-      { zoom: next, renderedPosition: cy.renderedCenter() },
-      { duration: 160, easing: 'ease-in-out' }
+      { zoom: next, center },
+      { duration: 120, easing: 'ease-in-out' }
     );
   };
+
   const zoomIn = () => {
     const cy = cyRef.current; if (!cy) return;
     animatedZoomTo(cy.zoom() * 1.2);
   };
+
   const zoomOut = () => {
     const cy = cyRef.current; if (!cy) return;
     animatedZoomTo(cy.zoom() / 1.2);
   };
-  const fitAll = () => cyRef.current?.animate({ fit: { eles: cyRef.current.elements(), padding: 40 } }, { duration: 160 });
-  const resetHighlight = () => cyRef.current?.elements().removeClass('faded highlighted');
 
   const downloadSVG = async () => {
     if (!cyRef.current) return;
@@ -507,10 +755,7 @@ export function JffCytoscapeViewer({
     }
   };
 
-  const copyDebug = async () => {
-    const payload = { parsed: debugParsed, elkOptions: debugElk, elements: debugElements };
-    await copyText(JSON.stringify(payload, null, 2));
-  };
+
 
   const TypeBadge = ({ t }: { t: MachineType }) => {
     const label =
@@ -525,17 +770,17 @@ export function JffCytoscapeViewer({
 
   return (
     <div className="w-full rounded-md border bg-white">
-      <div className="flex items-center justify-between gap-2 border-b p-2">
+      <div className="flex items-center justify-between gap-2 border-b p-2 overflow-x-auto">
         <div className="flex items-center gap-2 min-w-0">
           <div className="truncate text-sm font-medium">{title ?? src}</div>
           <TypeBadge t={type} />
         </div>
-        <div className="flex items-center gap-1 flex-wrap">
+        <div className="flex items-center gap-1">
           <Button size="sm" variant={grid ? 'default' : 'outline'} onClick={() => setGrid((s) => !s)} title="Toggle grid">
-            <Grid className="mr-1 h-4 w-4" /> Grid
+            <Grid className="mr-2 h-4 w-4" /> Grid
           </Button>
-          <Button size="sm" variant="outline" onClick={resetHighlight} title="Clear highlight">
-            <RefreshCw className="h-4 w-4" />
+          <Button size="sm" variant={honorPositions ? 'default' : 'outline'} onClick={() => setHonorPositions((p) => !p)} title="Original Positions">
+            <Waypoints className="mr-2 h-4 w-4" />Original Positions
           </Button>
           <Button size="sm" variant="outline" onClick={zoomOut} title="Zoom out">
             <ZoomOut className="h-4 w-4" />
@@ -543,7 +788,7 @@ export function JffCytoscapeViewer({
           <Button size="sm" variant="outline" onClick={zoomIn} title="Zoom in">
             <ZoomIn className="h-4 w-4" />
           </Button>
-          <Button size="sm" variant="outline" onClick={fitAll} title="Fit">
+          <Button size="sm" variant="outline" onClick={() => { onResizeRef.current?.(); }} title="Fit">
             <Maximize2 className="h-4 w-4" />
           </Button>
           <Button size="sm" variant="outline" onClick={downloadSVG} title="Download SVG">
@@ -555,9 +800,7 @@ export function JffCytoscapeViewer({
           <Button size="sm" variant="outline" onClick={copyPNG} title="Copy PNG to clipboard">
             <Copy className="mr-2 h-4 w-4" /> Copy PNG
           </Button>
-          <Button size="sm" variant="outline" onClick={() => setDebugOpen(true)} title="Debug">
-            {'<>'}
-          </Button>
+
         </div>
       </div>
 
@@ -565,35 +808,7 @@ export function JffCytoscapeViewer({
         {error ? <div className="p-4 text-sm text-red-600">{error}</div> : null}
       </div>
 
-      {debugOpen && (
-        <div className="fixed inset-0 z-[100] bg-black/40">
-          <div className="absolute inset-x-0 top-10 mx-auto w-[min(980px,92vw)] rounded-lg bg-white p-4 shadow-lg">
-            <div className="mb-2 flex items-center justify-between">
-              <div className="text-sm font-semibold">Debug</div>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" onClick={copyDebug} title="Copy debug JSON">
-                  <Copy className="mr-1 h-4 w-4" /> Copy
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => setDebugOpen(false)}>Close</Button>
-              </div>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded border p-2">
-                <div className="mb-1 text-xs font-medium text-gray-500">Parsed</div>
-                <pre className="max-h-72 overflow-auto text-xs">{JSON.stringify(debugParsed, null, 2)}</pre>
-              </div>
-              <div className="rounded border p-2">
-                <div className="mb-1 text-xs font-medium text-gray-500">Elements</div>
-                <pre className="max-h-72 overflow-auto text-[11px] leading-4">{JSON.stringify(debugElements, null, 2)}</pre>
-              </div>
-              <div className="rounded border p-2 md:col-span-2">
-                <div className="mb-1 text-xs font-medium text-gray-500">ELK Options</div>
-                <pre className="max-h-64 overflow-auto text-[11px] leading-4">{JSON.stringify(debugElk, null, 2)}</pre>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 }
@@ -603,7 +818,8 @@ export function JffCytoscapeViewer({
 export default function JffViewerDialog({
   open, onOpenChange, src, title,
   width = '80vw', height = '85vh',
-  epsSymbol = DEFAULT_EPS, darkMode = false, flowDirection = 'LR', showGridDefault = true,
+  epsSymbol = DEFAULT_EPS, darkMode = false, showGridDefault = true,
+  honorPositionsDefault = true,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -613,8 +829,8 @@ export default function JffViewerDialog({
   height?: number | string;
   epsSymbol?: string;
   darkMode?: boolean;
-  flowDirection?: FlowDirection;
   showGridDefault?: boolean;
+  honorPositionsDefault?: boolean;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -629,8 +845,8 @@ export default function JffViewerDialog({
             height={height}
             epsSymbol={epsSymbol}
             darkMode={darkMode}
-            flowDirection={flowDirection}
             showGridDefault={showGridDefault}
+            honorPositionsDefault={honorPositionsDefault}
           />
         </div>
       </DialogContent>

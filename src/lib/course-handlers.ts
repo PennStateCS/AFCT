@@ -12,6 +12,7 @@ import {
   updateCourseAfterProblemCreate,
   updateAssignmentPublishStatus,
   updateCoursePublishStatus,
+  updateCourseArchiveStatus,
   saveCourse,
 } from '@/lib/course-utils';
 
@@ -41,8 +42,9 @@ export function useCourseHandlers(
       await updateAssignmentPublishStatus(assignmentId, newValue);
       setCourse(updateCourseAfterAssignmentPublish(course, assignmentId, newValue));
       showToast.success(`Assignment ${newValue ? 'published' : 'unpublished'} successfully!`);
-    } catch (error) {
-      showToast.error('Failed to update assignment status');
+    } catch (error: any) {
+      const msg = error?.message || 'Unknown Error: Failed to update assignment status';
+      showToast.error(msg);
       console.error('Error updating assignment:', error);
     }
   }, [course, setCourse]);
@@ -91,7 +93,6 @@ export function useCourseHandlers(
   // Course save handler
   const handleCourseSave = useCallback(async (updatedCourse: Partial<Course>) => {
     if (!course) return;
-    
     try {
       const fullCourse = { ...course, ...updatedCourse };
       const updated = await saveCourse(fullCourse);
@@ -110,8 +111,24 @@ export function useCourseHandlers(
       const updated = await updateCoursePublishStatus(course.id, isPublished);
       setCourse((prev) => (prev ? { ...prev, isPublished: updated.isPublished } : prev));
       showToast.success(isPublished ? 'Course published' : 'Course unpublished');
-    } catch {
-      showToast.error('Error updating publish status');
+    } catch (error: any) {
+      const msg = error?.message || 'Failed to archive course';
+      showToast.error(msg);
+    }
+  }, [course, setCourse]);
+
+  // Course archive handler
+const handleCourseArchiveToggle = useCallback(async (isArchived: boolean) => {
+    if (!course) return;
+
+        
+    try {
+      const updated = await updateCourseArchiveStatus(course.id, course.startDate, course.endDate, isArchived);
+      setCourse((prev) => (prev ? { ...prev, isArchived: updated.isArchived } : prev));
+      showToast.success(isArchived ? 'Course archived' : 'Course unarchived');
+    } catch (error: any) {
+      const msg = error?.message || 'Failed to archive course';
+      showToast.error(msg);
     }
   }, [course, setCourse]);
 
@@ -121,12 +138,15 @@ export function useCourseHandlers(
     handleAssignmentSave,
     handleAssignmentPublishToggle,
     handleAssignmentCreate,
+
     handleProblemEditClick,
     handleProblemDeleteClick,
     handleProblemCreated,
     handleProblemSaved,
+
     handleDelete,
     handleCourseSave,
     handleCoursePublishToggle,
+    handleCourseArchiveToggle,
   };
 }

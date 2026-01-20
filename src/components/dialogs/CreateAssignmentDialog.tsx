@@ -32,6 +32,7 @@ type CreateAssignmentDialogProps = {
   open: boolean;
   setOpen: (open: boolean) => void;
   courseId: string;
+  courseIsArchived: boolean;
   onCreate?: (assignment: Assignment) => void;
 };
 
@@ -57,8 +58,10 @@ export function CreateAssignmentDialog({
   open,
   setOpen,
   courseId,
+  courseIsArchived,
   onCreate,
 }: CreateAssignmentDialogProps) {
+
   // Form defaults (strings for datetime-local fields)
   const defaults: FormValues = useMemo(
     () => ({
@@ -67,7 +70,7 @@ export function CreateAssignmentDialog({
       maxPoints: '100',
       dueDate: defaultDueLocalString(),
       isPublished: false,
-      courseId,
+      courseId: courseId,
     }),
     [courseId],
   );
@@ -87,10 +90,12 @@ export function CreateAssignmentDialog({
   // Refresh defaults on open; also clear state on close to avoid flicker
   useEffect(() => {
     if (open) {
-      reset(
-        { ...defaults, dueDate: defaultDueLocalString() },
-        { keepDirty: false, keepTouched: false, keepErrors: false, keepValues: false },
-      );
+      reset(defaults, {
+        keepDirty: false,
+        keepTouched: false,
+        keepErrors: false,
+        keepValues: false,
+      });
     } else {
       reset(defaults, {
         keepDirty: false,
@@ -266,7 +271,7 @@ export function CreateAssignmentDialog({
               </Button>
             </DialogClose>
 
-            <Button type="submit" disabled={!isValid || isSubmitting}>
+            <Button type="submit" disabled={!isValid || isSubmitting || courseIsArchived}>
               {isSubmitting ? 'Creating…' : 'Create Assignment'}
             </Button>
           </DialogFooter>

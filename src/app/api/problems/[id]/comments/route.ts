@@ -13,14 +13,29 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const resolvedParams = await params;
-    const problemId = resolvedParams.id;
+    const { searchParams } = new URL(request.url);
+    const problemId = searchParams.get('problemId');
+    const studentId = searchParams.get('studentId');
+
+    // Throw error if problem id does not exist
+    if (!problemId) {
+      return NextResponse.json(
+        { error: 'assignmentId and problemId are required' },
+        { status: 400 }
+      );
+    }
+
+    // If studentId present, restrict to comments about that student OR authored by that student
+    const whereClause = studentId
+      ? {
+          problemId,
+          OR: [{ aboutStudentId: studentId }, { roster: { userId: studentId } }],
+        }
+      : { problemId };
 
     // Fetch comments for the problem
     const comments = await prisma.comment.findMany({
-      where: {
-        problemId: problemId
-      },
+      where: whereClause,
       include: {
         roster: {
           include: {

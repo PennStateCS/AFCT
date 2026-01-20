@@ -5,33 +5,37 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
-import { Plus, FileText } from 'lucide-react';
+import { Plus, NotebookText } from 'lucide-react';
 
 type AssignmentWithProblemCount = Assignment & {
   problemCount: number;
 };
 
 interface AssignmentsCardProps {
+  courseId: string;
+  courseIsArchived: boolean;
   assignments: AssignmentWithProblemCount[];
   assignmentColumns: ColumnDef<AssignmentWithProblemCount>[];
   onCreateAssignment: () => void;
 }
 
 export function AssignmentsCard({ 
+  courseIsArchived,
   assignments, 
   assignmentColumns, 
-  onCreateAssignment 
+  onCreateAssignment,
 }: AssignmentsCardProps) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-2xl flex items-center gap-2"><FileText className="h-5 w-5" />Assignments</CardTitle>
+        <CardTitle className="text-2xl flex items-center gap-2"><NotebookText className="h-5 w-5" />Assignments</CardTitle>
         <Button
           style={{
             backgroundColor: 'var(--color-primary)',
-            color: 'var(--color-primary-foreground)',
+            color: 'var(--color-secondary-foreground)',
           }}
           onClick={onCreateAssignment}
+          hidden={courseIsArchived}
         >
           <Plus /> Create Assignment
         </Button>

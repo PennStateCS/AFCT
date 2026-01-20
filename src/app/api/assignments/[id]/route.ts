@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
-// import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 // Get a single assignment by ID
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -86,6 +86,27 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const data = await req.json();
 
+  // Make sure the assignment does not have any submissions or grades when unpublishing
+  if (data.isPublished === false) { // Note logic appears swapped for isPublished, but that is because isPublished is the next state
+    const hasSubmission = !!await prisma.assignmentProblem.findFirst({
+      where: { assignmentId: id, submissions: { some: {} } },
+      select: { assignmentId: true }
+    });
+
+    const hasGrade = !!await prisma.assignmentGrade.findFirst({
+      where: { assignmentId: id},
+      select: { assignmentId: true }
+    });
+
+    if (hasSubmission) {
+      return NextResponse.json({ error: 'Assignment must not have any submissions' }, { status: 403 });
+    }
+
+    if (hasGrade) {
+      return NextResponse.json({ error: 'Assignment must not have any grades' }, { status: 403 });
+    }
+  }
+
   try {
     const updated = await prisma.assignment.update({
       where: { id },
@@ -98,16 +119,19 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       },
     });
 
-    // await createEnhancedActivityLog(prisma, req, {
-    //   userId: session.user.id,
-    //   action: 'UPDATE_ASSIGNMENT',
-    //   category: 'ASSIGNMENT',
-    //   courseId: updated.courseId,
-    //   assignmentId: id,
-    //   metadata: {
-    //     updatedFields: Object.keys(data),
-    //   },
-    // });
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session.user.id,
+      action: 'UPDATE_ASSIGNMENT',
+      category: 'ASSIGNMENT',
+      courseId: updated.courseId,
+      assignmentId: id,
+      metadata: {
+        userId: session.user.id,
+        courseId: updated.courseId,
+        assignmentId: id,
+        updatedFields: Object.keys(data),
+      },
+    });
 
     return NextResponse.json(updated);
   } catch (error) {
@@ -128,6 +152,27 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const data = await req.json();
 
+  // Make sure the assignment does not have any submissions or grades when unpublishing
+  if (!data.isPublished) { // Note logic appears swapped for isPublished, but that is because isPublished is the next state
+    const hasSubmission = !!await prisma.assignmentProblem.findFirst({
+      where: { assignmentId: id, submissions: { some: {} } },
+      select: { assignmentId: true }
+    });
+
+    const hasGrade = !!await prisma.assignmentGrade.findFirst({
+      where: { assignmentId: id},
+      select: { assignmentId: true }
+    });
+
+    if (hasSubmission) {
+      return NextResponse.json({ error: 'Assignment must not have any submissions' }, { status: 403 });
+    }
+
+    if (hasGrade) {
+      return NextResponse.json({ error: 'Assignment must not have any grades' }, { status: 403 });
+    }
+  }
+  
   try {
     // Build update data object with only provided fields
     const updateData: {
@@ -149,16 +194,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       data: updateData,
     });
 
-    // await createEnhancedActivityLog(prisma, req, {
-    //   userId: session.user.id,
-    //   action: 'UPDATE_ASSIGNMENT',
-    //   category: 'ASSIGNMENT',
-    //   courseId: updated.courseId,
-    //   assignmentId: id,
-    //   metadata: {
-    //     updatedFields: Object.keys(updateData),
-    //   },
-    // });
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session.user.id,
+      action: 'UPDATE_ASSIGNMENT',
+      category: 'ASSIGNMENT',
+      courseId: updated.courseId,
+      assignmentId: id,
+      metadata: {
+        userId: session.user.id,
+        courseId: updated.courseId,
+        assignmentId: id,
+        updatedFields: Object.keys(updateData),
+      },
+    });
 
     return NextResponse.json(updated);
   } catch (error) {
@@ -193,17 +241,20 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // await createEnhancedActivityLog(prisma, req, {
-    //   userId: session.user.id,
-    //   action: 'CREATE_ASSIGNMENT',
-    //   category: 'ASSIGNMENT',
-    //   courseId: created.courseId,
-    //   assignmentId: created.id,
-    //   metadata: {
-    //     title: created.title,
-    //     maxPoints: created.maxPoints,
-    //   },
-    // });
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session.user.id,
+      action: 'CREATE_ASSIGNMENT',
+      category: 'ASSIGNMENT',
+      courseId: created.courseId,
+      assignmentId: created.id,
+      metadata: {
+        userId: session.user.id,
+        courseId: created.courseId,
+        assignmentId: created.id,
+        title: created.title,
+        maxPoints: created.maxPoints,
+      },
+    });
 
     return NextResponse.json(created, { status: 201 });
   } catch (error) {
@@ -248,14 +299,18 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     // Log the deletion
     try {
-      const { createEnhancedActivityLog } = await import('@/lib/activity-log-utils');
       await createEnhancedActivityLog(prisma, req as unknown as Request, {
         userId: session.user.id,
         action: 'DELETE_ASSIGNMENT',
         category: 'ASSIGNMENT',
         courseId: deleted.courseId,
         assignmentId: id,
-        metadata: { title: deleted.title }
+        metadata: {
+          userId: session.user.id,
+          courseId: deleted.courseId,
+          assignmentId: id,
+          title: deleted.title
+        }
       });
     } catch (logErr) {
       console.error('Failed to write activity log for assignment deletion', logErr);

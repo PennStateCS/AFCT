@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -15,7 +15,7 @@ enum Role {
 }
 
 enum CourseRole {
-  ADMIN
+  INSTRUCTOR
   FACULTY
   TA
   STUDENT
@@ -55,13 +55,14 @@ model User {
 model Course {
   id          String   @id @default(cuid())
   name        String
-  code        String   @unique
+  code        String
   regCode     String?  @unique
   semester    String
   credits     Int
   startDate   DateTime
   endDate     DateTime
   isPublished Boolean  @default(false)
+  isArchived  Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -79,10 +80,10 @@ model Roster {
   id   String     @id @default(cuid())
   role CourseRole // Role for the user in this course
 
-  course   Course @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
   courseId String
 
-  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId String
 
   createdAt DateTime @default(now())
@@ -107,7 +108,7 @@ model Assignment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  course   Course @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
   courseId String
 
   problems AssignmentProblem[]
@@ -134,7 +135,7 @@ model Problem {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  course   Course @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
   courseId String
 
   assignments AssignmentProblem[]
@@ -147,9 +148,9 @@ model Problem {
 }
 
 model AssignmentProblem {
-  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   assignmentId String
-  problem      Problem    @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  problem      Problem    @relation(fields: [problemId], references: [id], onDelete: Cascade)
   problemId    String
 
   submissions Submission[]
@@ -169,11 +170,11 @@ model Submission {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  assignmentProblem AssignmentProblem @relation(fields: [assignmentId, problemId], references: [assignmentId, problemId], onDelete: Restrict)
+  assignmentProblem AssignmentProblem @relation(fields: [assignmentId, problemId], references: [assignmentId, problemId], onDelete: Cascade)
   assignmentId      String
   problemId         String
 
-  student   User   @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  student   User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   studentId String
 
   activityLogs ActivityLog[]
@@ -191,10 +192,10 @@ model AssignmentGrade {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   assignmentId String
 
-  student   User   @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  student   User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   studentId String
 
   @@unique([assignmentId, studentId]) // One grade per student per assignment
@@ -207,16 +208,16 @@ model Comment {
   content   String
   createdAt DateTime @default(now())
 
-  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   assignmentId String
 
-  problem   Problem @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  problem   Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
   problemId String
 
-  roster   Roster @relation(fields: [rosterId], references: [id], onDelete: Restrict)
+  roster   Roster @relation(fields: [rosterId], references: [id], onDelete: Cascade)
   rosterId String
 
-  aboutStudent   User?   @relation("CommentsAboutStudent", fields: [aboutStudentId], references: [id], onDelete: Restrict)
+  aboutStudent   User?   @relation("CommentsAboutStudent", fields: [aboutStudentId], references: [id], onDelete: Cascade)
   aboutStudentId String?
 
   @@index([assignmentId])
@@ -230,7 +231,7 @@ model Comment {
 
 model ActivityLog {
   id        String   @id @default(cuid())
-  user      User?    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   userId    String?
   action    String
   timestamp DateTime @default(now())
@@ -238,13 +239,13 @@ model ActivityLog {
 
   // Normalized foreign keys for fast filtering
   courseId     String?
-  course       Course?     @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  course       Course?     @relation(fields: [courseId], references: [id], onDelete: SetNull)
   assignmentId String?
-  assignment   Assignment? @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  assignment   Assignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
   problemId    String?
-  problem      Problem?    @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  problem      Problem?    @relation(fields: [problemId], references: [id], onDelete: SetNull)
   submissionId String?
-  submission   Submission? @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  submission   Submission? @relation(fields: [submissionId], references: [id], onDelete: SetNull)
 
   // Additional categorization
   category    String? // SYSTEM, COURSE, ASSIGNMENT, PROBLEM, SUBMISSION, USER
@@ -263,4 +264,9 @@ model ActivityLog {
   @@index([assignmentId, action])
   @@index([userId, courseId])
   @@index([timestamp, category])
+}
+
+generator erd {
+  provider = "prisma-erd-generator"
+  output   = "ERD.svg"
 }

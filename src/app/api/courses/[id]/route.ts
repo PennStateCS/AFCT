@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canArchiveCourse, canUnpublishCourse } from '@/lib/course-status-checks';
 
 // GET: Fetch a course by ID with full metadata
 export async function GET(_: Request, context: { params: Promise<{ id: string }> }) {
@@ -47,29 +48,27 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
-    // Group roster users by role
-    const faculty = course.roster.filter((r) => r.role === 'FACULTY').map((r) => r.user);
-    const tas = course.roster.filter((r) => r.role === 'TA').map((r) => r.user);
-    // For students, compute whether they have any submissions for this course
-    const studentRoster = course.roster.filter((r) => r.role === 'STUDENT');
-    const students = await Promise.all(
-      studentRoster.map(async (r) => {
+    // Build a single enrolled array (user objects plus courseRole), and compute student submission flags as needed.
+    const enrolled = await Promise.all(
+      course.roster.map(async (r) => {
         const user = r.user;
-        // gather assignment ids for this course
-        const assignmentIds = course.assignments.map((a) => a.id);
+        const courseRole = r.role;
+
+        // For students only, compute hasSubmissions flag
         let hasSubmissions = false;
-        if (assignmentIds.length > 0) {
-          const found = await prisma.submission.findFirst({
-            where: {
-              studentId: user.id,
-              assignmentId: { in: assignmentIds },
-            },
-            select: { id: true },
-          });
-          hasSubmissions = !!found;
+        if (courseRole === 'STUDENT') {
+          const assignmentIds = course.assignments.map((a) => a.id);
+          if (assignmentIds.length > 0) {
+            const found = await prisma.submission.findFirst({
+              where: { studentId: user.id, assignmentId: { in: assignmentIds } },
+              select: { id: true },
+            });
+            hasSubmissions = !!found;
+          }
         }
-        return { ...user, hasSubmissions };
-      }),
+
+        return { ...user, courseRole, hasSubmissions };
+      })
     );
 
     // Attach problem counts and safety flags to assignments
@@ -105,7 +104,17 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
 
   const problemsWithLink = course.problems.map((p) => ({ ...p, usedByAssignment: linkedSet.has(p.id) }));
 
-  return NextResponse.json({
+    // Determine viewer's course role if authenticated
+    const session = await auth();
+    let viewerRole: string | null = null;
+    let viewerDefaultRole: string | null = null;
+    if (session?.user) {
+      const viewerRoster = await prisma.roster.findFirst({ where: { courseId: course.id, userId: session.user.id }, select: { role: true } });
+      viewerRole = viewerRoster?.role ?? null;
+      viewerDefaultRole = session.user.role ?? null;
+    }
+
+    return NextResponse.json({
       id: course.id,
       name: course.name,
       code: course.code,
@@ -115,13 +124,15 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
       startDate: course.startDate,
       endDate: course.endDate,
       isPublished: course.isPublished,
+      isArchived: course.isArchived,
       createdAt: course.createdAt,
       updatedAt: course.updatedAt,
-  faculty,
-  tas,
-  students,
-  problems: problemsWithLink,
+      // Only include a single enrolled array (user objects with courseRole)
+      enrolled,
+      problems: problemsWithLink,
       assignments: assignmentsWithProblemCount,
+      viewerRole,
+      viewerDefaultRole,
     });
   } catch (error) {
     console.error('GET /api/courses/[id] error:', error);
@@ -141,11 +152,34 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
   const session = await auth();
   const user = session?.user;
 
-  if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+  // Allow only ADMIN or FACULTY to toggle archive status
+  if (!user || !['ADMIN', 'FACULTY'].includes(user.role)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
+  // Parse request
   const body = await req.json();
+
+  // Validate input
+  if (typeof body.isArchived !== 'boolean') {
+    return NextResponse.json({ error: 'isArchived must be a boolean' }, { status: 400 });
+  }
+
+  // Centralized check for archiving
+  if (body.isArchived) {
+    const { canArchive, reason } = await canArchiveCourse(prisma, id, body.startDate, body.endDate);
+    if (!canArchive) {
+      return NextResponse.json({ error: reason }, { status: 403 });
+    }
+  }
+
+  // Centralized check for unpublishing
+  if (!body.isPublished) {
+    const { canUnpublish, reason } = await canUnpublishCourse(prisma, id);
+    if (!canUnpublish) {
+      return NextResponse.json({ error: reason }, { status: 403 });
+    }
+  }
 
   try {
     // Update the course
@@ -159,6 +193,7 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
         startDate: new Date(body.startDate),
         endDate: new Date(body.endDate),
         isPublished: body.isPublished,
+        isArchived: body.isArchived,
       },
       include: {
         problems: true,
@@ -187,17 +222,18 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
       },
     });
 
-    // Group roster users by role
-    const faculty = updatedCourse.roster.filter((r) => r.role === 'FACULTY').map((r) => r.user);
-    const tas = updatedCourse.roster.filter((r) => r.role === 'TA').map((r) => r.user);
-    const students = updatedCourse.roster.filter((r) => r.role === 'STUDENT').map((r) => r.user);
+    // Group roster users by role (include INSTRUCTOR alongside FACULTY)
+    const instructors = updatedCourse.roster.filter((r) => (r.role as string) === 'INSTRUCTOR').map((r) => ({ ...r.user, role: r.role }));
+    const faculty = updatedCourse.roster.filter((r) => (r.role as string) === 'FACULTY' || (r.role as string) === 'INSTRUCTOR').map((r) => ({ ...r.user, role: r.role }));
+    const tas = updatedCourse.roster.filter((r) => r.role === 'TA').map((r) => ({ ...r.user, role: r.role }));
+    const students = updatedCourse.roster.filter((r) => r.role === 'STUDENT').map((r) => ({ ...r.user, role: r.role }));
 
     // Attach problem counts to assignments
     const assignmentsWithProblemCount = await Promise.all(
       updatedCourse.assignments.map(async (assignment) => {
-  const submissionCount = await prisma.submission.count({ where: { assignmentId: assignment.id } });
-  const commentCount = await prisma.comment.count({ where: { assignmentId: assignment.id } });
-  const hasSubmissionsOrComments = submissionCount > 0 || commentCount > 0;
+        const submissionCount = await prisma.submission.count({ where: { assignmentId: assignment.id } });
+        const commentCount = await prisma.comment.count({ where: { assignmentId: assignment.id } });
+        const hasSubmissionsOrComments = submissionCount > 0 || commentCount > 0;
 
         return {
           id: assignment.id,
@@ -224,9 +260,21 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
       category: 'COURSE',
       courseId: updatedCourse.id,
       metadata: {
+        userId: user.id,
+        courseId: updatedCourse.id,
         updatedFields: Object.keys(body),
       },
     });
+
+    // Determine viewer's course role if authenticated
+    const session = await auth();
+    let viewerRole: string | null = null;
+    let viewerDefaultRole: string | null = null;
+    if (session?.user) {
+      const viewerRoster = await prisma.roster.findFirst({ where: { courseId: updatedCourse.id, userId: session.user.id }, select: { role: true } });
+      viewerRole = viewerRoster?.role ?? null;
+      viewerDefaultRole = session.user.role ?? null;
+    }
 
     return NextResponse.json({
       id: updatedCourse.id,
@@ -238,16 +286,69 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
       startDate: updatedCourse.startDate,
       endDate: updatedCourse.endDate,
       isPublished: updatedCourse.isPublished,
+      isArchived: updatedCourse.isArchived,
       createdAt: updatedCourse.createdAt,
       updatedAt: updatedCourse.updatedAt,
-      faculty,
-      tas,
-      students,
+      // Only include a single enrolled array (user objects with courseRole)
+      enrolled: updatedCourse.roster.map((r) => ({ ...r.user, courseRole: r.role })),
       problems: updatedCourse.problems,
       assignments: assignmentsWithProblemCount,
+      viewerRole,
+      viewerDefaultRole,
     });
   } catch (error) {
     console.error('PUT /api/courses/[id] error:', error);
     return NextResponse.json({ error: 'Failed to update course' }, { status: 500 });
+  }
+}
+
+// DELETE: Delete a course (Faculty/Admin/TA only, course must be archived)
+export async function DELETE(req: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
+
+  if (!id) {
+    return NextResponse.json({ error: 'Missing course ID' }, { status: 400 });
+  }
+
+  // Get authenticated user session
+  const session = await auth();
+  const user = session?.user;
+
+  if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  }
+
+  // Make sure the course isArchived
+  const courseIsArchived = await prisma.course.findFirst({
+    where: { id },
+    select: { isArchived: true }
+  });
+
+  if (courseIsArchived === null || courseIsArchived.isArchived === false) {
+    return NextResponse.json({ error: 'Course must be archived' }, { status: 403 });
+  }
+
+  const body = await req.json();
+
+  try {
+    // Deleting course code
+    const deletedCourse = await prisma.course.delete({
+      where: {
+        id,
+        isArchived: true,
+      } 
+    });
+
+    // Log the update action to ActivityLog
+    await createEnhancedActivityLog(prisma, req, {
+      userId: user.id,
+      action: 'DELETE_COURSE',
+      category: 'COURSE',
+      metadata: { "courseName": deletedCourse.name },
+    });
+    return NextResponse.json({ status: 204 });
+  } catch (error) {
+    console.error('DELETE /api/courses/[id] error:', error);
+    return NextResponse.json({ error: error }, { status: 500 });
   }
 }

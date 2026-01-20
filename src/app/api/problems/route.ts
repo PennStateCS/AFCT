@@ -67,6 +67,9 @@ export async function POST(req: Request) {
       courseId,
       problemId: problem.id,
       metadata: {
+        userId: user.id,
+        courseId: courseId,
+        problemId: problem.id,
         problemType: type,
         fileName,
       },

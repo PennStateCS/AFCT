@@ -80,7 +80,7 @@
   --sidebar-primary: oklch(94.148% 0.0081 254.087);
   --sidebar-primary-foreground: oklch(0.97 0.014 254.604);
   --sidebar-accent: oklch(0.967 0.001 286.375);
-  --sidebar-accent-foreground: ##ffffff;
+  --sidebar-accent-foreground: #ffffff;
   --sidebar-border: oklch(0.92 0.004 286.32);
   --sidebar-ring: oklch(94.845% 0.00467 258.626);
   --table-header: #e0e0e0;
@@ -188,8 +188,8 @@
   --sidebar-ring: oklch(0.488 0.243 264.376);
   --table-header: #000000;
   --table-header-foreground: #000000;
-  --table-highlight: #e0e0e0;
-  --table-background: #ffffff;
+  --table-highlight: #0f0f0f;
+  --table-background: #1f1f1f;
 }
 
 @layer base {

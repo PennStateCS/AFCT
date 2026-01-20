@@ -22,8 +22,7 @@ export async function GET(req: NextRequest) {
     // Note: req.geo and req.ip are not available in Next.js App Router
   };
 
-  console.log('=== REQUEST DEBUG INFO ===');
-  console.log(JSON.stringify(debugInfo, null, 2));
+  // debug info available in debugInfo
 
   return NextResponse.json(debugInfo);
 }

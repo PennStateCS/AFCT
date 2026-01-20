@@ -43,8 +43,11 @@ export async function POST(req: NextRequest) {
       courseId: created.courseId,
       assignmentId: created.id,
       metadata: {
+        userId: session.user.id,
+        courseId: created.courseId,
+        assignmentId: created.id,
         title: created.title,
-        description: created.description ? 'Has description' : 'No description',
+        description: created.description ? created.description : '',
         maxPoints: created.maxPoints,
         isPublished: created.isPublished,
         dueDate: created.dueDate.toISOString(),

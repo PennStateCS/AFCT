@@ -32,12 +32,12 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const role = searchParams.get('role');
 
-    console.log(`[USERS_GET] Fetching users${role ? ` with role: ${role}` : ''}`);
+  // Fetching users
 
     // 3. Query users from the database
     const users = await prisma.user.findMany({
       where: role ? { role: role as Role } : undefined,
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ role: 'asc' }, { lastName: 'asc'}],
       select: {
         id: true,
         email: true,
@@ -57,6 +57,7 @@ export async function GET(req: Request) {
       action: 'VIEW_USERS',
       category: 'USER',
       metadata: {
+        userId: session.user.id,
         filterRole: role,
       },
     });
@@ -131,7 +132,7 @@ export async function POST(req: Request) {
       },
     });
 
-    console.log(`[USERS_POST] User created: ${newUser.id} (${newUser.email})`);
+  // User created
 
     // 5. Log the creation
     await createEnhancedActivityLog(prisma, req, {
@@ -139,6 +140,7 @@ export async function POST(req: Request) {
       action: 'CREATE_USER',
       category: 'USER',
       metadata: {
+        userId: session.user.id,
         createdUserId: newUser.id,
         createdUserEmail: newUser.email,
         createdUserRole: newUser.role,

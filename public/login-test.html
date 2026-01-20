@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AFCT Custom Login API Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .container { max-width: 500px; margin: 0 auto; }
+        .form-group { margin: 20px 0; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, button { padding: 10px; width: 100%; box-sizing: border-box; }
+        button { background: #007cba; color: white; border: none; cursor: pointer; }
+        button:hover { background: #005a87; }
+        .result { margin-top: 20px; padding: 15px; border-radius: 5px; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .loading { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AFCT Custom Login API Test</h1>
+        <p>This page tests the <code>/api/public/login</code> endpoint for external system authentication.</p>
+        
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="email">Email:</label>
+                <input type="email" id="email" value="admin@example.com" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" value="password123" required>
+            </div>
+            
+            <button type="submit">Test Login API</button>
+        </form>
+        
+        <div id="result"></div>
+        
+        <h3>Test Credentials</h3>
+        <p>Default test accounts (if seeded):</p>
+        <ul>
+            <li><strong>Admin:</strong> admin@example.com / password123</li>
+            <li><strong>Faculty:</strong> faculty@example.com / password123</li>
+            <li><strong>Student:</strong> student@example.com / password123</li>
+            <li><strong>TA:</strong> ta@example.com / password123</li>
+        </ul>
+        
+        <h3>API Documentation</h3>
+        <p><strong>Endpoint:</strong> <code>POST /api/public/login</code></p>
+        <p><strong>Content-Type:</strong> <code>application/json</code></p>
+        <p><strong>Request Body:</strong></p>
+        <pre>{
+  "email": "user@example.com",
+  "password": "password123"
+}</pre>
+        <p><strong>Success Response (200):</strong></p>
+        <pre>{
+  "token": "jwt_token_here",
+  "user": {
+    "id": "user_id",
+    "email": "user@example.com",
+    "firstName": "First",
+    "lastName": "Last",
+    "role": "ADMIN"
+  }
+}</pre>
+        <p><strong>Error Response (401):</strong></p>
+        <pre>{
+  "error": "Invalid credentials"
+}</pre>
+    </div>
+
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const resultDiv = document.getElementById('result');
+            
+            // Show loading state
+            resultDiv.innerHTML = '<div class="result loading">Testing login API...</div>';
+            
+            try {
+                const response = await fetch('/api/public/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <div class="result success">
+                            <h4>✅ Login Successful!</h4>
+                            <p><strong>Status:</strong> ${response.status}</p>
+                            <p><strong>User:</strong> ${data.user.firstName} ${data.user.lastName} (${data.user.role})</p>
+                            <p><strong>Token:</strong> ${data.token.substring(0, 50)}...</p>
+                            <h5>Full Response:</h5>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="result error">
+                            <h4>❌ Login Failed</h4>
+                            <p><strong>Status:</strong> ${response.status}</p>
+                            <p><strong>Error:</strong> ${data.error}</p>
+                            <h5>Full Response:</h5>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="result error">
+                        <h4>❌ Network Error</h4>
+                        <p><strong>Error:</strong> ${error.message}</p>
+                        <p>Make sure the AFCT Dashboard is running on localhost:3000</p>
+                    </div>
+                `;
+            }
+        });
+        
+        // Quick test buttons
+        const quickTests = [
+            { name: 'Admin', email: 'admin@example.com', password: 'password123' },
+            { name: 'Faculty', email: 'faculty@example.com', password: 'password123' },
+            { name: 'Student', email: 'student@example.com', password: 'password123' },
+            { name: 'TA', email: 'ta@example.com', password: 'password123' }
+        ];
+        
+        const container = document.querySelector('.container');
+        const quickTestDiv = document.createElement('div');
+        quickTestDiv.innerHTML = '<h3>Quick Tests</h3>';
+        
+        quickTests.forEach(test => {
+            const button = document.createElement('button');
+            button.textContent = `Test ${test.name}`;
+            button.style.width = 'auto';
+            button.style.margin = '5px';
+            button.style.padding = '5px 15px';
+            button.addEventListener('click', () => {
+                document.getElementById('email').value = test.email;
+                document.getElementById('password').value = test.password;
+                document.getElementById('loginForm').dispatchEvent(new Event('submit'));
+            });
+            quickTestDiv.appendChild(button);
+        });
+        
+        container.appendChild(quickTestDiv);
+    </script>
+</body>
+</html>

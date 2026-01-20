@@ -96,6 +96,9 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
       courseId,
       problemId,
       metadata: {
+        userId: user.id,
+        courseId: courseId,
+        problemId: problemId,
         problemType: type,
         fileName,
         fileUpdated: !!file,
@@ -166,6 +169,9 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
       courseId: existingProblem.courseId,
       problemId,
       metadata: {
+        userId: user.id,
+        courseId: existingProblem.courseId,
+        problemId: problemId,
         fileName: existingProblem.fileName || null,
       },
     });

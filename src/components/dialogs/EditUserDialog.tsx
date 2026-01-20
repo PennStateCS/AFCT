@@ -10,6 +10,7 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { showToast } from '@/lib/toast';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import {
   Select,
@@ -27,6 +28,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 
 import type { User } from '@prisma/client';
 import { UpdateUserSchema, type UpdateUserRaw, type UpdateUserInput } from '@/schemas/user';
+import { roleOptions, formatRole } from '@/lib/roles';
 
 type EditUserDialogProps = {
   user: User;
@@ -38,7 +40,7 @@ type EditUserDialogProps = {
 export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogProps) {
   // Local preview state (keep separate from RHF file)
   const [avatarPreview, setAvatarPreview] = useState<string>(
-    user.avatar ? `/uploads/${user.avatar}` : '/default-avatar.png',
+    user.avatar ? `/uploads/pfps/${user.avatar}` : '/uploads/pfps/default-avatar.png',
   );
 
   // RHF defaults – email is read-only so it isn't in the schema
@@ -46,9 +48,10 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
     () => ({
       firstName: user.firstName ?? '',
       lastName: user.lastName ?? '',
-      role: (user.role as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT') ?? 'STUDENT',
+      role: user.role,
       avatarFile: undefined,
       deleteAvatar: false,
+      inactive: user.inactive ?? false,
     }),
     [user],
   );
@@ -77,7 +80,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
         keepValues: true,
       });
       // Reset preview from current user
-      setAvatarPreview(user.avatar ? `/uploads/${user.avatar}` : '/default-avatar.png');
+      setAvatarPreview(user.avatar ? `/uploads/pfps/${user.avatar}` : '/uploads/pfps/default-avatar.png');
     } else {
       reset(defaults, {
         keepDirty: false,
@@ -88,14 +91,32 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
     }
   }, [open, defaults, reset, user.avatar]);
 
+  const avatarFileErrorMessage = (() => {
+    const e = errors.avatarFile;
+    if (!e) return '';
+    if (typeof e === 'string') return e;
+    if (typeof e === 'object' && e !== null) {
+      const m = (e as { message?: unknown }).message;
+      if (typeof m === 'string') return m;
+    }
+    try {
+      return JSON.stringify(e);
+    } catch {
+      return String(e);
+    }
+  })();
+
   // Avatar upload handler: set file in RHF + update local preview + clear delete flag
   const onAvatarPicked = (file?: File) => {
+    // Update RHF state and local state
     setValue('avatarFile', file, {
       shouldDirty: true,
       shouldTouch: true,
       shouldValidate: true,
     });
     setValue('deleteAvatar', false, { shouldDirty: true });
+
+    // Set preview Avatar
     if (file) {
       const reader = new FileReader();
       reader.onload = () => setAvatarPreview(reader.result as string);
@@ -104,7 +125,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
   };
 
   const onDeleteAvatar = () => {
-    setAvatarPreview('/default-avatar.png');
+    setAvatarPreview('/uploads/pfps/default-avatar.png');
     setValue('avatarFile', undefined, { shouldDirty: true });
     setValue('deleteAvatar', true, { shouldDirty: true });
   };
@@ -121,27 +142,35 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
     formData.append('role', parsed.role);
     if (parsed.avatarFile instanceof File) formData.append('avatar', parsed.avatarFile);
     if (parsed.deleteAvatar) formData.append('deleteAvatar', 'true');
+    formData.append('inactive', parsed.inactive ? 'true' : 'false');
 
-    const res = await fetch(`/api/users/${user.id}`, { method: 'PATCH', body: formData });
+    const res = await fetch(`/api/users/${user.id}`, {
+      method: 'PATCH',
+      body: formData,
+    });
 
+    // Read the response body
+    const body = await res.json();
+
+    // End if there was an error
     if (!res.ok) {
-      const text = await res.text().catch(() => null);
-      console.error('Failed to update user:', text);
+      showToast.error(body?.error || "Failed to update user.");
       return;
     }
 
-    // Let parent refresh or patch its state
+    // Backend succeeded, now notify parent
     await onSave?.({
       ...user,
       firstName: parsed.firstName,
       lastName: parsed.lastName,
       role: parsed.role as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT',
-      // If you want to immediately clear avatar in UI on delete:
       avatar: parsed.deleteAvatar ? null : user.avatar,
+      inactive: parsed.inactive,
     });
 
     resetForm();
     setOpen(false);
+    showToast.success("User updated successfully.");
   };
 
   return (
@@ -191,14 +220,14 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
                       <UploadCloud className="h-4 w-4" />
                       Upload Avatar
                     </Button>
-                    {errors.avatarFile && (
-                      <p className="mt-1 text-xs text-red-600">{errors.avatarFile.message}</p>
+                    {avatarFileErrorMessage && (
+                      <p className="mt-1 text-xs text-red-600">{avatarFileErrorMessage}</p>
                     )}
                   </>
                 )}
               />
 
-              {avatarPreview && avatarPreview !== '/default-avatar.png' && (
+              {avatarPreview && avatarPreview !== '/uploads/pfps/default-avatar.png' && (
                 <Button
                   type="button"
                   variant="outline"
@@ -252,25 +281,49 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
             />
           </div>
 
-          {/* Role */}
+          {/* Default Role */}
           <Controller
             control={control}
             name="role"
+            render={({ field }) => {
+              return (
+                <div>
+                  <label className="mb-2 block text-sm font-medium">Default Role</label>
+                  <Select value={field.value} onValueChange={(v) => field.onChange(v)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select a default role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {roleOptions.map((r) => (
+                        <SelectItem key={r} value={r}>
+                          {formatRole(r)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.role && <p className="mt-1 text-xs text-red-600">{errors.role.message}</p>}
+                </div>
+              );
+            }}
+          />
+
+          {/* Inactive */}
+          <Controller
+            control={control}
+            name="inactive"
             render={({ field }) => (
               <div>
-                <label className="mb-2 block text-sm font-medium">Role</label>
-                <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v)}>
+                <label className="mb-2 block text-sm font-medium">Status</label>
+                <Select value={field.value ? 'true' : 'false'} onValueChange={(v) => field.onChange(v === 'true')}>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select a role" />
+                    <SelectValue placeholder="Select activity type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ADMIN">Admin</SelectItem>
-                    <SelectItem value="FACULTY">Faculty</SelectItem>
-                    <SelectItem value="TA">TA</SelectItem>
-                    <SelectItem value="STUDENT">Student</SelectItem>
+                    <SelectItem value="false">Active</SelectItem>
+                    <SelectItem value="true">Inactive</SelectItem>
                   </SelectContent>
                 </Select>
-                {errors.role && <p className="mt-1 text-xs text-red-600">{errors.role.message}</p>}
+                {errors.inactive && <p className="mt-1 text-xs text-red-600">{errors.inactive.message}</p>}
               </div>
             )}
           />
