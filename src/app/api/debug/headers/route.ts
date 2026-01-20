@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function GET(req: NextRequest) {
   // Debug: log all headers
   const headers: Record<string, string> = {};
-  req.headers.forEach((value, key) => {
+  req.headers.forEach((value: string, key: string) => {
     headers[key] = value;
   });
 
