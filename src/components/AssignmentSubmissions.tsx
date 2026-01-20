@@ -437,7 +437,7 @@ export default function AssignmentSubmissions({
                       placeholder="Search students..."
                       value={studentFilter}
                       onChange={(e) => setStudentFilter(e.target.value)}
-                      className="mb-2 bg-input border-border"
+                      className="mb-2 bg-card border-input"
                       aria-label="Search students by name"
                       onKeyDown={(e) => {
                         // Prevent any keyboard event from bubbling up to the DropdownMenu
@@ -535,7 +535,7 @@ export default function AssignmentSubmissions({
                         setEditingGrade(userGrade !== null && userGrade !== undefined ? String(userGrade) : "");
                       }
                     }}
-                    className="bg-input h-9 w-[90px] pr-8"
+                    className="bg-card border-input h-9 w-[90px] pr-8"
                     placeholder={isLoadingGrade ? '-' : (userGrade === null || userGrade === undefined ? '-' : String(userGrade))}
                     aria-label={`Grade (0-${maxAssignmentGrade})`}
                     disabled={isLoadingGrade}
