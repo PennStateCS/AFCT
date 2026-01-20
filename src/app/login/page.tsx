@@ -220,7 +220,7 @@ export default function LoginPage() {
           </div>
         )}
 
-        <h1 className="p-2 text-center text-2xl font-bold text-gray-900">AFCT Dashboard</h1>
+        <h1 className="p-2 text-center text-2xl font-bold text-foreground">AFCT Dashboard</h1>
 
         <div className="bg-secondary/20 my-6 flex justify-center gap-x-2 rounded-xl shadow">
           {(['login', 'signup'] as const).map((m) => (
