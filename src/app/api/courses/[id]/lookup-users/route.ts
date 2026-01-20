@@ -16,13 +16,13 @@ export async function POST(req: NextRequest) {
     // Use OR with equals + mode: 'insensitive' so matching does not depend on DB collation.
     const users = await prisma.user.findMany({
       where: {
-        OR: emails.map((e) => ({ email: { equals: e, mode: 'insensitive' } })),
+        OR: emails.map((e: string) => ({ email: { equals: e, mode: 'insensitive' } })),
       },
       select: { id: true, firstName: true, lastName: true, email: true, role: true },
     });
 
-    const foundEmails = new Set(users.map((u) => u.email.toLowerCase()));
-    const notFound = emails.filter((e) => !foundEmails.has(e));
+    const foundEmails = new Set(users.map((u: (typeof users)[number]) => u.email.toLowerCase()));
+    const notFound = emails.filter((e: string) => !foundEmails.has(e));
 
     return NextResponse.json({ found: users, notFound }, { status: 200 });
   } catch (err) {

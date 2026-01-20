@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import type { Prisma } from '@prisma/client';
 
 // Local copy of registration code generator to match POST /api/courses behavior
 async function generateUniqueCourseCode() {
@@ -86,7 +87,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const end = new Date(endDate);
 
     // Begin transaction
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Create new course (default not published)
       const regCode = await generateUniqueCourseCode();
 

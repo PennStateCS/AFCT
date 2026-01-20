@@ -41,7 +41,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
 
     // Prevent removal if the user has any submissions in this course
     const assignmentIds = await prisma.assignment.findMany({ where: { courseId }, select: { id: true } });
-    const assignmentIdList = assignmentIds.map((a) => a.id);
+    const assignmentIdList = assignmentIds.map((a: (typeof assignmentIds)[number]) => a.id);
 
     if (assignmentIdList.length > 0) {
       const existingSubmission = await prisma.submission.findFirst({
