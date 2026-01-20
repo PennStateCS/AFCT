@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import type { Prisma } from '@prisma/client';
+
+type CourseRole = 'INSTRUCTOR' | 'FACULTY' | 'TA' | 'STUDENT';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const resolved = await params;
@@ -20,7 +23,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!userIds.length) return NextResponse.json({ message: 'No users provided' }, { status: 400 });
 
     // Map global role to course role
-    const mapRole = (r: string | null | undefined) => {
+    const mapRole = (r: string | null | undefined): CourseRole => {
       switch (r) {
         case 'FACULTY':
         case 'ADMIN':
@@ -34,10 +37,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     // Fetch all users to get their global roles in a single query
     const users = await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, role: true } });
-    const roleMap = new Map(users.map(u => [u.id, mapRole(u.role)]));
+    const roleMap = new Map(
+      users.map((u: { id: string; role: string | null }) => [u.id, mapRole(u.role)]),
+    );
 
     // Enroll all users in a transaction using their inherited roles
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       for (const uid of userIds) {
         const roleToAssign = roleMap.get(uid) ?? 'STUDENT';
         const existing = await tx.roster.findFirst({ where: { courseId, userId: uid } });

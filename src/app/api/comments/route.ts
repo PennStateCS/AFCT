@@ -3,6 +3,44 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { RoleEnum, CourseRoleEnum } from '@/schemas/user';
+
+// ---- Types ----
+interface CommentUser {
+  id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  avatar?: string | null;
+  role?: z.infer<typeof RoleEnum> | null;
+}
+
+interface CommentRoster {
+  role?: z.infer<typeof CourseRoleEnum> | null;
+  user: CommentUser;
+}
+
+interface CommentDB {
+  id: string;
+  content: string;
+  createdAt: string | Date;
+  roster: CommentRoster;
+  assignmentId?: string;
+  problemId?: string;
+  aboutStudentId?: string | null;
+}
+
+interface CommentResponse {
+  id: string;
+  content: string;
+  createdAt: string | Date;
+  author: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    avatar: string | null;
+    role: string | null;
+  };
+}
 
 const createCommentSchema = z.object({
   content: z.string().min(1, 'Comment content is required').max(5000, 'Comment too long'),
@@ -82,7 +120,7 @@ export async function POST(request: NextRequest) {
           },
         },
       },
-    });
+    }) as CommentDB;
 
     await createEnhancedActivityLog(prisma, request, {
       userId: user.id,
@@ -173,7 +211,7 @@ export async function GET(request: NextRequest) {
         }
       : { assignmentId, problemId };
 
-    const comments = await prisma.comment.findMany({
+    const comments: CommentDB[] = await prisma.comment.findMany({
       where: whereClause,
       include: {
         roster: {
@@ -192,9 +230,9 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: { createdAt: 'asc' },
-    });
+    }) as CommentDB[];
 
-    const formatted = comments.map((c) => ({
+    const formatted: CommentResponse[] = comments.map((c) => ({
       id: c.id,
       content: c.content,
       createdAt: c.createdAt,
@@ -205,7 +243,7 @@ export async function GET(request: NextRequest) {
         avatar: c.roster.user.avatar ?? null,
         role: c.roster.role ?? c.roster.user.role ?? null,
       },
-    }));
+    })) as CommentResponse[];
 
     return NextResponse.json(formatted);
   } catch (error) {

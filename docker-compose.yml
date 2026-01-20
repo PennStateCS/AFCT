@@ -20,6 +20,18 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+
+  prisma-studio:
+    build:
+      context: . # Directory containing your Dockerfile
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5555:5555" # Map Prisma Studio port
+    depends_on:
+      - postgres # Ensure database starts before Prisma Studio
+    env_file:
+      - .env.production
+
   app:
     container_name: afct-production
     build:
@@ -41,6 +53,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
 volumes:
   postgres_data:
   uploads_data:

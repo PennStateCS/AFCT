@@ -299,7 +299,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     // Log the deletion
     try {
-      await createEnhancedActivityLog(prisma, req as unknown as Request, {
+      await createEnhancedActivityLog(prisma, req as Request, {
         userId: session.user.id,
         action: 'DELETE_ASSIGNMENT',
         category: 'ASSIGNMENT',

@@ -64,7 +64,7 @@ export function EditAssignmentDialog({
       description: assignment.description ?? '',
       maxPoints: String(assignment.maxPoints ?? 100),
       dueDate: toDateTimeLocalString(assignment.dueDate), // string for input
-      isPublished: assignment.isPublished ?? '',
+      isPublished: assignment.isPublished ?? false,
       courseId: assignment.courseId,
     }),
     [assignment],
