@@ -372,7 +372,7 @@ export default function AssignmentDashboardPage() {
                       header: 'Answer File',
                       cell: ({ row }: { row: { original: Problem } }) => {
                         const fileUrl = row.original.fileName
-                          ? `/uploads/problems/${row.original.fileName}`
+                          ? `/api/files/problems?file=${row.original.fileName}`
                           : null;
                         const fileName = row.original.originalFileName || 'Download';
                         return fileUrl ? (
