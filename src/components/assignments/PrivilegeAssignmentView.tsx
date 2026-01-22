@@ -489,7 +489,7 @@ export default function AssignmentDashboardPage() {
             )}
             {/* Description dialog */}
             <Dialog open={descOpen} onOpenChange={(v) => setDescOpen(v)}>
-                <DialogContent className="bg-white">
+                <DialogContent className="bg-card">
                     <DialogHeader>
                         <DialogTitle>Problem Description</DialogTitle>
                     </DialogHeader>
