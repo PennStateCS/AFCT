@@ -26,9 +26,15 @@ type Parsed = {
   }>;
 };
 
-const NODE_FILL = getComputedStyle(document.documentElement).getPropertyValue('--node-color').trim();
-const STROKE = getComputedStyle(document.documentElement).getPropertyValue('--foreground').trim();
-const TEXT_COLOR = getComputedStyle(document.documentElement).getPropertyValue('--foreground').trim();
+const NODE_FILL = typeof window !== 'undefined'
+  ? (getComputedStyle(document.documentElement).getPropertyValue('--node-color').trim() || '#38bdf8')
+  : '#38bdf8';
+const STROKE = typeof window !== 'undefined'
+  ? (getComputedStyle(document.documentElement).getPropertyValue('--foreground').trim() || '#0f172a')
+  : '#0f172a';
+const TEXT_COLOR = typeof window !== 'undefined'
+  ? (getComputedStyle(document.documentElement).getPropertyValue('--foreground').trim() || '#0f172a')
+  : '#0f172a';
 const EDGE_WIDTH = 1.6;
 const DEFAULT_EPS = 'λ';
 
@@ -324,7 +330,7 @@ export function JffCytoscapeViewer({
       }
       // Ensure the start edge exists
       const startEdgeId = `__startEdge${idx}`;
-      let startEdge = cy.getElementById(startEdgeId);
+      const startEdge = cy.getElementById(startEdgeId);
       if (!startEdge || startEdge.empty()) {
         cy.add({
           group: 'edges',
@@ -670,7 +676,7 @@ export function JffCytoscapeViewer({
                   x: nodePos.x + Math.cos(bestAngle) * radius,
                   y: nodePos.y + Math.sin(bestAngle) * radius,
                 };
-                let startNode = cy.getElementById(startNodeId);
+                const startNode = cy.getElementById(startNodeId);
                 if (startNode && !startNode.empty()) {
                   startNode.position(pos);
                 }
