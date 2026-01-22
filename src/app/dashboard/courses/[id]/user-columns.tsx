@@ -196,7 +196,7 @@ export const userColumns = (onChange: () => void, courseId: string, courseIsArch
       cell: ({ row }) => {
         const user = row.original;
         const initials = `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase();
-        const avatarUrl = user.avatar ? `/uploads/pfps/${user.avatar}` : '/uploads/pfps/default-avatar.png';
+        const avatarUrl = user.avatar ? `/api/files/avatar?file=${user.avatar}` : '/api/files/avatar?file=default-avatar.png';
         
         return (
           <Avatar className="h-10 w-10">
