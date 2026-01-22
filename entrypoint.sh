@@ -3,7 +3,7 @@ set -e
 
 # --------------------------------------------
 # AFCT Entrypoint
-# - Validates env
+# - Validates env (DATABASE_URL required for app)
 # - Waits for DB (optional)
 # - Ensures Prisma client exists (optional)
 # - Runs migrations (optional)
@@ -26,26 +26,33 @@ fi
 WAIT_FOR_DB="${WAIT_FOR_DB:-true}"
 DB_WAIT_SECONDS="${DB_WAIT_SECONDS:-60}"
 
+# Defaults for readiness checks (can be overridden by env)
+DB_HOST="${DB_HOST:-postgres}"
+DB_PORT="${DB_PORT:-5432}"
+DB_USER="${DB_USER:-afct_user}"
+DB_NAME="${DB_NAME:-afct}"
+
 if [ "$WAIT_FOR_DB" = "true" ]; then
   echo "→ Waiting for database to be reachable (timeout: ${DB_WAIT_SECONDS}s)..."
-
   i=0
 
   # Prefer pg_isready if present (postgresql-client)
   if command -v pg_isready >/dev/null 2>&1; then
-    until pg_isready -d "${DATABASE_URL}" >/dev/null 2>&1; do
+    # Use -h/-p/-U/-d (more reliable than passing DATABASE_URL to -d on Alpine)
+    until pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" >/dev/null 2>&1; do
       i=$((i+1))
       if [ "$i" -ge "$DB_WAIT_SECONDS" ]; then
-        echo "✖ DB not ready (timeout after ${DB_WAIT_SECONDS}s)"
+        echo "✖ DB not ready (timeout after ${DB_WAIT_SECONDS}s) - host=${DB_HOST} port=${DB_PORT} user=${DB_USER} db=${DB_NAME}"
         exit 1
       fi
       sleep 1
     done
   else
     # Fallback to TCP port probe (requires nc)
-    DB_HOST="${DB_HOST:-postgres}"
-    DB_PORT="${DB_PORT:-5432}"
-
+    if ! command -v nc >/dev/null 2>&1; then
+      echo "✖ Neither pg_isready nor nc is available to check DB readiness."
+      exit 1
+    fi
     until nc -z "$DB_HOST" "$DB_PORT" >/dev/null 2>&1; do
       i=$((i+1))
       if [ "$i" -ge "$DB_WAIT_SECONDS" ]; then
@@ -62,10 +69,7 @@ else
 fi
 
 # ---- 0.2) Ensure Prisma client exists (optional safety) ----
-# This should normally already be present because we copy it from the builder stage,
-# but this helps with weird volume mounts or partial builds.
 ENSURE_PRISMA_CLIENT="${ENSURE_PRISMA_CLIENT:-true}"
-
 if [ "$ENSURE_PRISMA_CLIENT" = "true" ]; then
   if [ ! -d "node_modules/@prisma/client" ] || [ ! -f "node_modules/.prisma/client/index.js" ]; then
     echo "→ Prisma client missing; attempting to generate..."
