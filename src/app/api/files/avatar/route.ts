@@ -5,7 +5,6 @@ import fs from 'fs';
 
 export async function GET(request: NextRequest){
 	try {
-		
 		const session = await auth();
 		const user = session?.user;
 
@@ -22,13 +21,18 @@ export async function GET(request: NextRequest){
 		const filePath = path.join(process.cwd(), 'private', 'uploads', 'pfps', fileName);
 
 		if (!fs.existsSync(filePath)){ // Check for valid file path
-			return NextResponse.json({ error: 'File at ' + filePath + ' does not exist' }, { status: 400 });
+			return NextResponse.json({ error: 'File at ' + filePath + ' does not exist' }, { status: 404 });
 		}
 
 		const buffer = fs.readFileSync(filePath);
+		
+		const fileType = fileName.split('.').at(-1);
 
+		if (!['png', 'jpg', 'avif', 'webp'].includes(fileType)){ //Check and see if this is a supported format
+			return NextResponse.json({ error: 'Unsupported file format' }, { status: 400 });
+		} 
 		const headers = new Headers();
-		headers.set('Content-Type', 'image/avif');
+		headers.set('Content-Type', 'image/' + fileType);
 		headers.set('Cache-Control', 'public, max-age=31536000, immutable');
 
 		return new NextResponse(buffer, { status: 200, statusText: 'OK', headers });
