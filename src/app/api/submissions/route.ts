@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
       const fileExt = path.extname(originalFileName);
       fileName = `${randomUUID()}${fileExt}`;
 
-      const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'submissions');
+      const uploadDir = path.join(process.cwd(), 'private', 'uploads', 'submissions');
       if (!fs.existsSync(uploadDir)) {
         fs.mkdirSync(uploadDir, { recursive: true });
       }
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
           if (answerFileName) {
             const answerFilePath = path.join(
               process.cwd(),
-              'public',
+              'private',
               'uploads',
               'problems',
               answerFileName,
