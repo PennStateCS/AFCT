@@ -1,4 +1,3 @@
-
 FROM node:20-alpine AS builder
 WORKDIR /app
 
@@ -21,20 +20,30 @@ RUN mkdir -p /app/bin /app/jars || true
 # RUN npm run db:erd
 
 # Build the Next.js app (requires devDependencies like Tailwind plugins)
-
 RUN npx prisma generate
 RUN npm run build
+
 
 FROM node:20-alpine AS runtime
 WORKDIR /app
 
-# Install Java runtime and curl for health checks
-RUN apk add --no-cache openjdk21-jre curl
+# Install Java runtime, curl, and tools needed by entrypoint.sh (pg_isready + nc)
+RUN apk add --no-cache \
+    openjdk21-jre \
+    curl \
+    postgresql-client \
+    netcat-openbsd
+
+# Optional: keep npm cache writable for non-root user
+ENV NPM_CONFIG_CACHE=/tmp/.npm
 
 COPY package*.json ./
+
 # Ensure Prisma schema exists before postinstall so prisma generate can run if needed
 COPY --from=builder /app/prisma ./prisma
+
 # Install only production dependencies for smaller runtime image
+# NOTE: prisma CLI must be in "dependencies" (not devDependencies) for npx prisma to work reliably
 RUN npm ci --omit=dev
 
 # Copy generated Prisma client artifacts into runtime image to ensure @prisma/client is available
@@ -58,6 +67,10 @@ RUN mkdir -p /app/bin && chmod -R 755 /app/bin || true
 # Verify Java (non-fatal)
 RUN java -version || true
 
+# Copy entrypoint script into runtime image and ensure it is executable
+COPY --from=builder /app/entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
+
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nextjs -u 1001
@@ -67,4 +80,9 @@ RUN chown -R nextjs:nodejs /app
 USER nextjs
 
 EXPOSE 3000
+
+# Run entrypoint first (wait for DB, migrations, etc.)
+ENTRYPOINT ["./entrypoint.sh"]
+
+# Then start the Next.js server
 CMD ["npm", "start"]
