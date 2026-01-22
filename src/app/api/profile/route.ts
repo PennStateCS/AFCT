@@ -9,7 +9,7 @@ import { existsSync } from 'fs';
 import { randomUUID } from 'crypto';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
-const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'pfps');
+const uploadDir = path.join(process.cwd(), 'private', 'uploads', 'pfps');
 
 // Utility to delete a file if it exists
 async function deleteFileIfExists(filename: string) {
