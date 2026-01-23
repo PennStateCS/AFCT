@@ -6,6 +6,49 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('Starting database seeding...');
 
+  // 🚦 Skip seeding if users already exist
+  const existingUsers = await prisma.user.count();
+  if (existingUsers > 0) {
+    console.log(`Database already has ${existingUsers} users. Skipping seed.`);
+    return;
+  }
+
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  // ===========================
+  // Production seeding (admin only)
+  // ===========================
+  if (isProduction) {
+    const adminEmail =
+      process.env.DEFAULT_ADMIN_EMAIL ||
+      process.env.ADMIN_EMAIL ||
+      'admin@example.com';
+    const adminPassword =
+      process.env.DEFAULT_ADMIN_PASSWORD ||
+      process.env.ADMIN_PASSWORD ||
+      'Password123!';
+    const adminFirstName = process.env.DEFAULT_ADMIN_FIRST_NAME || 'Admin';
+    const adminLastName = process.env.DEFAULT_ADMIN_LAST_NAME || 'User';
+
+    const prodHashed = await bcrypt.hash(adminPassword, 10);
+    await prisma.user.upsert({
+      where: { email: adminEmail },
+      update: {},
+      create: {
+        email: adminEmail,
+        firstName: adminFirstName,
+        lastName: adminLastName,
+        password: prodHashed,
+        role: 'ADMIN',
+      },
+    });
+
+    console.log(
+      `Production seed complete: created/ensured admin user (${adminEmail})`,
+    );
+    return;
+  }
+
   // Hash password for all users
   const hashedPassword = await bcrypt.hash('password123', 10);
 
