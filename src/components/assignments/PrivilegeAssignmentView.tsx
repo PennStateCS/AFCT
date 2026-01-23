@@ -94,7 +94,7 @@ export default function AssignmentDashboardPage() {
             showToast.error('No file available to render');
             return;
         }
-        const src = `/uploads/problems/${encodeURIComponent(fileName)}`;
+        const src = `/api/files/problems?file=${encodeURIComponent(fileName)}`;
         setViewerSrc(src);
         setViewerTitle(`${original || fileName} - ${problem.title}`);
         setViewerOpen(true);
