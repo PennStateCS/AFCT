@@ -18,14 +18,15 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const { firstName, lastName, email, password, role = 'STUDENT' } = body;
+    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : email;
 
     // Check for required fields
-    if (!email || !password || !firstName || !lastName) {
+    if (!normalizedEmail || !password || !firstName || !lastName) {
       return NextResponse.json({ error: 'Missing required fields.' }, { status: 400 });
     }
 
     // Validate email format
-    if (!isValidEmail(email)) {
+    if (!isValidEmail(normalizedEmail)) {
       return NextResponse.json({ error: 'Invalid email format.' }, { status: 400 });
     }
 
@@ -42,7 +43,7 @@ export async function POST(req: Request) {
 
     // Check for existing user
     const existingUser = await prisma.user.findUnique({
-      where: { email },
+      where: { email: normalizedEmail },
     });
 
     if (existingUser) {
@@ -55,7 +56,7 @@ export async function POST(req: Request) {
     // Create new user in the database
     const newUser = await prisma.user.create({
       data: {
-        email,
+        email: normalizedEmail,
         firstName,
         lastName,
         password: hashedPassword,
@@ -70,7 +71,7 @@ export async function POST(req: Request) {
       category: 'USER',
       metadata: {
         userId: newUser.id,
-        email: email,
+        email: normalizedEmail,
         role: role,
       },
     });
