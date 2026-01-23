@@ -88,13 +88,20 @@ else
   echo "→ MIGRATE_ON_START=false, skipping migrations"
 fi
 
-# ---- 2) Optionally seed (explicit only) ----
-SEED_ON_START="${SEED_ON_START:-false}"
+# ---- 2) Optionally seed ----
+SEED_ON_START="${SEED_ON_START:-auto}"
+should_seed="false"
 if [ "$SEED_ON_START" = "true" ]; then
+  should_seed="true"
+elif [ "$SEED_ON_START" = "auto" ] && [ "${NODE_ENV:-}" = "production" ]; then
+  should_seed="true"
+fi
+
+if [ "$should_seed" = "true" ]; then
   echo "→ Running prisma db seed..."
   npx prisma db seed
 else
-  echo "→ SEED_ON_START=false, skipping seed"
+  echo "→ SEED_ON_START=${SEED_ON_START}, skipping seed"
 fi
 
 # ---- 3) Start the app ----
