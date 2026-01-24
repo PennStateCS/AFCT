@@ -43,7 +43,19 @@ export async function POST(req: Request) {
     const buffer = Buffer.from(await file.arrayBuffer());
     const fileName = `${Date.now()}-${file.name}`;
     const fullPath = path.join(uploadsDir, fileName);
-    fs.writeFileSync(fullPath, buffer, {mode: 0o755});
+    try {
+      fs.writeFileSync(fullPath, buffer, {mode: 0o755});
+    } catch (writeErr) {
+      console.error('Failed to write problem file:', writeErr);
+      await createEnhancedActivityLog(prisma, req, {
+        userId: user.id,
+        action: 'PROBLEM_FILE_WRITE_FAILED',
+        category: 'PROBLEM',
+        courseId,
+        metadata: { fileName, filePath: fullPath, error: writeErr instanceof Error ? writeErr.message : String(writeErr) },
+      });
+      return NextResponse.json({ error: 'Failed to save uploaded problem file' }, { status: 500 });
+    }
 
     // Create the problem record in the database
     const problem = await prisma.problem.create({
