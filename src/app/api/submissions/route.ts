@@ -88,7 +88,21 @@ export async function POST(req: NextRequest) {
 
       const filePath = path.join(uploadDir, fileName);
       const buffer = Buffer.from(await file.arrayBuffer());
-      fs.writeFileSync(filePath, buffer, {mode: 0o755});
+      try {
+        fs.writeFileSync(filePath, buffer, {mode: 0o755});
+      } catch (writeErr) {
+        console.error('Failed to write submission file:', writeErr);
+        await createEnhancedActivityLog(prisma, req, {
+          userId: decoded.userId,
+          action: 'SUBMISSION_FILE_WRITE_FAILED',
+          category: 'SUBMISSION',
+          courseId,
+          assignmentId,
+          problemId,
+          metadata: { filePath, error: writeErr instanceof Error ? writeErr.message : String(writeErr) },
+        });
+        return NextResponse.json({ error: 'Failed to save uploaded file' }, { status: 500 });
+      }
 
       // 4b. Run system command to analyze the uploaded file
       try {
