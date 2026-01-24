@@ -23,7 +23,6 @@ RUN mkdir -p /app/bin /app/jars || true
 RUN npx prisma generate
 RUN npm run build
 
-
 FROM node:20-alpine AS runtime
 WORKDIR /app
 
@@ -64,8 +63,9 @@ RUN chmod -R 755 /app/jars || true && chmod +x /app/jars/*.jar || true
 COPY --from=builder /app/bin /app/bin
 RUN mkdir -p /app/bin && chmod -R 755 /app/bin || true
 
-# Verify Java (non-fatal)
-RUN java -version || true
+# Handles Prisma Studio
+# Expose the default Prisma Studio port
+EXPOSE 5555
 
 # Copy entrypoint script into runtime image and ensure it is executable
 COPY --from=builder /app/entrypoint.sh ./entrypoint.sh
