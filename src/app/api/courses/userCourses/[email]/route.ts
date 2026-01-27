@@ -1,24 +1,59 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { verifyToken, JwtPayload } from '@/app/utils/jwt';
 
 // ----------------------------------------
 // GET /api/courses/userCourses
 // ----------------------------------------
-export async function GET(_: Request, context: { params: Promise<{ email: string }> }) {
+export async function GET(req: Request, context: { params: Promise<{ email: string }> }) {
   const { email } = await context.params;
 
-  // Make sure the email is not missing
+  // 1. Make sure the email is not missing
   if (!email) {
     return NextResponse.json({ error: 'Missing email' }, { status: 400 });
   }
 
+  // 2. Extract and verify token
+  const authHeader = req.headers.get('authorization');
+  const token = authHeader?.split(' ')[1];
+  const decoded: JwtPayload | null = token ? verifyToken(token) : null;
+
+  if (!decoded) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
+    // Fetch the user's email
+    // const user = await prisma.user.findUnique({ where: { id: decoded.userId } });
+    // if (!user) {
+    //   return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    // }
+    // const actualEmail2 = user.email;
+    //
+    // const actualEmail = await prisma.user.findUnique({
+    //   where: { id: decoded.userId },
+    //   select: { email: true },
+    // });
+    //
+    // if (!actualEmail) {
+    //   return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    // }
+
+    // Determine if the email matches the authenticated account
+
     // Find courses where the user is enrolled in
     const courses = await prisma.course.findMany({
       // Find where user's email (unique identifier) matches
       where: {
         roster: {
-          some:{ user: { email } }
+          some: {
+            // Use the userId instead of the user's email
+            // This stops a user from determining what courses a different user is in.
+            // This could be done by giving an email not associated with the account of the user that made the request.
+            // Using the userId instead bypasses this, without requiring an extra DB query or any
+            //    email based joins (which would be slow as the Roster dos not have an index on user emails, but does on userIds
+            userId: decoded.userId,
+          }
         },
         isArchived: false
       },
