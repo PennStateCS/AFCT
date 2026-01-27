@@ -11,7 +11,11 @@ USER node
 WORKDIR /app
 
 # Create private folder (sibling to public) and ensure it is writable
-RUN mkdir -p /app/private
+RUN mkdir -p /private/uploads && chmod 775 /private/uploads
+RUN mkdir -p /private/uploads/pfps && chmod 775 /private/uploads/pfps
+RUN mkdir -p /private/uploads/problems && chmod 775 /private/uploads/problems
+RUN mkdir -p /private/uploads/solutions && chmod 775 /private/uploads/solutions
+RUN mkdir -p /private/uploads/submissions && chmod 775 /private/uploads/submissions
 
 COPY --chown=node:node package.json package-lock.json ./
 RUN --mount=type=cache,id=npm-cache-node20,target=/home/node/.npm,uid=1000,gid=1000 \
