@@ -8,8 +8,12 @@ Built with **PostgreSQL, Prisma, NextAuth.js, Tailwind, and Docker**.
 ![Node.js](https://img.shields.io/badge/Node.js-20%2B-brightgreen?logo=node.js)
 ![Docker](https://img.shields.io/badge/Docker-ready-blue?logo=docker)
 ![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=next.js)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?logo=postgresql&logoColor=white)
 ![Prisma](https://img.shields.io/badge/Prisma-ORM-blue?logo=prisma)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-38B2AC?logo=tailwindcss&logoColor=white)
+![Auth.js](https://img.shields.io/badge/Auth.js-NextAuth%20v5-black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue?logo=typescript)
+[![Publish Docker image to GHCR](https://github.com/PennStateWilkes-Barre/AFCT-Dashboard/actions/workflows/publish-ghcr.yml/badge.svg)](https://github.com/PennStateWilkes-Barre/AFCT-Dashboard/actions/workflows/publish-ghcr.yml)
 
 ---
 
@@ -57,10 +61,11 @@ npm run docker:clean        # Prune unused Docker data
 
 This repo builds and publishes a Docker image automatically using **GitHub Actions** whenever we maerge to `main`.
 
-- **Workflow:** [Docker build workflow](./.github/workflows/docker.yml)
-- **Dockerfile:** [Dockerfile](./Dockerfile)
+- **Workflow:** [Docker build workflow](./.github/workflows/publish-ghcr.yml)
+- **Dockerfile Production:** [Dockerfile](./Dockerfile)
+- **Dockerfile Dev:** [Dockerfile](./docker-compose.dev.yml)
 
-#### Published images (GHCR)
+#### Published Images (GHCR)
 
 - Stable tag (latest from `main`):
   - `ghcr.io/pennstatewilkes-barre/afct-dashboard:main`
@@ -302,12 +307,13 @@ docker system prune -af   # Hard reset
 
 ## 📚 Tech Stack
 
+- **Runtime**: Node.js 20+  
 - **Framework**: Next.js 15 (App Router)  
 - **DB**: PostgreSQL 15 + Prisma ORM  
-- **UI**: Tailwind CSS, Radix UI  
-- **Auth**: NextAuth.js v5  
-- **Lang**: TypeScript  
-- **Containers**: Docker + Compose  
+- **UI**: Tailwind CSS 4 + Radix UI  
+- **Auth**: Auth.js (NextAuth v5 beta)  
+- **Lang**: TypeScript 5.6  
+- **Containers**: Docker + Compose
 
 ---
 
