@@ -6,19 +6,23 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('Starting database seeding...');
 
-  // 🚦 Skip seeding if users already exist
-  const existingUsers = await prisma.user.count();
-  if (existingUsers > 0) {
-    console.log(`Database already has ${existingUsers} users. Skipping seed.`);
-    return;
-  }
-
   const isProduction = process.env.NODE_ENV === 'production';
 
   // ===========================
-  // Production seeding (admin only)
+  // Production seeding (admin only, first setup)
   // ===========================
   if (isProduction) {
+    // "First time" = no ADMIN exists yet (NOT "no users exist")
+    const existingAdmin = await prisma.user.findFirst({
+      where: { role: 'ADMIN' },
+      select: { id: true },
+    });
+
+    if (existingAdmin) {
+      console.log('Admin already exists. Skipping production admin bootstrap.');
+      return;
+    }
+
     const adminEmail =
       process.env.DEFAULT_ADMIN_EMAIL ||
       process.env.ADMIN_EMAIL ||
@@ -31,9 +35,12 @@ async function main() {
     const adminLastName = process.env.DEFAULT_ADMIN_LAST_NAME || 'User';
 
     const prodHashed = await bcrypt.hash(adminPassword, 10);
+
     await prisma.user.upsert({
       where: { email: adminEmail },
-      update: {},
+      // If the email already exists (e.g., a student registered first),
+      // elevate it to ADMIN for initial setup.
+      update: { role: 'ADMIN' },
       create: {
         email: adminEmail,
         firstName: adminFirstName,
@@ -44,11 +51,17 @@ async function main() {
     });
 
     console.log(
-      `Production seed complete: created/ensured admin user (${adminEmail})`,
+      `Production seed complete: created/ensured initial admin user (${adminEmail})`,
     );
     return;
   }
 
+  // 🚦 Skip seeding in development if users already exist
+  const existingUsers = await prisma.user.count();
+  if (existingUsers > 0) {
+    console.log(`Database already has ${existingUsers} users. Skipping seed.`);
+    return;
+  }
   // Hash password for all users
   const hashedPassword = await bcrypt.hash('password123', 10);
 
