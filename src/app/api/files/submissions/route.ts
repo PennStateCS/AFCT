@@ -24,6 +24,20 @@ export async function GET(request: NextRequest){
 			return NextResponse.json({ error: 'File at ' + filePath + ' does not exist' }, { status: 404 });
 		}
 
+		if (user.role === "STUDENT"){
+			const sub = await prisma.submission.findFirst({
+				where: {
+					fileName: fileName,
+				},
+				select: {
+					studentId: true,
+				},
+			});
+			if (sub?.studentId != user.id){
+				return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+			}	
+		}
+
 		const buffer = fs.readFileSync(filePath);
 		
 		const headers = new Headers();
