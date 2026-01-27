@@ -56,6 +56,9 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/next.config.ts ./next.config.ts
 COPY --from=builder /app/scripts ./scripts
 
+# Create private folder (sibling to public) and ensure it is writable
+RUN mkdir -p /app/private && chmod 775 /app/private
+
 # Copy jars directory from builder into runtime image (builder ensures dir exists)
 COPY --from=builder /app/jars /app/jars
 RUN chmod -R 755 /app/jars || true && chmod +x /app/jars/*.jar || true

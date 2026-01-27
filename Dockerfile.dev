@@ -10,6 +10,9 @@ ENV PATH="/app/bin:${PATH}"
 USER node
 WORKDIR /app
 
+# Create private folder (sibling to public) and ensure it is writable
+RUN mkdir -p /app/private
+
 COPY --chown=node:node package.json package-lock.json ./
 RUN --mount=type=cache,id=npm-cache-node20,target=/home/node/.npm,uid=1000,gid=1000 \
     npm ci --prefer-offline --no-audit --progress=false
