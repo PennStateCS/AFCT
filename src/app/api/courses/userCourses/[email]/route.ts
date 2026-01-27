@@ -32,8 +32,9 @@ export async function GET(req: Request, context: { params: Promise<{ email: stri
             // Use the userId instead of the user's email
             // This stops a user from determining what courses a different user is in.
             // This could be done by giving an email not associated with the account of the user that made the request.
-            // Using the userId instead bypasses this, without requiring an extra DB query or any
-            //    email based joins (which would be slow as the Roster dos not have an index on user emails, but does on userIds
+            // Using the userId instead bypasses this, without requiring an extra DB query.
+            // This also removes the email based join (which is slow as the Roster does not have
+            //    an index on user emails, but does have an index on userIds).
             userId: decoded.userId,
           }
         },
