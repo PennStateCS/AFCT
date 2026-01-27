@@ -1,7 +1,6 @@
 // /src/app/api/assignments/[id]/problems/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { ProblemTypeEnum } from '@/schemas/problem';
 import { z } from 'zod';
@@ -25,18 +24,13 @@ interface AssignmentProblemResult {
   submissions: { id: string }[];
 }
 
-export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, context: { params: Promise<{ id: string, email: string }> }) {
   // Await params if it is a Promise (some environments do this)
   const params = await context.params;
   const assignmentId = params?.id;
+  const userEmail = params?.email;
 
   try {
-    // ---- Auth ----
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     // ---- Assignment lookup ----
     const assignment = await prisma.assignment.findUnique({
       where: { id: assignmentId },
@@ -47,11 +41,19 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 
-    // ---- UserId from session ----
-    const userId = session.user.id;
-    if (!userId) {
-      return NextResponse.json({ error: 'Invalid session payload' }, { status: 401 });
+    if (!userEmail) {
+      return NextResponse.json({ error: 'Missing email parameter' }, { status: 400 });
     }
+
+    // ---- Resolve user id from email param ----
+    const userRecord = await prisma.user.findUnique({
+      where: { email: userEmail },
+      select: { id: true },
+    });
+    if (!userRecord) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+    const userId = userRecord.id;
 
     // ---- Enrollment check (any role) ----
     const courseId = assignment.courseId;
