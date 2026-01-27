@@ -1,7 +1,7 @@
 // /src/app/api/assignments/[id]/problems/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { auth } from '@/lib/auth';
+import { verifyToken, JwtPayload } from '@/app/utils/jwt';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { ProblemTypeEnum } from '@/schemas/problem';
 import { z } from 'zod';
@@ -30,13 +30,21 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
   const params = await context.params;
   const assignmentId = params?.id;
 
-  try {
-    // ---- Auth ----
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+  // 1. Validate courseId
+  if (!assignmentId) {
+    return NextResponse.json({ error: 'Missing course ID' }, { status: 400 });
+  }
 
+  // 2. Extract and verify token
+  const authHeader = req.headers.get('authorization');
+  const token = authHeader?.split(' ')[1];
+  const decoded: JwtPayload | null = token ? verifyToken(token) : null;
+
+  if (!decoded) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  try {
     // ---- Assignment lookup ----
     const assignment = await prisma.assignment.findUnique({
       where: { id: assignmentId },
@@ -47,11 +55,8 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 
-    // ---- UserId from session ----
-    const userId = session.user.id;
-    if (!userId) {
-      return NextResponse.json({ error: 'Invalid session payload' }, { status: 401 });
-    }
+    // ---- UserId from token ----
+    const userId = decoded.userId;
 
     // ---- Enrollment check (any role) ----
     const courseId = assignment.courseId;
