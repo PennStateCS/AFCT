@@ -53,6 +53,32 @@ npm run docker:down         # Stop containers
 npm run docker:clean        # Prune unused Docker data
 ```
 
+### Docker Image (GHCR) + CI Build Records
+
+This repo builds and publishes a Docker image automatically using **GitHub Actions** whenever we maerge to `main`.
+
+- **Workflow:** [Docker build workflow](./.github/workflows/docker.yml)
+- **Dockerfile:** [Dockerfile](./Dockerfile)
+
+#### Published images (GHCR)
+
+- Stable tag (latest from `main`):
+  - `ghcr.io/pennstatewilkes-barre/afct-dashboard:main`
+
+- Immutable tag (specific commit build):
+  - `ghcr.io/pennstatewilkes-barre/afct-dashboard:sha-<commit_sha>`
+
+#### Build record archive (Docker Desktop)
+
+Each workflow run uploads a **Docker build record archive** (`*.dockerbuild`) you can import into Docker Desktop:
+
+1. Go to the workflow run in GitHub Actions
+2. Download the `*.dockerbuild` artifact (example: `PennStateWilkes-Barre~AFCT-Dashboard~SQD53D.dockerbuild`)
+3. In Docker Desktop → **Builds** → **Import**, select the downloaded file
+
+Build records include timing, dependencies, logs, traces, and more.
+
+
 ### Reset Options
 ```bash
 npm run docker:down:volumes # Stop + remove database volume (reset data)
