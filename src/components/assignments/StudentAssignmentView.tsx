@@ -591,7 +591,7 @@ export default function StudentAssignmentPage() {
                           {problemComments.length > 0 && (
                             <div className="space-y-3 mb-4">
                               {problemComments.map((comment) => (
-                                <div key={comment.id} className="bg-gray-50 rounded-lg p-3">
+                                <div key={comment.id} className="bg-card border rounded-lg p-3">
                                   <div className="flex justify-between items-start mb-2">
                                     <div className="flex items-center gap-2">
                                       <span className="font-medium text-sm">{comment.authorName}</span>
