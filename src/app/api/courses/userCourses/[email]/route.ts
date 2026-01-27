@@ -23,24 +23,6 @@ export async function GET(req: Request, context: { params: Promise<{ email: stri
   }
 
   try {
-    // Fetch the user's email
-    // const user = await prisma.user.findUnique({ where: { id: decoded.userId } });
-    // if (!user) {
-    //   return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    // }
-    // const actualEmail2 = user.email;
-    //
-    // const actualEmail = await prisma.user.findUnique({
-    //   where: { id: decoded.userId },
-    //   select: { email: true },
-    // });
-    //
-    // if (!actualEmail) {
-    //   return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    // }
-
-    // Determine if the email matches the authenticated account
-
     // Find courses where the user is enrolled in
     const courses = await prisma.course.findMany({
       // Find where user's email (unique identifier) matches
