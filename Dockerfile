@@ -56,7 +56,14 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/next.config.ts ./next.config.ts
 COPY --from=builder /app/scripts ./scripts
 
+CMD ["whoami"]
+
 # Create private folder (sibling to public) and ensure it is writable
+USER root
+RUN mkdir -p /private/
+RUN chown node:node /private/
+USER node
+
 RUN mkdir -p /private/uploads && chmod 775 /private/uploads
 RUN mkdir -p /private/uploads/pfps && chmod 775 /private/uploads/pfps
 RUN mkdir -p /private/uploads/problems && chmod 775 /private/uploads/problems
