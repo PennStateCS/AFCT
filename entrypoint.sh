@@ -32,6 +32,12 @@ DB_PORT="${DB_PORT:-5432}"
 DB_USER="${DB_USER:-afct_user}"
 DB_NAME="${DB_NAME:-afct}"
 
+# Ensure private upload dirs exist (safe + idempotent)
+mkdir -p /private/uploads/pfps \
+         /private/uploads/problems \
+         /private/uploads/solutions \
+         /private/uploads/submissions || true
+
 if [ "$WAIT_FOR_DB" = "true" ]; then
   echo "→ Waiting for database to be reachable (timeout: ${DB_WAIT_SECONDS}s)..."
   i=0

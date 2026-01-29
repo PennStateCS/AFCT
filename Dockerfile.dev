@@ -1,47 +1,52 @@
 # syntax=docker/dockerfile:1.7
 FROM node:20-alpine
 
-RUN apk add --no-cache libc6-compat openssl python3 make g++ git openjdk21-jre tini
+RUN apk add --no-cache \
+    libc6-compat \
+    openssl \
+    python3 \
+    make \
+    g++ \
+    git \
+    openjdk21-jre \
+    tini
 
 ENV NODE_ENV=development
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PATH="/app/bin:${PATH}"
 
-USER node
 WORKDIR /app
+USER node
 
-# Create private folder (sibling to public) and ensure it is writable
-RUN mkdir -p /private/uploads && chmod 775 /private/uploads
-RUN mkdir -p /private/uploads/pfps && chmod 775 /private/uploads/pfps
-RUN mkdir -p /private/uploads/problems && chmod 775 /private/uploads/problems
-RUN mkdir -p /private/uploads/solutions && chmod 775 /private/uploads/solutions
-RUN mkdir -p /private/uploads/submissions && chmod 775 /private/uploads/submissions
+# ---- PRIVATE UPLOAD STORAGE (DEV) ----
+RUN mkdir -p /private/uploads/{pfps,problems,solutions,submissions} && \
+    chmod -R 775 /private/uploads
 
+# Dependencies
 COPY --chown=node:node package.json package-lock.json ./
 RUN --mount=type=cache,id=npm-cache-node20,target=/home/node/.npm,uid=1000,gid=1000 \
     npm ci --prefer-offline --no-audit --progress=false
 
+# Tooling
 COPY --chown=node:node jars /app/jars
 COPY --chown=node:node bin  /app/bin
 RUN if [ -f /app/bin/cfganalyzer ]; then chmod +x /app/bin/cfganalyzer; fi
 
+# App source
 COPY --chown=node:node . .
+
+# Prisma (non-fatal for dev)
 RUN --mount=type=cache,id=prisma-cache-node20,target=/home/node/.cache/prisma,uid=1000,gid=1000 \
     npx prisma generate || true
 
-# Handles Prisma Studio
-# Expose the default Prisma Studio port
-EXPOSE 5555
-
-# Command to run Prisma Studio
-CMD ["npx", "prisma", "studio"]
-
 RUN java -version || true
 
-# add entrypoint AFTER files are copied
+# Entrypoint
 COPY --chown=node:node entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 EXPOSE 3000
+EXPOSE 5555
+
 ENTRYPOINT ["/sbin/tini","-g","--","/usr/local/bin/entrypoint.sh"]
-# no CMD here; compose supplies it
+# CMD supplied by docker-compose
