@@ -1,95 +1,88 @@
+# ----------------------------
+# Builder
+# ----------------------------
 FROM node:20-alpine AS builder
 WORKDIR /app
 
 ENV DISABLE_ERD=true
 ENV SKIP_PRISMA_GENERATE=1
+ENV NEXTJS_IGNORE_ESLINT=1
 
 # Install Java (OpenJDK) for running .jar files during build if needed
 RUN apk add --no-cache openjdk21-jre
-
-# Ensure Next.js ignores ESLint during production build (mirrors next.config setting)
-ENV NEXTJS_IGNORE_ESLINT=1
 
 # Install all dependencies (including dev) for the build step
 COPY package*.json ./
 RUN npm ci
 
-# Copy sources and generate Prisma client
+# Copy sources
 COPY . .
-RUN mkdir -p /app/bin /app/jars || true
-# RUN npm run db:erd
 
-# Build the Next.js app (requires devDependencies like Tailwind plugins)
+RUN mkdir -p /app/bin /app/jars || true
+
+# Generate Prisma client + build
 RUN npx prisma generate
 RUN npm run build
 
 
+# ----------------------------
+# Runtime
+# ----------------------------
 FROM node:20-alpine AS runtime
 WORKDIR /app
 
-# Install Java runtime, curl, and tools needed by entrypoint.sh (pg_isready + nc)
+# Install runtime tools
 RUN apk add --no-cache \
     openjdk21-jre \
     curl \
     postgresql-client \
     netcat-openbsd
 
-# Optional: keep npm cache writable for non-root user
 ENV NPM_CONFIG_CACHE=/tmp/.npm
 
 COPY package*.json ./
 
-# Ensure Prisma schema exists before postinstall so prisma generate can run if needed
+# Prisma schema + production deps
 COPY --from=builder /app/prisma ./prisma
-
-# Install only production dependencies for smaller runtime image
-# NOTE: prisma CLI must be in "dependencies" (not devDependencies) for npx prisma to work reliably
 RUN npm ci --omit=dev
 
-# Copy generated Prisma client artifacts into runtime image to ensure @prisma/client is available
+# Prisma client artifacts
 COPY --from=builder /app/node_modules/@prisma /app/node_modules/@prisma
 COPY --from=builder /app/node_modules/.prisma /app/node_modules/.prisma
 
-# Copy build output and static assets from the builder stage
+# App build + assets
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/next.config.ts ./next.config.ts
 COPY --from=builder /app/scripts ./scripts
 
-# Create private folder (sibling to public) and ensure it is writable
-RUN mkdir -p /private/uploads && chmod 775 /private/uploads
-RUN mkdir -p /private/uploads/pfps && chmod 775 /private/uploads/pfps
-RUN mkdir -p /private/uploads/problems && chmod 775 /private/uploads/problems
-RUN mkdir -p /private/uploads/solutions && chmod 775 /private/uploads/solutions
-RUN mkdir -p /private/uploads/submissions && chmod 775 /private/uploads/submissions
-
-# Copy jars directory from builder into runtime image (builder ensures dir exists)
+# Jars + bin
 COPY --from=builder /app/jars /app/jars
 RUN chmod -R 755 /app/jars || true && chmod +x /app/jars/*.jar || true
 
-# Copy bin directory from builder (may be empty) and ensure permissions
 COPY --from=builder /app/bin /app/bin
 RUN mkdir -p /app/bin && chmod -R 755 /app/bin || true
 
-# Verify Java (non-fatal)
-RUN java -version || true
-
-# Copy entrypoint script into runtime image and ensure it is executable
+# Entrypoint
 COPY --from=builder /app/entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 
-# Create non-root user for security
+# Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nextjs -u 1001
+    adduser  -S nextjs -u 1001 -G nodejs
 
-# Change ownership of app directory
+# ---- PRIVATE UPLOAD STORAGE (NOT SERVED BY NEXT.JS) ----
+RUN mkdir -p /private/uploads/{pfps,problems,solutions,submissions} && \
+    chown -R nextjs:nodejs /private/uploads && \
+    chmod -R 775 /private/uploads
+
+# App ownership
 RUN chown -R nextjs:nodejs /app
-USER nextjs
 
+RUN java -version || true
+
+USER nextjs
 EXPOSE 3000
 
-# Run entrypoint first (wait for DB, migrations, etc.)
 ENTRYPOINT ["./entrypoint.sh"]
-
-# Then start the Next.js server
 CMD ["npm", "start"]
