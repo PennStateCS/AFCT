@@ -28,7 +28,7 @@ export async function GET(request: NextRequest){
 		
 		const fileType = fileName.split('.').at(-1);
 
-		if (!['png', 'jpg', 'avif', 'webp'].includes(fileType)){ //Check and see if this is a supported format
+		if (!fileType || !['png', 'jpg', 'avif', 'webp'].includes(fileType)){ //Check and see if this is a supported format
 			return NextResponse.json({ error: 'Unsupported file format' }, { status: 400 });
 		} 
 		const headers = new Headers();
