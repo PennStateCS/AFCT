@@ -31,11 +31,16 @@ services:
       # App source (hot reload)
       - .:/app
 
+      # Keep container-installed node_modules (avoid host override)
+      - /app/node_modules
+
       # Same private uploads path as prod
       - ./dev-uploads:/private/uploads
 
     depends_on:
       - postgres
+
+    command: ["npm", "run", "dev"]
 
   postgres:
     image: postgres:15-alpine
