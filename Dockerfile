@@ -4,6 +4,7 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
+# Set environment variables for build
 ENV DISABLE_ERD=true
 ENV SKIP_PRISMA_GENERATE=1
 ENV NEXTJS_IGNORE_ESLINT=1
@@ -38,8 +39,10 @@ RUN apk add --no-cache \
     postgresql-client \
     netcat-openbsd
 
+# Set npm cache directory
 ENV NPM_CONFIG_CACHE=/tmp/.npm
 
+# App dependencies
 COPY package*.json ./
 
 # Prisma schema + production deps
@@ -71,7 +74,7 @@ RUN chmod +x ./entrypoint.sh
 RUN addgroup -g 1001 -S nodejs && \
     adduser  -S nextjs -u 1001 -G nodejs
 
-# ---- PRIVATE UPLOAD STORAGE (NOT SERVED BY NEXT.JS) ----
+# Private upload directories
 RUN mkdir -p /private/uploads/{pfps,problems,solutions,submissions} && \
     chown -R nextjs:nodejs /private/uploads && \
     chmod -R 775 /private/uploads
@@ -79,8 +82,10 @@ RUN mkdir -p /private/uploads/{pfps,problems,solutions,submissions} && \
 # App ownership
 RUN chown -R nextjs:nodejs /app
 
+# Verify Java installation
 RUN java -version || true
 
+# Switch to non-root user
 USER nextjs
 EXPOSE 3000
 
