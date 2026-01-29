@@ -17,11 +17,19 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PATH="/app/bin:${PATH}"
 
 WORKDIR /app
-USER node
+
+# Ensure app directory is writable by node user
+RUN chown -R node:node /app
 
 # Private upload directories
-RUN mkdir -p /private/uploads/{pfps,problems,solutions,submissions} && \
-    chmod -R 775 /private/uploads
+RUN mkdir -p /private/uploads/pfps \
+    /private/uploads/problems \
+    /private/uploads/solutions \
+    /private/uploads/submissions && \
+    chmod -R 775 /private/uploads && \
+    chown -R node:node /private/uploads
+
+USER node
 
 # Dependencies
 COPY --chown=node:node package.json package-lock.json ./
