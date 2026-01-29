@@ -75,7 +75,10 @@ RUN addgroup -g 1001 -S nodejs && \
     adduser  -S nextjs -u 1001 -G nodejs
 
 # Private upload directories
-RUN mkdir -p /private/uploads/{pfps,problems,solutions,submissions} && \
+RUN mkdir -p /private/uploads/pfps \
+    /private/uploads/problems \
+    /private/uploads/solutions \
+    /private/uploads/submissions && \
     chown -R nextjs:nodejs /private/uploads && \
     chmod -R 775 /private/uploads
 
