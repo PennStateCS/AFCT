@@ -11,6 +11,7 @@ RUN apk add --no-cache \
     openjdk21-jre \
     tini
 
+# Environment variables
 ENV NODE_ENV=development
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PATH="/app/bin:${PATH}"
@@ -18,7 +19,7 @@ ENV PATH="/app/bin:${PATH}"
 WORKDIR /app
 USER node
 
-# ---- PRIVATE UPLOAD STORAGE (DEV) ----
+# Private upload directories
 RUN mkdir -p /private/uploads/{pfps,problems,solutions,submissions} && \
     chmod -R 775 /private/uploads
 
@@ -39,6 +40,7 @@ COPY --chown=node:node . .
 RUN --mount=type=cache,id=prisma-cache-node20,target=/home/node/.cache/prisma,uid=1000,gid=1000 \
     npx prisma generate || true
 
+# Verify Java installation
 RUN java -version || true
 
 # Entrypoint
