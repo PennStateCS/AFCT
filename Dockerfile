@@ -1,7 +1,7 @@
 # ----------------------------
 # Builder
 # ----------------------------
-FROM node:20-alpine AS builder
+FROM node:20-bullseye-slim AS builder
 WORKDIR /app
 
 # Set environment variables for build
@@ -9,8 +9,16 @@ ENV DISABLE_ERD=true
 ENV SKIP_PRISMA_GENERATE=1
 ENV NEXTJS_IGNORE_ESLINT=1
 
-# Install Java (OpenJDK) for running .jar files during build if needed
-RUN apk add --no-cache openjdk21-jre
+# Install build tools + Java (OpenJDK) for running .jar files during build if needed
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssl \
+    python3 \
+    make \
+    g++ \
+    git \
+    openjdk-17-jre-headless \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install all dependencies (including dev) for the build step
 COPY package*.json ./
@@ -29,15 +37,18 @@ RUN npm run build
 # ----------------------------
 # Runtime
 # ----------------------------
-FROM node:20-alpine AS runtime
+FROM node:20-bullseye-slim AS runtime
 WORKDIR /app
 
 # Install runtime tools
-RUN apk add --no-cache \
-    openjdk21-jre \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openjdk-17-jre-headless \
     curl \
     postgresql-client \
-    netcat-openbsd
+    netcat-openbsd \
+    tini \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set npm cache directory
 ENV NPM_CONFIG_CACHE=/tmp/.npm
@@ -92,5 +103,5 @@ RUN java -version || true
 USER nextjs
 EXPOSE 3000
 
-ENTRYPOINT ["./entrypoint.sh"]
+ENTRYPOINT ["/usr/bin/tini","-g","--","./entrypoint.sh"]
 CMD ["npm", "start"]
