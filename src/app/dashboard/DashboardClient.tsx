@@ -1,6 +1,5 @@
 'use client';
 
-import { format } from 'date-fns';
 import Link from 'next/link';
 
 import type { Course, User } from '@prisma/client';
@@ -23,6 +22,26 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
   const { role } = sessionUser;
   const isPrivileged = role === 'ADMIN' || role === 'FACULTY' || role === 'TA';
   const now = new Date();
+
+  const formatDateTime = (value: Date) => {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'UTC',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }).formatToParts(value);
+    const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    const month = lookup.month ?? '';
+    const day = lookup.day ?? '';
+    const year = lookup.year ?? '';
+    const hour = lookup.hour ?? '';
+    const minute = lookup.minute ?? '';
+    const dayPeriod = lookup.dayPeriod ?? '';
+    return `${month}/${day}/${year} ${hour}:${minute} ${dayPeriod}`.trim();
+  };
 
   const visibleCourses =
     role === 'STUDENT' ? courses.filter((course) => course.isPublished) : courses;
@@ -99,8 +118,8 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
                         </div>
                         <div>
                           <span className="font-semibold">Dates:</span>{' '}
-                          {format(new Date(course.startDate), 'M/d/yyyy p')} to{' '}
-                          {format(new Date(course.endDate), 'M/d/yyyy p')}
+                          {formatDateTime(new Date(course.startDate))} to{' '}
+                          {formatDateTime(new Date(course.endDate))}
                         </div>
                       </div>
                     </div>
