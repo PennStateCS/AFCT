@@ -1,42 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
-
-const COMMON_TIMEZONES = [
-  'UTC',
-  'America/New_York',
-  'America/Chicago',
-  'America/Denver',
-  'America/Los_Angeles',
-  'America/Phoenix',
-  'America/Anchorage',
-  'Pacific/Honolulu',
-  'Europe/London',
-  'Europe/Paris',
-  'Europe/Berlin',
-  'Europe/Madrid',
-  'Europe/Rome',
-  'Europe/Amsterdam',
-  'Europe/Zurich',
-  'Europe/Stockholm',
-  'Europe/Warsaw',
-  'Europe/Athens',
-  'Africa/Cairo',
-  'Africa/Johannesburg',
-  'Asia/Jerusalem',
-  'Asia/Dubai',
-  'Asia/Kolkata',
-  'Asia/Bangkok',
-  'Asia/Singapore',
-  'Asia/Hong_Kong',
-  'Asia/Shanghai',
-  'Asia/Tokyo',
-  'Asia/Seoul',
-  'Australia/Sydney',
-  'Australia/Melbourne',
-  'Australia/Perth',
-  'Pacific/Auckland',
-];
+import { COMMON_TIMEZONES } from '@/lib/timezones';
 
 export async function GET() {
   const session = await auth();

@@ -3,7 +3,6 @@
 import { ColumnDef } from '@tanstack/react-table';
 import { roleSortingFn } from '@/lib/roles';
 import { useState } from 'react';
-import { format } from 'date-fns';
 import { User } from '@prisma/client';
 
 import { Button } from '@/components/ui/button';
@@ -14,6 +13,7 @@ import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { showToast } from '@/lib/toast';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Pencil, Trash2, Lock, User2, ChevronDown } from 'lucide-react';
+import { formatDateTimeInTimeZone } from '@/lib/date';
 
 import {
   DropdownMenu,
@@ -24,7 +24,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 
-export function getUserColumns(onUserUpdate: () => void): ColumnDef<User>[] {
+export function getUserColumns(onUserUpdate: () => void, timeZone: string): ColumnDef<User>[] {
   return [
     {
       id: 'avatar',
@@ -90,8 +90,7 @@ export function getUserColumns(onUserUpdate: () => void): ColumnDef<User>[] {
       header: 'Created At',
       meta: { priority: 4 },
       cell: ({ row }) => {
-        const date = new Date(row.original.createdAt);
-        return format(date, "M/d/yyyy 'at' p");
+        return formatDateTimeInTimeZone(row.original.createdAt, timeZone);
       },
     },
     {

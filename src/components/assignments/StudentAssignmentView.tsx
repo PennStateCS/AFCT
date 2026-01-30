@@ -13,6 +13,8 @@ import { showToast } from '@/lib/toast';
 import { ArrowLeft, Clock, BookOpen, Target, FileText, Trophy, MessageSquare, Send, Eye, EyeOff, Download } from 'lucide-react';
 import { Badge as RoleBadge } from '@/components/ui/RoleBadge';
 import JffViewerDialog from '@/components/JffViewerDialog';
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import { formatDateInTimeZone, formatTimeInTimeZone, formatDateTimeInTimeZone } from '@/lib/date';
 
 type AssignmentProblem = {
   problem: Problem;
@@ -57,6 +59,7 @@ export default function StudentAssignmentPage() {
   const [newComment, setNewComment] = useState<Record<string, string>>({});
   const [submittingComment, setSubmittingComment] = useState<Record<string, boolean>>({});
   const [expandedProblems, setExpandedProblems] = useState<Record<string, boolean>>({});
+  const { timezone } = useEffectiveTimezone();
 
   const isStudent = session?.user?.role === 'STUDENT';
 
@@ -332,13 +335,10 @@ export default function StudentAssignmentPage() {
               <div className="flex-1">
                 <p className="text-sm font-medium text-muted-foreground mb-1">Due Date</p>
                 <p className={`text-lg font-bold ${isOverdue ? 'text-red-600' : 'text-foreground'}`}>
-                  {dueDate.toLocaleDateString()}
+                  {formatDateInTimeZone(dueDate, timezone)}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  {dueDate.toLocaleTimeString([], { 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                  })}
+                  {formatTimeInTimeZone(dueDate, timezone)}
                 </p>
                 {isOverdue && (
                   <p className="text-xs text-red-600 font-medium mt-1">Overdue</p>
@@ -516,7 +516,7 @@ export default function StudentAssignmentPage() {
                                   {problemSubmissions.map((submission) => (
                                     <TableRow key={submission.id}>
                                       <TableCell>
-                                        {new Date(submission.submittedAt).toLocaleString()}
+                                        {formatDateTimeInTimeZone(submission.submittedAt, timezone)}
                                       </TableCell>
                                       <TableCell>
                                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -598,7 +598,7 @@ export default function StudentAssignmentPage() {
                                       <RoleBadge role={comment.authorRole} />
                                     </div>
                                     <span className="text-xs text-muted-foreground">
-                                      {new Date(comment.createdAt).toLocaleString()}
+                                      {formatDateTimeInTimeZone(comment.createdAt, timezone)}
                                     </span>
                                   </div>
                                   <p className="text-sm">{comment.content}</p>

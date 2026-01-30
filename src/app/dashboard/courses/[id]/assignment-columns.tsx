@@ -6,9 +6,9 @@ import { Assignment } from '@prisma/client';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { NotebookText, Pencil, Trash2, ChevronDown, BookOpen } from 'lucide-react';
-import { format } from 'date-fns';
 import Link from 'next/link';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
+import { formatDateTimeInTimeZone } from '@/lib/date';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -82,6 +82,7 @@ export function useAssignmentColumns(
   handleAssignmentDeleteClick: (id: string) => void,
   handleAssignmentEditClick: (assignment: Assignment) => void,
   handlePublishToggle: (assignmentId: string, newValue: boolean) => void,
+  timeZone: string,
 ): ColumnDef<AssignmentWithProblemCount>[] {
   return [
     {
@@ -101,12 +102,12 @@ export function useAssignmentColumns(
     {
       accessorKey: 'dueDate',
       header: 'Due Date',
-      cell: ({ row }) => <div>{format(new Date(row.original.dueDate), "P 'at' p")}</div>,
+      cell: ({ row }) => <div>{formatDateTimeInTimeZone(row.original.dueDate, timeZone)}</div>,
     },
     {
       accessorKey: 'createdAt',
       header: 'Created At',
-      cell: ({ row }) => <div>{format(new Date(row.original.createdAt), "P 'at' p")}</div>,
+      cell: ({ row }) => <div>{formatDateTimeInTimeZone(row.original.createdAt, timeZone)}</div>,
     },
     {
       accessorKey: 'maxPoints',

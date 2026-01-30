@@ -19,11 +19,19 @@ function Calendar({
   buttonVariant = "ghost",
   formatters,
   components,
+  timeZone,
   ...props
 }: React.ComponentProps<typeof DayPicker> & {
   buttonVariant?: React.ComponentProps<typeof Button>["variant"]
+  timeZone?: string
 }) {
   const defaultClassNames = getDefaultClassNames()
+
+  const formatMonthLabel = (date: Date) =>
+    new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      timeZone,
+    }).format(date)
 
   return (
     <DayPicker
@@ -36,8 +44,7 @@ function Calendar({
       )}
       captionLayout={captionLayout}
       formatters={{
-        formatMonthDropdown: (date) =>
-          date.toLocaleString("default", { month: "short" }),
+        formatMonthDropdown: (date) => formatMonthLabel(date),
         ...formatters,
       }}
       classNames={{
@@ -155,7 +162,7 @@ function Calendar({
             <ChevronDownIcon className={cn("size-4", className)} {...props} />
           )
         },
-        DayButton: CalendarDayButton,
+        DayButton: (dayProps) => <CalendarDayButton {...dayProps} timeZone={timeZone} />,
         WeekNumber: ({ children, ...props }) => {
           return (
             <td {...props}>
@@ -176,8 +183,9 @@ function CalendarDayButton({
   className,
   day,
   modifiers,
+  timeZone,
   ...props
-}: React.ComponentProps<typeof DayButton>) {
+}: React.ComponentProps<typeof DayButton> & { timeZone?: string }) {
   const defaultClassNames = getDefaultClassNames()
 
   const ref = React.useRef<HTMLButtonElement>(null)
@@ -190,7 +198,12 @@ function CalendarDayButton({
       ref={ref}
       variant="ghost"
       size="icon"
-      data-day={day.date.toLocaleDateString()}
+      data-day={new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+      }).format(day.date)}
       data-selected-single={
         modifiers.selected &&
         !modifiers.range_start &&

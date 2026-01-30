@@ -29,6 +29,7 @@ export const UpdateProfileSchema = z.object({
     // Email is read-only in the dialog; we don't validate it here.
     avatarFile: ImageFileOptional, // Optional file upload
     deleteAvatar: z.boolean().default(false), // Checkbox to delete avatar
+  timezone: z.string().trim().optional(),
   })
   .strict();
 
