@@ -36,6 +36,7 @@
     "docker:dev:down": "npm run docker:down",
     "docker:dev:clean": "npm run docker:clean",
     "docker:dev:down:volumes": "npm run docker:down:volumes",
+    "docker:dev:emptydb": "docker exec -it afct-dev-postgres psql -U afct_user -d afct -c \"DO $$ DECLARE stmt text; BEGIN SELECT 'TRUNCATE TABLE ' || string_agg(format('%I.%I', schemaname, tablename), ', ') || ' RESTART IDENTITY CASCADE' INTO stmt FROM pg_tables WHERE schemaname = 'public'; IF stmt IS NOT NULL THEN EXECUTE stmt; END IF; END $$;\" && docker exec -it afct-dev npx prisma migrate deploy",
     "docker:dev:nuke": "npm run docker:nuke",
     "docker:dev:resetdb": "npm run docker:down:volumes",
     "docker:dev:studio": "npm run docker:studio",
