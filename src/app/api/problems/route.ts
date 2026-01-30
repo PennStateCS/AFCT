@@ -7,6 +7,7 @@ import path from 'path';
 import { auth } from '@/lib/auth';
 import { ProblemType } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { getSystemUploadLimit } from '@/lib/upload-limits';
 
 // POST /api/problems - Create a new problem with file upload
 export async function POST(req: Request) {
@@ -33,6 +34,14 @@ export async function POST(req: Request) {
     // Validate required fields
     if (!title || !file || !courseId || !type) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    const { maxBytes, maxMb } = await getSystemUploadLimit();
+    if (file.size > maxBytes) {
+      return NextResponse.json(
+        { error: `File exceeds max upload size (${maxMb} MB).` },
+        { status: 413 },
+      );
     }
 
     // Ensure upload directory exists

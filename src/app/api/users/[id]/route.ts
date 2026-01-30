@@ -8,6 +8,7 @@ import { Role } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { parseRole } from '@/lib/roles';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
+import { getSystemUploadLimit } from '@/lib/upload-limits';
 
 // PATCH: Update a user's profile
 export async function PATCH(req: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -60,6 +61,14 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     }
     if (timezoneRaw && !COMMON_TIMEZONES.includes(timezoneRaw)) {
       return NextResponse.json({ error: 'Invalid timezone' }, { status: 400 });
+    }
+
+    const { maxBytes, maxMb } = await getSystemUploadLimit();
+    if (avatarFile && avatarFile.size > 0 && avatarFile.size > maxBytes) {
+      return NextResponse.json(
+        { error: `File exceeds max upload size (${maxMb} MB).` },
+        { status: 413 },
+      );
     }
 
     // Parse/validate role using shared helper
