@@ -24,8 +24,8 @@ type SystemSettingsResponse = {
 export default function SystemSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [timezone, setTimezone] = useState('UTC');
-  const [maxUploadSizeMb, setMaxUploadSizeMb] = useState(25);
+  const [timezone, setTimezone] = useState('');
+  const [maxUploadSizeMb, setMaxUploadSizeMb] = useState<number | ''>('');
 
   useEffect(() => {
     const load = async () => {
@@ -54,12 +54,12 @@ export default function SystemSettingsPage() {
 
   const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!COMMON_TIMEZONES.includes(timezone)) {
+    if (!timezone || !COMMON_TIMEZONES.includes(timezone)) {
       showToast.error('Please select a valid timezone.');
       return;
     }
 
-    const clampedSize = Math.max(1, Math.min(1024, Math.trunc(maxUploadSizeMb || 0)));
+    const clampedSize = Math.max(1, Math.min(1024, Math.trunc(Number(maxUploadSizeMb) || 0)));
     setSaving(true);
     try {
       const res = await fetch('/api/system-settings', {
@@ -87,7 +87,7 @@ export default function SystemSettingsPage() {
           <div className="flex items-center gap-3">
             <CardTitle className="text-2xl">System Settings</CardTitle>
             <Badge variant="outline" className="bg-blue-50 text-blue-700">
-              Preview
+              Beta Feature
             </Badge>
           </div>
           <div className="text-sm text-muted-foreground">
@@ -106,9 +106,9 @@ export default function SystemSettingsPage() {
               <label className="pb-2 text-sm font-medium" htmlFor="timezone">
                 Timezone
               </label>
-              <Select value={timezone} onValueChange={(val) => setTimezone(val)} disabled={loading || saving}>
+              <Select value={loading ? '' : timezone} onValueChange={(val) => setTimezone(val)} disabled={loading || saving}>
                 <SelectTrigger className="w-full" id="timezone">
-                  <SelectValue placeholder="Select timezone" />
+                  <SelectValue placeholder={loading ? 'Loading timezone...' : 'Select timezone'} />
                 </SelectTrigger>
                 <SelectContent>
                   {timezoneOptions.map((option) => (
@@ -119,7 +119,7 @@ export default function SystemSettingsPage() {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                This will control how dates and times default across the dashboard.
+                This is the default timezone for the server. User-specific timezones can be set in their profile settings.
               </p>
             </div>
             <InputGroup
@@ -128,8 +128,8 @@ export default function SystemSettingsPage() {
               type="number"
               min={1}
               max={1024}
-              value={String(maxUploadSizeMb)}
-              setValue={(val) => setMaxUploadSizeMb(Number(val))}
+              value={maxUploadSizeMb === '' ? '' : String(maxUploadSizeMb)}
+              setValue={(val) => setMaxUploadSizeMb(val === '' ? '' : Number(val))}
               disabled={loading || saving}
               description="Applies to all uploads. Range: 1–1024 MB."
             />

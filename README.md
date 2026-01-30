@@ -18,9 +18,6 @@ Built with:
 ### Prerequisites
 - Docker Desktop (recommended)
 - Node.js 20+ (optional for non-Docker dev)
-- Git (for cloning the repo)
-- PostgreSQL 15+ (required for non-Docker dev)
-- Java 21+ (required for non-Docker dev)
 
 ### Development Setup
 
@@ -110,6 +107,7 @@ npm run docker:prod:seed
 ```bash
 npm install
 npm run build
+npm run db:generate
 npm run db:deploy
 npm start
 ```
@@ -118,12 +116,6 @@ Requires:
 - Node.js 20+
 - PostgreSQL 15+
 - Java 21+
-
-Required env vars:
-- DATABASE_URL
-- NEXTAUTH_URL
-- NEXTAUTH_SECRET
-- JWT_SECRET
 
 ## 🗄️ Database Management
 
