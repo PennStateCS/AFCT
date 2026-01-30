@@ -24,6 +24,7 @@ import bcrypt from 'bcrypt';
  * Skips execution if users already exist to avoid overwriting local changes.
  */
 export const runDevelopmentSeed = async (prisma: PrismaClient) => {
+  console.log('[seed] development: checking for existing users');
   // Skip seeding in development if users already exist.
   let existingUsers = 0;
   try {
@@ -45,6 +46,7 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
     return;
   }
 
+  console.log('[seed] development: hashing shared password');
   // Shared dev password for seeded users.
   const hashedPassword = await bcrypt.hash('password123', 10);
 
@@ -61,6 +63,8 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
     ...withRole(studentData, 'STUDENT' as Role),
   ];
 
+  console.log(`[seed] development: preparing ${userSeeds.length} users`);
+
   // Store created IDs back into the seed data arrays.
   const setPersonId = (list: Array<{ email: string; id?: string }>, email: string, id: string) => {
     const person = list.find((item) => item.email === email);
@@ -69,6 +73,7 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
     }
   };
 
+  console.log('[seed] development: creating users');
   // Insert users in bulk (safe to re-run thanks to skipDuplicates).
   await prisma.user.createMany({
     data: userSeeds.map((userSeed) => ({
@@ -82,6 +87,7 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
   });
 
   // Fetch back created users so we can capture their IDs.
+  console.log('[seed] development: fetching created users');
   const createdUsers = await prisma.user.findMany({
     where: { email: { in: userSeeds.map((seed) => seed.email) } },
   });
@@ -104,6 +110,7 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
     }
   }
 
+  console.log('[seed] development: computing term dates');
   // Determine the current academic term and generate rolling term assignments.
   const now = new Date();
   const currentTerm = getTermForDate(now);
@@ -121,6 +128,7 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
     return `${term.term} ${term.year}`;
   });
 
+  console.log(`[seed] development: upserting ${courseData.length} courses`);
   // Upsert courses and capture IDs back into seed data.
   const courses = await Promise.all(
     courseData.map((courseSeed, index) =>
@@ -155,6 +163,7 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
     courseData[index].id = course.id;
   });
 
+  console.log('[seed] development: preparing rosters');
   // Collect seeded users by role for roster assignment.
   const facultyUsers = facultyData.filter((faculty) => faculty.id) as Array<
     (typeof facultyData)[number] & { id: string }
@@ -164,6 +173,7 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
     (typeof studentData)[number] & { id: string }
   >;
 
+  console.log('[seed] development: assigning course rosters');
   // Randomly assign instructor/TA/students per course.
   await assignCourseRosters(
     prisma,
@@ -176,6 +186,7 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
     studentUsers,
   );
 
+  console.log('[seed] development: counting seeded records');
   // Report counts for quick verification in logs.
   await logSeedCounts(prisma);
 };
