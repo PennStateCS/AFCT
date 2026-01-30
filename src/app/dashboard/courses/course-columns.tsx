@@ -12,13 +12,13 @@ import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
 import { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Trash2, BookOpen, ChevronDown } from 'lucide-react';
-import { format } from 'date-fns';
 import Link from 'next/link';
 import { useState } from 'react';
 import { Course } from '@prisma/client';
 import { EditCourseDialog } from '@/components/dialogs/EditCourseDialog';
 import { getInstructors, formatInstructorNames } from '@/lib/course-utils';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
+import { formatDateTimeInTimeZone } from '@/lib/date';
 
 type CourseWithFaculty = Course & {
   // Enrolled list (user objects with courseRole and flags)
@@ -35,6 +35,7 @@ type CourseActionsCellProps = {
 export const columns = (
   onCourseUpdated: (updated: CourseWithFaculty) => void,
   onCourseDeleted: () => void,
+  timeZone: string,
 ): ColumnDef<CourseWithFaculty>[] => [
   {
     accessorKey: 'name',
@@ -80,8 +81,7 @@ export const columns = (
     meta: { priority: 4 },
     header: 'Start Date',
     cell: ({ row }) => {
-      const date = new Date(row.original.startDate);
-      return format(date, "M/d/yyyy");
+      return formatDateTimeInTimeZone(row.original.startDate, timeZone);
     },
   },
   {
@@ -89,8 +89,7 @@ export const columns = (
     meta: { priority: 4 },
     header: 'End Date',
     cell: ({ row }) => {
-      const date = new Date(row.original.endDate);
-      return format(date, "M/d/yyyy");
+      return formatDateTimeInTimeZone(row.original.endDate, timeZone);
     },
   },
   {

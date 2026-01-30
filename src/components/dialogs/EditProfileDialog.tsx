@@ -10,6 +10,13 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select';
 import { UploadCloud, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -19,6 +26,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 
 import type { User } from '@prisma/client';
 import { UpdateProfileSchema, type UpdateProfileRaw, type UpdateProfileInput } from '@/schemas/profile';
+import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
 
 type EditProfileDialog = {
   user: User;
@@ -32,12 +40,14 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
   const [avatarPreview, setAvatarPreview] = useState<string>(
     user.avatar ? `/uploads/pfps/${user.avatar}` : '/uploads/pfps/default-avatar.png',
   );
+  const [serverTimezone, setServerTimezone] = useState('UTC');
 
   // RHF defaults – email is read-only so it isn't in the schema
   const defaults: UpdateProfileRaw = useMemo(
     () => ({
       firstName: user.firstName ?? '',
       lastName: user.lastName ?? '',
+      timezone: user.timezone ?? '',
       avatarFile: undefined,
       deleteAvatar: false,
     }),
@@ -51,11 +61,12 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
     reset,
     watch,
     setValue,
+    getValues,
     formState: { errors, isSubmitting, isValid, isDirty },
   } = useForm<UpdateProfileRaw>({
     resolver: zodResolver(UpdateProfileSchema),
     defaultValues: defaults,
-    mode: 'onBlur',
+    mode: 'onChange',
     reValidateMode: 'onChange',
   });
 
@@ -79,6 +90,44 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
       });
     }
   }, [open, defaults, reset, user.avatar]);
+
+  useEffect(() => {
+    if (!open) return;
+    const loadServerTimezone = async () => {
+      try {
+        const res = await fetch('/api/system-settings/public', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        const tz = String(data?.timezone ?? 'UTC');
+        setServerTimezone(tz);
+        const current = getValues('timezone');
+        if (!current) {
+          setValue('timezone', tz, { shouldDirty: false });
+        }
+      } catch {
+        // ignore
+      }
+    };
+    loadServerTimezone();
+  }, [open, getValues, setValue]);
+
+  useEffect(() => {
+    if (!open) return;
+    const loadUserTimezone = async () => {
+      try {
+        const res = await fetch('/api/profile', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        const tz = String(data?.timezone ?? '');
+        if (tz) {
+          setValue('timezone', tz, { shouldDirty: false });
+        }
+      } catch {
+        // ignore
+      }
+    };
+    loadUserTimezone();
+  }, [open, setValue]);
 
   // Avatar error message extraction
   const avatarFileErrorMessage = (() => {
@@ -130,6 +179,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
     formData.append('lastName', parsed.lastName);
     if (parsed.avatarFile) formData.append('avatar', parsed.avatarFile);
     if (parsed.deleteAvatar) formData.append('deleteAvatar', 'true');
+    if (parsed.timezone) formData.append('timezone', parsed.timezone);
 
     try {
       // Post new profile data to database
@@ -141,6 +191,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
         firstName: parsed.firstName,
         lastName: parsed.lastName,
         avatar: parsed.deleteAvatar ? null : user.avatar,
+        timezone: parsed.timezone || undefined,
       });
       
       toast.success('Profile updated!');
@@ -247,6 +298,31 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
                 fieldProps={field}
                 error={errors.lastName?.message}
               />
+            )}
+          />
+
+          {/* Timezone */}
+          <Controller
+            name="timezone"
+            control={control}
+            render={({ field }) => (
+              <div className="flex flex-col">
+                <label className="pb-2 text-sm font-medium" htmlFor="timezone">
+                  Timezone
+                </label>
+                <Select value={field.value || serverTimezone} onValueChange={(v) => field.onChange(v)}>
+                  <SelectTrigger className="w-full" id="timezone">
+                    <SelectValue placeholder="Select timezone" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {COMMON_TIMEZONES.map((tz) => (
+                      <SelectItem key={tz} value={tz}>
+                        {formatTimezoneLabel(tz)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             )}
           />
 

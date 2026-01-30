@@ -6,6 +6,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay } from 'date-fns';
 import DayAssignmentsDialog from '@/components/dialogs/DayAssignmentsDialog';
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
 // Fetch assignments for courses the current user is enrolled in between given ISO start/end
 async function fetchAssignmentsInRange(startIso: string, endIso: string) {
@@ -20,6 +21,7 @@ async function fetchAssignmentsInRange(startIso: string, endIso: string) {
 }
 
 export default function CalendarPage() {
+  const { timezone } = useEffectiveTimezone();
   const [assignments, setAssignments] = useState<any[]>([]);
   const [selected, setSelected] = useState<Date | undefined>(undefined);
   const [loading, setLoading] = useState(true);
@@ -99,6 +101,7 @@ export default function CalendarPage() {
             onSelect={setSelected}
             onMonthChange={(month: Date) => fetchForMonth(month)}
             className="w-full h-full text-foreground bg-card"
+            timeZone={timezone}
             components={{
               DayButton: (props: any) => {
                 const dateStr = localDateKey(props.day.date);

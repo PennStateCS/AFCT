@@ -27,6 +27,7 @@ export default function ViewCoursesPage() {
   const [courses, setCourses] = useState<CourseWithRoster[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [timezone, setTimezone] = useState('UTC');
 
   const fetchCourses = async () => {
     try {
@@ -46,6 +47,35 @@ export default function ViewCoursesPage() {
     fetchCourses();
   }, []);
 
+  useEffect(() => {
+    const loadTimezone = async () => {
+      try {
+        const [profileRes, systemRes] = await Promise.all([
+          fetch('/api/profile', { cache: 'no-store' }),
+          fetch('/api/system-settings/public', { cache: 'no-store' }),
+        ]);
+
+        let userTz = '';
+        if (profileRes.ok) {
+          const profile = await profileRes.json();
+          userTz = String(profile?.timezone ?? '');
+        }
+
+        let serverTz = 'UTC';
+        if (systemRes.ok) {
+          const system = await systemRes.json();
+          serverTz = String(system?.timezone ?? 'UTC');
+        }
+
+        setTimezone(userTz || serverTz || 'UTC');
+      } catch {
+        setTimezone('UTC');
+      }
+    };
+
+    loadTimezone();
+  }, []);
+
   // Memoize columns to avoid unnecessary re-renders
   // Passes update and delete callbacks to columns definition
   const columnsMemo = useMemo(
@@ -63,9 +93,10 @@ export default function ViewCoursesPage() {
         // Called after a course is deleted (triggers reload)
         () => {
           fetchCourses();
-        }
+        },
+        timezone,
       ),
-    [setCourses],
+    [setCourses, timezone],
   );
 
   return (

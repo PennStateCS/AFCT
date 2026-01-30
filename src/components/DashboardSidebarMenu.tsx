@@ -99,6 +99,7 @@ export default function DashboardSidebarMenu() {
     firstName = '',
     lastName = '',
     avatar = '',
+    timezone,
     role = 'STUDENT',
   } = session.user;
 
@@ -118,6 +119,7 @@ export default function DashboardSidebarMenu() {
     name: resolvedName,
     email,
     avatar: avatarUrl,
+    timezone: timezone ?? undefined,
     initials,
     role: (role?.toUpperCase?.() || 'STUDENT') as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT',
     password: '', // password is not exposed from session

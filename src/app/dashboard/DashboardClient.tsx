@@ -6,6 +6,8 @@ import type { Course, User } from '@prisma/client';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { getCourseStatusTag } from '@/lib/course-status';
 import { formatInstructorNames, getStudentCount } from '@/lib/course-utils';
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import { formatDateTimeInTimeZone } from '@/lib/date';
 
 type Props = {
   sessionUser: {
@@ -22,26 +24,7 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
   const { role } = sessionUser;
   const isPrivileged = role === 'ADMIN' || role === 'FACULTY' || role === 'TA';
   const now = new Date();
-
-  const formatDateTime = (value: Date) => {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'UTC',
-      year: 'numeric',
-      month: 'numeric',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    }).formatToParts(value);
-    const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-    const month = lookup.month ?? '';
-    const day = lookup.day ?? '';
-    const year = lookup.year ?? '';
-    const hour = lookup.hour ?? '';
-    const minute = lookup.minute ?? '';
-    const dayPeriod = lookup.dayPeriod ?? '';
-    return `${month}/${day}/${year} ${hour}:${minute} ${dayPeriod}`.trim();
-  };
+  const { timezone } = useEffectiveTimezone();
 
   const visibleCourses =
     role === 'STUDENT' ? courses.filter((course) => course.isPublished) : courses;
@@ -118,8 +101,8 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
                         </div>
                         <div>
                           <span className="font-semibold">Dates:</span>{' '}
-                          {formatDateTime(new Date(course.startDate))} to{' '}
-                          {formatDateTime(new Date(course.endDate))}
+                          {formatDateTimeInTimeZone(course.startDate, timezone)} to{' '}
+                          {formatDateTimeInTimeZone(course.endDate, timezone)}
                         </div>
                       </div>
                     </div>

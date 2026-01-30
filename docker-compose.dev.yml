@@ -15,6 +15,9 @@ services:
 
     environment:
       NODE_ENV: development
+      CHOKIDAR_USEPOLLING: "true"
+      CHOKIDAR_INTERVAL: "500"
+      WATCHPACK_POLLING: "true"
 
       DATABASE_URL: postgres://afct_user:afct_pass@postgres:5432/afct
 

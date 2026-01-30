@@ -31,6 +31,8 @@ import AssignmentSubmissions from "@/components/AssignmentSubmissions";
 import Link from 'next/link';
 import { Problem } from "@prisma/client";
 import JffViewerDialog from "@/components/JffViewerDialog";
+import { useEffectiveTimezone } from "@/hooks/use-effective-timezone";
+import { formatDateTimeInTimeZone } from "@/lib/date";
 
 const problemTypeLabels: Record<string, string> = {
     // Add your problem type labels here
@@ -59,6 +61,7 @@ type AssignmentWithDetails = {
 };
 
 export default function AssignmentDashboardPage() {
+  const { timezone } = useEffectiveTimezone();
     const { id, aid } = useParams<{ id: string; aid: string }>();
     const searchParams = useSearchParams();
     const router = useRouter();
@@ -256,7 +259,7 @@ export default function AssignmentDashboardPage() {
                             <span className="text-muted-foreground">•</span>
                             <span className="text-sm"><span className="font-semibold">Max Points:</span> {assignment.maxPoints}</span>
                             <span className="text-muted-foreground">•</span>
-                            <span className="text-sm"><span className="font-semibold">Due:</span> {new Date(assignment.dueDate).toLocaleString()}</span>
+                            <span className="text-sm"><span className="font-semibold">Due:</span> {formatDateTimeInTimeZone(assignment.dueDate, timezone)}</span>
                         </div>
                     </div>
                     <div>
