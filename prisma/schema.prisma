@@ -270,6 +270,7 @@ model SystemSettings {
   /// Singleton row (id=1)
   id       Int      @id @default(1)
   timezone String   @default("UTC")
+  maxUploadSizeMb Int @default(25)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
