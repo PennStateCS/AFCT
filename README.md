@@ -35,11 +35,25 @@ Visit: http://localhost:3000
 ```bash
 npm run docker:dev
 npm run docker:dev:detached
-npm run docker:down
-npm run docker:clean
-npm run docker:down:volumes
-npm run docker:nuke
+npm run docker:dev:seed
+npm run docker:dev:migrate
+npm run docker:dev:psql
+npm run docker:dev:down
+npm run docker:dev:clean
+npm run docker:dev:down:volumes
+npm run docker:dev:nuke
 ```
+
+**What these do**
+- `docker:dev`: Build and run the dev stack in the foreground (logs attached).
+- `docker:dev:detached`: Build and run the dev stack in the background.
+- `docker:dev:seed`: Run Prisma seed inside the dev app container.
+- `docker:dev:migrate`: Run Prisma migrations inside the dev app container.
+- `docker:dev:psql`: Open psql against the dev Postgres container.
+- `docker:dev:down`: Stop dev containers (keeps volumes).
+- `docker:dev:clean`: Stop dev containers and prune unused Docker resources.
+- `docker:dev:down:volumes`: Stop dev containers and remove volumes (data reset).
+- `docker:dev:nuke`: Remove dev containers, volumes, and all unused Docker data.
 
 ### What Happens on Startup
 - PostgreSQL container starts
@@ -64,10 +78,30 @@ NODE_ENV=production
 
 ### Main Commands
 ```bash
-docker compose --env-file .env up -d
-docker compose down
-docker pull ghcr.io/pennstatewilkes-barre/afct-dashboard:main
+npm run docker:prod
+npm run docker:prod:nobuild
+npm run docker:prod:down
+npm run docker:prod:logs
+npm run docker:prod:logs:app
+npm run docker:prod:logs:db
+npm run docker:prod:migrate
+npm run docker:prod:seed
 ```
+
+**What these do**
+- `docker:prod`: Build and start the production stack in detached mode.
+- `docker:prod:nobuild`: Start the production stack without rebuilding.
+- `docker:prod:down`: Stop the production stack.
+- `docker:prod:logs`: Follow logs for all production services.
+- `docker:prod:logs:app`: Follow logs for the app service only.
+- `docker:prod:logs:db`: Follow logs for the database service only.
+- `docker:prod:migrate`: Run Prisma migrations inside the app container.
+- `docker:prod:seed`: Run the production seed script inside the app container.
+
+**Notes**
+- `docker:prod` builds locally using the Dockerfile and starts the stack.
+- `docker:prod:nobuild` starts without building (use after pulling GHCR).
+- To use GHCR directly: `docker pull ghcr.io/pennstatewilkes-barre/afct-dashboard:main` then run `npm run docker:prod:nobuild`.
 
 ## 🏭 Production (Node.js – No Docker)
 ```bash
@@ -96,9 +130,9 @@ npm run seed
 
 ### Inside Docker
 ```bash
-npm run docker:studio
-npm run docker:seed
-npm run docker:psql
+npm run docker:dev:studio
+npm run docker:dev:seed
+npm run docker:dev:psql
 ```
 
 ---
@@ -107,14 +141,14 @@ npm run docker:psql
 
 **Database**
 ```bash
-docker logs afct-pg
-docker exec -it afct-pg pg_isready -U afct_user
+docker logs afct-dev-postgres
+docker exec -it afct-dev-postgres pg_isready -U afct_user
 ```
 
 **Auth / Login**
 ```bash
-docker exec -it afct-app sh -lc 'echo $NEXTAUTH_URL'
-docker logs afct-app | tail
+docker exec -it afct-dev sh -lc 'echo $NEXTAUTH_URL'
+docker logs afct-dev | tail
 ```
 
 
