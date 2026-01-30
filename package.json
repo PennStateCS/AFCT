@@ -37,6 +37,7 @@
     "docker:dev:clean": "npm run docker:clean",
     "docker:dev:down:volumes": "npm run docker:down:volumes",
     "docker:dev:nuke": "npm run docker:nuke",
+    "docker:dev:resetdb": "npm run docker:down:volumes",
     "docker:dev:studio": "npm run docker:studio",
     "docker:dev:seed": "npm run docker:seed",
     "docker:dev:psql": "npm run docker:psql",
