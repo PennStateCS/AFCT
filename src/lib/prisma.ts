@@ -27,7 +27,11 @@ const createPrismaClient = () => {
       // Only log queries that exceed a performance threshold (e.g., 100ms)
       if (e.duration > 100) {
         console.log(chalk.yellowBright(`Slow Query (${e.duration}ms)`));
-        console.log(chalk.gray(format(e.query)));
+        try {
+          console.log(chalk.gray(format(e.query, { language: 'postgresql' })));
+        } catch {
+          console.log(chalk.gray(e.query));
+        }
         console.log(chalk.dim(`Params: ${e.params}`));
       }
     });
