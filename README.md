@@ -38,6 +38,7 @@ npm run docker:dev:detached
 npm run docker:dev:seed
 npm run docker:dev:migrate
 npm run docker:dev:psql
+npm run docker:dev:emptydb
 npm run docker:dev:down
 npm run docker:dev:clean
 npm run docker:dev:down:volumes
@@ -51,6 +52,7 @@ npm run docker:dev:nuke
 - `docker:dev:seed`: Run Prisma seed inside the dev app container.
 - `docker:dev:migrate`: Run Prisma migrations inside the dev app container.
 - `docker:dev:psql`: Open psql against the dev Postgres container.
+- `docker:dev:emptydb`: Truncate all tables and re-apply migrations (keeps schema/volumes).
 - `docker:dev:down`: Stop dev containers (keeps volumes).
 - `docker:dev:clean`: Stop dev containers and prune unused Docker resources.
 - `docker:dev:down:volumes`: Stop dev containers and remove volumes (data reset).
