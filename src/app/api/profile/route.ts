@@ -9,6 +9,7 @@ import { existsSync } from 'fs';
 import { randomUUID } from 'crypto';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
+import { getSystemUploadLimit } from '@/lib/upload-limits';
 
 const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'pfps');
 
@@ -36,6 +37,7 @@ export async function POST(req: Request) {
   const avatar = formData.get('avatar') as File | null;
   const deleteAvatar = formData.get('deleteAvatar') === 'true';
   const timezoneRaw = (formData.get('timezone') as string | null)?.trim() || '';
+  const { maxBytes, maxMb } = await getSystemUploadLimit();
 
   if (!firstName || !lastName) {
     return NextResponse.json(
@@ -63,6 +65,12 @@ export async function POST(req: Request) {
   let avatarFileName: string | null = currentUser.avatar || null;
 
   if (avatar && avatar.size > 0) {
+    if (avatar.size > maxBytes) {
+      return NextResponse.json(
+        { error: `File exceeds max upload size (${maxMb} MB).` },
+        { status: 413 },
+      );
+    }
     // Save new avatar
     const bytes = await avatar.arrayBuffer();
     const buffer = Buffer.from(bytes);
