@@ -55,7 +55,10 @@ services:
       POSTGRES_PASSWORD: afct_pass
 
     volumes:
-      - ./dev-postgres:/var/lib/postgresql/data
+      - afct-dev-postgres:/var/lib/postgresql/data
 
     ports:
       - "5432:5432"
+
+volumes:
+  afct-dev-postgres:
