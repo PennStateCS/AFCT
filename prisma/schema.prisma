@@ -266,6 +266,15 @@ model ActivityLog {
   @@index([timestamp, category])
 }
 
+model SystemSettings {
+  /// Singleton row (id=1)
+  id       Int      @id @default(1)
+  timezone String   @default("UTC")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 generator erd {
   provider = "prisma-erd-generator"
   output   = "ERD.svg"
