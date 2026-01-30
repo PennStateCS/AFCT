@@ -7,6 +7,7 @@ import path from 'path';
 import { auth } from '@/lib/auth';
 import { ProblemType } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { getSystemUploadLimit } from '@/lib/upload-limits';
 
 // PUT /api/problems/[id] - Update an existing problem
 export async function PUT(req: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -51,6 +52,13 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
 
     // Handle file update if a new file is provided
     if (file && file.size > 0) {
+      const { maxBytes, maxMb } = await getSystemUploadLimit();
+      if (file.size > maxBytes) {
+        return NextResponse.json(
+          { error: `File exceeds max upload size (${maxMb} MB).` },
+          { status: 413 },
+        );
+      }
       // Ensure upload directory exists
       const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'problems');
       fs.mkdirSync(uploadsDir, { recursive: true });

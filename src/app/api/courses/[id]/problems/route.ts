@@ -7,6 +7,7 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { getSystemUploadLimit } from '@/lib/upload-limits';
 
 type ProblemType = 'PDA' | 'RE' | 'CFG' | 'FA';
 
@@ -52,6 +53,14 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
 
     if (!file || typeof file === 'string') {
       return NextResponse.json({ error: 'Missing or invalid file' }, { status: 400 });
+    }
+
+    const { maxBytes, maxMb } = await getSystemUploadLimit();
+    if (file.size > maxBytes) {
+      return NextResponse.json(
+        { error: `File exceeds max upload size (${maxMb} MB).` },
+        { status: 413 },
+      );
     }
 
     // Step 3: Ensure course exists
