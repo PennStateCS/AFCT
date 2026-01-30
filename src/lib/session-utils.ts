@@ -51,6 +51,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
             role: user.role,
             avatar: user.avatar || undefined,
+            timezone: user.timezone || undefined,
           }
         } catch (err) {
           console.error('[auth] authorize error:', err)
@@ -73,10 +74,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           try {
             const full = await prisma.user.findUnique({
               where: { email: (user as any).email },
-              select: { firstName: true, lastName: true }
+              select: { firstName: true, lastName: true, timezone: true }
             })
             token.firstName = full?.firstName || undefined
             token.lastName = full?.lastName || undefined
+            token.timezone = full?.timezone || undefined
           } catch (e) {
             dbg('jwt name fetch failed:', e)
           }
@@ -90,6 +92,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.id = token.id as string
         session.user.role = token.role as Role
         session.user.avatar = (token.avatar as string | null) || undefined
+        session.user.timezone = token.timezone as string | undefined
 
         // Option A (lighter): trust token values for names
         session.user.firstName = token.firstName as string | undefined

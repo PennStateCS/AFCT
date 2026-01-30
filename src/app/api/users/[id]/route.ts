@@ -6,8 +6,8 @@ import { writeFile, unlink } from 'fs/promises';
 import path from 'path';
 import { Role } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { activityColumns } from '@/app/dashboard/courses/[id]/activity-columns';
 import { parseRole } from '@/lib/roles';
+import { COMMON_TIMEZONES } from '@/lib/timezones';
 
 // PATCH: Update a user's profile
 export async function PATCH(req: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -41,6 +41,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     let inactive: boolean | undefined;
     let avatarFile: File | null = null;
     let deleteAvatar = false;
+    let timezoneRaw: string | undefined;
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await req.formData();
@@ -50,10 +51,15 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       inactive = formData.get('inactive') === 'true';
       avatarFile = formData.get('avatar') as File;
       deleteAvatar = formData.get('deleteAvatar') === 'true';
+      timezoneRaw = (formData.get('timezone') as string) || undefined;
     } else {
       const body = await req.json();
       ({ firstName, lastName, inactive } = body);
       rawRole = body.role;
+      timezoneRaw = body.timezone;
+    }
+    if (timezoneRaw && !COMMON_TIMEZONES.includes(timezoneRaw)) {
+      return NextResponse.json({ error: 'Invalid timezone' }, { status: 400 });
     }
 
     // Parse/validate role using shared helper
@@ -127,12 +133,14 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       avatar?: string | null;
       role?: Role;
       inactive?: boolean;
+      timezone?: string | null;
     } = {
       firstName: firstName ?? undefined,
       lastName: lastName ?? undefined,
       avatar: avatarFilename !== undefined ? avatarFilename : undefined,
       role: role,
       inactive: inactive,
+      timezone: timezoneRaw ? timezoneRaw : undefined,
     };
 
     // Perform the update
@@ -147,6 +155,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
         role: true,
         inactive: true,
         avatar: true,
+        timezone: true,
       },
     });
 

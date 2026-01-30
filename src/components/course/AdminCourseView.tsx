@@ -11,6 +11,7 @@ import { FullCourse, TabType } from '@/types/course';
 import { getInstructors } from '@/lib/course-utils';
 import { NotebookText, FileText, Users, GraduationCap, Activity } from 'lucide-react';
 import { Assignment, Problem } from '@prisma/client';
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
 interface AdminCourseViewProps {
   course: FullCourse;
@@ -43,17 +44,21 @@ export function AdminCourseView({
   onRefreshCourse,
   onBulkEnroll,
 }: AdminCourseViewProps) {
+  const { timezone } = useEffectiveTimezone();
+
   const assignmentColumns = useAssignmentColumns(
     course.isArchived,
     onAssignmentDelete,
     onAssignmentEdit,
     onAssignmentPublishToggle,
+    timezone,
   );
 
   const { columns: problemColumns, viewDialog: problemViewDialog } = useProblemColumns({
     courseIsArchived: course.isArchived,
     onEdit: onProblemEdit,
     onDelete: onProblemDelete,
+    timeZone: timezone,
   });
 
   return (

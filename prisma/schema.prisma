@@ -36,6 +36,7 @@ model User {
   password  String
   role      Role    @default(STUDENT) // Global role
   avatar    String?
+  timezone  String?
   inactive  Boolean @default(false)
 
   createdAt DateTime @default(now())

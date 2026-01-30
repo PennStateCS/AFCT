@@ -13,6 +13,8 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone'
+import { formatDateInTimeZone, formatDateTimeInTimeZone, formatWeekdayInTimeZone } from '@/lib/date'
 
 type Props = {
   open: boolean
@@ -26,6 +28,7 @@ type Props = {
 export default function DayAssignmentsDialog({ open, onOpenChange, date, assignments, onClose, onNavigate }: Props) {
   // Use the provided `date` prop directly. If it's a string, fall back to `new Date(date)`.
   const parsedDate = date instanceof Date ? date : (date ? new Date(date) : undefined);
+  const { timezone } = useEffectiveTimezone();
 
   const handlePrev = () => {
     if (!parsedDate) return;
@@ -46,9 +49,9 @@ export default function DayAssignmentsDialog({ open, onOpenChange, date, assignm
       <DialogContent className="bg-card max-w-lg">
         <DialogHeader className="flex items-start justify-between gap-4">
           <div>
-            <DialogTitle>{parsedDate ? `${parsedDate.toLocaleDateString()}` : 'Assignments'}</DialogTitle>
+            <DialogTitle>{parsedDate ? `${formatDateInTimeZone(parsedDate, timezone)}` : 'Assignments'}</DialogTitle>
             {parsedDate && (
-              <div className="text-sm text-muted-foreground">{parsedDate.toLocaleDateString(undefined, { weekday: 'long' })}</div>
+              <div className="text-sm text-muted-foreground">{formatWeekdayInTimeZone(parsedDate, timezone)}</div>
             )}
             <DialogDescription className="truncate text-sm text-muted-foreground mt-1">{assignments.length} assignment{assignments.length !== 1 ? 's' : ''}</DialogDescription>
           </div>
@@ -72,7 +75,7 @@ export default function DayAssignmentsDialog({ open, onOpenChange, date, assignm
                   >
                     <div className="font-medium text-sm truncate">{a.course?.code ? `${a.course.code} - ${a.title}` : a.title}</div>
                     <div className="text-xs opacity-90">{a.course?.name ?? ''}</div>
-                    <div className="text-xs opacity-80 mt-1">{new Date(a.dueDate).toLocaleString()}</div>
+                    <div className="text-xs opacity-80 mt-1">{formatDateTimeInTimeZone(a.dueDate, timezone)}</div>
                   </Link>
                 </li>
               ))}

@@ -1,58 +1,14 @@
+'use client';
+
 import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DataTable } from '@/components/ui/data-table';
-import { activityColumns } from '@/app/dashboard/courses/[id]/activity-columns';
+import { getActivityColumns, type ActivityLog } from '@/app/dashboard/courses/[id]/activity-columns';
 import { Loader2, RefreshCw, Activity } from 'lucide-react';
 import { toast } from 'sonner';
-
-interface ActivityUser {
-  id: string;
-  email: string;
-  firstName: string | null;
-  lastName: string | null;
-  avatar: string | null;
-}
-
-interface ActivityLog {
-  id: string;
-  userId: string | null;
-  action: string;
-  timestamp: string;
-  metadata: Record<string, unknown> | null;
-  user: ActivityUser | null;
-  // Enhanced fields (available in new entries with enhanced schema)
-  category?: string;
-  ipAddress?: string;
-  userAgent?: string;
-  courseId?: string;
-  assignmentId?: string;
-  problemId?: string;
-  submissionId?: string;
-  // Enhanced relations (available from API includes)
-  course?: {
-    id: string;
-    name: string;
-    code: string;
-  } | null;
-  assignment?: {
-    id: string;
-    title: string;
-  } | null;
-  problem?: {
-    id: string;
-    title: string;
-  } | null;
-  submission?: {
-    id: string;
-    assignmentProblem: {
-      assignment: {
-        title: string;
-      };
-    };
-  } | null;
-}
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
 interface ActivityResponse {
   activities: ActivityLog[];
@@ -65,6 +21,7 @@ interface ActivityCardProps {
 }
 
 export function ActivityCard({ courseId }: ActivityCardProps) {
+  const { timezone } = useEffectiveTimezone();
   const [activities, setActivities] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -105,7 +62,7 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
   useEffect(() => {
     fetchActivities();
   }, [fetchActivities]);
-
+            <DataTable columns={getActivityColumns(timezone)} data={activities} />
   const loadMore = () => {
     if (!loadingMore && hasMore) {
       fetchActivities(activities.length, true);
@@ -162,7 +119,7 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
           </div>
         ) : (
           <>
-            <DataTable columns={activityColumns} data={activities} />
+            <DataTable columns={getActivityColumns(timezone)} data={activities} />
             
             {hasMore && (
               <div className="flex justify-center pt-4">

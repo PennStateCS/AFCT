@@ -10,6 +10,7 @@ declare module 'next-auth' {
       firstName?: string;
       lastName?: string;
       avatar?: string;
+      timezone?: string;
       name?: string;
       image?: string;
       ipAddress?: string;
@@ -27,6 +28,7 @@ declare module 'next-auth' {
     firstName?: string;
     lastName?: string;
     avatar?: string;
+    timezone?: string;
     name?: string;
     image?: string;
   }
@@ -40,6 +42,7 @@ declare module 'next-auth/jwt' {
     firstName?: string;
     lastName?: string;
     avatar?: string;
+    timezone?: string;
     name?: string;
     image?: string;
     ipAddress?: string;

@@ -3,61 +3,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
+import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select';
+import InputGroup from '@/components/ui/InputGroup';
 
-const COMMON_TIMEZONES = [
-  'UTC',
-  'America/New_York',
-  'America/Chicago',
-  'America/Denver',
-  'America/Los_Angeles',
-  'America/Phoenix',
-  'America/Anchorage',
-  'Pacific/Honolulu',
-  'Europe/London',
-  'Europe/Paris',
-  'Europe/Berlin',
-  'Europe/Madrid',
-  'Europe/Rome',
-  'Europe/Amsterdam',
-  'Europe/Zurich',
-  'Europe/Stockholm',
-  'Europe/Warsaw',
-  'Europe/Athens',
-  'Africa/Cairo',
-  'Africa/Johannesburg',
-  'Asia/Jerusalem',
-  'Asia/Dubai',
-  'Asia/Kolkata',
-  'Asia/Bangkok',
-  'Asia/Singapore',
-  'Asia/Hong_Kong',
-  'Asia/Shanghai',
-  'Asia/Tokyo',
-  'Asia/Seoul',
-  'Australia/Sydney',
-  'Australia/Melbourne',
-  'Australia/Perth',
-  'Pacific/Auckland',
-];
-
-const formatTimezoneLabel = (tz: string) => {
-  try {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: tz,
-      timeZoneName: 'shortOffset',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).formatToParts(new Date());
-    const tzName = parts.find((part) => part.type === 'timeZoneName')?.value;
-    const offset = tzName?.replace('GMT', 'UTC') ?? 'UTC';
-    return `${tz} (${offset})`;
-  } catch {
-    return tz;
-  }
-};
 
 type SystemSettingsResponse = {
   timezone: string;
@@ -141,47 +98,41 @@ export default function SystemSettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">General System Settings</CardTitle>
+          <CardTitle className="text-lg">General</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="grid max-w-xl gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="timezone">Timezone</Label>
-              <select
-                id="timezone"
-                name="timezone"
-                value={timezone}
-                onChange={(event) => setTimezone(event.target.value)}
-                disabled={loading || saving}
-                className="border-input bg-background focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] flex h-9 w-full min-w-0 rounded-md border px-3 py-1 text-sm shadow-xs outline-none"
-              >
-                {timezoneOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+              <label className="pb-2 text-sm font-medium" htmlFor="timezone">
+                Timezone
+              </label>
+              <Select value={timezone} onValueChange={(val) => setTimezone(val)} disabled={loading || saving}>
+                <SelectTrigger className="w-full" id="timezone">
+                  <SelectValue placeholder="Select timezone" />
+                </SelectTrigger>
+                <SelectContent>
+                  {timezoneOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <p className="text-xs text-muted-foreground">
                 This will control how dates and times default across the dashboard.
               </p>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="maxUploadSizeMb">Max upload size (MB)</Label>
-              <input
-                id="maxUploadSizeMb"
-                name="maxUploadSizeMb"
-                type="number"
-                min={1}
-                max={1024}
-                value={maxUploadSizeMb}
-                onChange={(event) => setMaxUploadSizeMb(Number(event.target.value))}
-                disabled={loading || saving}
-                className="border-input bg-background focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] flex h-9 w-full min-w-0 rounded-md border px-3 py-1 text-sm shadow-xs outline-none"
-              />
-              <p className="text-xs text-muted-foreground">
-                Applies to all uploads. Range: 1–1024 MB.
-              </p>
-            </div>
+            <InputGroup
+              label="Max upload size (MB)"
+              name="maxUploadSizeMb"
+              type="number"
+              min={1}
+              max={1024}
+              value={String(maxUploadSizeMb)}
+              setValue={(val) => setMaxUploadSizeMb(Number(val))}
+              disabled={loading || saving}
+              description="Applies to all uploads. Range: 1–1024 MB."
+            />
             <div>
               <Button type="submit" disabled={loading || saving}>
                 {saving ? 'Saving...' : 'Save changes'}

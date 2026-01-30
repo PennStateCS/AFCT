@@ -8,6 +8,7 @@ import { writeFile, unlink, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import { randomUUID } from 'crypto';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { COMMON_TIMEZONES } from '@/lib/timezones';
 
 const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'pfps');
 
@@ -34,12 +35,17 @@ export async function POST(req: Request) {
   const lastName = (formData.get('lastName') as string)?.trim();
   const avatar = formData.get('avatar') as File | null;
   const deleteAvatar = formData.get('deleteAvatar') === 'true';
+  const timezoneRaw = (formData.get('timezone') as string | null)?.trim() || '';
 
   if (!firstName || !lastName) {
     return NextResponse.json(
       { error: 'First name and last name cannot be blank.' },
       { status: 400 },
     );
+  }
+
+  if (timezoneRaw && !COMMON_TIMEZONES.includes(timezoneRaw)) {
+    return NextResponse.json({ error: 'Invalid timezone.' }, { status: 400 });
   }
 
   if (!existsSync(uploadDir)) {
@@ -81,6 +87,7 @@ export async function POST(req: Request) {
       firstName,
       lastName,
       avatar: avatarFileName,
+      timezone: timezoneRaw || null,
     },
     select: {
       id: true,
@@ -89,6 +96,7 @@ export async function POST(req: Request) {
       lastName: true,
       avatar: true,
       role: true,
+      timezone: true,
     },
   });
 
@@ -124,6 +132,7 @@ export async function GET() {
       lastName: true,
       avatar: true,
       role: true,
+      timezone: true,
     },
   });
 
