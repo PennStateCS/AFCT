@@ -1,25 +1,32 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Role, User } from '@prisma/client';
+import { adminData, courseData, facultyData, studentData, taData } from './seed-data';
+import { getTermSequence, pickRandom, pickRandomRange, upsertRoster, withRole } from './seed-utils';
 import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Starting database seeding...');
+  console.log('[seed] starting');
 
   const isProduction = process.env.NODE_ENV === 'production';
 
   // ===========================
   // Production seeding (admin only, first setup)
   // ===========================
+  // Production: only bootstrap the first admin when the DB is empty.
   if (isProduction) {
-    // "First time" = no ADMIN exists yet (NOT "no users exist")
-    const existingAdmin = await prisma.user.findFirst({
-      where: { role: 'ADMIN' },
-      select: { id: true },
-    });
-
-    if (existingAdmin) {
-      console.log('Admin already exists. Skipping production admin bootstrap.');
+    let existingUsers = 0;
+    try {
+      existingUsers = await prisma.user.count();
+    } catch (error: any) {
+      if (error?.code === 'P2021') {
+        console.log('[seed] production: missing tables; run migrations first');
+        return;
+      }
+      throw error;
+    }
+    if (existingUsers > 0) {
+      console.log('[seed] production: users already exist, skipping admin bootstrap');
       return;
     }
 
@@ -31,6 +38,7 @@ async function main() {
       process.env.DEFAULT_ADMIN_PASSWORD ||
       process.env.ADMIN_PASSWORD ||
       'Password123!';
+
     const adminFirstName = process.env.DEFAULT_ADMIN_FIRST_NAME || 'Admin';
     const adminLastName = process.env.DEFAULT_ADMIN_LAST_NAME || 'User';
 
@@ -51,669 +59,220 @@ async function main() {
     });
 
     console.log(
-      `Production seed complete: created/ensured initial admin user (${adminEmail})`,
+      `[seed] production: created/ensured initial admin user (${adminEmail})`,
     );
     return;
   }
 
-  // 🚦 Skip seeding in development if users already exist
-  const existingUsers = await prisma.user.count();
+  // Skip seeding in development if users already exist
+  // Development: skip seeding if any users already exist.
+  let existingUsers = 0;
+  try {
+    existingUsers = await prisma.user.count();
+  } catch (error: any) {
+    if (error?.code === 'P2021') {
+      console.log('[seed] development: missing tables; run migrations first');
+      return;
+    }
+    throw error;
+  }
   if (existingUsers > 0) {
-    console.log(`Database already has ${existingUsers} users. Skipping seed.`);
+    console.log(
+      `[seed] development: ${existingUsers} users exist, skipping seed`,
+    );
     return;
   }
   // Hash password for all users
+  // Shared dev password for seeded users.
   const hashedPassword = await bcrypt.hash('password123', 10);
 
-  // Create Admin User
-  const admin = await prisma.user.upsert({
-    where: { email: 'admin@example.com' },
-    update: {},
-    create: {
-      email: 'admin@example.com',
-      firstName: 'Admin',
-      lastName: 'User',
-      password: hashedPassword,
-      role: 'ADMIN',
-    },
-  });
+  // Create users from seed data with explicit roles.
+  const students: User[] = [];
 
-  // Create Faculty Users
-  const faculty1 = await prisma.user.upsert({
-    where: { email: 'faculty@example.com' },
-    update: {},
-    create: {
-      email: 'faculty@example.com',
-      firstName: 'Jeffrey',
-      lastName: 'Chiampi',
-      password: hashedPassword,
-      role: 'FACULTY',
-      avatar: 'cmdc7t2vy0001lvu0zgeec2g2_1753058269605_8285cd86-ad03-4cc4-8a36-9753173d9ad3.jpg',
-    },
-  });
-
-  const faculty2 = await prisma.user.upsert({
-    where: { email: 'faculty2@example.com' },
-    update: {},
-    create: {
-      email: 'faculty2@example.com',
-      firstName: 'Bruce',
-      lastName: 'Wayne',
-      password: hashedPassword,
-      role: 'FACULTY',
-    },
-  });
-
-  const faculty3 = await prisma.user.upsert({
-    where: { email: 'faculty3@example.com' },
-    update: {},
-    create: {
-      email: 'faculty3@example.com',
-      firstName: 'Clark',
-      lastName: 'Kent',
-      password: hashedPassword,
-      role: 'FACULTY',
-    },
-  });
-
-  // Create TA Users
-  const ta1 = await prisma.user.upsert({
-    where: { email: 'ta@example.com' },
-    update: {},
-    create: {
-      email: 'ta@example.com',
-      firstName: 'Diana',
-      lastName: 'Prince',
-      password: hashedPassword,
-      role: 'TA',
-    },
-  });
-
-  const ta2 = await prisma.user.upsert({
-    where: { email: 'ta2@example.com' },
-    update: {},
-    create: {
-      email: 'ta2@example.com',
-      firstName: 'Hal',
-      lastName: 'Jordan',
-      password: hashedPassword,
-      role: 'TA',
-    },
-  });
-
-  // Create Sample Students
-  const students = [];
-  const studentData = [
-    {
-      email: 'student@example.com',
-      firstName: 'Oliver',
-      lastName: 'Green',
-      avatar: 'cmdc7t2xq0007lvu0v3e504di_1753582590136_a9b637f5-e376-4e56-80c9-4f5f94ae795c.avif',
-    },
-    { email: 'student1@example.com', firstName: 'Peter', lastName: 'Parker' },
-    { email: 'student2@example.com', firstName: 'Tony', lastName: 'Stark' },
-    { email: 'student3@example.com', firstName: 'Steve', lastName: 'Rogers' },
-    { email: 'student4@example.com', firstName: 'Natasha', lastName: 'Romanoff' },
-    { email: 'student5@example.com', firstName: 'Thor', lastName: 'Odinson' },
-    { email: 'student6@example.com', firstName: 'Clint', lastName: 'Barton' },
-    { email: 'student7@example.com', firstName: 'Wanda', lastName: 'Maximoff' },
-    { email: 'student8@example.com', firstName: 'Vision', lastName: 'Android' },
-    { email: 'student9@example.com', firstName: 'Sam', lastName: 'Wilson' },
-    { email: 'student10@example.com', firstName: 'Bucky', lastName: 'Barnes' },
-    { email: 'student11@example.com', firstName: 'Scott', lastName: 'Lang' },
-    { email: 'student12@example.com', firstName: 'Hope', lastName: 'Van Dyne' },
-    { email: 'student13@example.com', firstName: 'Carol', lastName: 'Danvers' },
-    { email: 'student14@example.com', firstName: 'Stephen', lastName: 'Strange' },
-    { email: 'student15@example.com', firstName: "T'Challa", lastName: 'Wakanda' },
-    { email: 'student16@example.com', firstName: 'Shuri', lastName: 'Wakanda' },
-    { email: 'student17@example.com', firstName: 'Kurt', lastName: 'Wagner' },
-    {
-      email: 'student18@example.com',
-      firstName: 'Jean',
-      lastName: 'Gray',
-      avatar: 'cmdc7t2xu000glvu06d3gotwx_1753583314285_c9b3ca75-5fcc-4fea-9e18-def9e438024c.jpg',
-    },
-    { email: 'student19@example.com', firstName: 'Logan', lastName: 'Howlett' },
-    { email: 'student20@example.com', firstName: 'Ororo', lastName: 'Monroe' },
-    { email: 'student21@example.com', firstName: 'Remy', lastName: 'LeBeau' },
-    {
-      email: 'student22@example.com',
-      firstName: 'Bruce',
-      lastName: 'Banner',
-      avatar: 'cmdc7t2y0000rlvu0j92i2qx1_1753583537015_57f649b2-6363-4eae-a809-8c8307717e02.jpg',
-    },
-    { email: 'student23@example.com', firstName: 'Hank', lastName: 'McCoy' },
-    {
-      email: 'student24@example.com',
-      firstName: 'Miles',
-      lastName: 'Morales',
-      avatar: 'cmdc7t2y9000tlvu0hdcfufh2_1753583866075_43e50ce3-e083-43f1-9a14-a0ff19198e73.jpg',
-    },
-    { email: 'student25@example.com', firstName: 'Gwen', lastName: 'Stacy' },
+  // Normalize seed data into a single list with roles applied.
+  const userSeeds: Array<{
+    email: string;
+    firstName: string;
+    lastName: string;
+    role: Role;
+  }> = [
+    ...withRole([adminData], 'ADMIN' as Role),
+    ...withRole(facultyData, 'FACULTY' as Role),
+    ...withRole(taData, 'TA' as Role),
+    ...withRole(studentData, 'STUDENT' as Role),
   ];
 
-  for (const studentInfo of studentData) {
-    const student = await prisma.user.upsert({
-      where: { email: studentInfo.email },
-      update: {},
-      create: {
-        email: studentInfo.email,
-        firstName: studentInfo.firstName,
-        lastName: studentInfo.lastName,
-        password: hashedPassword,
-        role: 'STUDENT',
-        avatar: studentInfo.avatar || null,
-      },
-    });
-    students.push(student);
+  // Store created IDs back into the seed data arrays.
+  const setPersonId = (
+    list: Array<{ email: string; id?: string }>,
+    email: string,
+    id: string,
+  ) => {
+    const person = list.find((item) => item.email === email);
+    if (person) {
+      person.id = id;
+    }
+  };
+
+  // Insert users in bulk (safe to re-run thanks to skipDuplicates).
+  await prisma.user.createMany({
+    data: userSeeds.map((userSeed) => ({
+      email: userSeed.email,
+      firstName: userSeed.firstName,
+      lastName: userSeed.lastName,
+      password: hashedPassword,
+      role: userSeed.role,
+    })),
+    skipDuplicates: true,
+  });
+
+  // Fetch back created users so we can capture their IDs.
+  const createdUsers = await prisma.user.findMany({
+    where: { email: { in: userSeeds.map((seed) => seed.email) } },
+  });
+
+  const usersByEmail = new Map(createdUsers.map((user) => [user.email, user]));
+
+  // Map IDs to the in-memory seed arrays for later use.
+  for (const userSeed of userSeeds) {
+    const user = usersByEmail.get(userSeed.email);
+    if (!user) continue;
+
+    if (userSeed.role === 'ADMIN') {
+      adminData.id = user.id;
+    } else if (userSeed.role === 'FACULTY') {
+      setPersonId(facultyData, user.email, user.id);
+    } else if (userSeed.role === 'TA') {
+      setPersonId(taData, user.email, user.id);
+    } else if (userSeed.role === 'STUDENT') {
+      students.push(user);
+      setPersonId(studentData, user.email, user.id);
+    }
   }
 
   // ===========================
   // Create Courses
   // ===========================
 
-  // Course 1 (Published, Not Archived, Has Stuff)
-  const course1 = await prisma.course.upsert({
-    where: { id: 'cmdoowaql0000lvesz3qanxph' },
-    update: {},
-    create: {
-      id: 'cmdoowaql0000lvesz3qanxph',
-      name: 'Introduction to Digital Systems',
-      code: 'CMPEN 271',
-      regCode: 'ABC123',
-      semester: 'Fall 2025',
-      credits: 4,
-      startDate: new Date('2025-08-15T03:59:00.000Z'),
-      endDate: new Date('2026-01-15T03:59:00.000Z'),
-      isPublished: true,
-      isArchived: false,
-    },
-  });
+  // Determine the current academic term and generate rolling term assignments.
+  const now = new Date();
 
-  // Course 2 (Published, Archived, Has Stuff)
-  const course2 = await prisma.course.upsert({
-    where: { id: 'cmdqx47bn0003tp19s8vzo52m' },
-    update: {},
-    create: {
-      id: 'cmdqx47bn0003tp19s8vzo52m',
-      name: 'Introduction to Digital Systems',
-      code: 'CMPEN 271',
-      regCode: 'DEF456',
-      semester: 'Spring 2025',
-      credits: 4,
-      startDate: new Date('2025-01-15T03:59:00.000Z'),
-      endDate: new Date('2025-05-15T03:59:00.000Z'),
-      isPublished: true,
-      isArchived: true,
-    },
-  });
+  type Term = 'Spring' | 'Summer' | 'Fall';
 
-   // Course 3 (Published, Not Archived, Empty)
-  const course3 = await prisma.course.upsert({
-    where: { id: 'cmdnw83cr0007kv24t5xha91p' },
-    update: {},
-    create: {
-      id: 'cmdnw83cr0007kv24t5xha91p',
-      name: 'Programming and Computation I: Fundamentals',
-      code: 'CMPSC 131',
-      regCode: 'VSU053',
-      semester: 'Fall 2025',
-      credits: 3,
-      startDate: new Date('2025-08-15T03:59:00.000Z'),
-      endDate: new Date('2025-12-15T03:59:00.000Z'),
-      isPublished: true,
-      isArchived: false,
-    },
-  });
+  // Map a date to its academic term bucket.
+  const getTermForDate = (date: Date): Term => {
+    const month = date.getMonth();
+    if (month <= 4) return 'Spring';
+    if (month <= 6) return 'Summer';
+    return 'Fall';
+  };
 
-  // Create Course Roster Entries
-  await prisma.roster.upsert({
-    where: { id: 'cmdnw26cm0001lv14v5vxo26o' },
-    update: {},
-    create: {
-      id: 'cmdnw26cm0001lv14v5vxo26o',
-      role: 'INSTRUCTOR',
-      courseId: course1.id,
-      userId: faculty1.id,
-    },
-  });
-
-  await prisma.roster.upsert({
-    where: { id: 'cmdjg25vm0002gw68m4bqe73x' },
-    update: {},
-    create: {
-      id: 'cmdjg25vm0002gw68m4bqe73x',
-      role: 'TA',
-      courseId: course1.id,
-      userId: ta1.id,
-    },
-  });
-
-  await prisma.roster.upsert({
-    where: { id: 'cmdnw44cm2201lv14v5vox44x' },
-    update: {},
-    create: {
-      id: 'cmdnw44cm2201lv14v5vox44x',
-      role: 'INSTRUCTOR',
-      courseId: course2.id,
-      userId: faculty1.id,
-    },
-  });
-
-  await prisma.roster.upsert({
-    where: { id: 'cmdfr61qd0009rx21t7wmo48j' },
-    update: {},
-    create: {
-      id: 'cmdfr61qd0009rx21t7wmo48j',
-      role: 'TA',
-      courseId: course2.id,
-      userId: ta1.id,
-    },
-  });
-
-  await prisma.roster.upsert({
-    where: { id: 'cmdoowaqx0001lvesqduvsw2v' },
-    update: {},
-    create: {
-      id: 'cmdoowaqx0001lvesqduvsw2v',
-      role: 'INSTRUCTOR',
-      courseId: course3.id,
-      userId: faculty2.id,
-    },
-  });
-
-  // Add some students to courses (check for existing entries first)
-  const studentsInCourse1 = students.slice(0, 5);
-  const studentsInCourse2 = students.slice(5, 9);
-  const studentsInCourse3 = students.slice(5, 8);
-
-  let rosterIdCounter = 1;
-  for (const student of studentsInCourse1) {
-    const existingRoster = await prisma.roster.findUnique({
-      where: {
-        courseId_userId: {
-          courseId: course1.id,
-          userId: student.id,
-        },
-      },
-    });
-
-    if (!existingRoster) {
-      await prisma.roster.create({
-        data: {
-          id: `roster_${rosterIdCounter}`,
-          role: 'STUDENT',
-          courseId: course1.id,
-          userId: student.id,
-        },
-      });
+  // Generate start/end dates for a given term/year.
+  const getTermDates = (term: Term, year: number) => {
+    if (term === 'Spring') {
+      return {
+        startDate: new Date(year, 0, 15),
+        endDate: new Date(year, 4, 15),
+      };
     }
-    rosterIdCounter++;
+
+    if (term === 'Summer') {
+      return {
+        startDate: new Date(year, 5, 15),
+        endDate: new Date(year, 6, 31),
+      };
+    }
+
+    return {
+      startDate: new Date(year, 7, 15),
+      endDate: new Date(year, 11, 15),
+    };
+  };
+
+  const currentTerm = getTermForDate(now);
+  const currentYear = now.getFullYear();
+
+  const termSequence = getTermSequence(currentTerm, currentYear);
+
+  // Assign each course to current/next/after term, repeating for extra courses.
+  const courseDates = courseData.map((_, index) => {
+    const term = termSequence[index % termSequence.length];
+    return getTermDates(term.term, term.year);
+  });
+
+  const courseSemesters = courseData.map((_, index) => {
+    const term = termSequence[index % termSequence.length];
+    return `${term.term} ${term.year}`;
+  });
+  // Upsert courses and capture IDs back into seed data.
+  const courses = await Promise.all(
+    courseData.map((courseSeed, index) =>
+      prisma.course.upsert({
+        where: { regCode: courseSeed.regCode },
+        update: {
+          name: courseSeed.title,
+          code: courseSeed.code,
+          semester: courseSemesters[index],
+          credits: courseSeed.credits,
+          startDate: courseDates[index].startDate,
+          endDate: courseDates[index].endDate,
+          isPublished: courseSeed.isPublished,
+          isArchived: courseSeed.isArchived,
+        },
+        create: {
+          name: courseSeed.title,
+          code: courseSeed.code,
+          regCode: courseSeed.regCode,
+          semester: courseSemesters[index],
+          credits: courseSeed.credits,
+          startDate: courseDates[index].startDate,
+          endDate: courseDates[index].endDate,
+          isPublished: courseSeed.isPublished,
+          isArchived: courseSeed.isArchived,
+        },
+      }),
+    ),
+  );
+
+  courses.forEach((course, index) => {
+    courseData[index].id = course.id;
+  });
+
+
+  // Collect seeded users by role for roster assignment.
+  const facultyUsers = facultyData.filter((faculty) => faculty.id) as Array<
+    typeof facultyData[number] & { id: string }
+  >;
+  const taUsers = taData.filter((ta) => ta.id) as Array<
+    typeof taData[number] & { id: string }
+  >;
+  const studentUsers = studentData.filter((student) => student.id) as Array<
+    typeof studentData[number] & { id: string }
+  >;
+
+  // Randomly assign instructor/TA/students per course.
+  for (const course of courses) {
+    const instructor = pickRandom(facultyUsers);
+    if (instructor) {
+      await upsertRoster(prisma, course.id, instructor.id, 'INSTRUCTOR');
+    }
+
+    const assignTa = taUsers.length > 0 && Math.random() < 0.7;
+    if (assignTa) {
+      const ta = pickRandom(taUsers);
+      if (ta) {
+        await upsertRoster(prisma, course.id, ta.id, 'TA');
+      }
+    }
+
+    const courseStudents = pickRandomRange(studentUsers, 3, 5);
+    for (const student of courseStudents) {
+      await upsertRoster(prisma, course.id, student.id, 'STUDENT');
+    }
   }
 
-  for (const student of studentsInCourse2) {
-    const existingRoster = await prisma.roster.findUnique({
-      where: {
-        courseId_userId: {
-          courseId: course2.id,
-          userId: student.id,
-        },
-      },
-    });
 
-    if (!existingRoster) {
-      await prisma.roster.create({
-        data: {
-          id: `roster_${rosterIdCounter}`,
-          role: 'STUDENT',
-          courseId: course2.id,
-          userId: student.id,
-        },
-      });
-    }
-    rosterIdCounter++;
-  }
-
-  for (const student of studentsInCourse3) {
-    const existingRoster = await prisma.roster.findUnique({
-      where: {
-        courseId_userId: {
-          courseId: course3.id,
-          userId: student.id,
-        },
-      },
-    });
-
-    if (!existingRoster) {
-      await prisma.roster.create({
-        data: {
-          id: `roster_${rosterIdCounter}`,
-          role: 'STUDENT',
-          courseId: course3.id,
-          userId: student.id,
-        },
-      });
-    }
-    rosterIdCounter++;
-  }
-
-  // ===========================
-  // Create Problems
-  // ===========================
-
- // Couse 1
-  const problem1 = await prisma.problem.upsert({
-    where: { id: 'cmioqr2yw000fru6re5kqrm4w' },
-    update: {},
-    create: {
-      id: 'cmioqr2yw000fru6re5kqrm4w',
-      title: 'D Flip-Flop',
-      description: 'Design the finite automation machine involving a D flip-flop with "q0" being the initial state.',
-      fileName: '1764689813955-d_flip-flop.jff',
-      originalFileName: 'd_flip-flop.jff',
-      type: 'FA',
-      maxStates: 2,
-      isDeterministic: true,
-      courseId: course1.id,
-    },
-  });
-
-  const problem2 = await prisma.problem.upsert({
-    where: { id: 'cmioqqpb10007ru6rgv934ig5' },
-    update: {},
-    create: {
-      id: 'cmioqqpb10007ru6rgv934ig5',
-      title: 'Toggle Flip-Flop',
-      description: 'Design the finite automation machine involving a toggle flip-flop with "q0" being the initial state.',
-      fileName: '1764689796246-toggle_flip-flop.jff',
-      originalFileName: 'toggle_flip-flop.jff',
-      type: 'FA',
-      maxStates: 2,
-      isDeterministic: true,
-      courseId: course1.id,
-    },
-  });
-
-  const problem3 = await prisma.problem.upsert({
-    where: { id: 'cmioqq1tj0003ru6rmf0vvl4u' },
-    update: {},
-    create: {
-      id: 'cmioqq1tj0003ru6rmf0vvl4u',
-      title: 'Traffic Light',
-      description: 'Design a traffic light with the states "Green", "Yellow", and "Red" with the "Green" State being the initial state and a high signal causing a change in the light.',
-      fileName: '1764689765806-traffic_light.jff',
-      originalFileName: 'traffic_light.jff',
-      type: 'FA',
-      maxStates: 3,
-      isDeterministic: false,
-      courseId: course1.id,
-    },
-  });
-
-  const problem4 = await prisma.problem.upsert({
-    where: { id: 'cmioqqwvg000bru6re8nk7ko6' },
-    update: {},
-    create: {
-      id: 'cmioqqwvg000bru6re8nk7ko6',
-      title: 'Three Consecutive 1s',
-      description: 'With "q0" being the initial state, create the finite automation with mininum number of states required to detect three consecutive ones.',
-      fileName: '1764689806055-three_consecutive.jff',
-      originalFileName: 'three_consecutive.jff',
-      type: 'FA',
-      maxStates: 4,
-      isDeterministic: true,
-      courseId: course1.id,
-    },
-  });
-
-  // Cousre 2
-  const problem5 = await prisma.problem.upsert({
-    where: { id: 'cmdtv39kl0004lt85v2zpa60n' },
-    update: {},
-    create: {
-      id: 'cmdtv39kl0004lt85v2zpa60n',
-      title: 'D Flip-Flop',
-      description: 'Design the finite automation machine involving a D flip-flop with "q0" being the initial state.',
-      fileName: '1764689813955-d_flip-flop.jff',
-      originalFileName: 'd_flip-flop.jff',
-      type: 'FA',
-      maxStates: 2,
-      isDeterministic: true,
-      courseId: course2.id,
-    },
-  });
-
-  const problem6 = await prisma.problem.upsert({
-    where: { id: 'cmdpb74cs0006hp33s1mxe92c' },
-    update: {},
-    create: {
-      id: 'cmdpb74cs0006hp33s1mxe92c',
-      title: 'Toggle Flip-Flop',
-      description: 'Design the finite automation machine involving a toggle flip-flop with "q0" being the initial state.',
-      fileName: '1764689796246-toggle_flip-flop.jff',
-      originalFileName: 'toggle_flip-flop.jff',
-      type: 'FA',
-      maxStates: 2,
-      isDeterministic: true,
-      courseId: course2.id,
-    },
-  });
-
-  const problem7 = await prisma.problem.upsert({
-    where: { id: 'cmdlh58rt0008jy40p6xsa19u' },
-    update: {},
-    create: {
-      id: 'cmdlh58rt0008jy40p6xsa19u',
-      title: 'Traffic Light',
-      description: 'Design a traffic light with the states "Green", "Yellow", and "Red" with the "Green" State being the initial state and a high signal causing a change in the light.',
-      fileName: '1764689765806-traffic_light.jff',
-      originalFileName: 'traffic_light.jff',
-      type: 'FA',
-      maxStates: 3,
-      isDeterministic: false,
-      courseId: course2.id,
-    },
-  });
-
-  const problem8 = await prisma.problem.upsert({
-    where: { id: 'cmdwv12pm0005fz77r3qhd84t' },
-    update: {},
-    create: {
-      id: 'cmdwv12pm0005fz77r3qhd84t',
-      title: 'Three Consecutive 1s',
-      description: 'With "q0" being the initial state, create the finite automation with mininum number of states required to detect three consecutive ones.',
-      fileName: '1764689806055-three_consecutive.jff',
-      originalFileName: 'three_consecutive.jff',
-      type: 'FA',
-      maxStates: 4,
-      isDeterministic: true,
-      courseId: course2.id,
-    },
-  });
-
-  // ===========================
-  // Create Assignments
-  // ===========================
-
-  // Course 1
-  const assignment1 = await prisma.assignment.upsert({
-    where: { id: 'cmdnwyb8k0000lvjcjctu5em3' },
-    update: {},
-    create: {
-      id: 'cmdnwyb8k0000lvjcjctu5em3',
-      title: 'Flip Flops',
-      description:
-        'For this assignment, you will be creating finite automation machines for varying types of flip-flops.',
-      dueDate: new Date('2025-09-29T03:59:00.000Z'),
-      maxPoints: 20,
-      isPublished: true,
-      courseId: course1.id,
-    },
-  });
-
-  const assignment2 = await prisma.assignment.upsert({
-    where: { id: 'cmdp906y10001lviwgpo84uwd' },
-    update: {},
-    create: {
-      id: 'cmdp906y10001lviwgpo84uwd',
-      title: 'Real Life Examples',
-      description: 'For this assignment, you will be creating finite automation machines solving real world problems.',
-      dueDate: new Date('2025-11-30T03:59:00.000Z'),
-      maxPoints: 20,
-      isPublished: true,
-      courseId: course1.id,
-    },
-  });
-
-    // Course 2
-  const assignment3 = await prisma.assignment.upsert({
-    where: { id: 'cmdks90ng0001bw54k8yvo36s' },
-    update: {},
-    create: {
-      id: 'cmdks90ng0001bw54k8yvo36s',
-      title: 'Flip Flops',
-      description:
-        'For this assignment, you will be creating finite automation machines for varying types of flip-flops.',
-      dueDate: new Date('2025-02-15T03:59:00.000Z'),
-      maxPoints: 20,
-      isPublished: true,
-      courseId: course2.id,
-    },
-  });
-
-  const assignment4 = await prisma.assignment.upsert({
-    where: { id: 'cmdhz44xf0003lv28v5xro67q' },
-    update: {},
-    create: {
-      id: 'cmdhz44xf0003lv28v5xro67q',
-      title: 'Real Life Examples',
-      description: 'For this assignment, you will be creating finite automation machines solving real world problems.',
-      dueDate: new Date('2025-04-30T03:59:00.000Z'),
-      maxPoints: 20,
-      isPublished: true,
-      courseId: course2.id,
-    },
-  });
-
-  // ===========================
-  // Link Problems to Assignments
-  // ===========================
-
-  // Course 1
-  await prisma.assignmentProblem.upsert({
-    where: {
-      assignmentId_problemId: {
-        assignmentId: assignment1.id,
-        problemId: problem1.id,
-      },
-    },
-    update: {},
-    create: {
-      assignmentId: assignment1.id,
-      problemId: problem1.id,
-    },
-  });
-
-  await prisma.assignmentProblem.upsert({
-    where: {
-      assignmentId_problemId: {
-        assignmentId: assignment1.id,
-        problemId: problem2.id,
-      },
-    },
-    update: {},
-    create: {
-      assignmentId: assignment1.id,
-      problemId: problem2.id,
-    },
-  });
-
-  await prisma.assignmentProblem.upsert({
-    where: {
-      assignmentId_problemId: {
-        assignmentId: assignment2.id,
-        problemId: problem3.id,
-      },
-    },
-    update: {},
-    create: {
-      assignmentId: assignment2.id,
-      problemId: problem3.id,
-    },
-  });
-
-  await prisma.assignmentProblem.upsert({
-    where: {
-      assignmentId_problemId: {
-        assignmentId: assignment2.id,
-        problemId: problem4.id,
-      },
-    },
-    update: {},
-    create: {
-      assignmentId: assignment2.id,
-      problemId: problem4.id,
-    },
-  });
-
-  // Course 2
-  await prisma.assignmentProblem.upsert({
-    where: {
-      assignmentId_problemId: {
-        assignmentId: assignment3.id,
-        problemId: problem5.id,
-      },
-    },
-    update: {},
-    create: {
-      assignmentId: assignment3.id,
-      problemId: problem5.id,
-    },
-  });
-
-  await prisma.assignmentProblem.upsert({
-    where: {
-      assignmentId_problemId: {
-        assignmentId: assignment3.id,
-        problemId: problem6.id,
-      },
-    },
-    update: {},
-    create: {
-      assignmentId: assignment3.id,
-      problemId: problem6.id,
-    },
-  });
-
-  await prisma.assignmentProblem.upsert({
-    where: {
-      assignmentId_problemId: {
-        assignmentId: assignment4.id,
-        problemId: problem7.id,
-      },
-    },
-    update: {},
-    create: {
-      assignmentId: assignment4.id,
-      problemId: problem7.id,
-    },
-  });
-
-  await prisma.assignmentProblem.upsert({
-    where: {
-      assignmentId_problemId: {
-        assignmentId: assignment4.id,
-        problemId: problem8.id,
-      },
-    },
-    update: {},
-    create: {
-      assignmentId: assignment4.id,
-      problemId: problem8.id,
-    },
-  });
-
-  // Count entities for scalable logging
+  // Count entities for summary logging.
   const userCount = await prisma.user.count();
   const adminCount = await prisma.user.count({ where: { role: 'ADMIN' } });
   const facultyCount = await prisma.user.count({ where: { role: 'FACULTY' } });
@@ -726,19 +285,19 @@ async function main() {
   const assignmentProblemCount = await prisma.assignmentProblem.count();
   const commentCount = await prisma.comment.count();
 
-  console.log('Database seeded successfully!');
-  console.log('Created:');
-  console.log(`- ${adminCount} Admin user(s)`);
-  console.log(`- ${facultyCount} Faculty user(s)`);
-  console.log(`- ${taCount} TA user(s)`);
-  console.log(`- ${studentCount} Student user(s)`);
-  console.log(`- ${userCount} Total user(s)`);
-  console.log(`- ${courseCount} Course(s)`);
-  console.log(`- ${problemCount} Problem(s)`);
-  console.log(`- ${assignmentCount} Assignment(s)`);
-  console.log(`- ${rosterCount} Course roster membership(s)`);
-  console.log(`- ${assignmentProblemCount} Assignment-Problem linkage(s)`);
-  console.log(`- ${commentCount} Comment(s)`);
+  console.log('[seed] completed');
+  console.log('[seed] counts');
+  console.log(`- admins: ${adminCount}`);
+  console.log(`- faculty: ${facultyCount}`);
+  console.log(`- tas: ${taCount}`);
+  console.log(`- students: ${studentCount}`);
+  console.log(`- users total: ${userCount}`);
+  console.log(`- courses: ${courseCount}`);
+  console.log(`- problems: ${problemCount}`);
+  console.log(`- assignments: ${assignmentCount}`);
+  console.log(`- rosters: ${rosterCount}`);
+  console.log(`- assignment-problems: ${assignmentProblemCount}`);
+  console.log(`- comments: ${commentCount}`);
 }
 
 main()
