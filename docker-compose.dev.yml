@@ -28,7 +28,7 @@ services:
 
       WAIT_FOR_DB: "true"
       MIGRATE_ON_START: "true"
-      SEED_ON_START: "false"
+      SEED_ON_START: "true"
 
     volumes:
       # App source (hot reload)
