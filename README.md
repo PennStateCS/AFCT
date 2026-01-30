@@ -41,6 +41,7 @@ npm run docker:dev:psql
 npm run docker:dev:down
 npm run docker:dev:clean
 npm run docker:dev:down:volumes
+npm run docker:dev:resetdb
 npm run docker:dev:nuke
 ```
 
@@ -53,6 +54,7 @@ npm run docker:dev:nuke
 - `docker:dev:down`: Stop dev containers (keeps volumes).
 - `docker:dev:clean`: Stop dev containers and prune unused Docker resources.
 - `docker:dev:down:volumes`: Stop dev containers and remove volumes (data reset).
+- `docker:dev:resetdb`: Stop dev containers and remove dev database volume.
 - `docker:dev:nuke`: Remove dev containers, volumes, and all unused Docker data.
 
 ### What Happens on Startup
