@@ -7,6 +7,8 @@ import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ConfirmDialog } from "./dialogs/ConfirmDialog";
+import { useEffectiveTimezone } from "@/hooks/use-effective-timezone";
+import { formatDateTimeInTimeZone } from "@/lib/date";
 
 export type Comment = {
   id: string;
@@ -53,14 +55,6 @@ const authorAvatarSrc = (author: Comment["author"]) => {
   return `/uploads/${raw}`;
 };
 
-const formatDateTime = (iso: string | Date) => {
-  const d = typeof iso === "string" ? new Date(iso) : iso;
-  return `${d.toLocaleDateString()} at ${d.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  })}`;
-};
-
 export default function DiscussionPanel({
   courseIsArchived,
   comments,
@@ -76,6 +70,10 @@ export default function DiscussionPanel({
 }: Props) {
   const { data: session } = useSession();
   const myId = session?.user?.id ?? null;
+  const { timezone } = useEffectiveTimezone();
+
+  const formatDateTime = (iso: string | Date) =>
+    formatDateTimeInTimeZone(iso, timezone);
 
   const [commentToDelete, setCommentToDelete] = useState<string | null>(null);
   const handleConfirmDelete = () => {

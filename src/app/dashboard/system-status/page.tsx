@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import pkg from '../../../../package.json';
+import { useEffectiveTimezone } from "@/hooks/use-effective-timezone";
+import { formatDateTimeInTimeZone, formatTimeInTimeZone } from "@/lib/date";
 
 type IpAddr = { iface?: string; address?: string; family?: string };
 type CpuInfo = { model?: string; speed?: number };
@@ -266,6 +268,7 @@ const TrendBadge = ({ delta }: { delta: number }) => {
 
 /* -------------------- page -------------------- */
 export default function SystemStatusPage() {
+  const { timezone } = useEffectiveTimezone();
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(false);
@@ -427,7 +430,7 @@ export default function SystemStatusPage() {
               </select>
             </div>
             <div className="text-xs text-muted-foreground">
-              {lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : ""}
+              {lastUpdated ? `Updated ${formatTimeInTimeZone(lastUpdated, timezone)}` : ""}
             </div>
             <Button size="sm" onClick={fetchStatus} disabled={loading}>
               {loading ? "Refreshing…" : "Refresh"}
@@ -616,7 +619,7 @@ export default function SystemStatusPage() {
               {/* Details */}
               <div className="grid gap-4 sm:grid-cols-2">
                 {status.database?.details?.current_time_iso && (
-                  <Stat label="DB Time" value={new Date(status.database.details.current_time_iso).toLocaleString()} />
+                  <Stat label="DB Time" value={formatDateTimeInTimeZone(status.database.details.current_time_iso, timezone)} />
                 )}
                 {status.database?.details?.current_database && (
                   <Stat label="DB Name" value={status.database.details.current_database} />
@@ -653,7 +656,7 @@ export default function SystemStatusPage() {
                         {status.database!.details!.last_migration_finished_at ? (
                           <span className="text-muted-foreground">
                             {" "}
-                            — {new Date(status.database!.details!.last_migration_finished_at!).toLocaleString()}
+                            — {formatDateTimeInTimeZone(status.database!.details!.last_migration_finished_at!, timezone)}
                           </span>
                         ) : null}
                       </>
@@ -836,7 +839,7 @@ export default function SystemStatusPage() {
                               ) : null}
                             </div>
                           </td>
-                          <td className="py-2 pr-3">{s.lastSeen ? new Date(s.lastSeen).toLocaleString() : "—"}</td>
+                          <td className="py-2 pr-3">{s.lastSeen ? formatDateTimeInTimeZone(s.lastSeen, timezone) : "—"}</td>
                           <td className="py-2">
                             <div className="max-w-[50ch] truncate" title={s.userAgent ?? ""}>
                               {s.userAgent ?? "—"}

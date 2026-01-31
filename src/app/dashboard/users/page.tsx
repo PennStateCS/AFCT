@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { CreateUserDialog } from '@/components/dialogs/CreateUserDialog';
 import { UserRoundPlus } from 'lucide-react';
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
 export default function ViewUsersPage() {
   const searchParams = useSearchParams();
@@ -17,6 +18,7 @@ export default function ViewUsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(searchParams.get('create') === 'open');
+  const { timezone } = useEffectiveTimezone();
 
   const fetchUsers = async () => {
     try {
@@ -56,7 +58,7 @@ export default function ViewUsersPage() {
       </CardHeader>
 
       <CardContent>
-        <DataTable columns={getUserColumns(fetchUsers)} data={users} loading={loading} />
+        <DataTable columns={getUserColumns(fetchUsers, timezone)} data={users} loading={loading} />
       </CardContent>
 
       <CreateUserDialog open={open} setOpen={handleDialogClose} onSuccess={fetchUsers} />

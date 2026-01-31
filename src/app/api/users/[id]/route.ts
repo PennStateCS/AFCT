@@ -6,8 +6,9 @@ import { writeFile, unlink } from 'fs/promises';
 import path from 'path';
 import { Role } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { activityColumns } from '@/app/dashboard/courses/[id]/activity-columns';
 import { parseRole } from '@/lib/roles';
+import { COMMON_TIMEZONES } from '@/lib/timezones';
+import { getSystemUploadLimit } from '@/lib/upload-limits';
 
 // PATCH: Update a user's profile
 export async function PATCH(req: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -26,7 +27,8 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     }
 
     const isAdminOnly = currentUser.role === 'ADMIN';
-    const canEdit = isAdminOnly || currentUser.id === userId || ['FACULTY','TA'].includes(currentUser.role);
+    const canEdit =
+      isAdminOnly || currentUser.id === userId || ['FACULTY', 'TA'].includes(currentUser.role);
     if (!canEdit) {
       console.warn(`[PATCH] Forbidden: ${currentUser.id} tried to update user ${userId}`);
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -41,6 +43,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     let inactive: boolean | undefined;
     let avatarFile: File | null = null;
     let deleteAvatar = false;
+    let timezoneRaw: string | undefined;
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await req.formData();
@@ -50,10 +53,26 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       inactive = formData.get('inactive') === 'true';
       avatarFile = formData.get('avatar') as File;
       deleteAvatar = formData.get('deleteAvatar') === 'true';
+      timezoneRaw = (formData.get('timezone') as string) || undefined;
     } else {
       const body = await req.json();
       ({ firstName, lastName, inactive } = body);
       rawRole = body.role;
+      timezoneRaw = body.timezone;
+    }
+    if (
+      timezoneRaw &&
+      !COMMON_TIMEZONES.includes(timezoneRaw as (typeof COMMON_TIMEZONES)[number])
+    ) {
+      return NextResponse.json({ error: 'Invalid timezone' }, { status: 400 });
+    }
+
+    const { maxBytes, maxMb } = await getSystemUploadLimit();
+    if (avatarFile && avatarFile.size > 0 && avatarFile.size > maxBytes) {
+      return NextResponse.json(
+        { error: `File exceeds max upload size (${maxMb} MB).` },
+        { status: 413 },
+      );
     }
 
     // Parse/validate role using shared helper
@@ -91,30 +110,36 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     }
 
     // Make sure the user is not in any active courses if changing active status
-    if (inactive){ // Note logic appears swapped, but that is because inactive is the next state
+    if (inactive) {
+      // Note logic appears swapped, but that is because inactive is the next state
       // Generate the current date and time
       const currTime = new Date();
 
       // Find if the user is in an active coruse
       const activeCourses = await prisma.roster.findMany({
-        where: { 
+        where: {
           userId: userId,
           course: {
             endDate: {
-              gte: currTime
-            }
-          }
+              gte: currTime,
+            },
+          },
         },
         select: { course: { select: { isArchived: true, isPublished: true } } },
-      })
-      
+      });
+
       // Return an error if the user is in an active course
-      if (activeCourses){
+      if (activeCourses) {
         // Make sure the active course is not archived
         for (const activeCourse of activeCourses) {
           if (!activeCourse.course.isArchived && activeCourse.course.isPublished) {
-            console.error('[PATCH] Error updating user: User in an unarchived active course cannot be inactive');
-            return NextResponse.json({ error: 'Users in an active course cannot be inactive' }, { status: 403 });
+            console.error(
+              '[PATCH] Error updating user: User in an unarchived active course cannot be inactive',
+            );
+            return NextResponse.json(
+              { error: 'Users in an active course cannot be inactive' },
+              { status: 403 },
+            );
           }
         }
       }
@@ -127,12 +152,14 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       avatar?: string | null;
       role?: Role;
       inactive?: boolean;
+      timezone?: string | null;
     } = {
       firstName: firstName ?? undefined,
       lastName: lastName ?? undefined,
       avatar: avatarFilename !== undefined ? avatarFilename : undefined,
       role: role,
       inactive: inactive,
+      timezone: timezoneRaw ? timezoneRaw : undefined,
     };
 
     // Perform the update
@@ -147,6 +174,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
         role: true,
         inactive: true,
         avatar: true,
+        timezone: true,
       },
     });
 
@@ -221,7 +249,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
       },
     });
 
-  // User deleted
+    // User deleted
     return NextResponse.json({ success: true, message: 'User deleted' });
   } catch (error) {
     console.error('[DELETE] Error deleting user:', error);

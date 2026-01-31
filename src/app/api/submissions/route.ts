@@ -9,6 +9,7 @@ import { randomUUID } from 'crypto';
 import { execSync } from 'child_process';
 import os from 'os';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { getSystemUploadLimit } from '@/lib/upload-limits';
 
 // Import JavaRunner for JAR execution
 import JavaRunner from '../../../../lib/java-runner';
@@ -37,6 +38,7 @@ export async function POST(req: NextRequest) {
   const assignmentId = formData.get('assignmentId')?.toString();
   const problemId = formData.get('problemId')?.toString();
   const file = formData.get('file') as File | null;
+  const { maxBytes, maxMb } = await getSystemUploadLimit();
 
   if (!assignmentId || !problemId) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -77,6 +79,12 @@ export async function POST(req: NextRequest) {
   try {
     // 4. Handle file upload
     if (file) {
+      if (file.size > maxBytes) {
+        return NextResponse.json(
+          { error: `File exceeds max upload size (${maxMb} MB).` },
+          { status: 413 },
+        );
+      }
       originalFileName = file.name;
       const fileExt = path.extname(originalFileName);
       fileName = `${randomUUID()}${fileExt}`;

@@ -1,3 +1,5 @@
+'use client';
+
 // problem-columns.tsx
 import { ColumnDef } from '@tanstack/react-table';
 import type { Problem } from '@prisma/client';
@@ -6,6 +8,7 @@ import { ChevronDown, Pencil, Trash2, FileText, Eye } from 'lucide-react';
 import { Badge } from '@/components/ui/RoleBadge';
 import { Button } from '@/components/ui/button';
 import JffViewerDialog from '@/components/JffViewerDialog';
+import { formatDateInTimeZone } from '@/lib/date';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -26,10 +29,12 @@ export const useProblemColumns = ({
   courseIsArchived,
   onEdit,
   onDelete,
+  timeZone,
 }: {
   onEdit: (p: Problem) => void;
   onDelete: (id: string) => void;
   courseIsArchived: boolean;
+  timeZone: string;
 }): { columns: ColumnDef<Problem>[]; viewDialog: JSX.Element | null } => {
   const [openDialog, setOpenDialog] = useState<{ open: boolean; problem: Problem | null }>({ open: false, problem: null });
 
@@ -92,7 +97,7 @@ export const useProblemColumns = ({
   {
     accessorKey: 'createdAt',
     header: 'Created',
-    cell: ({ row }) => new Date(row.original.createdAt).toLocaleDateString(),
+    cell: ({ row }) => formatDateInTimeZone(row.original.createdAt, timeZone),
   },
   {
     id: 'actions',
