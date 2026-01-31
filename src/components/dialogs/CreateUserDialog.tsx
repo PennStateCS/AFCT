@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import InputGroup from '@/components/ui/InputGroup';
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -43,20 +44,21 @@ type CreateUserDialogProps = {
 };
 
 export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogProps) {
-  const defaults: CreateUserRaw = useMemo(
-    () => {
-      const defaultRole = roleOptions.includes('STUDENT' as any) ? 'STUDENT' : (roleOptions[0] ?? 'STUDENT');
-      return ({
-        firstName: '',
-        lastName: '',
-        email: '',
-        password: '',
-        confirmPassword: '',
-        role: defaultRole as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT',
-      });
-    },
-    [roleOptions],
-  );
+  const { timezone } = useEffectiveTimezone();
+  const defaults: CreateUserRaw = useMemo(() => {
+    const defaultRole = roleOptions.includes('STUDENT' as any)
+      ? 'STUDENT'
+      : (roleOptions[0] ?? 'STUDENT');
+    return {
+      firstName: '',
+      lastName: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
+      role: defaultRole as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT',
+      timezone,
+    };
+  }, [roleOptions, timezone]);
 
   const {
     control,
@@ -244,7 +246,10 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
               {passwordRules.map((rule) => {
                 const ok = rule.test(pw ?? '');
                 return (
-                  <li key={rule.label} className={ok ? 'text-green-600 text-xs' : 'text-red-500 text-xs'}>
+                  <li
+                    key={rule.label}
+                    className={ok ? 'text-xs text-green-600' : 'text-xs text-red-500'}
+                  >
                     {rule.label}
                   </li>
                 );

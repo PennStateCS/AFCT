@@ -26,6 +26,7 @@ const BaseUserSchema = z.object({
 export const CreateUserSchema = BaseUserSchema.extend({
   password: StrongPassword,
   confirmPassword: z.string(),
+  timezone: z.string().trim().optional(),
 }).refine((d) => d.password === d.confirmPassword, {
   path: ['confirmPassword'],
   message: 'Passwords must match.',
@@ -41,14 +42,17 @@ const createImageFileSchema = () => {
       .refine((f) => f.type.startsWith('image/'), 'Avatar must be an image.')
       .optional();
   }
-  
+
   // Server-side fallback
-  return z.any().refine((f) => {
-    if (f && typeof f === 'object' && 'size' in f && 'type' in f) {
-      return f.size <= 5 * 1024 * 1024 && f.type.startsWith('image/');
-    }
-    return true; // Let server handle validation
-  }, 'Avatar must be a valid image ≤ 5MB').optional();
+  return z
+    .any()
+    .refine((f) => {
+      if (f && typeof f === 'object' && 'size' in f && 'type' in f) {
+        return f.size <= 5 * 1024 * 1024 && f.type.startsWith('image/');
+      }
+      return true; // Let server handle validation
+    }, 'Avatar must be a valid image ≤ 5MB')
+    .optional();
 };
 
 const ImageFileOptional = createImageFileSchema();

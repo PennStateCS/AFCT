@@ -25,6 +25,32 @@ export const runProductionSeed = async (prisma: PrismaClient) => {
   try {
     // Bootstrap the admin if the database is empty.
     await maybeBootstrapAdmin(prisma, adminEmail, adminFirstName, adminLastName, prodHashed);
+
+    // Seed system settings if the database is empty
+    const userCount = await prisma.user.count();
+    if (userCount === 1) {
+      // Database was just initialized with the admin user
+      console.log('[seed] production: seeding system settings');
+      try {
+        await prisma.systemSettings.upsert({
+          where: { id: 1 },
+          update: {
+            maxUploadSizeMb: 25,
+            timezone: 'America/New_York',
+          },
+          create: {
+            id: 1,
+            maxUploadSizeMb: 25,
+            timezone: 'America/New_York',
+          },
+        });
+        console.log('[seed] production: system settings configured (25MB, America/New_York)');
+      } catch (error) {
+        console.error('[seed] production: error seeding system settings', error);
+        throw error;
+      }
+    }
+
     return;
   } catch (error: unknown) {
     if (

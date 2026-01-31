@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 
 export function useEffectiveTimezone() {
-  const [timezone, setTimezone] = useState('UTC');
+  const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  const [timezone, setTimezone] = useState(browserTz);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -28,10 +29,10 @@ export function useEffectiveTimezone() {
           serverTz = String(system?.timezone ?? 'UTC');
         }
 
-        const nextTz = userTz || serverTz || 'UTC';
+        const nextTz = userTz || serverTz || browserTz || 'UTC';
         if (!cancelled) setTimezone(nextTz);
       } catch {
-        if (!cancelled) setTimezone('UTC');
+        if (!cancelled) setTimezone(browserTz || 'UTC');
       } finally {
         if (!cancelled) setLoading(false);
       }

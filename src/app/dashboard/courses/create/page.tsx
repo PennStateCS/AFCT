@@ -129,11 +129,11 @@ export default function CreateCoursePage() {
           </div>
 
           <div>
-            <Label htmlFor="startDate">Start Date</Label>
+            <Label htmlFor="startDate">Start Date & Time</Label>
             <Input
               id="startDate"
               name="startDate"
-              type="date"
+              type="datetime-local"
               value={formData.startDate}
               onChange={handleChange}
               required
@@ -141,11 +141,11 @@ export default function CreateCoursePage() {
           </div>
 
           <div>
-            <Label htmlFor="endDate">End Date</Label>
+            <Label htmlFor="endDate">End Date & Time</Label>
             <Input
               id="endDate"
               name="endDate"
-              type="date"
+              type="datetime-local"
               value={formData.endDate}
               onChange={handleChange}
               required

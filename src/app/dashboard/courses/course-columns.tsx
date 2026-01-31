@@ -22,7 +22,15 @@ import { formatDateTimeInTimeZone } from '@/lib/date';
 
 type CourseWithFaculty = Course & {
   // Enrolled list (user objects with courseRole and flags)
-  enrolled?: ({ id: string; firstName?: string | null; lastName?: string | null; email?: string | null; avatar?: string | null; courseRole?: string; hasSubmissions?: boolean })[];
+  enrolled?: {
+    id: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    email?: string | null;
+    avatar?: string | null;
+    courseRole?: string;
+    hasSubmissions?: boolean;
+  }[];
 };
 
 // Cell for course actions (edit/delete)
@@ -30,7 +38,8 @@ type CourseActionsCellProps = {
   course: CourseWithFaculty;
   onCourseUpdated: (updated: CourseWithFaculty) => void; // Called when a course is updated (edit/save)
   onCourseDeleted: () => void; // Called after a course is deleted (triggers parent reload)
-}
+  timeZone: string;
+};
 
 export const columns = (
   onCourseUpdated: (updated: CourseWithFaculty) => void,
@@ -45,7 +54,7 @@ export const columns = (
       const course = row.original;
       return (
         <Link href={`/dashboard/courses/${course.id}`} className="text-blue-600 hover:underline">
-          {course.name.substring(0, 46) + (course.name.length > 47 ? "..." : "")}
+          {course.name.substring(0, 46) + (course.name.length > 47 ? '...' : '')}
         </Link>
       );
     },
@@ -118,12 +127,24 @@ export const columns = (
     meta: { priority: 1 },
     cell: ({ row }) => {
       const course = row.original;
-      return <CourseActionsCell course={course} onCourseUpdated={onCourseUpdated} onCourseDeleted={onCourseDeleted} />;
+      return (
+        <CourseActionsCell
+          course={course}
+          onCourseUpdated={onCourseUpdated}
+          onCourseDeleted={onCourseDeleted}
+          timeZone={timeZone}
+        />
+      );
     },
   },
 ];
 
-function CourseActionsCell({ course, onCourseUpdated, onCourseDeleted }: CourseActionsCellProps) {
+function CourseActionsCell({
+  course,
+  onCourseUpdated,
+  onCourseDeleted,
+  timeZone,
+}: CourseActionsCellProps) {
   const [editOpen, setEditOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -153,26 +174,13 @@ function CourseActionsCell({ course, onCourseUpdated, onCourseDeleted }: CourseA
     <>
       <EditCourseDialog
         course={course}
+        timeZone={timeZone}
         open={editOpen}
         setOpen={setEditOpen}
-        onSave={async (updatedCourse) => {
-          try {
-            const res = await fetch(`/api/courses/${updatedCourse.id}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(updatedCourse),
-            });
-            if (!res.ok) throw new Error('Failed to save course');
-
-            const refreshed = await fetch(`/api/courses/${updatedCourse.id}`).then((r) => r.json());
-
-            onCourseUpdated(refreshed);
-            showToast.success('Course updated!');
-          } catch {
-            showToast.error('Failed to save course');
-          } finally {
-            setEditOpen(false);
-          }
+        onSave={(updatedCourse) => {
+          onCourseUpdated(updatedCourse as CourseWithFaculty);
+          showToast.success('Course updated!');
+          setEditOpen(false);
         }}
       />
 
@@ -214,7 +222,7 @@ function CourseActionsCell({ course, onCourseUpdated, onCourseDeleted }: CourseA
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={() => setConfirmOpen(true)}
-            className="hover:bg-secondary focus:text-red-600 flex items-center gap-2 text-red-600"
+            className="hover:bg-secondary flex items-center gap-2 text-red-600 focus:text-red-600"
             disabled={!course.isArchived}
           >
             <Trash2 className="mr-2 h-4 w-4" />

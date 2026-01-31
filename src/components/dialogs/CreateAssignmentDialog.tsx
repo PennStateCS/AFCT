@@ -21,10 +21,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 
 // ✅ Import assignment schemas directly to avoid barrel/cycle issues
-import { CreateAssignmentFormSchema, CreateAssignmentSchema } from '@/schemas/assignment';
+import { CreateAssignmentFormSchema } from '@/schemas/assignment';
 
 type FormValues = z.infer<typeof CreateAssignmentFormSchema>; // strings for datetime-local
-type ParsedValues = z.output<typeof CreateAssignmentSchema>; // Dates, coerced numbers
 
 import { Assignment } from '@prisma/client';
 
@@ -33,25 +32,47 @@ type CreateAssignmentDialogProps = {
   setOpen: (open: boolean) => void;
   courseId: string;
   courseIsArchived: boolean;
+  timeZone: string;
   onCreate?: (assignment: Assignment) => void;
 };
 
-function nowLocalString(): string {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
-    d.getMinutes(),
-  )}`;
+function toDateTimeLocalInTimeZone(date: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const year = lookup.year ?? '0000';
+  const month = lookup.month ?? '01';
+  const day = lookup.day ?? '01';
+  const hour = lookup.hour ?? '00';
+  const minute = lookup.minute ?? '00';
+  return `${year}-${month}-${day}T${hour}:${minute}`;
 }
 
-// Default to “today at 23:59”
-function defaultDueLocalString(): string {
-  const d = new Date();
-  d.setHours(23, 59, 0, 0);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
-    d.getMinutes(),
-  )}`;
+function nowLocalString(timeZone: string): string {
+  return toDateTimeLocalInTimeZone(new Date(), timeZone);
+}
+
+// Default to “today at 23:59” in the user's timezone
+function defaultDueLocalString(timeZone: string): string {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const year = lookup.year ?? '0000';
+  const month = lookup.month ?? '01';
+  const day = lookup.day ?? '01';
+  return `${year}-${month}-${day}T23:59`;
 }
 
 export function CreateAssignmentDialog({
@@ -59,20 +80,20 @@ export function CreateAssignmentDialog({
   setOpen,
   courseId,
   courseIsArchived,
+  timeZone,
   onCreate,
 }: CreateAssignmentDialogProps) {
-
   // Form defaults (strings for datetime-local fields)
   const defaults: FormValues = useMemo(
     () => ({
       title: '',
       description: '',
       maxPoints: '100',
-      dueDate: defaultDueLocalString(),
+      dueDate: defaultDueLocalString(timeZone),
       isPublished: false,
       courseId: courseId,
     }),
-    [courseId],
+    [courseId, timeZone],
   );
 
   const {
@@ -119,16 +140,11 @@ export function CreateAssignmentDialog({
     const formData = {
       ...raw,
       maxPoints: Number(raw.maxPoints), // Convert string to number for API schema
-      dueDate: raw.dueDate, // Keep as string for CreateAssignmentSchema to transform
+      dueDate: raw.dueDate, // Keep as string for API timezone conversion
     };
 
-    // Normalize & transform via Zod
-    const values: ParsedValues = CreateAssignmentSchema.parse(formData);
-
     const payload = {
-      ...values,
-      maxPoints: Number(values.maxPoints),
-      dueDate: values.dueDate.toISOString(),
+      ...formData,
     };
 
     const res = await fetch('/api/assignments', {
@@ -220,7 +236,7 @@ export function CreateAssignmentDialog({
                     field.onChange(e.target.value),
                 }}
                 // Optional: prevent selecting a past time
-                min={nowLocalString()}
+                min={nowLocalString(timeZone)}
                 error={errors.dueDate?.message}
               />
             )}

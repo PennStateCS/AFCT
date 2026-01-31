@@ -5,9 +5,18 @@
  * - Users (admin, faculty, TAs, students)
  * - Courses with rolling term dates
  * - Randomized rosters (instructors/TAs/students)
+ * - Problems for each course
  */
 import { PrismaClient, Role } from '@prisma/client';
-import { adminData, courseData, facultyData, studentData, taData } from './seed-data';
+import {
+  adminData,
+  assignmentData,
+  courseData,
+  facultyData,
+  problemData,
+  studentData,
+  taData,
+} from './seed-data';
 import {
   assignCourseRosters,
   getTermDates,
@@ -120,7 +129,20 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
   // Assign each course to current/next/after term, repeating for extra courses.
   const courseDates = courseData.map((_, index) => {
     const term = termSequence[index % termSequence.length];
-    return getTermDates(term.term, term.year);
+    const dates = getTermDates(term.term, term.year);
+
+    // Set times to 11:59 PM EST/EDT (America/New_York)
+    // EST is UTC-5, EDT is UTC-4. To get 11:59 PM in New York time,
+    // we need to store as 4:59 AM UTC (11:59 PM + 5 hours for EST)
+    const startDate = new Date(dates.startDate);
+    startDate.setHours(23, 59, 0, 0);
+    startDate.setTime(startDate.getTime() + 5 * 60 * 60 * 1000); // Add 5 hours for EST offset
+
+    const endDate = new Date(dates.endDate);
+    endDate.setHours(23, 59, 0, 0);
+    endDate.setTime(endDate.getTime() + 5 * 60 * 60 * 1000); // Add 5 hours for EST offset
+
+    return { startDate, endDate };
   });
 
   const courseSemesters = courseData.map((_, index) => {
@@ -185,6 +207,158 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
     taUsers,
     studentUsers,
   );
+
+  console.log('[seed] development: creating problems for courses');
+  // Create problems for each course. All courses get the same problems.
+  const createdProblems: { [courseId: string]: Array<{ id: string; title: string }> } = {};
+
+  try {
+    // Prepare all problem data for batch insertion
+    const problemsToCreate = courses.flatMap((course) =>
+      problemData.map((problemSeed) => ({
+        title: problemSeed.title,
+        description: problemSeed.description,
+        fileName: problemSeed.fileName,
+        originalFileName: problemSeed.originalFileName,
+        type: problemSeed.type,
+        maxStates: problemSeed.maxStates,
+        isDeterministic: problemSeed.isDeterministic,
+        courseId: course.id,
+      })),
+    );
+
+    const createdProblemRecords = await prisma.problem.createMany({
+      data: problemsToCreate,
+    });
+
+    // Fetch created problems to map them back to courses
+    const allProblems = await prisma.problem.findMany({
+      where: { courseId: { in: courses.map((c) => c.id) } },
+    });
+
+    for (const course of courses) {
+      createdProblems[course.id] = allProblems
+        .filter((p) => p.courseId === course.id)
+        .map((p) => ({ id: p.id, title: p.title }));
+    }
+
+    console.log(`[seed] development: created ${createdProblemRecords.count} problems`);
+  } catch (error) {
+    console.error('[seed] development: error creating problems', error);
+    throw error;
+  }
+
+  console.log('[seed] development: creating assignments for courses');
+  // Create assignments for each course. All courses get the same assignments.
+  const createdAssignments: { [courseId: string]: Array<{ id: string; title: string }> } = {};
+
+  try {
+    // Prepare all assignment data for batch insertion
+    const assignmentsToCreate = courses.flatMap((course) =>
+      assignmentData.map((assignmentSeed) => {
+        // Calculate due date based on dueFraction and course endDate
+        const courseStart = new Date(course.startDate);
+        const courseDuration = new Date(course.endDate).getTime() - courseStart.getTime();
+        const dueDateMs = courseStart.getTime() + courseDuration * assignmentSeed.dueFraction;
+
+        return {
+          title: assignmentSeed.title,
+          description: assignmentSeed.description,
+          dueDate: new Date(dueDateMs),
+          maxPoints: assignmentSeed.maxPoints,
+          isPublished: assignmentSeed.isPublished,
+          courseId: course.id,
+        };
+      }),
+    );
+
+    const createdAssignmentRecords = await prisma.assignment.createMany({
+      data: assignmentsToCreate,
+    });
+
+    // Fetch created assignments to map them back to courses
+    const allAssignments = await prisma.assignment.findMany({
+      where: { courseId: { in: courses.map((c) => c.id) } },
+    });
+
+    for (const course of courses) {
+      createdAssignments[course.id] = allAssignments
+        .filter((a) => a.courseId === course.id)
+        .map((a) => ({ id: a.id, title: a.title }));
+    }
+
+    console.log(`[seed] development: created ${createdAssignmentRecords.count} assignments`);
+  } catch (error) {
+    console.error('[seed] development: error creating assignments', error);
+    throw error;
+  }
+
+  console.log('[seed] development: assigning problems to assignments');
+  // Assign problems to assignments for each course
+  try {
+    const assignmentProblemsToCreate: Array<{
+      assignmentId: string;
+      problemId: string;
+    }> = [];
+
+    for (const course of courses) {
+      const courseProblems = createdProblems[course.id] || [];
+      const courseAssignments = createdAssignments[course.id] || [];
+
+      if (courseProblems.length === 0 || courseAssignments.length === 0) {
+        continue;
+      }
+
+      // For each assignment, assign 2-3 problems from the course
+      for (const assignment of courseAssignments) {
+        // Randomly pick 2-3 problems for this assignment
+        const numProblemsToAssign = Math.floor(Math.random() * 2) + 2; // 2 or 3
+        const selectedProblems = courseProblems
+          .sort(() => Math.random() - 0.5) // Shuffle
+          .slice(0, Math.min(numProblemsToAssign, courseProblems.length));
+
+        for (const problem of selectedProblems) {
+          assignmentProblemsToCreate.push({
+            assignmentId: assignment.id,
+            problemId: problem.id,
+          });
+        }
+      }
+    }
+
+    const createdAssignmentProblems = await prisma.assignmentProblem.createMany({
+      data: assignmentProblemsToCreate,
+      skipDuplicates: true,
+    });
+
+    console.log(
+      `[seed] development: created ${createdAssignmentProblems.count} assignment-problem relationships`,
+    );
+  } catch (error) {
+    console.error('[seed] development: error assigning problems to assignments', error);
+    throw error;
+  }
+
+  console.log('[seed] development: seeding system settings');
+  // Upsert system settings
+  try {
+    await prisma.systemSettings.upsert({
+      where: { id: 1 },
+      update: {
+        maxUploadSizeMb: 25,
+        timezone: 'America/New_York',
+      },
+      create: {
+        id: 1,
+        maxUploadSizeMb: 25,
+        timezone: 'America/New_York',
+      },
+    });
+    console.log('[seed] development: system settings configured (25MB, America/New_York)');
+  } catch (error) {
+    console.error('[seed] development: error seeding system settings', error);
+    throw error;
+  }
 
   console.log('[seed] development: counting seeded records');
   // Report counts for quick verification in logs.

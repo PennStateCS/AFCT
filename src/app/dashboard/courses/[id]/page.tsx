@@ -9,8 +9,14 @@ import { EnrollableUser } from '@/types/course';
 import { Assignment, Problem } from '@prisma/client';
 
 // Hooks
-import { useCourseData, useTabNavigation, useDialogStates, useEnrollment } from '@/hooks/use-course';
+import {
+  useCourseData,
+  useTabNavigation,
+  useDialogStates,
+  useEnrollment,
+} from '@/hooks/use-course';
 import { useCourseHandlers } from '@/lib/course-handlers';
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
 // Components
 import { CourseHeader } from '@/components/course/CourseHeader';
@@ -23,28 +29,29 @@ export default function AdminCoursePage() {
   const { id } = useParams();
   const { data: session } = useSession();
   const courseId = Array.isArray(id) ? id[0] : id;
-  
+
   // Check if user is a student (vs admin/faculty/TA)
   const isStudent = session?.user?.role === 'STUDENT';
 
   // Data fetching
   const { course, setCourse, refetchCourse } = useCourseData(courseId || '');
-  
+
   // Tab navigation (admin only)
   const { tab, handleTabChange } = useTabNavigation();
-  
+
   // Dialog states
   const dialogStates = useDialogStates();
-  
+
   // Enrollment
   const { allUsers, fetchAvailableUsers, handleEnrollUser } = useEnrollment(course);
-  
+
   // Event handlers
   const handlers = useCourseHandlers(course, setCourse);
   // Duplicate modal state
   const [duplicateOpen, setDuplicateOpen] = useState(false);
   // Bulk enroll dialog state
   const [bulkEnrollOpen, setBulkEnrollOpen] = useState(false);
+  const { timezone } = useEffectiveTimezone();
   // Prepare duplicate form when opening
   const openDuplicate = () => {
     // dialog component will initialize values from the `course` prop
@@ -62,27 +69,40 @@ export default function AdminCoursePage() {
     setBulkEnrollOpen(true);
   }, []);
 
-  // Problem handlers with dialog state
-  const handleProblemEditClick = useCallback((problem: Problem) => {
-    dialogStates.setSelectedProblem(problem);
-    dialogStates.setEditProblemOpen(true);
-  }, [dialogStates]);
+  // timezone is resolved via useEffectiveTimezone()
 
-  const handleProblemDeleteClick = useCallback((problemId: string) => {
-    dialogStates.setPendingDelete({ id: problemId, type: 'problem' });
-    dialogStates.setConfirmOpen(true);
-  }, [dialogStates]);
+  // Problem handlers with dialog state
+  const handleProblemEditClick = useCallback(
+    (problem: Problem) => {
+      dialogStates.setSelectedProblem(problem);
+      dialogStates.setEditProblemOpen(true);
+    },
+    [dialogStates],
+  );
+
+  const handleProblemDeleteClick = useCallback(
+    (problemId: string) => {
+      dialogStates.setPendingDelete({ id: problemId, type: 'problem' });
+      dialogStates.setConfirmOpen(true);
+    },
+    [dialogStates],
+  );
 
   // Assignment handlers with dialog state
-  const handleAssignmentEditClick = useCallback((assignment: Assignment) => {
-    dialogStates.setSelectedAssignment(assignment);
-    dialogStates.setEditAssignmentOpen(true);
-  }, [dialogStates]);
-
-  const handleAssignmentDeleteClick = useCallback((assignmentId: string) => {
-    dialogStates.setPendingDelete({ id: assignmentId, type: 'assignment' });
-    dialogStates.setConfirmOpen(true);
-  }, [dialogStates]);
+  const handleAssignmentEditClick = useCallback(
+    (assignment: Assignment) => {
+      dialogStates.setSelectedAssignment(assignment);
+      dialogStates.setEditAssignmentOpen(true);
+    },
+    [dialogStates],
+  );
+  const handleAssignmentDeleteClick = useCallback(
+    (assignmentId: string) => {
+      dialogStates.setPendingDelete({ id: assignmentId, type: 'assignment' });
+      dialogStates.setConfirmOpen(true);
+    },
+    [dialogStates],
+  );
 
   // Confirm handlers
   const handleConfirm = useCallback(() => {
@@ -94,15 +114,17 @@ export default function AdminCoursePage() {
   }, [dialogStates, handlers]);
 
   const handleCancel = useCallback(() => {
-    dialogStates.setPendingDelete(null);
     dialogStates.setConfirmOpen(false);
+    dialogStates.setPendingDelete(null);
   }, [dialogStates]);
 
-  // Publish handlers
-  const handlePublishToggle = useCallback((checked: boolean) => {
-    dialogStates.setPendingPublish(checked);
-    dialogStates.setPublishConfirmOpen(true);
-  }, [dialogStates]);
+  const handlePublishToggle = useCallback(
+    (checked: boolean) => {
+      dialogStates.setPendingPublish(checked);
+      dialogStates.setPublishConfirmOpen(true);
+    },
+    [dialogStates],
+  );
 
   const handlePublishConfirm = useCallback(async () => {
     if (dialogStates.pendingPublish !== null) {
@@ -117,11 +139,13 @@ export default function AdminCoursePage() {
     dialogStates.setPendingPublish(null);
   }, [dialogStates]);
 
-  // Archive handler
-  const handleArchiveToggle = useCallback((checked: boolean) => {
-    dialogStates.setPendingArchive(checked);
-    dialogStates.setArchiveConfirmOpen(true);
-  }, [dialogStates]);
+  const handleArchiveToggle = useCallback(
+    (checked: boolean) => {
+      dialogStates.setPendingArchive(checked);
+      dialogStates.setArchiveConfirmOpen(true);
+    },
+    [dialogStates],
+  );
 
   const handleArchiveConfirm = useCallback(async () => {
     if (dialogStates.pendingArchive !== null) {
@@ -137,17 +161,23 @@ export default function AdminCoursePage() {
   }, [dialogStates]);
 
   // Enrollment handler
-  const handleEnrollUserWrapper = useCallback(async (user: EnrollableUser) => {
-    if (!courseId) return;
-    await handleEnrollUser(user, courseId, refetchCourse);
-  }, [handleEnrollUser, courseId, refetchCourse]);
+  const handleEnrollUserWrapper = useCallback(
+    async (user: EnrollableUser) => {
+      if (!courseId) return;
+      await handleEnrollUser(user, courseId, refetchCourse);
+    },
+    [handleEnrollUser, courseId, refetchCourse],
+  );
 
   // Assignment save handler
-  const handleAssignmentSave = useCallback(async (updatedAssignment: Assignment) => {
-    await handlers.handleAssignmentSave(updatedAssignment);
-    dialogStates.setEditAssignmentOpen(false);
-    dialogStates.setSelectedAssignment(null);
-  }, [handlers, dialogStates]);
+  const handleAssignmentSave = useCallback(
+    async (updatedAssignment: Assignment) => {
+      await handlers.handleAssignmentSave(updatedAssignment);
+      dialogStates.setEditAssignmentOpen(false);
+      dialogStates.setSelectedAssignment(null);
+    },
+    [handlers, dialogStates],
+  );
 
   if (!course) return <div className="p-6">Loading course...</div>;
 
@@ -188,10 +218,10 @@ export default function AdminCoursePage() {
       {!isStudent && (
         <CourseDialogs
           course={course}
+          timeZone={timezone}
           editOpen={dialogStates.editOpen}
           setEditOpen={dialogStates.setEditOpen}
           onCourseSave={handlers.handleCourseSave}
-
           problemOpen={dialogStates.problemOpen}
           setProblemOpen={dialogStates.setProblemOpen}
           editProblemOpen={dialogStates.editProblemOpen}
@@ -200,7 +230,6 @@ export default function AdminCoursePage() {
           setSelectedProblem={dialogStates.setSelectedProblem}
           onProblemCreated={handlers.handleProblemCreated}
           onProblemSaved={handlers.handleProblemSaved}
-          
           editAssignmentOpen={dialogStates.editAssignmentOpen}
           setEditAssignmentOpen={dialogStates.setEditAssignmentOpen}
           selectedAssignment={dialogStates.selectedAssignment}
@@ -212,17 +241,14 @@ export default function AdminCoursePage() {
           pendingDelete={dialogStates.pendingDelete}
           onConfirm={handleConfirm}
           onCancel={handleCancel}
-
           publishConfirmOpen={dialogStates.publishConfirmOpen}
           pendingPublish={dialogStates.pendingPublish}
           onPublishConfirm={handlePublishConfirm}
           onPublishCancel={handlePublishCancel}
-
           archiveConfirmOpen={dialogStates.archiveConfirmOpen}
           pendingArchive={dialogStates.pendingArchive}
           onArchiveConfirm={handleArchiveConfirm}
           onArchiveCancel={handleArchiveCancel}
-
           enrollOpen={dialogStates.enrollOpen}
           setEnrollOpen={dialogStates.setEnrollOpen}
           allUsers={allUsers}
@@ -237,6 +263,7 @@ export default function AdminCoursePage() {
           open={duplicateOpen}
           setOpen={setDuplicateOpen}
           course={course}
+          timeZone={timezone}
           onSuccess={(newId) => {
             // navigate to new course page after successful duplication
             window.location.href = `/dashboard/courses/${newId}`;

@@ -3,11 +3,14 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validationResponse } from '@/lib/zod-error';
+import { auth } from '@/lib/auth';
+import { toEndOfDayInTimezone } from '@/lib/date-utils';
 import type { Prisma } from '@prisma/client';
 
 // ----------------------------------------
 // Utilities
 // ----------------------------------------
+
 async function generateUniqueCourseCode() {
   const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   const numbers = '0123456789';
@@ -62,7 +65,10 @@ export async function GET() {
     // Group roster by role (treat INSTRUCTOR like FACULTY for display and permissions)
     const formatted = courses.map((c: (typeof courses)[number]) => {
       // Build single `enrolled` list (user objects with courseRole). Do not construct role-specific arrays here.
-      const enrolled = c.roster.map((r: (typeof c.roster)[number]) => ({ ...r.user, courseRole: r.role }));
+      const enrolled = c.roster.map((r: (typeof c.roster)[number]) => ({
+        ...r.user,
+        courseRole: r.role,
+      }));
 
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { roster, ...rest } = c;
@@ -84,7 +90,23 @@ export async function POST(req: Request) {
     // 1) Parse payload of information
     const json = await req.json();
 
-    // 2) Optional uniqueness check (code + semester)
+    // 2) Get user's timezone (DB user > system settings > default)
+    const session = await auth();
+    let userTimezone = 'America/New_York';
+    if (session?.user?.id) {
+      const userRecord = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { timezone: true },
+      });
+      if (userRecord?.timezone) {
+        userTimezone = userRecord.timezone;
+      } else {
+        const system = await prisma.systemSettings.findUnique({ where: { id: 1 } });
+        userTimezone = system?.timezone || userTimezone;
+      }
+    }
+
+    // 3) Optional uniqueness check (code + semester)
     const exists = await prisma.course.findFirst({
       where: { code: json.code, semester: json.semester },
       select: { id: true },
@@ -96,10 +118,10 @@ export async function POST(req: Request) {
       );
     }
 
-    // 3) Generate a unique registration code
+    // 4) Generate a unique registration code
     const regCode = await generateUniqueCourseCode();
 
-    // 4) Create course (and roster rows for faculty) in a transaction for consistency
+    // 5) Create course (and roster rows for faculty) in a transaction for consistency
     const created = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const course = await tx.course.create({
         data: {
@@ -108,8 +130,8 @@ export async function POST(req: Request) {
           regCode,
           semester: json.semester,
           credits: json.credits,
-          startDate: json.startDate, // Date object is fine
-          endDate: json.endDate,
+          startDate: toEndOfDayInTimezone(json.startDate, userTimezone),
+          endDate: toEndOfDayInTimezone(json.endDate, userTimezone),
           isPublished: json.isPublished ?? false,
           isArchived: false,
         },
@@ -138,7 +160,9 @@ export async function POST(req: Request) {
       });
 
       const faculty =
-        withRoster?.roster.filter((r: NonNullable<typeof withRoster>['roster'][number]) => r.role === 'FACULTY').map((r: NonNullable<typeof withRoster>['roster'][number]) => r.user) ?? [];
+        withRoster?.roster
+          .filter((r: NonNullable<typeof withRoster>['roster'][number]) => r.role === 'FACULTY')
+          .map((r: NonNullable<typeof withRoster>['roster'][number]) => r.user) ?? [];
 
       return { course, faculty, withRoster };
     });
@@ -158,7 +182,8 @@ export async function POST(req: Request) {
           endDate: created.course.endDate,
           isPublished: created.course.isPublished,
           isArchived: created.course.isArchived,
-          enrolled: created.withRoster?.roster.map((r: any) => ({ ...r.user, courseRole: r.role })) ?? [],
+          enrolled:
+            created.withRoster?.roster.map((r: any) => ({ ...r.user, courseRole: r.role })) ?? [],
         },
       },
       { status: 201 },
