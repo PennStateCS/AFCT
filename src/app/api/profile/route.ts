@@ -46,7 +46,7 @@ export async function POST(req: Request) {
     );
   }
 
-  if (timezoneRaw && !COMMON_TIMEZONES.includes(timezoneRaw)) {
+  if (timezoneRaw && !COMMON_TIMEZONES.includes(timezoneRaw as (typeof COMMON_TIMEZONES)[number])) {
     return NextResponse.json({ error: 'Invalid timezone.' }, { status: 400 });
   }
 

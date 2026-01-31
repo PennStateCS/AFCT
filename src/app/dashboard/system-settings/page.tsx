@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,7 +14,6 @@ import {
   SelectItem,
 } from '@/components/ui/select';
 import InputGroup from '@/components/ui/InputGroup';
-
 
 type SystemSettingsResponse = {
   timezone: string;
@@ -45,16 +44,17 @@ export default function SystemSettingsPage() {
   }, []);
 
   const timezoneOptions = useMemo(
-    () => COMMON_TIMEZONES.map((tz) => ({
-      value: tz,
-      label: formatTimezoneLabel(tz),
-    })),
-    []
+    () =>
+      COMMON_TIMEZONES.map((tz) => ({
+        value: tz,
+        label: formatTimezoneLabel(tz),
+      })),
+    [],
   );
 
   const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!timezone || !COMMON_TIMEZONES.includes(timezone)) {
+    if (!timezone || !COMMON_TIMEZONES.includes(timezone as (typeof COMMON_TIMEZONES)[number])) {
       showToast.error('Please select a valid timezone.');
       return;
     }
@@ -90,7 +90,7 @@ export default function SystemSettingsPage() {
               Beta Feature
             </Badge>
           </div>
-          <div className="text-sm text-muted-foreground">
+          <div className="text-muted-foreground text-sm">
             Configuration tools will be added here over time.
           </div>
         </CardHeader>
@@ -106,7 +106,11 @@ export default function SystemSettingsPage() {
               <label className="pb-2 text-sm font-medium" htmlFor="timezone">
                 Timezone
               </label>
-              <Select value={loading ? '' : timezone} onValueChange={(val) => setTimezone(val)} disabled={loading || saving}>
+              <Select
+                value={loading ? '' : timezone}
+                onValueChange={(val) => setTimezone(val)}
+                disabled={loading || saving}
+              >
                 <SelectTrigger className="w-full" id="timezone">
                   <SelectValue placeholder={loading ? 'Loading timezone...' : 'Select timezone'} />
                 </SelectTrigger>
@@ -118,8 +122,9 @@ export default function SystemSettingsPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                This is the default timezone for the server. User-specific timezones can be set in their profile settings.
+              <p className="text-muted-foreground text-xs">
+                This is the default timezone for the server. User-specific timezones can be set in
+                their profile settings.
               </p>
             </div>
             <InputGroup
