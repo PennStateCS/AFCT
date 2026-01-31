@@ -1,12 +1,13 @@
 'use client';
 
-import { format } from 'date-fns';
 import Link from 'next/link';
 
 import type { Course, User } from '@prisma/client';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { getCourseStatusTag } from '@/lib/course-status';
 import { formatInstructorNames, getStudentCount } from '@/lib/course-utils';
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import { formatDateTimeInTimeZone } from '@/lib/date';
 
 type Props = {
   sessionUser: {
@@ -23,6 +24,7 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
   const { role } = sessionUser;
   const isPrivileged = role === 'ADMIN' || role === 'FACULTY' || role === 'TA';
   const now = new Date();
+  const { timezone } = useEffectiveTimezone();
 
   const visibleCourses =
     role === 'STUDENT' ? courses.filter((course) => course.isPublished) : courses;
@@ -99,8 +101,8 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
                         </div>
                         <div>
                           <span className="font-semibold">Dates:</span>{' '}
-                          {format(new Date(course.startDate), 'M/d/yyyy p')} to{' '}
-                          {format(new Date(course.endDate), 'M/d/yyyy p')}
+                          {formatDateTimeInTimeZone(course.startDate, timezone)} to{' '}
+                          {formatDateTimeInTimeZone(course.endDate, timezone)}
                         </div>
                       </div>
                     </div>

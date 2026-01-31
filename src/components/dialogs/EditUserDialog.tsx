@@ -29,6 +29,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import type { User } from '@prisma/client';
 import { UpdateUserSchema, type UpdateUserRaw, type UpdateUserInput } from '@/schemas/user';
 import { roleOptions, formatRole } from '@/lib/roles';
+import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
 
 type EditUserDialogProps = {
   user: User;
@@ -42,6 +43,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
   const [avatarPreview, setAvatarPreview] = useState<string>(
     user.avatar ? `/uploads/pfps/${user.avatar}` : '/uploads/pfps/default-avatar.png',
   );
+  const [serverTimezone, setServerTimezone] = useState('UTC');
 
   // RHF defaults – email is read-only so it isn't in the schema
   const defaults: UpdateUserRaw = useMemo(
@@ -49,6 +51,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
       firstName: user.firstName ?? '',
       lastName: user.lastName ?? '',
       role: user.role,
+      timezone: user.timezone ?? '',
       avatarFile: undefined,
       deleteAvatar: false,
       inactive: user.inactive ?? false,
@@ -62,11 +65,12 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
     reset,
     watch,
     setValue,
+    getValues,
     formState: { errors, isSubmitting, isValid, isDirty },
   } = useForm<UpdateUserRaw>({
     resolver: zodResolver(UpdateUserSchema),
     defaultValues: defaults,
-    mode: 'onBlur',
+    mode: 'onChange',
     reValidateMode: 'onChange',
   });
 
@@ -90,6 +94,26 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
       });
     }
   }, [open, defaults, reset, user.avatar]);
+
+  useEffect(() => {
+    if (!open) return;
+    const loadServerTimezone = async () => {
+      try {
+        const res = await fetch('/api/system-settings/public', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        const tz = String(data?.timezone ?? 'UTC');
+        setServerTimezone(tz);
+        const current = getValues('timezone');
+        if (!current) {
+          setValue('timezone', tz, { shouldDirty: false });
+        }
+      } catch {
+        // ignore
+      }
+    };
+    loadServerTimezone();
+  }, [open, getValues, setValue]);
 
   const avatarFileErrorMessage = (() => {
     const e = errors.avatarFile;
@@ -143,6 +167,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
     if (parsed.avatarFile instanceof File) formData.append('avatar', parsed.avatarFile);
     if (parsed.deleteAvatar) formData.append('deleteAvatar', 'true');
     formData.append('inactive', parsed.inactive ? 'true' : 'false');
+    if (parsed.timezone) formData.append('timezone', parsed.timezone);
 
     const res = await fetch(`/api/users/${user.id}`, {
       method: 'PATCH',
@@ -166,6 +191,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
       role: parsed.role as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT',
       avatar: parsed.deleteAvatar ? null : user.avatar,
       inactive: parsed.inactive,
+      timezone: parsed.timezone || undefined,
     });
 
     resetForm();
@@ -266,6 +292,31 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
                 fieldProps={field}
                 error={errors.lastName?.message}
               />
+            )}
+          />
+
+          {/* Timezone */}
+          <Controller
+            control={control}
+            name="timezone"
+            render={({ field }) => (
+              <div>
+                <label className="mb-2 block text-sm font-medium" htmlFor="timezone">
+                  Timezone
+                </label>
+                <Select value={field.value || serverTimezone} onValueChange={(v) => field.onChange(v)}>
+                  <SelectTrigger className="w-full" id="timezone">
+                    <SelectValue placeholder="Select timezone" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {COMMON_TIMEZONES.map((tz) => (
+                      <SelectItem key={tz} value={tz}>
+                        {formatTimezoneLabel(tz)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             )}
           />
 

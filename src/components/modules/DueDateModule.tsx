@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { format } from 'date-fns';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import { formatDateTimeInTimeZone } from '@/lib/date';
 
 type Assignment = {
   id: string;
@@ -16,6 +17,7 @@ type Props = {
 };
 
 export function DueDateModule({ assignments }: Props) {
+  const { timezone } = useEffectiveTimezone();
   const now = new Date();
 
   const upcoming = assignments
@@ -50,7 +52,7 @@ export function DueDateModule({ assignments }: Props) {
                 </Link>
               </div>
               <span className="text-muted-foreground text-sm">
-                {format(new Date(assignment.dueDate), "PPP 'at' p")}
+                {formatDateTimeInTimeZone(assignment.dueDate, timezone)}
               </span>
             </div>
           ))
