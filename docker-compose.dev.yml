@@ -1,4 +1,4 @@
-version: "3.9"
+version: '3.9'
 
 services:
   app:
@@ -9,15 +9,17 @@ services:
     container_name: afct-dev
     restart: unless-stopped
 
+    user: '0:0'
+
     ports:
-      - "3000:3000"
-      - "5555:5555"
+      - '3000:3000'
+      - '5555:5555'
 
     environment:
       NODE_ENV: development
-      CHOKIDAR_USEPOLLING: "true"
-      CHOKIDAR_INTERVAL: "500"
-      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: 'true'
+      CHOKIDAR_INTERVAL: '1000'
+      WATCHPACK_POLLING: 'true'
 
       DATABASE_URL: postgres://afct_user:afct_pass@postgres:5432/afct
 
@@ -26,16 +28,19 @@ services:
       DB_USER: afct_user
       DB_NAME: afct
 
-      WAIT_FOR_DB: "true"
-      MIGRATE_ON_START: "true"
-      SEED_ON_START: "true"
+      WAIT_FOR_DB: 'true'
+      MIGRATE_ON_START: 'true'
+      SEED_ON_START: 'true'
 
     volumes:
       # App source (hot reload)
-      - .:/app
+      - .:/app:cached
 
       # Keep container-installed node_modules (avoid host override)
-      - /app/node_modules
+      - afct-dev-node-modules:/app/node_modules
+
+      # Keep .next in container to avoid slow host I/O
+      - afct-dev-next:/app/.next
 
       # Same private uploads path as prod
       - ./dev-uploads:/private/uploads
@@ -43,7 +48,7 @@ services:
     depends_on:
       - postgres
 
-    command: ["npm", "run", "dev"]
+    command: ['npm', 'run', 'dev']
 
   postgres:
     image: postgres:15-alpine
@@ -58,7 +63,9 @@ services:
       - afct-dev-postgres:/var/lib/postgresql/data
 
     ports:
-      - "5432:5432"
+      - '5432:5432'
 
 volumes:
   afct-dev-postgres:
+  afct-dev-node-modules:
+  afct-dev-next:

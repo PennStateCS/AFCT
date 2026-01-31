@@ -17,7 +17,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           enableSystem
           disableTransitionOnChange
         >
-          <SessionProvider>
+          <SessionProvider refetchOnWindowFocus={false} refetchInterval={0}>
             <SessionWatcher />
             <Toaster
               position="top-center"

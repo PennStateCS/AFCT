@@ -30,6 +30,7 @@ import type { User } from '@prisma/client';
 import { UpdateUserSchema, type UpdateUserRaw, type UpdateUserInput } from '@/schemas/user';
 import { roleOptions, formatRole } from '@/lib/roles';
 import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
 type EditUserDialogProps = {
   user: User;
@@ -39,6 +40,7 @@ type EditUserDialogProps = {
 };
 
 export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogProps) {
+  const { timezone: effectiveTimezone } = useEffectiveTimezone();
   // Local preview state (keep separate from RHF file)
   const [avatarPreview, setAvatarPreview] = useState<string>(
     user.avatar ? `/uploads/pfps/${user.avatar}` : '/uploads/pfps/default-avatar.png',
@@ -84,7 +86,9 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
         keepValues: true,
       });
       // Reset preview from current user
-      setAvatarPreview(user.avatar ? `/uploads/pfps/${user.avatar}` : '/uploads/pfps/default-avatar.png');
+      setAvatarPreview(
+        user.avatar ? `/uploads/pfps/${user.avatar}` : '/uploads/pfps/default-avatar.png',
+      );
     } else {
       reset(defaults, {
         keepDirty: false,
@@ -97,23 +101,12 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
 
   useEffect(() => {
     if (!open) return;
-    const loadServerTimezone = async () => {
-      try {
-        const res = await fetch('/api/system-settings/public', { cache: 'no-store' });
-        if (!res.ok) return;
-        const data = await res.json();
-        const tz = String(data?.timezone ?? 'UTC');
-        setServerTimezone(tz);
-        const current = getValues('timezone');
-        if (!current) {
-          setValue('timezone', tz, { shouldDirty: false });
-        }
-      } catch {
-        // ignore
-      }
-    };
-    loadServerTimezone();
-  }, [open, getValues, setValue]);
+    const tz = user.timezone || effectiveTimezone || 'UTC';
+    setServerTimezone(effectiveTimezone || 'UTC');
+    if (!getValues('timezone')) {
+      setValue('timezone', tz, { shouldDirty: false });
+    }
+  }, [open, user.timezone, effectiveTimezone, getValues, setValue]);
 
   const avatarFileErrorMessage = (() => {
     const e = errors.avatarFile;
@@ -179,7 +172,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
 
     // End if there was an error
     if (!res.ok) {
-      showToast.error(body?.error || "Failed to update user.");
+      showToast.error(body?.error || 'Failed to update user.');
       return;
     }
 
@@ -196,7 +189,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
 
     resetForm();
     setOpen(false);
-    showToast.success("User updated successfully.");
+    showToast.success('User updated successfully.');
   };
 
   return (
@@ -304,7 +297,10 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
                 <label className="mb-2 block text-sm font-medium" htmlFor="timezone">
                   Timezone
                 </label>
-                <Select value={field.value || serverTimezone} onValueChange={(v) => field.onChange(v)}>
+                <Select
+                  value={field.value || serverTimezone}
+                  onValueChange={(v) => field.onChange(v)}
+                >
                   <SelectTrigger className="w-full" id="timezone">
                     <SelectValue placeholder="Select timezone" />
                   </SelectTrigger>
@@ -352,7 +348,9 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
                       ))}
                     </SelectContent>
                   </Select>
-                  {errors.role && <p className="mt-1 text-xs text-red-600">{errors.role.message}</p>}
+                  {errors.role && (
+                    <p className="mt-1 text-xs text-red-600">{errors.role.message}</p>
+                  )}
                 </div>
               );
             }}
@@ -365,7 +363,10 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
             render={({ field }) => (
               <div>
                 <label className="mb-2 block text-sm font-medium">Status</label>
-                <Select value={field.value ? 'true' : 'false'} onValueChange={(v) => field.onChange(v === 'true')}>
+                <Select
+                  value={field.value ? 'true' : 'false'}
+                  onValueChange={(v) => field.onChange(v === 'true')}
+                >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select activity type" />
                   </SelectTrigger>
@@ -374,7 +375,9 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
                     <SelectItem value="true">Inactive</SelectItem>
                   </SelectContent>
                 </Select>
-                {errors.inactive && <p className="mt-1 text-xs text-red-600">{errors.inactive.message}</p>}
+                {errors.inactive && (
+                  <p className="mt-1 text-xs text-red-600">{errors.inactive.message}</p>
+                )}
               </div>
             )}
           />

@@ -25,8 +25,13 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 import type { User } from '@prisma/client';
-import { UpdateProfileSchema, type UpdateProfileRaw, type UpdateProfileInput } from '@/schemas/profile';
+import {
+  UpdateProfileSchema,
+  type UpdateProfileRaw,
+  type UpdateProfileInput,
+} from '@/schemas/profile';
 import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
 type EditProfileDialog = {
   user: User;
@@ -36,6 +41,7 @@ type EditProfileDialog = {
 };
 
 export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDialog) {
+  const { timezone: effectiveTimezone } = useEffectiveTimezone();
   // Local preview state (keep separate from RHF file)
   const [avatarPreview, setAvatarPreview] = useState<string>(
     user.avatar ? `/uploads/pfps/${user.avatar}` : '/uploads/pfps/default-avatar.png',
@@ -53,7 +59,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
     }),
     [user],
   );
-  
+
   // RHF with Zod
   const {
     control,
@@ -79,8 +85,10 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
         keepTouched: false,
         keepValues: false,
       });
-        // Reset preview from current user
-      setAvatarPreview(user.avatar ? `/uploads/pfps/${user.avatar}` : '/uploads/pfps/default-avatar.png');
+      // Reset preview from current user
+      setAvatarPreview(
+        user.avatar ? `/uploads/pfps/${user.avatar}` : '/uploads/pfps/default-avatar.png',
+      );
     } else {
       reset(defaults, {
         keepDirty: false,
@@ -93,41 +101,12 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
 
   useEffect(() => {
     if (!open) return;
-    const loadServerTimezone = async () => {
-      try {
-        const res = await fetch('/api/system-settings/public', { cache: 'no-store' });
-        if (!res.ok) return;
-        const data = await res.json();
-        const tz = String(data?.timezone ?? 'UTC');
-        setServerTimezone(tz);
-        const current = getValues('timezone');
-        if (!current) {
-          setValue('timezone', tz, { shouldDirty: false });
-        }
-      } catch {
-        // ignore
-      }
-    };
-    loadServerTimezone();
-  }, [open, getValues, setValue]);
-
-  useEffect(() => {
-    if (!open) return;
-    const loadUserTimezone = async () => {
-      try {
-        const res = await fetch('/api/profile', { cache: 'no-store' });
-        if (!res.ok) return;
-        const data = await res.json();
-        const tz = String(data?.timezone ?? '');
-        if (tz) {
-          setValue('timezone', tz, { shouldDirty: false });
-        }
-      } catch {
-        // ignore
-      }
-    };
-    loadUserTimezone();
-  }, [open, setValue]);
+    const tz = user.timezone || effectiveTimezone || 'UTC';
+    setServerTimezone(effectiveTimezone || 'UTC');
+    if (!getValues('timezone')) {
+      setValue('timezone', tz, { shouldDirty: false });
+    }
+  }, [open, user.timezone, effectiveTimezone, getValues, setValue]);
 
   // Avatar error message extraction
   const avatarFileErrorMessage = (() => {
@@ -173,7 +152,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
 
   const onSubmit = async (values: UpdateProfileInput) => {
     const parsed: UpdateProfileInput = UpdateProfileSchema.parse(values);
-    
+
     const formData = new FormData();
     formData.append('firstName', parsed.firstName);
     formData.append('lastName', parsed.lastName);
@@ -193,7 +172,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
         avatar: parsed.deleteAvatar ? null : user.avatar,
         timezone: parsed.timezone || undefined,
       });
-      
+
       toast.success('Profile updated!');
       setOpen(false);
     } catch {
@@ -210,7 +189,9 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
       onOpenChange={(val) => {
         setOpen(val);
         // Prevent “red fields on cancel”: clear RHF UI state on close
-        if (!val) { resetForm(); }
+        if (!val) {
+          resetForm();
+        }
       }}
     >
       <DialogContent className="bg-card max-w-lg">
@@ -310,7 +291,10 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
                 <label className="pb-2 text-sm font-medium" htmlFor="timezone">
                   Timezone
                 </label>
-                <Select value={field.value || serverTimezone} onValueChange={(v) => field.onChange(v)}>
+                <Select
+                  value={field.value || serverTimezone}
+                  onValueChange={(v) => field.onChange(v)}
+                >
                   <SelectTrigger className="w-full" id="timezone">
                     <SelectValue placeholder="Select timezone" />
                   </SelectTrigger>

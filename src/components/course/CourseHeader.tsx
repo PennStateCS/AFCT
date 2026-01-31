@@ -5,19 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import {
-  CalendarDays,
-  Pencil,
-  Copy,
-  CopyCheck,
-  Layers as DuplicateIcon,
-} from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { CalendarDays, Pencil, Copy, CopyCheck, Layers as DuplicateIcon } from 'lucide-react';
 import type { FullCourse } from '@/types/course';
 import { formatInstructorNames, getStudentCount } from '@/lib/course-utils';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
@@ -45,8 +34,7 @@ export function CourseHeader({
   // Get course status tag at the top
   const { status, bgColor } = require('@/lib/course-status').getCourseStatusTag(course);
   const formatRange = (start?: string | Date | null, end?: string | Date | null) => {
-    const toDate = (v?: string | Date | null) =>
-      !v ? null : v instanceof Date ? v : new Date(v);
+    const toDate = (v?: string | Date | null) => (!v ? null : v instanceof Date ? v : new Date(v));
     const s = toDate(start);
     const e = toDate(end);
     if (!s && !e) return 'Dates TBD';
@@ -80,12 +68,14 @@ export function CourseHeader({
   // Use helpers for clarity and reuse
   const facultyNames = formatInstructorNames(enrolled as any);
 
-  const taList = (enrolled as any[]).filter((u:any) => u.courseRole === 'TA');
-  const taNames = taList.length === 0
-    ? 'None assigned'
-    : taList.length === 1
-      ? `${taList[0].firstName ?? ''} ${taList[0].lastName ?? ''}`.trim()
-      : `${(taList[0].firstName ?? '') + (taList[0].lastName ? ' ' + taList[0].lastName : '')}`.trim() + ', ...';
+  const taList = (enrolled as any[]).filter((u: any) => u.courseRole === 'TA');
+  const taNames =
+    taList.length === 0
+      ? 'None assigned'
+      : taList.length === 1
+        ? `${taList[0].firstName ?? ''} ${taList[0].lastName ?? ''}`.trim()
+        : `${(taList[0].firstName ?? '') + (taList[0].lastName ? ' ' + taList[0].lastName : '')}`.trim() +
+          ', ...';
 
   // derive metrics from the course object where possible
   type AssignmentCounts = {
@@ -118,9 +108,18 @@ export function CourseHeader({
     const needsGrading = Array.isArray(course.assignments)
       ? course.assignments.reduce((count, a) => {
           const ac = a as unknown as AssignmentCounts;
-          const due = ac.dueDate ? (ac.dueDate instanceof Date ? ac.dueDate : new Date(ac.dueDate)) : null;
+          const due = ac.dueDate
+            ? ac.dueDate instanceof Date
+              ? ac.dueDate
+              : new Date(ac.dueDate)
+            : null;
           const hasSubmissions = Boolean(Number(ac.submissionCount) > 0);
-          if (due && Number.isFinite(due.getTime()) && due.getTime() < Date.now() && hasSubmissions) {
+          if (
+            due &&
+            Number.isFinite(due.getTime()) &&
+            due.getTime() < Date.now() &&
+            hasSubmissions
+          ) {
             return count + 1;
           }
           return count;
@@ -136,16 +135,16 @@ export function CourseHeader({
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <CardTitle className="text-2xl font-semibold leading-tight tracking-tight">
-              <span className="mr-2 text-muted-foreground">{course.code}</span>
+            <CardTitle className="text-2xl leading-tight font-semibold tracking-tight">
+              <span className="text-muted-foreground mr-2">{course.code}</span>
               {course.name}
             </CardTitle>
-              {/* Course status tag (shared logic) */}
-              <span
-                className={`inline-block rounded ${bgColor} px-2 py-1 text-sm text-white shadow-sm ring-1 ring-gray-900/30`}
-              >
-                {status}
-              </span>
+            {/* Course status tag (shared logic) */}
+            <span
+              className={`inline-block rounded ${bgColor} px-2 py-1 text-sm text-white shadow-sm ring-1 ring-gray-900/30`}
+            >
+              {status}
+            </span>
           </div>
 
           {/* meta row */}
@@ -154,7 +153,7 @@ export function CourseHeader({
             <Badge variant="outline">
               {course.credits} credit{course.credits === 1 ? '' : 's'}
             </Badge>
-            <span className="inline-flex items-center gap-1 text-muted-foreground">
+            <span className="text-muted-foreground inline-flex items-center gap-1">
               <CalendarDays className="h-4 w-4" aria-hidden />
               {formatRange(course.startDate, course.endDate)}
             </span>
@@ -178,7 +177,12 @@ export function CourseHeader({
                 <TooltipContent>Edit course</TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            <Button variant="secondary" className="hidden sm:inline-flex" onClick={onEditClick} hidden={course.isArchived}>
+            <Button
+              variant="secondary"
+              className="hidden sm:inline-flex"
+              onClick={onEditClick}
+              hidden={course.isArchived}
+            >
               <Pencil className="mr-2 h-4 w-4" />
               Edit Course
             </Button>
@@ -216,14 +220,14 @@ export function CourseHeader({
           <>
             {/* Course Access (flush colored header touching border) */}
             <div className="rounded-md border">
-              <div className="rounded-t-md border-b bg-sidebar/80 px-2.5 py-2 text-sm font-medium leading-none text-white">
+              <div className="bg-sidebar/80 rounded-t-md border-b px-2.5 py-2 text-sm leading-none font-medium text-white">
                 Course Access
               </div>
-              <div className="px-2.5 pb-2.5 pt-2">
+              <div className="px-2.5 pt-2 pb-2.5">
                 <div className="grid grid-cols-1 gap-y-2 text-sm">
                   {/* Registration Code */}
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">Registration Code:</span>
+                    <span className="text-muted-foreground text-xs">Registration Code:</span>
                     <div className="flex items-center gap-2">
                       <span className="text-xs">{regCodeFormatted ?? 'Not set'}</span>
                       {regCodeFormatted && (
@@ -237,7 +241,11 @@ export function CourseHeader({
                                 onClick={copyRegCode}
                                 aria-label="Copy registration code"
                               >
-                                {copied ? <CopyCheck className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                                {copied ? (
+                                  <CopyCheck className="h-4 w-4" />
+                                ) : (
+                                  <Copy className="h-4 w-4" />
+                                )}
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>{copied ? 'Copied!' : 'Copy code'}</TooltipContent>
@@ -249,7 +257,7 @@ export function CourseHeader({
 
                   {/* Published */}
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-muted-foreground">Published:</span>
+                    <span className="text-muted-foreground text-[11px]">Published:</span>
                     <Switch
                       checked={course.isPublished}
                       onCheckedChange={onPublishToggle}
@@ -260,7 +268,7 @@ export function CourseHeader({
 
                   {/* Archived */}
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-muted-foreground">Archived:</span>
+                    <span className="text-muted-foreground text-[11px]">Archived:</span>
                     <Switch
                       checked={course.isArchived}
                       onCheckedChange={onArchiveToggle}
@@ -272,18 +280,18 @@ export function CourseHeader({
             </div>
 
             {/* Course Staff (flush colored header touching border) */}
-                <div className="rounded-md border">
-                  <div className="rounded-t-md border-b bg-sidebar/80 px-2.5 py-2 text-sm font-medium leading-none text-white">
-                    Course Staff
-                  </div>
-              <div className="px-2.5 pb-2.5 pt-2">
+            <div className="rounded-md border">
+              <div className="bg-sidebar/80 rounded-t-md border-b px-2.5 py-2 text-sm leading-none font-medium text-white">
+                Course Staff
+              </div>
+              <div className="px-2.5 pt-2 pb-2.5">
                 <dl className="mt-1 grid gap-1.5 text-sm">
                   <div className="grid grid-cols-[90px_1fr] gap-1.5">
-                    <dt className="text-xs text-muted-foreground">Instructor(s)</dt>
+                    <dt className="text-muted-foreground text-xs">Instructor(s)</dt>
                     <dd className="text-xs">{facultyNames}</dd>
                   </div>
                   <div className="grid grid-cols-[90px_1fr] gap-1.5">
-                    <dt className="text-xs text-muted-foreground">TAs</dt>
+                    <dt className="text-muted-foreground text-xs">TAs</dt>
                     <dd className="text-xs">{taNames}</dd>
                   </div>
                 </dl>
@@ -291,34 +299,34 @@ export function CourseHeader({
             </div>
 
             {/* Course Metrics (flush colored header touching border) */}
-                <div className="rounded-md border">
-                  <div className="rounded-t-md border-b bg-sidebar/80 px-2.5 py-2 text-sm font-medium leading-none text-white">
-                    Course Metrics
-                  </div>
-              <div className="px-2.5 pb-2.5 pt-2">
-                <dl className="grid grid-cols-2 gap-y-1 gap-x-4 text-sm">
+            <div className="rounded-md border">
+              <div className="bg-sidebar/80 rounded-t-md border-b px-2.5 py-2 text-sm leading-none font-medium text-white">
+                Course Metrics
+              </div>
+              <div className="px-2.5 pt-2 pb-2.5">
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
                   <div className="flex justify-between">
-                    <dt className="text-[11px] text-muted-foreground">Assignments</dt>
+                    <dt className="text-muted-foreground text-[11px]">Assignments</dt>
                     <dd className="font-medium">{metrics.assignments}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-[11px] text-muted-foreground">Problems</dt>
+                    <dt className="text-muted-foreground text-[11px]">Problems</dt>
                     <dd className="font-medium">{metrics.problems}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-[11px] text-muted-foreground">Students</dt>
+                    <dt className="text-muted-foreground text-[11px]">Students</dt>
                     <dd className="font-medium">{metrics.students}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-[11px] text-muted-foreground">Submissions</dt>
+                    <dt className="text-muted-foreground text-[11px]">Submissions</dt>
                     <dd className="font-medium">{metrics.submissions}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-[11px] text-muted-foreground">Needs Grading</dt>
+                    <dt className="text-muted-foreground text-[11px]">Needs Grading</dt>
                     <dd className="font-medium">{metrics.needsGrading}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-[11px] text-muted-foreground">Comments</dt>
+                    <dt className="text-muted-foreground text-[11px]">Comments</dt>
                     <dd className="font-medium">{metrics.comments}</dd>
                   </div>
                 </dl>

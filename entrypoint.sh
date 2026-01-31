@@ -16,6 +16,12 @@ echo "AFCT container starting..."
 echo "Node env: ${NODE_ENV:-unset}"
 echo "=============================================="
 
+# Ensure writable app dirs (for Next.js build output)
+mkdir -p /app/.next /app/node_modules || true
+if [ "$(id -u)" = "0" ]; then
+  chown -R node:node /app/.next /app/node_modules /private/uploads || true
+fi
+
 # ---- 0) Sanity checks ----
 if [ -z "${DATABASE_URL:-}" ]; then
   echo "✖ DATABASE_URL is not set. Refusing to start."
