@@ -53,6 +53,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Set npm cache directory
 ENV NPM_CONFIG_CACHE=/tmp/.npm
 
+# Ensure app directory is writable by node user
+RUN chown -R node:node /app
+
 # App dependencies
 COPY package*.json ./
 
@@ -81,26 +84,23 @@ RUN mkdir -p /app/bin && chmod -R 755 /app/bin || true
 COPY --from=builder /app/entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser  -S nextjs -u 1001 -G nodejs
-
 # Private upload directories
 RUN mkdir -p /private/uploads/pfps \
     /private/uploads/problems \
     /private/uploads/solutions \
     /private/uploads/submissions && \
-    chown -R nextjs:nodejs /private/uploads && \
-    chmod -R 775 /private/uploads
+    chmod -R 775 /private/uploads && \
+    chown -R node:node /private/uploads
 
 # App ownership
-RUN chown -R nextjs:nodejs /app
+RUN chown -R node:node /app
 
 # Verify Java installation
 RUN java -version || true
 
 # Switch to non-root user
-USER nextjs
+USER node
+
 EXPOSE 3000
 
 ENTRYPOINT ["/usr/bin/tini","-g","--","./entrypoint.sh"]
