@@ -33,9 +33,12 @@ export async function PUT(req: Request) {
 
   const timezone = String(body.timezone ?? '').trim();
   const rawSize = Number(body.maxUploadSizeMb);
-  const maxUploadSizeMb = Math.max(1, Math.min(1024, Number.isFinite(rawSize) ? Math.trunc(rawSize) : 0));
+  const maxUploadSizeMb = Math.max(
+    1,
+    Math.min(1024, Number.isFinite(rawSize) ? Math.trunc(rawSize) : 0),
+  );
 
-  if (!COMMON_TIMEZONES.includes(timezone)) {
+  if (!COMMON_TIMEZONES.includes(timezone as (typeof COMMON_TIMEZONES)[number])) {
     return NextResponse.json({ error: 'Invalid timezone' }, { status: 400 });
   }
 
