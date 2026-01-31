@@ -4,11 +4,6 @@ const nextConfig: NextConfig = {
   // Fix for CommonJS modules in ESM context (only jsonwebtoken since bcrypt is external)
   transpilePackages: ['jsonwebtoken'],
 
-  // Temporarily skip type-checking during build to avoid TS stack overflow
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-
   // Mark external packages that shouldn't be bundled
   serverExternalPackages: ['@prisma/client', 'bcrypt', '@mapbox/node-pre-gyp'],
 

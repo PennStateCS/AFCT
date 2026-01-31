@@ -41,8 +41,8 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
       const { canArchive, reason } = await canArchiveCourse(
         prisma,
         courseId,
-        courseDates.startDate,
-        courseDates.endDate,
+        courseDates.startDate.toISOString(),
+        courseDates.endDate.toISOString(),
       );
       if (!canArchive) {
         return NextResponse.json({ error: reason }, { status: 403 });
