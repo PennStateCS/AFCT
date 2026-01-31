@@ -21,7 +21,7 @@ import {
 import type { FullCourse } from '@/types/course';
 import { formatInstructorNames, getStudentCount } from '@/lib/course-utils';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { formatDateInTimeZone } from '@/lib/date';
+import { formatDateInTimeZone, formatDateTimeInTimeZone } from '@/lib/date';
 
 interface CourseHeaderProps {
   course: FullCourse;
@@ -50,10 +50,10 @@ export function CourseHeader({
     const s = toDate(start);
     const e = toDate(end);
     if (!s && !e) return 'Dates TBD';
-    if (s && !e) return `${formatDateInTimeZone(s, timezone)} to TBD`;
-    if (!s && e) return `TBD to ${formatDateInTimeZone(e, timezone)}`;
+    if (s && !e) return `${formatDateTimeInTimeZone(s, timezone)} to TBD`;
+    if (!s && e) return `TBD to ${formatDateTimeInTimeZone(e, timezone)}`;
     if (s && e && Number.isFinite(s.getTime()) && Number.isFinite(e.getTime())) {
-      return `${formatDateInTimeZone(s, timezone)} to ${formatDateInTimeZone(e, timezone)}`;
+      return `${formatDateTimeInTimeZone(s, timezone)} to ${formatDateTimeInTimeZone(e, timezone)}`;
     }
     return 'Invalid dates';
   };
