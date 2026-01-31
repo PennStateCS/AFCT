@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import DashboardSidebarShell from '@/components/DashboardSidebarShell';
 import Navbar from '@/components/Navbar';
 import { SidebarProvider } from '@/components/ui/sidebar';
+import AuthGate from '@/components/AuthGate';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -28,13 +29,15 @@ export default async function DashboardLayout({ children }: { children: React.Re
       }
       defaultOpen={defaultOpen}
     >
-      <div className="flex min-h-screen w-full">
-        <DashboardSidebarShell />
-        <div className="flex flex-1 flex-col p-4">
-          <Navbar />
-          <main>{children}</main>
+      <AuthGate>
+        <div className="flex min-h-screen w-full">
+          <DashboardSidebarShell />
+          <div className="flex flex-1 flex-col p-4">
+            <Navbar />
+            <main>{children}</main>
+          </div>
         </div>
-      </div>
+      </AuthGate>
     </SidebarProvider>
   );
 }
