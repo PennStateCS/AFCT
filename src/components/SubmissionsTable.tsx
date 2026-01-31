@@ -13,24 +13,22 @@ import {
 import { Button } from "@/components/ui/button";
 import { Submission } from "@prisma/client";
 import JffViewerDialog from "./JffViewerDialog";
+import { useEffectiveTimezone } from "@/hooks/use-effective-timezone";
+import { formatDateTimeInTimeZone } from "@/lib/date";
 
 type Props = {
   submissions: Submission[];
   className?: string;
 };
 
-const formatDateTime = (iso: string | Date) => {
-  const d = typeof iso === "string" ? new Date(iso) : iso;
-  return `${d.toLocaleDateString()} at ${d.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  })}`;
-};
-
 export default function SubmissionsTable({
   submissions,
   className = "",
 }: Props) {
+  const { timezone } = useEffectiveTimezone();
+
+  const formatDateTime = (iso: string | Date) =>
+    formatDateTimeInTimeZone(iso, timezone);
   const [openDialog, setOpenDialog] = useState<{
     open: boolean;
     submission: Submission | null;

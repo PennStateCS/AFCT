@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { showToast } from '@/lib/toast';
 import { GraduationCap, Download, TrendingUp, Users, Target, RefreshCw } from 'lucide-react';
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import { formatTimeInTimeZone } from '@/lib/date';
 
 type StudentRow = {
   id: string;
@@ -29,6 +31,7 @@ type Assignment = {
 type ApiStudent = { id: string; firstName?: string | null; lastName?: string | null; email?: string | null; avatar?: string | null };
 
 export default function GradesCard({ courseId }: { courseId: string }) {
+  const { timezone } = useEffectiveTimezone();
   const [loading, setLoading] = useState(true);
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -426,7 +429,7 @@ export default function GradesCard({ courseId }: { courseId: string }) {
         {/* Last Updated Info */}
         {lastUpdated && (
           <div className="text-xs text-muted-foreground text-center">
-            Last updated: {lastUpdated.toLocaleTimeString()}
+            Last updated: {formatTimeInTimeZone(lastUpdated, timezone)}
           </div>
         )}
 

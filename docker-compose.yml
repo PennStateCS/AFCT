@@ -3,6 +3,9 @@ version: "3.9"
 services:
   app:
     image: ghcr.io/pennstatewilkes-barre/afct-dashboard:main
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: afct-app
     restart: unless-stopped
 

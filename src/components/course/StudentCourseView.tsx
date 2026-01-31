@@ -1,6 +1,8 @@
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FullCourse } from '@/types/course';
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import { formatDateInTimeZone, formatTimeInTimeZone } from '@/lib/date';
 
 interface StudentCourseViewProps {
   course: FullCourse;
@@ -8,6 +10,7 @@ interface StudentCourseViewProps {
 
 export function StudentCourseView({ course }: StudentCourseViewProps) {
   const router = useRouter();
+  const { timezone } = useEffectiveTimezone();
 
   return (
     <Card>
@@ -69,11 +72,8 @@ export function StudentCourseView({ course }: StudentCourseViewProps) {
                                 : 'text-green-700'
                             }`}>
                               {isOverdue ? 'OVERDUE: ' : 'Due: '}
-                              {new Date(assignment.dueDate).toLocaleDateString()} at{' '}
-                              {new Date(assignment.dueDate).toLocaleTimeString([], { 
-                                hour: '2-digit', 
-                                minute: '2-digit' 
-                              })}
+                              {formatDateInTimeZone(assignment.dueDate, timezone)} at{' '}
+                              {formatTimeInTimeZone(assignment.dueDate, timezone)}
                             </span>
                           </div>
                           

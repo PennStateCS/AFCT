@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import type { FullCourse } from '@/types/course';
 import { formatInstructorNames, getStudentCount } from '@/lib/course-utils';
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import { formatDateInTimeZone } from '@/lib/date';
 
 interface CourseHeaderProps {
   course: FullCourse;
@@ -38,6 +40,7 @@ export function CourseHeader({
   onPublishToggle,
   onArchiveToggle,
 }: CourseHeaderProps) {
+  const { timezone } = useEffectiveTimezone();
   // -- helpers ---------------------------------------------------------------
   // Get course status tag at the top
   const { status, bgColor } = require('@/lib/course-status').getCourseStatusTag(course);
@@ -46,16 +49,11 @@ export function CourseHeader({
       !v ? null : v instanceof Date ? v : new Date(v);
     const s = toDate(start);
     const e = toDate(end);
-    const fmt = new Intl.DateTimeFormat(undefined, {
-      year: '2-digit',
-      month: '2-digit',
-      day: '2-digit',
-    });
     if (!s && !e) return 'Dates TBD';
-    if (s && !e) return `${fmt.format(s)} to TBD`;
-    if (!s && e) return `TBD to ${fmt.format(e)}`;
+    if (s && !e) return `${formatDateInTimeZone(s, timezone)} to TBD`;
+    if (!s && e) return `TBD to ${formatDateInTimeZone(e, timezone)}`;
     if (s && e && Number.isFinite(s.getTime()) && Number.isFinite(e.getTime())) {
-      return `${fmt.format(s)} to ${fmt.format(e)}`;
+      return `${formatDateInTimeZone(s, timezone)} to ${formatDateInTimeZone(e, timezone)}`;
     }
     return 'Invalid dates';
   };

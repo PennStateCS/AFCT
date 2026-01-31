@@ -45,6 +45,7 @@ export async function GET(req: Request) {
         lastName: true,
         role: true,
         avatar: true,
+        timezone: true,
         inactive: true,
         createdAt: true,
         updatedAt: true,
@@ -114,6 +115,8 @@ export async function POST(req: Request) {
     // 4. Hash the password and create the user
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    const systemSettings = await prisma.systemSettings.findUnique({ where: { id: 1 } });
+
     const newUser = await prisma.user.create({
       data: {
         email,
@@ -121,6 +124,7 @@ export async function POST(req: Request) {
         lastName,
         role,
         password: hashedPassword,
+        timezone: systemSettings?.timezone ?? 'UTC',
       },
       select: {
         id: true,
@@ -129,6 +133,7 @@ export async function POST(req: Request) {
         lastName: true,
         role: true,
         createdAt: true,
+        timezone: true,
       },
     });
 

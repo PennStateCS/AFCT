@@ -6,8 +6,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Clock, Info } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
+import { formatDateTimeInTimeZone } from '@/lib/date';
 
-interface ActivityUser {
+export interface ActivityUser {
   id: string;
   email: string;
   firstName: string | null;
@@ -15,7 +16,7 @@ interface ActivityUser {
   avatar: string | null;
 }
 
-interface ActivityLog {
+export interface ActivityLog {
   id: string;
   userId: string | null;
   action: string;
@@ -208,18 +209,8 @@ const formatTimestamp = (timestamp: string) => {
   return relativeTime;
 };
 
-const formatFullTimestamp = (timestamp: string) => {
-  const date = new Date(timestamp);
-  return date.toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: true
-  });
-};
+const formatFullTimestamp = (timestamp: string, timeZone: string) =>
+  formatDateTimeInTimeZone(timestamp, timeZone);
 
 const getIpAddress = (metadata: Record<string, unknown> | null, activity: ActivityLog) => {
   // Try the direct ipAddress field first (from enhanced schema)
@@ -242,7 +233,7 @@ const getIpAddress = (metadata: Record<string, unknown> | null, activity: Activi
   return null;
 };
 
-export const activityColumns: ColumnDef<ActivityLog>[] = [
+export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] => [
   {
     id: 'avatar',
     header: '',
@@ -415,7 +406,7 @@ export const activityColumns: ColumnDef<ActivityLog>[] = [
             {formatTimestamp(activity.timestamp)}
           </div>
           <div className="text-xs text-muted-foreground mt-0.5">
-            {formatFullTimestamp(activity.timestamp)}
+            {formatFullTimestamp(activity.timestamp, timeZone)}
           </div>
         </div>
       );

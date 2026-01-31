@@ -36,6 +36,7 @@ model User {
   password  String
   role      Role    @default(STUDENT) // Global role
   avatar    String?
+  timezone  String?
   inactive  Boolean @default(false)
 
   createdAt DateTime @default(now())
@@ -264,6 +265,16 @@ model ActivityLog {
   @@index([assignmentId, action])
   @@index([userId, courseId])
   @@index([timestamp, category])
+}
+
+model SystemSettings {
+  /// Singleton row (id=1)
+  id       Int      @id @default(1)
+  timezone String   @default("UTC")
+  maxUploadSizeMb Int @default(25)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 generator erd {

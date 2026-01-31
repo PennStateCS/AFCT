@@ -36,6 +36,23 @@ const nextConfig: NextConfig = {
       });
     }
 
+    // Prevent watchpack from scanning Docker volume mounts with restricted perms
+    config.watchOptions = {
+      ...(config.watchOptions || {}),
+      ignored: [
+        '**/dev-postgres/**',
+        '**/dev-postgres',
+        '**/dev-postgres/**/*',
+        '/app/dev-postgres/**',
+        '/app/dev-postgres/**/*',
+        '**/dev-uploads/**',
+        '**/dev-uploads',
+        '**/dev-uploads/**/*',
+        '/app/dev-uploads/**',
+        '/app/dev-uploads/**/*',
+      ],
+    };
+
     return config;
   },
 };
