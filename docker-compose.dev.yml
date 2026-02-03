@@ -1,4 +1,4 @@
-version: "3.9"
+version: '3.9'
 
 services:
   app:
@@ -10,14 +10,14 @@ services:
     restart: unless-stopped
 
     ports:
-      - "3000:3000"
-      - "5555:5555"
+      - '3000:3000'
+      - '5555:5555'
 
     environment:
       NODE_ENV: development
-      CHOKIDAR_USEPOLLING: "true"
-      CHOKIDAR_INTERVAL: "500"
-      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: 'true'
+      CHOKIDAR_INTERVAL: '500'
+      WATCHPACK_POLLING: 'true'
 
       DATABASE_URL: postgres://afct_user:afct_pass@postgres:5432/afct
 
@@ -26,9 +26,9 @@ services:
       DB_USER: afct_user
       DB_NAME: afct
 
-      WAIT_FOR_DB: "true"
-      MIGRATE_ON_START: "true"
-      SEED_ON_START: "true"
+      WAIT_FOR_DB: 'true'
+      MIGRATE_ON_START: 'true'
+      SEED_ON_START: 'true'
 
     volumes:
       # App source (hot reload)
@@ -41,9 +41,17 @@ services:
       - ./dev-uploads:/private/uploads
 
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
 
-    command: ["npm", "run", "dev"]
+    command: ['npm', 'run', 'dev']
+
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -f http://localhost:3000/api/health || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   postgres:
     image: postgres:15-alpine
@@ -58,7 +66,13 @@ services:
       - afct-dev-postgres:/var/lib/postgresql/data
 
     ports:
-      - "5432:5432"
+      - '5432:5432'
+
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U afct_user -d afct']
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   afct-dev-postgres:
