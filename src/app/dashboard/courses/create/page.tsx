@@ -21,6 +21,7 @@ export default function CreateCoursePage() {
     endDate: '',
     isPublished: false,
     facultyIds: [] as string[],
+	instructorIds: [] as string[],
   });
 
   const [facultyList, setFacultyList] = useState<User[]>([]);
@@ -56,6 +57,18 @@ export default function CreateCoursePage() {
         facultyIds: alreadySelected
           ? prev.facultyIds.filter((fid) => fid !== id)
           : [...prev.facultyIds, id],
+      };
+    });
+  };
+
+  const handleFacultySelect = (id: string) => {
+    setFormData((prev) => {
+      const alreadySelected = prev.instructorIds.includes(id);
+      return {
+        ...prev,
+        facultyIds: alreadySelected
+          ? prev.instructorIds.filter((fid) => fid !== id)
+          : [...prev.instructorIds, id],
       };
     });
   };
@@ -175,6 +188,28 @@ export default function CreateCoursePage() {
                       type="checkbox"
                       checked={formData.facultyIds.includes(faculty.id)}
                       onChange={() => handleFacultySelect(faculty.id)}
+                    />
+                    <span>
+                      {faculty.firstName} {faculty.lastName}
+                    </span>
+                  </label>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div>
+            <Label>Assign Instructors</Label>
+            <div className="mt-1 max-h-40 space-y-1 overflow-y-auto rounded border p-2">
+              {facultyList.length === 0 ? (
+                <p className="text-muted-foreground text-sm">No faculty available.</p>
+              ) : (
+                facultyList.map((faculty) => (
+                  <label key={faculty.id} className="flex items-center space-x-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={formData.instructorIds.includes(faculty.id)}
+                      onChange={() => handleInstructorSelect(faculty.id)}
                     />
                     <span>
                       {faculty.firstName} {faculty.lastName}

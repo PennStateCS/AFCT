@@ -95,7 +95,7 @@ export default function SubmissionsTable({
               <TableCell>
                 {submission.originalFileName && submission.fileName ? (
                   <a
-                    href={`/uploads/submissions/${submission.fileName}`}
+                    href={`/api/files/submissions?file=${submission.fileName}`}
                     download={submission.originalFileName}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -133,7 +133,7 @@ export default function SubmissionsTable({
         <JffViewerDialog
           open={openDialog.open}
           onOpenChange={(open) => setOpenDialog({ open, submission: null })}
-          src={`/uploads/submissions/${encodeURIComponent(openDialog.submission.fileName ?? '')}`}
+          src={`/api/files/submissions?file=${encodeURIComponent(openDialog.submission.fileName ?? '')}`}
           title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
           width="70vw"
           height="70vh"

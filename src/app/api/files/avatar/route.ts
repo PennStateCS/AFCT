@@ -1,0 +1,43 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@/lib/auth';
+import path from 'path';
+import fs from 'fs'; 
+
+export async function GET(request: NextRequest){
+	try {
+		const session = await auth();
+		const user = session?.user;
+
+		if (!user){ //Make sure user is in a valid session
+			return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+		}
+
+		const fileName = request.nextUrl.searchParams.get('file');
+
+		if (!fileName || fileName.includes('/') || fileName.includes('\\')){ // Check for valid file name
+			return NextResponse.json({ error: 'Invalid File' }, { status: 400 });
+		}
+
+		const filePath = path.join(process.cwd(), 'private', 'uploads', 'pfps', fileName);
+
+		if (!fs.existsSync(filePath)){ // Check for valid file path
+			return NextResponse.json({ error: 'File at ' + filePath + ' does not exist' }, { status: 404 });
+		}
+
+		const buffer = fs.readFileSync(filePath);
+		
+		const fileType = fileName.split('.').at(-1);
+
+		if (!fileType || !['png', 'jpg', 'avif', 'webp'].includes(fileType)){ //Check and see if this is a supported format
+			return NextResponse.json({ error: 'Unsupported file format' }, { status: 400 });
+		} 
+		const headers = new Headers();
+		headers.set('Content-Type', 'image/' + fileType);
+		headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+
+		return new NextResponse(buffer, { status: 200, statusText: 'OK', headers });
+	} catch (err) {
+		console.error('Avatar serve error: ', err);
+		return NextResponse.json({ error: 'Server error' }, { status: 500 });
+	}
+}
