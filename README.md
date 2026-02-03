@@ -16,6 +16,7 @@ Built with:
 ## 🚀 Quick Start Guide
 
 ### Prerequisites
+
 - Docker Desktop (recommended)
 - Node.js 20+ (optional for non-Docker dev)
 
@@ -32,6 +33,7 @@ Visit: http://localhost:3000
 ## 🐳 Docker Development (Recommended)
 
 ### Main Commands
+
 ```bash
 npm run docker:dev
 npm run docker:dev:detached
@@ -47,6 +49,7 @@ npm run docker:dev:nuke
 ```
 
 **What these do**
+
 - `docker:dev`: Build and run the dev stack in the foreground (logs attached).
 - `docker:dev:detached`: Build and run the dev stack in the background.
 - `docker:dev:seed`: Run Prisma seed inside the dev app container.
@@ -60,6 +63,7 @@ npm run docker:dev:nuke
 - `docker:dev:nuke`: Remove dev containers, volumes, and all unused Docker data.
 
 ### What Happens on Startup
+
 - PostgreSQL container starts
 - Prisma migrations applied
 - Seed data inserted
@@ -70,6 +74,7 @@ npm run docker:dev:nuke
 Production deployments typically pull the **GHCR image** and run via Docker Compose.
 
 ### Environment (`.env`)
+
 ```env
 POSTGRES_PASSWORD=change-me
 NEXTAUTH_URL=http://10.144.18.20:3000
@@ -81,6 +86,7 @@ NODE_ENV=production
 ⚠️ `NEXTAUTH_URL` must exactly match the browser URL or login may fail with `MissingCSRF`.
 
 ### Main Commands
+
 ```bash
 npm run docker:prod
 npm run docker:prod:nobuild
@@ -93,6 +99,7 @@ npm run docker:prod:seed
 ```
 
 **What these do**
+
 - `docker:prod`: Build and start the production stack in detached mode.
 - `docker:prod:nobuild`: Start the production stack without rebuilding.
 - `docker:prod:down`: Stop the production stack.
@@ -103,11 +110,33 @@ npm run docker:prod:seed
 - `docker:prod:seed`: Run the production seed script inside the app container.
 
 **Notes**
+
 - `docker:prod` builds locally using the Dockerfile and starts the stack.
 - `docker:prod:nobuild` starts without building (use after pulling GHCR).
 - To use GHCR directly: `docker pull ghcr.io/pennstatewilkes-barre/afct-dashboard:main` then run `npm run docker:prod:nobuild`.
 
+## 🔐 SSL / Custom Certificates (Nginx)
+
+By default, nginx generates a **self‑signed** certificate on first start. You can replace it with your own certificate at any time.
+
+### Replace the certificate (dev or prod)
+
+1. Place your cert and key in the nginx certs folder:
+   - `docker/nginx/certs/server.crt`
+   - `docker/nginx/certs/server.key`
+2. Restart nginx:
+   - Dev: `docker compose -f docker-compose.dev.yml restart nginx`
+   - Prod: `docker compose restart nginx`
+
+### Ports
+
+- HTTP redirect: `3001` → `80`
+- HTTPS: `3002` → `443`
+
+> Tip: If you don’t have a domain, the self‑signed cert is fine for local/testing. Browsers will show a warning until you trust the cert.
+
 ## 🏭 Production (Node.js – No Docker)
+
 ```bash
 npm install
 npm run build
@@ -117,6 +146,7 @@ npm start
 ```
 
 Requires:
+
 - Node.js 20+
 - PostgreSQL 15+
 - Java 21+
@@ -124,6 +154,7 @@ Requires:
 ## 🗄️ Database Management
 
 ### Prisma (Local / Node)
+
 ```bash
 npm run db:generate
 npm run db:migrate
@@ -134,6 +165,7 @@ npm run seed
 ```
 
 ### Inside Docker
+
 ```bash
 npm run docker:dev:studio
 npm run docker:dev:seed
@@ -145,17 +177,18 @@ npm run docker:dev:psql
 ## 🔍 Troubleshooting
 
 **Database**
+
 ```bash
 docker logs afct-dev-postgres
 docker exec -it afct-dev-postgres pg_isready -U afct_user
 ```
 
 **Auth / Login**
+
 ```bash
 docker exec -it afct-dev sh -lc 'echo $NEXTAUTH_URL'
 docker logs afct-dev | tail
 ```
-
 
 ## 📚 Tech Stack
 
@@ -168,15 +201,10 @@ docker logs afct-dev | tail
 
 ## 👥 Contributors
 
-| Name | Affiliation | Email | GitHub |
-| --- | --- | --- | --- |
-| Jesse Burdick-Pless | RIT | - | [jb4411](https://github.com/jb4411) |
-| Jeffrey Chiampi | PSU | jdc308@psu.edu | [jdc308](https://github.com/jdc308) |
-| Edwin Kismal | PSU | etk5176@psu.edu | [EdwinKimsal](https://github.com/EdwinKimsal) |
-| Adam Manowski | PSU | ajm9738@psu.edu | [astemaxed](https://github.com/astemaxed) |
-| Andrew Sutton | PSU |  ams12165@psu.edu | [asutton24](https://github.com/asutton24) |
-
-
-
-
-
+| Name                | Affiliation | Email            | GitHub                                        |
+| ------------------- | ----------- | ---------------- | --------------------------------------------- |
+| Jesse Burdick-Pless | RIT         | -                | [jb4411](https://github.com/jb4411)           |
+| Jeffrey Chiampi     | PSU         | jdc308@psu.edu   | [jdc308](https://github.com/jdc308)           |
+| Edwin Kismal        | PSU         | etk5176@psu.edu  | [EdwinKimsal](https://github.com/EdwinKimsal) |
+| Adam Manowski       | PSU         | ajm9738@psu.edu  | [astemaxed](https://github.com/astemaxed)     |
+| Andrew Sutton       | PSU         | ams12165@psu.edu | [asutton24](https://github.com/asutton24)     |

@@ -57,7 +57,7 @@ services:
     image: nginx:1.25-alpine
     container_name: afct-dev-nginx
     ports:
-      - '3001:80'  # HTTP redirect
+      - '3001:80' # HTTP redirect
       - '3002:443' # HTTPS
     depends_on:
       app:
