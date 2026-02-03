@@ -1,14 +1,7 @@
 #!/bin/sh
 set -e
 
-# Error handling
-trap 'echo "✖ Entrypoint script failed"; exit 1' ERR
-
-# Define color codes for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+TRAP_MESSAGE="✖ Entrypoint script failed"
 
 # Logging helper
 log_info() {
@@ -23,8 +16,8 @@ log_error() {
   echo "✖ $1" >&2
 }
 
-# Export for use in subshells
-export -f log_info log_success log_error
+# Error handling (POSIX sh compatible)
+trap 'status=$?; if [ $status -ne 0 ]; then echo "$TRAP_MESSAGE (exit $status)" >&2; fi; exit $status' EXIT
 
 # --------------------------------------------
 # AFCT Entrypoint
@@ -51,10 +44,9 @@ log_success "DATABASE_URL is configured"
 
 # ---- 0.1) Ensure private upload dirs exist ----
 UPLOAD_DIR="/private/uploads"
-UPLOAD_SUBDIRS="pfps problems solutions submissions"
 
 log_info "Creating upload directories..."
-if mkdir -p "$UPLOAD_DIR"/{pfps,problems,solutions,submissions} 2>/dev/null; then
+if mkdir -p "$UPLOAD_DIR/pfps" "$UPLOAD_DIR/problems" "$UPLOAD_DIR/solutions" "$UPLOAD_DIR/submissions" 2>/dev/null; then
   log_success "Upload directories ready"
 else
   log_error "Failed to create upload directories in $UPLOAD_DIR"

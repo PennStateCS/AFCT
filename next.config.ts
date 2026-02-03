@@ -5,9 +5,13 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // Acknowledge Turbopack when custom webpack config is present (Next 16+)
+  turbopack: {
+    root: __dirname,
+  },
   // Fix for CommonJS modules in ESM context
   transpilePackages: ['jsonwebtoken', 'bcrypt'],
-  
+
   webpack: (config, { isServer, webpack }) => {
     // Fix CommonJS/ESM module issues
     config.resolve.fallback = {
@@ -23,16 +27,16 @@ const nextConfig: NextConfig = {
     config.plugins.push(
       new webpack.DefinePlugin({
         'typeof self': JSON.stringify(isServer ? 'undefined' : 'object'),
-      })
+      }),
     );
 
     // Handle CommonJS modules that break in ESM context
     if (isServer) {
       config.externals = config.externals || [];
       config.externals.push({
-        'jsonwebtoken': 'commonjs jsonwebtoken',
-        'bcrypt': 'commonjs bcrypt',
-        'crypto': 'commonjs crypto',
+        jsonwebtoken: 'commonjs jsonwebtoken',
+        bcrypt: 'commonjs bcrypt',
+        crypto: 'commonjs crypto',
       });
     }
 
