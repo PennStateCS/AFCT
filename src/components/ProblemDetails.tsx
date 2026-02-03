@@ -114,7 +114,7 @@ export default function ProblemDetails({
             {problem.fileName && problem.originalFileName ? (
               <div className="flex items-center gap-2">
                 <a
-                  href={`/uploads/problems/${problem.fileName}`}
+                  href={`/api/files/problems?file=${problem.fileName}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline"
@@ -137,7 +137,7 @@ export default function ProblemDetails({
                   <JffViewerDialog
                     open={open}
                     onOpenChange={setOpen}
-                    src={`/uploads/problems/${encodeURIComponent(problem.fileName ?? '')}`}
+                    src={`/api/files/problems?file=${encodeURIComponent(problem.fileName ?? '')}`}
                     title={`${problem.originalFileName || problem.fileName} - ${problem.title}`}
                     width="70vw"
                     height="70vh"

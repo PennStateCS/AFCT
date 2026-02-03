@@ -38,7 +38,7 @@ type EditProfileDialog = {
 export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDialog) {
   // Local preview state (keep separate from RHF file)
   const [avatarPreview, setAvatarPreview] = useState<string>(
-    user.avatar ? `/uploads/pfps/${user.avatar}` : '/uploads/pfps/default-avatar.png',
+    user.avatar ? `/api/files/avatar?file=${user.avatar}` : '/api/files/avatar?file=default-avatar.png',
   );
   const [serverTimezone, setServerTimezone] = useState('UTC');
 
@@ -80,7 +80,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
         keepValues: false,
       });
         // Reset preview from current user
-      setAvatarPreview(user.avatar ? `/uploads/pfps/${user.avatar}` : '/uploads/pfps/default-avatar.png');
+      setAvatarPreview(user.avatar ? `/api/files/avatar?file=${user.avatar}` : '/api/files/avatar?file=default-avatar.png');
     } else {
       reset(defaults, {
         keepDirty: false,
@@ -163,7 +163,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
   };
 
   const handleDeleteAvatar = () => {
-    setAvatarPreview('/uploads/pfps/default-avatar.png');
+    setAvatarPreview('/api/files/avatar?=default-avatar.png');
     setValue('avatarFile', undefined, { shouldDirty: true });
     setValue('deleteAvatar', true, { shouldDirty: true });
   };
@@ -259,7 +259,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
                 )}
               />
 
-              {avatarPreview && avatarPreview !== '/uploads/pfps/default-avatar.png' && (
+              {avatarPreview && avatarPreview !== '/api/files/avatar?=default-avatar.png' && (
                 <Button
                   type="button"
                   variant="outline"
