@@ -3,20 +3,14 @@ version: '3.9'
 services:
   app:
     image: ghcr.io/pennstatewilkes-barre/afct-dashboard:main
-      - "3001:80"  # HTTP redirect
-      - "3002:443" # HTTPS
-      context: .
-      dockerfile: Dockerfile
     container_name: afct-app
     env_file:
       - .env.production
     # All required environment variables are sourced from .env.production
-    # NOTE: no direct host port mapping — nginx will expose the app on host port 3001
+    # NOTE: no direct host port mapping — nginx will expose the app on host ports 80/443
     depends_on:
-      - ./docker/nginx/certs:/etc/nginx/certs
-      - ./docker/nginx/entrypoint.sh:/docker-entrypoint.d/99-self-signed.sh:ro
       postgres:
-      test: ["CMD-SHELL", "curl -f http://localhost:80/api/health || exit 1"]
+        condition: service_healthy
     restart: unless-stopped
     volumes:
       - uploads_data:/app/public/uploads
@@ -33,30 +27,29 @@ services:
       MIGRATE_ON_START: 'true'
       SEED_ON_START: 'auto'
     healthcheck:
-      # Healthcheck should target the app's internal port (3000)
-      test: ['CMD-SHELL', 'curl -f http://localhost:3000/api/health || exit 1']
+      test: ['CMD-SHELL', 'curl -f http://localhost:3000/ || exit 1']
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 60s
 
   nginx:
     image: nginx:1.25-alpine
     container_name: afct-nginx
     ports:
-      - '3001:80' # Public port for the app (previously mapped on app)
+      - '80:80'   # HTTP
+      - '443:443' # HTTPS
     depends_on:
       app:
         condition: service_healthy
     restart: unless-stopped
-    # Mount the uploads volume so nginx can serve uploaded files directly
     volumes:
       - uploads_data:/usr/share/nginx/html/uploads:ro
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./docker/nginx/certs:/etc/nginx/certs
+      - ./docker/nginx/entrypoint.sh:/docker-entrypoint.d/99-self-signed.sh:ro
     healthcheck:
-      test: ['CMD-SHELL', 'curl -f http://localhost:80/api/health || exit 1']
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      disable: true
 
   postgres:
     image: postgres:15-alpine
@@ -73,6 +66,13 @@ services:
 
     ports:
       - '5432:5432'
+
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U afct_user -d afct']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
 volumes:
   uploads_data:

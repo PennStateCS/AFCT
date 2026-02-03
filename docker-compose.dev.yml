@@ -47,11 +47,7 @@ services:
     command: ['npm', 'run', 'dev']
 
     healthcheck:
-      test: ['CMD-SHELL', 'curl -f http://localhost:3000/api/health || exit 1']
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+      disable: true
 
   nginx:
     image: nginx:1.25-alpine
@@ -61,7 +57,7 @@ services:
       - '3002:443' # HTTPS
     depends_on:
       app:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
     volumes:
       - ./dev-uploads:/usr/share/nginx/html/uploads:ro
@@ -69,10 +65,7 @@ services:
       - ./docker/nginx/certs:/etc/nginx/certs
       - ./docker/nginx/entrypoint.sh:/docker-entrypoint.d/99-self-signed.sh:ro
     healthcheck:
-      test: ['CMD-SHELL', 'curl -f http://localhost:80/api/health || exit 1']
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      disable: true
 
   postgres:
     image: postgres:15-alpine
