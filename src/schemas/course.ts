@@ -56,59 +56,66 @@ const normalizeCode = (v: string) => v.trim().replace(/\s+/g, ' ').toUpperCase()
 /**
  * Base schema object without effects
  */
-const BaseCourseObject = z.object({
-  name: z.string().trim().min(3, 'Course name must be at least 3 characters.'),
-  code: z
-    .string()
-    .trim()
-    .min(2, 'Course code is required.')
-    .transform(normalizeCode)
-    .refine((v) => courseCodeRegex.test(v), {
-      message: 'Use a code like "CMPSC 221" or "MATH220".',
-    }),
-  semester: z.string().trim().min(1, 'Semester is required.'),
-  credits: z.coerce.number().int('Credits must be an integer.').min(1).max(6),
-  startDate: DateTimeLocal,
-  endDate: DateTimeLocal,
-  isPublished: z.boolean().default(false),
-}).strict();
+const BaseCourseObject = z
+  .object({
+    name: z.string().trim().min(3, 'Course name must be at least 3 characters.'),
+    code: z
+      .string()
+      .trim()
+      .min(2, 'Course code is required.')
+      .transform(normalizeCode)
+      .refine((v) => courseCodeRegex.test(v), {
+        message: 'Use a code like "CMPSC 221" or "MATH220".',
+      }),
+    semester: z.string().trim().min(1, 'Semester is required.'),
+    credits: z.coerce.number().int('Credits must be an integer.').min(1).max(6),
+    startDate: DateTimeLocal,
+    endDate: DateTimeLocal,
+    isPublished: z.boolean().default(false),
+  })
+  .strict();
 
 /**
  * Form-only base object schema (no date transformation)
  */
-const BaseCourseFormObject = z.object({
-  name: z.string().trim().min(3, 'Course name must be at least 3 characters.'),
-  code: z.string().trim().min(2, 'Course code is required.'),
-  semester: z.string().trim().min(1, 'Semester is required.'),
-  credits: z.string().min(1, 'Credits are required.'),
-  startDate: DateTimeLocalForm,
-  endDate: DateTimeLocalForm,
-}).strict();
+const BaseCourseFormObject = z
+  .object({
+    name: z.string().trim().min(3, 'Course name must be at least 3 characters.'),
+    code: z.string().trim().min(2, 'Course code is required.'),
+    semester: z.string().trim().min(1, 'Semester is required.'),
+    credits: z.string().min(1, 'Credits are required.'),
+    startDate: DateTimeLocalForm,
+    endDate: DateTimeLocalForm,
+  })
+  .strict();
 
 /**
- * Create schema — includes publish+faculty selection.
+ * Create schema — includes publish+instructor selection.
  */
 export const CreateCourseSchema = BaseCourseObject.extend({
   facultyIds: z.array(z.string()).default([]),
   instructorIds: z.array(z.string()).default([]),
-}).refine((d) => d.startDate <= d.endDate, {
-  path: ['startDate'],
-  message: 'Start date/time must be on or before the end date/time.',
-}).refine((d) => d.startDate <= d.endDate, {
-  path: ['endDate'],
-  message: 'End date/time must be on or after the start date/time.',
-}).superRefine((d, ctx) => {
-  if (d.isPublished && d.facultyIds.length === 0) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['facultyIds'],
-      message: 'Pick at least one faculty member if publishing now.',
-    });
-  }
-});
+})
+  .refine((d) => d.startDate <= d.endDate, {
+    path: ['startDate'],
+    message: 'Start date/time must be on or before the end date/time.',
+  })
+  .refine((d) => d.startDate <= d.endDate, {
+    path: ['endDate'],
+    message: 'End date/time must be on or after the start date/time.',
+  })
+  .superRefine((d, ctx) => {
+    if (d.instructorIds.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['instructorIds'],
+        message: 'Pick at least one instructor.',
+      });
+    }
+  });
 
 /**
- * Create form schema — includes publish+faculty selection.
+ * Create form schema — includes publish+instructor selection.
  * Uses form-only validation (no transformations)
  */
 export const CreateCourseFormSchema = BaseCourseFormObject.extend({
@@ -152,11 +159,11 @@ export const CreateCourseFormSchema = BaseCourseFormObject.extend({
     });
   }
 
-  if (d.isPublished && d.facultyIds.length === 0) {
+  if (d.instructorIds.length === 0) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      path: ['facultyIds'],
-      message: 'Pick at least one faculty member if publishing now.',
+      path: ['instructorIds'],
+      message: 'Pick at least one instructor.',
     });
   }
 });
@@ -175,32 +182,32 @@ export const UpdateCourseSchema = BaseCourseObject.partial().extend({
 export const CourseFormSchema = BaseCourseFormObject.extend({
   isPublished: z.boolean().default(false),
   isArchived: z.boolean().default(false),
-}).refine((d) => d.startDate <= d.endDate, {
-  path: ['startDate'],
-  message: 'Start date/time must be on or before the end date/time.',
-}).refine((d) => d.startDate <= d.endDate, {
-  path: ['endDate'],
-  message: 'End date/time must be on or after the start date/time.',
-});
+})
+  .refine((d) => d.startDate <= d.endDate, {
+    path: ['startDate'],
+    message: 'Start date/time must be on or before the end date/time.',
+  })
+  .refine((d) => d.startDate <= d.endDate, {
+    path: ['endDate'],
+    message: 'End date/time must be on or after the start date/time.',
+  });
 
 /**
  * Export form-only schema for use in Duplicate forms.
  */
 export const DuplicateFormSchema = BaseCourseFormObject.extend({
-  copyMode: z.enum([
-    'assignments',
-    'assignments_with_problems',
-    'problems',
-  ]).optional(),
+  copyMode: z.enum(['assignments', 'assignments_with_problems', 'problems']).optional(),
   copyFaculty: z.boolean().optional(),
   copyTAs: z.boolean().optional(),
-}).refine((d) => d.startDate <= d.endDate, {
-  path: ['startDate'],
-  message: 'Start date/time must be on or before the end date/time.',
-}).refine((d) => d.startDate <= d.endDate, {
-  path: ['endDate'],
-  message: 'End date/time must be on or after the start date/time.',
-});
+})
+  .refine((d) => d.startDate <= d.endDate, {
+    path: ['startDate'],
+    message: 'Start date/time must be on or before the end date/time.',
+  })
+  .refine((d) => d.startDate <= d.endDate, {
+    path: ['endDate'],
+    message: 'End date/time must be on or after the start date/time.',
+  });
 
 /** Types */
 export type CreateCourseInput = z.infer<typeof CreateCourseSchema>;
