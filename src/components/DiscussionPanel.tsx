@@ -47,12 +47,19 @@ const initials = (first?: string | null, last?: string | null) => {
   return fi + li || "U";
 };
 
+//const authorAvatarSrc = (author: Comment["author"]) => {
+//  const raw = author?.avatar ?? author?.avatarUrl ?? null;
+//  if (!raw) return undefined;
+//  if (/^https?:\/\//i.test(raw)) return raw;
+//  if (raw.startsWith("/")) return raw;
+//  return `/uploads/${raw}`;
+//};
+
 const authorAvatarSrc = (author: Comment["author"]) => {
   const raw = author?.avatar ?? author?.avatarUrl ?? null;
   if (!raw) return undefined;
-  if (/^https?:\/\//i.test(raw)) return raw;
-  if (raw.startsWith("/")) return raw;
-  return `/uploads/${raw}`;
+  const name = raw.substring(raw.lastIndexOf("/") + 1);
+  return "/api/files/submissions?file=" + name;
 };
 
 export default function DiscussionPanel({

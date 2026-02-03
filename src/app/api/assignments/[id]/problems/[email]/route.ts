@@ -25,10 +25,11 @@ interface AssignmentProblemResult {
   submissions: { id: string }[];
 }
 
-export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, context: { params: Promise<{ id: string, email: string }> }) {
   // Await params if it is a Promise (some environments do this)
   const params = await context.params;
   const assignmentId = params?.id;
+  const userEmail = params?.email;
 
   // 1. Validate courseId
   if (!assignmentId) {
@@ -55,8 +56,21 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 
+    if (!userEmail) {
+      return NextResponse.json({ error: 'Missing email parameter' }, { status: 400 });
+    }
     // ---- UserId from token ----
-    const userId = decoded.userId;
+    // const userId = decoded.userId;
+
+    // ---- Resolve user id from email param ----
+    const userRecord = await prisma.user.findUnique({
+      where: { email: userEmail },
+      select: { id: true },
+    });
+    if (!userRecord) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+    const userId = userRecord.id;
 
     // ---- Enrollment check (any role) ----
     const courseId = assignment.courseId;

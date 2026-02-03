@@ -544,7 +544,7 @@ export default function StudentAssignmentPage() {
                                       <TableCell>
                                         {submission.fileName ? (
                                           <a
-                                            href={`/uploads/submissions/${encodeURIComponent(submission.fileName)}`}
+                                            href={`/api/files/submissions?file=${encodeURIComponent(submission.fileName)}`}
                                             download={submission.originalFileName || 'Download'}
                                             className="text-blue-600 underline hover:text-blue-800 inline-flex items-center gap-1"
                                             target="_blank"
@@ -591,7 +591,7 @@ export default function StudentAssignmentPage() {
                           {problemComments.length > 0 && (
                             <div className="space-y-3 mb-4">
                               {problemComments.map((comment) => (
-                                <div key={comment.id} className="bg-gray-50 rounded-lg p-3">
+                                <div key={comment.id} className="bg-card border rounded-lg p-3">
                                   <div className="flex justify-between items-start mb-2">
                                     <div className="flex items-center gap-2">
                                       <span className="font-medium text-sm">{comment.authorName}</span>
@@ -660,7 +660,7 @@ export default function StudentAssignmentPage() {
         <JffViewerDialog
           open={openDialog.open}
           onOpenChange={(open) => setOpenDialog({ open, submission: null })}
-          src={`/uploads/submissions/${encodeURIComponent(openDialog.submission.fileName ?? '')}`}
+          src={`/api/files/submissions?file=${encodeURIComponent(openDialog.submission.fileName ?? '')}`}
           title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
           width="70vw"
           height="70vh"
