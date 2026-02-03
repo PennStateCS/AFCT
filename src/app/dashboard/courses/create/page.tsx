@@ -21,7 +21,6 @@ export default function CreateCoursePage() {
     endDate: '',
     isPublished: false,
     facultyIds: [] as string[],
-	instructorIds: [] as string[],
   });
 
   const [facultyList, setFacultyList] = useState<User[]>([]);
@@ -57,18 +56,6 @@ export default function CreateCoursePage() {
         facultyIds: alreadySelected
           ? prev.facultyIds.filter((fid) => fid !== id)
           : [...prev.facultyIds, id],
-      };
-    });
-  };
-
-  const handleFacultySelect = (id: string) => {
-    setFormData((prev) => {
-      const alreadySelected = prev.instructorIds.includes(id);
-      return {
-        ...prev,
-        facultyIds: alreadySelected
-          ? prev.instructorIds.filter((fid) => fid !== id)
-          : [...prev.instructorIds, id],
       };
     });
   };
