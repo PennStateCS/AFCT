@@ -3,7 +3,8 @@ version: '3.9'
 services:
   app:
     image: ghcr.io/pennstatewilkes-barre/afct-dashboard:main
-    build:
+      - "3001:80"  # HTTP redirect
+      - "3002:443" # HTTPS
       context: .
       dockerfile: Dockerfile
     container_name: afct-app
@@ -12,8 +13,10 @@ services:
     # All required environment variables are sourced from .env.production
     # NOTE: no direct host port mapping — nginx will expose the app on host port 3001
     depends_on:
+      - ./docker/nginx/certs:/etc/nginx/certs
+      - ./docker/nginx/entrypoint.sh:/docker-entrypoint.d/99-self-signed.sh:ro
       postgres:
-        condition: service_healthy
+      test: ["CMD-SHELL", "curl -f http://localhost:80/api/health || exit 1"]
     restart: unless-stopped
     volumes:
       - uploads_data:/app/public/uploads
