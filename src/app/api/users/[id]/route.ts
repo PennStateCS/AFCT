@@ -99,7 +99,12 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
           userId: currentUser.id,
           action: 'AVATAR_FILE_WRITE_FAILED',
           category: 'USER',
-          metadata: { userId, fileName: avatarFilename, filePath: uploadPath, error: writeErr instanceof Error ? writeErr.message : String(writeErr) },
+          metadata: {
+            userId,
+            fileName: avatarFilename,
+            filePath: uploadPath,
+            error: writeErr instanceof Error ? writeErr.message : String(writeErr),
+          },
         });
         return NextResponse.json({ error: 'Failed to save avatar file' }, { status: 500 });
       }
