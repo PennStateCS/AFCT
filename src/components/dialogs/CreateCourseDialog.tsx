@@ -12,9 +12,17 @@ import {
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+} from '@/components/ui/dropdown-menu';
 import { User } from '@prisma/client';
 import { toast } from 'sonner';
 import InputGroup from '@/components/ui/InputGroup';
+import { ChevronDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -47,7 +55,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
       endDate: '',
       isPublished: false,
       facultyIds: [],
-	  instructorIds: [],
+      instructorIds: [],
     }),
     [],
   );
@@ -67,6 +75,9 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
 
   const isPublished = watch('isPublished');
   const startDateStr = watch('startDate'); // string (YYYY-MM-DDTHH:MM)
+
+  const [instructorSearch, setInstructorSearch] = useState('');
+  const [instructorMenuOpen, setInstructorMenuOpen] = useState(false);
 
   // Fetch faculty list when dialog opens
   const [facultyList, setFacultyList] = useState<User[]>([]);
@@ -94,7 +105,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
 
   const onSubmit = async (raw: FormValues) => {
     // Convert form values to the format expected by the API schema
-	const formData = {
+    const formData = {
       ...raw,
       credits: Number(raw.credits), // Convert string to number for API schema
       // Date strings remain as-is for API schema to transform
@@ -140,7 +151,11 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
         if (!val) resetForm(); // also reset when closed from outside
       }}
     >
-      <DialogContent className="bg-card max-w-2xl">
+      <DialogContent
+        className="bg-card max-w-2xl"
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Create Course</DialogTitle>
         </DialogHeader>
@@ -266,79 +281,95 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
             />
           </div>
 
-          {/* FACULTY PICKER */}
           <div>
-            <Label>Assign Faculty</Label>
-            <div className="mt-1 max-h-40 space-y-1 overflow-y-auto rounded border p-2">
-              <Controller
-                control={control}
-                name="facultyIds"
-                render={({ field }) => (
-                  <>
-                    {facultyList.map((faculty) => {
-                      const checked = (field.value ?? []).includes(faculty.id);
-                      return (
-                        <label key={faculty.id} className="flex items-center space-x-2 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => {
-                              const set = new Set(field.value ?? []);
-                              if (set.has(faculty.id)) set.delete(faculty.id);
-                              else set.add(faculty.id);
-                              field.onChange(Array.from(set));
-                            }}
-                          />
-                          <span>
-                            {faculty.firstName} {faculty.lastName}
+            <Label>Assign Instructor(s)</Label>
+            <Controller
+              control={control}
+              name="instructorIds"
+              render={({ field }) => {
+                const selectedIds = field.value ?? [];
+                const selectedNames = facultyList
+                  .filter((f) => selectedIds.includes(f.id))
+                  .map((f) => `${f.firstName} ${f.lastName}`.trim())
+                  .filter(Boolean)
+                  .join(', ');
+                const hasSelection = selectedNames.length > 0;
+
+                const filteredFaculty = facultyList.filter((faculty) => {
+                  const q = instructorSearch.toLowerCase();
+                  if (!q) return true;
+                  return (
+                    (faculty.firstName ?? '').toLowerCase().includes(q) ||
+                    (faculty.lastName ?? '').toLowerCase().includes(q)
+                  );
+                });
+
+                return (
+                  <div className="mt-1">
+                    <DropdownMenu open={instructorMenuOpen} onOpenChange={setInstructorMenuOpen}>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="border-input h-9 w-full justify-between bg-transparent px-3 py-1 text-sm shadow-xs"
+                        >
+                          <span
+                            className={cn('truncate', !hasSelection && 'text-muted-foreground')}
+                          >
+                            {selectedNames || 'Select instructor(s)'}
                           </span>
-                        </label>
-                      );
-                    })}
-                    {errors.facultyIds && isPublished ? (
-                      <p className="mt-1 text-xs text-red-600">{errors.facultyIds.message}</p>
-                    ) : null}
-                  </>
-                )}
-              />
-            </div>
-          </div>
-		  
-          <div>
-            <Label>Assign Instructors</Label>
-            <div className="mt-1 max-h-40 space-y-1 overflow-y-auto rounded border p-2">
-              <Controller
-                control={control}
-                name="instructorIds"
-                render={({ field }) => (
-                  <>
-                    {facultyList.map((faculty) => {
-                      const checked = (field.value ?? []).includes(faculty.id);
-                      return (
-                        <label key={faculty.id} className="flex items-center space-x-2 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => {
-                              const set = new Set(field.value ?? []);
-                              if (set.has(faculty.id)) set.delete(faculty.id);
-                              else set.add(faculty.id);
-                              field.onChange(Array.from(set));
-                            }}
-                          />
-                          <span>
-                            {faculty.firstName} {faculty.lastName}
-                          </span>
-                        </label>
-                      );
-                    })}
-                    {errors.instructorIds && isPublished ? (
+                          <ChevronDown className="text-muted-foreground h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="w-[var(--radix-dropdown-menu-trigger-width)] p-2">
+                        <Input
+                          placeholder="Search instructors..."
+                          value={instructorSearch}
+                          onChange={(e) => setInstructorSearch(e.target.value)}
+                          onKeyDown={(e) => e.stopPropagation()}
+                          className="mb-2"
+                        />
+                        <div className="max-h-64 overflow-auto rounded border">
+                          {filteredFaculty.length === 0 ? (
+                            <div className="text-muted-foreground p-3 text-center text-sm">
+                              No instructors found.
+                            </div>
+                          ) : (
+                            filteredFaculty.map((faculty) => {
+                              const checked = selectedIds.includes(faculty.id);
+                              return (
+                                <label
+                                  key={faculty.id}
+                                  className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 px-3 py-2 text-sm"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => {
+                                      const set = new Set(selectedIds);
+                                      if (set.has(faculty.id)) set.delete(faculty.id);
+                                      else set.add(faculty.id);
+                                      field.onChange(Array.from(set));
+                                    }}
+                                  />
+                                  <span>
+                                    {faculty.firstName} {faculty.lastName}
+                                  </span>
+                                </label>
+                              );
+                            })
+                          )}
+                        </div>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    {errors.instructorIds ? (
                       <p className="mt-1 text-xs text-red-600">{errors.instructorIds.message}</p>
                     ) : null}
-                  </>
-                )}
-              />
-            </div>
+                  </div>
+                );
+              }}
+            />
           </div>
 
           <DialogFooter>

@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import * as React from 'react';
 import {
@@ -54,13 +54,16 @@ export default function BulkEnrollDialog({
   }, [open]);
 
   const parseEmails = (text: string) => {
-    const lines = text.split(/\r?\n|,|;|\s+/).map((s) => s.trim()).filter(Boolean);
+    const lines = text
+      .split(/\r?\n|,|;|\s+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
     // normalize to lower-case emails
     return Array.from(new Set(lines.map((e) => e.toLowerCase())));
   };
 
   const handleNextFromPaste = async () => {
-  const parsed = parseEmails(rawText);
+    const parsed = parseEmails(rawText);
     setIsLoading(true);
     try {
       const res = await fetch(`/api/courses/${courseId}/lookup-users`, {
@@ -105,11 +108,16 @@ export default function BulkEnrollDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="bg-card max-w-3xl">
+      <DialogContent
+        className="bg-card max-w-3xl"
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Bulk Enroll Students</DialogTitle>
           <DialogDescription>
-            Step {step} of 3 — {step === 1 ? 'Paste emails' : step === 2 ? 'Review matches' : 'Done'}
+            Step {step} of 3 —{' '}
+            {step === 1 ? 'Paste emails' : step === 2 ? 'Review matches' : 'Done'}
           </DialogDescription>
         </DialogHeader>
 
@@ -117,10 +125,17 @@ export default function BulkEnrollDialog({
           {step === 1 && (
             <div>
               <Label htmlFor="emails">Paste emails (one per line or comma-separated)</Label>
-              <Textarea id="emails" className="mt-2 h-64" value={rawText} onChange={(e) => setRawText(e.target.value)} />
-              <div className="text-sm text-muted-foreground mt-2">
-                Note: This tool can only enroll users who already have a system account. If an email is not associated with an existing account it will be listed as not found and will not be enrolled — ask the student to create an account or add them manually.
-                Lookups are case-insensitive, so Email and email@example.com will match the same account.
+              <Textarea
+                id="emails"
+                className="mt-2 h-64"
+                value={rawText}
+                onChange={(e) => setRawText(e.target.value)}
+              />
+              <div className="text-muted-foreground mt-2 text-sm">
+                Note: This tool can only enroll users who already have a system account. If an email
+                is not associated with an existing account it will be listed as not found and will
+                not be enrolled — ask the student to create an account or add them manually. Lookups
+                are case-insensitive, so Email and email@example.com will match the same account.
               </div>
               {/* Controls are in the dialog footer to avoid duplication */}
             </div>
@@ -128,17 +143,19 @@ export default function BulkEnrollDialog({
 
           {step === 2 && (
             <div className="grid grid-cols-2 gap-4">
-              <div className="border rounded p-2 h-96 overflow-auto" ref={listRef}>
-                <div className="font-medium mb-2">Matched users ({found.length})</div>
+              <div className="h-96 overflow-auto rounded border p-2" ref={listRef}>
+                <div className="mb-2 font-medium">Matched users ({found.length})</div>
                 {found.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">No matched users.</div>
+                  <div className="text-muted-foreground text-sm">No matched users.</div>
                 ) : (
                   <ul className="space-y-2">
                     {found.map((u) => (
                       <li key={u.id} className="flex items-center justify-between gap-2">
                         <div>
-                          <div className="text-sm">{u.firstName} {u.lastName}</div>
-                          <div className="text-xs text-muted-foreground">{u.email}</div>
+                          <div className="text-sm">
+                            {u.firstName} {u.lastName}
+                          </div>
+                          <div className="text-muted-foreground text-xs">{u.email}</div>
                         </div>
                         <Badge role={u.role}>{u.role}</Badge>
                       </li>
@@ -147,15 +164,22 @@ export default function BulkEnrollDialog({
                 )}
               </div>
 
-              <div className="border rounded p-2 h-96 overflow-auto">
-                <div className="font-medium mb-2">Not found ({notFound.length})</div>
-                  <div className="text-xs text-muted-foreground mb-2">These emails were not matched to existing system accounts and will not be enrolled automatically. Lookups are case-insensitive.</div>
+              <div className="h-96 overflow-auto rounded border p-2">
+                <div className="mb-2 font-medium">Not found ({notFound.length})</div>
+                <div className="text-muted-foreground mb-2 text-xs">
+                  These emails were not matched to existing system accounts and will not be enrolled
+                  automatically. Lookups are case-insensitive.
+                </div>
                 {notFound.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">All emails matched existing accounts.</div>
+                  <div className="text-muted-foreground text-sm">
+                    All emails matched existing accounts.
+                  </div>
                 ) : (
                   <ul className="space-y-1 text-sm">
                     {notFound.map((e) => (
-                      <li key={e} className="px-2 py-1 bg-muted/10 rounded">{e}</li>
+                      <li key={e} className="bg-muted/10 rounded px-2 py-1">
+                        {e}
+                      </li>
                     ))}
                   </ul>
                 )}
@@ -166,30 +190,41 @@ export default function BulkEnrollDialog({
           {step === 3 && (
             <div className="p-4">
               <div className="text-lg font-medium">Enrollment complete</div>
-              <div className="text-sm text-muted-foreground mt-2">{found.length} users were enrolled. {notFound.length} emails were not found.</div>
+              <div className="text-muted-foreground mt-2 text-sm">
+                {found.length} users were enrolled. {notFound.length} emails were not found.
+              </div>
             </div>
           )}
         </div>
 
         <DialogFooter>
           <DialogClose asChild>
-            <Button type="button" variant="secondary">Cancel</Button>
+            <Button type="button" variant="secondary">
+              Cancel
+            </Button>
           </DialogClose>
 
           {step === 1 && (
-            <Button onClick={handleNextFromPaste} disabled={isLoading || !rawText.trim() || courseIsArchived}>Next</Button>
+            <Button
+              onClick={handleNextFromPaste}
+              disabled={isLoading || !rawText.trim() || courseIsArchived}
+            >
+              Next
+            </Button>
           )}
 
           {step === 2 && (
             <>
-              <Button variant="default" onClick={() => setStep(1)}>Back</Button>
-              <Button onClick={handleEnroll} disabled={isEnrolling || found.length === 0}>{isEnrolling ? 'Enrolling…' : 'Enroll'}</Button>
+              <Button variant="default" onClick={() => setStep(1)}>
+                Back
+              </Button>
+              <Button onClick={handleEnroll} disabled={isEnrolling || found.length === 0}>
+                {isEnrolling ? 'Enrolling…' : 'Enroll'}
+              </Button>
             </>
           )}
 
-          {step === 3 && (
-            <Button onClick={() => setOpen(false)}>Done</Button>
-          )}
+          {step === 3 && <Button onClick={() => setOpen(false)}>Done</Button>}
         </DialogFooter>
       </DialogContent>
     </Dialog>

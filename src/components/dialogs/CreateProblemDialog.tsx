@@ -41,7 +41,7 @@ type CreateProblemDialogProps = {
   onCreated?: (created?: Problem) => void;
 };
 
-// RHF state BEFORE transforms  
+// RHF state BEFORE transforms
 type FormValues = ProblemFormRaw;
 // Parsed AFTER Zod transforms
 type ParsedValues = CreateProblemInput;
@@ -128,7 +128,7 @@ export function CreateProblemDialog({
 
   const onSubmit = async (raw: FormValues) => {
     try {
-  // Form submission
+      // Form submission
 
       // Parse with CreateProblemSchema which requires file
       const values: ParsedValues = CreateProblemSchema.parse(raw);
@@ -177,7 +177,11 @@ export function CreateProblemDialog({
         if (!val) resetForm();
       }}
     >
-      <DialogContent className="bg-card max-w-lg">
+      <DialogContent
+        className="bg-card max-w-lg"
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Create Problem</DialogTitle>
           <DialogDescription>
@@ -320,10 +324,10 @@ export function CreateProblemDialog({
                   accept=".txt,.fa,.pda,.cfg,.re,.jff"
                   ref={ref}
                   onBlur={onBlur}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      onChange(file);
-                    }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    onChange(file);
+                  }}
                 />
                 {fileErrorMessage && (
                   <p className="mt-1 text-xs text-red-600">{fileErrorMessage}</p>
@@ -338,7 +342,7 @@ export function CreateProblemDialog({
                 Cancel
               </Button>
             </DialogClose>
-            <Button type="submit" disabled={!isValid || isSubmitting || !file || courseIsArchived }>
+            <Button type="submit" disabled={!isValid || isSubmitting || !file || courseIsArchived}>
               {isSubmitting ? 'Creating…' : 'Create Problem'}
             </Button>
           </DialogFooter>
