@@ -19,8 +19,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null
         }
 
-        const user = await prisma.user.findUnique({ 
-          where: { email: credentials.email as string, inactive: false } 
+        const user = await prisma.user.findFirst({
+          where: {
+            email: (credentials.email as string).trim().toLowerCase(),
+            inactive: false,
+          },
         })
 
         if (!user) {

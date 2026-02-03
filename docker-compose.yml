@@ -1,59 +1,47 @@
+version: "3.9"
+
 services:
+  app:
+    image: ghcr.io/pennstatewilkes-barre/afct-dashboard:main
+    container_name: afct-app
+    restart: unless-stopped
+
+    ports:
+      - "3000:3000"
+
+    environment:
+      NODE_ENV: production
+
+      DATABASE_URL: ${DATABASE_URL}
+
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: afct_user
+      DB_NAME: afct
+
+      WAIT_FOR_DB: "true"
+      MIGRATE_ON_START: "true"
+      SEED_ON_START: "auto"
+
+    volumes:
+      # PRIVATE uploads (not served by Next.js)
+      - /opt/afct/uploads:/private/uploads
+
+    depends_on:
+      - postgres
+
   postgres:
     image: postgres:15-alpine
-    container_name: afct-postgres-prod
+    container_name: afct-postgres
     restart: unless-stopped
-    env_file:
-      - .env.production
+
     environment:
       POSTGRES_DB: afct
       POSTGRES_USER: afct_user
-      POSTGRES_INITDB_ARGS: "--data-checksums"
-      TZ: "America/New_York"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5433:5432"  # Different port to avoid conflicts with dev
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U afct_user -d afct"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+      - /opt/afct/postgres:/var/lib/postgresql/data
 
-  prisma-studio:
-    build:
-      context: . # Directory containing your Dockerfile
-      dockerfile: Dockerfile.dev
     ports:
-      - "5555:5555" # Map Prisma Studio port
-    depends_on:
-      - postgres # Ensure database starts before Prisma Studio
-    env_file:
-      - .env.production
-
-  app:
-    container_name: afct-production
-    build:
-      context: .
-      dockerfile: Dockerfile
-    env_file:
-      - .env.production
-    # All required environment variables are sourced from .env.production
-    ports:
-      - "3001:3000"  # Different port to avoid conflicts with dev
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: unless-stopped
-    volumes:
-      - uploads_data:/app/public/uploads
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3001/api/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-volumes:
-  postgres_data:
-  uploads_data:
+      - "5432:5432"
