@@ -7,7 +7,8 @@ import { prisma } from '@/lib/prisma';
 export async function GET(request: Request) {
   // Parse the email query parameter from the request URL
   const { searchParams } = new URL(request.url);
-  const email = searchParams.get('email');
+  const rawEmail = searchParams.get('email');
+  const email = rawEmail?.trim().toLowerCase() || null;
 
   // If no email is provided, return a 400 Bad Request
   if (!email) {
