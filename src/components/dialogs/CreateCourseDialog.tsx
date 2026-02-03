@@ -47,6 +47,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
       endDate: '',
       isPublished: false,
       facultyIds: [],
+	  instructorIds: [],
     }),
     [],
   );
@@ -93,7 +94,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
 
   const onSubmit = async (raw: FormValues) => {
     // Convert form values to the format expected by the API schema
-    const formData = {
+	const formData = {
       ...raw,
       credits: Number(raw.credits), // Convert string to number for API schema
       // Date strings remain as-is for API schema to transform
@@ -144,7 +145,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
           <DialogTitle>Create Course</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={onSubmitWrapper} className="space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {/* NAME */}
           <Controller
             control={control}
@@ -296,6 +297,43 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
                     })}
                     {errors.facultyIds && isPublished ? (
                       <p className="mt-1 text-xs text-red-600">{errors.facultyIds.message}</p>
+                    ) : null}
+                  </>
+                )}
+              />
+            </div>
+          </div>
+		  
+          <div>
+            <Label>Assign Instructors</Label>
+            <div className="mt-1 max-h-40 space-y-1 overflow-y-auto rounded border p-2">
+              <Controller
+                control={control}
+                name="instructorIds"
+                render={({ field }) => (
+                  <>
+                    {facultyList.map((faculty) => {
+                      const checked = (field.value ?? []).includes(faculty.id);
+                      return (
+                        <label key={faculty.id} className="flex items-center space-x-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              const set = new Set(field.value ?? []);
+                              if (set.has(faculty.id)) set.delete(faculty.id);
+                              else set.add(faculty.id);
+                              field.onChange(Array.from(set));
+                            }}
+                          />
+                          <span>
+                            {faculty.firstName} {faculty.lastName}
+                          </span>
+                        </label>
+                      );
+                    })}
+                    {errors.instructorIds && isPublished ? (
+                      <p className="mt-1 text-xs text-red-600">{errors.instructorIds.message}</p>
                     ) : null}
                   </>
                 )}

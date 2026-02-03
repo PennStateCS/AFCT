@@ -48,7 +48,7 @@ export async function DELETE(
 
     // Step 6: Attempt to delete the associated solution file (if it exists)
     if (problem.fileName) {
-      const filePath = path.join(process.cwd(), 'public', 'uploads', 'solutions', problem.fileName);
+      const filePath = path.join(process.cwd(), 'private', 'uploads', 'solutions', problem.fileName);
       try {
         await fs.unlink(filePath);
       } catch (fsErr: unknown) {

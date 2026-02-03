@@ -114,13 +114,36 @@ export async function POST(req: Request) {
           isArchived: false,
         },
       });
+           
+	  let facultyIds = []; 
+	  if (Array.isArray(json.facultyIds) && json.facultyIds.length > 0){
+        facultyIds = json.facultyIds;
+	  }
 
-      if (Array.isArray(json.facultyIds) && json.facultyIds.length > 0) {
+      let instructorIds = [];
+	  if (Array.isArray(json.instructorIds) && json.instructorIds.length > 0){
+        instructorIds = json.instructorIds;
+	  }
+
+	  const instructorSet = new Set(instructorIds);
+	  facultyIds = facultyIds.filter(el => !instructorSet.has(el));
+
+      if (facultyIds.length > 0) {
         await tx.roster.createMany({
-          data: json.facultyIds.map((userId: string) => ({
+          data: facultyIds.map((userId: string) => ({
             userId,
             courseId: course.id,
             role: 'FACULTY',
+          })),
+        });
+      }
+
+      if (instructorIds.length > 0) {
+        await tx.roster.createMany({
+          data: instructorIds.map((userId: string) => ({
+            userId,
+            courseId: course.id,
+            role: 'INSTRUCTOR',
           })),
         });
       }
@@ -166,6 +189,7 @@ export async function POST(req: Request) {
   } catch (err) {
     // If it’s a Zod error, send normalized validation issues
     const resp = validationResponse(err);
+	console.error('Course creation failed', err);
     if (resp.status === 400) return resp;
 
     console.error('Failed to create course:', err);
