@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install all dependencies (including dev) for the build step
 COPY package*.json ./
-RUN npm ci
+RUN npm ci --legacy-peer-deps
 
 # Copy sources
 COPY . .
@@ -30,8 +30,9 @@ COPY . .
 RUN mkdir -p /app/bin /app/jars || true
 
 # Generate Prisma client + build
-RUN npx prisma generate
-RUN npm run build
+RUN set -e && \
+    npx prisma generate && \
+    npm run build
 
 # ----------------------------
 # Runtime
@@ -74,10 +75,11 @@ COPY --from=builder /app/scripts ./scripts
 
 # Jars + bin
 COPY --from=builder /app/jars /app/jars
-RUN chmod -R 755 /app/jars || true && chmod +x /app/jars/*.jar || true
+RUN chmod -R 755 /app/jars && \
+    find /app/jars -name "*.jar" -exec chmod +x {} \;
 
 COPY --from=builder /app/bin /app/bin
-RUN mkdir -p /app/bin && chmod -R 755 /app/bin || true
+RUN mkdir -p /app/bin && chmod -R 755 /app/bin
 
 # Handles Prisma Studio
 # Expose the default Prisma Studio port
