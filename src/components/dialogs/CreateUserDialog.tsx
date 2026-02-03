@@ -43,20 +43,19 @@ type CreateUserDialogProps = {
 };
 
 export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogProps) {
-  const defaults: CreateUserRaw = useMemo(
-    () => {
-      const defaultRole = roleOptions.includes('STUDENT' as any) ? 'STUDENT' : (roleOptions[0] ?? 'STUDENT');
-      return ({
-        firstName: '',
-        lastName: '',
-        email: '',
-        password: '',
-        confirmPassword: '',
-        role: defaultRole as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT',
-      });
-    },
-    [roleOptions],
-  );
+  const defaults: CreateUserRaw = useMemo(() => {
+    const defaultRole = roleOptions.includes('STUDENT' as any)
+      ? 'STUDENT'
+      : (roleOptions[0] ?? 'STUDENT');
+    return {
+      firstName: '',
+      lastName: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
+      role: defaultRole as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT',
+    };
+  }, [roleOptions]);
 
   const {
     control,
@@ -125,7 +124,11 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
         if (!val) resetForm();
       }}
     >
-      <DialogContent className="bg-card max-w-2xl">
+      <DialogContent
+        className="bg-card max-w-2xl"
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Create New User</DialogTitle>
           <DialogDescription>Fill out the fields to create a user account.</DialogDescription>
@@ -244,7 +247,10 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
               {passwordRules.map((rule) => {
                 const ok = rule.test(pw ?? '');
                 return (
-                  <li key={rule.label} className={ok ? 'text-green-600 text-xs' : 'text-red-500 text-xs'}>
+                  <li
+                    key={rule.label}
+                    className={ok ? 'text-xs text-green-600' : 'text-xs text-red-500'}
+                  >
                     {rule.label}
                   </li>
                 );

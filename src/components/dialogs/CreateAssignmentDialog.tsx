@@ -61,7 +61,6 @@ export function CreateAssignmentDialog({
   courseIsArchived,
   onCreate,
 }: CreateAssignmentDialogProps) {
-
   // Form defaults (strings for datetime-local fields)
   const defaults: FormValues = useMemo(
     () => ({
@@ -161,7 +160,11 @@ export function CreateAssignmentDialog({
         if (!val) resetForm();
       }}
     >
-      <DialogContent className="bg-card max-w-2xl">
+      <DialogContent
+        className="bg-card max-w-2xl"
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Create Assignment</DialogTitle>
           <DialogDescription>Fill in the assignment details and click Create.</DialogDescription>

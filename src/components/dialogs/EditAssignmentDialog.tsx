@@ -123,7 +123,7 @@ export function EditAssignmentDialog({
       ...raw, // Keep maxPoints as string for schema validation
     });
 
-    try{
+    try {
       const res = await fetch(`/api/assignments/${assignment.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -167,7 +167,11 @@ export function EditAssignmentDialog({
         if (!val) resetForm();
       }}
     >
-      <DialogContent className="bg-card">
+      <DialogContent
+        className="bg-card"
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Edit Assignment</DialogTitle>
           <DialogDescription>
@@ -284,13 +288,14 @@ export function EditAssignmentDialog({
               disabled={!isValid || !isDirty || isSubmitting || courseIsArchived}
               title={
                 !isValid
-                ? 'Fix validation errors to save'
+                  ? 'Fix validation errors to save'
                   : !isDirty
-                  ? 'No changes to save'
+                    ? 'No changes to save'
                     : isSubmitting
-                    ? 'Already submitting'
-                      : courseIsArchived ?
-                      'Course is archived' : undefined
+                      ? 'Already submitting'
+                      : courseIsArchived
+                        ? 'Course is archived'
+                        : undefined
               }
             >
               {isSubmitting ? 'Saving…' : 'Save Changes'}
