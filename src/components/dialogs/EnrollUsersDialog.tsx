@@ -117,7 +117,11 @@ export function EnrollUserDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="bg-card max-w-lg">
+      <DialogContent
+        className="bg-card max-w-lg"
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Enroll User</DialogTitle>
           <DialogDescription>Find and select a user to enroll in this course.</DialogDescription>
@@ -149,7 +153,7 @@ export function EnrollUserDialog({
                   >
                     <label
                       htmlFor={`enroll-checkbox-${user.id}`}
-                      className={`hover:bg-primary/10 flex cursor-pointer items-center gap-2 rounded px-3 py-2 w-full ${
+                      className={`hover:bg-primary/10 flex w-full cursor-pointer items-center gap-2 rounded px-3 py-2 ${
                         selectedIdx === idx ? 'bg-primary/10' : ''
                       }`}
                       onMouseEnter={() => setSelectedIdx(idx)}

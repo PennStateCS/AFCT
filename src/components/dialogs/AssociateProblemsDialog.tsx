@@ -87,7 +87,11 @@ export function AssociateProblemsDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-      <DialogContent className="bg-card !max-w-2xl">
+      <DialogContent
+        className="bg-card !max-w-2xl"
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Add Existing Problems to Assignment</DialogTitle>
           <DialogDescription>
@@ -153,7 +157,11 @@ export function AssociateProblemsDialog({
           <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="default" disabled={movedProblems.length === 0 || courseIsArchived} onClick={handleAdd}>
+          <Button
+            variant="default"
+            disabled={movedProblems.length === 0 || courseIsArchived}
+            onClick={handleAdd}
+          >
             Save Changes
           </Button>
         </DialogFooter>

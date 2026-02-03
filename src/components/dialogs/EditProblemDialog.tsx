@@ -36,8 +36,13 @@ type EditProblemDialogProps = {
 type FormValues = z.input<typeof ProblemFormSchema>;
 type ParsedValues = z.output<typeof ProblemFormSchema>;
 
-export function EditProblemDialog({ courseIsArchived, problem, open, setOpen, onSaved }: EditProblemDialogProps) {
-  
+export function EditProblemDialog({
+  courseIsArchived,
+  problem,
+  open,
+  setOpen,
+  onSaved,
+}: EditProblemDialogProps) {
   const defaults: FormValues = useMemo(
     () => ({
       title: problem.title ?? '',
@@ -90,7 +95,6 @@ export function EditProblemDialog({ courseIsArchived, problem, open, setOpen, on
   // Reset when opening/closing (prevents touched/error flicker)
   useEffect(() => {
     if (open) {
-      
       reset(defaults, {
         keepDirty: false,
         keepTouched: false,
@@ -145,19 +149,19 @@ export function EditProblemDialog({ courseIsArchived, problem, open, setOpen, on
         formData.append('file', payload.file);
       }
 
-  // Sending PUT request
+      // Sending PUT request
 
       const res = await fetch(`/api/problems/${problem.id}`, {
         method: 'PUT',
         body: formData,
       });
 
-  // Response status available in res.status
+      // Response status available in res.status
 
       if (!res.ok) {
         const errorText = await res.text();
         console.error('Edit problem error response:', errorText);
-        
+
         let errorMessage = 'Failed to update problem.';
         try {
           const errorData = JSON.parse(errorText);
@@ -165,7 +169,7 @@ export function EditProblemDialog({ courseIsArchived, problem, open, setOpen, on
         } catch {
           // Keep default message if response isn't JSON
         }
-        
+
         console.error('Failed to update problem:', errorMessage);
         return;
       }
@@ -190,7 +194,11 @@ export function EditProblemDialog({ courseIsArchived, problem, open, setOpen, on
         if (!val) resetForm();
       }}
     >
-      <DialogContent className="bg-card max-w-lg">
+      <DialogContent
+        className="bg-card max-w-lg"
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Edit Problem</DialogTitle>
           <DialogDescription>Update the problem details and save your changes.</DialogDescription>
@@ -209,7 +217,6 @@ export function EditProblemDialog({ courseIsArchived, problem, open, setOpen, on
                 error={errors.title?.message}
                 showStatus
                 isValid={!errors.title && !!field.value}
-
               />
             )}
           />
@@ -333,7 +340,9 @@ export function EditProblemDialog({ courseIsArchived, problem, open, setOpen, on
                   accept=".txt,.fa,.pda,.cfg,.re,.jff"
                   onChange={(e) => field.onChange(e.target.files?.[0])}
                 />
-                {fileErrorMessage && <p className="mt-1 text-xs text-red-600">{fileErrorMessage}</p>}
+                {fileErrorMessage && (
+                  <p className="mt-1 text-xs text-red-600">{fileErrorMessage}</p>
+                )}
               </div>
             )}
           />
@@ -346,13 +355,9 @@ export function EditProblemDialog({ courseIsArchived, problem, open, setOpen, on
             </DialogClose>
             <Button
               type="submit"
-              disabled={!isValid || isSubmitting || !isDirty || courseIsArchived }
+              disabled={!isValid || isSubmitting || !isDirty || courseIsArchived}
               title={
-                !isValid
-                  ? 'Fix validation errors to save'
-                  : !isDirty
-                    ? 'Submitting...'
-                    : undefined
+                !isValid ? 'Fix validation errors to save' : !isDirty ? 'Submitting...' : undefined
               }
             >
               {isSubmitting ? 'Saving…' : 'Save Changes'}

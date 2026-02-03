@@ -11,7 +11,13 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { showToast } from '@/lib/toast';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Trash2, Delete } from 'lucide-react';
@@ -30,7 +36,16 @@ type Props = {
   initialViewerDefaultRole?: string | null;
 };
 
-export default function CourseEditUserDialog({ open, setOpen, courseId, userId, onSaved, initialRoster = null, initialViewerCourseRole = null, initialViewerDefaultRole = null }: Props) {
+export default function CourseEditUserDialog({
+  open,
+  setOpen,
+  courseId,
+  userId,
+  onSaved,
+  initialRoster = null,
+  initialViewerCourseRole = null,
+  initialViewerDefaultRole = null,
+}: Props) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [roster, setRoster] = useState<any | null>(null);
@@ -62,7 +77,11 @@ export default function CourseEditUserDialog({ open, setOpen, courseId, userId, 
       setRoster(initialRoster);
       setViewerCourseRole(initialViewerCourseRole ?? null);
       setViewerDefaultRole(initialViewerDefaultRole ?? null);
-      setAvatarPreview(initialRoster?.user?.avatar ? `/api/files/avatar?file=${initialRoster.user.avatar}` : '/api/files/avatar?file=default-avatar.png');
+      setAvatarPreview(
+        initialRoster?.user?.avatar
+          ? `/api/files/avatar?file=${initialRoster.user.avatar}`
+          : '/api/files/avatar?file=default-avatar.png',
+      );
       originalRosterRef.current = JSON.parse(JSON.stringify(initialRoster));
       return;
     }
@@ -83,7 +102,11 @@ export default function CourseEditUserDialog({ open, setOpen, courseId, userId, 
         setViewerCourseRole(body?.viewerCourseRole ?? null);
         setViewerDefaultRole(body?.viewerDefaultRole ?? null);
         // Initialize avatar preview from fetched user profile (if available)
-        setAvatarPreview(body?.roster?.user?.avatar ? `/api/files/avatar?file=${body.roster.user.avatar}` : '/api/files/avatar?file=default-avatar.png');
+        setAvatarPreview(
+          body?.roster?.user?.avatar
+            ? `/api/files/avatar?file=${body.roster.user.avatar}`
+            : '/api/files/avatar?file=default-avatar.png',
+        );
         // Save a copy of the original roster entry for dirty checks
         originalRosterRef.current = JSON.parse(JSON.stringify(body?.roster ?? null));
       } catch (err) {
@@ -94,8 +117,18 @@ export default function CourseEditUserDialog({ open, setOpen, courseId, userId, 
         if (mounted) setLoading(false);
       }
     })();
-    return () => { mounted = false; };
-  }, [open, courseId, userId, setOpen, initialRoster, initialViewerCourseRole, initialViewerDefaultRole]);
+    return () => {
+      mounted = false;
+    };
+  }, [
+    open,
+    courseId,
+    userId,
+    setOpen,
+    initialRoster,
+    initialViewerCourseRole,
+    initialViewerDefaultRole,
+  ]);
 
   const handleSave = async () => {
     if (!roster) return;
@@ -155,12 +188,20 @@ export default function CourseEditUserDialog({ open, setOpen, courseId, userId, 
         if (!v && originalRosterRef.current) {
           const orig = JSON.parse(JSON.stringify(originalRosterRef.current));
           setRoster(orig);
-          setAvatarPreview(orig?.user?.avatar ? `/api/files/avatar?file=${orig.user.avatar}` : '/uapi/files/avatar?file=default-avatar.png');
+          setAvatarPreview(
+            orig?.user?.avatar
+              ? `/api/files/avatar?file=${orig.user.avatar}`
+              : '/uapi/files/avatar?file=default-avatar.png',
+          );
           setConfirmOpen(false);
         }
       }}
     >
-      <DialogContent className="bg-card max-w-md">
+      <DialogContent
+        className="bg-card max-w-md"
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Edit User</DialogTitle>
           <DialogDescription>Modify course-specific settings for this user.</DialogDescription>
@@ -173,30 +214,41 @@ export default function CourseEditUserDialog({ open, setOpen, courseId, userId, 
             <div className="space-y-4">
               <div className="flex items-center gap-4">
                 <Avatar className="h-20 w-20">
-                  <AvatarImage src={avatarPreview ?? '/api/files/avatar?file=default-avatar.png'} alt="User Avatar" />
+                  <AvatarImage
+                    src={avatarPreview ?? '/api/files/avatar?file=default-avatar.png'}
+                    alt="User Avatar"
+                  />
                   <AvatarFallback className="bg-secondary text-secondary-foreground">
-                    {(roster.user?.firstName || '?').charAt(0)}{(roster.user?.lastName || '?').charAt(0)}
+                    {(roster.user?.firstName || '?').charAt(0)}
+                    {(roster.user?.lastName || '?').charAt(0)}
                   </AvatarFallback>
                 </Avatar>
 
                 <div>
-                  <div className="text-sm text-muted-foreground">Name</div>
-                  <div className="font-medium">{roster.user.firstName} {roster.user.lastName}</div>
-                  <div className="text-xs text-muted-foreground">{roster.user.email}</div>
+                  <div className="text-muted-foreground text-sm">Name</div>
+                  <div className="font-medium">
+                    {roster.user.firstName} {roster.user.lastName}
+                  </div>
+                  <div className="text-muted-foreground text-xs">{roster.user.email}</div>
                 </div>
 
                 {/* Delete avatar button: visible to course FACULTY, INSTRUCTOR, or site ADMIN */}
                 <div className="ml-auto">
-                  {((viewerCourseRole === 'FACULTY') || (viewerCourseRole === 'INSTRUCTOR') || (viewerDefaultRole === 'ADMIN')) && (
+                  {(viewerCourseRole === 'FACULTY' ||
+                    viewerCourseRole === 'INSTRUCTOR' ||
+                    viewerDefaultRole === 'ADMIN') && (
                     <Button
                       variant="outline"
                       className="flex items-center gap-2 border-red-600 text-red-600 hover:bg-red-50"
                       onClick={async () => {
-                        if (!confirm('Delete this user\'s profile photo?')) return;
+                        if (!confirm("Delete this user's profile photo?")) return;
                         try {
                           const form = new FormData();
                           form.append('deleteAvatar', 'true');
-                          const res = await fetch(`/api/users/${roster.user.id}`, { method: 'PATCH', body: form });
+                          const res = await fetch(`/api/users/${roster.user.id}`, {
+                            method: 'PATCH',
+                            body: form,
+                          });
                           const body = await res.json();
                           if (!res.ok) {
                             showToast.error(body?.error || 'Failed to delete avatar');
@@ -224,8 +276,13 @@ export default function CourseEditUserDialog({ open, setOpen, courseId, userId, 
 
               <div>
                 <label className="mb-2 block text-sm font-medium">Course Role</label>
-                <Select value={roster.role} onValueChange={(v) => setRoster({ ...roster, role: v })}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <Select
+                  value={roster.role}
+                  onValueChange={(v) => setRoster({ ...roster, role: v })}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     {courseRoleOptions.map((r) => (
                       <SelectItem key={r} value={r}>
@@ -245,10 +302,14 @@ export default function CourseEditUserDialog({ open, setOpen, courseId, userId, 
                     const targetRole = roster.role ?? null;
                     let viewerCanDelete = false;
                     if (isSiteAdmin) viewerCanDelete = true;
-                    else if (viewerCourse === 'INSTRUCTOR') viewerCanDelete = (targetRole !== 'INSTRUCTOR');
-                    else if (viewerCourse === 'FACULTY') viewerCanDelete = (targetRole !== 'INSTRUCTOR' && targetRole !== 'FACULTY');
+                    else if (viewerCourse === 'INSTRUCTOR')
+                      viewerCanDelete = targetRole !== 'INSTRUCTOR';
+                    else if (viewerCourse === 'FACULTY')
+                      viewerCanDelete = targetRole !== 'INSTRUCTOR' && targetRole !== 'FACULTY';
                     const removeDisabled = !viewerCanDelete;
-                    const removeTitle = removeDisabled ? 'You do not have permission to remove this user' : undefined;
+                    const removeTitle = removeDisabled
+                      ? 'You do not have permission to remove this user'
+                      : undefined;
 
                     return (
                       <>
@@ -279,15 +340,23 @@ export default function CourseEditUserDialog({ open, setOpen, courseId, userId, 
               </div>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">Roster entry not found.</p>
+            <p className="text-muted-foreground text-sm">Roster entry not found.</p>
           )}
         </div>
 
         <DialogFooter className="mt-4">
           <DialogClose asChild>
-            <Button type="button" variant="secondary">Cancel</Button>
+            <Button type="button" variant="secondary">
+              Cancel
+            </Button>
           </DialogClose>
-          <Button onClick={handleSave} disabled={!isDirty || saving || loading} title={!isDirty ? 'No changes to save' : undefined}>{saving ? 'Saving…' : 'Save'}</Button>
+          <Button
+            onClick={handleSave}
+            disabled={!isDirty || saving || loading}
+            title={!isDirty ? 'No changes to save' : undefined}
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

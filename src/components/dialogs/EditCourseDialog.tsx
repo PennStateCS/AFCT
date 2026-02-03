@@ -136,7 +136,11 @@ export function EditCourseDialog({ course, open, setOpen, onSave }: EditCourseDi
         if (!val) resetForm();
       }}
     >
-      <DialogContent className="bg-card">
+      <DialogContent
+        className="bg-card"
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Edit Course</DialogTitle>
           <DialogDescription>Update the course details and save your changes.</DialogDescription>
@@ -254,7 +258,12 @@ export function EditCourseDialog({ course, open, setOpen, onSave }: EditCourseDi
             control={control}
             render={({ field }) => (
               <div className="flex items-center justify-between">
-                <label className="pb-2 text-sm leading-none font-medium select-none" htmlFor="isPublished-switch">Published</label>
+                <label
+                  className="pb-2 text-sm leading-none font-medium select-none"
+                  htmlFor="isPublished-switch"
+                >
+                  Published
+                </label>
                 <Switch
                   id="isPublished-switch"
                   checked={field.value}
@@ -271,7 +280,12 @@ export function EditCourseDialog({ course, open, setOpen, onSave }: EditCourseDi
             control={control}
             render={({ field }) => (
               <div className="flex items-center justify-between">
-                <label className="pb-2 text-sm leading-none font-medium select-none" htmlFor="isArchived-switch">Archived</label>
+                <label
+                  className="pb-2 text-sm leading-none font-medium select-none"
+                  htmlFor="isArchived-switch"
+                >
+                  Archived
+                </label>
                 <Switch
                   id="isArchived-switch"
                   checked={field.value}
@@ -303,7 +317,7 @@ export function EditCourseDialog({ course, open, setOpen, onSave }: EditCourseDi
                   ? 'Fix validation errors to save'
                   : !isDirty
                     ? 'No changes to save'
-                    : "Course is not archived"
+                    : 'Course is not archived'
               }
             >
               {isSubmitting ? 'Saving...' : 'Save Changes'}
