@@ -37,7 +37,7 @@ services:
     image: nginx:1.25-alpine
     container_name: afct-nginx
     ports:
-      - '80:80'   # HTTP
+      - '80:80' # HTTP
       - '443:443' # HTTPS
     depends_on:
       app:
