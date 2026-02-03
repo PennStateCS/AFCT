@@ -1,4 +1,4 @@
-version: "3.9"
+version: '3.9'
 
 services:
   app:
@@ -17,9 +17,21 @@ services:
     restart: unless-stopped
     volumes:
       - uploads_data:/app/public/uploads
+      # PRIVATE uploads (not served by Next.js)
+      - /opt/afct/uploads:/private/uploads
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: afct_user
+      DB_NAME: afct
+      WAIT_FOR_DB: 'true'
+      MIGRATE_ON_START: 'true'
+      SEED_ON_START: 'auto'
     healthcheck:
       # Healthcheck should target the app's internal port (3000)
-      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      test: ['CMD-SHELL', 'curl -f http://localhost:3000/api/health || exit 1']
       interval: 30s
       timeout: 10s
       retries: 3
@@ -43,25 +55,6 @@ services:
       timeout: 10s
       retries: 3
 
-  app:
-    environment:
-      NODE_ENV: production
-
-      DATABASE_URL: ${DATABASE_URL}
-
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: afct_user
-      DB_NAME: afct
-
-      WAIT_FOR_DB: "true"
-      MIGRATE_ON_START: "true"
-      SEED_ON_START: "auto"
-
-    volumes:
-      # PRIVATE uploads (not served by Next.js)
-      - /opt/afct/uploads:/private/uploads
-
   postgres:
     image: postgres:15-alpine
     container_name: afct-postgres
@@ -76,7 +69,7 @@ services:
       - /opt/afct/postgres:/var/lib/postgresql/data
 
     ports:
-      - "5432:5432"
+      - '5432:5432'
 
 volumes:
   uploads_data:
