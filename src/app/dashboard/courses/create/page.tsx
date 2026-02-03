@@ -185,28 +185,6 @@ export default function CreateCoursePage() {
             </div>
           </div>
 
-          <div>
-            <Label>Assign Instructors</Label>
-            <div className="mt-1 max-h-40 space-y-1 overflow-y-auto rounded border p-2">
-              {facultyList.length === 0 ? (
-                <p className="text-muted-foreground text-sm">No faculty available.</p>
-              ) : (
-                facultyList.map((faculty) => (
-                  <label key={faculty.id} className="flex items-center space-x-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={formData.instructorIds.includes(faculty.id)}
-                      onChange={() => handleInstructorSelect(faculty.id)}
-                    />
-                    <span>
-                      {faculty.firstName} {faculty.lastName}
-                    </span>
-                  </label>
-                ))
-              )}
-            </div>
-          </div>
-
           {errorMsg && <p className="text-sm text-red-500">{errorMsg}</p>}
 
           <Button type="submit" disabled={loading}>
