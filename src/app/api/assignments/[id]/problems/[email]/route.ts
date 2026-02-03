@@ -1,10 +1,7 @@
 // /src/app/api/assignments/[id]/problems/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-<<<<<<< HEAD:src/app/api/assignments/[id]/problems/[email]/route.ts
-=======
 import { verifyToken, JwtPayload } from '@/app/utils/jwt';
->>>>>>> main:src/app/api/assignments/[id]/problems/route.ts
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { ProblemTypeEnum } from '@/schemas/problem';
 import { z } from 'zod';
