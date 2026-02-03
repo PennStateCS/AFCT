@@ -25,13 +25,12 @@ WORKDIR /app
 # Ensure app directory is writable by node user
 RUN chown -R node:node /app
 
-# Private upload directories
+# Private upload directories - create as root to ensure they exist
 RUN mkdir -p /private/uploads/pfps \
     /private/uploads/problems \
     /private/uploads/solutions \
     /private/uploads/submissions && \
-    chmod -R 775 /private/uploads && \
-    chown -R node:node /private/uploads
+    chmod -R 777 /private/uploads
 
 USER node
 
