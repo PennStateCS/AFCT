@@ -88,9 +88,9 @@ export const maybeBootstrapAdmin = async (
  */
 export const getProductionAdminCredentials = async () => {
   const adminEmail =
-    process.env.DEFAULT_ADMIN_EMAIL || process.env.ADMIN_EMAIL || 'admin@example.com';
+    process.env.ADMIN_EMAIL || process.env.DEFAULT_ADMIN_EMAIL || 'admin@example.com';
   const adminPassword =
-    process.env.DEFAULT_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || 'Password123!';
+    process.env.ADMIN_PASSWORD || process.env.DEFAULT_ADMIN_PASSWORD || 'Password123!';
   const adminFirstName = process.env.DEFAULT_ADMIN_FIRST_NAME || 'Admin';
   const adminLastName = process.env.DEFAULT_ADMIN_LAST_NAME || 'User';
 
