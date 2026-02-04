@@ -113,9 +113,10 @@ export default function SessionWatcher() {
   const progressValue = (timeLeft / TOTAL_COUNTDOWN) * 100;
   const displayMinutes = Math.floor(timeLeft / 60);
   const displaySeconds = Math.ceil(timeLeft % 60);
-  const timeDisplay = displayMinutes > 0 
-    ? `${displayMinutes}:${displaySeconds.toString().padStart(2, '0')}` 
-    : `${Math.ceil(timeLeft)}`;
+  const timeDisplay =
+    displayMinutes > 0
+      ? `${displayMinutes}:${displaySeconds.toString().padStart(2, '0')}`
+      : `${Math.ceil(timeLeft)}`;
   const timeUnit = displayMinutes > 0 ? 'minutes' : 'seconds';
 
   // Render guard AFTER all hooks
