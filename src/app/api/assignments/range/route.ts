@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { toEndOfDayInTimezone } from '@/lib/date-utils';
 
   // Types
   interface Course {
@@ -33,7 +34,18 @@ import { prisma } from '@/lib/prisma';
     assignmentId: string;
     _count: { _all: number };
   }
-  
+
+async function resolveUserTimezone(userId?: string | null) {
+  let tz = 'America/New_York';
+  if (!userId) return tz;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { timezone: true },
+  });
+  if (user?.timezone) return user.timezone;
+  const system = await prisma.systemSettings.findUnique({ where: { id: 1 } });
+  return system?.timezone || tz;
+}
 export async function POST(req: NextRequest) {
   try {
     const session = await auth();
@@ -45,8 +57,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing start or end' }, { status: 400 });
     }
 
-    const startDate = new Date(start);
-    const endDate = new Date(end);
+    const userTimezone = await resolveUserTimezone(session.user.id);
+    const startInput = start.includes('T') ? start : `${start}T00:00`;
+    const endInput = end.includes('T') ? end : `${end}T23:59`;
+    const startDate = toEndOfDayInTimezone(startInput, userTimezone);
+    const endDate = toEndOfDayInTimezone(endInput, userTimezone);
 
     // Get course ids the user is enrolled in
     const rosterEntries: Course[] = await prisma.roster.findMany({ where: { userId: session.user.id }, select: { courseId: true } });
