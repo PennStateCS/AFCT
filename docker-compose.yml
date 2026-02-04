@@ -12,7 +12,7 @@ services:
       - ./docker/nginx/entrypoint.sh:/entrypoint.sh:ro
       # Persist certs (so it doesn't regenerate every restart)
       - nginx_certs:/etc/nginx/certs
-      # If you want nginx to serve /uploads via alias (matches your nginx conf)
+      # If nginx serves /uploads via alias (matches your nginx conf)
       - uploads_data:/usr/share/nginx/html/uploads
     entrypoint: ['/bin/sh', '/entrypoint.sh']
     restart: unless-stopped
@@ -33,16 +33,17 @@ services:
       - /opt/afct/uploads:/private/uploads
     environment:
       NODE_ENV: production
-      DATABASE_URL: ${DATABASE_URL}
+      # Leave these as container envs; Compose substitution happens from shell/.env, not env_file
+      DATABASE_URL: '${DATABASE_URL}'
       DB_HOST: postgres
-      DB_PORT: 5432
+      DB_PORT: '5432'
       DB_USER: afct_user
       DB_NAME: afct
       WAIT_FOR_DB: 'true'
       MIGRATE_ON_START: 'true'
       SEED_ON_START: 'auto'
     healthcheck:
-      test: ['CMD-SHELL', 'curl -f http://localhost:3000/ || exit 1']
+      test: ['CMD-SHELL', 'curl -fsS http://localhost:3000/ >/dev/null || exit 1']
       interval: 30s
       timeout: 10s
       retries: 3
@@ -55,7 +56,8 @@ services:
     environment:
       POSTGRES_DB: afct
       POSTGRES_USER: afct_user
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Same note: Compose substitution needs shell/.env, not env_file
+      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}'
     volumes:
       - /opt/afct/postgres:/var/lib/postgresql/data
     # In production, consider removing this so Postgres isn't exposed publicly:
