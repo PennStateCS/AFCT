@@ -32,6 +32,9 @@ RUN mkdir -p /private/uploads/pfps \
     /private/uploads/submissions && \
     chmod -R 775 /private/uploads
 
+# Declare upload volumes for persistence
+VOLUME ["/private/uploads", "/app/public/uploads"]
+
 USER node
 
 # Dependencies

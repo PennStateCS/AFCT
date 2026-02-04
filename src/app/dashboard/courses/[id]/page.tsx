@@ -29,7 +29,6 @@ export default function AdminCoursePage() {
   const { id } = useParams();
   const { data: session } = useSession();
   const courseId = Array.isArray(id) ? id[0] : id;
-  const { timezone } = useEffectiveTimezone();
 
   // Check if user is a student (vs admin/faculty/TA)
   const isStudent = session?.user?.role === 'STUDENT';
@@ -52,6 +51,7 @@ export default function AdminCoursePage() {
   const [duplicateOpen, setDuplicateOpen] = useState(false);
   // Bulk enroll dialog state
   const [bulkEnrollOpen, setBulkEnrollOpen] = useState(false);
+  const { timezone } = useEffectiveTimezone();
   // Prepare duplicate form when opening
   const openDuplicate = () => {
     // dialog component will initialize values from the `course` prop
@@ -68,6 +68,8 @@ export default function AdminCoursePage() {
   const openBulkEnrollDialog = useCallback(() => {
     setBulkEnrollOpen(true);
   }, []);
+
+  // timezone is resolved via useEffectiveTimezone()
 
   // Problem handlers with dialog state
   const handleProblemEditClick = useCallback(
@@ -113,11 +115,10 @@ export default function AdminCoursePage() {
   }, [dialogStates, handlers]);
 
   const handleCancel = useCallback(() => {
-    dialogStates.setPendingDelete(null);
     dialogStates.setConfirmOpen(false);
+    dialogStates.setPendingDelete(null);
   }, [dialogStates]);
 
-  // Publish handlers
   const handlePublishToggle = useCallback(
     (checked: boolean) => {
       dialogStates.setPendingPublish(checked);
@@ -139,7 +140,6 @@ export default function AdminCoursePage() {
     dialogStates.setPendingPublish(null);
   }, [dialogStates]);
 
-  // Archive handler
   const handleArchiveToggle = useCallback(
     (checked: boolean) => {
       dialogStates.setPendingArchive(checked);

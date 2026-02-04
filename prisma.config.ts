@@ -2,7 +2,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import dotenv from 'dotenv';
-import { defineConfig, env } from 'prisma/config';
+import { defineConfig } from 'prisma/config';
 
 const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env.development';
 const envPath = path.join(process.cwd(), envFile);
