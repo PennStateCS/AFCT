@@ -55,6 +55,7 @@ services:
   nginx:
     image: nginx:1.25-alpine
     container_name: afct-dev-nginx
+    entrypoint: ['/bin/sh', '/entrypoint.sh']
     ports:
       - '3001:80' # HTTP redirect
       - '3002:443' # HTTPS
