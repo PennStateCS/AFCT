@@ -1,13 +1,14 @@
 # Node.js
 node_modules/
 
-# Environment files (ignore actual secrets, keep templates)
+# Environment files (ignore actual secrets, keep templates only)
 .env
 .env.local
 .env.*.local
-!.env.development
-!.env.production
+.env.production
+.env.production.local
 !.env.example
+!.env.production.template
 
 # Next.js build outputs
 .next/
