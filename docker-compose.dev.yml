@@ -96,6 +96,3 @@ volumes:
   private_uploads:
   nginx_certs:
   postgres_dev_data:
-  uploads_data:
-  private_uploads:
-  nginx_certs:
