@@ -31,6 +31,7 @@ import {
   type UpdateProfileInput,
 } from '@/schemas/profile';
 import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
 type EditProfileDialog = {
   user: User;
@@ -38,14 +39,12 @@ type EditProfileDialog = {
   setOpen: (open: boolean) => void;
   onSave?: (updatedUser: Partial<User>) => Promise<void>;
 };
-
-  import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDialog) {
   // Local preview state (keep separate from RHF file)
-    const { timezone: effectiveTimezone } = useEffectiveTimezone();
+  const { timezone: effectiveTimezone } = useEffectiveTimezone();
   const [avatarPreview, setAvatarPreview] = useState<string>(
-    user.avatar
-      user.avatar ? `/uploads/pfps/${user.avatar}` : '/uploads/pfps/default-avatar.png',
+    user.avatar ? `/uploads/pfps/${user.avatar}` : '/uploads/pfps/default-avatar.png',
+  );
   const [serverTimezone, setServerTimezone] = useState('UTC');
 
   // RHF defaults – email is read-only so it isn't in the schema
