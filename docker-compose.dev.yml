@@ -9,6 +9,8 @@ services:
     container_name: afct-dev
     restart: unless-stopped
 
+    user: '0:0'
+
     ports:
       - '3000:3000'
       - '5555:5555'
@@ -16,7 +18,7 @@ services:
     environment:
       NODE_ENV: development
       CHOKIDAR_USEPOLLING: 'true'
-      CHOKIDAR_INTERVAL: '500'
+      CHOKIDAR_INTERVAL: '1000'
       WATCHPACK_POLLING: 'true'
 
       DATABASE_URL: postgres://afct_user:afct_pass@postgres:5432/afct
@@ -32,16 +34,16 @@ services:
 
     volumes:
       # App source (hot reload)
-      - .:/app
+      - .:/app:cached
 
       # Keep container-installed node_modules (avoid host override)
-      - /app/node_modules
+      - afct-dev-node-modules:/app/node_modules
 
-      # Public uploads
-      - uploads_data:/app/public/uploads
+      # Keep .next in container to avoid slow host I/O
+      - afct-dev-next:/app/.next
 
       # Private uploads managed by Docker (named volume)
-      - private_uploads:/private/uploads
+      - ./dev-uploads:/private/uploads
 
     depends_on:
       postgres:
@@ -67,7 +69,6 @@ services:
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ./docker/nginx/entrypoint.sh:/entrypoint.sh:ro
       - nginx_certs:/etc/nginx/certs
-      - uploads_data:/usr/share/nginx/html/uploads
     healthcheck:
       disable: true
 
@@ -93,7 +94,7 @@ services:
       retries: 5
 
 volumes:
-  uploads_data:
-  private_uploads:
   nginx_certs:
   postgres_dev_data:
+  afct-dev-node-modules:
+  afct-dev-next:
