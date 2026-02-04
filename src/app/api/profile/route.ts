@@ -11,7 +11,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 
-const uploadDir = path.join(process.cwd(), 'private', 'uploads', 'pfps');
+const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'pfps');
 
 // Utility to delete a file if it exists
 async function deleteFileIfExists(filename: string) {

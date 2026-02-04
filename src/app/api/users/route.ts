@@ -6,6 +6,7 @@ import bcrypt from 'bcrypt';
 import { auth } from '@/lib/auth';
 import { Role } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { COMMON_TIMEZONES } from '@/lib/timezones';
 
 // Utility to validate email format
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -32,12 +33,12 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const role = searchParams.get('role');
 
-  // Fetching users
+    // Fetching users
 
     // 3. Query users from the database
     const users = await prisma.user.findMany({
       where: role ? { role: role as Role } : undefined,
-      orderBy: [{ role: 'asc' }, { lastName: 'asc'}],
+      orderBy: [{ role: 'asc' }, { lastName: 'asc' }],
       select: {
         id: true,
         email: true,
@@ -82,7 +83,7 @@ export async function POST(req: Request) {
 
     // 2. Parse and validate request body
     const body = await req.json();
-    const { email, firstName, lastName, password, role } = body;
+    const { email, firstName, lastName, password, role, timezone } = body;
 
     if (!email || !firstName || !lastName || !password || !role) {
       console.warn('[USERS_POST] Missing required fields');
@@ -115,6 +116,10 @@ export async function POST(req: Request) {
     // 4. Hash the password and create the user
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    if (timezone && !COMMON_TIMEZONES.includes(timezone as (typeof COMMON_TIMEZONES)[number])) {
+      return NextResponse.json({ error: 'Invalid timezone' }, { status: 400 });
+    }
+
     const systemSettings = await prisma.systemSettings.findUnique({ where: { id: 1 } });
 
     const newUser = await prisma.user.create({
@@ -124,7 +129,7 @@ export async function POST(req: Request) {
         lastName,
         role,
         password: hashedPassword,
-        timezone: systemSettings?.timezone ?? 'UTC',
+        timezone: timezone || systemSettings?.timezone || 'UTC',
       },
       select: {
         id: true,
@@ -137,7 +142,7 @@ export async function POST(req: Request) {
       },
     });
 
-  // User created
+    // User created
 
     // 5. Log the creation
     await createEnhancedActivityLog(prisma, req, {

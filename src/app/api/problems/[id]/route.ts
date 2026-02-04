@@ -60,7 +60,7 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
         );
       }
       // Ensure upload directory exists
-      const uploadsDir = path.join(process.cwd(), 'private', 'uploads', 'problems');
+      const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'problems');
       fs.mkdirSync(uploadsDir, { recursive: true });
 
       // Delete old file if it exists
@@ -145,7 +145,10 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     // Prevent deletion if the problem is linked to any assignment
     const linked = await prisma.assignmentProblem.findFirst({ where: { problemId } });
     if (linked) {
-      return NextResponse.json({ error: 'Problem is associated with an assignment and cannot be deleted' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Problem is associated with an assignment and cannot be deleted' },
+        { status: 400 },
+      );
     }
 
     // Delete associated submissions first
@@ -155,7 +158,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
 
     // Delete the problem file if it exists
     if (existingProblem.fileName) {
-      const uploadsDir = path.join(process.cwd(), 'private', 'uploads', 'problems');
+      const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'problems');
       const filePath = path.join(uploadsDir, existingProblem.fileName);
       try {
         fs.unlinkSync(filePath);
