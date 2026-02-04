@@ -22,7 +22,6 @@
     "db:deploy": "prisma migrate deploy",
     "db:reset": "prisma migrate reset --force --skip-generate",
     "db:erd": "npx prisma generate --schema=prisma/schema.prisma",
-    "db:performance": "powershell -ExecutionPolicy Bypass -File scripts\\quick-db-check.ps1",
     "docker:dev": "docker compose -f docker-compose.dev.yml up --build",
     "docker:dev:detached": "docker compose -f docker-compose.dev.yml up --build -d",
     "docker:down": "docker compose down",
