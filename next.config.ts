@@ -49,11 +49,6 @@ const nextConfig: NextConfig = {
         '**/dev-postgres/**/*',
         '/app/dev-postgres/**',
         '/app/dev-postgres/**/*',
-        '**/dev-uploads/**',
-        '**/dev-uploads',
-        '**/dev-uploads/**/*',
-        '/app/dev-uploads/**',
-        '/app/dev-uploads/**/*',
       ],
     };
 
