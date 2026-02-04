@@ -19,7 +19,7 @@ Built with:
 - [Tech Stack](#-tech-stack)
 - [Docker Development (Recommended)](#-docker-development-recommended)
 - [Production (Docker)](#-production-docker)
-- [SSL / Custom Certificates (Nginx)](#-ssl--custom-certificates-nginx)
+- [Nginx (Production Port Forwarding)](#-nginx-production-port-forwarding)
 - [Production (Node.js – No Docker)](#-production-nodejs--no-docker)
 - [Database Management](#-database-management)
 - [Troubleshooting](#-troubleshooting)
@@ -32,15 +32,17 @@ Built with:
 - Docker Desktop (recommended)
 - Node.js 20+ (optional for non-Docker dev)
 
-### Development Setup
+### Setup
 
-```bash
-git clone <repository-url>
-cd afct
-npm run docker:dev
-```
-
-Visit: http://localhost:3000
+1. Copy the development environment template:
+   ```bash
+   cp .env.development.example .env.development
+   ```
+2. Start development:
+   ```bash
+   npm run docker:dev
+   ```
+3. Visit: http://localhost:3000
 
 ## 📚 Tech Stack
 
@@ -53,27 +55,21 @@ Visit: http://localhost:3000
 
 ## 🐳 Docker Development (Recommended)
 
-### Environment (`.env.develepment`)
+### Ports
 
-```env
-# Database Configuration
-DATABASE_URL=postgresql://afct_user:afct_password@db:5432/afct_dev
+- **App (HTTP)**: localhost:3000
+- **Prisma Studio**: localhost:5555
+- **Postgres**: localhost:5432
 
-# Authentication Configuration
-NEXTAUTH_SECRET=your-nextauth-secret-change-this-in-production
-NEXTAUTH_URL=http://localhost:3000
-JWT_SECRET=your-jwt-secret-key-change-this-in-production
+### Environment Configuration
 
-# Java/JAR Configuration
-CFGANALYZER_LIMIT=15
-CFGANALYZER_BINARY=/app/bin/cfganalyzer
+Copy the template file and update with your local values:
 
-# File Upload Configuration
-MAX_FILE_SIZE=10485760
-
-# Node Environment
-NODE_ENV=development
+```bash
+cp .env.development.example .env.development
 ```
+
+See [.env.development.example](.env.development.example) for all available options.
 
 ### Main Commands
 
@@ -100,11 +96,18 @@ npm run docker:dev:nuke          # Remove containers, volumes, and data
 
 ## 🏭 Production (Docker)
 
-Production deployments typically pull the **GHCR image** and run via Docker Compose.
+Production deployments pull the **GHCR image** and run via Docker Compose with Nginx reverse proxy.
+
+### Ports
+
+- **HTTP (Port 80)**: Nginx listens, redirects to HTTPS
+- **HTTPS (Port 443)**: Nginx listens, terminates TLS, proxies to app:3000 (internal)
+- **App (Port 3000)**: Only exposed to Nginx container (not to host)
+- **Postgres (Port 5432)**: Internal only
 
 ### Environment (`.env.production`)
 
-```env
+````env
 # Database Configuration
 POSTGRES_PASSWORD=change_me_now_with_a_strong_password
 DATABASE_URL=postgresql://afct_user:change_me_now_with_a_strong_password@postgres:5432/afct
@@ -115,44 +118,18 @@ ADMIN_PASSWORD=Password123!
 DEFAULT_ADMIN_FIRST_NAME=Admin
 DEFAULT_ADMIN_LAST_NAME=User
 
-# Authentication Configuration
-NEXTAUTH_SECRET=secure-production-secret
-NEXTAUTH_URL=http://10.144.18.20
-AUTH_TRUST_HOST=true
-JWT_SECRET=secure-jwt-secret
+# AuthenticationConfiguration
 
-# Java/JAR Configuration
-CFGANALYZER_LIMIT=15
-CFGANALYZER_BINARY=/app/bin/cfganalyzer
+1. Copy the production environment template:
+   ```bash
+   cp .env.production.example .env.production
+````
 
-# File Upload Configuration
-MAX_FILE_SIZE=10485760
+2. Update all values in `.env.production` with your production secrets, domain, and admin credentials
 
-# Node Environment
-NODE_ENV=production
+⚠️ **Security**: Use strong, unique passwords. `NEXTAUTH_URL` must match your production domain exactly or login will fail.
 
-# Enable automatic seeding in production
-SEED_ON_START=true
-```
-
-⚠️ `NEXTAUTH_URL` must exactly match the browser URL or login may fail with `MissingCSRF`.
-
-### Admin Seed (Production)
-
-Set `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `DEFAULT_ADMIN_FIRST_NAME`, and `DEFAULT_ADMIN_LAST_NAME` in `.env.production` to create the initial admin user on first database setup. Use a strong, unique password and rotate it after the first login. If seeding should run automatically on container start, set `SEED_ON_START=true`.
-
-### Main Commands
-
-```bash
-npm run docker:prod           # Build and start
-npm run docker:prod:nobuild   # Start without rebuilding
-npm run docker:prod:down      # Stop the stack
-npm run docker:prod:logs      # Follow logs
-npm run docker:prod:logs:app  # Follow app logs
-npm run docker:prod:logs:db   # Follow db logs
-npm run docker:prod:migrate   # Run migrate
-npm run docker:prod:seed      # Run seed
-```
+See [.env.production.example](.env.production.example) for all available options
 
 **Notes**
 
@@ -160,25 +137,22 @@ npm run docker:prod:seed      # Run seed
 - `docker:prod:nobuild` starts without building (use after pulling GHCR).
 - To use GHCR directly: `docker pull ghcr.io/pennstatewilkes-barre/afct-dashboard:main` then run `npm run docker:prod:nobuild`.
 
-## 🔐 SSL / Custom Certificates (Nginx)
+## 🌐 Nginx (Production Port Forwarding)
 
-By default, nginx generates a **self‑signed** certificate on first start. You can replace it with your own certificate at any time.
+**Production only.** Nginx acts as a reverse proxy and TLS terminator:
 
-### Replace the certificate (dev or prod)
+- **Port 80 (HTTP)**: Client request → Nginx receives → 301 redirect to HTTPS
+- **Port 443 (HTTPS)**: Client request → Nginx receives → Terminates TLS → Proxies to app:3000
+- **Port 3000 (App)**: Only exposed internally to Nginx container
 
-1. Place your cert and key in the nginx certs folder:
+### Custom SSL Certificates
+
+By default, Nginx generates a self‑signed certificate. To use your own:
+
+1. Place cert and key:
    - `docker/nginx/certs/server.crt`
    - `docker/nginx/certs/server.key`
-2. Restart nginx:
-   - Dev: `docker compose -f docker-compose.dev.yml restart nginx`
-   - Prod: `docker compose restart nginx`
-
-### Ports
-
-- HTTP redirect: `3001` → `80`
-- HTTPS: `3002` → `443`
-
-> Tip: If you don’t have a domain, the self‑signed cert is fine for local/testing. Browsers will show a warning until you trust the cert.
+2. Restart Nginx: `docker compose restart nginx`
 
 ## 🏭 Production (Node.js – No Docker)
 
