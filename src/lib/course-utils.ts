@@ -29,19 +29,16 @@ export async function deleteItem(target: DeleteTarget): Promise<void> {
   }
 }
 
-export function updateCourseAfterDelete(
-  course: FullCourse,
-  target: DeleteTarget
-): FullCourse {
+export function updateCourseAfterDelete(course: FullCourse, target: DeleteTarget): FullCourse {
   if (target.type === 'assignment') {
     return {
       ...course,
-      assignments: course.assignments.filter((a) => a.id !== target.id)
+      assignments: course.assignments.filter((a) => a.id !== target.id),
     };
   } else if (target.type === 'problem') {
     return {
       ...course,
-      problems: course.problems.filter((p) => p.id !== target.id)
+      problems: course.problems.filter((p) => p.id !== target.id),
     };
   }
   return course;
@@ -49,14 +46,12 @@ export function updateCourseAfterDelete(
 
 export function updateCourseAfterAssignmentSave(
   course: FullCourse,
-  updatedAssignment: Assignment
+  updatedAssignment: Assignment,
 ): FullCourse {
   return {
     ...course,
     assignments: course.assignments.map((a) =>
-      a.id === updatedAssignment.id
-        ? { ...updatedAssignment, problemCount: a.problemCount }
-        : a
+      a.id === updatedAssignment.id ? { ...updatedAssignment, problemCount: a.problemCount } : a,
     ),
   };
 }
@@ -64,19 +59,17 @@ export function updateCourseAfterAssignmentSave(
 export function updateCourseAfterAssignmentPublish(
   course: FullCourse,
   assignmentId: string,
-  isPublished: boolean
+  isPublished: boolean,
 ): FullCourse {
   return {
     ...course,
-    assignments: course.assignments.map((a) =>
-      a.id === assignmentId ? { ...a, isPublished } : a
-    ),
+    assignments: course.assignments.map((a) => (a.id === assignmentId ? { ...a, isPublished } : a)),
   };
 }
 
 export function updateCourseAfterProblemSave(
   course: FullCourse,
-  updatedProblem: Problem
+  updatedProblem: Problem,
 ): FullCourse {
   return {
     ...course,
@@ -86,7 +79,7 @@ export function updateCourseAfterProblemSave(
 
 export function updateCourseAfterAssignmentCreate(
   course: FullCourse,
-  newAssignment: Assignment
+  newAssignment: Assignment,
 ): FullCourse {
   return {
     ...course,
@@ -96,7 +89,7 @@ export function updateCourseAfterAssignmentCreate(
 
 export function updateCourseAfterProblemCreate(
   course: FullCourse,
-  newProblem: Problem
+  newProblem: Problem,
 ): FullCourse {
   return {
     ...course,
@@ -106,14 +99,14 @@ export function updateCourseAfterProblemCreate(
 
 export async function updateAssignmentPublishStatus(
   assignmentId: string,
-  isPublished: boolean
+  isPublished: boolean,
 ): Promise<void> {
   const res = await fetch(`/api/assignments/${assignmentId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ isPublished }),
   });
-  
+
   if (!res.ok) {
     let msg = 'Failed to publish course';
     try {
@@ -129,14 +122,14 @@ export async function updateAssignmentPublishStatus(
 
 export async function updateCoursePublishStatus(
   courseId: string,
-  isPublished: boolean
+  isPublished: boolean,
 ): Promise<Course> {
   const res = await fetch(`/api/courses/${courseId}/publish`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ isPublished }),
   });
-  
+
   if (!res.ok) {
     let msg = 'Failed to publish course';
     try {
@@ -159,9 +152,9 @@ export async function updateCourseArchiveStatus(
   const res = await fetch(`/api/courses/${courseId}/archive`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ "isArchived": isArchived, "startDate": startDate, "endDate": endDate}),
+    body: JSON.stringify({ isArchived: isArchived, startDate: startDate, endDate: endDate }),
   });
-  
+
   if (!res.ok) {
     let msg = 'Failed to archive course';
     try {
@@ -181,7 +174,7 @@ export async function saveCourse(course: Course): Promise<Course> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(course),
   });
-  
+
   if (!res.ok) throw new Error('Failed to save course');
   return res.json();
 }
@@ -207,14 +200,17 @@ export function getEnrolledIds(enrolled: (string | EnrolledUser)[] | undefined):
   return enrolled.map((e) => (typeof e === 'string' ? e : e.id));
 }
 
-export function isEnrolled(enrolled: (string | EnrolledUser)[] | undefined, userId: string): boolean {
+export function isEnrolled(
+  enrolled: (string | EnrolledUser)[] | undefined,
+  userId: string,
+): boolean {
   const ids = getEnrolledIds(enrolled);
   return ids.includes(userId);
 }
 
 export function getInstructors(enrolled: EnrolledUser[] | undefined): EnrolledUser[] {
   if (!Array.isArray(enrolled)) return [];
-  return enrolled.filter((u) => u.courseRole === 'INSTRUCTOR');
+  return enrolled.filter((u) => u.courseRole === 'INSTRUCTOR' || u.courseRole === 'FACULTY');
 }
 
 export function getTAs(enrolled: EnrolledUser[] | undefined): EnrolledUser[] {
@@ -234,9 +230,13 @@ export function getStudentCount(enrolled: EnrolledUser[] | undefined): number {
 export function formatInstructorNames(enrolled: EnrolledUser[] | undefined): string {
   const instructors = getInstructors(enrolled);
   if (instructors.length === 0) return 'TBA';
-  if (instructors.length === 1) return `${instructors[0].firstName ?? ''} ${instructors[0].lastName ?? ''}`.trim();
+  if (instructors.length === 1)
+    return `${instructors[0].firstName ?? ''} ${instructors[0].lastName ?? ''}`.trim();
   // Multiple instructors: show the first instructor followed by an ellipsis
-  return `${(instructors[0].firstName ?? '') + (instructors[0].lastName ? ' ' + instructors[0].lastName : '')}`.trim() + ', ...';
+  return (
+    `${(instructors[0].firstName ?? '') + (instructors[0].lastName ? ' ' + instructors[0].lastName : '')}`.trim() +
+    ', ...'
+  );
 }
 
 export function deriveRoleSlices(enrolled: EnrolledUser[] | undefined) {
