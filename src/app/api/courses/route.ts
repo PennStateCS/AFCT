@@ -3,6 +3,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validationResponse } from '@/lib/zod-error';
+import { auth } from '@/lib/auth';
+import { toEndOfDayInTimezone } from '@/lib/date-utils';
 import type { Prisma } from '@prisma/client';
 
 // ----------------------------------------
@@ -87,7 +89,23 @@ export async function POST(req: Request) {
     // 1) Parse payload of information
     const json = await req.json();
 
-    // 2) Optional uniqueness check (code + semester)
+    // 2) Get user's timezone (DB user > system settings > default)
+    const session = await auth();
+    let userTimezone = 'America/New_York';
+    if (session?.user?.id) {
+      const userRecord = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { timezone: true },
+      });
+      if (userRecord?.timezone) {
+        userTimezone = userRecord.timezone;
+      } else {
+        const system = await prisma.systemSettings.findUnique({ where: { id: 1 } });
+        userTimezone = system?.timezone || userTimezone;
+      }
+    }
+
+    // 3) Optional uniqueness check (code + semester)
     const exists = await prisma.course.findFirst({
       where: { code: json.code, semester: json.semester },
       select: { id: true },
@@ -99,10 +117,10 @@ export async function POST(req: Request) {
       );
     }
 
-    // 3) Generate a unique registration code
+    // 4) Generate a unique registration code
     const regCode = await generateUniqueCourseCode();
 
-    // 4) Create course (and roster rows for faculty) in a transaction for consistency
+    // 5) Create course (and roster rows for faculty) in a transaction for consistency
     const created = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const course = await tx.course.create({
         data: {
@@ -111,42 +129,19 @@ export async function POST(req: Request) {
           regCode,
           semester: json.semester,
           credits: json.credits,
-          startDate: json.startDate, // Date object is fine
-          endDate: json.endDate,
+          startDate: toEndOfDayInTimezone(json.startDate, userTimezone),
+          endDate: toEndOfDayInTimezone(json.endDate, userTimezone),
           isPublished: json.isPublished ?? false,
           isArchived: false,
         },
       });
 
-      let facultyIds: string[] = [];
       if (Array.isArray(json.facultyIds) && json.facultyIds.length > 0) {
-        facultyIds = json.facultyIds as string[];
-      }
-
-      let instructorIds: string[] = [];
-      if (Array.isArray(json.instructorIds) && json.instructorIds.length > 0) {
-        instructorIds = json.instructorIds as string[];
-      }
-
-      const instructorSet = new Set(instructorIds);
-      facultyIds = facultyIds.filter((el: string) => !instructorSet.has(el));
-
-      if (facultyIds.length > 0) {
         await tx.roster.createMany({
-          data: facultyIds.map((userId: string) => ({
+          data: json.facultyIds.map((userId: string) => ({
             userId,
             courseId: course.id,
             role: 'FACULTY',
-          })),
-        });
-      }
-
-      if (instructorIds.length > 0) {
-        await tx.roster.createMany({
-          data: instructorIds.map((userId: string) => ({
-            userId,
-            courseId: course.id,
-            role: 'INSTRUCTOR',
           })),
         });
       }
@@ -195,7 +190,6 @@ export async function POST(req: Request) {
   } catch (err) {
     // If it’s a Zod error, send normalized validation issues
     const resp = validationResponse(err);
-    console.error('Course creation failed', err);
     if (resp.status === 400) return resp;
 
     console.error('Failed to create course:', err);

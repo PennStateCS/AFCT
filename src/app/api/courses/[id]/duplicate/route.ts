@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { toEndOfDayInTimezone } from '@/lib/date-utils';
 import type { Prisma } from '@prisma/client';
 
 // Local copy of registration code generator to match POST /api/courses behavior
@@ -64,7 +65,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     } = body ?? {};
 
     // Determine normalized mode: 'assignments' | 'problems' | 'assignments_with_problems'
-    let mode: 'assignments' | 'problems' | 'assignments_with_problems' = 'assignments_with_problems';
+    let mode: 'assignments' | 'problems' | 'assignments_with_problems' =
+      'assignments_with_problems';
     if (copyMode) {
       if (copyMode === 'assignments') mode = 'assignments';
       else if (copyMode === 'problems') mode = 'problems';
@@ -82,9 +84,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Convert dates
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+    // Get user's timezone (DB user > system settings > default)
+    let userTimezone = 'America/New_York';
+    if (session.user?.id) {
+      const userRecord = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { timezone: true },
+      });
+      if (userRecord?.timezone) {
+        userTimezone = userRecord.timezone;
+      } else {
+        const system = await prisma.systemSettings.findUnique({ where: { id: 1 } });
+        userTimezone = system?.timezone || userTimezone;
+      }
+    }
 
     // Begin transaction
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -97,8 +110,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           code,
           semester,
           credits: Number(credits) || 0,
-          startDate: start,
-          endDate: end,
+          startDate: toEndOfDayInTimezone(startDate, userTimezone),
+          endDate: toEndOfDayInTimezone(endDate, userTimezone),
           isPublished: false,
           isArchived: false,
           regCode,
@@ -119,11 +132,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const originalRoster = await tx.roster.findMany({ where: { courseId } });
         for (const r of originalRoster) {
           if (r.userId === session.user.id) continue; // already added
-          if (((r.role as string) === 'FACULTY' || (r.role as string) === 'INSTRUCTOR') && copyFaculty) {
-            await tx.roster.create({ data: { courseId: newCourse.id, userId: r.userId, role: r.role } });
+          if (
+            ((r.role as string) === 'FACULTY' || (r.role as string) === 'INSTRUCTOR') &&
+            copyFaculty
+          ) {
+            await tx.roster.create({
+              data: { courseId: newCourse.id, userId: r.userId, role: r.role },
+            });
           }
           if (r.role === 'TA' && copyTAs) {
-            await tx.roster.create({ data: { courseId: newCourse.id, userId: r.userId, role: r.role } });
+            await tx.roster.create({
+              data: { courseId: newCourse.id, userId: r.userId, role: r.role },
+            });
           }
         }
       }
@@ -163,7 +183,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           for (const ap of a.problems) neededProblemIds.add(ap.problemId);
         }
         if (neededProblemIds.size > 0) {
-          const problemsToCopy = await tx.problem.findMany({ where: { id: { in: Array.from(neededProblemIds) } } });
+          const problemsToCopy = await tx.problem.findMany({
+            where: { id: { in: Array.from(neededProblemIds) } },
+          });
           for (const p of problemsToCopy) {
             const created = await tx.problem.create({
               data: {
@@ -202,7 +224,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
               const oldProblemId = ap.problemId;
               const newProblemId = problemIdMap[oldProblemId];
               if (!newProblemId) continue; // skip if problem wasn't copied for some reason
-              await tx.assignmentProblem.create({ data: { assignmentId: createdA.id, problemId: newProblemId } });
+              await tx.assignmentProblem.create({
+                data: { assignmentId: createdA.id, problemId: newProblemId },
+              });
             }
           }
         }

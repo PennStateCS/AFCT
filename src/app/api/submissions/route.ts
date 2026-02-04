@@ -89,34 +89,20 @@ export async function POST(req: NextRequest) {
       const fileExt = path.extname(originalFileName);
       fileName = `${randomUUID()}${fileExt}`;
 
-      const uploadDir = path.join(process.cwd(), 'private', 'uploads', 'submissions');
+      const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'submissions');
       if (!fs.existsSync(uploadDir)) {
         fs.mkdirSync(uploadDir, { recursive: true });
       }
 
       const filePath = path.join(uploadDir, fileName);
       const buffer = Buffer.from(await file.arrayBuffer());
-      try {
-        fs.writeFileSync(filePath, buffer, {mode: 0o755});
-      } catch (writeErr) {
-        console.error('Failed to write submission file:', writeErr);
-        await createEnhancedActivityLog(prisma, req, {
-          userId: decoded.userId,
-          action: 'SUBMISSION_FILE_WRITE_FAILED',
-          category: 'SUBMISSION',
-          courseId,
-          assignmentId,
-          problemId,
-          metadata: { filePath, error: writeErr instanceof Error ? writeErr.message : String(writeErr) },
-        });
-        return NextResponse.json({ error: 'Failed to save uploaded file' }, { status: 500 });
-      }
+      fs.writeFileSync(filePath, buffer, { mode: 0o755 });
 
       // 4b. Run system command to analyze the uploaded file
       try {
         // Check if we're running in Docker (has CFGANALYZER_BINARY env var)
         const isDocker = process.env.CFGANALYZER_BINARY !== undefined;
-        
+
         if (!isDocker && os.platform() === 'win32') {
           // Windows local development: Count lines as before
           const result = execSync(`powershell -Command "(Get-Content '${filePath}').Count"`, {
@@ -129,7 +115,7 @@ export async function POST(req: NextRequest) {
           if (answerFileName) {
             const answerFilePath = path.join(
               process.cwd(),
-              'private',
+              'public',
               'uploads',
               'problems',
               answerFileName,
@@ -157,9 +143,9 @@ export async function POST(req: NextRequest) {
 
                 // Execute the evaluator with 30 second timeout
                 const result = await evaluator.execute(args, {
-                  timeout: 30000
+                  timeout: 30000,
                 });
-                
+
                 // Parse the JSON response
                 try {
                   const evaluation = JSON.parse(result.stdout.trim());
@@ -168,7 +154,7 @@ export async function POST(req: NextRequest) {
                     if (typeof evaluation.correct === 'boolean') {
                       correct = evaluation.correct;
                     }
-                    
+
                     // Extract feedback if present
                     if (typeof evaluation.feedback === 'string') {
                       feedback = evaluation.feedback;
@@ -196,7 +182,7 @@ export async function POST(req: NextRequest) {
       } catch (cmdErr) {
         console.error('Command execution failed:', cmdErr);
         const isDocker = process.env.CFGANALYZER_BINARY !== undefined;
-        
+
         if (!isDocker && os.platform() === 'win32') {
           feedback = 'ERROR: Failed to analyze file.';
         } else {
