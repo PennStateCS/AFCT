@@ -19,38 +19,59 @@ import { useForm, Controller } from 'react-hook-form';
 import { showToast } from '@/lib/toast';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { CourseFormSchema, UpdateCourseSchema } from '@/schemas/course';
+import { CourseFormSchema } from '@/schemas/course';
 
 type EditCourseDialogProps = {
   course: Course;
   open: boolean;
   setOpen: (open: boolean) => void;
   onSave?: (updatedCourse: Partial<Course>) => void;
+  timeZone: string;
 };
 
-function toDateTimeLocalString(date: Date | string): string {
+function toDateTimeLocalInTimeZone(date: Date | string, timeZone: string): string {
   const d = new Date(date);
-  const offset = d.getTimezoneOffset();
-  const localDate = new Date(d.getTime() - offset * 60000);
-  return localDate.toISOString().slice(0, 16);
+  if (!Number.isFinite(d.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(d);
+  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const year = lookup.year ?? '0000';
+  const month = lookup.month ?? '01';
+  const day = lookup.day ?? '01';
+  const hour = lookup.hour ?? '00';
+  const minute = lookup.minute ?? '00';
+  return `${year}-${month}-${day}T${hour}:${minute}`;
 }
 
 // RHF form state before transforms (strings for datetime-local)
 type FormValues = z.infer<typeof CourseFormSchema>;
 
-export function EditCourseDialog({ course, open, setOpen, onSave }: EditCourseDialogProps) {
+export function EditCourseDialog({
+  course,
+  open,
+  setOpen,
+  onSave,
+  timeZone,
+}: EditCourseDialogProps) {
   const defaultValues: FormValues = useMemo(
     () => ({
       name: course.name ?? '',
       code: course.code ?? '',
       semester: course.semester ?? '',
       credits: String(course.credits ?? 3),
-      startDate: toDateTimeLocalString(course.startDate),
-      endDate: toDateTimeLocalString(course.endDate),
+      startDate: toDateTimeLocalInTimeZone(course.startDate, timeZone),
+      endDate: toDateTimeLocalInTimeZone(course.endDate, timeZone),
       isPublished: course.isPublished ?? false,
       isArchived: course.isArchived ?? false,
     }),
-    [course],
+    [course, timeZone],
   );
 
   const {
@@ -84,7 +105,10 @@ export function EditCourseDialog({ course, open, setOpen, onSave }: EditCourseDi
       code: raw.code.trim().replace(/\s+/g, ' ').toUpperCase(), // Normalize code
     };
 
-    const payload = UpdateCourseSchema.parse({ id: course.id, ...formData });
+    const payload = {
+      id: course.id,
+      ...formData,
+    };
 
     try {
       const res = await fetch(`/api/courses/${course.id}`, {
@@ -136,11 +160,7 @@ export function EditCourseDialog({ course, open, setOpen, onSave }: EditCourseDi
         if (!val) resetForm();
       }}
     >
-      <DialogContent
-        className="bg-card"
-        onInteractOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
-      >
+      <DialogContent className="bg-card">
         <DialogHeader>
           <DialogTitle>Edit Course</DialogTitle>
           <DialogDescription>Update the course details and save your changes.</DialogDescription>

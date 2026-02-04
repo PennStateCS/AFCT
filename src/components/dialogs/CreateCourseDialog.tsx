@@ -28,14 +28,11 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   CreateCourseFormSchema, // Form schema (no transformations)
-  CreateCourseSchema, // API schema (with transformations)
 } from '@/schemas/course';
 import { z } from 'zod';
 
 // RHF form state = Zod INPUT (strings for datetime-local)
 type FormValues = z.infer<typeof CreateCourseFormSchema>;
-// Parsed values returned by API Zod schema (Dates, normalized code, coerced credits)
-type ParsedValues = z.output<typeof CreateCourseSchema>;
 
 interface CreateCourseDialogProps {
   open: boolean;
@@ -111,14 +108,10 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
       // Date strings remain as-is for API schema to transform
     };
 
-    // Parse with Zod: code uppercased, credits coerced, dates transformed to Date
-    const values: ParsedValues = CreateCourseSchema.parse(formData);
-
     const payload = {
-      ...values,
-      credits: Number(values.credits),
-      startDate: values.startDate?.toISOString(),
-      endDate: values.endDate?.toISOString(),
+      ...formData,
+      code: raw.code.trim().replace(/\s+/g, ' ').toUpperCase(),
+      credits: Number(raw.credits),
     };
 
     const res = await fetch('/api/courses', {
