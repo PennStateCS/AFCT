@@ -25,25 +25,6 @@ Built with:
 - [Troubleshooting](#-troubleshooting)
 - [Contributors](#-contributors)
 
-## 🚀 Quick Start Guide
-
-### Prerequisites
-
-- Docker Desktop (recommended)
-- Node.js 20+ (optional for non-Docker dev)
-
-### Setup
-
-1. Copy the development environment template:
-   ```bash
-   cp .env.development.example .env.development
-   ```
-2. Start development:
-   ```bash
-   npm run docker:dev
-   ```
-3. Visit: http://localhost:3000
-
 ## 📚 Tech Stack
 
 - Node.js 20+
