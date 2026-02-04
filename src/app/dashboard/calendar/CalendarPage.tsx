@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfDay, endOfDay } from 'date-fns';
 import DayAssignmentsDialog from '@/components/dialogs/DayAssignmentsDialog';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import { toEndOfDayInTimezone } from '@/lib/date-utils';
 
 // Fetch assignments for courses the current user is enrolled in between given ISO start/end
 async function fetchAssignmentsInRange(startIso: string, endIso: string) {
@@ -18,6 +19,22 @@ async function fetchAssignmentsInRange(startIso: string, endIso: string) {
   });
   if (!res.ok) return [];
   return res.json();
+}
+
+function getDateKeyInTimeZone(date: Date | string, timeZone: string): string {
+  const d = new Date(date);
+  if (!Number.isFinite(d.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(d);
+  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const year = lookup.year ?? '0000';
+  const month = lookup.month ?? '01';
+  const day = lookup.day ?? '01';
+  return `${year}-${month}-${day}`;
 }
 
 export default function CalendarPage() {
@@ -33,22 +50,27 @@ export default function CalendarPage() {
   const [dialogDate, setDialogDate] = useState<Date | null>(null);
   const [dialogAssignments, setDialogAssignments] = useState<any[]>([]);
 
-  const fetchForMonth = useCallback(async (month: Date) => {
-    setLoading(true);
-    const start = startOfWeek(startOfMonth(month));
-    const end = endOfWeek(endOfMonth(month));
+  const fetchForMonth = useCallback(
+    async (month: Date) => {
+      setLoading(true);
+      const start = startOfWeek(startOfMonth(month));
+      const end = endOfWeek(endOfMonth(month));
 
-    // Expand to day range [00:00, 23:59:59.999]
-    const startIso = startOfDay(start).toISOString();
-    const endIso = endOfDay(end).toISOString();
+      // Expand to day range [00:00, 23:59:59.999]
+      const startKey = getDateKeyInTimeZone(startOfDay(start), timezone);
+      const endKey = getDateKeyInTimeZone(endOfDay(end), timezone);
+      const startIso = toEndOfDayInTimezone(`${startKey}T00:00`, timezone).toISOString();
+      const endIso = toEndOfDayInTimezone(`${endKey}T23:59`, timezone).toISOString();
 
-    setVisibleStart(new Date(startIso));
-    setVisibleEnd(new Date(endIso));
+      setVisibleStart(new Date(startIso));
+      setVisibleEnd(new Date(endIso));
 
-    const data = await fetchAssignmentsInRange(startIso, endIso);
-    setAssignments(data);
-    setLoading(false);
-  }, []);
+      const data = await fetchAssignmentsInRange(startIso, endIso);
+      setAssignments(data);
+      setLoading(false);
+    },
+    [timezone],
+  );
 
   const openDayDialog = (date: Date, dayAssignments: any[]) => {
     setDialogDate(date);
@@ -67,11 +89,8 @@ export default function CalendarPage() {
     fetchForMonth(new Date());
   }, [fetchForMonth]);
 
-  // Helper to get a local YYYY-MM-DD key (avoids UTC toISOString timezone slips)
-  const localDateKey = (date: Date | string) => {
-    const d = new Date(date);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  };
+  // Helper to get a YYYY-MM-DD key in the user's timezone
+  const localDateKey = (date: Date | string) => getDateKeyInTimeZone(date, timezone);
 
   // Group assignments by date string (YYYY-MM-DD) using local dates
   const assignmentsByDate: Record<string, any[]> = {};
@@ -91,10 +110,10 @@ export default function CalendarPage() {
   };
 
   return (
-    <div className="bg-background flex min-h-screen flex-col items-stretch justify-start overflow-hidden">
+    <div className="bg-background flex min-h-screen flex-col items-center justify-start overflow-hidden">
       <h1 className="p-4 text-2xl font-bold">Calendar</h1>
       <div
-        className="bg-card flex w-full flex-1 flex-col rounded-lg border border-gray-200 p-4 shadow"
+        className="bg-card flex w-full max-w-6xl flex-1 flex-col items-center rounded-lg border border-gray-200 p-4 shadow"
         style={{ boxSizing: 'border-box', minHeight: 480 }}
       >
         <div className="h-full w-full overflow-auto">

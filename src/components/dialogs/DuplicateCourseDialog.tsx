@@ -18,11 +18,25 @@ import { z } from 'zod';
 import { DuplicateFormSchema } from '@/schemas/course';
 import { FullCourse } from '@/types/course';
 
-function toDateTimeLocalString(date: Date | string): string {
+function toDateTimeLocalInTimeZone(date: Date | string, timeZone: string): string {
   const d = new Date(date);
-  const offset = d.getTimezoneOffset();
-  const localDate = new Date(d.getTime() - offset * 60000);
-  return localDate.toISOString().slice(0, 16);
+  if (!Number.isFinite(d.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(d);
+  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const year = lookup.year ?? '0000';
+  const month = lookup.month ?? '01';
+  const day = lookup.day ?? '01';
+  const hour = lookup.hour ?? '00';
+  const minute = lookup.minute ?? '00';
+  return `${year}-${month}-${day}T${hour}:${minute}`;
 }
 
 type FormValues = z.infer<typeof DuplicateFormSchema>;
@@ -31,17 +45,24 @@ interface Props {
   open: boolean;
   setOpen: (v: boolean) => void;
   course: FullCourse | null;
+  timeZone: string;
   onSuccess?: (newId: string) => void;
 }
 
-export default function DuplicateCourseDialog({ open, setOpen, course, onSuccess }: Props) {
+export default function DuplicateCourseDialog({
+  open,
+  setOpen,
+  course,
+  timeZone,
+  onSuccess,
+}: Props) {
   const defaults: FormValues = {
     name: course?.name ?? '',
     code: course?.code ?? '',
     semester: course?.semester ?? '',
     credits: String(course?.credits ?? 3),
-    startDate: course ? toDateTimeLocalString(course.startDate) : '',
-    endDate: course ? toDateTimeLocalString(course.endDate) : '',
+    startDate: course ? toDateTimeLocalInTimeZone(course.startDate, timeZone) : '',
+    endDate: course ? toDateTimeLocalInTimeZone(course.endDate, timeZone) : '',
     copyMode: 'assignments_with_problems',
     copyFaculty: false,
     copyTAs: false,
@@ -77,8 +98,8 @@ export default function DuplicateCourseDialog({ open, setOpen, course, onSuccess
       code: course?.code ?? '',
       semester: course?.semester ?? '',
       credits: String(course?.credits ?? 3),
-      startDate: course ? toDateTimeLocalString(course.startDate) : '',
-      endDate: course ? toDateTimeLocalString(course.endDate) : '',
+      startDate: course ? toDateTimeLocalInTimeZone(course.startDate, timeZone) : '',
+      endDate: course ? toDateTimeLocalInTimeZone(course.endDate, timeZone) : '',
       copyMode: 'assignments_with_problems',
       copyFaculty: false,
       copyTAs: false,
@@ -86,7 +107,7 @@ export default function DuplicateCourseDialog({ open, setOpen, course, onSuccess
     reset(vals);
     setConfirmChecked(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, course]);
+  }, [open, course, timeZone]);
 
   const onSubmit = async (raw: FormValues) => {
     // Build payload
@@ -95,8 +116,8 @@ export default function DuplicateCourseDialog({ open, setOpen, course, onSuccess
       title: raw.name,
       code: raw.code,
       semester: raw.semester,
-      startDate: toDateTimeLocalString(raw.startDate),
-      endDate: toDateTimeLocalString(raw.endDate),
+      startDate: raw.startDate,
+      endDate: raw.endDate,
       credits: Number(raw.credits),
       copyAssignments: mode === 'assignments' || mode === 'assignments_with_problems',
       copyProblems: mode === 'problems' || mode === 'assignments_with_problems',
@@ -153,11 +174,7 @@ export default function DuplicateCourseDialog({ open, setOpen, course, onSuccess
         }
       }}
     >
-      <DialogContent
-        className="bg-card max-w-2xl"
-        onInteractOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
-      >
+      <DialogContent className="bg-card max-w-2xl">
         <DialogHeader>
           <div className="flex items-center gap-2">
             <Copy className="text-muted-foreground size-4" />

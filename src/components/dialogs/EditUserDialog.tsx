@@ -30,6 +30,7 @@ import type { User } from '@prisma/client';
 import { UpdateUserSchema, type UpdateUserRaw, type UpdateUserInput } from '@/schemas/user';
 import { roleOptions, formatRole } from '@/lib/roles';
 import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
 type EditUserDialogProps = {
   user: User;
@@ -39,11 +40,10 @@ type EditUserDialogProps = {
 };
 
 export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogProps) {
+  const { timezone: effectiveTimezone } = useEffectiveTimezone();
   // Local preview state (keep separate from RHF file)
   const [avatarPreview, setAvatarPreview] = useState<string>(
-    user.avatar
-      ? `/api/files/avatar?file=${user.avatar}`
-      : '/api/files/avatar?file=default-avatar.png',
+    user.avatar ? `/uploads/pfps/${user.avatar}` : '/uploads/pfps/default-avatar.png',
   );
   const [serverTimezone, setServerTimezone] = useState('UTC');
 
@@ -87,9 +87,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
       });
       // Reset preview from current user
       setAvatarPreview(
-        user.avatar
-          ? `/api/files/avatar?file=${user.avatar}`
-          : '/api/files/avatar?file=default-avatar.png',
+        user.avatar ? `/uploads/pfps/${user.avatar}` : '/uploads/pfps/default-avatar.png',
       );
     } else {
       reset(defaults, {
@@ -103,23 +101,12 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
 
   useEffect(() => {
     if (!open) return;
-    const loadServerTimezone = async () => {
-      try {
-        const res = await fetch('/api/system-settings/public', { cache: 'no-store' });
-        if (!res.ok) return;
-        const data = await res.json();
-        const tz = String(data?.timezone ?? 'UTC');
-        setServerTimezone(tz);
-        const current = getValues('timezone');
-        if (!current) {
-          setValue('timezone', tz, { shouldDirty: false });
-        }
-      } catch {
-        // ignore
-      }
-    };
-    loadServerTimezone();
-  }, [open, getValues, setValue]);
+    const tz = user.timezone || effectiveTimezone || 'UTC';
+    setServerTimezone(effectiveTimezone || 'UTC');
+    if (!getValues('timezone')) {
+      setValue('timezone', tz, { shouldDirty: false });
+    }
+  }, [open, user.timezone, effectiveTimezone, getValues, setValue]);
 
   const avatarFileErrorMessage = (() => {
     const e = errors.avatarFile;
@@ -155,7 +142,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
   };
 
   const onDeleteAvatar = () => {
-    setAvatarPreview('/api/files/avatar?file=default-avatar.png');
+    setAvatarPreview('/uploads/pfps/default-avatar.png');
     setValue('avatarFile', undefined, { shouldDirty: true });
     setValue('deleteAvatar', true, { shouldDirty: true });
   };
@@ -213,11 +200,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
         if (!val) resetForm();
       }}
     >
-      <DialogContent
-        className="bg-card"
-        onInteractOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
-      >
+      <DialogContent className="bg-card">
         <DialogHeader>
           <DialogTitle>Edit User</DialogTitle>
           <DialogDescription>Modify the user’s information and profile photo.</DialogDescription>
@@ -263,7 +246,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
                 )}
               />
 
-              {avatarPreview && avatarPreview !== '/api/files/avatar?file=default-avatar.png' && (
+              {avatarPreview && avatarPreview !== '/uploads/pfps/default-avatar.png' && (
                 <Button
                   type="button"
                   variant="outline"

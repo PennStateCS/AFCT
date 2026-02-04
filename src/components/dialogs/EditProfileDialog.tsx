@@ -39,13 +39,13 @@ type EditProfileDialog = {
   onSave?: (updatedUser: Partial<User>) => Promise<void>;
 };
 
+  import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDialog) {
   // Local preview state (keep separate from RHF file)
+    const { timezone: effectiveTimezone } = useEffectiveTimezone();
   const [avatarPreview, setAvatarPreview] = useState<string>(
     user.avatar
-      ? `/api/files/avatar?file=${user.avatar}`
-      : '/api/files/avatar?file=default-avatar.png',
-  );
+      user.avatar ? `/uploads/pfps/${user.avatar}` : '/uploads/pfps/default-avatar.png',
   const [serverTimezone, setServerTimezone] = useState('UTC');
 
   // RHF defaults – email is read-only so it isn't in the schema
@@ -103,41 +103,12 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
 
   useEffect(() => {
     if (!open) return;
-    const loadServerTimezone = async () => {
-      try {
-        const res = await fetch('/api/system-settings/public', { cache: 'no-store' });
-        if (!res.ok) return;
-        const data = await res.json();
-        const tz = String(data?.timezone ?? 'UTC');
-        setServerTimezone(tz);
-        const current = getValues('timezone');
-        if (!current) {
-          setValue('timezone', tz, { shouldDirty: false });
-        }
-      } catch {
-        // ignore
-      }
-    };
-    loadServerTimezone();
-  }, [open, getValues, setValue]);
-
-  useEffect(() => {
-    if (!open) return;
-    const loadUserTimezone = async () => {
-      try {
-        const res = await fetch('/api/profile', { cache: 'no-store' });
-        if (!res.ok) return;
-        const data = await res.json();
-        const tz = String(data?.timezone ?? '');
-        if (tz) {
-          setValue('timezone', tz, { shouldDirty: false });
-        }
-      } catch {
-        // ignore
-      }
-    };
-    loadUserTimezone();
-  }, [open, setValue]);
+    const tz = user.timezone || effectiveTimezone || 'UTC';
+    setServerTimezone(effectiveTimezone || 'UTC');
+    if (!getValues('timezone')) {
+      setValue('timezone', tz, { shouldDirty: false });
+    }
+  }, [open, user.timezone, effectiveTimezone, getValues, setValue]);
 
   // Avatar error message extraction
   const avatarFileErrorMessage = (() => {
@@ -173,8 +144,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
   };
 
   const handleDeleteAvatar = () => {
-    setAvatarPreview('/api/files/avatar?=default-avatar.png');
-    setValue('avatarFile', undefined, { shouldDirty: true });
+    setAvatarPreview('/uploads/pfps/default-avatar.png');
     setValue('deleteAvatar', true, { shouldDirty: true });
   };
 
@@ -225,11 +195,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
         }
       }}
     >
-      <DialogContent
-        className="bg-card max-w-lg"
-        onInteractOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
-      >
+      <DialogContent className="bg-card max-w-lg">
         <DialogHeader>
           <DialogTitle>Edit Profile</DialogTitle>
           <DialogDescription>Update your personal information and avatar.</DialogDescription>
