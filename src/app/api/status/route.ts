@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 type DatabaseDetails = {
   version?: string;
@@ -43,31 +43,45 @@ type DatabaseStats = {
     connections_idle_in_xact?: number | null;
     db_size_mb?: number | null;
     top_queries?: Array<{ pid: number; state: string | null; age_ms: number; query_trunc: string }>;
+    cache_hit_ratio?: number | null;
+    seq_scans?: number | null;
+    idx_scans?: number | null;
+    transactions_per_sec?: number | null;
+    slow_query_count?: number | null;
   };
   sqlite?: {
     journal_mode?: string | null;
-    wal_checkpoint?: { busy?: number | null; log?: number | null; checkpointed?: number | null } | null;
+    wal_checkpoint?: {
+      busy?: number | null;
+      log?: number | null;
+      checkpointed?: number | null;
+    } | null;
   };
 };
 
-type DatabaseStatus = { ok: boolean; message: string; details?: DatabaseDetails; stats?: DatabaseStats };
+type DatabaseStatus = {
+  ok: boolean;
+  message: string;
+  details?: DatabaseDetails;
+  stats?: DatabaseStats;
+};
 function getNum(obj: Record<string, unknown>, k: string): number | undefined {
   const v = obj?.[k];
-  if (typeof v === "number") return v;
-  if (typeof v === "string") {
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string') {
     const n = Number(v);
     return Number.isFinite(n) ? n : undefined;
   }
   return undefined;
 }
-function detectProvider(url: string): "sqlite" | "postgres" | "unknown" {
+function detectProvider(url: string): 'sqlite' | 'postgres' | 'unknown' {
   try {
-    if (!url) return "unknown";
-    if (url.startsWith("file:") || url.includes("sqlite")) return "sqlite";
+    if (!url) return 'unknown';
+    if (url.startsWith('file:') || url.includes('sqlite')) return 'sqlite';
     const u = new URL(url);
-    if (u.protocol.startsWith("postgres")) return "postgres";
+    if (u.protocol.startsWith('postgres')) return 'postgres';
   } catch {}
-  return "unknown";
+  return 'unknown';
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -75,10 +89,10 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export async function GET(req: Request) {
   const t0 = performance.now();
   const url = new URL(req.url);
-  const deep = url.searchParams.get("deep") === "1";
+  const deep = url.searchParams.get('deep') === '1';
 
   // ===== System =====
-  const os = await import("os");
+  const os = await import('os');
 
   // quick per-process CPU usage sample (~100ms)
   const cores = os.cpus()?.length ?? 1;
@@ -89,7 +103,8 @@ export async function GET(req: Request) {
   const time1 = process.hrtime.bigint();
   const elapsedMicros = Number((time1 - time0) / 1000n); // wall micros
   const procCpuMicros = cpu1.user + cpu1.system;
-  const cpuPct = elapsedMicros > 0 ? Math.min(100, (procCpuMicros / elapsedMicros) * (100 / cores)) : 0;
+  const cpuPct =
+    elapsedMicros > 0 ? Math.min(100, (procCpuMicros / elapsedMicros) * (100 / cores)) : 0;
 
   const system = {
     ok: true,
@@ -105,7 +120,10 @@ export async function GET(req: Request) {
       os
         .cpus()
         ?.slice(0, 4)
-        .map((c) => ({ model: (c as { model?: string }).model, speed: (c as { speed?: number }).speed })) ?? [],
+        .map((c) => ({
+          model: (c as { model?: string }).model,
+          speed: (c as { speed?: number }).speed,
+        })) ?? [],
     memory: { total: os.totalmem(), free: os.freemem() },
     loadavg: os.loadavg(),
     ipAddresses: (() => {
@@ -118,12 +136,12 @@ export async function GET(req: Request) {
           for (const a of addrs) {
             const addr = a as { address?: string; family?: string | number; internal?: boolean };
             if (!addr || addr.internal) continue;
-            const address = addr.address ?? "";
-            if (!address || address === "::1") continue;
+            const address = addr.address ?? '';
+            if (!address || address === '::1') continue;
             if (/^fe80:/i.test(address)) continue; // IPv6 link-local
             if (/^f[cd]/i.test(address)) continue; // IPv6 ULA
             if (/^169\.254\./.test(address)) continue; // IPv4 link-local
-            out.push({ iface: name, address, family: String(addr.family ?? "") });
+            out.push({ iface: name, address, family: String(addr.family ?? '') });
           }
         }
         const seen = new Set<string>();
@@ -158,23 +176,27 @@ export async function GET(req: Request) {
   // ===== Database =====
   const dbDetails: DatabaseDetails = {};
   const dbStats: DatabaseStats = {};
-  const dbUrl = process.env.DATABASE_URL ?? "";
+  const dbUrl = process.env.DATABASE_URL ?? '';
   const provider = detectProvider(dbUrl);
-  let database: DatabaseStatus = { ok: false, message: "unknown" };
+  let database: DatabaseStatus = { ok: false, message: 'unknown' };
 
   try {
     await prisma.$queryRaw`SELECT 1`;
-    database = { ok: true, message: "reachable" };
+    database = { ok: true, message: 'reachable' };
 
     // ---------- PostgreSQL ----------
-    if (provider === "postgres" || provider === "unknown") {
+    if (provider === 'postgres' || provider === 'unknown') {
       try {
-        const ver = (await prisma.$queryRaw`SELECT version() as v LIMIT 1`) as Array<{ v?: string }>;
+        const ver = (await prisma.$queryRaw`SELECT version() as v LIMIT 1`) as Array<{
+          v?: string;
+        }>;
         const v = ver?.[0]?.v;
         if (v) dbDetails.version = String(v);
       } catch {}
       try {
-        const cur = (await prisma.$queryRaw`SELECT current_database() as name`) as Array<{ name?: string }>;
+        const cur = (await prisma.$queryRaw`SELECT current_database() as name`) as Array<{
+          name?: string;
+        }>;
         const name = cur?.[0]?.name;
         if (name) dbDetails.current_database = String(name);
       } catch {}
@@ -186,9 +208,11 @@ export async function GET(req: Request) {
 
       // Robust table counting
       try {
-        const sp = (await prisma.$queryRawUnsafe(`SHOW search_path`)) as Array<Record<string, unknown>>;
+        const sp = (await prisma.$queryRawUnsafe(`SHOW search_path`)) as Array<
+          Record<string, unknown>
+        >;
         const val = sp?.[0] ? Object.values(sp[0])[0] : undefined;
-        if (typeof val === "string") dbDetails.search_path = val;
+        if (typeof val === 'string') dbDetails.search_path = val;
       } catch {}
       let visibleSchemas: string[] = [];
       try {
@@ -197,7 +221,7 @@ export async function GET(req: Request) {
         `) as Array<{ nsp?: string }>;
         visibleSchemas = rs.map((r) => r.nsp).filter((s): s is string => !!s);
       } catch {}
-      const SYSTEM_SCHEMAS = new Set(["pg_catalog", "information_schema", "pg_toast"]);
+      const SYSTEM_SCHEMAS = new Set(['pg_catalog', 'information_schema', 'pg_toast']);
       const userVisible = visibleSchemas.filter((s) => !SYSTEM_SCHEMAS.has(s));
       if (userVisible.length) dbDetails.visible_schemas = userVisible;
 
@@ -210,7 +234,7 @@ export async function GET(req: Request) {
           WHERE c.relkind IN ('r','p','f')
             AND n.nspname = ANY(${schemas})
         `) as Array<{ cnt?: number }>;
-        return getNum(res?.[0] ?? {}, "cnt") ?? 0;
+        return getNum(res?.[0] ?? {}, 'cnt') ?? 0;
       }
 
       let tableCountVisible: number | null = null;
@@ -229,34 +253,35 @@ export async function GET(req: Request) {
           WHERE c.relkind IN ('r','p','f')
             AND n.nspname NOT IN ('pg_catalog','information_schema','pg_toast')
         `) as Array<{ cnt?: number }>;
-        tableCountAll = getNum(res?.[0] ?? {}, "cnt") ?? 0;
+        tableCountAll = getNum(res?.[0] ?? {}, 'cnt') ?? 0;
       } catch {}
 
       dbDetails.table_count_visible = tableCountVisible;
       dbDetails.table_count_all = tableCountAll;
       dbDetails.table_count =
-        (typeof tableCountVisible === "number" && tableCountVisible > 0
+        typeof tableCountVisible === 'number' && tableCountVisible > 0
           ? tableCountVisible
-          : typeof tableCountAll === "number" && tableCountAll > 0
-          ? tableCountAll
-          : 0);
+          : typeof tableCountAll === 'number' && tableCountAll > 0
+            ? tableCountAll
+            : 0;
 
       dbStats.pg = {};
       try {
         const mc = (await prisma.$queryRaw`
           SELECT setting::int as max_connections FROM pg_settings WHERE name='max_connections'
         `) as Array<{ max_connections?: number }>;
-        dbStats.pg.max_connections = getNum(mc?.[0] ?? {}, "max_connections") ?? null;
+        dbStats.pg.max_connections = getNum(mc?.[0] ?? {}, 'max_connections') ?? null;
       } catch {}
       try {
         const nb = (await prisma.$queryRaw`
           SELECT numbackends::int as num_backends, pg_database_size(current_database())::bigint as dbsize
           FROM pg_stat_database WHERE datname = current_database()
         `) as Array<{ num_backends?: number; dbsize?: number }>;
-        dbStats.pg.num_backends = getNum(nb?.[0] ?? {}, "num_backends") ?? null;
-        const dbsize = getNum(nb?.[0] ?? {}, "dbsize");
+        dbStats.pg.num_backends = getNum(nb?.[0] ?? {}, 'num_backends') ?? null;
+        const dbsize = getNum(nb?.[0] ?? {}, 'dbsize');
         dbDetails.pg_database_size_bytes = dbsize ?? null;
-        dbStats.pg.db_size_mb = typeof dbsize === "number" ? Math.round(dbsize / 1024 / 1024) : null;
+        dbStats.pg.db_size_mb =
+          typeof dbsize === 'number' ? Math.round(dbsize / 1024 / 1024) : null;
       } catch {}
       try {
         const cs = (await prisma.$queryRaw`
@@ -264,14 +289,60 @@ export async function GET(req: Request) {
           FROM pg_stat_activity
           GROUP BY state
         `) as Array<{ state?: string; cnt?: number }>;
-        dbStats.pg.connections_by_state = Object.fromEntries(cs.map((r) => [r.state ?? "unknown", r.cnt ?? 0]));
+        dbStats.pg.connections_by_state = Object.fromEntries(
+          cs.map((r) => [r.state ?? 'unknown', r.cnt ?? 0]),
+        );
       } catch {}
       try {
         const idleX = (await prisma.$queryRaw`
           SELECT count(*)::int AS cnt FROM pg_stat_activity WHERE state='idle in transaction'
         `) as Array<{ cnt?: number }>;
-        dbStats.pg.connections_idle_in_xact = getNum(idleX?.[0] ?? {}, "cnt") ?? null;
+        dbStats.pg.connections_idle_in_xact = getNum(idleX?.[0] ?? {}, 'cnt') ?? null;
       } catch {}
+
+      // Performance metrics
+      try {
+        const cache = (await prisma.$queryRaw`
+          SELECT 
+            round(sum(blks_hit) / NULLIF(sum(blks_hit + blks_read), 0) * 100, 2) as cache_hit_ratio
+          FROM pg_stat_database
+          WHERE datname = current_database()
+        `) as Array<{ cache_hit_ratio?: number }>;
+        dbStats.pg.cache_hit_ratio = getNum(cache?.[0] ?? {}, 'cache_hit_ratio') ?? null;
+      } catch {}
+
+      try {
+        const scans = (await prisma.$queryRaw`
+          SELECT 
+            sum(seq_scan)::bigint as seq_scans,
+            sum(idx_scan)::bigint as idx_scans
+          FROM pg_stat_user_tables
+        `) as Array<{ seq_scans?: number; idx_scans?: number }>;
+        dbStats.pg.seq_scans = getNum(scans?.[0] ?? {}, 'seq_scans') ?? null;
+        dbStats.pg.idx_scans = getNum(scans?.[0] ?? {}, 'idx_scans') ?? null;
+      } catch {}
+
+      try {
+        const txn = (await prisma.$queryRaw`
+          SELECT 
+            round((xact_commit + xact_rollback) / NULLIF(EXTRACT(EPOCH FROM (now() - stats_reset)), 0), 2) as tps
+          FROM pg_stat_database
+          WHERE datname = current_database()
+        `) as Array<{ tps?: number }>;
+        dbStats.pg.transactions_per_sec = getNum(txn?.[0] ?? {}, 'tps') ?? null;
+      } catch {}
+
+      try {
+        const slow = (await prisma.$queryRaw`
+          SELECT count(*)::int as slow_count
+          FROM pg_stat_activity
+          WHERE state = 'active'
+            AND query NOT ILIKE '%pg_stat_activity%'
+            AND EXTRACT(EPOCH FROM (now() - query_start)) > 5
+        `) as Array<{ slow_count?: number }>;
+        dbStats.pg.slow_query_count = getNum(slow?.[0] ?? {}, 'slow_count') ?? null;
+      } catch {}
+
       if (deep) {
         try {
           const top = (await prisma.$queryRaw`
@@ -289,24 +360,28 @@ export async function GET(req: Request) {
             pid: r.pid ?? 0,
             state: r.state ?? null,
             age_ms: Math.round(r.age_ms ?? 0),
-            query_trunc: r.query_trunc ?? "",
+            query_trunc: r.query_trunc ?? '',
           }));
         } catch {}
       }
     }
 
     // ---------- SQLite ----------
-    if (provider === "sqlite" || provider === "unknown") {
+    if (provider === 'sqlite' || provider === 'unknown') {
       try {
-        const sq = (await prisma.$queryRawUnsafe(`SELECT sqlite_version() as v`)) as Array<{ v?: string }>;
+        const sq = (await prisma.$queryRawUnsafe(`SELECT sqlite_version() as v`)) as Array<{
+          v?: string;
+        }>;
         const v = sq?.[0]?.v;
         if (v) dbDetails.sqlite_version = String(v);
       } catch {}
       try {
-        const now2 = (await prisma.$queryRawUnsafe(`SELECT datetime('now') as now`)) as Array<{ now?: string }>;
+        const now2 = (await prisma.$queryRawUnsafe(`SELECT datetime('now') as now`)) as Array<{
+          now?: string;
+        }>;
         const n = now2?.[0]?.now;
         if (n) {
-          const s = String(n).replace(" ", "T") + "Z";
+          const s = String(n).replace(' ', 'T') + 'Z';
           dbDetails.current_time_iso = new Date(s).toISOString();
         }
       } catch {}
@@ -315,24 +390,24 @@ export async function GET(req: Request) {
       dbDetails.table_names = [];
       try {
         // List attached databases (seq, name, file)
-        const dblist = (await prisma.$queryRawUnsafe(
-          `PRAGMA database_list`
-        )) as Array<{ seq?: number; name?: string; file?: string }>;
+        const dblist = (await prisma.$queryRawUnsafe(`PRAGMA database_list`)) as Array<{
+          seq?: number;
+          name?: string;
+          file?: string;
+        }>;
 
         const quoteIdent = (s: string) => `"${String(s).replace(/"/g, '""')}"`;
 
         // We’ll iterate each db and collect table names (skip internal)
         const names: string[] = [];
-        const dbNames = dblist
-          ?.map((r) => r.name)
-          .filter((n): n is string => !!n)
+        const dbNames = dblist?.map((r) => r.name).filter((n): n is string => !!n) ??
           // typically: main, temp, plus any attached; keep all
-          ?? ["main"];
+          ['main'];
 
         for (const db of dbNames) {
           const ident = quoteIdent(db);
           const rows = (await prisma.$queryRawUnsafe<{ name?: string }[]>(
-            `SELECT name FROM ${ident}.sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`
+            `SELECT name FROM ${ident}.sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`,
           )) as Array<{ name?: string }>;
           for (const r of rows) {
             if (r?.name) names.push(r.name);
@@ -346,17 +421,19 @@ export async function GET(req: Request) {
         // Fallback to single-DB count if something fails
         try {
           const t1 = (await prisma.$queryRawUnsafe(
-            `SELECT count(*) as count FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%'`
+            `SELECT count(*) as count FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%'`,
           )) as Array<{ count?: number }>;
-          dbDetails.table_count = getNum(t1?.[0] ?? {}, "count") ?? 0;
+          dbDetails.table_count = getNum(t1?.[0] ?? {}, 'count') ?? 0;
         } catch {}
       }
 
       dbStats.sqlite = {};
       try {
-        const jm = (await prisma.$queryRawUnsafe(`PRAGMA journal_mode`)) as Array<Record<string, unknown>>;
+        const jm = (await prisma.$queryRawUnsafe(`PRAGMA journal_mode`)) as Array<
+          Record<string, unknown>
+        >;
         const first = jm?.[0] ?? {};
-        const val = Object.values(first).find((v) => typeof v === "string") as string | undefined;
+        const val = Object.values(first).find((v) => typeof v === 'string') as string | undefined;
         dbStats.sqlite.journal_mode = val ?? null;
       } catch {}
       try {
@@ -368,19 +445,23 @@ export async function GET(req: Request) {
         const row = wc?.[0];
         dbStats.sqlite.wal_checkpoint = row
           ? {
-              busy: getNum(row as Record<string, unknown>, "busy") ?? null,
-              log: getNum(row as Record<string, unknown>, "log") ?? null,
-              checkpointed: getNum(row as Record<string, unknown>, "checkpointed") ?? null,
+              busy: getNum(row as Record<string, unknown>, 'busy') ?? null,
+              log: getNum(row as Record<string, unknown>, 'log') ?? null,
+              checkpointed: getNum(row as Record<string, unknown>, 'checkpointed') ?? null,
             }
           : null;
       } catch {}
 
       // file metrics
       try {
-        const pc = (await prisma.$queryRawUnsafe(`PRAGMA page_count`)) as Array<{ page_count?: number }>;
-        const ps = (await prisma.$queryRawUnsafe(`PRAGMA page_size`)) as Array<{ page_size?: number }>;
-        const pageCount = getNum(pc?.[0] ?? {}, "page_count") ?? 0;
-        const pageSize = getNum(ps?.[0] ?? {}, "page_size") ?? 0;
+        const pc = (await prisma.$queryRawUnsafe(`PRAGMA page_count`)) as Array<{
+          page_count?: number;
+        }>;
+        const ps = (await prisma.$queryRawUnsafe(`PRAGMA page_size`)) as Array<{
+          page_size?: number;
+        }>;
+        const pageCount = getNum(pc?.[0] ?? {}, 'page_count') ?? 0;
+        const pageSize = getNum(ps?.[0] ?? {}, 'page_size') ?? 0;
         if (pageCount && pageSize) {
           dbDetails.sqlite_page_count = pageCount;
           dbDetails.sqlite_page_size = pageSize;
@@ -390,11 +471,11 @@ export async function GET(req: Request) {
 
       try {
         let p = dbUrl;
-        if (p && (p.startsWith("file:") || p.includes("sqlite"))) {
-          p = p.startsWith("file:") ? p.replace("file:", "") : p;
-          p = p.split("?")[0];
-          const path = await import("path");
-          const fs = await import("fs");
+        if (p && (p.startsWith('file:') || p.includes('sqlite'))) {
+          p = p.startsWith('file:') ? p.replace('file:', '') : p;
+          p = p.split('?')[0];
+          const path = await import('path');
+          const fs = await import('fs');
           const resolved = path.isAbsolute(p) ? p : path.resolve(process.cwd(), p);
           try {
             const st = await fs.promises.stat(resolved);
@@ -408,7 +489,7 @@ export async function GET(req: Request) {
     // ---------- Prisma migrate info ----------
     try {
       const m = (await prisma.$queryRawUnsafe(
-        `SELECT migration_name, finished_at FROM _prisma_migrations ORDER BY finished_at DESC LIMIT 1`
+        `SELECT migration_name, finished_at FROM _prisma_migrations ORDER BY finished_at DESC LIMIT 1`,
       )) as Array<{ migration_name?: string; finished_at?: Date | string | null }>;
       const row = m?.[0];
       if (row) {
@@ -420,14 +501,13 @@ export async function GET(req: Request) {
 
     database = { ...database, details: dbDetails, stats: dbStats };
   } catch (err) {
-    const msg =
-      !err
-        ? "unknown"
-        : typeof err === "string"
+    const msg = !err
+      ? 'unknown'
+      : typeof err === 'string'
         ? err
-        : typeof err === "object" && err !== null && "message" in err
-        ? String((err as { message?: unknown }).message ?? "unknown")
-        : String(err);
+        : typeof err === 'object' && err !== null && 'message' in err
+          ? String((err as { message?: unknown }).message ?? 'unknown')
+          : String(err);
     database = { ok: false, message: msg };
   }
 
@@ -436,10 +516,10 @@ export async function GET(req: Request) {
   const envMaskedSummary: Record<string, string> = {};
   try {
     for (const [k, v] of Object.entries(process.env)) {
-      if (k.startsWith("NEXT_PUBLIC_") || k.startsWith("PUBLIC_")) {
-        envPublic[k] = String(v ?? "");
+      if (k.startsWith('NEXT_PUBLIC_') || k.startsWith('PUBLIC_')) {
+        envPublic[k] = String(v ?? '');
       } else {
-        envMaskedSummary[k] = v == null ? "<unset>" : `<masked length=${String(v).length}>`;
+        envMaskedSummary[k] = v == null ? '<unset>' : `<masked length=${String(v).length}>`;
       }
     }
   } catch {}
@@ -469,9 +549,9 @@ export async function GET(req: Request) {
     const rows = (await prisma.activityLog.findMany({
       where: {
         timestamp: { gte: since },
-        action: { in: ["LOGIN_SUCCESS", "SESSION_EXTENDED", "LOGIN", "PRESENCE_BEAT"] },
+        action: { in: ['LOGIN_SUCCESS', 'SESSION_EXTENDED', 'LOGIN', 'PRESENCE_BEAT'] },
       },
-      orderBy: { timestamp: "desc" },
+      orderBy: { timestamp: 'desc' },
       take: 500,
     })) as Array<{
       userId?: string | null;
@@ -483,12 +563,18 @@ export async function GET(req: Request) {
 
     const seen = new Map<
       string,
-      { userId?: string | null; email?: string | null; ipAddress?: string | null; userAgent?: string | null; lastSeen?: string | null }
+      {
+        userId?: string | null;
+        email?: string | null;
+        ipAddress?: string | null;
+        userAgent?: string | null;
+        lastSeen?: string | null;
+      }
     >();
     const uniqUsers = new Set<string>();
 
     const metaField = (m: unknown, k: string): string | null => {
-      if (!m || typeof m !== "object") return null;
+      if (!m || typeof m !== 'object') return null;
       const obj = m as Record<string, unknown>;
       const v = obj[k];
       return v == null ? null : String(v);
@@ -501,10 +587,10 @@ export async function GET(req: Request) {
 
     for (const r of rows) {
       const meta = r.metadata;
-      const uid = typeof r.userId === "string" ? r.userId : metaField(meta, "userId");
-      const email = metaField(meta, "email");
-      const ip = typeof r.ipAddress === "string" ? r.ipAddress : metaField(meta, "ip");
-      const ua = typeof r.userAgent === "string" ? r.userAgent : metaField(meta, "ua");
+      const uid = typeof r.userId === 'string' ? r.userId : metaField(meta, 'userId');
+      const email = metaField(meta, 'email');
+      const ip = typeof r.ipAddress === 'string' ? r.ipAddress : metaField(meta, 'ip');
+      const ua = typeof r.userAgent === 'string' ? r.userAgent : metaField(meta, 'ua');
       const ts = r.timestamp ? new Date(r.timestamp as Date | string).getTime() : null;
 
       if (uid) uniqUsers.add(uid);
@@ -516,7 +602,7 @@ export async function GET(req: Request) {
         if (ageMs <= 60 * 60 * 1000) last60m++;
       }
 
-      const key = uid ?? (ip || ua ? `${ip ?? ""}|${ua ?? ""}` : JSON.stringify(meta ?? {}));
+      const key = uid ?? (ip || ua ? `${ip ?? ''}|${ua ?? ''}` : JSON.stringify(meta ?? {}));
       if (!seen.has(key)) {
         seen.set(key, {
           userId: uid ?? null,
@@ -550,13 +636,15 @@ export async function GET(req: Request) {
     };
 
     await Promise.allSettled([
-      safeCount("users", async () => prisma.user.count()),
-      safeCount("courses", async () => prisma.course.count()),
-      safeCount("assignments", async () => prisma.assignment.count()),
-      safeCount("problems", async () => prisma.problem.count()),
-      safeCount("submissions", async () => prisma.submission.count()),
-      safeCount("activityLogs24h", async () =>
-        prisma.activityLog.count({ where: { timestamp: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } } })
+      safeCount('users', async () => prisma.user.count()),
+      safeCount('courses', async () => prisma.course.count()),
+      safeCount('assignments', async () => prisma.assignment.count()),
+      safeCount('problems', async () => prisma.problem.count()),
+      safeCount('submissions', async () => prisma.submission.count()),
+      safeCount('activityLogs24h', async () =>
+        prisma.activityLog.count({
+          where: { timestamp: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+        }),
       ),
     ]);
   } catch {}
@@ -578,8 +666,8 @@ export async function GET(req: Request) {
 
   return NextResponse.json(body, {
     headers: {
-      "Cache-Control": "no-store, max-age=0",
-      "x-status-latency-ms": String(latencyMs),
+      'Cache-Control': 'no-store, max-age=0',
+      'x-status-latency-ms': String(latencyMs),
     },
   });
 }
