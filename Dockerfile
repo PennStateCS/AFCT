@@ -10,15 +10,16 @@ ENV SKIP_PRISMA_GENERATE=1
 ENV NEXTJS_IGNORE_ESLINT=1
 
 # Install build tools + Java (OpenJDK) for running .jar files during build if needed
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
     openssl \
     python3 \
     make \
     g++ \
     git \
     openjdk-17-jre-headless \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+    ca-certificates
 
 # Install all dependencies (including dev) for the build step
 COPY package*.json ./
@@ -40,15 +41,16 @@ RUN set -e && \
 FROM node:20-bullseye-slim AS runtime
 WORKDIR /app
 
-# Install runtime tools
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install runtime tools (combined in single RUN for better caching)
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
     openjdk-17-jre-headless \
     curl \
     postgresql-client \
     netcat-openbsd \
     tini \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+    ca-certificates
 
 # Set npm cache directory
 ENV NPM_CONFIG_CACHE=/tmp/.npm

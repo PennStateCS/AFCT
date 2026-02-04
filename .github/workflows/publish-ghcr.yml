@@ -41,6 +41,21 @@ jobs:
           push: true
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+          build-contexts: |
+            context=.
+          tags: |
+            ghcr.io/pennstatewilkes-barre/afct-dashboard:main
+            ghcr.io/pennstatewilkes-barre/afct-dashboard:sha-${{ github.sha }}
+        continue-on-error: true
+
+      - name: Retry build and push on failure
+        if: failure()
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
           tags: |
             ghcr.io/pennstatewilkes-barre/afct-dashboard:main
             ghcr.io/pennstatewilkes-barre/afct-dashboard:sha-${{ github.sha }}
