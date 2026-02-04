@@ -99,6 +99,9 @@ RUN mkdir -p /private/uploads/pfps \
     chmod -R 775 /private/uploads && \
     chown -R node:node /private/uploads
 
+# Declare upload volumes for persistence
+VOLUME ["/private/uploads", "/app/public/uploads"]
+
 # App ownership
 RUN chown -R node:node /app
 
