@@ -30,13 +30,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ file
     let allowed = false;
     if (['ADMIN', 'FACULTY', 'TA'].includes(role)) allowed = true;
     else {
-      const roster = await prisma.roster.findFirst({ where: { courseId: problem.courseId, userId: session.user.id } });
+      const roster = await prisma.roster.findFirst({
+        where: { courseId: problem.courseId, userId: session.user.id },
+      });
       if (roster) allowed = true;
     }
 
     if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    const uploadsDir = path.join(process.cwd(), 'private', 'uploads', 'solutions');
+    const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'solutions');
     const filePath = path.join(uploadsDir, file);
     if (!fs.existsSync(filePath)) {
       return NextResponse.json({ error: 'File not found on disk' }, { status: 404 });
@@ -46,7 +48,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ file
     const buffer = await fs.promises.readFile(filePath);
     const nodeStream = stream.Readable.from(buffer);
     // Convert Node stream to a web-compatible ReadableStream
-    const webStream = new (stream.Readable as unknown as new () => stream.Readable)().wrap(nodeStream);
+    const webStream = new (stream.Readable as unknown as new () => stream.Readable)().wrap(
+      nodeStream,
+    );
     const headers: Record<string, string> = {
       'Content-Type': 'application/octet-stream',
       'Content-Disposition': `attachment; filename="${problem.originalFileName ?? file}"`,

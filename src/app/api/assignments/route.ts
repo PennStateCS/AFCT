@@ -4,6 +4,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { toEndOfDayInTimezone } from '@/lib/date-utils';
+
+async function resolveUserTimezone(userId?: string | null) {
+  let tz = 'America/New_York';
+  if (!userId) return tz;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { timezone: true },
+  });
+  if (user?.timezone) return user.timezone;
+  const system = await prisma.systemSettings.findUnique({ where: { id: 1 } });
+  return system?.timezone || tz;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,12 +36,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    const userTimezone = await resolveUserTimezone(session.user.id);
+
     // Create a new assignment in the database
     const created = await prisma.assignment.create({
       data: {
         title: data.title,
         description: data.description,
-        dueDate: new Date(data.dueDate),
+        dueDate: toEndOfDayInTimezone(data.dueDate, userTimezone),
         maxPoints: data.maxPoints || 0,
         isPublished: data.isPublished || false,
         courseId: data.courseId,

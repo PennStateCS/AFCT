@@ -43,11 +43,6 @@ type DatabaseStats = {
     connections_idle_in_xact?: number | null;
     db_size_mb?: number | null;
     top_queries?: Array<{ pid: number; state: string | null; age_ms: number; query_trunc: string }>;
-    cache_hit_ratio?: number | null;
-    seq_scans?: number | null;
-    idx_scans?: number | null;
-    transactions_per_sec?: number | null;
-    slow_query_count?: number | null;
   };
   sqlite?: {
     journal_mode?: string | null;
@@ -298,49 +293,6 @@ export async function GET(req: Request) {
           SELECT count(*)::int AS cnt FROM pg_stat_activity WHERE state='idle in transaction'
         `) as Array<{ cnt?: number }>;
         dbStats.pg.connections_idle_in_xact = getNum(idleX?.[0] ?? {}, 'cnt') ?? null;
-      } catch {}
-
-      // Performance metrics
-      try {
-        const cache = (await prisma.$queryRaw`
-          SELECT 
-            round(sum(blks_hit) / NULLIF(sum(blks_hit + blks_read), 0) * 100, 2) as cache_hit_ratio
-          FROM pg_stat_database
-          WHERE datname = current_database()
-        `) as Array<{ cache_hit_ratio?: number }>;
-        dbStats.pg.cache_hit_ratio = getNum(cache?.[0] ?? {}, 'cache_hit_ratio') ?? null;
-      } catch {}
-
-      try {
-        const scans = (await prisma.$queryRaw`
-          SELECT 
-            sum(seq_scan)::bigint as seq_scans,
-            sum(idx_scan)::bigint as idx_scans
-          FROM pg_stat_user_tables
-        `) as Array<{ seq_scans?: number; idx_scans?: number }>;
-        dbStats.pg.seq_scans = getNum(scans?.[0] ?? {}, 'seq_scans') ?? null;
-        dbStats.pg.idx_scans = getNum(scans?.[0] ?? {}, 'idx_scans') ?? null;
-      } catch {}
-
-      try {
-        const txn = (await prisma.$queryRaw`
-          SELECT 
-            round((xact_commit + xact_rollback) / NULLIF(EXTRACT(EPOCH FROM (now() - stats_reset)), 0), 2) as tps
-          FROM pg_stat_database
-          WHERE datname = current_database()
-        `) as Array<{ tps?: number }>;
-        dbStats.pg.transactions_per_sec = getNum(txn?.[0] ?? {}, 'tps') ?? null;
-      } catch {}
-
-      try {
-        const slow = (await prisma.$queryRaw`
-          SELECT count(*)::int as slow_count
-          FROM pg_stat_activity
-          WHERE state = 'active'
-            AND query NOT ILIKE '%pg_stat_activity%'
-            AND EXTRACT(EPOCH FROM (now() - query_start)) > 5
-        `) as Array<{ slow_count?: number }>;
-        dbStats.pg.slow_query_count = getNum(slow?.[0] ?? {}, 'slow_count') ?? null;
       } catch {}
 
       if (deep) {

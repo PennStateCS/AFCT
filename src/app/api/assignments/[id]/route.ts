@@ -4,6 +4,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { toEndOfDayInTimezone } from '@/lib/date-utils';
+
+async function resolveUserTimezone(userId?: string | null) {
+  let tz = 'America/New_York';
+  if (!userId) return tz;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { timezone: true },
+  });
+  if (user?.timezone) return user.timezone;
+  const system = await prisma.systemSettings.findUnique({ where: { id: 1 } });
+  return system?.timezone || tz;
+}
 
 // Get a single assignment by ID
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -22,10 +35,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         course: true,
         problems: {
           include: {
-            problem: true
-          }
-        }
-      }
+            problem: true,
+          },
+        },
+      },
     });
 
     if (!assignment) {
@@ -44,8 +57,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         where: {
           courseId: assignment.courseId,
           userId: session.user.id,
-          role: 'STUDENT'  // Use CourseRole enum value
-        }
+          role: 'STUDENT', // Use CourseRole enum value
+        },
       });
 
       if (!enrollment) {
@@ -58,8 +71,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         where: {
           courseId: assignment.courseId,
           userId: session.user.id,
-          role: { in: ['FACULTY', 'TA'] }
-        }
+          role: { in: ['FACULTY', 'TA'] },
+        },
       });
 
       if (!hasAccess && session.user.role !== 'ADMIN') {
@@ -85,21 +98,26 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   const data = await req.json();
+  const userTimezone = await resolveUserTimezone(session.user.id);
 
   // Make sure the assignment does not have any submissions or grades when unpublishing
-  if (data.isPublished === false) { // Note logic appears swapped for isPublished, but that is because isPublished is the next state
-    const hasSubmission = !!await prisma.assignmentProblem.findFirst({
+  if (data.isPublished === false) {
+    // Note logic appears swapped for isPublished, but that is because isPublished is the next state
+    const hasSubmission = !!(await prisma.assignmentProblem.findFirst({
       where: { assignmentId: id, submissions: { some: {} } },
-      select: { assignmentId: true }
-    });
+      select: { assignmentId: true },
+    }));
 
-    const hasGrade = !!await prisma.assignmentGrade.findFirst({
-      where: { assignmentId: id},
-      select: { assignmentId: true }
-    });
+    const hasGrade = !!(await prisma.assignmentGrade.findFirst({
+      where: { assignmentId: id },
+      select: { assignmentId: true },
+    }));
 
     if (hasSubmission) {
-      return NextResponse.json({ error: 'Assignment must not have any submissions' }, { status: 403 });
+      return NextResponse.json(
+        { error: 'Assignment must not have any submissions' },
+        { status: 403 },
+      );
     }
 
     if (hasGrade) {
@@ -113,7 +131,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       data: {
         title: data.title,
         description: data.description,
-        dueDate: new Date(data.dueDate),
+        dueDate: toEndOfDayInTimezone(data.dueDate, userTimezone),
         maxPoints: data.maxPoints,
         isPublished: data.isPublished,
       },
@@ -151,28 +169,33 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const data = await req.json();
+  const userTimezone = await resolveUserTimezone(session.user.id);
 
   // Make sure the assignment does not have any submissions or grades when unpublishing
-  if (!data.isPublished) { // Note logic appears swapped for isPublished, but that is because isPublished is the next state
-    const hasSubmission = !!await prisma.assignmentProblem.findFirst({
+  if (!data.isPublished) {
+    // Note logic appears swapped for isPublished, but that is because isPublished is the next state
+    const hasSubmission = !!(await prisma.assignmentProblem.findFirst({
       where: { assignmentId: id, submissions: { some: {} } },
-      select: { assignmentId: true }
-    });
+      select: { assignmentId: true },
+    }));
 
-    const hasGrade = !!await prisma.assignmentGrade.findFirst({
-      where: { assignmentId: id},
-      select: { assignmentId: true }
-    });
+    const hasGrade = !!(await prisma.assignmentGrade.findFirst({
+      where: { assignmentId: id },
+      select: { assignmentId: true },
+    }));
 
     if (hasSubmission) {
-      return NextResponse.json({ error: 'Assignment must not have any submissions' }, { status: 403 });
+      return NextResponse.json(
+        { error: 'Assignment must not have any submissions' },
+        { status: 403 },
+      );
     }
 
     if (hasGrade) {
       return NextResponse.json({ error: 'Assignment must not have any grades' }, { status: 403 });
     }
   }
-  
+
   try {
     // Build update data object with only provided fields
     const updateData: {
@@ -182,10 +205,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       maxPoints?: number;
       isPublished?: boolean;
     } = {};
-    
+
     if (data.title !== undefined) updateData.title = data.title;
     if (data.description !== undefined) updateData.description = data.description;
-    if (data.dueDate !== undefined) updateData.dueDate = new Date(data.dueDate);
+    if (data.dueDate !== undefined) {
+      updateData.dueDate = toEndOfDayInTimezone(data.dueDate, userTimezone);
+    }
     if (data.maxPoints !== undefined) updateData.maxPoints = data.maxPoints;
     if (data.isPublished !== undefined) updateData.isPublished = data.isPublished;
 
@@ -225,6 +250,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const data = await req.json();
+    const userTimezone = await resolveUserTimezone(session.user.id);
 
     if (!data.title || !data.courseId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -234,7 +260,7 @@ export async function POST(req: NextRequest) {
       data: {
         title: data.title,
         description: data.description,
-        dueDate: new Date(data.dueDate),
+        dueDate: toEndOfDayInTimezone(data.dueDate, userTimezone),
         maxPoints: data.maxPoints || 0,
         isPublished: data.isPublished || false,
         courseId: data.courseId,
@@ -283,13 +309,19 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     // Check for any submissions associated with this assignment via AssignmentProblem -> Submission
     const submissionCount = await prisma.submission.count({ where: { assignmentId: id } });
     if (submissionCount > 0) {
-      return NextResponse.json({ error: 'Cannot delete assignment: submissions exist' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Cannot delete assignment: submissions exist' },
+        { status: 400 },
+      );
     }
 
     // Check for any comments associated with this assignment
     const commentCount = await prisma.comment.count({ where: { assignmentId: id } });
     if (commentCount > 0) {
-      return NextResponse.json({ error: 'Cannot delete assignment: comments exist' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Cannot delete assignment: comments exist' },
+        { status: 400 },
+      );
     }
 
     // Safe to delete: remove AssignmentProblem links first, then delete the assignment
@@ -309,8 +341,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
           userId: session.user.id,
           courseId: deleted.courseId,
           assignmentId: id,
-          title: deleted.title
-        }
+          title: deleted.title,
+        },
       });
     } catch (logErr) {
       console.error('Failed to write activity log for assignment deletion', logErr);

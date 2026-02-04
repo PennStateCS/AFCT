@@ -90,28 +90,12 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     if (avatarFile && avatarFile.size > 0) {
       const bytes = Buffer.from(await avatarFile.arrayBuffer());
       avatarFilename = `${userId}-${Date.now()}-${avatarFile.name}`;
-      const uploadPath = path.join(process.cwd(), 'private', 'uploads', 'pfps', avatarFilename);
-      try {
-        await writeFile(uploadPath, bytes);
-      } catch (writeErr) {
-        console.error('[PATCH] Failed to write avatar file:', writeErr);
-        await createEnhancedActivityLog(prisma, req, {
-          userId: currentUser.id,
-          action: 'AVATAR_FILE_WRITE_FAILED',
-          category: 'USER',
-          metadata: {
-            userId,
-            fileName: avatarFilename,
-            filePath: uploadPath,
-            error: writeErr instanceof Error ? writeErr.message : String(writeErr),
-          },
-        });
-        return NextResponse.json({ error: 'Failed to save avatar file' }, { status: 500 });
-      }
+      const uploadPath = path.join(process.cwd(), 'public', 'uploads', 'pfps', avatarFilename);
+      await writeFile(uploadPath, bytes);
       // Uploaded new avatar: avatarFilename
 
       if (userRecord?.avatar) {
-        const oldPath = path.join(process.cwd(), 'private', 'uploads', 'pfps', userRecord.avatar);
+        const oldPath = path.join(process.cwd(), 'public', 'uploads', 'pfps', userRecord.avatar);
         await unlink(oldPath).catch(() => {});
         // Deleted old avatar
       }
@@ -119,7 +103,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
 
     // Delete avatar if requested
     if (deleteAvatar && userRecord?.avatar) {
-      const oldPath = path.join(process.cwd(), 'private', 'uploads', 'pfps', userRecord.avatar);
+      const oldPath = path.join(process.cwd(), 'public', 'uploads', 'pfps', userRecord.avatar);
       await unlink(oldPath).catch(() => {});
       avatarFilename = null;
       // Avatar removed
@@ -239,7 +223,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     });
 
     if (user?.avatar) {
-      const avatarPath = path.join(process.cwd(), 'private', 'uploads', 'pfps', user.avatar);
+      const avatarPath = path.join(process.cwd(), 'public', 'uploads', 'pfps', user.avatar);
       await unlink(avatarPath).catch(() => {});
       // Avatar file deleted
     }
