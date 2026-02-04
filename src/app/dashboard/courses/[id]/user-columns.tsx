@@ -27,7 +27,15 @@ type ActionsCellProps = {
   viewerDefaultRole?: string | null;
 };
 
-function ActionsCell({ user, onChange, courseId, courseIsArchived, facultyCount, viewerRole, viewerDefaultRole }: ActionsCellProps) {
+function ActionsCell({
+  user,
+  onChange,
+  courseId,
+  courseIsArchived,
+  facultyCount,
+  viewerRole,
+  viewerDefaultRole,
+}: ActionsCellProps) {
   const [open, setOpen] = useState(false);
 
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -43,7 +51,10 @@ function ActionsCell({ user, onChange, courseId, courseIsArchived, facultyCount,
   const handleDelete = async () => {
     try {
       // remove user from the course roster instead of deleting the user record
-      const res = await fetch(`/api/courses/${courseId}/roster/${user.id}`, { method: 'DELETE', credentials: 'same-origin' });
+      const res = await fetch(`/api/courses/${courseId}/roster/${user.id}`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+      });
       if (!res.ok) {
         // try to read message from server
         const data = await res.json().catch(() => ({}));
@@ -78,10 +89,7 @@ function ActionsCell({ user, onChange, courseId, courseIsArchived, facultyCount,
 
   // Helper to determine whether the viewer (role `viewer`) can delete a target with course role `target`.
   // Site ADMIN users can delete any roster member. Otherwise fall back to course role rules.
-  const canViewerDeleteUser = (
-    viewer: string | null | undefined,
-    target: string,
-  ): boolean => {
+  const canViewerDeleteUser = (viewer: string | null | undefined, target: string): boolean => {
     // Site admin can remove anyone
     if (isSiteAdmin) return true;
     if (!viewer) return false;
@@ -106,13 +114,13 @@ function ActionsCell({ user, onChange, courseId, courseIsArchived, facultyCount,
   const removeTitle = courseIsArchived
     ? 'Cannot delete user from archived course'
     : !viewerCanDelete
-    ? 'You do not have permission to remove this user'
-    : hasSubmissions
-    ? 'This user cannot be removed from the course'
-    : undefined;
+      ? 'You do not have permission to remove this user'
+      : hasSubmissions
+        ? 'This user cannot be removed from the course'
+        : undefined;
 
   return (
-    <div className="flex gap-2 items-center">
+    <div className="flex items-center gap-2">
       <EditUserDialog user={user} open={open} setOpen={setOpen} onSave={handleSave} />
 
       {/* Edit button: visible to instructors or site ADMINs */}
@@ -129,7 +137,7 @@ function ActionsCell({ user, onChange, courseId, courseIsArchived, facultyCount,
       )}
 
       {/* Inline delete button for Faculty only (Manage dropdown provides remove action for instructors) */}
-      {currentCourseRole === "FACULTY" && (
+      {currentCourseRole === 'FACULTY' && (
         <Button
           variant="destructive"
           disabled={removeDisabled}
@@ -176,7 +184,18 @@ function ActionsCell({ user, onChange, courseId, courseIsArchived, facultyCount,
         courseId={courseId}
         userId={user.id}
         onSaved={onChange}
-        initialRoster={{ role: courseRole, user: { id: user.id, firstName: user.firstName, lastName: user.lastName, email: user.email, avatar: user.avatar, role: user.role }, hasSubmissions: user.hasSubmissions }}
+        initialRoster={{
+          role: courseRole,
+          user: {
+            id: user.id,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            email: user.email,
+            avatar: user.avatar,
+            role: user.role,
+          },
+          hasSubmissions: user.hasSubmissions,
+        }}
         initialViewerCourseRole={currentCourseRole}
         initialViewerDefaultRole={viewerDefaultRole}
       />
@@ -184,10 +203,18 @@ function ActionsCell({ user, onChange, courseId, courseIsArchived, facultyCount,
   );
 }
 
-export const userColumns = (onChange: () => void, courseId: string, courseIsArchived: boolean, facultyCount?: number, viewerRole?: string | null, viewerDefaultRole?: string | null): ColumnDef<User>[] => {
+export const userColumns = (
+  onChange: () => void,
+  courseId: string,
+  courseIsArchived: boolean,
+  facultyCount?: number,
+  viewerRole?: string | null,
+  viewerDefaultRole?: string | null,
+): ColumnDef<User>[] => {
   const currentCourseRole = viewerRole ?? null;
   const isSiteAdmin = viewerDefaultRole === 'ADMIN';
-  const viewerHasActions = isSiteAdmin || currentCourseRole === 'INSTRUCTOR' || currentCourseRole === 'FACULTY';
+  const viewerHasActions =
+    isSiteAdmin || currentCourseRole === 'INSTRUCTOR' || currentCourseRole === 'FACULTY';
 
   const cols: ColumnDef<User>[] = [
     {
@@ -196,14 +223,13 @@ export const userColumns = (onChange: () => void, courseId: string, courseIsArch
       cell: ({ row }) => {
         const user = row.original;
         const initials = `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase();
-        const avatarUrl = user.avatar ? `/api/files/avatar?file=${user.avatar}` : '/api/files/avatar?file=default-avatar.png';
-        
+        const avatarUrl = user.avatar
+          ? `/uploads/pfps/${user.avatar}`
+          : '/uploads/pfps/default-avatar.png';
+
         return (
           <Avatar className="h-10 w-10">
-            <AvatarImage
-              src={avatarUrl}
-              alt={`${user.firstName} ${user.lastName}`}
-            />
+            <AvatarImage src={avatarUrl} alt={`${user.firstName} ${user.lastName}`} />
             <AvatarFallback className="bg-secondary text-secondary-foreground">
               {initials || 'U'}
             </AvatarFallback>
@@ -243,7 +269,17 @@ export const userColumns = (onChange: () => void, courseId: string, courseIsArch
     cols.push({
       id: 'actions',
       header: 'Actions',
-      cell: ({ row }) => <ActionsCell user={row.original} onChange={onChange} courseId={courseId} courseIsArchived={courseIsArchived} facultyCount={facultyCount} viewerRole={viewerRole} viewerDefaultRole={viewerDefaultRole} />,
+      cell: ({ row }) => (
+        <ActionsCell
+          user={row.original}
+          onChange={onChange}
+          courseId={courseId}
+          courseIsArchived={courseIsArchived}
+          facultyCount={facultyCount}
+          viewerRole={viewerRole}
+          viewerDefaultRole={viewerDefaultRole}
+        />
+      ),
     });
   }
 

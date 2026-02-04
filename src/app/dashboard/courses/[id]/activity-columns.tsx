@@ -76,7 +76,10 @@ function MetadataCell({ activity }: { activity: ActivityLog }) {
     }
   }, [expanded]);
 
-  const formatMetadataForDisplay = (metadata: Record<string, unknown> | null, activity: ActivityLog) => {
+  const formatMetadataForDisplay = (
+    metadata: Record<string, unknown> | null,
+    activity: ActivityLog,
+  ) => {
     if (!metadata || Object.keys(metadata).length === 0) {
       // Even if metadata is empty, show enhanced field information if available
       const enhancedInfo: string[] = [];
@@ -86,24 +89,26 @@ function MetadataCell({ activity }: { activity: ActivityLog }) {
       if (activity.submissionId) enhancedInfo.push(`Submission ID: ${activity.submissionId}`);
       if (activity.category) enhancedInfo.push(`Category: ${activity.category}`);
       if (activity.ipAddress) enhancedInfo.push(`IP Address: ${activity.ipAddress}`);
-      
+
       return enhancedInfo.length > 0 ? enhancedInfo.join('\n') : 'No metadata available';
     }
-    
+
     // Group related information for better display
     const sections: string[] = [];
-    
+
     // Enhanced entity information section
     const entityInfo: string[] = [];
-    if (activity.course) entityInfo.push(`Course: ${activity.course.name} (${activity.course.code})`);
+    if (activity.course)
+      entityInfo.push(`Course: ${activity.course.name} (${activity.course.code})`);
     if (activity.assignment) entityInfo.push(`Assignment: ${activity.assignment.title}`);
     if (activity.problem) entityInfo.push(`Problem: ${activity.problem.title}`);
-    if (activity.submission) entityInfo.push(`Assignment: ${activity.submission.assignmentProblem.assignment.title}`);
-    
+    if (activity.submission)
+      entityInfo.push(`Assignment: ${activity.submission.assignmentProblem.assignment.title}`);
+
     if (entityInfo.length > 0) {
       sections.push('Related Entities:\n' + entityInfo.join('\n'));
     }
-    
+
     // Enhanced fields section
     const enhancedFields: string[] = [];
     if (activity.courseId) enhancedFields.push(`Course ID: ${activity.courseId}`);
@@ -112,12 +117,13 @@ function MetadataCell({ activity }: { activity: ActivityLog }) {
     if (activity.submissionId) enhancedFields.push(`Submission ID: ${activity.submissionId}`);
     if (activity.category) enhancedFields.push(`Category: ${activity.category}`);
     if (activity.ipAddress) enhancedFields.push(`IP Address: ${activity.ipAddress}`);
-    if (activity.userAgent) enhancedFields.push(`User Agent: ${activity.userAgent.substring(0, 50)}...`);
-    
+    if (activity.userAgent)
+      enhancedFields.push(`User Agent: ${activity.userAgent.substring(0, 50)}...`);
+
     if (enhancedFields.length > 0) {
       sections.push('Enhanced Fields:\n' + enhancedFields.join('\n'));
     }
-    
+
     // Metadata section
     const metadataEntries = Object.entries(metadata)
       .filter(([key]) => !['ipAddress', 'userAgent'].includes(key)) // Exclude duplicates
@@ -130,19 +136,27 @@ function MetadataCell({ activity }: { activity: ActivityLog }) {
         }
         return `${key}: ${value}`;
       });
-    
+
     if (metadataEntries.length > 0) {
       sections.push('Metadata:\n' + metadataEntries.join('\n'));
     }
-    
+
     return sections.join('\n\n') || 'No additional information available';
   };
 
   // Show metadata button if there's metadata OR enhanced field data
-  const hasMetadataOrEnhancedData = (activity.metadata && Object.keys(activity.metadata).length > 0) ||
-                                   activity.courseId || activity.assignmentId || activity.problemId || 
-                                   activity.submissionId || activity.category || activity.ipAddress ||
-                                   activity.course || activity.assignment || activity.problem || activity.submission;
+  const hasMetadataOrEnhancedData =
+    (activity.metadata && Object.keys(activity.metadata).length > 0) ||
+    activity.courseId ||
+    activity.assignmentId ||
+    activity.problemId ||
+    activity.submissionId ||
+    activity.category ||
+    activity.ipAddress ||
+    activity.course ||
+    activity.assignment ||
+    activity.problem ||
+    activity.submission;
 
   if (!hasMetadataOrEnhancedData) {
     return null;
@@ -156,12 +170,12 @@ function MetadataCell({ activity }: { activity: ActivityLog }) {
         </Button>
       </CollapsibleTrigger>
       <CollapsibleContent className="relative z-10">
-        <div 
+        <div
           ref={containerRef}
-          className="absolute right-0 top-2 w-80 max-w-[90vw] bg-popover border rounded-md shadow-md p-3 max-h-60 overflow-auto"
+          className="bg-popover absolute top-2 right-0 max-h-60 w-80 max-w-[90vw] overflow-auto rounded-md border p-3 shadow-md"
         >
-          <div className="text-xs font-medium mb-2">Metadata</div>
-          <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-mono break-words">
+          <div className="mb-2 text-xs font-medium">Metadata</div>
+          <pre className="text-muted-foreground font-mono text-xs break-words whitespace-pre-wrap">
             {formatMetadataForDisplay(activity.metadata, activity)}
           </pre>
         </div>
@@ -176,7 +190,7 @@ const formatAction = (action: string) => {
     .split('_')
     .map((word: string) => word.charAt(0) + word.slice(1).toLowerCase())
     .join(' ');
-  
+
   // Clean formatting without category prefix
   return formattedAction;
 };
@@ -192,7 +206,7 @@ const formatTimestamp = (timestamp: string) => {
   const date = new Date(timestamp);
   const now = new Date();
   const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
-  
+
   // Relative time for quick reference
   let relativeTime = '';
   if (diffInHours < 1) {
@@ -205,7 +219,7 @@ const formatTimestamp = (timestamp: string) => {
   } else {
     relativeTime = `${Math.floor(diffInHours / (24 * 7))}w ago`;
   }
-  
+
   return relativeTime;
 };
 
@@ -217,19 +231,19 @@ const getIpAddress = (metadata: Record<string, unknown> | null, activity: Activi
   if (activity.ipAddress) {
     return activity.ipAddress === '::1' ? 'localhost' : activity.ipAddress;
   }
-  
+
   // Fallback to metadata for legacy entries
   if (!metadata) return null;
-  
+
   const ipKeys = ['ipAddress', 'ip', 'clientIp', 'remoteAddress'];
-  
+
   for (const key of ipKeys) {
     const value = metadata[key];
     if (typeof value === 'string' && value.trim()) {
       return value === '::1' ? 'localhost' : value;
     }
   }
-  
+
   return null;
 };
 
@@ -241,11 +255,15 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
       const activity = row.original;
       return (
         <Avatar className="h-10 w-10">
-          <AvatarImage 
-            src={activity.user?.avatar ? `/api/files/avatar?file=${activity.user.avatar}` : `/api/files/avatar?file=default-avatar.png`}
+          <AvatarImage
+            src={
+              activity.user?.avatar
+                ? `/uploads/pfps/${activity.user.avatar}`
+                : `/uploads/pfps/default-avatar.png`
+            }
             alt={`${activity.user?.firstName} ${activity.user?.lastName}`}
           />
-          <AvatarFallback className="text-xs bg-secondary text-secondary-foreground">
+          <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
             {getInitials(activity.user)}
           </AvatarFallback>
         </Avatar>
@@ -257,11 +275,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
     header: 'First Name',
     cell: ({ row }) => {
       const activity = row.original;
-      return (
-        <div className="text-sm">
-          {activity.user?.firstName || 'Unknown'}
-        </div>
-      );
+      return <div className="text-sm">{activity.user?.firstName || 'Unknown'}</div>;
     },
   },
   {
@@ -269,11 +283,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
     header: 'Last Name',
     cell: ({ row }) => {
       const activity = row.original;
-      return (
-        <div className="text-sm">
-          {activity.user?.lastName || 'User'}
-        </div>
-      );
+      return <div className="text-sm">{activity.user?.lastName || 'User'}</div>;
     },
   },
   {
@@ -281,12 +291,8 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
     header: 'Activity',
     cell: ({ row }) => {
       const activity = row.original;
-      
-      return (
-        <div className="text-sm">
-          {formatAction(activity.action)}
-        </div>
-      );
+
+      return <div className="text-sm">{formatAction(activity.action)}</div>;
     },
   },
   {
@@ -296,31 +302,34 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
     accessorFn: (row) => row.category || '',
     cell: ({ row }) => {
       const activity = row.original;
-      
+
       if (!activity.category) {
-        return (
-          <span className="text-muted-foreground italic text-xs">
-            N/A
-          </span>
-        );
+        return <span className="text-muted-foreground text-xs italic">N/A</span>;
       }
 
       // Get category-specific styling
       const getCategoryStyle = (category: string) => {
         switch (category) {
-          case 'SYSTEM': return 'bg-gray-100 text-gray-800 border-gray-200';
-          case 'USER': return 'bg-blue-100 text-blue-800 border-blue-200';
-          case 'COURSE': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
-          case 'ASSIGNMENT': return 'bg-purple-100 text-purple-800 border-purple-200';
-          case 'PROBLEM': return 'bg-green-100 text-green-800 border-green-200';
-          case 'SUBMISSION': return 'bg-orange-100 text-orange-800 border-orange-200';
-          default: return 'bg-gray-100 text-gray-800 border-gray-200';
+          case 'SYSTEM':
+            return 'bg-gray-100 text-gray-800 border-gray-200';
+          case 'USER':
+            return 'bg-blue-100 text-blue-800 border-blue-200';
+          case 'COURSE':
+            return 'bg-indigo-100 text-indigo-800 border-indigo-200';
+          case 'ASSIGNMENT':
+            return 'bg-purple-100 text-purple-800 border-purple-200';
+          case 'PROBLEM':
+            return 'bg-green-100 text-green-800 border-green-200';
+          case 'SUBMISSION':
+            return 'bg-orange-100 text-orange-800 border-orange-200';
+          default:
+            return 'bg-gray-100 text-gray-800 border-gray-200';
         }
       };
 
       return (
-        <span 
-          className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium border ${getCategoryStyle(activity.category)}`}
+        <span
+          className={`inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium ${getCategoryStyle(activity.category)}`}
         >
           {activity.category}
         </span>
@@ -332,31 +341,29 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
     header: 'Assignment',
     enableSorting: true,
     accessorFn: (row) => {
-      const assignmentTitle = row.assignment?.title || 
-                              row.submission?.assignmentProblem?.assignment?.title ||
-                              row.metadata?.assignmentTitle as string || 
-                              row.metadata?.assignmentName as string;
+      const assignmentTitle =
+        row.assignment?.title ||
+        row.submission?.assignmentProblem?.assignment?.title ||
+        (row.metadata?.assignmentTitle as string) ||
+        (row.metadata?.assignmentName as string);
       return assignmentTitle || '';
     },
     cell: ({ row }) => {
       const activity = row.original;
       // Use relation data first (from enhanced schema), then fall back to metadata
       // Only use specific assignment-related metadata fields, not generic 'title'
-      const assignmentTitle = activity.assignment?.title || 
-                              activity.submission?.assignmentProblem?.assignment?.title ||
-                              activity.metadata?.assignmentTitle as string || 
-                              activity.metadata?.assignmentName as string;
-      
+      const assignmentTitle =
+        activity.assignment?.title ||
+        activity.submission?.assignmentProblem?.assignment?.title ||
+        (activity.metadata?.assignmentTitle as string) ||
+        (activity.metadata?.assignmentName as string);
+
       return (
         <div className="text-sm">
           {assignmentTitle ? (
-            <span className="font-medium text-purple-700">
-              {assignmentTitle}
-            </span>
+            <span className="font-medium text-purple-700">{assignmentTitle}</span>
           ) : (
-            <span className="text-muted-foreground italic">
-              N/A
-            </span>
+            <span className="text-muted-foreground italic">N/A</span>
           )}
         </div>
       );
@@ -367,28 +374,26 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
     header: 'Problem',
     enableSorting: true,
     accessorFn: (row) => {
-      const problemTitle = row.problem?.title || 
-                           row.metadata?.problemTitle as string || 
-                           row.metadata?.problemName as string;
+      const problemTitle =
+        row.problem?.title ||
+        (row.metadata?.problemTitle as string) ||
+        (row.metadata?.problemName as string);
       return problemTitle || '';
     },
     cell: ({ row }) => {
       const activity = row.original;
       // Use relation data first (from enhanced schema), then fall back to metadata
-      const problemTitle = activity.problem?.title || 
-                           activity.metadata?.problemTitle as string || 
-                           activity.metadata?.problemName as string;
-      
+      const problemTitle =
+        activity.problem?.title ||
+        (activity.metadata?.problemTitle as string) ||
+        (activity.metadata?.problemName as string);
+
       return (
         <div className="text-sm">
           {problemTitle ? (
-            <span className="font-medium text-green-700">
-              {problemTitle}
-            </span>
+            <span className="font-medium text-green-700">{problemTitle}</span>
           ) : (
-            <span className="text-muted-foreground italic">
-              N/A
-            </span>
+            <span className="text-muted-foreground italic">N/A</span>
           )}
         </div>
       );
@@ -405,7 +410,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
             <Clock className="h-3 w-3" />
             {formatTimestamp(activity.timestamp)}
           </div>
-          <div className="text-xs text-muted-foreground mt-0.5">
+          <div className="text-muted-foreground mt-0.5 text-xs">
             {formatFullTimestamp(activity.timestamp, timeZone)}
           </div>
         </div>
@@ -420,11 +425,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
     cell: ({ row }) => {
       const activity = row.original;
       const ipAddress = getIpAddress(activity.metadata, activity);
-      return (
-        <div className="text-xs text-muted-foreground font-mono">
-          {ipAddress || '-'}
-        </div>
-      );
+      return <div className="text-muted-foreground font-mono text-xs">{ipAddress || '-'}</div>;
     },
   },
   {

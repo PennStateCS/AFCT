@@ -51,11 +51,11 @@ const Navbar: React.FC = () => {
           return instData;
         }
       } catch (err) {
-        console.log("Error fetching navbar: ", err)
+        console.log('Error fetching navbar: ', err);
         setCourseName(null);
         setAssignmentName(null);
       }
-    }
+    };
 
     const loadNames = async () => {
       // Reset course and assignment
@@ -63,16 +63,16 @@ const Navbar: React.FC = () => {
       setAssignmentId(null);
       setCourseName(null);
       setAssignmentName(null);
-      
+
       // Set base url for an easy call
       const baseUrl = '/api';
-    
+
       // If on a course page (or assignment page), fetch course name, and assignment name appropriately
       if (segments[1] === 'courses' && segments[2]) {
         const cid = segments[2];
         setCourseId(cid);
 
-        const courseJson = (await fetchData(`${baseUrl}/courses/${cid}`)); // Returns JSON data of course from API call
+        const courseJson = await fetchData(`${baseUrl}/courses/${cid}`); // Returns JSON data of course from API call
         setCourseName(courseJson.name);
 
         // Assignment in a course
@@ -80,10 +80,10 @@ const Navbar: React.FC = () => {
           const aid = segments[3];
           setAssignmentId(aid);
 
-          const assignmentJson = (await fetchData(`${baseUrl}/courses/${cid}/${aid}`)); // Returns JSON data of assignment from API call
+          const assignmentJson = await fetchData(`${baseUrl}/courses/${cid}/${aid}`); // Returns JSON data of assignment from API call
           setAssignmentName(assignmentJson.title);
         }
-      } 
+      }
 
       // If a student is on an assignment page, fetch assignment name
       else if (segments[1] === `assignments` && segments[2]) {
@@ -92,8 +92,8 @@ const Navbar: React.FC = () => {
         setAssignmentId(aid);
 
         // Get JSON of both assignment and course
-        const assignmentJson = (await fetchData(`${baseUrl}/assignments/${aid}`)); // Returns JSON data of assignment from API call
-        const courseJson = (await fetchData(`${baseUrl}/courses/${assignmentJson.courseId}`)); // Returns JSON data of course from API call
+        const assignmentJson = await fetchData(`${baseUrl}/assignments/${aid}`); // Returns JSON data of assignment from API call
+        const courseJson = await fetchData(`${baseUrl}/courses/${assignmentJson.courseId}`); // Returns JSON data of course from API call
 
         // Set the course id
         setCourseId(assignmentJson.courseId);
@@ -117,18 +117,18 @@ const Navbar: React.FC = () => {
 
   const { firstName, lastName, role, avatar } = data.user;
   const roleDisplay = role || 'STUDENT';
-  const avatarUrl = avatar ? `/api/files/avatar?file=${avatar}` : '/api/files/avatar?file=default-avatar.png';
-  
+  const avatarUrl = avatar ? `/uploads/pfps/${avatar}` : '/uploads/pfps/default-avatar.png';
+
   // Use session.user.name first (which is built from firstName + lastName in auth)
   // Then fallback to building it from individual fields, then fallback to 'User'
-  const fullName = data.user.name || 
-    [firstName, lastName].filter(Boolean).join(' ') || 
-    'User';
+  const fullName = data.user.name || [firstName, lastName].filter(Boolean).join(' ') || 'User';
 
   // Generate a displSegments variable that is used to display the segments. Changes non-existent paths to proper ones.
   const displSegments = segments.map((segment, index) => {
     // Show assignment name instead of aid (student view)
-    if (segments[1] === 'assignments' && index === 1 && courseId) { return courseId; }
+    if (segments[1] === 'assignments' && index === 1 && courseId) {
+      return courseId;
+    }
 
     // Else return the segment
     return segment;
@@ -145,14 +145,20 @@ const Navbar: React.FC = () => {
               const isLast = index === displSegments.length - 1;
 
               let href = '/' + displSegments.slice(0, index + 1).join('/');
-              let label = (segment ? segment : "ERROR").charAt(0).toUpperCase() + (segment ? segment : "ERROR").slice(1);
+              let label =
+                (segment ? segment : 'ERROR').charAt(0).toUpperCase() +
+                (segment ? segment : 'ERROR').slice(1);
 
               // Show course name instead of id
-              if (segments[1] === 'courses' && index === 2 && courseName) { label = courseName; }
+              if (segments[1] === 'courses' && index === 2 && courseName) {
+                label = courseName;
+              }
 
               // Show assignment name instead of aid (teacher view)
-              else if (segments[1] === 'courses' && index === 3 && assignmentName) { label = assignmentName; }
-              
+              else if (segments[1] === 'courses' && index === 3 && assignmentName) {
+                label = assignmentName;
+              }
+
               // Show course name instead of assignments (student view)
               else if (segments[1] === 'assignments' && index === 1 && courseName) {
                 label = courseName;
@@ -160,12 +166,14 @@ const Navbar: React.FC = () => {
               }
 
               // Show assignment name instead of aid (student view)
-              else if (segments[1] === 'assignments' && index === 2 && assignmentName) { label = assignmentName; }
+              else if (segments[1] === 'assignments' && index === 2 && assignmentName) {
+                label = assignmentName;
+              }
 
               // Split dashes by space
               else {
-                const words = label.split("-");
-                label = words.map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
+                const words = label.split('-');
+                label = words.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
               }
 
               return (
@@ -208,7 +216,7 @@ const Navbar: React.FC = () => {
           <DropdownMenuTrigger asChild>
             <Button
               variant="outline"
-              className="hover:text-red hover:bg-background bg-card border text-foreground"
+              className="hover:text-red hover:bg-background bg-card text-foreground border"
             >
               <Sun className="h-[1.2rem] w-[1.2rem] scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90" />
               <Moon className="absolute h-[1.2rem] w-[1.2rem] scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0" />

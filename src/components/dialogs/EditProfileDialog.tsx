@@ -86,9 +86,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
       });
       // Reset preview from current user
       setAvatarPreview(
-        user.avatar
-          ? `/api/files/avatar?file=${user.avatar}`
-          : '/api/files/avatar?file=default-avatar.png',
+        user.avatar ? `/uploads/pfps/${user.avatar}` : '/uploads/pfps/default-avatar.png',
       );
     } else {
       reset(defaults, {
@@ -240,7 +238,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
                 )}
               />
 
-              {avatarPreview && avatarPreview !== '/api/files/avatar?=default-avatar.png' && (
+              {avatarPreview && avatarPreview !== '/uploads/pfps/default-avatar.png' && (
                 <Button
                   type="button"
                   variant="outline"

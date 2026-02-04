@@ -36,7 +36,9 @@ export function getUserColumns(onUserUpdate: () => void, timeZone: string): Colu
         return (
           <Avatar className="h-12 w-12">
             <AvatarImage
-              src={user.avatar ? `/api/files/avatar?file=${user.avatar}` : `/api/files/avatar?file=default-avatar.png`}
+              src={
+                user.avatar ? `/uploads/pfps/${user.avatar}` : `/uploads/pfps/default-avatar.png`
+              }
               alt={`${user.firstName} ${user.lastName}`}
             />
             <AvatarFallback className="bg-secondary text-secondary-foreground">
@@ -133,7 +135,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: User; onUserUpdate: () 
 
       if (!res.ok) {
         const body = await res.json();
-        const errorMsg = body?.error || "Unexpected Error: Failed to delete user";
+        const errorMsg = body?.error || 'Unexpected Error: Failed to delete user';
 
         showToast.error(errorMsg);
         return;
@@ -143,7 +145,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: User; onUserUpdate: () 
       setConfirmOpen(false);
       onUserUpdate();
     } catch (err) {
-      showToast.error("Unexpected Error: Failed to delete user");
+      showToast.error('Unexpected Error: Failed to delete user');
     }
   }
 
@@ -153,7 +155,9 @@ function UserActionsCell({ user, onUserUpdate }: { user: User; onUserUpdate: () 
         user={user}
         open={editOpen}
         setOpen={setEditOpen}
-        onSave={async () => { onUserUpdate(); }}
+        onSave={async () => {
+          onUserUpdate();
+        }}
       />
 
       <AdminResetPasswordDialog
@@ -209,7 +213,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: User; onUserUpdate: () 
           <DropdownMenuItem
             onClick={() => setConfirmOpen(true)}
             disabled={!user.inactive}
-            className="hover:bg-secondary focus:text-red-600 flex items-center gap-2 text-red-600"
+            className="hover:bg-secondary flex items-center gap-2 text-red-600 focus:text-red-600"
           >
             <Trash2 className="h-4 w-4" />
             Delete Inactive User

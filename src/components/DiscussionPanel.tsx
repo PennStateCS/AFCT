@@ -1,14 +1,14 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { useSession } from "next-auth/react";
-import { MessageSquare, Send, X } from "lucide-react";
-import { Button } from "./ui/button";
-import { Textarea } from "./ui/textarea";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ConfirmDialog } from "./dialogs/ConfirmDialog";
-import { useEffectiveTimezone } from "@/hooks/use-effective-timezone";
-import { formatDateTimeInTimeZone } from "@/lib/date";
+import { useState } from 'react';
+import { useSession } from 'next-auth/react';
+import { MessageSquare, Send, X } from 'lucide-react';
+import { Button } from './ui/button';
+import { Textarea } from './ui/textarea';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { ConfirmDialog } from './dialogs/ConfirmDialog';
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import { formatDateTimeInTimeZone } from '@/lib/date';
 
 export type Comment = {
   id: string;
@@ -40,11 +40,11 @@ type Props = {
 
 // helpers
 const initials = (first?: string | null, last?: string | null) => {
-  const f = (first ?? "").trim();
-  const l = (last ?? "").trim();
-  const fi = f ? f[0].toUpperCase() : "";
-  const li = l ? l[0].toUpperCase() : "";
-  return fi + li || "U";
+  const f = (first ?? '').trim();
+  const l = (last ?? '').trim();
+  const fi = f ? f[0].toUpperCase() : '';
+  const li = l ? l[0].toUpperCase() : '';
+  return fi + li || 'U';
 };
 
 //const authorAvatarSrc = (author: Comment["author"]) => {
@@ -55,11 +55,12 @@ const initials = (first?: string | null, last?: string | null) => {
 //  return `/uploads/${raw}`;
 //};
 
-const authorAvatarSrc = (author: Comment["author"]) => {
+const authorAvatarSrc = (author: Comment['author']) => {
   const raw = author?.avatar ?? author?.avatarUrl ?? null;
   if (!raw) return undefined;
-  const name = raw.substring(raw.lastIndexOf("/") + 1);
-  return "/api/files/submissions?file=" + name;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith('/')) return raw;
+  return `/uploads/${raw}`;
 };
 
 export default function DiscussionPanel({
@@ -71,16 +72,15 @@ export default function DiscussionPanel({
   onDeleteComment,
   isSaving = false,
   deletingComments = {},
-  title = "Discussion",
-  placeholder = "Add a comment...",
-  className = "",
+  title = 'Discussion',
+  placeholder = 'Add a comment...',
+  className = '',
 }: Props) {
   const { data: session } = useSession();
   const myId = session?.user?.id ?? null;
   const { timezone } = useEffectiveTimezone();
 
-  const formatDateTime = (iso: string | Date) =>
-    formatDateTimeInTimeZone(iso, timezone);
+  const formatDateTime = (iso: string | Date) => formatDateTimeInTimeZone(iso, timezone);
 
   const [commentToDelete, setCommentToDelete] = useState<string | null>(null);
   const handleConfirmDelete = () => {
@@ -93,37 +93,31 @@ export default function DiscussionPanel({
 
   return (
     <>
-      <section className={`rounded-md border border-border overflow-hidden ${className}`}>
-        <header className="flex items-center gap-2 border-b border-border bg-primary px-3 py-2 rounded-t-md">
+      <section className={`border-border overflow-hidden rounded-md border ${className}`}>
+        <header className="border-border bg-primary flex items-center gap-2 rounded-t-md border-b px-3 py-2">
           <MessageSquare className="h-4 w-4 text-white" />
-          <h4 className="text-sm font-medium text-white">{title} ({comments.length})</h4>
+          <h4 className="text-sm font-medium text-white">
+            {title} ({comments.length})
+          </h4>
         </header>
 
         <div className="bg-card p-3">
           {comments.length > 0 ? (
             <ul className="mb-3 space-y-3">
               {comments
-                .sort(
-                  (a, b) =>
-                    new Date(a.createdAt).getTime() -
-                    new Date(b.createdAt).getTime()
-                )
+                .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
                 .map((comment) => {
                   const name =
-                    `${comment.author.firstName ?? ""} ${
-                      comment.author.lastName ?? ""
-                    }`.trim() || "Unknown User";
-                  const isMine =
-                    Boolean(
-                      myId &&
-                        comment.author?.id &&
-                        String(comment.author.id) === String(myId)
-                    );
+                    `${comment.author.firstName ?? ''} ${comment.author.lastName ?? ''}`.trim() ||
+                    'Unknown User';
+                  const isMine = Boolean(
+                    myId && comment.author?.id && String(comment.author.id) === String(myId),
+                  );
 
                   // alignment: my comments right, others left
-                  const row = isMine ? "justify-end" : "justify-start";
-                  const wrapDir = isMine ? "flex-row-reverse" : "flex-row";
-                  const metaAlign = isMine ? "text-right" : "text-left";
+                  const row = isMine ? 'justify-end' : 'justify-start';
+                  const wrapDir = isMine ? 'flex-row-reverse' : 'flex-row';
+                  const metaAlign = isMine ? 'text-right' : 'text-left';
 
                   return (
                     <li key={comment.id} className={`flex ${row}`}>
@@ -131,47 +125,37 @@ export default function DiscussionPanel({
                         {/* avatar */}
                         <div className="flex flex-col items-center gap-2">
                           <Avatar className="h-10 w-10">
-                            <AvatarImage
-                              src={authorAvatarSrc(comment.author)}
-                              alt={name}
-                            />
+                            <AvatarImage src={authorAvatarSrc(comment.author)} alt={name} />
                             <AvatarFallback className="bg-secondary text-secondary-foreground">
-                              {initials(
-                                comment.author.firstName,
-                                comment.author.lastName
-                              )}
+                              {initials(comment.author.firstName, comment.author.lastName)}
                             </AvatarFallback>
                           </Avatar>
                         </div>
 
                         {/* bubble */}
                         <div
-                          className={`min-w-0 min-w-[65%] w-fit max-w-[90%] sm:max-w-[85%] lg:max-w-[75%] break-words rounded-lg border border-border px-3 py-2 shadow bg-card relative ${
-                            isMine ? "ml-auto" : ""
+                          className={`border-border bg-card relative w-fit max-w-[90%] min-w-0 min-w-[65%] rounded-lg border px-3 py-2 break-words shadow sm:max-w-[85%] lg:max-w-[75%] ${
+                            isMine ? 'ml-auto' : ''
                           }`}
                         >
                           {/* Delete button - inside bubble top right */}
                           <button
                             onClick={() => setCommentToDelete(comment.id)}
-                            className="absolute top-1 right-1 h-4 w-4 rounded-full hover:bg-red-100 text-muted-foreground hover:text-red-600 flex items-center justify-center text-xs transition-colors opacity-70 hover:opacity-100"
+                            className="text-muted-foreground absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full text-xs opacity-70 transition-colors hover:bg-red-100 hover:text-red-600 hover:opacity-100"
                             title="Delete comment"
                             disabled={deletingComments[comment.id]}
                             hidden={courseIsArchived}
                           >
                             <X className="h-3 w-3 stroke-2" />
                           </button>
-                          
-                          <p className="whitespace-pre-wrap text-sm leading-relaxed pr-6">
+
+                          <p className="pr-6 text-sm leading-relaxed whitespace-pre-wrap">
                             {comment.content}
                           </p>
 
                           <div className="mt-1 flex items-center justify-between gap-1 overflow-hidden whitespace-nowrap">
-                            <span className="truncate text-xs text-muted-foreground">
-                              {name}
-                            </span>
-                            <span
-                              className={`text-xs text-muted-foreground ${metaAlign}`}
-                            >
+                            <span className="text-muted-foreground truncate text-xs">{name}</span>
+                            <span className={`text-muted-foreground text-xs ${metaAlign}`}>
                               {formatDateTime(comment.createdAt)}
                             </span>
                           </div>
@@ -182,7 +166,7 @@ export default function DiscussionPanel({
                 })}
             </ul>
           ) : (
-            <div className="mb-3 flex items-center justify-center rounded-md border border-dashed border-border bg-card py-8 text-muted-foreground">
+            <div className="border-border bg-card text-muted-foreground mb-3 flex items-center justify-center rounded-md border border-dashed py-8">
               <MessageSquare className="mr-2 h-5 w-5 opacity-50" />
               <span>No comments yet.</span>
             </div>
@@ -194,12 +178,12 @@ export default function DiscussionPanel({
               value={commentText}
               onChange={(e) => onCommentTextChange(e.target.value)}
               onKeyDown={(e) => {
-                if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
                   e.preventDefault();
                   onSaveComment();
                 }
               }}
-              className="min-h-[80px] bg-input"
+              className="bg-input min-h-[80px]"
               aria-label="Add comment"
               hidden={courseIsArchived}
             />
@@ -211,7 +195,7 @@ export default function DiscussionPanel({
                 hidden={courseIsArchived}
               >
                 {isSaving ? (
-                  "Submitting…"
+                  'Submitting…'
                 ) : (
                   <>
                     <Send className="mr-2 h-4 w-4" /> Add Comment

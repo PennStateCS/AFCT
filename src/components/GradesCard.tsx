@@ -28,14 +28,23 @@ type Assignment = {
   dueDate?: string;
 };
 
-type ApiStudent = { id: string; firstName?: string | null; lastName?: string | null; email?: string | null; avatar?: string | null };
+type ApiStudent = {
+  id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+  avatar?: string | null;
+};
 
 export default function GradesCard({ courseId }: { courseId: string }) {
   const { timezone } = useEffectiveTimezone();
   const [loading, setLoading] = useState(true);
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [editingCell, setEditingCell] = useState<{ studentId: string; assignmentId: string } | null>(null);
+  const [editingCell, setEditingCell] = useState<{
+    studentId: string;
+    assignmentId: string;
+  } | null>(null);
   const [editingValue, setEditingValue] = useState<string>('');
   const [savingGrades, setSavingGrades] = useState<Set<string>>(new Set());
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -47,12 +56,28 @@ export default function GradesCard({ courseId }: { courseId: string }) {
       if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load grades');
       const body = await res.json();
 
-      const { students: s, assignments: a, grades } = body as { students: ApiStudent[]; assignments: Assignment[]; grades: Record<string, Record<string, number | null>> };
+      const {
+        students: s,
+        assignments: a,
+        grades,
+      } = body as {
+        students: ApiStudent[];
+        assignments: Assignment[];
+        grades: Record<string, Record<string, number | null>>;
+      };
 
       // Build rows
       const rows: StudentRow[] = s.map((stu) => {
-        const name = [stu.firstName, stu.lastName].filter(Boolean).join(' ') || stu.email || 'Unknown';
-        const row: StudentRow = { id: stu.id, name, email: stu.email, avatar: stu.avatar ?? null, firstName: stu.firstName ?? '', lastName: stu.lastName ?? '' };
+        const name =
+          [stu.firstName, stu.lastName].filter(Boolean).join(' ') || stu.email || 'Unknown';
+        const row: StudentRow = {
+          id: stu.id,
+          name,
+          email: stu.email,
+          avatar: stu.avatar ?? null,
+          firstName: stu.firstName ?? '',
+          lastName: stu.lastName ?? '',
+        };
         for (const asg of a) {
           const grade = grades?.[stu.id]?.[asg.id];
           row[asg.id] = grade ?? null;
@@ -90,69 +115,81 @@ export default function GradesCard({ courseId }: { courseId: string }) {
     };
   }, [fetchGrades]);
 
-  const handleGradeEdit = useCallback((studentId: string, assignmentId: string, currentValue: unknown) => {
-    setEditingCell({ studentId, assignmentId });
-    setEditingValue(currentValue === null || currentValue === undefined ? '' : String(currentValue));
-  }, []);
+  const handleGradeEdit = useCallback(
+    (studentId: string, assignmentId: string, currentValue: unknown) => {
+      setEditingCell({ studentId, assignmentId });
+      setEditingValue(
+        currentValue === null || currentValue === undefined ? '' : String(currentValue),
+      );
+    },
+    [],
+  );
 
-  const handleGradeSave = useCallback(async (studentId: string, assignmentId: string, assignmentMaxGrade: number) => {
-    const gradeKey = `${studentId}-${assignmentId}`;
-    setSavingGrades(prev => new Set(prev).add(gradeKey));
-    
-    try {
-      // Validate grade
-      const numericValue = editingValue.trim() === '' ? null : Number(editingValue);
-      if (numericValue !== null && (isNaN(numericValue) || numericValue < 0 || numericValue > assignmentMaxGrade)) {
-        showToast.error(  `Grade must be a number between 0 and ${assignmentMaxGrade}`);
-        // cleanup saving flag
-        setSavingGrades(prev => {
+  const handleGradeSave = useCallback(
+    async (studentId: string, assignmentId: string, assignmentMaxGrade: number) => {
+      const gradeKey = `${studentId}-${assignmentId}`;
+      setSavingGrades((prev) => new Set(prev).add(gradeKey));
+
+      try {
+        // Validate grade
+        const numericValue = editingValue.trim() === '' ? null : Number(editingValue);
+        if (
+          numericValue !== null &&
+          (isNaN(numericValue) || numericValue < 0 || numericValue > assignmentMaxGrade)
+        ) {
+          showToast.error(`Grade must be a number between 0 and ${assignmentMaxGrade}`);
+          // cleanup saving flag
+          setSavingGrades((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(gradeKey);
+            return newSet;
+          });
+          return;
+        }
+
+        // Save to API
+        const res = await fetch(`/api/courses/${courseId}/${assignmentId}/grade/${studentId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ grade: numericValue }),
+        });
+
+        if (!res.ok) {
+          const error = await res.json().catch(() => ({}));
+          throw new Error(error?.error || 'Failed to save grade');
+        }
+
+        // Update local state
+        setStudents((prev) =>
+          prev.map((student) =>
+            student.id === studentId ? { ...student, [assignmentId]: numericValue } : student,
+          ),
+        );
+
+        // Get student name for toast
+        const student = students.find((s) => s.id === studentId);
+        const assignment = assignments.find((a) => a.id === assignmentId);
+        const studentName = student ? student.name : 'Student';
+        const assignmentTitle = assignment ? assignment.title : 'Assignment';
+
+        showToast.success(
+          `Grade ${numericValue ?? 'cleared'} saved for ${studentName} - ${assignmentTitle}`,
+        );
+        setEditingCell(null);
+        setEditingValue('');
+      } catch (error) {
+        console.error('Grade save error:', error);
+        showToast.error(error instanceof Error ? error.message : 'Failed to save grade');
+      } finally {
+        setSavingGrades((prev) => {
           const newSet = new Set(prev);
           newSet.delete(gradeKey);
           return newSet;
         });
-        return;
       }
-
-      // Save to API
-      const res = await fetch(`/api/courses/${courseId}/${assignmentId}/grade/${studentId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ grade: numericValue }),
-      });
-
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({}));
-        throw new Error(error?.error || 'Failed to save grade');
-      }
-
-      // Update local state
-      setStudents(prev => prev.map(student => 
-        student.id === studentId 
-          ? { ...student, [assignmentId]: numericValue }
-          : student
-      ));
-
-      // Get student name for toast
-      const student = students.find(s => s.id === studentId);
-      const assignment = assignments.find(a => a.id === assignmentId);
-      const studentName = student ? student.name : 'Student';
-      const assignmentTitle = assignment ? assignment.title : 'Assignment';
-
-      showToast.success(`Grade ${numericValue ?? 'cleared'} saved for ${studentName} - ${assignmentTitle}`);
-      setEditingCell(null);
-      setEditingValue('');
-      
-    } catch (error) {
-      console.error('Grade save error:', error);
-      showToast.error(error instanceof Error ? error.message : 'Failed to save grade');
-    } finally {
-      setSavingGrades(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(gradeKey);
-        return newSet;
-      });
-    }
-  }, [courseId, students, assignments, editingValue]);
+    },
+    [courseId, students, assignments, editingValue],
+  );
 
   const handleGradeCancel = useCallback(() => {
     setEditingCell(null);
@@ -161,18 +198,18 @@ export default function GradesCard({ courseId }: { courseId: string }) {
 
   const exportGrades = useCallback(() => {
     // Create CSV content
-    const headers = ['Student Name', 'Email', ...assignments.map(a => a.title)];
-    const rows = students.map(student => [
+    const headers = ['Student Name', 'Email', ...assignments.map((a) => a.title)];
+    const rows = students.map((student) => [
       student.name,
       student.email || '',
-      ...assignments.map(a => {
+      ...assignments.map((a) => {
         const grade = student[a.id];
         return grade === null || grade === undefined ? '' : String(grade);
-      })
+      }),
     ]);
 
     const csvContent = [headers, ...rows]
-      .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
       .join('\n');
 
     // Download CSV
@@ -185,7 +222,7 @@ export default function GradesCard({ courseId }: { courseId: string }) {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    
+
     showToast.success('Grades exported successfully');
   }, [students, assignments]);
 
@@ -193,53 +230,60 @@ export default function GradesCard({ courseId }: { courseId: string }) {
   const gradeStats = useMemo(() => {
     if (assignments.length === 0 || students.length === 0) return null;
 
-    const stats = assignments.map(assignment => {
+    const stats = assignments.map((assignment) => {
       const grades = students
-        .map(student => student[assignment.id])
+        .map((student) => student[assignment.id])
         .filter((grade): grade is number => typeof grade === 'number');
-      
+
       if (grades.length === 0) {
         return {
           assignmentId: assignment.id,
           title: assignment.title,
           average: null,
           submitted: 0,
-          total: students.length
+          total: students.length,
         };
       }
 
-      const average = 100 * grades.reduce((sum, grade) => sum + grade, 0) / (grades.length * assignment.maxPoints);
-      
+      const average =
+        (100 * grades.reduce((sum, grade) => sum + grade, 0)) /
+        (grades.length * assignment.maxPoints);
+
       return {
         assignmentId: assignment.id,
         title: assignment.title,
         average: Math.round(average * 10) / 10,
         submitted: grades.length,
-        total: students.length
+        total: students.length,
       };
     });
 
-    const overallGrades = students.map(student => {
-      // Pair each grade with its assignment's maxPoints
-      const gradePairs = assignments
-        .map(assignment => {
-          const grade = student[assignment.id];
-          return typeof grade === 'number' ? { grade, maxPoints: assignment.maxPoints } : null;
-        })
-        .filter((pair): pair is { grade: number; maxPoints: number } => pair !== null);
+    const overallGrades = students
+      .map((student) => {
+        // Pair each grade with its assignment's maxPoints
+        const gradePairs = assignments
+          .map((assignment) => {
+            const grade = student[assignment.id];
+            return typeof grade === 'number' ? { grade, maxPoints: assignment.maxPoints } : null;
+          })
+          .filter((pair): pair is { grade: number; maxPoints: number } => pair !== null);
 
-      if (gradePairs.length === 0) return null;
-      
-      // Calculate the student's average as a percentage of their possible points
-      const totalEarned = gradePairs.reduce((sum, pair) => sum + pair.grade, 0);
-      const totalPossible = gradePairs.reduce((sum, pair) => sum + pair.maxPoints, 0);
-      if (totalPossible === 0) return null;
-      return (totalEarned / totalPossible) * 100;
-    }).filter((avg): avg is number => avg !== null);
+        if (gradePairs.length === 0) return null;
 
-    const overallAverage = overallGrades.length > 0 
-      ? Math.round((overallGrades.reduce((sum, avg) => sum + avg, 0) / overallGrades.length) * 10) / 10
-      : null;
+        // Calculate the student's average as a percentage of their possible points
+        const totalEarned = gradePairs.reduce((sum, pair) => sum + pair.grade, 0);
+        const totalPossible = gradePairs.reduce((sum, pair) => sum + pair.maxPoints, 0);
+        if (totalPossible === 0) return null;
+        return (totalEarned / totalPossible) * 100;
+      })
+      .filter((avg): avg is number => avg !== null);
+
+    const overallAverage =
+      overallGrades.length > 0
+        ? Math.round(
+            (overallGrades.reduce((sum, avg) => sum + avg, 0) / overallGrades.length) * 10,
+          ) / 10
+        : null;
 
     return { assignmentStats: stats, overallAverage };
   }, [assignments, students]);
@@ -252,12 +296,20 @@ export default function GradesCard({ courseId }: { courseId: string }) {
         accessorKey: 'avatar',
         cell: ({ row }) => {
           const avatar = row.original.avatar as string | null | undefined;
-          const initials = `${String(row.original.firstName ?? '')?.[0] ?? ''}${String(row.original.lastName ?? '')?.[0] ?? ''}`.toUpperCase();
-          const avatarUrl = avatar ? `/api/files/avatar?file=${avatar}` : '/api/files/avatar?file=default-avatar.png';
+          const initials =
+            `${String(row.original.firstName ?? '')?.[0] ?? ''}${String(row.original.lastName ?? '')?.[0] ?? ''}`.toUpperCase();
+          const avatarUrl = avatar ? `/uploads/pfps/${avatar}` : '/uploads/pfps/default-avatar.png';
           return (
             <Avatar className="h-10 w-10">
-              <AvatarImage src={avatarUrl} alt={String(row.original.firstName ?? '') + ' ' + String(row.original.lastName ?? '')} />
-              <AvatarFallback className="bg-secondary text-secondary-foreground">{initials || 'U'}</AvatarFallback>
+              <AvatarImage
+                src={avatarUrl}
+                alt={
+                  String(row.original.firstName ?? '') + ' ' + String(row.original.lastName ?? '')
+                }
+              />
+              <AvatarFallback className="bg-secondary text-secondary-foreground">
+                {initials || 'U'}
+              </AvatarFallback>
             </Avatar>
           );
         },
@@ -285,7 +337,8 @@ export default function GradesCard({ courseId }: { courseId: string }) {
         cell: ({ row }) => {
           const val = row.original[a.id];
           const studentId = row.original.id as string;
-          const isEditing = editingCell?.studentId === studentId && editingCell?.assignmentId === a.id;
+          const isEditing =
+            editingCell?.studentId === studentId && editingCell?.assignmentId === a.id;
           const gradeKey = `${studentId}-${a.id}`;
           const isSaving = savingGrades.has(gradeKey);
 
@@ -318,7 +371,7 @@ export default function GradesCard({ courseId }: { courseId: string }) {
 
           return (
             <div
-              className="cursor-pointer hover:bg-neutral-300 rounded px-2 py-1 h-full w-full flex items-center justify-center"
+              className="flex h-full w-full cursor-pointer items-center justify-center rounded px-2 py-1 hover:bg-neutral-300"
               onClick={() => handleGradeEdit(studentId, a.id, val)}
               title="Click to edit grade"
             >
@@ -337,7 +390,15 @@ export default function GradesCard({ courseId }: { courseId: string }) {
     }
 
     return cols;
-  }, [assignments, editingCell, editingValue, savingGrades, handleGradeEdit, handleGradeSave, handleGradeCancel]);
+  }, [
+    assignments,
+    editingCell,
+    editingValue,
+    savingGrades,
+    handleGradeEdit,
+    handleGradeSave,
+    handleGradeCancel,
+  ]);
 
   return (
     <Card>
@@ -374,13 +435,15 @@ export default function GradesCard({ courseId }: { courseId: string }) {
       <CardContent className="space-y-6">
         {/* Grade Statistics */}
         {gradeStats && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-card border rounded-lg">
+          <div className="bg-card grid grid-cols-1 gap-4 rounded-lg border p-4 md:grid-cols-3">
             <div className="flex items-center gap-2">
               <TrendingUp className="h-4 w-4 text-blue-600" />
               <div>
                 <div className="text-sm font-medium">Overall Average</div>
                 <div className="text-lg font-bold">
-                  {gradeStats.overallAverage !== null ? `${gradeStats.overallAverage}%` : 'No grades'}
+                  {gradeStats.overallAverage !== null
+                    ? `${gradeStats.overallAverage}%`
+                    : 'No grades'}
                 </div>
               </div>
             </div>
@@ -404,12 +467,12 @@ export default function GradesCard({ courseId }: { courseId: string }) {
         {/* Assignment Statistics */}
         {gradeStats && gradeStats.assignmentStats.length > 0 && (
           <div className="space-y-2">
-            <h4 className="text-sm font-medium text-muted-foreground">Assignment Statistics</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-              {gradeStats.assignmentStats.map(stat => (
-                <div key={stat.assignmentId} className="p-3 border rounded-lg">
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="font-medium text-sm truncate">{stat.title}</div>
+            <h4 className="text-muted-foreground text-sm font-medium">Assignment Statistics</h4>
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
+              {gradeStats.assignmentStats.map((stat) => (
+                <div key={stat.assignmentId} className="rounded-lg border p-3">
+                  <div className="mb-1 flex items-center justify-between">
+                    <div className="truncate text-sm font-medium">{stat.title}</div>
                     <Badge variant="secondary" className="ml-2">
                       {stat.submitted}/{stat.total}
                     </Badge>
@@ -417,8 +480,10 @@ export default function GradesCard({ courseId }: { courseId: string }) {
                   <div className="text-lg font-bold">
                     {stat.average !== null ? `${stat.average}%` : 'No grades'}
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    {stat.submitted > 0 ? `${Math.round((stat.submitted / stat.total) * 100)}% submitted` : 'No submissions'}
+                  <div className="text-muted-foreground text-xs">
+                    {stat.submitted > 0
+                      ? `${Math.round((stat.submitted / stat.total) * 100)}% submitted`
+                      : 'No submissions'}
                   </div>
                 </div>
               ))}
@@ -428,19 +493,19 @@ export default function GradesCard({ courseId }: { courseId: string }) {
 
         {/* Last Updated Info */}
         {lastUpdated && (
-          <div className="text-xs text-muted-foreground text-center">
+          <div className="text-muted-foreground text-center text-xs">
             Last updated: {formatTimeInTimeZone(lastUpdated, timezone)}
           </div>
         )}
 
         {/* Instructions */}
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="text-muted-foreground flex items-center gap-2 text-sm">
           <div className="flex items-center gap-1">
-            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+            <div className="h-2 w-2 rounded-full bg-blue-500"></div>
             Click any grade cell to edit
           </div>
           <div className="flex items-center gap-1">
-            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+            <div className="h-2 w-2 rounded-full bg-green-500"></div>
             Press Enter to save, Escape to cancel
           </div>
         </div>
