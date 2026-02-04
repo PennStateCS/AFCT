@@ -34,6 +34,9 @@ echo "AFCT container starting..."
 echo "Node env: ${NODE_ENV:-unset}"
 echo "=============================================="
 
+# Ensure NODE_ENV is exported for all child processes
+export NODE_ENV="${NODE_ENV:-production}"
+
 # ---- 0) Sanity checks ----
 if [ -z "${DATABASE_URL:-}" ]; then
   log_error "DATABASE_URL is not set. Refusing to start."
@@ -132,6 +135,8 @@ fi
 # ---- 2) Optionally seed ----
 SEED_ON_START="${SEED_ON_START:-auto}"
 should_seed="false"
+
+log_info "Seed configuration: SEED_ON_START=${SEED_ON_START}, NODE_ENV=${NODE_ENV}"
 
 if [ "$SEED_ON_START" = "true" ]; then
   should_seed="true"
