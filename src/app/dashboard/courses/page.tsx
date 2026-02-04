@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { CreateCourseDialog } from '@/components/dialogs/CreateCourseDialog';
 import { BookPlus } from 'lucide-react';
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
 type UserSummary = {
   id: string;
@@ -16,18 +17,34 @@ type UserSummary = {
 };
 
 type CourseWithRoster = Course & {
-  enrolled?: ({ id: string; firstName?: string | null; lastName?: string | null; email?: string | null; avatar?: string | null; courseRole?: string; hasSubmissions?: boolean })[];
+  enrolled?: {
+    id: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    email?: string | null;
+    avatar?: string | null;
+    courseRole?: string;
+    hasSubmissions?: boolean;
+  }[];
 };
 
 type CourseWithFaculty = Course & {
-  enrolled?: ({ id: string; firstName?: string | null; lastName?: string | null; email?: string | null; avatar?: string | null; courseRole?: string; hasSubmissions?: boolean })[];
+  enrolled?: {
+    id: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    email?: string | null;
+    avatar?: string | null;
+    courseRole?: string;
+    hasSubmissions?: boolean;
+  }[];
 };
 
 export default function ViewCoursesPage() {
   const [courses, setCourses] = useState<CourseWithRoster[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
-  const [timezone, setTimezone] = useState('UTC');
+  const { timezone } = useEffectiveTimezone();
 
   const fetchCourses = async () => {
     try {
@@ -47,35 +64,6 @@ export default function ViewCoursesPage() {
     fetchCourses();
   }, []);
 
-  useEffect(() => {
-    const loadTimezone = async () => {
-      try {
-        const [profileRes, systemRes] = await Promise.all([
-          fetch('/api/profile', { cache: 'no-store' }),
-          fetch('/api/system-settings/public', { cache: 'no-store' }),
-        ]);
-
-        let userTz = '';
-        if (profileRes.ok) {
-          const profile = await profileRes.json();
-          userTz = String(profile?.timezone ?? '');
-        }
-
-        let serverTz = 'UTC';
-        if (systemRes.ok) {
-          const system = await systemRes.json();
-          serverTz = String(system?.timezone ?? 'UTC');
-        }
-
-        setTimezone(userTz || serverTz || 'UTC');
-      } catch {
-        setTimezone('UTC');
-      }
-    };
-
-    loadTimezone();
-  }, []);
-
   // Memoize columns to avoid unnecessary re-renders
   // Passes update and delete callbacks to columns definition
   const columnsMemo = useMemo(
@@ -85,11 +73,13 @@ export default function ViewCoursesPage() {
         (refreshedCourse: CourseWithFaculty) => {
           setCourses((prev) =>
             prev.map((c) =>
-              c.id === refreshedCourse.id ? { ...c, ...refreshedCourse, enrolled: refreshedCourse.enrolled ?? c.enrolled } : c,
+              c.id === refreshedCourse.id
+                ? { ...c, ...refreshedCourse, enrolled: refreshedCourse.enrolled ?? c.enrolled }
+                : c,
             ),
           );
         },
-        
+
         // Called after a course is deleted (triggers reload)
         () => {
           fetchCourses();
@@ -109,11 +99,7 @@ export default function ViewCoursesPage() {
       </CardHeader>
 
       <CardContent>
-        <DataTable
-          columns={columnsMemo}
-          data={courses}
-          loading={loading}
-        />
+        <DataTable columns={columnsMemo} data={courses} loading={loading} />
       </CardContent>
 
       <CreateCourseDialog open={open} setOpen={setOpen} onSuccess={fetchCourses} />
