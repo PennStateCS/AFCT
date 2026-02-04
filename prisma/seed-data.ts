@@ -92,11 +92,28 @@ export const courseData: CourseSeed[] = [
     isArchived: false,
     assignTa: true,
   },
+  {
+    title: 'Programming and Computation II: Data Structures',
+    code: 'CMPSC 132',
+    regCode: 'HDB928',
+    credits: 3,
+    isPublished: true,
+    isArchived: false,
+    assignTa: false,
+  },
+  {
+    title: 'Introduction to the Theory of Computation',
+    code: 'CMPSC 464',
+    regCode: 'WME129',
+    credits: 3,
+    isPublished: true,
+    isArchived: false,
+    assignTa: false,
+  },
 ];
 
 export const problemData = [
   {
-    id: 'cmioqr2yw000fru6re5kqrm4w',
     title: 'D Flip-Flop',
     description:
       'Design the finite automation machine involving a D flip-flop with "q0" being the initial state.',
@@ -108,7 +125,6 @@ export const problemData = [
     courseIndex: 0,
   },
   {
-    id: 'cmioqqpb10007ru6rgv934ig5',
     title: 'Toggle Flip-Flop',
     description:
       'Design the finite automation machine involving a toggle flip-flop with "q0" being the initial state.',
@@ -120,7 +136,6 @@ export const problemData = [
     courseIndex: 0,
   },
   {
-    id: 'cmioqq1tj0003ru6rmf0vvl4u',
     title: 'Traffic Light',
     description:
       'Design a traffic light with the states "Green", "Yellow", and "Red" with the "Green" State being the initial state and a high signal causing a change in the light.',
@@ -132,7 +147,6 @@ export const problemData = [
     courseIndex: 0,
   },
   {
-    id: 'cmioqqwvg000bru6re8nk7ko6',
     title: 'Three Consecutive 1s',
     description:
       'With "q0" being the initial state, create the finite automation with mininum number of states required to detect three consecutive ones.',
@@ -144,7 +158,6 @@ export const problemData = [
     courseIndex: 0,
   },
   {
-    id: 'cmdtv39kl0004lt85v2zpa60n',
     title: 'D Flip-Flop',
     description:
       'Design the finite automation machine involving a D flip-flop with "q0" being the initial state.',
@@ -156,7 +169,6 @@ export const problemData = [
     courseIndex: 1,
   },
   {
-    id: 'cmdpb74cs0006hp33s1mxe92c',
     title: 'Toggle Flip-Flop',
     description:
       'Design the finite automation machine involving a toggle flip-flop with "q0" being the initial state.',
@@ -168,7 +180,6 @@ export const problemData = [
     courseIndex: 1,
   },
   {
-    id: 'cmdlh58rt0008jy40p6xsa19u',
     title: 'Traffic Light',
     description:
       'Design a traffic light with the states "Green", "Yellow", and "Red" with the "Green" State being the initial state and a high signal causing a change in the light.',
@@ -180,7 +191,6 @@ export const problemData = [
     courseIndex: 1,
   },
   {
-    id: 'cmdwv12pm0005fz77r3qhd84t',
     title: 'Three Consecutive 1s',
     description:
       'With "q0" being the initial state, create the finite automation with mininum number of states required to detect three consecutive ones.',
@@ -195,7 +205,6 @@ export const problemData = [
 
 export const assignmentData = [
   {
-    id: 'cmdnwyb8k0000lvjcjctu5em3',
     title: 'Flip Flops',
     description:
       'For this assignment, you will be creating finite automation machines for varying types of flip-flops.',
@@ -205,7 +214,6 @@ export const assignmentData = [
     courseIndex: 0,
   },
   {
-    id: 'cmdp906y10001lviwgpo84uwd',
     title: 'Real Life Examples',
     description:
       'For this assignment, you will be creating finite automation machines solving real world problems.',
@@ -215,7 +223,6 @@ export const assignmentData = [
     courseIndex: 0,
   },
   {
-    id: 'cmdks90ng0001bw54k8yvo36s',
     title: 'Flip Flops',
     description:
       'For this assignment, you will be creating finite automation machines for varying types of flip-flops.',
@@ -225,7 +232,6 @@ export const assignmentData = [
     courseIndex: 1,
   },
   {
-    id: 'cmdhz44xf0003lv28v5xro67q',
     title: 'Real Life Examples',
     description:
       'For this assignment, you will be creating finite automation machines solving real world problems.',
