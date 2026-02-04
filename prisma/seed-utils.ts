@@ -33,7 +33,7 @@ export const upsertRoster = async (
   courseId: string,
   userId: string,
   role: 'INSTRUCTOR' | 'TA' | 'STUDENT',
-): Promise<void> => {
+) => {
   await prisma.roster.upsert({
     where: {
       courseId_userId: {
@@ -60,7 +60,7 @@ export const maybeBootstrapAdmin = async (
   adminFirstName: string,
   adminLastName: string,
   hashedPassword: string,
-): Promise<boolean> => {
+) => {
   const existingUsers = await prisma.user.count();
   if (existingUsers > 0) {
     console.log('[seed] production: users already exist, skipping admin bootstrap');
@@ -113,7 +113,7 @@ export const assignCourseRosters = async (
   facultyUsers: SeedPerson[],
   taUsers: SeedPerson[],
   studentUsers: SeedPerson[],
-): Promise<void> => {
+) => {
   for (const course of courses) {
     const instructor = pickRandom(facultyUsers);
     if (instructor) {
@@ -199,7 +199,7 @@ export const getTermSequence = (currentTerm: Term, currentYear: number) => {
 /**
  * Compute and log seed summary counts.
  */
-export const logSeedCounts = async (prisma: PrismaClient): Promise<void> => {
+export const logSeedCounts = async (prisma: PrismaClient) => {
   const userCount = await prisma.user.count();
   const adminCount = await prisma.user.count({ where: { role: 'ADMIN' } });
   const facultyCount = await prisma.user.count({ where: { role: 'FACULTY' } });

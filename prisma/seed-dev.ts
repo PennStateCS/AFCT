@@ -211,6 +211,7 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
   console.log('[seed] development: creating problems for courses');
   // Create problems for each course. All courses get the same problems.
   const createdProblems: { [courseId: string]: Array<{ id: string; title: string }> } = {};
+
   try {
     // Prepare all problem data for batch insertion
     const problemsToCreate = courses.flatMap((course) =>
@@ -250,6 +251,7 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
   console.log('[seed] development: creating assignments for courses');
   // Create assignments for each course. All courses get the same assignments.
   const createdAssignments: { [courseId: string]: Array<{ id: string; title: string }> } = {};
+
   try {
     // Prepare all assignment data for batch insertion
     const assignmentsToCreate = courses.flatMap((course) =>
@@ -258,6 +260,7 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
         const courseStart = new Date(course.startDate);
         const courseDuration = new Date(course.endDate).getTime() - courseStart.getTime();
         const dueDateMs = courseStart.getTime() + courseDuration * assignmentSeed.dueFraction;
+
         return {
           title: assignmentSeed.title,
           description: assignmentSeed.description,
