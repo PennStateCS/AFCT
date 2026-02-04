@@ -13,6 +13,18 @@ Built with:
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue?logo=typescript)
 [![Publish Docker image to GHCR](https://github.com/PennStateWilkes-Barre/AFCT-Dashboard/actions/workflows/publish-ghcr.yml/badge.svg?branch=main)](https://github.com/PennStateWilkes-Barre/AFCT-Dashboard/actions/workflows/publish-ghcr.yml)
 
+## Table of Contents
+
+- [Quick Start Guide](#-quick-start-guide)
+- [Tech Stack](#-tech-stack)
+- [Docker Development (Recommended)](#-docker-development-recommended)
+- [Production (Docker)](#-production-docker)
+- [SSL / Custom Certificates (Nginx)](#-ssl--custom-certificates-nginx)
+- [Production (Node.js – No Docker)](#-production-nodejs--no-docker)
+- [Database Management](#-database-management)
+- [Troubleshooting](#-troubleshooting)
+- [Contributors](#-contributors)
+
 ## 🚀 Quick Start Guide
 
 ### Prerequisites
@@ -30,37 +42,54 @@ npm run docker:dev
 
 Visit: http://localhost:3000
 
+## 📚 Tech Stack
+
+- Node.js 20+
+- Next.js 15
+- PostgreSQL + Prisma
+- Auth.js / NextAuth v5
+- Tailwind CSS
+- Docker + GHCR
+
 ## 🐳 Docker Development (Recommended)
+
+### Environment (`.env.develepment`)
+
+```env
+# Database Configuration
+DATABASE_URL=postgresql://afct_user:afct_password@db:5432/afct_dev
+
+# Authentication Configuration
+NEXTAUTH_SECRET=your-nextauth-secret-change-this-in-production
+NEXTAUTH_URL=http://localhost:3000
+JWT_SECRET=your-jwt-secret-key-change-this-in-production
+
+# Java/JAR Configuration
+CFGANALYZER_LIMIT=15
+CFGANALYZER_BINARY=/app/bin/cfganalyzer
+
+# File Upload Configuration
+MAX_FILE_SIZE=10485760
+
+# Node Environment
+NODE_ENV=development
+```
 
 ### Main Commands
 
 ```bash
-npm run docker:dev
-npm run docker:dev:detached
-npm run docker:dev:seed
-npm run docker:dev:migrate
-npm run docker:dev:psql
-npm run docker:dev:emptydb
-npm run docker:dev:down
-npm run docker:dev:clean
-npm run docker:dev:down:volumes
-npm run docker:dev:resetdb
-npm run docker:dev:nuke
+npm run docker:dev               # Build and run
+npm run docker:dev:detached      # Build and run in background
+npm run docker:dev:seed          # Seed the database
+npm run docker:dev:migrate       # Run database migrations
+npm run docker:dev:psql          # Open psql
+npm run docker:dev:emptydb       # Truncate all tables
+npm run docker:dev:down          # Stop containers (keep volumes)
+npm run docker:dev:clean         # Stop and prune unused resources
+npm run docker:dev:down:volumes  # Stop containers (remove volumes)
+npm run docker:dev:resetdb       # Stop containers remove database
+npm run docker:dev:nuke          # Remove containers, volumes, and data
 ```
-
-**What these do**
-
-- `docker:dev`: Build and run the dev stack in the foreground (logs attached).
-- `docker:dev:detached`: Build and run the dev stack in the background.
-- `docker:dev:seed`: Run Prisma seed inside the dev app container.
-- `docker:dev:migrate`: Run Prisma migrations inside the dev app container.
-- `docker:dev:psql`: Open psql against the dev Postgres container.
-- `docker:dev:emptydb`: Truncate all tables and re-apply migrations (keeps schema/volumes).
-- `docker:dev:down`: Stop dev containers (keeps volumes).
-- `docker:dev:clean`: Stop dev containers and prune unused Docker resources.
-- `docker:dev:down:volumes`: Stop dev containers and remove volumes (data reset).
-- `docker:dev:resetdb`: Stop dev containers and remove dev database volume.
-- `docker:dev:nuke`: Remove dev containers, volumes, and all unused Docker data.
 
 ### What Happens on Startup
 
@@ -73,41 +102,57 @@ npm run docker:dev:nuke
 
 Production deployments typically pull the **GHCR image** and run via Docker Compose.
 
-### Environment (`.env`)
+### Environment (`.env.production`)
 
 ```env
-POSTGRES_PASSWORD=change-me
-NEXTAUTH_URL=http://10.144.18.20:3000
-NEXTAUTH_SECRET=change-me
-JWT_SECRET=change-me
+# Database Configuration
+POSTGRES_PASSWORD=change_me_now_with_a_strong_password
+DATABASE_URL=postgresql://afct_user:change_me_now_with_a_strong_password@postgres:5432/afct
+
+# Admin Account Configuration (required for production seed)
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=Password123!
+DEFAULT_ADMIN_FIRST_NAME=Admin
+DEFAULT_ADMIN_LAST_NAME=User
+
+# Authentication Configuration
+NEXTAUTH_SECRET=secure-production-secret
+NEXTAUTH_URL=http://10.144.18.20
+AUTH_TRUST_HOST=true
+JWT_SECRET=secure-jwt-secret
+
+# Java/JAR Configuration
+CFGANALYZER_LIMIT=15
+CFGANALYZER_BINARY=/app/bin/cfganalyzer
+
+# File Upload Configuration
+MAX_FILE_SIZE=10485760
+
+# Node Environment
 NODE_ENV=production
+
+# Enable automatic seeding in production
+SEED_ON_START=true
 ```
 
 ⚠️ `NEXTAUTH_URL` must exactly match the browser URL or login may fail with `MissingCSRF`.
 
+### Admin Seed (Production)
+
+Set `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `DEFAULT_ADMIN_FIRST_NAME`, and `DEFAULT_ADMIN_LAST_NAME` in `.env.production` to create the initial admin user on first database setup. Use a strong, unique password and rotate it after the first login. If seeding should run automatically on container start, set `SEED_ON_START=true`.
+
 ### Main Commands
 
 ```bash
-npm run docker:prod
-npm run docker:prod:nobuild
-npm run docker:prod:down
-npm run docker:prod:logs
-npm run docker:prod:logs:app
-npm run docker:prod:logs:db
-npm run docker:prod:migrate
-npm run docker:prod:seed
+npm run docker:prod           # Build and start
+npm run docker:prod:nobuild   # Start without rebuilding
+npm run docker:prod:down      # Stop the stack
+npm run docker:prod:logs      # Follow logs
+npm run docker:prod:logs:app  # Follow app logs
+npm run docker:prod:logs:db   # Follow db logs
+npm run docker:prod:migrate   # Run migrate
+npm run docker:prod:seed      # Run seed
 ```
-
-**What these do**
-
-- `docker:prod`: Build and start the production stack in detached mode.
-- `docker:prod:nobuild`: Start the production stack without rebuilding.
-- `docker:prod:down`: Stop the production stack.
-- `docker:prod:logs`: Follow logs for all production services.
-- `docker:prod:logs:app`: Follow logs for the app service only.
-- `docker:prod:logs:db`: Follow logs for the database service only.
-- `docker:prod:migrate`: Run Prisma migrations inside the app container.
-- `docker:prod:seed`: Run the production seed script inside the app container.
 
 **Notes**
 
@@ -138,11 +183,11 @@ By default, nginx generates a **self‑signed** certificate on first start. You 
 ## 🏭 Production (Node.js – No Docker)
 
 ```bash
-npm install
-npm run build
-npm run db:generate
-npm run db:deploy
-npm start
+npm install         # Install dependencies
+npm run build       # Build the app
+npm run db:generate # Generate Prisma client
+npm run db:deploy   # Apply migrations
+npm start           # Start the production server
 ```
 
 Requires:
@@ -156,20 +201,20 @@ Requires:
 ### Prisma (Local / Node)
 
 ```bash
-npm run db:generate
-npm run db:migrate
-npm run db:deploy
-npm run db:studio
-npm run db:reset
-npm run seed
+npm run db:generate # Generate Prisma client
+npm run db:migrate  # Create and run migrations (dev)
+npm run db:deploy   # Apply migrations (prod)
+npm run db:studio   # Open Prisma Studio
+npm run db:reset    # Reset database
+npm run seed        # Seed database
 ```
 
 ### Inside Docker
 
 ```bash
-npm run docker:dev:studio
-npm run docker:dev:seed
-npm run docker:dev:psql
+npm run docker:dev:studio # Open Prisma Studio
+npm run docker:dev:seed   # Seed the database
+npm run docker:dev:psql   # Open psql
 ```
 
 ---
@@ -179,25 +224,16 @@ npm run docker:dev:psql
 **Database**
 
 ```bash
-docker logs afct-dev-postgres
-docker exec -it afct-dev-postgres pg_isready -U afct_user
+docker logs afct-dev-postgres                          # View Postgres logs
+docker exec -it afct-dev-postgres pg_isready -U afct_user # Check Postgres readiness
 ```
 
 **Auth / Login**
 
 ```bash
-docker exec -it afct-dev sh -lc 'echo $NEXTAUTH_URL'
-docker logs afct-dev | tail
+docker exec -it afct-dev sh -lc 'echo $NEXTAUTH_URL' # Verify NEXTAUTH_URL in container
+docker logs afct-dev | tail                          # Tail app logs
 ```
-
-## 📚 Tech Stack
-
-- Node.js 20+
-- Next.js 15
-- PostgreSQL + Prisma
-- Auth.js / NextAuth v5
-- Tailwind CSS
-- Docker + GHCR
 
 ## 👥 Contributors
 
