@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import InputGroup from '@/components/ui/InputGroup';
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -43,6 +44,7 @@ type CreateUserDialogProps = {
 };
 
 export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogProps) {
+  const { timezone } = useEffectiveTimezone();
   const defaults: CreateUserRaw = useMemo(() => {
     const defaultRole = roleOptions.includes('STUDENT' as any)
       ? 'STUDENT'
@@ -54,8 +56,9 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
       password: '',
       confirmPassword: '',
       role: defaultRole as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT',
+      timezone,
     };
-  }, [roleOptions]);
+  }, [roleOptions, timezone]);
 
   const {
     control,
@@ -124,11 +127,7 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
         if (!val) resetForm();
       }}
     >
-      <DialogContent
-        className="bg-card max-w-2xl"
-        onInteractOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
-      >
+      <DialogContent className="bg-card max-w-2xl">
         <DialogHeader>
           <DialogTitle>Create New User</DialogTitle>
           <DialogDescription>Fill out the fields to create a user account.</DialogDescription>

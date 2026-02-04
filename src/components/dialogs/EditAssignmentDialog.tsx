@@ -27,17 +27,26 @@ import {
   UpdateAssignmentSchema, // partial + id + publish rule
 } from '@/schemas/assignment';
 
-// Convert Date → "YYYY-MM-DDTHH:MM" for <input type="datetime-local">
-function toDateTimeLocalString(date: Date | string): string {
+// Convert Date → "YYYY-MM-DDTHH:MM" for <input type="datetime-local"> in a timezone
+function toDateTimeLocalInTimeZone(date: Date | string, timeZone: string): string {
   const d = new Date(date);
   if (Number.isNaN(d.getTime())) return '';
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const yyyy = d.getFullYear();
-  const mm = pad(d.getMonth() + 1);
-  const dd = pad(d.getDate());
-  const hh = pad(d.getHours());
-  const mi = pad(d.getMinutes());
-  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(d);
+  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const year = lookup.year ?? '0000';
+  const month = lookup.month ?? '01';
+  const day = lookup.day ?? '01';
+  const hour = lookup.hour ?? '00';
+  const minute = lookup.minute ?? '00';
+  return `${year}-${month}-${day}T${hour}:${minute}`;
 }
 
 type EditAssignmentDialogProps = {
@@ -45,6 +54,7 @@ type EditAssignmentDialogProps = {
   assignment: Assignment;
   open: boolean;
   setOpen: (open: boolean) => void;
+  timeZone: string;
   onSave?: (updated: Assignment) => void;
 };
 
@@ -56,6 +66,7 @@ export function EditAssignmentDialog({
   assignment,
   open,
   setOpen,
+  timeZone,
   onSave,
 }: EditAssignmentDialogProps) {
   const defaultValues: FormValues = useMemo(
@@ -63,11 +74,11 @@ export function EditAssignmentDialog({
       title: assignment.title ?? '',
       description: assignment.description ?? '',
       maxPoints: String(assignment.maxPoints ?? 100),
-      dueDate: toDateTimeLocalString(assignment.dueDate), // string for input
+      dueDate: toDateTimeLocalInTimeZone(assignment.dueDate, timeZone), // string for input
       isPublished: assignment.isPublished ?? false,
       courseId: assignment.courseId,
     }),
-    [assignment],
+    [assignment, timeZone],
   );
 
   const {
@@ -167,11 +178,7 @@ export function EditAssignmentDialog({
         if (!val) resetForm();
       }}
     >
-      <DialogContent
-        className="bg-card"
-        onInteractOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
-      >
+      <DialogContent className="bg-card">
         <DialogHeader>
           <DialogTitle>Edit Assignment</DialogTitle>
           <DialogDescription>

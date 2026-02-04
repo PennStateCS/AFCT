@@ -11,11 +11,12 @@ import { Assignment, Problem, Course } from '@prisma/client';
 
 interface CourseDialogsProps {
   course: FullCourse;
+  timeZone: string;
   // Edit course
   editOpen: boolean;
   setEditOpen: (open: boolean) => void;
   onCourseSave: (course: Partial<Course>) => void;
-  
+
   // Problems
   problemOpen: boolean;
   setProblemOpen: (open: boolean) => void;
@@ -25,7 +26,7 @@ interface CourseDialogsProps {
   setSelectedProblem: (problem: Problem | null) => void;
   onProblemCreated: (problem?: Problem) => void;
   onProblemSaved: (problem?: Problem) => void;
-  
+
   // Assignments
   editAssignmentOpen: boolean;
   setEditAssignmentOpen: (open: boolean) => void;
@@ -34,13 +35,13 @@ interface CourseDialogsProps {
   setCreateAssignmentOpen: (open: boolean) => void;
   onAssignmentSave: (assignment: Assignment) => void;
   onAssignmentCreate: (assignment: Assignment) => void;
-  
+
   // Delete confirm
   confirmOpen: boolean;
   pendingDelete: DeleteTarget | null;
   onConfirm: () => void;
   onCancel: () => void;
-  
+
   // Publish confirm
   publishConfirmOpen: boolean;
   pendingPublish: boolean | null;
@@ -52,7 +53,7 @@ interface CourseDialogsProps {
   pendingArchive: boolean | null;
   onArchiveConfirm: () => void;
   onArchiveCancel: () => void;
-  
+
   // Enroll user
   enrollOpen: boolean;
   setEnrollOpen: (open: boolean) => void;
@@ -65,6 +66,7 @@ interface CourseDialogsProps {
 
 export function CourseDialogs({
   course,
+  timeZone,
   editOpen,
   setEditOpen,
   onCourseSave,
@@ -89,7 +91,7 @@ export function CourseDialogs({
   pendingDelete,
   onConfirm,
   onCancel,
-  
+
   publishConfirmOpen,
   pendingPublish,
   onPublishConfirm,
@@ -111,6 +113,7 @@ export function CourseDialogs({
     <>
       <EditCourseDialog
         course={course}
+        timeZone={timeZone}
         open={editOpen}
         setOpen={setEditOpen}
         onSave={onCourseSave}
@@ -128,6 +131,7 @@ export function CourseDialogs({
         <EditAssignmentDialog
           courseIsArchived={course.isArchived}
           assignment={selectedAssignment}
+          timeZone={timeZone}
           open={editAssignmentOpen}
           setOpen={setEditAssignmentOpen}
           onSave={onAssignmentSave}
@@ -152,9 +156,10 @@ export function CourseDialogs({
         setOpen={setCreateAssignmentOpen}
         courseId={course.id}
         courseIsArchived={course.isArchived}
+        timeZone={timeZone}
         onCreate={onAssignmentCreate}
       />
-      
+
       <ConfirmDialog
         open={confirmOpen}
         title={pendingDelete?.type === 'assignment' ? 'Delete Assignment?' : 'Delete Problem?'}
@@ -203,7 +208,10 @@ export function CourseDialogs({
           setOpen={(v) => setBulkEnrollOpen?.(v)}
           courseId={course.id}
           courseIsArchived={course.isArchived}
-          onComplete={() => { /* noop */ }} />
+          onComplete={() => {
+            /* noop */
+          }}
+        />
       )}
     </>
   );
