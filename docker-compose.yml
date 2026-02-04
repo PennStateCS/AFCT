@@ -29,14 +29,6 @@ services:
         condition: service_healthy
     restart: unless-stopped
     volumes:
-      # App source (hot reload)
-      - .:/app:cached
-
-      # Keep container-installed node_modules (avoid host override)
-      - afct-dev-node-modules:/app/node_modules
-
-      # Keep .next in container to avoid slow host I/O
-      - afct-dev-next:/app/.next
       - uploads_data:/app/public/uploads
       # Private uploads managed by Docker (named volume)
       - private_uploads:/private/uploads
@@ -80,8 +72,6 @@ services:
       start_period: 30s
 
 volumes:
-  afct-dev-node-modules:
-  afct-dev-next:
   uploads_data:
   private_uploads:
   nginx_certs:

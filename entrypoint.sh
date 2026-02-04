@@ -17,9 +17,9 @@ echo "Node env: ${NODE_ENV:-unset}"
 echo "=============================================="
 
 # Ensure writable app dirs (for Next.js build output)
-mkdir -p /app/.next /app/node_modules || true
+mkdir -p /app/.next /app/node_modules /app/public/uploads || true
 if [ "$(id -u)" = "0" ]; then
-  chown -R node:node /app/.next /app/node_modules /private/uploads || true
+  chown -R node:node /app/.next /app/node_modules /private/uploads /app/public/uploads || true
 fi
 
 # ---- 0) Sanity checks ----
