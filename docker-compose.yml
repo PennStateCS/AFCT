@@ -30,7 +30,8 @@ services:
     restart: unless-stopped
     volumes:
       - uploads_data:/app/public/uploads
-      - /opt/afct/uploads:/private/uploads
+      # Private uploads managed by Docker (named volume)
+      - private_uploads:/private/uploads
     environment:
       NODE_ENV: production
       # Leave these as container envs; Compose substitution happens from shell/.env, not env_file
@@ -59,7 +60,7 @@ services:
       # Same note: Compose substitution needs shell/.env, not env_file
       POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}'
     volumes:
-      - /opt/afct/postgres:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     # In production, consider removing this so Postgres isn't exposed publicly:
     # ports:
     #   - "5432:5432"
@@ -72,4 +73,6 @@ services:
 
 volumes:
   uploads_data:
+  private_uploads:
   nginx_certs:
+  postgres_data:
