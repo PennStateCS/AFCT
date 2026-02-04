@@ -1,13 +1,13 @@
-version: '3.9'
-
 services:
   app:
     image: ghcr.io/pennstatewilkes-barre/afct-dashboard:main
     container_name: afct-app
     env_file:
       - .env.production
-    # All required environment variables are sourced from .env.production
-    # NOTE: no direct host port mapping — nginx will expose the app on host ports 80/443
+    # Expose directly on ports 80 and 443 (no nginx reverse proxy for now)
+    ports:
+      - '80:3000' # HTTP
+      - '443:3000' # HTTPS (self-signed cert should be handled by Next.js or app)
     depends_on:
       postgres:
         condition: service_healthy
@@ -32,24 +32,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
-
-  nginx:
-    image: nginx:1.25-alpine
-    container_name: afct-nginx
-    ports:
-      - '80:80' # HTTP
-      - '443:443' # HTTPS
-    depends_on:
-      app:
-        condition: service_healthy
-    restart: unless-stopped
-    volumes:
-      - uploads_data:/usr/share/nginx/html/uploads:ro
-      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./docker/nginx/certs:/etc/nginx/certs
-      - ./docker/nginx/entrypoint.sh:/docker-entrypoint.d/99-self-signed.sh:ro
-    healthcheck:
-      disable: true
 
   postgres:
     image: postgres:15-alpine
