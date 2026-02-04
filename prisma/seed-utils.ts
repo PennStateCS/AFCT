@@ -104,8 +104,10 @@ export const getProductionAdminCredentials = async (): Promise<{
   adminLastName: string;
   adminPassword: string;
 }> => {
-  const adminEmail = process.env.DEFAULT_ADMIN_EMAIL || process.env.ADMIN_EMAIL || 'admin@example.com';
-  const adminPassword = process.env.DEFAULT_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || 'Password123!';
+  const adminEmail =
+    process.env.DEFAULT_ADMIN_EMAIL || process.env.ADMIN_EMAIL || 'admin@example.com';
+  const adminPassword =
+    process.env.DEFAULT_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || 'Password123!';
   const adminFirstName = process.env.DEFAULT_ADMIN_FIRST_NAME || 'Admin';
   const adminLastName = process.env.DEFAULT_ADMIN_LAST_NAME || 'User';
 
