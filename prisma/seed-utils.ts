@@ -3,8 +3,7 @@ import { PrismaClient } from '@prisma/client';
 /**
  * Add a role field to every item in the list.
  */
-export const withRole = <T, R>(items: T[], role: R): Array<T & { role: R }> =>
-  items.map((item) => ({ ...item, role }));
+export const withRole = <T, R>(items: T[], role: R) => items.map((item) => ({ ...item, role }));
 
 /**
  * Pick a random item from a list.
@@ -35,25 +34,20 @@ export const upsertRoster = async (
   userId: string,
   role: 'INSTRUCTOR' | 'TA' | 'STUDENT',
 ): Promise<void> => {
-  try {
-    await prisma.roster.upsert({
-      where: {
-        courseId_userId: {
-          courseId,
-          userId,
-        },
-      },
-      update: { role },
-      create: {
-        role,
+  await prisma.roster.upsert({
+    where: {
+      courseId_userId: {
         courseId,
         userId,
       },
-    });
-  } catch (error: unknown) {
-    console.error(`[seed] failed to upsert roster (course=${courseId}, user=${userId})`, error);
-    throw error;
-  }
+    },
+    update: { role },
+    create: {
+      role,
+      courseId,
+      userId,
+    },
+  });
 };
 
 /**
@@ -67,43 +61,32 @@ export const maybeBootstrapAdmin = async (
   adminLastName: string,
   hashedPassword: string,
 ): Promise<boolean> => {
-  try {
-    const existingUsers = await prisma.user.count();
-    if (existingUsers > 0) {
-      console.log('[seed] production: users already exist, skipping admin bootstrap');
-      return false;
-    }
-
-    await prisma.user.upsert({
-      where: { email: adminEmail },
-      update: { role: 'ADMIN' },
-      create: {
-        email: adminEmail,
-        firstName: adminFirstName,
-        lastName: adminLastName,
-        password: hashedPassword,
-        role: 'ADMIN',
-      },
-    });
-
-    console.log(`[seed] production: created/ensured initial admin user (${adminEmail})`);
-    return true;
-  } catch (error: unknown) {
-    console.error('[seed] production: failed to bootstrap admin', error);
-    throw error;
+  const existingUsers = await prisma.user.count();
+  if (existingUsers > 0) {
+    console.log('[seed] production: users already exist, skipping admin bootstrap');
+    return false;
   }
+
+  await prisma.user.upsert({
+    where: { email: adminEmail },
+    update: { role: 'ADMIN' },
+    create: {
+      email: adminEmail,
+      firstName: adminFirstName,
+      lastName: adminLastName,
+      password: hashedPassword,
+      role: 'ADMIN',
+    },
+  });
+
+  console.log(`[seed] production: created/ensured initial admin user (${adminEmail})`);
+  return true;
 };
 
 /**
  * Resolve production admin credentials from env and hash the password.
- * Throws if required credentials are missing.
  */
-export const getProductionAdminCredentials = async (): Promise<{
-  adminEmail: string;
-  adminFirstName: string;
-  adminLastName: string;
-  adminPassword: string;
-}> => {
+export const getProductionAdminCredentials = async () => {
   const adminEmail =
     process.env.DEFAULT_ADMIN_EMAIL || process.env.ADMIN_EMAIL || 'admin@example.com';
   const adminPassword =
@@ -131,40 +114,23 @@ export const assignCourseRosters = async (
   taUsers: SeedPerson[],
   studentUsers: SeedPerson[],
 ): Promise<void> => {
-  if (!courses.length) {
-    throw new Error('[seed] assignCourseRosters: no courses provided');
-  }
+  for (const course of courses) {
+    const instructor = pickRandom(facultyUsers);
+    if (instructor) {
+      await upsertRoster(prisma, course.id, instructor.id, 'INSTRUCTOR');
+    }
 
-  if (!facultyUsers.length) {
-    throw new Error('[seed] assignCourseRosters: no faculty users available');
-  }
-
-  if (!studentUsers.length) {
-    throw new Error('[seed] assignCourseRosters: no student users available');
-  }
-
-  try {
-    for (const course of courses) {
-      const instructor = pickRandom(facultyUsers);
-      if (instructor) {
-        await upsertRoster(prisma, course.id, instructor.id, 'INSTRUCTOR');
-      }
-
-      if (course.assignTa && taUsers.length > 0) {
-        const ta = pickRandom(taUsers);
-        if (ta) {
-          await upsertRoster(prisma, course.id, ta.id, 'TA');
-        }
-      }
-
-      const courseStudents = pickRandomRange(studentUsers, 3, 5);
-      for (const student of courseStudents) {
-        await upsertRoster(prisma, course.id, student.id, 'STUDENT');
+    if (course.assignTa && taUsers.length > 0) {
+      const ta = pickRandom(taUsers);
+      if (ta) {
+        await upsertRoster(prisma, course.id, ta.id, 'TA');
       }
     }
-  } catch (error: unknown) {
-    console.error('[seed] assignCourseRosters: failed to assign rosters', error);
-    throw error;
+
+    const courseStudents = pickRandomRange(studentUsers, 3, 5);
+    for (const student of courseStudents) {
+      await upsertRoster(prisma, course.id, student.id, 'STUDENT');
+    }
   }
 };
 export type Term = 'Spring' | 'Summer' | 'Fall';
@@ -182,13 +148,7 @@ export const getTermForDate = (date: Date): Term => {
 /**
  * Compute term start/end dates for a given term/year.
  */
-export const getTermDates = (
-  term: Term,
-  year: number,
-): {
-  startDate: Date;
-  endDate: Date;
-} => {
+export const getTermDates = (term: Term, year: number) => {
   if (term === 'Spring') {
     return {
       startDate: new Date(year, 0, 15),
@@ -212,10 +172,7 @@ export const getTermDates = (
 /**
  * Build the rolling term sequence: current term + next two.
  */
-export const getTermSequence = (
-  currentTerm: Term,
-  currentYear: number,
-): Array<{ term: Term; year: number }> => {
+export const getTermSequence = (currentTerm: Term, currentYear: number) => {
   if (currentTerm === 'Spring') {
     return [
       { term: 'Spring' as Term, year: currentYear },
@@ -243,34 +200,29 @@ export const getTermSequence = (
  * Compute and log seed summary counts.
  */
 export const logSeedCounts = async (prisma: PrismaClient): Promise<void> => {
-  try {
-    const userCount = await prisma.user.count();
-    const adminCount = await prisma.user.count({ where: { role: 'ADMIN' } });
-    const facultyCount = await prisma.user.count({ where: { role: 'FACULTY' } });
-    const taCount = await prisma.user.count({ where: { role: 'TA' } });
-    const studentCount = await prisma.user.count({ where: { role: 'STUDENT' } });
-    const courseCount = await prisma.course.count();
-    const problemCount = await prisma.problem.count();
-    const assignmentCount = await prisma.assignment.count();
-    const rosterCount = await prisma.roster.count();
-    const assignmentProblemCount = await prisma.assignmentProblem.count();
-    const commentCount = await prisma.comment.count();
+  const userCount = await prisma.user.count();
+  const adminCount = await prisma.user.count({ where: { role: 'ADMIN' } });
+  const facultyCount = await prisma.user.count({ where: { role: 'FACULTY' } });
+  const taCount = await prisma.user.count({ where: { role: 'TA' } });
+  const studentCount = await prisma.user.count({ where: { role: 'STUDENT' } });
+  const courseCount = await prisma.course.count();
+  const problemCount = await prisma.problem.count();
+  const assignmentCount = await prisma.assignment.count();
+  const rosterCount = await prisma.roster.count();
+  const assignmentProblemCount = await prisma.assignmentProblem.count();
+  const commentCount = await prisma.comment.count();
 
-    console.log('[seed] completed');
-    console.log('[seed] counts');
-    console.log(`- admins: ${adminCount}`);
-    console.log(`- faculty: ${facultyCount}`);
-    console.log(`- tas: ${taCount}`);
-    console.log(`- students: ${studentCount}`);
-    console.log(`- users total: ${userCount}`);
-    console.log(`- courses: ${courseCount}`);
-    console.log(`- problems: ${problemCount}`);
-    console.log(`- assignments: ${assignmentCount}`);
-    console.log(`- rosters: ${rosterCount}`);
-    console.log(`- assignment-problems: ${assignmentProblemCount}`);
-    console.log(`- comments: ${commentCount}`);
-  } catch (error: unknown) {
-    console.error('[seed] failed to compute seed counts', error);
-    throw error;
-  }
+  console.log('[seed] completed');
+  console.log('[seed] counts');
+  console.log(`- admins: ${adminCount}`);
+  console.log(`- faculty: ${facultyCount}`);
+  console.log(`- tas: ${taCount}`);
+  console.log(`- students: ${studentCount}`);
+  console.log(`- users total: ${userCount}`);
+  console.log(`- courses: ${courseCount}`);
+  console.log(`- problems: ${problemCount}`);
+  console.log(`- assignments: ${assignmentCount}`);
+  console.log(`- rosters: ${rosterCount}`);
+  console.log(`- assignment-problems: ${assignmentProblemCount}`);
+  console.log(`- comments: ${commentCount}`);
 };
