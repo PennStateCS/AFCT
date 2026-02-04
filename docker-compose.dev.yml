@@ -32,6 +32,10 @@ services:
       MIGRATE_ON_START: 'true'
       SEED_ON_START: 'true'
 
+    depends_on:
+      postgres:
+        condition: service_healthy
+
     volumes:
       # App source (hot reload)
       - .:/app:cached
@@ -45,10 +49,6 @@ services:
       # Private uploads managed by Docker (named volume)
       - ./dev-uploads:/private/uploads
 
-    depends_on:
-      postgres:
-        condition: service_healthy
-
     command: ['npm', 'run', 'dev']
 
     healthcheck:
@@ -58,13 +58,14 @@ services:
     image: nginx:1.25-alpine
     container_name: afct-dev-nginx
     entrypoint: ['/bin/sh', '/entrypoint.sh']
+    restart: unless-stopped
+
     ports:
       - '3001:80' # HTTP redirect
       - '3002:443' # HTTPS
     depends_on:
       app:
         condition: service_started
-    restart: unless-stopped
     volumes:
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ./docker/nginx/entrypoint.sh:/entrypoint.sh:ro
