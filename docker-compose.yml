@@ -41,9 +41,10 @@ services:
       start_period: 60s
 
   nginx:
-    image: nginx:alpine
+    build:
+      context: ./docker/nginx
+      dockerfile: Dockerfile
     container_name: afct-nginx
-    entrypoint: ['/bin/sh', '/entrypoint.sh']
     restart: unless-stopped
 
     depends_on:
@@ -54,8 +55,6 @@ services:
       - '443:443'
 
     volumes:
-      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./docker/nginx/entrypoint.sh:/entrypoint.sh:ro
       # Persist certs (so it doesn't regenerate every restart)
       - nginx_certs:/etc/nginx/certs
       # If nginx serves /uploads via alias (matches your nginx conf)
