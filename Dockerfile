@@ -113,5 +113,5 @@ USER node
 
 EXPOSE 3000
 
-ENTRYPOINT ["/usr/bin/tini","-g","--","./entrypoint.sh"]
+ENTRYPOINT ["/usr/bin/tini","-g","--","/bin/sh","./entrypoint.sh"]
 CMD ["npm", "start"]
