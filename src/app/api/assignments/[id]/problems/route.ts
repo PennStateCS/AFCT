@@ -70,7 +70,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     }
 
     // ---- Load problems ----
-    const assignmentProblems = (await prisma.assignmentProblem.findMany({
+    const assignmentProblems = await prisma.assignmentProblem.findMany({
       where: { assignmentId: assignmentId },
       include: {
         problem: {
@@ -92,16 +92,14 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
         },
       },
       orderBy: {
-        problemId: 'asc',
+        problemId: 'asc'
       },
-    })) as AssignmentProblemResult[];
+    }) as AssignmentProblemResult[];
 
-    const problems: ProblemWithSolved[] = assignmentProblems.map(
-      (ap: (typeof assignmentProblems)[number]) => ({
-        ...ap.problem,
-        solved: ap.submissions.length > 0,
-      }),
-    );
+    const problems: ProblemWithSolved[] = assignmentProblems.map((ap: (typeof assignmentProblems)[number]) => ({
+      ...ap.problem,
+      solved: ap.submissions.length > 0,
+    }));
 
     // ---- Activity log ----
     try {
