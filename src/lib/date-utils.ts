@@ -33,7 +33,7 @@ export function toEndOfDayInTimezone(
 
   // We need to find what UTC time corresponds to the given local time in the timezone.
   // Start with an approximate UTC guess (assuming UTC)
-  const guess = new Date(Date.UTC(year, month - 1, day, hour, minute, 0, 0));
+  let guess = new Date(Date.UTC(year, month - 1, day, hour, minute, 0, 0));
 
   // Get the offset for this guess
   const formatter = new Intl.DateTimeFormat('en-US', {
