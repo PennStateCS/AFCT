@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { Download, Eye, Check, X, Minus } from "lucide-react";
-import { useState } from "react";
+import { Download, Eye, Check, X, Minus } from 'lucide-react';
+import { useState } from 'react';
 import {
   Table,
   TableBody,
@@ -9,60 +9,55 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Submission } from "@prisma/client";
-import JffViewerDialog from "./JffViewerDialog";
-import { useEffectiveTimezone } from "@/hooks/use-effective-timezone";
-import { formatDateTimeInTimeZone } from "@/lib/date";
+} from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { Submission } from '@prisma/client';
+import JffViewerDialog from './JffViewerDialog';
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import { formatDateTimeInTimeZone } from '@/lib/date';
 
 type Props = {
   submissions: Submission[];
   className?: string;
 };
 
-export default function SubmissionsTable({
-  submissions,
-  className = "",
-}: Props) {
+export default function SubmissionsTable({ submissions, className = '' }: Props) {
   const { timezone } = useEffectiveTimezone();
 
-  const formatDateTime = (iso: string | Date) =>
-    formatDateTimeInTimeZone(iso, timezone);
+  const formatDateTime = (iso: string | Date) => formatDateTimeInTimeZone(iso, timezone);
   const [openDialog, setOpenDialog] = useState<{
     open: boolean;
     submission: Submission | null;
   }>({ open: false, submission: null });
 
   // Process submissions: sort by oldest first
-  const filtered = [...submissions].sort(
-    (a, b) =>
-      new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime()
-  ).reverse();
+  const filtered = [...submissions]
+    .sort((a, b) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime())
+    .reverse();
 
   if (filtered.length === 0) {
     return (
       <div className={className}>
         {submissions.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No submissions yet.</p>
+          <p className="text-muted-foreground text-sm">No submissions yet.</p>
         ) : (
-          <p className="text-sm text-muted-foreground">No submissions found.</p>
+          <p className="text-muted-foreground text-sm">No submissions found.</p>
         )}
       </div>
     );
   }
 
   return (
-    <div className={`rounded-md border overflow-hidden bg-card ${className}`}>
+    <div className={`bg-card overflow-hidden rounded-md border ${className}`}>
       <Table>
         <TableHeader>
           <TableRow className="bg-primary">
-            <TableHead className="text-white text-sm font-medium">Attempt</TableHead>
-            <TableHead className="text-white text-sm font-medium">Submitted At</TableHead>
-            <TableHead className="text-white text-sm font-medium">Correct</TableHead>
-            <TableHead className="text-white text-sm font-medium">Feedback</TableHead>
-            <TableHead className="text-white text-sm font-medium">File</TableHead>
-            <TableHead className="text-white text-sm font-medium">View</TableHead>
+            <TableHead className="text-sm font-medium text-white">Attempt</TableHead>
+            <TableHead className="text-sm font-medium text-white">Submitted At</TableHead>
+            <TableHead className="text-sm font-medium text-white">Correct</TableHead>
+            <TableHead className="text-sm font-medium text-white">Feedback</TableHead>
+            <TableHead className="text-sm font-medium text-white">File</TableHead>
+            <TableHead className="text-sm font-medium text-white">View</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -95,11 +90,11 @@ export default function SubmissionsTable({
               <TableCell>
                 {submission.originalFileName && submission.fileName ? (
                   <a
-                    href={`/api/files/submissions?file=${submission.fileName}`}
+                    href={`/uploads/submissions/${submission.fileName}`}
                     download={submission.originalFileName}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-blue-600 hover:text-blue-700 underline"
+                    className="flex items-center gap-1 text-blue-600 underline hover:text-blue-700"
                   >
                     <Download className="h-4 w-4" />
                     {submission.originalFileName}
@@ -133,7 +128,7 @@ export default function SubmissionsTable({
         <JffViewerDialog
           open={openDialog.open}
           onOpenChange={(open) => setOpenDialog({ open, submission: null })}
-          src={`/api/files/submissions?file=${encodeURIComponent(openDialog.submission.fileName ?? '')}`}
+          src={`/uploads/submissions/${encodeURIComponent(openDialog.submission.fileName ?? '')}`}
           title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
           width="70vw"
           height="70vh"
