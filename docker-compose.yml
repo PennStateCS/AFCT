@@ -1,20 +1,35 @@
 services:
+  nginx:
+    image: nginx:alpine
+    container_name: afct-nginx
+    depends_on:
+      - app
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./docker/nginx/entrypoint.sh:/entrypoint.sh:ro
+      # Persist certs (so it doesn't regenerate every restart)
+      - nginx_certs:/etc/nginx/certs
+      # If you want nginx to serve /uploads via alias (matches your nginx conf)
+      - uploads_data:/usr/share/nginx/html/uploads
+    entrypoint: ['/bin/sh', '/entrypoint.sh']
+    restart: unless-stopped
+
   app:
     image: ghcr.io/pennstatewilkes-barre/afct-dashboard:main
     container_name: afct-app
     env_file:
       - .env.production
-    # Expose directly on ports 80 and 443 (no nginx reverse proxy for now)
-    ports:
-      - '80:3000' # HTTP
-      - '443:3000' # HTTPS (self-signed cert should be handled by Next.js or app)
+    expose:
+      - '3000' # only exposed to other containers, not published to host
     depends_on:
       postgres:
         condition: service_healthy
     restart: unless-stopped
     volumes:
       - uploads_data:/app/public/uploads
-      # PRIVATE uploads (not served by Next.js)
       - /opt/afct/uploads:/private/uploads
     environment:
       NODE_ENV: production
@@ -37,18 +52,15 @@ services:
     image: postgres:15-alpine
     container_name: afct-postgres
     restart: unless-stopped
-
     environment:
       POSTGRES_DB: afct
       POSTGRES_USER: afct_user
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-
     volumes:
       - /opt/afct/postgres:/var/lib/postgresql/data
-
-    ports:
-      - '5432:5432'
-
+    # In production, consider removing this so Postgres isn't exposed publicly:
+    # ports:
+    #   - "5432:5432"
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U afct_user -d afct']
       interval: 10s
@@ -58,3 +70,4 @@ services:
 
 volumes:
   uploads_data:
+  nginx_certs:
