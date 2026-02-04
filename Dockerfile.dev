@@ -35,8 +35,6 @@ RUN mkdir -p /private/uploads/pfps \
 # Declare upload volumes for persistence
 VOLUME ["/private/uploads", "/app/public/uploads"]
 
-USER node
-
 # Dependencies
 COPY --chown=node:node package.json package-lock.json ./
 RUN --mount=type=cache,id=npm-cache-node20,target=/home/node/.npm,uid=1000,gid=1000 \
@@ -60,6 +58,9 @@ RUN java -version || true
 # Entrypoint
 COPY --chown=node:node entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
+
+# Switch to non-root user
+USER node
 
 EXPOSE 3000
 EXPOSE 5555
