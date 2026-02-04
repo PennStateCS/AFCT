@@ -15,7 +15,6 @@ Built with:
 
 ## Table of Contents
 
-- [Quick Start Guide](#-quick-start-guide)
 - [Tech Stack](#-tech-stack)
 - [Docker Development (Recommended)](#-docker-development-recommended)
 - [Production (Docker)](#-production-docker)
@@ -46,8 +45,22 @@ Built with:
 
 Copy the template file and update with your local values:
 
+**macOS / Linux**
+
 ```bash
 cp .env.development.example .env.development
+```
+
+**Windows (PowerShell)**
+
+```powershell
+Copy-Item .env.development.example .env.development
+```
+
+**Windows (Command Prompt)**
+
+```bat
+copy .env.development.example .env.development
 ```
 
 See [.env.development.example](.env.development.example) for all available options.
@@ -86,31 +99,31 @@ Production deployments pull the **GHCR image** and run via Docker Compose with N
 - **App (Port 3000)**: Only exposed to Nginx container (not to host)
 - **Postgres (Port 5432)**: Internal only
 
-### Environment (`.env.production`)
+### Environment Configuration
 
-````env
-# Database Configuration
-POSTGRES_PASSWORD=change_me_now_with_a_strong_password
-DATABASE_URL=postgresql://afct_user:change_me_now_with_a_strong_password@postgres:5432/afct
+Copy the template file and update with your production values:
 
-# Admin Account Configuration (required for production seed)
-ADMIN_EMAIL=admin@example.com
-ADMIN_PASSWORD=Password123!
-DEFAULT_ADMIN_FIRST_NAME=Admin
-DEFAULT_ADMIN_LAST_NAME=User
+**macOS / Linux**
 
-# AuthenticationConfiguration
+```bash
+cp .env.production.example .env.production
+```
 
-1. Copy the production environment template:
-   ```bash
-   cp .env.production.example .env.production
-````
+**Windows (PowerShell)**
 
-2. Update all values in `.env.production` with your production secrets, domain, and admin credentials
+```powershell
+Copy-Item .env.production.example .env.production
+```
+
+**Windows (Command Prompt)**
+
+```bat
+copy .env.production.example .env.production
+```
+
+See [.env.production.example](.env.production.example) for all available options.
 
 ⚠️ **Security**: Use strong, unique passwords. `NEXTAUTH_URL` must match your production domain exactly or login will fail.
-
-See [.env.production.example](.env.production.example) for all available options
 
 **Notes**
 
@@ -187,7 +200,14 @@ docker exec -it afct-dev-postgres pg_isready -U afct_user # Check Postgres readi
 
 ```bash
 docker exec -it afct-dev sh -lc 'echo $NEXTAUTH_URL' # Verify NEXTAUTH_URL in container
+docker exec -it afct-dev sh -lc 'echo $NEXTAUTH_SECRET' # Verify NEXTAUTH_SECRET in container
 docker logs afct-dev | tail                          # Tail app logs
+```
+
+**File Uploads / Permissions**
+
+```bash
+docker exec -it afct-dev sh -lc 'ls -ld /private/uploads /app/public/uploads'
 ```
 
 ## 👥 Contributors
