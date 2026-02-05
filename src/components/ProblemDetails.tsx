@@ -106,14 +106,6 @@ export default function ProblemDetails({ problem, submissionCount, className = '
 
             {problem.fileName && problem.originalFileName ? (
               <div className="flex items-center gap-2">
-                <a
-                  href={`/api/solutions/${problem.fileName}`}
-                  download={problem.originalFileName}
-                  className="flex items-center gap-1 text-blue-600 underline hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                >
-                  <Download className="h-3 w-3" />
-                  {problem.originalFileName}
-                </a>
                 {/* View in dialog using the new JffViewerDialog component */}
                 <div>
                   <Button
