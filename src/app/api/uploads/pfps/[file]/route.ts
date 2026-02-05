@@ -16,7 +16,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ file: stri
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const uploadsDir = path.join(process.cwd(), 'private', 'uploads', 'pfps');
+    const uploadsDir = path.join('/private', 'uploads', 'pfps');
     const filePath = path.join(uploadsDir, file);
     if (!fs.existsSync(filePath)) {
       return NextResponse.json({ error: 'File not found on disk' }, { status: 404 });
