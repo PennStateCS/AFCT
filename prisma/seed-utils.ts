@@ -32,7 +32,7 @@ export const upsertRoster = async (
   prisma: PrismaClient,
   courseId: string,
   userId: string,
-  role: 'INSTRUCTOR' | 'TA' | 'STUDENT',
+  role: 'ADMIN' | 'TA' | 'STUDENT',
 ) => {
   await prisma.roster.upsert({
     where: {
@@ -105,7 +105,7 @@ export const getProductionAdminCredentials = async () => {
 type SeedPerson = { id: string };
 
 /**
- * Randomly assign instructors, optional TAs, and 3–5 students per course.
+ * Randomly assign course admins, optional TAs, and 3–5 students per course.
  */
 export const assignCourseRosters = async (
   prisma: PrismaClient,
@@ -117,7 +117,7 @@ export const assignCourseRosters = async (
   for (const course of courses) {
     const instructor = pickRandom(facultyUsers);
     if (instructor) {
-      await upsertRoster(prisma, course.id, instructor.id, 'INSTRUCTOR');
+      await upsertRoster(prisma, course.id, instructor.id, 'ADMIN');
     }
 
     if (course.assignTa && taUsers.length > 0) {

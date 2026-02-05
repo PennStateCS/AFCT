@@ -211,54 +211,98 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
   }
 
   try {
-    // Update the course
-    const updatedCourse = await prisma.course.update({
-      where: { id },
-      data: {
-        name: body.name,
-        code: body.code,
-        semester: body.semester,
-        credits: Number(body.credits),
-        startDate: toDateTimeInTimezone(body.startDate, userTimezone),
-        endDate: toDateTimeInTimezone(body.endDate, userTimezone),
-        isPublished: body.isPublished,
-        isArchived: body.isArchived,
-      },
-      include: {
-        problems: true,
-        assignments: {
-          include: {
-            _count: {
-              select: { problems: true },
+    const instructorIds = Array.isArray(body.instructorIds) ? body.instructorIds : null;
+
+    // Update the course and optionally sync faculty (ADMIN) roster entries
+    const updatedCourse = await prisma.$transaction(async (tx) => {
+      await tx.course.update({
+        where: { id },
+        data: {
+          name: body.name,
+          code: body.code,
+          semester: body.semester,
+          credits: Number(body.credits),
+          startDate: toDateTimeInTimezone(body.startDate, userTimezone),
+          endDate: toDateTimeInTimezone(body.endDate, userTimezone),
+          isPublished: body.isPublished,
+          isArchived: body.isArchived,
+        },
+      });
+
+      if (instructorIds) {
+        const existingAdmins = await tx.roster.findMany({
+          where: { courseId: id, role: 'ADMIN' },
+          select: { userId: true },
+        });
+        const existingAdminIds = new Set(existingAdmins.map((r) => r.userId));
+        const desiredAdminIds = new Set(instructorIds);
+
+        const toAdd = instructorIds.filter((userId: string) => !existingAdminIds.has(userId));
+        const toRemove = Array.from(existingAdminIds).filter(
+          (userId) => !desiredAdminIds.has(userId),
+        );
+
+        if (toRemove.length > 0) {
+          await tx.roster.deleteMany({
+            where: { courseId: id, role: 'ADMIN', userId: { in: toRemove } },
+          });
+        }
+
+        if (toAdd.length > 0) {
+          await tx.roster.createMany({
+            data: toAdd.map((userId: string) => ({
+              userId,
+              courseId: id,
+              role: 'ADMIN',
+            })),
+          });
+        }
+      }
+
+      const refreshed = await tx.course.findUnique({
+        where: { id },
+        include: {
+          problems: true,
+          assignments: {
+            include: {
+              _count: {
+                select: { problems: true },
+              },
             },
           },
-        },
-        roster: {
-          select: {
-            role: true,
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                role: true,
-                email: true,
-                avatar: true,
+          roster: {
+            select: {
+              role: true,
+              user: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  role: true,
+                  email: true,
+                  avatar: true,
+                },
               },
             },
           },
         },
-      },
+      });
+
+      if (!refreshed) {
+        throw new Error('Course not found after update');
+      }
+
+      return refreshed;
     });
 
-    // Group roster users by role (include INSTRUCTOR alongside FACULTY)
+    // Group roster users by role (include ADMIN alongside FACULTY)
     const instructors = updatedCourse.roster
-      .filter((r: (typeof updatedCourse.roster)[number]) => (r.role as string) === 'INSTRUCTOR')
+      .filter((r: (typeof updatedCourse.roster)[number]) => (r.role as string) === 'ADMIN')
       .map((r: (typeof updatedCourse.roster)[number]) => ({ ...r.user, role: r.role }));
     const faculty = updatedCourse.roster
       .filter(
         (r: (typeof updatedCourse.roster)[number]) =>
-          (r.role as string) === 'FACULTY' || (r.role as string) === 'INSTRUCTOR',
+          (r.role as string) === 'FACULTY' || (r.role as string) === 'ADMIN',
       )
       .map((r: (typeof updatedCourse.roster)[number]) => ({ ...r.user, role: r.role }));
     const tas = updatedCourse.roster

@@ -15,7 +15,7 @@ enum Role {
 }
 
 enum CourseRole {
-  INSTRUCTOR
+  ADMIN
   FACULTY
   TA
   STUDENT

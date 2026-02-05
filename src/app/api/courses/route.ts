@@ -90,7 +90,7 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
     });
 
-    // Group roster by role (treat INSTRUCTOR like FACULTY for display and permissions)
+    // Group roster by role (treat course admins like faculty for display and permissions)
     const formatted = courses.map((c: (typeof courses)[number]) => {
       // Build single `enrolled` list (user objects with courseRole). Do not construct role-specific arrays here.
       const enrolled = c.roster.map((r: (typeof c.roster)[number]) => ({
@@ -180,9 +180,23 @@ export async function POST(req: Request) {
         },
       });
 
-      if (Array.isArray(json.facultyIds) && json.facultyIds.length > 0) {
+      const instructorIds = Array.isArray(json.instructorIds) ? json.instructorIds : [];
+      const facultyIds = Array.isArray(json.facultyIds) ? json.facultyIds : [];
+
+      if (instructorIds.length > 0) {
         await tx.roster.createMany({
-          data: json.facultyIds.map((userId: string) => ({
+          data: instructorIds.map((userId: string) => ({
+            userId,
+            courseId: course.id,
+            role: 'ADMIN',
+          })),
+        });
+      }
+
+      const facultyOnlyIds = facultyIds.filter((id: string) => !instructorIds.includes(id));
+      if (facultyOnlyIds.length > 0) {
+        await tx.roster.createMany({
+          data: facultyOnlyIds.map((userId: string) => ({
             userId,
             courseId: course.id,
             role: 'FACULTY',
