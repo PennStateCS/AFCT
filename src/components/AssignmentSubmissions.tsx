@@ -1,33 +1,33 @@
-"use client";
+'use client';
 
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import {
-  ChevronLeft,
-  ChevronRight,
-  Eye,
-  EyeOff,
-  CheckCircle,
-  XCircle,
-  Package,
-  ChevronDown,
-} from "lucide-react";
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { ChevronLeft, ChevronRight, Eye, FileText, MessageSquare, ChevronDown } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-} from "./ui/dropdown-menu";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Submission, User } from "@prisma/client";
-import { showToast } from "@/lib/toast";
-import DiscussionPanel, { Comment as DiscussionComment } from "./DiscussionPanel";
-import ProblemDetails from "./ProblemDetails";
-import SubmissionsTable from "./SubmissionsTable";
+} from './ui/dropdown-menu';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Submission, User } from '@prisma/client';
+import { showToast } from '@/lib/toast';
+import DiscussionPanel, { Comment as DiscussionComment } from './DiscussionPanel';
+import JffViewerDialog from './JffViewerDialog';
 
-type Person = Pick<User, "firstName" | "lastName" | "id">;
+type Person = Pick<User, 'firstName' | 'lastName' | 'id'>;
 
 type Problem = {
   id: string;
@@ -54,10 +54,264 @@ type Props = {
 const extractSubs = (raw?: SubmissionData): Submission[] => {
   if (!raw) return [];
   if (Array.isArray(raw)) return raw;
-  if (raw && typeof raw === "object" && "submissions" in raw)
+  if (raw && typeof raw === 'object' && 'submissions' in raw)
     return (raw as { submissions: Submission[] }).submissions;
   return [];
 };
+
+const getTypeBadge = (type?: string) => {
+  if (!type) return null;
+  const map: Record<string, { label: string; className: string }> = {
+    PDA: {
+      label: 'Pushdown Automaton',
+      className: 'bg-purple-100 text-purple-800 border-purple-200',
+    },
+    RE: { label: 'Regular Expression', className: 'bg-blue-100 text-blue-800 border-blue-200' },
+    CFG: {
+      label: 'Context-Free Grammar',
+      className: 'bg-green-100 text-green-800 border-green-200',
+    },
+    FA: { label: 'Finite Automaton', className: 'bg-orange-100 text-orange-800 border-orange-200' },
+  };
+  return map[type] || { label: type, className: 'bg-gray-100 text-gray-800 border-gray-200' };
+};
+
+function ProblemList({
+  problems,
+  submissions,
+  selectedProblemId,
+  onSelect,
+}: {
+  problems: Problem[];
+  submissions: Record<string, SubmissionData>;
+  selectedProblemId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <Card className="print:hidden">
+      <CardHeader>
+        <CardTitle className="text-base">Problems</CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <ScrollArea className="h-[520px]">
+          <ul className="divide-border divide-y">
+            {problems.map((p) => {
+              const count = extractSubs(submissions[p.id]).length;
+              const active = selectedProblemId === p.id;
+              return (
+                <li key={p.id}>
+                  <button
+                    type="button"
+                    onClick={() => onSelect(p.id)}
+                    className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition ${
+                      active ? 'bg-secondary text-secondary-foreground' : 'hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="truncate">{p.title}</span>
+                    <Badge variant="outline" className="shrink-0">
+                      {count}
+                    </Badge>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </ScrollArea>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SubmissionTable({
+  submissions,
+  onView,
+  className = '',
+}: {
+  submissions: Submission[];
+  onView: (submission: Submission) => void;
+  className?: string;
+}) {
+  if (!submissions.length) {
+    return (
+      <div className="text-muted-foreground rounded-md border border-dashed p-6 text-center text-sm">
+        No submissions yet.
+      </div>
+    );
+  }
+
+  const sorted = [...submissions].sort(
+    (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
+  );
+  const latestId = sorted[0]?.id;
+
+  return (
+    <div className={`overflow-hidden rounded-md border ${className}`}>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Attempt #</TableHead>
+            <TableHead>Submitted At</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Score</TableHead>
+            <TableHead>Action</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {sorted.map((s, idx) => (
+            <TableRow key={s.id} className={s.id === latestId ? 'bg-muted/50' : ''}>
+              <TableCell>{sorted.length - idx}</TableCell>
+              <TableCell>{new Date(s.submittedAt).toLocaleString()}</TableCell>
+              <TableCell>
+                <Badge variant="outline">
+                  {s.correct === true ? 'Correct' : s.correct === false ? 'Incorrect' : 'Submitted'}
+                </Badge>
+              </TableCell>
+              <TableCell>{'—'}</TableCell>
+              <TableCell>
+                {s.fileName ? (
+                  <Button size="sm" variant="secondary" onClick={() => onView(s)}>
+                    <Eye className="mr-2 h-4 w-4" /> View
+                  </Button>
+                ) : (
+                  <span className="text-muted-foreground text-sm">No file</span>
+                )}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+function ProblemWorkspace({
+  problem,
+  submissions,
+  comments,
+  commentText,
+  onCommentTextChange,
+  onSaveComment,
+  onDeleteComment,
+  isSaving,
+  deletingComments,
+  onViewSubmission,
+  courseIsArchived,
+}: {
+  problem: Problem | null;
+  submissions: Submission[];
+  comments: DiscussionComment[];
+  commentText: string;
+  onCommentTextChange: (text: string) => void;
+  onSaveComment: () => void;
+  onDeleteComment: (id: string) => void;
+  isSaving?: boolean;
+  deletingComments?: Record<string, boolean>;
+  onViewSubmission: (submission: Submission) => void;
+  courseIsArchived: boolean;
+}) {
+  if (!problem) {
+    return (
+      <Card>
+        <CardContent className="text-muted-foreground p-6 text-sm">
+          Select a problem to view submissions.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="print:border-0 print:shadow-none">
+      <CardHeader>
+        <CardTitle className="text-lg">{problem.title}</CardTitle>
+        <div className="text-muted-foreground mt-2 flex flex-wrap items-center gap-4 text-xs">
+          {(() => {
+            const badge = getTypeBadge(problem.type);
+            return badge ? (
+              <Badge variant="outline" className={badge.className}>
+                {badge.label}
+              </Badge>
+            ) : null;
+          })()}
+          {typeof problem.maxStates === 'number' ? (
+            <span>Max States: {problem.maxStates === -1 ? 'Unlimited' : problem.maxStates}</span>
+          ) : null}
+          {typeof problem.isDeterministic === 'boolean' ? (
+            <span>{problem.isDeterministic ? 'Deterministic' : 'Nondeterministic'}</span>
+          ) : null}
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="grid items-stretch gap-4 lg:grid-cols-[60%_40%]">
+          <section className="flex h-full flex-col overflow-hidden rounded-md border">
+            <div className="flex items-center gap-2 border-b bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700">
+              <FileText className="h-4 w-4" /> Submissions
+            </div>
+            <div className="flex-1 p-3">
+              <SubmissionTable
+                submissions={submissions}
+                onView={onViewSubmission}
+                className="h-full"
+              />
+            </div>
+          </section>
+          <section className="flex h-full flex-col overflow-hidden rounded-md border">
+            <div className="flex items-center gap-2 border-b bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700">
+              <MessageSquare className="h-4 w-4" /> Discussion
+            </div>
+            <div className="flex-1 p-3">
+              <ProblemDiscussionPanel
+                courseIsArchived={courseIsArchived}
+                comments={comments}
+                commentText={commentText}
+                onCommentTextChange={onCommentTextChange}
+                onSaveComment={onSaveComment}
+                onDeleteComment={onDeleteComment}
+                isSaving={isSaving}
+                deletingComments={deletingComments}
+              />
+            </div>
+          </section>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ProblemDiscussionPanel({
+  courseIsArchived,
+  comments,
+  commentText,
+  onCommentTextChange,
+  onSaveComment,
+  onDeleteComment,
+  isSaving,
+  deletingComments,
+}: {
+  courseIsArchived: boolean;
+  comments: DiscussionComment[];
+  commentText: string;
+  onCommentTextChange: (text: string) => void;
+  onSaveComment: () => void;
+  onDeleteComment: (id: string) => void;
+  isSaving?: boolean;
+  deletingComments?: Record<string, boolean>;
+}) {
+  return (
+    <DiscussionPanel
+      courseIsArchived={courseIsArchived}
+      comments={comments}
+      commentText={commentText}
+      onCommentTextChange={onCommentTextChange}
+      onSaveComment={onSaveComment}
+      onDeleteComment={onDeleteComment}
+      isSaving={isSaving}
+      deletingComments={deletingComments}
+      placeholder="Add a comment about this problem…"
+      className="min-w-0 flex-1"
+      frameless
+    />
+  );
+}
 
 export default function AssignmentSubmissions({
   courseIsArchived,
@@ -66,6 +320,8 @@ export default function AssignmentSubmissions({
   maxAssignmentGrade,
   problems,
 }: Props) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [students, setStudents] = useState<Person[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [submissions, setSubmissions] = useState<Record<string, SubmissionData>>({});
@@ -73,16 +329,18 @@ export default function AssignmentSubmissions({
   const [commentTexts, setCommentTexts] = useState<Record<string, string>>({});
   const [savingComments, setSavingComments] = useState<Record<string, boolean>>({});
   const [deletingComments, setDeletingComments] = useState<Record<string, boolean>>({});
-  const [expandedProblems, setExpandedProblems] = useState<Record<string, boolean>>({});
-  const [leftPanelWidth, setLeftPanelWidth] = useState(66.67);
-  const [isDragging, setIsDragging] = useState(false);
+  const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
   // Grade editing state (robust, GradesCard style)
-  const [editingGrade, setEditingGrade] = useState<string>("");
+  const [editingGrade, setEditingGrade] = useState<string>('');
   const [isEditing, setIsEditing] = useState(false);
   const [isSavingGrade, setIsSavingGrade] = useState(false);
   const [gradeError, setGradeError] = useState<string | null>(null);
   const [userGrade, setUserGrade] = useState<number | null>(null);
   const [isLoadingGrade, setIsLoadingGrade] = useState(false);
+  const [openDialog, setOpenDialog] = useState<{
+    open: boolean;
+    submission: Submission | null;
+  }>({ open: false, submission: null });
 
   // Student search/filter
   const [studentFilter, setStudentFilter] = useState<string>('');
@@ -94,9 +352,35 @@ export default function AssignmentSubmissions({
     if (!f) return students;
     return students.filter((s) => {
       const full = `${s.firstName ?? ''} ${s.lastName ?? ''}`.toLowerCase();
-      return full.includes(f) || (s.firstName ?? '').toLowerCase().includes(f) || (s.lastName ?? '').toLowerCase().includes(f);
+      return (
+        full.includes(f) ||
+        (s.firstName ?? '').toLowerCase().includes(f) ||
+        (s.lastName ?? '').toLowerCase().includes(f)
+      );
     });
   }, [students, studentFilter]);
+
+  const updateQuery = useCallback(
+    (problemId: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('problemId', problemId);
+      router.replace(`?${params.toString()}`, { scroll: false });
+    },
+    [router, searchParams],
+  );
+
+  useEffect(() => {
+    if (problems.length === 0) return;
+    const paramProblemId = searchParams.get('problemId');
+    const validProblemId = problems.some((p) => p.id === paramProblemId)
+      ? (paramProblemId as string)
+      : problems[0].id;
+
+    setSelectedProblemId(validProblemId);
+    if (paramProblemId !== validProblemId) {
+      updateQuery(validProblemId);
+    }
+  }, [problems, searchParams, updateQuery]);
 
   useEffect(() => {
     if (menuOpen) {
@@ -107,45 +391,13 @@ export default function AssignmentSubmissions({
 
   const selectedStudent = students[selectedIndex] ?? null;
 
-  // Handle draggable resize
-  const handleMouseDown = () => {
-    setIsDragging(true);
-  };
-
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDragging) return;
-    const container = document.querySelector('.resize-container');
-    if (!container) return;
-    
-    const rect = container.getBoundingClientRect();
-    const newWidth = ((e.clientX - rect.left) / rect.width) * 100;
-    
-    if (newWidth >= 30 && newWidth <= 80) {
-      setLeftPanelWidth(newWidth);
-    }
-  }, [isDragging]);
-
-  const handleMouseUp = useCallback(() => {
-    setIsDragging(false);
-  }, []);
-
-  useEffect(() => {
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = 'col-resize';
-    } else {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = '';
-    }
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = '';
-    };
-  }, [isDragging, handleMouseMove, handleMouseUp]);
+  const handleSelectProblem = useCallback(
+    (problemId: string) => {
+      setSelectedProblemId(problemId);
+      updateQuery(problemId);
+    },
+    [updateQuery],
+  );
 
   // Fetch students
   useEffect(() => {
@@ -186,7 +438,7 @@ export default function AssignmentSubmissions({
       }
       try {
         const res = await fetch(
-          `/api/courses/${courseId}/${assignmentId}/submissions/${selectedStudent.id}`
+          `/api/courses/${courseId}/${assignmentId}/submissions/${selectedStudent.id}`,
         );
         if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load submissions');
         const data = await res.json();
@@ -212,7 +464,7 @@ export default function AssignmentSubmissions({
           problems.map(async (p) => {
             try {
               const res = await fetch(
-                `/api/comments?assignmentId=${assignmentId}&problemId=${p.id}&studentId=${selectedStudent.id}`
+                `/api/comments?assignmentId=${assignmentId}&problemId=${p.id}&studentId=${selectedStudent.id}`,
               );
               if (!res.ok) throw new Error('Failed to load comments');
               const list = await res.json();
@@ -221,7 +473,7 @@ export default function AssignmentSubmissions({
               console.error(`Fetch comments error for problem ${p.id}:`, err);
               return [p.id, []] as const;
             }
-          })
+          }),
         );
         setComments(Object.fromEntries(entries));
       } catch (err) {
@@ -236,7 +488,7 @@ export default function AssignmentSubmissions({
   useEffect(() => {
     if (!selectedStudent) {
       setUserGrade(null);
-      setEditingGrade("");
+      setEditingGrade('');
       setIsEditing(false);
       setGradeError(null);
       setIsLoadingGrade(false);
@@ -244,29 +496,29 @@ export default function AssignmentSubmissions({
     }
     setIsLoadingGrade(true);
     setUserGrade(null);
-    setEditingGrade("");
+    setEditingGrade('');
     setIsEditing(false);
     setGradeError(null);
     const fetchGrade = async () => {
       try {
         const res = await fetch(
-          `/api/courses/${courseId}/${assignmentId}/grade/${selectedStudent.id}`
+          `/api/courses/${courseId}/${assignmentId}/grade/${selectedStudent.id}`,
         );
         if (res.ok) {
           const { grade } = await res.json();
-          setUserGrade(typeof grade === "number" ? grade : null);
-          setEditingGrade(typeof grade === "number" ? String(grade) : "");
+          setUserGrade(typeof grade === 'number' ? grade : null);
+          setEditingGrade(typeof grade === 'number' ? String(grade) : '');
           setIsEditing(false);
           setGradeError(null);
         } else {
           setUserGrade(null);
-          setEditingGrade("");
+          setEditingGrade('');
           setIsEditing(false);
           setGradeError(null);
         }
       } catch (err) {
         setUserGrade(null);
-        setEditingGrade("");
+        setEditingGrade('');
         setIsEditing(false);
         setGradeError(null);
         console.error('Fetch grade error:', err);
@@ -277,46 +529,49 @@ export default function AssignmentSubmissions({
     fetchGrade();
   }, [courseId, assignmentId, selectedStudent]);
 
-  const saveComment = useCallback(async (problemId: string) => {
-    const commentText = commentTexts[problemId]?.trim();
-    if (!commentText || !selectedStudent) return;
-    
-    setSavingComments((prev) => ({ ...prev, [problemId]: true }));
-    try {
-      const response = await fetch("/api/comments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          content: commentText,
-          assignmentId,
-          problemId,
-          studentId: selectedStudent.id,
-        }),
-      });
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error?.error || 'Failed to save comment');
+  const saveComment = useCallback(
+    async (problemId: string) => {
+      const commentText = commentTexts[problemId]?.trim();
+      if (!commentText || !selectedStudent) return;
+
+      setSavingComments((prev) => ({ ...prev, [problemId]: true }));
+      try {
+        const response = await fetch('/api/comments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content: commentText,
+            assignmentId,
+            problemId,
+            studentId: selectedStudent.id,
+          }),
+        });
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error?.error || 'Failed to save comment');
+        }
+        const newComment = await response.json();
+        setComments((prev) => ({
+          ...prev,
+          [problemId]: [...(prev[problemId] || []), newComment],
+        }));
+        setCommentTexts((prev) => ({ ...prev, [problemId]: '' }));
+        showToast.success('Comment saved successfully');
+      } catch (err) {
+        console.error('Save comment error:', err);
+        showToast.error(err instanceof Error ? err.message : 'Failed to save comment');
+      } finally {
+        setSavingComments((prev) => ({ ...prev, [problemId]: false }));
       }
-      const newComment = await response.json();
-      setComments((prev) => ({
-        ...prev,
-        [problemId]: [...(prev[problemId] || []), newComment],
-      }));
-      setCommentTexts((prev) => ({ ...prev, [problemId]: "" }));
-      showToast.success('Comment saved successfully');
-    } catch (err) {
-      console.error('Save comment error:', err);
-      showToast.error(err instanceof Error ? err.message : 'Failed to save comment');
-    } finally {
-      setSavingComments((prev) => ({ ...prev, [problemId]: false }));
-    }
-  }, [commentTexts, selectedStudent, assignmentId]);
+    },
+    [commentTexts, selectedStudent, assignmentId],
+  );
 
   const deleteComment = useCallback(async (commentId: string, problemId: string) => {
     setDeletingComments((prev) => ({ ...prev, [commentId]: true }));
     try {
       const response = await fetch(`/api/comments?commentId=${commentId}`, {
-        method: "DELETE",
+        method: 'DELETE',
       });
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
@@ -335,7 +590,6 @@ export default function AssignmentSubmissions({
     }
   }, []);
 
-
   // Save grade (robust, GradesCard style)
   const saveGrade = useCallback(async () => {
     if (!selectedStudent) return;
@@ -344,13 +598,19 @@ export default function AssignmentSubmissions({
     // Only validate if value changed
     const trimmed = editingGrade.trim();
     const numericValue = trimmed === '' ? null : Number(trimmed);
-    if (numericValue !== null && (isNaN(numericValue) || numericValue < 0 || numericValue > maxAssignmentGrade)) {
+    if (
+      numericValue !== null &&
+      (isNaN(numericValue) || numericValue < 0 || numericValue > maxAssignmentGrade)
+    ) {
       setGradeError(`Grade must be a number between 0 and ${maxAssignmentGrade}`);
       showToast.error(`Grade must be a number between 0 and ${maxAssignmentGrade}`);
       return;
     }
     // If value is unchanged, do nothing
-    if ((userGrade === null && (numericValue === null || numericValue === undefined)) || userGrade === numericValue) {
+    if (
+      (userGrade === null && (numericValue === null || numericValue === undefined)) ||
+      userGrade === numericValue
+    ) {
       setGradeError(null);
       return;
     }
@@ -360,10 +620,10 @@ export default function AssignmentSubmissions({
       const res = await fetch(
         `/api/courses/${courseId}/${assignmentId}/grade/${selectedStudent.id}`,
         {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ grade: numericValue }),
-        }
+        },
       );
       if (!res.ok) {
         const error = await res.json().catch(() => ({}));
@@ -371,10 +631,12 @@ export default function AssignmentSubmissions({
       }
       // Do not re-fetch grade, just update state
       setUserGrade(numericValue);
-      setEditingGrade(numericValue !== null && numericValue !== undefined ? String(numericValue) : "");
+      setEditingGrade(
+        numericValue !== null && numericValue !== undefined ? String(numericValue) : '',
+      );
       setGradeError(null);
       showToast.success(
-        `Grade ${numericValue ?? 'cleared'} saved for ${selectedStudent.firstName} ${selectedStudent.lastName}`
+        `Grade ${numericValue ?? 'cleared'} saved for ${selectedStudent.firstName} ${selectedStudent.lastName}`,
       );
     } catch (err) {
       console.error('Save grade error:', err);
@@ -384,17 +646,15 @@ export default function AssignmentSubmissions({
     } finally {
       setIsSavingGrade(false);
     }
-  }, [selectedStudent, courseId, assignmentId, maxAssignmentGrade, editingGrade, userGrade, isSavingGrade]);
-
-  const toggleProblemExpansion = (problemId: string) =>
-    setExpandedProblems((prev) => ({ ...prev, [problemId]: !prev[problemId] }));
-
-  const toggleAllProblems = () => {
-    const allExpanded = problems.every((p) => expandedProblems[p.id]);
-    const next: Record<string, boolean> = {};
-    problems.forEach((p) => (next[p.id] = !allExpanded));
-    setExpandedProblems(next);
-  };
+  }, [
+    selectedStudent,
+    courseId,
+    assignmentId,
+    maxAssignmentGrade,
+    editingGrade,
+    userGrade,
+    isSavingGrade,
+  ]);
 
   const handleSelectChange = (id: string) => {
     const index = students.findIndex((s) => s.id === id);
@@ -410,7 +670,7 @@ export default function AssignmentSubmissions({
         <Card className="w-full">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-2xl">
-              <Package className="h-6 w-6" /> Submissions
+              <FileText className="h-6 w-6" /> Submissions
             </CardTitle>
 
             <div className="mt-4 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
@@ -426,18 +686,25 @@ export default function AssignmentSubmissions({
                 </Button>
                 <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="flex items-center gap-2 w-[320px] justify-between bg-card text-foreground border border-border hover:bg-input focus:ring-2 focus:ring-offset-1 focus:ring-primary-300">
-                      <span className="truncate">{selectedStudent ? `${selectedStudent.firstName} ${selectedStudent.lastName}` : 'Select student'}</span>
+                    <Button
+                      variant="outline"
+                      className="bg-card text-foreground border-border hover:bg-input focus:ring-primary-300 flex w-[320px] items-center justify-between gap-2 border focus:ring-2 focus:ring-offset-1"
+                    >
+                      <span className="truncate">
+                        {selectedStudent
+                          ? `${selectedStudent.firstName} ${selectedStudent.lastName}`
+                          : 'Select student'}
+                      </span>
                       <ChevronDown className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-[320px] p-2 bg-card text-foreground border border-border shadow-lg rounded-md">
+                  <DropdownMenuContent className="bg-card text-foreground border-border w-[320px] rounded-md border p-2 shadow-lg">
                     <Input
                       ref={inputRef}
                       placeholder="Search students..."
                       value={studentFilter}
                       onChange={(e) => setStudentFilter(e.target.value)}
-                      className="mb-2 bg-card border-input"
+                      className="bg-card border-input mb-2"
                       aria-label="Search students by name"
                       onKeyDown={(e) => {
                         // Prevent any keyboard event from bubbling up to the DropdownMenu
@@ -461,7 +728,7 @@ export default function AssignmentSubmissions({
                     />
                     <div className="max-h-64 overflow-auto">
                       {filteredStudents.length === 0 ? (
-                        <div className="text-sm text-muted-foreground p-2">No students found</div>
+                        <div className="text-muted-foreground p-2 text-sm">No students found</div>
                       ) : (
                         filteredStudents.map((s) => (
                           <DropdownMenuItem
@@ -473,7 +740,9 @@ export default function AssignmentSubmissions({
                               setMenuOpen(false);
                             }}
                           >
-                            <span className="truncate">{s.firstName} {s.lastName}</span>
+                            <span className="truncate">
+                              {s.firstName} {s.lastName}
+                            </span>
                           </DropdownMenuItem>
                         ))
                       )}
@@ -488,29 +757,9 @@ export default function AssignmentSubmissions({
                 >
                   Next <ChevronRight className="h-4 w-4" />
                 </Button>
-                <span className="ml-2 text-sm text-muted-foreground">
+                <span className="text-muted-foreground ml-2 text-sm">
                   {selectedIndex + 1} of {students.length}
                 </span>
-              </div>
-
-              {/* Filters */}
-              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={toggleAllProblems}
-                  className="flex items-center gap-x-1"
-                >
-                  {problems.every((p) => expandedProblems[p.id]) ? (
-                    <>
-                      <EyeOff className="h-4 w-4" /> Hide All
-                    </>
-                  ) : (
-                    <>
-                      <Eye className="h-4 w-4" /> Show All
-                    </>
-                  )}
-                </Button>
               </div>
 
               {/* Grade box: always-visible input, robust logic */}
@@ -522,25 +771,33 @@ export default function AssignmentSubmissions({
                     min={0}
                     max={maxAssignmentGrade}
                     step="1.0"
-                    value={editingGrade === "" ? "" : editingGrade}
-                    onChange={e => {
+                    value={editingGrade === '' ? '' : editingGrade}
+                    onChange={(e) => {
                       setEditingGrade(e.target.value);
                     }}
-                    onKeyDown={e => {
-                      if (e.key === "Enter") {
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
                         e.preventDefault();
                         saveGrade();
-                      } else if (e.key === "Escape") {
+                      } else if (e.key === 'Escape') {
                         e.preventDefault();
-                        setEditingGrade(userGrade !== null && userGrade !== undefined ? String(userGrade) : "");
+                        setEditingGrade(
+                          userGrade !== null && userGrade !== undefined ? String(userGrade) : '',
+                        );
                       }
                     }}
                     className="bg-card border-input h-9 w-[90px] pr-8"
-                    placeholder={isLoadingGrade ? '-' : (userGrade === null || userGrade === undefined ? '-' : String(userGrade))}
+                    placeholder={
+                      isLoadingGrade
+                        ? '-'
+                        : userGrade === null || userGrade === undefined
+                          ? '-'
+                          : String(userGrade)
+                    }
                     aria-label={`Grade (0-${maxAssignmentGrade})`}
                     disabled={isLoadingGrade}
                   />
-                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                  <span className="text-muted-foreground pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-xs">
                     /{maxAssignmentGrade}
                   </span>
                 </div>
@@ -553,139 +810,86 @@ export default function AssignmentSubmissions({
                       const trimmed = editingGrade.trim();
                       const numericValue = trimmed === '' ? null : Number(trimmed);
                       return (
-                        (userGrade === null && (numericValue === null || numericValue === undefined)) ||
+                        (userGrade === null &&
+                          (numericValue === null || numericValue === undefined)) ||
                         userGrade === numericValue
                       );
                     })()
                   }
                   variant="secondary"
                 >
-                  {isSavingGrade ? "Saving…" : "Save Grade"}
+                  {isSavingGrade ? 'Saving…' : 'Save Grade'}
                 </Button>
-
               </div>
             </div>
           </CardHeader>
 
           <CardContent>
-            <div className="space-y-4">
-              {problems.map((problem, idx) => {
-                const subsAll = extractSubs(submissions[problem.id]);
-                const isExpanded = expandedProblems[problem.id] || false;
-                const hasAny = subsAll.length > 0;
-                const anyCorrect = subsAll.some((s) => s.correct === true);
-
-                const getBorderClass = (type: string | null) => {
-                  const borderMap: Record<string, string> = {
-                    PDA: "border-l-purple-500",
-                    RE: "border-l-blue-500", 
-                    CFG: "border-l-green-500",
-                    FA: "border-l-orange-500",
-                  };
-                  return borderMap[type || ""] || "border-l-gray-500";
-                };
-                const typeBorderClass = getBorderClass(problem.type ?? null);
-
-                const filtered = [...subsAll].sort(
-                  (a, b) =>
-                    new Date(b.submittedAt).getTime() -
-                    new Date(a.submittedAt).getTime()
-                );
+            {problems.length === 0 ? (
+              <div className="text-muted-foreground rounded-md border border-dashed p-6 text-center text-sm">
+                No problems have been added to this assignment yet.
+              </div>
+            ) : (
+              (() => {
+                const selectedProblem = selectedProblemId
+                  ? problems.find((p) => p.id === selectedProblemId) || null
+                  : problems[0] || null;
+                const selectedSubs = selectedProblem
+                  ? extractSubs(submissions[selectedProblem.id])
+                  : [];
+                const selectedComments = selectedProblem ? comments[selectedProblem.id] || [] : [];
 
                 return (
-                  <div
-                    key={problem.id}
-                    className={`rounded-lg border border-l-4 p-4 ${typeBorderClass}`}
-                  >
-                    <div className="mb-4 flex items-start justify-between">
-                      <div className="flex-1">
-                        <h3 className="flex items-center gap-2 text-lg font-semibold">
-                          Problem {idx + 1}: {problem.title}
-                          {hasAny ? (
-                            anyCorrect ? (
-                              <Badge className="flex items-center gap-1 bg-green-100 text-green-800">
-                                <CheckCircle className="h-3 w-3" /> Correct
-                              </Badge>
-                            ) : (
-                              <Badge className="flex items-center gap-1 bg-red-100 text-red-800">
-                                <XCircle className="h-3 w-3" /> Incorrect
-                              </Badge>
-                            )
-                          ) : (
-                            <Badge
-                              variant="outline"
-                              className="border-gray-300 text-gray-600"
-                            >
-                              No attempts
-                            </Badge>
-                          )}
-                        </h3>
-                        {problem.description && (
-                          <p className="mt-1 text-muted-foreground">
-                            {problem.description}
-                          </p>
-                        )}
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => toggleProblemExpansion(problem.id)}
-                      >
-                        {isExpanded ? (
-                          <>
-                            <EyeOff className="mr-2 h-4 w-4" /> Hide Details
-                          </>
-                        ) : (
-                          <>
-                            <Eye className="mr-2 h-4 w-4" /> Show Details
-                          </>
-                        )}
-                      </Button>
+                  <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
+                    <ProblemList
+                      problems={problems}
+                      submissions={submissions}
+                      selectedProblemId={selectedProblem?.id ?? null}
+                      onSelect={handleSelectProblem}
+                    />
+
+                    <div className="print:col-span-2">
+                      <ProblemWorkspace
+                        problem={selectedProblem}
+                        submissions={selectedSubs}
+                        comments={selectedComments}
+                        commentText={selectedProblem ? commentTexts[selectedProblem.id] || '' : ''}
+                        onCommentTextChange={(text) =>
+                          selectedProblem &&
+                          setCommentTexts((prev) => ({
+                            ...prev,
+                            [selectedProblem.id]: text,
+                          }))
+                        }
+                        onSaveComment={() => selectedProblem && saveComment(selectedProblem.id)}
+                        onDeleteComment={(commentId) =>
+                          selectedProblem && deleteComment(commentId, selectedProblem.id)
+                        }
+                        isSaving={selectedProblem ? savingComments[selectedProblem.id] : false}
+                        deletingComments={deletingComments}
+                        onViewSubmission={(submission) => setOpenDialog({ open: true, submission })}
+                        courseIsArchived={courseIsArchived}
+                      />
                     </div>
-
-                    {isExpanded && (
-                      <div className="resize-container flex gap-4">
-                        <section 
-                          className="min-w-0" 
-                          style={{ width: `${leftPanelWidth}%` }}
-                        >
-                          <ProblemDetails problem={problem} submissionCount={subsAll.length} className="mb-4"/>
-                          <SubmissionsTable submissions={filtered} />
-                        </section>
-
-                        <div
-                          className="w-1 bg-muted hover:bg-border cursor-col-resize transition-colors"
-                          onMouseDown={handleMouseDown}
-                          title="Drag to resize"
-                        />
-
-                        <DiscussionPanel
-                          courseIsArchived={courseIsArchived}
-                          comments={comments[problem.id] || []}
-                          commentText={commentTexts[problem.id] || ""}
-                          onCommentTextChange={(text) =>
-                            setCommentTexts((prev) => ({
-                              ...prev,
-                              [problem.id]: text,
-                            }))
-                          }
-                          onSaveComment={() => saveComment(problem.id)}
-                          onDeleteComment={(commentId) =>
-                            deleteComment(commentId, problem.id)
-                          }
-                          isSaving={savingComments[problem.id]}
-                          deletingComments={deletingComments}
-                          placeholder="Add a comment about this problem…"
-                          className="flex-1 min-w-0 ml-1"
-                        />
-                      </div>
-                    )}
                   </div>
                 );
-              })}
-            </div>
+              })()
+            )}
           </CardContent>
         </Card>
+      )}
+
+      {openDialog.submission && (
+        <JffViewerDialog
+          open={openDialog.open}
+          onOpenChange={(open) => setOpenDialog({ open, submission: null })}
+          src={`/api/uploads/submissions/${encodeURIComponent(
+            openDialog.submission.fileName ?? '',
+          )}`}
+          title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
+          width="70vw"
+          height="70vh"
+        />
       )}
     </div>
   );

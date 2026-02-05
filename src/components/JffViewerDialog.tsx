@@ -358,6 +358,10 @@ export function JffCytoscapeViewer({
         setType(parsed.type);
         const elements = toElements(parsed, epsSymbol, honorPositions);
 
+        if (!containerRef.current) {
+          return;
+        }
+
         const cytoscape = await ensureCytoscapeReady();
 
         if (cyRef.current) {
@@ -845,15 +849,17 @@ export default function JffViewerDialog({
           <DialogTitle className="truncate">{title ?? 'JFLAP Viewer'}</DialogTitle>
         </DialogHeader>
         <div className="h-full p-4 pt-2">
-          <JffCytoscapeViewer
-            src={src}
-            title={title}
-            height={height}
-            epsSymbol={epsSymbol}
-            darkMode={darkMode}
-            showGridDefault={showGridDefault}
-            honorPositionsDefault={honorPositionsDefault}
-          />
+          {open ? (
+            <JffCytoscapeViewer
+              src={src}
+              title={title}
+              height={height}
+              epsSymbol={epsSymbol}
+              darkMode={darkMode}
+              showGridDefault={showGridDefault}
+              honorPositionsDefault={honorPositionsDefault}
+            />
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>
