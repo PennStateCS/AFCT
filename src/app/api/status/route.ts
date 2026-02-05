@@ -63,6 +63,7 @@ type DatabaseStatus = {
 function getNum(obj: Record<string, unknown>, k: string): number | undefined {
   const v = obj?.[k];
   if (typeof v === 'number') return v;
+  if (typeof v === 'bigint') return Number(v);
   if (typeof v === 'string') {
     const n = Number(v);
     return Number.isFinite(n) ? n : undefined;
@@ -81,10 +82,68 @@ function detectProvider(url: string): 'sqlite' | 'postgres' | 'unknown' {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+async function resolveHost(host?: string | null): Promise<string[] | null> {
+  if (!host) return null;
+  try {
+    const dns = await import('dns');
+    const results = await dns.promises.lookup(host, { all: true });
+    return Array.from(new Set(results.map((r) => r.address)));
+  } catch {
+    return null;
+  }
+}
+
+async function measureFetchLatency(url?: string | null, timeoutMs = 3000): Promise<number | null> {
+  if (!url) return null;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const t0 = performance.now();
+    await fetch(url, { method: 'GET', cache: 'no-store', signal: controller.signal });
+    const t1 = performance.now();
+    clearTimeout(timer);
+    return Math.round(t1 - t0);
+  } catch {
+    return null;
+  }
+}
+
+async function getTlsExpiry(host?: string | null, port?: number | null): Promise<string | null> {
+  if (!host) return null;
+  try {
+    const tls = await import('tls');
+    const p = port ?? 443;
+    const cert = await new Promise<tls.PeerCertificate>((resolve, reject) => {
+      const socket = tls.connect(
+        { host, port: p, servername: host, rejectUnauthorized: false, timeout: 3000 },
+        () => {
+          const c = socket.getPeerCertificate();
+          socket.end();
+          resolve(c);
+        },
+      );
+      socket.on('error', (err) => reject(err));
+      socket.on('timeout', () => {
+        socket.destroy();
+        reject(new Error('timeout'));
+      });
+    });
+    const validTo = (cert as { valid_to?: string }).valid_to;
+    if (!validTo) return null;
+    const dt = new Date(validTo);
+    return Number.isFinite(dt.getTime()) ? dt.toISOString() : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(req: Request) {
   const t0 = performance.now();
   const url = new URL(req.url);
   const deep = url.searchParams.get('deep') === '1';
+  const origin = url.origin;
+  const authBase = process.env.NEXTAUTH_URL ? new URL(process.env.NEXTAUTH_URL).origin : origin;
+  const authProbeUrl = new URL('/api/auth/session', authBase).toString();
 
   // ===== System =====
   const os = await import('os');
@@ -174,9 +233,12 @@ export async function GET(req: Request) {
   const dbUrl = process.env.DATABASE_URL ?? '';
   const provider = detectProvider(dbUrl);
   let database: DatabaseStatus = { ok: false, message: 'unknown' };
+  let dbLatencyMs: number | null = null;
 
   try {
+    const dbLatencyStart = performance.now();
     await prisma.$queryRaw`SELECT 1`;
+    dbLatencyMs = Math.round(performance.now() - dbLatencyStart);
     database = { ok: true, message: 'reachable' };
 
     // ---------- PostgreSQL ----------
@@ -601,6 +663,93 @@ export async function GET(req: Request) {
     ]);
   } catch {}
 
+  // ===== Network =====
+  let network: Record<string, unknown> | undefined = undefined;
+  try {
+    let dbHost: string | null = null;
+    let dbPort: number | null = null;
+    if (provider === 'postgres' || provider === 'unknown') {
+      try {
+        const dbUrlObj = new URL(dbUrl);
+        dbHost = dbUrlObj.hostname || null;
+        dbPort = dbUrlObj.port ? Number(dbUrlObj.port) : 5432;
+      } catch {
+        dbHost = null;
+        dbPort = null;
+      }
+    }
+
+    let authHost: string | null = null;
+    let authPort: number | null = null;
+    let authProtocol: string | null = null;
+    try {
+      const authUrlObj = new URL(authBase);
+      authHost = authUrlObj.hostname || null;
+      authPort = authUrlObj.port
+        ? Number(authUrlObj.port)
+        : authUrlObj.protocol === 'https:'
+          ? 443
+          : 80;
+      authProtocol = authUrlObj.protocol || null;
+    } catch {
+      authHost = null;
+      authPort = null;
+      authProtocol = null;
+    }
+
+    const [dbResolved, authResolved, authLatencyMs, authCertExpiry] = await Promise.all([
+      resolveHost(dbHost),
+      resolveHost(authHost),
+      measureFetchLatency(authProbeUrl),
+      authProtocol === 'https:' ? getTlsExpiry(authHost, authPort) : Promise.resolve(null),
+    ]);
+
+    const nowMs = Date.now();
+    const since5m = new Date(nowMs - 5 * 60 * 1000);
+    const since15m = new Date(nowMs - 15 * 60 * 1000);
+    const errorWhere = {
+      OR: [
+        { action: { contains: 'error', mode: 'insensitive' as const } },
+        { action: { contains: 'fail', mode: 'insensitive' as const } },
+        { action: { contains: 'denied', mode: 'insensitive' as const } },
+        { action: { contains: 'forbidden', mode: 'insensitive' as const } },
+      ],
+    };
+
+    const [total5m, total15m, err5m, err15m] = await Promise.all([
+      prisma.activityLog.count({ where: { timestamp: { gte: since5m } } }),
+      prisma.activityLog.count({ where: { timestamp: { gte: since15m } } }),
+      prisma.activityLog.count({ where: { timestamp: { gte: since5m }, ...errorWhere } }),
+      prisma.activityLog.count({ where: { timestamp: { gte: since15m }, ...errorWhere } }),
+    ]);
+
+    const rate = (errors: number, total: number) => (total > 0 ? (errors / total) * 100 : 0);
+    const dbConnections =
+      database?.stats?.pg?.num_backends ?? database?.details?.pg_active_connections ?? null;
+
+    network = {
+      db: {
+        host: dbHost,
+        port: dbPort,
+        resolved: dbResolved,
+        latencyMs: dbLatencyMs,
+        connections: dbConnections,
+      },
+      auth: {
+        url: authProbeUrl,
+        host: authHost,
+        port: authPort,
+        resolved: authResolved,
+        latencyMs: authLatencyMs,
+        sslExpiry: authCertExpiry,
+      },
+      errors: {
+        last5m: { total: total5m, errors: err5m, ratePct: rate(err5m, total5m) },
+        last15m: { total: total15m, errors: err15m, ratePct: rate(err15m, total15m) },
+      },
+    };
+  } catch {}
+
   // ===== Build response =====
   const body: Record<string, unknown> = {
     system,
@@ -609,6 +758,7 @@ export async function GET(req: Request) {
     ...(activeSessions ? { activeSessions } : {}),
     ...(sessionSummary ? { sessionSummary } : {}),
     app,
+    ...(network ? { network } : {}),
     metrics: { provider },
   };
 

@@ -64,6 +64,27 @@ type DatabaseStatus = {
   details?: DatabaseDetails;
   stats?: DatabaseStats;
 };
+type NetworkStatus = {
+  db?: {
+    host?: string | null;
+    port?: number | null;
+    resolved?: string[] | null;
+    latencyMs?: number | null;
+    connections?: number | null;
+  };
+  auth?: {
+    url?: string | null;
+    host?: string | null;
+    port?: number | null;
+    resolved?: string[] | null;
+    latencyMs?: number | null;
+    sslExpiry?: string | null;
+  };
+  errors?: {
+    last5m?: { total?: number; errors?: number; ratePct?: number };
+    last15m?: { total?: number; errors?: number; ratePct?: number };
+  };
+};
 type SystemBlock = {
   ok?: boolean;
   uptime?: number;
@@ -98,6 +119,7 @@ type SessionSummary = {
 type StatusResponse = {
   system: SystemBlock;
   database: DatabaseStatus;
+  network?: NetworkStatus;
   env?: { public?: Record<string, string>; masked?: Record<string, string> };
   activeSessions?: SessionItem[];
   sessionSummary?: SessionSummary;
@@ -132,6 +154,10 @@ const formatDbSize = (bytes?: number | null) => {
   if (b < 1024 * 1024 * 1024) return `${(b / 1024 / 1024).toFixed(1)} MB`;
   return `${(b / 1024 / 1024 / 1024).toFixed(2)} GB`;
 };
+const formatMs = (ms?: number | null) =>
+  typeof ms === 'number' && Number.isFinite(ms) ? `${ms} ms` : '—';
+const formatRate = (pct?: number | null) =>
+  typeof pct === 'number' && Number.isFinite(pct) ? `${pct.toFixed(1)}%` : '—';
 const formatLoad = (arr?: number[] | null) => {
   if (!Array.isArray(arr) || arr.length === 0) return '—';
   return arr.map((n) => n.toFixed(2)).join(' / ');
@@ -379,6 +405,7 @@ export default function SystemStatusPage() {
   const dbOk = status?.database?.ok ?? false;
   const provider = status?.metrics?.provider ?? 'unknown';
   const sStats = status?.system?.stats;
+  const net = status?.network;
 
   // Robust DB table & size resolution
   const dbTables: number | null = useMemo(() => {
@@ -891,6 +918,54 @@ export default function SystemStatusPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <Stat label="Hostname" value={status.system?.hostname ?? '—'} />
+              <Stat label="DB Latency" value={formatMs(net?.db?.latencyMs)} />
+              <Stat label="Auth Latency" value={formatMs(net?.auth?.latencyMs)} />
+              <Stat
+                label="DB Connections"
+                value={
+                  typeof net?.db?.connections === 'number' ? String(net?.db?.connections) : '—'
+                }
+              />
+              <Stat
+                label="Error rate (5m)"
+                value={
+                  net?.errors?.last5m
+                    ? `${net.errors.last5m.errors ?? 0}/${net.errors.last5m.total ?? 0} (${formatRate(
+                        net.errors.last5m.ratePct ?? 0,
+                      )})`
+                    : '—'
+                }
+              />
+              <Stat
+                label="Error rate (15m)"
+                value={
+                  net?.errors?.last15m
+                    ? `${net.errors.last15m.errors ?? 0}/${net.errors.last15m.total ?? 0} (${formatRate(
+                        net.errors.last15m.ratePct ?? 0,
+                      )})`
+                    : '—'
+                }
+              />
+              <Stat
+                label="SSL cert expiry"
+                value={
+                  net?.auth?.sslExpiry
+                    ? formatDateTimeInTimeZone(net.auth.sslExpiry, timezone)
+                    : '—'
+                }
+              />
+              <Stat
+                label="DB DNS"
+                value={
+                  (net?.db?.resolved ?? []).length ? (net?.db?.resolved ?? []).join(', ') : '—'
+                }
+              />
+              <Stat
+                label="Auth DNS"
+                value={
+                  (net?.auth?.resolved ?? []).length ? (net?.auth?.resolved ?? []).join(', ') : '—'
+                }
+              />
               <div>
                 <div className="text-muted-foreground mb-1 text-sm">IP Addresses</div>
                 {(status.system?.ipAddresses?.length ?? 0) > 0 ? (
