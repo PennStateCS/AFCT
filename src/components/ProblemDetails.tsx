@@ -102,14 +102,13 @@ export default function ProblemDetails({ problem, submissionCount, className = '
             </span>
           </div>
           <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Answer File:</span>
+            <span className="text-muted-foreground">Solution File:</span>
 
             {problem.fileName && problem.originalFileName ? (
               <div className="flex items-center gap-2">
                 <a
                   href={`/api/solutions/${problem.fileName}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  download={problem.originalFileName}
                   className="flex items-center gap-1 text-blue-600 underline hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                 >
                   <Download className="h-3 w-3" />
@@ -139,7 +138,7 @@ export default function ProblemDetails({ problem, submissionCount, className = '
                 </div>
               </div>
             ) : (
-              <span className="text-muted-foreground text-sm">No answer file</span>
+              <span className="text-muted-foreground text-sm">No solution file</span>
             )}
           </div>
         </div>
