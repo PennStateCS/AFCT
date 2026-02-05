@@ -17,10 +17,7 @@ echo "Node env: ${NODE_ENV:-unset}"
 echo "=============================================="
 
 # Ensure writable app dirs (for Next.js build output)
-mkdir -p /app/.next /app/node_modules /app/public/uploads || true
-if [ "$(id -u)" = "0" ]; then
-  chown -R node:node /app/.next /app/node_modules /private/uploads /app/public/uploads || true
-fi
+mkdir -p /app/.next /app/node_modules || true
 
 # ---- 0) Sanity checks ----
 if [ -z "${DATABASE_URL:-}" ]; then
@@ -43,6 +40,10 @@ mkdir -p /private/uploads/pfps \
          /private/uploads/problems \
          /private/uploads/solutions \
          /private/uploads/submissions || true
+
+if [ "$(id -u)" = "0" ]; then
+  chown -R node:node /app/.next /app/node_modules /private/uploads || true
+fi
 
 if [ "$WAIT_FOR_DB" = "true" ]; then
   echo "→ Waiting for database to be reachable (timeout: ${DB_WAIT_SECONDS}s)..."

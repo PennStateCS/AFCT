@@ -60,7 +60,7 @@ const authorAvatarSrc = (author: Comment['author']) => {
   if (!raw) return undefined;
   if (/^https?:\/\//i.test(raw)) return raw;
   if (raw.startsWith('/')) return raw;
-  return `/uploads/${raw}`;
+  return `/api/uploads/pfps/${raw}`;
 };
 
 export default function DiscussionPanel({

@@ -74,7 +74,7 @@ export const useProblemColumns = ({
         if (!file || !fileName) return '—';
         return (
           <a
-            href={`/uploads/problems/${fileName}`}
+            href={`/api/solutions/${fileName}`}
             download={file}
             className="text-sm break-all text-blue-600 hover:underline"
           >
@@ -170,7 +170,7 @@ export const useProblemColumns = ({
     <JffViewerDialog
       open={openDialog.open}
       onOpenChange={(open) => setOpenDialog({ open, problem: open ? openDialog.problem : null })}
-      src={`/uploads/problems/${encodeURIComponent(openDialog.problem.fileName ?? '')}`}
+      src={`/api/solutions/${encodeURIComponent(openDialog.problem.fileName ?? '')}`}
       title={`${openDialog.problem.originalFileName || openDialog.problem.fileName} - Problem`}
       width="70vw"
       height="70vh"
