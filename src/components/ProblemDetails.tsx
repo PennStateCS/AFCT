@@ -62,10 +62,6 @@ export default function ProblemDetails({ problem, submissionCount, className = '
   // problem data available via prop
   return (
     <div className={`border-border bg-card overflow-hidden rounded-md border ${className}`}>
-      <header className="border-border bg-primary flex items-center gap-2 rounded-t-md border-b px-3 py-2">
-        <Package className="h-4 w-4 text-white" />
-        <h4 className="text-sm font-medium text-white">Problem Details</h4>
-      </header>
       <div className="bg-card p-3">
         <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
           <div className="flex items-center justify-between text-sm">

@@ -36,6 +36,7 @@ type Props = {
   title?: string;
   placeholder?: string;
   className?: string;
+  frameless?: boolean;
 };
 
 // helpers
@@ -75,6 +76,7 @@ export default function DiscussionPanel({
   title = 'Discussion',
   placeholder = 'Add a comment...',
   className = '',
+  frameless = false,
 }: Props) {
   const { data: session } = useSession();
   const myId = session?.user?.id ?? null;
@@ -93,15 +95,21 @@ export default function DiscussionPanel({
 
   return (
     <>
-      <section className={`border-border overflow-hidden rounded-md border ${className}`}>
-        <header className="border-border bg-primary flex items-center gap-2 rounded-t-md border-b px-3 py-2">
-          <MessageSquare className="h-4 w-4 text-white" />
-          <h4 className="text-sm font-medium text-white">
-            {title} ({comments.length})
-          </h4>
-        </header>
+      <section
+        className={
+          frameless ? className : `border-border overflow-hidden rounded-md border ${className}`
+        }
+      >
+        {!frameless ? (
+          <header className="border-border bg-primary flex items-center gap-2 rounded-t-md border-b px-3 py-2">
+            <MessageSquare className="h-4 w-4 text-white" />
+            <h4 className="text-sm font-medium text-white">
+              {title} ({comments.length})
+            </h4>
+          </header>
+        ) : null}
 
-        <div className="bg-card p-3">
+        <div className={frameless ? '' : 'bg-card p-3'}>
           {comments.length > 0 ? (
             <ul className="mb-3 space-y-3">
               {comments
