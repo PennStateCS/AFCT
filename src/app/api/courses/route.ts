@@ -127,8 +127,14 @@ export async function POST(req: Request) {
     // 1) Parse payload of information
     const json = await req.json();
 
-    // 2) Get user's timezone (DB user > system settings > default)
+    // 2) Ensure user is authorized to create courses
     const session = await auth();
+    const role = session?.user?.role;
+    if (!role || !['ADMIN', 'TA', 'FACULTY'].includes(role)) {
+      return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
+    }
+
+    // 3) Get user's timezone (DB user > system settings > default)
     let userTimezone = 'America/New_York';
     if (session?.user?.id) {
       const userRecord = await prisma.user.findUnique({
@@ -143,7 +149,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // 3) Optional uniqueness check (code + semester)
+    // 4) Optional uniqueness check (code + semester)
     const exists = await prisma.course.findFirst({
       where: { code: json.code, semester: json.semester },
       select: { id: true },
@@ -155,10 +161,10 @@ export async function POST(req: Request) {
       );
     }
 
-    // 4) Generate a unique registration code
+    // 5) Generate a unique registration code
     const regCode = await generateUniqueCourseCode();
 
-    // 5) Create course (and roster rows for faculty) in a transaction for consistency
+    // 6) Create course (and roster rows for faculty) in a transaction for consistency
     const created = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const course = await tx.course.create({
         data: {
