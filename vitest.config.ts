@@ -7,9 +7,6 @@ export default defineConfig({
     globals: true,
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
   },
-  css: {
-    postcss: false,
-  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
