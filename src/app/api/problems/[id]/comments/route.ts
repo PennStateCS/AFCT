@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { prisma } from '@/lib/prisma';
 
 // GET - Fetch comments for a specific problem
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
@@ -21,7 +19,7 @@ export async function GET(
     if (!problemId) {
       return NextResponse.json(
         { error: 'assignmentId and problemId are required' },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -43,15 +41,15 @@ export async function GET(
               select: {
                 firstName: true,
                 lastName: true,
-                role: true
-              }
-            }
-          }
-        }
+                role: true,
+              },
+            },
+          },
+        },
       },
       orderBy: {
-        createdAt: 'asc'
-      }
+        createdAt: 'asc',
+      },
     });
 
     // Transform comments to match the expected format
@@ -59,26 +57,22 @@ export async function GET(
       id: comment.id,
       content: comment.content,
       createdAt: comment.createdAt.toISOString(),
-      authorName: `${comment.roster.user.firstName || ''} ${comment.roster.user.lastName || ''}`.trim() || 'Unknown User',
+      authorName:
+        `${comment.roster.user.firstName || ''} ${comment.roster.user.lastName || ''}`.trim() ||
+        'Unknown User',
       authorRole: comment.roster.role,
-      problemId: comment.problemId
+      problemId: comment.problemId,
     }));
 
     return NextResponse.json(transformedComments);
   } catch (error) {
     console.error('Error fetching comments:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch comments' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to fetch comments' }, { status: 500 });
   }
 }
 
 // POST - Create a new comment for a specific problem
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
@@ -101,12 +95,12 @@ export async function POST(
           include: {
             assignment: {
               include: {
-                course: true
-              }
-            }
-          }
-        }
-      }
+                course: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!problem || problem.assignments.length === 0) {
@@ -120,8 +114,8 @@ export async function POST(
     const rosterEntry = await prisma.roster.findFirst({
       where: {
         userId: session.user.id,
-        courseId: assignment.course.id
-      }
+        courseId: assignment.course.id,
+      },
     });
 
     if (!rosterEntry) {
@@ -134,7 +128,7 @@ export async function POST(
         content: content.trim(),
         assignmentId: assignment.id,
         problemId: problemId,
-        rosterId: rosterEntry.id
+        rosterId: rosterEntry.id,
       },
       include: {
         roster: {
@@ -143,12 +137,29 @@ export async function POST(
               select: {
                 firstName: true,
                 lastName: true,
-                role: true
-              }
-            }
-          }
-        }
-      }
+                role: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    await createEnhancedActivityLog(prisma, request, {
+      userId: session.user.id,
+      action: 'CREATE_COMMENT',
+      category: 'ASSIGNMENT',
+      courseId: assignment.course.id,
+      assignmentId: assignment.id,
+      problemId: problemId,
+      metadata: {
+        userId: session.user.id,
+        courseId: assignment.course.id,
+        assignmentId: assignment.id,
+        problemId: problemId,
+        commentId: comment.id,
+        contentLength: content.trim().length,
+      },
     });
 
     // Transform comment to match the expected format
@@ -156,17 +167,16 @@ export async function POST(
       id: comment.id,
       content: comment.content,
       createdAt: comment.createdAt.toISOString(),
-      authorName: `${comment.roster.user.firstName || ''} ${comment.roster.user.lastName || ''}`.trim() || 'Unknown User',
+      authorName:
+        `${comment.roster.user.firstName || ''} ${comment.roster.user.lastName || ''}`.trim() ||
+        'Unknown User',
       authorRole: comment.roster.role,
-      problemId: comment.problemId
+      problemId: comment.problemId,
     };
 
     return NextResponse.json(transformedComment, { status: 201 });
   } catch (error) {
     console.error('Error creating comment:', error);
-    return NextResponse.json(
-      { error: 'Failed to create comment' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to create comment' }, { status: 500 });
   }
 }

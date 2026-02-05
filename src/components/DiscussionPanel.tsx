@@ -183,7 +183,7 @@ export default function DiscussionPanel({
                   onSaveComment();
                 }
               }}
-              className="bg-input min-h-[80px]"
+              className="bg-background min-h-[80px]"
               aria-label="Add comment"
               hidden={courseIsArchived}
             />
