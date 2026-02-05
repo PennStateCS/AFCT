@@ -21,7 +21,7 @@ async function ensureDirExists(dir: string) {
 }
 
 // Upload directory path
-const uploadDir = path.join(process.cwd(), 'private', 'uploads', 'solutions');
+const uploadDir = path.join('/private', 'uploads', 'solutions');
 
 // POST: Create a new problem with optional solution file
 export async function POST(req: NextRequest, context: { params: Promise<{ id: string }> }) {
