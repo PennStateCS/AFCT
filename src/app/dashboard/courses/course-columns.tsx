@@ -103,21 +103,25 @@ export const columns = (
   },
   {
     id: 'instructor',
-    accessorFn: (row) => formatInstructorNames(row.enrolled as any[]),
+    accessorFn: (row) =>
+      getInstructors(row.enrolled as any[])
+        .filter((f) => f.role !== 'ADMIN')
+        .map((f) => `${f.firstName ?? ''} ${f.lastName ?? ''}`.trim())
+        .filter(Boolean)
+        .join(', '),
     meta: { priority: 1 },
     enableSorting: true,
     header: 'Faculty',
     cell: ({ row }) => {
       const instructors = getInstructors(row.original.enrolled as any[]);
-      if (!instructors || instructors.length === 0) {
+      const faculty = (instructors || []).filter((f) => f.role !== 'ADMIN');
+      if (faculty.length === 0) {
         return <span className="text-muted-foreground italic">None</span>;
       }
-      if (instructors.length === 1) {
-        const f = instructors[0];
-        return `${f.firstName ?? ''} ${f.lastName ?? ''}`.trim();
-      }
-      const f = instructors[0];
-      return `${(f.firstName ?? '') + (f.lastName ? ' ' + f.lastName : '')}`.trim() + ', ...';
+      return faculty
+        .map((f) => `${f.firstName ?? ''} ${f.lastName ?? ''}`.trim())
+        .filter(Boolean)
+        .join(', ');
     },
   },
   {
