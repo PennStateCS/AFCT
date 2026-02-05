@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
       const fileExt = path.extname(originalFileName);
       fileName = `${randomUUID()}${fileExt}`;
 
-      const uploadDir = path.join(process.cwd(), 'private', 'uploads', 'submissions');
+      const uploadDir = path.join('/private', 'uploads', 'submissions');
       if (!fs.existsSync(uploadDir)) {
         fs.mkdirSync(uploadDir, { recursive: true });
       }

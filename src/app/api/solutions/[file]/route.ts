@@ -32,7 +32,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ file
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const uploadsDir = path.join(process.cwd(), 'private', 'uploads', 'solutions');
+    const uploadsDir = path.join('/private', 'uploads', 'solutions');
     const filePath = path.join(uploadsDir, file);
     if (!fs.existsSync(filePath)) {
       return NextResponse.json({ error: 'File not found on disk' }, { status: 404 });
