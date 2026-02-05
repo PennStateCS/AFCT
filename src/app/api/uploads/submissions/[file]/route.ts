@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import path from 'path';
 import fs from 'fs';
 import stream from 'stream';
@@ -6,60 +6,63 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
-export async function GET(req: NextRequest, { params }: { params: Promise<{ file: string }> }) {
+export async function GET(_: Request, { params }: { params: Promise<{ file: string }> }) {
   try {
-    const resolvedParams = await params;
-    const { file } = resolvedParams;
+    const { file } = await params;
     if (!file || file.includes('..')) {
       return NextResponse.json({ error: 'Invalid file' }, { status: 400 });
     }
 
-    // Require authenticated user
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Find the problem record by stored filename so we can return the original name and course
-    const problem = await prisma.problem.findFirst({ where: { fileName: file } });
-    if (!problem) {
+    const submission = await prisma.submission.findFirst({
+      where: { fileName: file },
+      select: { id: true, originalFileName: true, studentId: true, assignmentId: true },
+    });
+
+    if (!submission) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
 
-    // Allow access only for admin/faculty/ta
     const role = session.user.role;
-    if (!['ADMIN', 'FACULTY', 'TA'].includes(role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    let allowed = false;
+    if (['ADMIN', 'FACULTY', 'TA'].includes(role)) allowed = true;
+    else if (submission.studentId === session.user.id) allowed = true;
 
-    const uploadsDir = path.join(process.cwd(), 'private', 'uploads', 'solutions');
+    if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+    const uploadsDir = path.join(process.cwd(), 'private', 'uploads', 'submissions');
     const filePath = path.join(uploadsDir, file);
     if (!fs.existsSync(filePath)) {
       return NextResponse.json({ error: 'File not found on disk' }, { status: 404 });
     }
 
-    // Read file into buffer and return as response
     const buffer = await fs.promises.readFile(filePath);
 
     await createEnhancedActivityLog(prisma, null, {
       userId: session.user.id,
-      action: 'DOWNLOAD_SOLUTION_FILE',
-      category: 'PROBLEM',
-      courseId: problem.courseId,
-      problemId: problem.id,
+      action: 'DOWNLOAD_SUBMISSION_FILE',
+      category: 'SUBMISSION',
+      assignmentId: submission.assignmentId,
+      submissionId: submission.id,
       metadata: {
         fileName: file,
-        originalFileName: problem.originalFileName ?? null,
+        originalFileName: submission.originalFileName ?? null,
+        studentId: submission.studentId,
       },
     });
+
     const headers: Record<string, string> = {
       'Content-Type': 'application/octet-stream',
-      'Content-Disposition': `attachment; filename="${problem.originalFileName ?? file}"`,
+      'Content-Disposition': `attachment; filename="${submission.originalFileName ?? file}"`,
     };
 
     return new NextResponse(buffer as unknown as BodyInit, { status: 200, headers });
   } catch (err) {
-    console.error('Error serving solution file:', err);
+    console.error('Error serving submission file:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -258,8 +258,8 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
           <AvatarImage
             src={
               activity.user?.avatar
-                ? `/uploads/pfps/${activity.user.avatar}`
-                : `/uploads/pfps/default-avatar.png`
+                ? `/api/uploads/pfps/${activity.user.avatar}`
+                : `/api/uploads/pfps/default-avatar.png`
             }
             alt={`${activity.user?.firstName} ${activity.user?.lastName}`}
           />

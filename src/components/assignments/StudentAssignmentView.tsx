@@ -595,7 +595,7 @@ export default function StudentAssignmentPage() {
                                       <TableCell>
                                         {submission.fileName ? (
                                           <a
-                                            href={`/uploads/submissions/${encodeURIComponent(submission.fileName)}`}
+                                            href={`/api/uploads/submissions/${encodeURIComponent(submission.fileName)}`}
                                             download={submission.originalFileName || 'Download'}
                                             className="inline-flex items-center gap-1 text-blue-600 underline hover:text-blue-800"
                                             target="_blank"
@@ -728,7 +728,7 @@ export default function StudentAssignmentPage() {
         <JffViewerDialog
           open={openDialog.open}
           onOpenChange={(open) => setOpenDialog({ open, submission: null })}
-          src={`/uploads/submissions/${encodeURIComponent(openDialog.submission.fileName ?? '')}`}
+          src={`/api/uploads/submissions/${encodeURIComponent(openDialog.submission.fileName ?? '')}`}
           title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
           width="70vw"
           height="70vh"

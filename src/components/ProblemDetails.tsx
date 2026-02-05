@@ -107,7 +107,7 @@ export default function ProblemDetails({ problem, submissionCount, className = '
             {problem.fileName && problem.originalFileName ? (
               <div className="flex items-center gap-2">
                 <a
-                  href={`/uploads/problems/${problem.fileName}`}
+                  href={`/api/solutions/${problem.fileName}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-1 text-blue-600 underline hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
@@ -130,7 +130,7 @@ export default function ProblemDetails({ problem, submissionCount, className = '
                   <JffViewerDialog
                     open={open}
                     onOpenChange={setOpen}
-                    src={`/uploads/problems/${encodeURIComponent(problem.fileName ?? '')}`}
+                    src={`/api/solutions/${encodeURIComponent(problem.fileName ?? '')}`}
                     title={`${problem.originalFileName || problem.fileName} - ${problem.title}`}
                     width="70vw"
                     height="70vh"

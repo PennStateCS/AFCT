@@ -45,7 +45,7 @@ export async function POST(req: Request) {
     }
 
     // Ensure upload directory exists
-    const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'problems');
+    const uploadsDir = path.join(process.cwd(), 'private', 'uploads', 'solutions');
     fs.mkdirSync(uploadsDir, { recursive: true });
 
     // Write uploaded file to disk

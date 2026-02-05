@@ -37,7 +37,9 @@ export function getUserColumns(onUserUpdate: () => void, timeZone: string): Colu
           <Avatar className="h-12 w-12">
             <AvatarImage
               src={
-                user.avatar ? `/uploads/pfps/${user.avatar}` : `/uploads/pfps/default-avatar.png`
+                user.avatar
+                  ? `/api/uploads/pfps/${user.avatar}`
+                  : `/api/uploads/pfps/default-avatar.png`
               }
               alt={`${user.firstName} ${user.lastName}`}
             />
