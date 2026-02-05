@@ -166,8 +166,8 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
   const session = await auth();
   const user = session?.user;
 
-  // Allow only ADMIN or FACULTY to toggle archive status
-  if (!user || !['ADMIN', 'FACULTY'].includes(user.role)) {
+  // Allow only ADMIN, FACULTY, or TA to edit courses
+  if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -212,6 +212,12 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
 
   try {
     const instructorIds = Array.isArray(body.instructorIds) ? body.instructorIds : null;
+    if (Array.isArray(instructorIds) && instructorIds.length === 0) {
+      return NextResponse.json(
+        { error: 'At least one faculty member is required.' },
+        { status: 400 },
+      );
+    }
 
     // Update the course and optionally sync faculty (ADMIN) roster entries
     const updatedCourse = await prisma.$transaction(async (tx) => {
