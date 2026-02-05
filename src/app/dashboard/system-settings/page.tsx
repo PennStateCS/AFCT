@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
@@ -102,10 +103,10 @@ export default function SystemSettingsPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="grid max-w-xl gap-4">
-            <div className="grid gap-2">
-              <label className="pb-2 text-sm font-medium" htmlFor="timezone">
+            <div className="flex flex-col">
+              <Label className="pb-2" htmlFor="timezone">
                 Timezone
-              </label>
+              </Label>
               <Select
                 value={loading ? '' : timezone}
                 onValueChange={(val) => setTimezone(val)}
@@ -122,7 +123,7 @@ export default function SystemSettingsPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-muted-foreground text-xs">
+              <p className="text-muted-foreground mt-1 text-xs">
                 This is the default timezone for the server. User-specific timezones can be set in
                 their profile settings.
               </p>
