@@ -232,10 +232,10 @@ export default function CourseEditUserDialog({
                   <div className="text-muted-foreground text-xs">{roster.user.email}</div>
                 </div>
 
-                {/* Delete avatar button: visible to course FACULTY, INSTRUCTOR, or site ADMIN */}
+                {/* Delete avatar button: visible to course FACULTY, ADMIN, or site ADMIN */}
                 <div className="ml-auto">
                   {(viewerCourseRole === 'FACULTY' ||
-                    viewerCourseRole === 'INSTRUCTOR' ||
+                    viewerCourseRole === 'ADMIN' ||
                     viewerDefaultRole === 'ADMIN') && (
                     <Button
                       variant="outline"
@@ -302,10 +302,9 @@ export default function CourseEditUserDialog({
                     const targetRole = roster.role ?? null;
                     let viewerCanDelete = false;
                     if (isSiteAdmin) viewerCanDelete = true;
-                    else if (viewerCourse === 'INSTRUCTOR')
-                      viewerCanDelete = targetRole !== 'INSTRUCTOR';
+                    else if (viewerCourse === 'ADMIN') viewerCanDelete = targetRole !== 'ADMIN';
                     else if (viewerCourse === 'FACULTY')
-                      viewerCanDelete = targetRole !== 'INSTRUCTOR' && targetRole !== 'FACULTY';
+                      viewerCanDelete = targetRole !== 'ADMIN' && targetRole !== 'FACULTY';
                     const removeDisabled = !viewerCanDelete;
                     const removeTitle = removeDisabled
                       ? 'You do not have permission to remove this user'

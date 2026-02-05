@@ -4,7 +4,7 @@ import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import type { Prisma } from '@prisma/client';
 
-type CourseRole = 'INSTRUCTOR' | 'FACULTY' | 'TA' | 'STUDENT';
+type CourseRole = 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const resolved = await params;
@@ -16,17 +16,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     // Only faculty/admin/ta can bulk enroll
     const role = session.user.role;
-    if (!['FACULTY', 'ADMIN', 'TA'].includes(role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!['FACULTY', 'ADMIN', 'TA'].includes(role))
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const body = await req.json();
     const userIds: string[] = (body?.userIds ?? []).map((s: string) => String(s)).filter(Boolean);
-    if (!userIds.length) return NextResponse.json({ message: 'No users provided' }, { status: 400 });
+    if (!userIds.length)
+      return NextResponse.json({ message: 'No users provided' }, { status: 400 });
 
     // Map global role to course role
     const mapRole = (r: string | null | undefined): CourseRole => {
       switch (r) {
-        case 'FACULTY':
         case 'ADMIN':
+          return 'ADMIN';
+        case 'FACULTY':
           return 'FACULTY';
         case 'TA':
           return 'TA';
@@ -36,7 +39,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     };
 
     // Fetch all users to get their global roles in a single query
-    const users = await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, role: true } });
+    const users = await prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, role: true },
+    });
     const roleMap = new Map(
       users.map((u: { id: string; role: string | null }) => [u.id, mapRole(u.role)]),
     );
@@ -61,7 +67,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       action: 'BULK_ENROLL_USERS',
       category: 'COURSE',
       courseId,
-      metadata: { 
+      metadata: {
         userId: session?.user.id,
         courseId: courseId,
         enrolledIds: userIds,

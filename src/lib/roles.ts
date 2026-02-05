@@ -6,23 +6,18 @@ import type { Row } from '@tanstack/react-table';
 
 // List of valid roles derived from the Zod enum in one place
 export const roleOptions: Role[] = RoleEnum.options as Role[];
-export const courseRoleOptions: CourseRole[] = CourseRoleEnum.options as CourseRole[]
+export const courseRoleOptions: CourseRole[] = CourseRoleEnum.options as CourseRole[];
 
 // Role ordering used for sorting tables
 export const roleOrder: Record<string, number> = {
   ADMIN: 1,
   FACULTY: 2,
-  INSTRUCTOR: 2,
   TA: 3,
   STUDENT: 4,
 };
 
 // SortingFn signature: (rowA, rowB, columnId)
-export function roleSortingFn<T = any>(
-  rowA: Row<T>,
-  rowB: Row<T>,
-  columnId: string,
-): number {
+export function roleSortingFn<T = any>(rowA: Row<T>, rowB: Row<T>, columnId: string): number {
   // Sort by role first
   const aRole = rowA.getValue(columnId) as string;
   const bRole = rowB.getValue(columnId) as string;
@@ -66,4 +61,4 @@ export function formatCourseRole(role?: CourseRole | null): string {
   if (!role) return '';
   if (role === 'TA') return 'TA';
   return role.charAt(0) + role.slice(1).toLowerCase();
-} 
+}

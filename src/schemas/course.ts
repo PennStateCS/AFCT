@@ -182,6 +182,7 @@ export const UpdateCourseSchema = BaseCourseObject.partial().extend({
 export const CourseFormSchema = BaseCourseFormObject.extend({
   isPublished: z.boolean().default(false),
   isArchived: z.boolean().default(false),
+  instructorIds: z.array(z.string()).default([]),
 })
   .refine((d) => d.startDate <= d.endDate, {
     path: ['startDate'],
@@ -190,6 +191,15 @@ export const CourseFormSchema = BaseCourseFormObject.extend({
   .refine((d) => d.startDate <= d.endDate, {
     path: ['endDate'],
     message: 'End date/time must be on or after the start date/time.',
+  })
+  .superRefine((d, ctx) => {
+    if (d.instructorIds.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['instructorIds'],
+        message: 'Pick at least one faculty member.',
+      });
+    }
   });
 
 /**
