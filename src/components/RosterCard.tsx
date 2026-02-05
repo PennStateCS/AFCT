@@ -1,6 +1,5 @@
 'use client';
 
-
 import { User } from '@prisma/client';
 import { sortRoster, type EnrolledUser } from '@/lib/course-utils';
 import { ColumnDef } from '@tanstack/react-table';
@@ -27,27 +26,36 @@ export function RosterCard({
   onBulkEnroll,
   loading = false,
 }: RosterCardProps) {
-
   // Use a shared sort helper to keep ordering consistent
-  const rosterData = sortRoster(enrolled).map((u) => ({ ...u, role: u.courseRole ?? u.role }));
+  const rosterData = sortRoster(enrolled).map((u) => ({
+    ...u,
+    role: u.role === 'ADMIN' ? 'ADMIN' : (u.courseRole ?? u.role),
+  }));
 
   return (
     <Card className="p-4">
       <CardHeader className="flex flex-row items-center justify-between pb-4">
-        <CardTitle className="text-2xl flex items-center gap-2">
-          <Users className="h-5 w-5" />Roster
+        <CardTitle className="flex items-center gap-2 text-2xl">
+          <Users className="h-5 w-5" />
+          Roster
         </CardTitle>
         <div className="flex items-center gap-2">
           <Button variant="default" onClick={onEnrollUser} hidden={courseIsArchived}>
-            <Plus />Enroll User
+            <Plus />
+            Enroll User
           </Button>
           <Button variant="default" onClick={() => onBulkEnroll?.()} hidden={courseIsArchived}>
-            <Users className="mr-1" />Bulk Enroll
+            <Users className="mr-1" />
+            Bulk Enroll
           </Button>
         </div>
       </CardHeader>
       <CardContent>
-        <DataTable columns={userColumns as ColumnDef<User>[]} data={rosterData as unknown as User[]} loading={loading} />
+        <DataTable
+          columns={userColumns as ColumnDef<User>[]}
+          data={rosterData as unknown as User[]}
+          loading={loading}
+        />
       </CardContent>
     </Card>
   );
