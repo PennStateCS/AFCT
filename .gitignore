@@ -68,6 +68,8 @@ next-env.d.ts
 # Uploads and user content
 public/uploads/*
 !public/uploads/.gitkeep
+private/uploads/*
+!private/uploads/.gitkeep
 
 # Logs
 logs/
