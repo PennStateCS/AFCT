@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { NextRequest } from 'next/server';
 
 const prismaMock = vi.hoisted(() => ({
   assignment: {
@@ -35,13 +36,13 @@ describe('POST /api/comments', () => {
   it('returns 401 when not authenticated', async () => {
     authMock.mockResolvedValue(null);
 
-    const req = new Request('http://localhost/api/comments', {
+    const req = new NextRequest('http://localhost/api/comments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: 'Hi', assignmentId: 'a1', problemId: 'p1' }),
     });
 
-    const res = await POST(req as unknown as Request);
+    const res = await POST(req);
     expect(res.status).toBe(401);
   });
 
@@ -60,13 +61,13 @@ describe('POST /api/comments', () => {
       },
     });
 
-    const req = new Request('http://localhost/api/comments', {
+    const req = new NextRequest('http://localhost/api/comments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: 'Hello', assignmentId: 'a1', problemId: 'p1' }),
     });
 
-    const res = await POST(req as unknown as Request);
+    const res = await POST(req);
     expect(res.status).toBe(201);
     expect(prismaMock.comment.create).toHaveBeenCalled();
     expect(activityLogMock).toHaveBeenCalled();
@@ -77,16 +78,18 @@ describe('DELETE /api/comments', () => {
   it('returns 401 when not authenticated', async () => {
     authMock.mockResolvedValue(null);
 
-    const req = new Request('http://localhost/api/comments?commentId=cm1', { method: 'DELETE' });
-    const res = await DELETE(req as unknown as Request);
+    const req = new NextRequest('http://localhost/api/comments?commentId=cm1', {
+      method: 'DELETE',
+    });
+    const res = await DELETE(req);
     expect(res.status).toBe(401);
   });
 
   it('returns 400 when commentId missing', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
 
-    const req = new Request('http://localhost/api/comments', { method: 'DELETE' });
-    const res = await DELETE(req as unknown as Request);
+    const req = new NextRequest('http://localhost/api/comments', { method: 'DELETE' });
+    const res = await DELETE(req);
     expect(res.status).toBe(400);
   });
 
@@ -101,8 +104,10 @@ describe('DELETE /api/comments', () => {
       assignment: { courseId: 'c1' },
     });
 
-    const req = new Request('http://localhost/api/comments?commentId=cm1', { method: 'DELETE' });
-    const res = await DELETE(req as unknown as Request);
+    const req = new NextRequest('http://localhost/api/comments?commentId=cm1', {
+      method: 'DELETE',
+    });
+    const res = await DELETE(req);
 
     expect(res.status).toBe(200);
     expect(prismaMock.comment.delete).toHaveBeenCalledWith({ where: { id: 'cm1' } });

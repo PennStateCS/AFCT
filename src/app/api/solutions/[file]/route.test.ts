@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { NextRequest } from 'next/server';
 
 const prismaMock = vi.hoisted(() => ({
   problem: {
@@ -22,7 +23,7 @@ beforeEach(() => {
 
 describe('GET /api/solutions/[file]', () => {
   it('returns 400 for invalid file param', async () => {
-    const res = await GET(new Request('http://localhost/api/solutions/..'), {
+    const res = await GET(new NextRequest('http://localhost/api/solutions/..'), {
       params: Promise.resolve({ file: '../secret.txt' }),
     });
 
@@ -32,7 +33,7 @@ describe('GET /api/solutions/[file]', () => {
   it('returns 401 when not authenticated', async () => {
     authMock.mockResolvedValue(null);
 
-    const res = await GET(new Request('http://localhost/api/solutions/file.txt'), {
+    const res = await GET(new NextRequest('http://localhost/api/solutions/file.txt'), {
       params: Promise.resolve({ file: 'file.txt' }),
     });
 
@@ -43,7 +44,7 @@ describe('GET /api/solutions/[file]', () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', role: 'FACULTY' } });
     prismaMock.problem.findFirst.mockResolvedValue(null);
 
-    const res = await GET(new Request('http://localhost/api/solutions/file.txt'), {
+    const res = await GET(new NextRequest('http://localhost/api/solutions/file.txt'), {
       params: Promise.resolve({ file: 'file.txt' }),
     });
 
@@ -58,7 +59,7 @@ describe('GET /api/solutions/[file]', () => {
       originalFileName: 'solution.txt',
     });
 
-    const res = await GET(new Request('http://localhost/api/solutions/file.txt'), {
+    const res = await GET(new NextRequest('http://localhost/api/solutions/file.txt'), {
       params: Promise.resolve({ file: 'file.txt' }),
     });
 
