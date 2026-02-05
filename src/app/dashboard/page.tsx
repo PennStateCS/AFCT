@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import DashboardClient from './DashboardClient';
 import { DueDateModule } from '@/components/modules/DueDateModule';
 import { JoinCourseModule } from '@/components/modules/JoinCourseModule';
+import { SubmissionsModule } from '@/components/modules/SubmissionsModule';
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -16,15 +17,16 @@ export default async function DashboardPage() {
   }
 
   // Get user's id
-  const { id } = session.user;
+  const { id, role } = session.user;
+  const showSubmissions = role === 'FACULTY' || role === 'TA';
 
   // Get all courses for the user via roster entries
   const rosterEntries = await prisma.roster.findMany({
-    where: { 
-        userId: id,
-        course: {
-            isArchived: false,
-        },
+    where: {
+      userId: id,
+      course: {
+        isArchived: false,
+      },
     },
     include: {
       course: {
@@ -74,7 +76,7 @@ export default async function DashboardPage() {
     <div className="flex h-full w-full flex-col lg:flex-row">
       {/* Left (Big Column) */}
       <div className="w-full lg:w-3/4">
-        <DashboardClient sessionUser={session.user} courses={courses} title={"Current Courses"}/>
+        <DashboardClient sessionUser={session.user} courses={courses} title={'Current Courses'} />
       </div>
 
       {/* Right (Skinny Column) */}
@@ -82,6 +84,11 @@ export default async function DashboardPage() {
         <div className="pb-4">
           <JoinCourseModule />
         </div>
+        {showSubmissions && (
+          <div className="pb-4">
+            <SubmissionsModule />
+          </div>
+        )}
         <div>
           <DueDateModule assignments={assignments} />
         </div>

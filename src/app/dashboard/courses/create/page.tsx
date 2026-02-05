@@ -32,7 +32,7 @@ export default function CreateCoursePage() {
       try {
         const res = await fetch('/api/users?role=FACULTY');
         const data = await res.json();
-        setFacultyList(data);
+        setFacultyList((Array.isArray(data) ? data : []).filter((user) => user.role === 'FACULTY'));
       } catch (err) {
         console.error('Failed to fetch faculty:', err);
       }
