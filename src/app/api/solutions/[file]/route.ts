@@ -41,7 +41,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ file
     // Read file into buffer and return as response
     const buffer = await fs.promises.readFile(filePath);
 
-    await createEnhancedActivityLog(prisma, null, {
+    await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'DOWNLOAD_SOLUTION_FILE',
       category: 'PROBLEM',
