@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
-import { toEndOfDayInTimezone } from '@/lib/date-utils';
+import { toDateTimeInTimezone } from '@/lib/date-utils';
 import type { Prisma } from '@prisma/client';
 
 // Local copy of registration code generator to match POST /api/courses behavior
@@ -110,8 +110,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           code,
           semester,
           credits: Number(credits) || 0,
-          startDate: toEndOfDayInTimezone(startDate, userTimezone),
-          endDate: toEndOfDayInTimezone(endDate, userTimezone),
+          startDate: toDateTimeInTimezone(startDate, userTimezone),
+          endDate: toDateTimeInTimezone(endDate, userTimezone),
           isPublished: false,
           isArchived: false,
           regCode,
