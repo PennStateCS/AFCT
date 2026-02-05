@@ -298,7 +298,9 @@ export default function GradesCard({ courseId }: { courseId: string }) {
           const avatar = row.original.avatar as string | null | undefined;
           const initials =
             `${String(row.original.firstName ?? '')?.[0] ?? ''}${String(row.original.lastName ?? '')?.[0] ?? ''}`.toUpperCase();
-          const avatarUrl = avatar ? `/uploads/pfps/${avatar}` : '/uploads/pfps/default-avatar.png';
+          const avatarUrl = avatar
+            ? `/api/uploads/pfps/${avatar}`
+            : '/api/uploads/pfps/default-avatar.png';
           return (
             <Avatar className="h-10 w-10">
               <AvatarImage

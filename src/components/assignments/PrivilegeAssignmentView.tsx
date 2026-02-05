@@ -20,10 +20,12 @@ import {
   Download,
 } from 'lucide-react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { useEffect, useState, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { AssociateProblemsDialog } from '@/components/dialogs/AssociateProblemsDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
+import { CreateProblemDialog } from '@/components/dialogs/CreateProblemDialog';
 import {
   Dialog,
   DialogContent,
@@ -70,6 +72,7 @@ type AssignmentWithDetails = {
 };
 
 export default function AssignmentDashboardPage() {
+  const { data: session } = useSession();
   const { timezone } = useEffectiveTimezone();
   const { id, aid } = useParams<{ id: string; aid: string }>();
   const searchParams = useSearchParams();
@@ -82,6 +85,7 @@ export default function AssignmentDashboardPage() {
   const [problemToRemove, setProblemToRemove] = useState<Problem | null>(null);
   const [editAssignmentOpen, setEditAssignmentOpen] = useState(false);
   const [addProblemDialogOpen, setAddProblemDialogOpen] = useState(false);
+  const [createProblemOpen, setCreateProblemOpen] = useState(false);
   const [editProblemDialogOpen, setEditProblemDialogOpen] = useState(false);
   const [problemToEdit, setProblemToEdit] = useState<Problem | null>(null);
   const [loading, setLoading] = useState(false);
@@ -89,6 +93,7 @@ export default function AssignmentDashboardPage() {
   const [descOpen, setDescOpen] = useState(false);
   const [descText, setDescText] = useState<string | null>(null);
   const courseIsArchived = assignment?.course?.isArchived ?? false;
+  const canManageProblems = ['ADMIN', 'FACULTY', 'TA'].includes(session?.user?.role ?? '');
 
   // JFLAP viewer dialog state
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -106,7 +111,7 @@ export default function AssignmentDashboardPage() {
       showToast.error('No file available to render');
       return;
     }
-    const src = `/uploads/problems/${encodeURIComponent(fileName)}`;
+    const src = `/api/solutions/${encodeURIComponent(fileName)}`;
     setViewerSrc(src);
     setViewerTitle(`${original || fileName} - ${problem.title}`);
     setViewerOpen(true);
@@ -127,15 +132,19 @@ export default function AssignmentDashboardPage() {
     [searchParams, router],
   );
 
-  useEffect(() => {
-    if (!id) return;
+  const fetchProblems = useCallback(() => {
+    if (!id) return Promise.resolve();
     setProblemsLoading(true);
-    fetch(`/api/courses/${id}/problems`)
+    return fetch(`/api/courses/${id}/problems`)
       .then((res) => res.json())
       .then((data) => setAllProblems(Array.isArray(data) ? data : []))
       .catch(() => setAllProblems([]))
       .finally(() => setProblemsLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    fetchProblems();
+  }, [fetchProblems]);
 
   useEffect(() => {
     if (!aid) return;
@@ -149,6 +158,7 @@ export default function AssignmentDashboardPage() {
 
   async function handleAddProblems(problemIds: string[]) {
     if (!id || !aid) return;
+    if (!canManageProblems) return;
     try {
       const res = await fetch(`/api/courses/${id}/${aid}/add-problems`, {
         method: 'POST',
@@ -192,6 +202,7 @@ export default function AssignmentDashboardPage() {
 
   const handleEditAssignment = () => setEditAssignmentOpen(true);
   const handleAddExistingProblem = () => setAddProblemDialogOpen(true);
+  const handleCreateProblem = () => setCreateProblemOpen(true);
   const handleEditProblem = (problem: Problem) => {
     const problemWithCourseId = {
       ...problem,
@@ -307,15 +318,26 @@ export default function AssignmentDashboardPage() {
                   <FileText className="h-6 w-6" />
                   Problems
                 </CardTitle>
-                <Button
-                  variant="default"
-                  aria-label="Add Existing Problem"
-                  onClick={handleAddExistingProblem}
-                  disabled={problemsLoading}
-                  hidden={courseIsArchived}
-                >
-                  Add Existing Problem
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    aria-label="Create Problem"
+                    onClick={handleCreateProblem}
+                    disabled={problemsLoading || !canManageProblems}
+                    hidden={courseIsArchived || !canManageProblems}
+                  >
+                    Create Problem
+                  </Button>
+                  <Button
+                    variant="default"
+                    aria-label="Add Existing Problem"
+                    onClick={handleAddExistingProblem}
+                    disabled={problemsLoading || !canManageProblems}
+                    hidden={courseIsArchived || !canManageProblems}
+                  >
+                    Add Existing Problem
+                  </Button>
+                </div>
               </div>
               <p className="text-muted-foreground mt-2 text-sm" hidden={courseIsArchived}>
                 This assignment is made up of the following problems. You can add an existing
@@ -390,7 +412,7 @@ export default function AssignmentDashboardPage() {
                     header: 'Answer File',
                     cell: ({ row }: { row: { original: Problem } }) => {
                       const fileUrl = row.original.fileName
-                        ? `/uploads/problems/${row.original.fileName}`
+                        ? `/api/solutions/${row.original.fileName}`
                         : null;
                       const fileName = row.original.originalFileName || 'Download';
                       return fileUrl ? (
@@ -531,7 +553,23 @@ export default function AssignmentDashboardPage() {
           description: ap.problem.description ?? undefined,
           type: typeof ap.problem.type === 'string' ? ap.problem.type : undefined,
         }))}
-        onAddProblems={handleAddProblems}
+        onAddProblems={(selectedProblemIds) => {
+          const existingIds = assignment.problems.map((ap: { problem: Problem }) => ap.problem.id);
+          const merged = Array.from(new Set([...existingIds, ...selectedProblemIds]));
+          handleAddProblems(merged);
+        }}
+      />
+      <CreateProblemDialog
+        open={createProblemOpen}
+        setOpen={setCreateProblemOpen}
+        courseId={id}
+        courseIsArchived={courseIsArchived}
+        onCreated={async (created) => {
+          await fetchProblems();
+          if (created?.id) {
+            await handleAddProblems([created.id]);
+          }
+        }}
       />
       <ConfirmDialog
         open={!!problemToRemove}

@@ -10,7 +10,7 @@ import { z } from 'zod';
 // Types
 interface Id {
   id: string;
-};
+}
 
 interface AssignmentProblemCount {
   _count: {
@@ -50,22 +50,22 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
     }
 
-  const problemIds: string[] = Array.isArray(body.problemIds) ? body.problemIds : [];
-  // parsed problemIds available
+    const problemIds: string[] = Array.isArray(body.problemIds) ? body.problemIds : [];
+    // parsed problemIds available
 
     // Validate that all problems exist and belong to the specified course
-    const validProblems = await prisma.problem.findMany({
+    const validProblems = (await prisma.problem.findMany({
       where: {
         id: { in: problemIds },
         courseId,
       },
       select: { id: true },
-    }) as Id[];
+    })) as Id[];
 
-    const validIds = validProblems.map((p: (typeof validProblems)[number]) => p.id );
+    const validIds = validProblems.map((p: (typeof validProblems)[number]) => p.id);
 
     // Get existing assignment-problem links
-    const existingLinks = await prisma.assignmentProblem.findMany({
+    const existingLinks = (await prisma.assignmentProblem.findMany({
       where: {
         assignmentId,
         assignment: {
@@ -79,31 +79,21 @@ export async function POST(
           },
         },
       },
-    }) as AssignmentProblemCount[];
+    })) as AssignmentProblemCount[];
 
-    // Separate links with and without submissions
-    const linksWithSubmissions = existingLinks.filter((link: (typeof existingLinks)[number]) => link._count.submissions > 0);
-    const linksWithoutSubmissions = existingLinks.filter((link: (typeof existingLinks)[number]) => link._count.submissions === 0);
-    const existingProblemIds = existingLinks.map((link: (typeof existingLinks)[number]) => link.problemId);
+    // Separate links with submissions (for reporting only)
+    const linksWithSubmissions = existingLinks.filter(
+      (link: (typeof existingLinks)[number]) => link._count.submissions > 0,
+    );
+    const existingProblemIds = existingLinks.map(
+      (link: (typeof existingLinks)[number]) => link.problemId,
+    );
 
-    // Only remove links that have no submissions
-    if (linksWithoutSubmissions.length > 0) {
-      await prisma.assignmentProblem.deleteMany({
-        where: {
-          assignmentId,
-          problemId: {
-            in: linksWithoutSubmissions.map(link => link.problemId),
-          },
-        },
-      });
-    }
-
-    // Keep existing problem IDs that have submissions
-    const protectedProblemIds = linksWithSubmissions.map((link: (typeof linksWithSubmissions)[number]) => link.problemId);
-    
     // Add new links for problems that aren't already linked
-    const newProblemIds = validIds.filter((id: string) => !existingProblemIds.includes(id)) as string[];
-    
+    const newProblemIds = validIds.filter(
+      (pid: string) => !existingProblemIds.includes(pid),
+    ) as string[];
+
     if (newProblemIds.length > 0) {
       await prisma.assignmentProblem.createMany({
         data: newProblemIds.map((pid: string) => ({
@@ -113,8 +103,8 @@ export async function POST(
       });
     }
 
-    // Final set includes protected problems + new problems
-    const finalProblemIds = [...protectedProblemIds, ...newProblemIds];
+    // Final set includes all existing problems + new problems
+    const finalProblemIds = [...existingProblemIds, ...newProblemIds];
 
     // Fetch the updated assignment with its problems
     const updated = await prisma.assignment.findUnique({
@@ -126,9 +116,9 @@ export async function POST(
       },
     });
 
-    const problems = updated?.problems.map(
-      (ap: NonNullable<typeof updated>['problems'][number]) => ap.problem,
-    ) || [];
+    const problems =
+      updated?.problems.map((ap: NonNullable<typeof updated>['problems'][number]) => ap.problem) ||
+      [];
 
     // Log the action to the ActivityLog
     try {
@@ -143,7 +133,9 @@ export async function POST(
           courseId: courseId,
           assignmentId: assignmentId,
           addedProblemIds: newProblemIds,
-          protectedProblemIds: protectedProblemIds,
+          protectedProblemIds: linksWithSubmissions.map(
+            (link: (typeof linksWithSubmissions)[number]) => link.problemId,
+          ),
           finalProblemIds: finalProblemIds,
           linksWithSubmissions: linksWithSubmissions.length,
         },
@@ -160,11 +152,12 @@ export async function POST(
       metadata: {
         totalProblems: problems.length,
         newProblemsAdded: newProblemIds.length,
-        protectedProblems: protectedProblemIds.length,
-        message: protectedProblemIds.length > 0 
-          ? `Added ${newProblemIds.length} new problems. ${protectedProblemIds.length} existing problems with submissions were preserved.`
-          : `Successfully updated assignment with ${finalProblemIds.length} problems.`
-      }
+        protectedProblems: linksWithSubmissions.length,
+        message:
+          linksWithSubmissions.length > 0
+            ? `Added ${newProblemIds.length} new problems. ${linksWithSubmissions.length} existing problems with submissions were preserved.`
+            : `Successfully updated assignment with ${finalProblemIds.length} problems.`,
+      },
     };
 
     return NextResponse.json(response);
