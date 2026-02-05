@@ -18,6 +18,7 @@ import {
   Package,
   Eye,
   Download,
+  Plus,
 } from 'lucide-react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
@@ -225,6 +226,7 @@ export default function AssignmentDashboardPage() {
           className="absolute top-6 right-6"
           hidden={courseIsArchived}
         >
+          <Pencil className="mr-2 h-4 w-4" />
           Edit Assignment
         </Button>
         <div>
@@ -320,12 +322,13 @@ export default function AssignmentDashboardPage() {
                 </CardTitle>
                 <div className="flex items-center gap-2">
                   <Button
-                    variant="secondary"
+                    variant="default"
                     aria-label="Create Problem"
                     onClick={handleCreateProblem}
                     disabled={problemsLoading || !canManageProblems}
                     hidden={courseIsArchived || !canManageProblems}
                   >
+                    <Plus />
                     Create Problem
                   </Button>
                   <Button
@@ -335,14 +338,19 @@ export default function AssignmentDashboardPage() {
                     disabled={problemsLoading || !canManageProblems}
                     hidden={courseIsArchived || !canManageProblems}
                   >
+                    <Plus />
                     Add Existing Problem
                   </Button>
                 </div>
               </div>
-              <p className="text-muted-foreground mt-2 text-sm" hidden={courseIsArchived}>
-                This assignment is made up of the following problems. You can add an existing
-                problem from this course by clicking on the <strong>Add Existing Problem</strong>{' '}
-                button in the upper right hand corner.
+              <p
+                className="text-muted-foreground mt-2 max-w-3xl text-sm text-balance"
+                hidden={courseIsArchived}
+              >
+                This assignment consists of the following problems. You may add an existing problem
+                from this course using the <strong>Add Existing Problem</strong> button in the
+                upper-right corner, or create a new problem using the{' '}
+                <strong>Create Problem</strong> button.
               </p>
             </CardHeader>
             <CardContent>
@@ -409,7 +417,7 @@ export default function AssignmentDashboardPage() {
                   },
                   {
                     id: 'answerFile',
-                    header: 'Answer File',
+                    header: 'Solution File',
                     cell: ({ row }: { row: { original: Problem } }) => {
                       const fileUrl = row.original.fileName
                         ? `/api/solutions/${row.original.fileName}`
@@ -425,18 +433,19 @@ export default function AssignmentDashboardPage() {
                             aria-label="Render file"
                           >
                             <Eye className="h-4 w-4" />
+                            <span>View</span>
                           </Button>
-                          <a
-                            href={fileUrl}
-                            download={fileName}
-                            className="inline-flex items-center gap-1 text-blue-600 underline hover:text-blue-800"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="Download file"
-                          >
-                            <Download className="h-4 w-4" aria-hidden="true" />
-                            <span>{fileName}</span>
-                          </a>
+                          <Button asChild variant="secondary" size="sm">
+                            <a
+                              href={fileUrl}
+                              download={fileName}
+                              title={`Download ${fileName}`}
+                              aria-label={`Download ${fileName}`}
+                            >
+                              <Download className="h-4 w-4" aria-hidden="true" />
+                              <span>Download</span>
+                            </a>
+                          </Button>
                         </div>
                       ) : (
                         <span className="text-muted-foreground">No file</span>
@@ -472,7 +481,20 @@ export default function AssignmentDashboardPage() {
                             onClick={() => openRenderViewer(row.original)}
                             className="flex items-center gap-2"
                           >
-                            <Eye className="mr-2 h-4 w-4" /> Render File
+                            <Eye className="mr-2 h-4 w-4" /> View File
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="flex items-center gap-2"
+                            disabled={!row.original.fileName}
+                            onClick={() => {
+                              const url = row.original.fileName
+                                ? `/api/solutions/${row.original.fileName}`
+                                : null;
+                              if (!url) return;
+                              window.open(url, '_blank', 'noopener,noreferrer');
+                            }}
+                          >
+                            <Download className="mr-2 h-4 w-4" /> Download File
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
