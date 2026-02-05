@@ -106,7 +106,7 @@ export const columns = (
     accessorFn: (row) => formatInstructorNames(row.enrolled as any[]),
     meta: { priority: 1 },
     enableSorting: true,
-    header: 'Instructor(s)',
+    header: 'Faculty',
     cell: ({ row }) => {
       const instructors = getInstructors(row.original.enrolled as any[]);
       if (!instructors || instructors.length === 0) {

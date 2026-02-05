@@ -258,24 +258,8 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
             )}
           />
 
-          {/* PUBLISH SWITCH */}
-          <div className="flex items-center justify-between">
-            <Label htmlFor="isPublished">Publish Now</Label>
-            <Controller
-              control={control}
-              name="isPublished"
-              render={({ field }) => (
-                <Switch
-                  id="isPublished"
-                  checked={!!field.value}
-                  onCheckedChange={(checked) => field.onChange(!!checked)}
-                />
-              )}
-            />
-          </div>
-
           <div>
-            <Label>Assign Instructor(s)</Label>
+            <Label className="pb-2">Assign Faculty</Label>
             <Controller
               control={control}
               name="instructorIds"
@@ -298,7 +282,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
                 });
 
                 return (
-                  <div className="mt-1">
+                  <div>
                     <DropdownMenu open={instructorMenuOpen} onOpenChange={setInstructorMenuOpen}>
                       <DropdownMenuTrigger asChild>
                         <Button
@@ -309,14 +293,14 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
                           <span
                             className={cn('truncate', !hasSelection && 'text-muted-foreground')}
                           >
-                            {selectedNames || 'Select instructor(s)'}
+                            {selectedNames || 'Select faculty'}
                           </span>
                           <ChevronDown className="text-muted-foreground h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent className="w-[var(--radix-dropdown-menu-trigger-width)] p-2">
                         <Input
-                          placeholder="Search instructors..."
+                          placeholder="Search faculty..."
                           value={instructorSearch}
                           onChange={(e) => setInstructorSearch(e.target.value)}
                           onKeyDown={(e) => e.stopPropagation()}
@@ -325,7 +309,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
                         <div className="max-h-64 overflow-auto rounded border">
                           {filteredFaculty.length === 0 ? (
                             <div className="text-muted-foreground p-3 text-center text-sm">
-                              No instructors found.
+                              No faculty found.
                             </div>
                           ) : (
                             filteredFaculty.map((faculty) => {
@@ -362,6 +346,22 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
                   </div>
                 );
               }}
+            />
+          </div>
+
+          {/* PUBLISH SWITCH */}
+          <div className="flex items-center justify-between">
+            <Label htmlFor="isPublished">Publish Now</Label>
+            <Controller
+              control={control}
+              name="isPublished"
+              render={({ field }) => (
+                <Switch
+                  id="isPublished"
+                  checked={!!field.value}
+                  onCheckedChange={(checked) => field.onChange(!!checked)}
+                />
+              )}
             />
           </div>
 

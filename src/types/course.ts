@@ -10,7 +10,7 @@ export type FullCourse = Course & {
   enrolled?: (User & { courseRole?: string; hasSubmissions?: boolean })[];
   assignments: AssignmentWithProblemCount[];
   problems: Problem[];
-  // viewer's role in this course (INSTRUCTOR | FACULTY | TA | STUDENT) or null
+  // viewer's role in this course (ADMIN | FACULTY | TA | STUDENT) or null
   viewerRole?: string | null;
   // viewer's global default role (ADMIN | FACULTY | TA | STUDENT) or null
   viewerDefaultRole?: string | null;

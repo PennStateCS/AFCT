@@ -10,19 +10,30 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Course } from '@prisma/client';
-import { useEffect, useMemo } from 'react';
+import { Course, User } from '@prisma/client';
+import { useEffect, useMemo, useState } from 'react';
 import InputGroup from '@/components/ui/InputGroup';
 import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+} from '@/components/ui/dropdown-menu';
 
 import { useForm, Controller } from 'react-hook-form';
 import { showToast } from '@/lib/toast';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CourseFormSchema } from '@/schemas/course';
+import { ChevronDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import { getInstructors, EnrolledUser } from '@/lib/course-utils';
 
 type EditCourseDialogProps = {
-  course: Course;
+  course: Course & { enrolled?: EnrolledUser[] };
   open: boolean;
   setOpen: (open: boolean) => void;
   onSave?: (updatedCourse: Partial<Course>) => void;
@@ -70,6 +81,7 @@ export function EditCourseDialog({
       endDate: toDateTimeLocalInTimeZone(course.endDate, timeZone),
       isPublished: course.isPublished ?? false,
       isArchived: course.isArchived ?? false,
+      instructorIds: getInstructors(course.enrolled).map((u) => u.id),
     }),
     [course, timeZone],
   );
@@ -89,6 +101,24 @@ export function EditCourseDialog({
 
   // Keep min (end) in sync with start
   const startDateStr = watch('startDate');
+
+  const [instructorSearch, setInstructorSearch] = useState('');
+  const [instructorMenuOpen, setInstructorMenuOpen] = useState(false);
+  const [facultyList, setFacultyList] = useState<User[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      try {
+        const res = await fetch('/api/users?role=FACULTY');
+        if (!res.ok) throw new Error('Failed to load faculty');
+        const data = await res.json();
+        setFacultyList(data);
+      } catch {
+        toast.error('Failed to load faculty list.');
+      }
+    })();
+  }, [open]);
 
   // Reset to current course when opened; also clear on close from outside
   useEffect(() => {
@@ -271,6 +301,97 @@ export function EditCourseDialog({
               />
             )}
           />
+
+          <div>
+            <Label className="pb-2">Assign Faculty</Label>
+            <Controller
+              control={control}
+              name="instructorIds"
+              render={({ field }) => {
+                const selectedIds = field.value ?? [];
+                const selectedNames = facultyList
+                  .filter((f) => selectedIds.includes(f.id))
+                  .map((f) => `${f.firstName} ${f.lastName}`.trim())
+                  .filter(Boolean)
+                  .join(', ');
+                const hasSelection = selectedNames.length > 0;
+
+                const filteredFaculty = facultyList.filter((faculty) => {
+                  const q = instructorSearch.toLowerCase();
+                  if (!q) return true;
+                  return (
+                    (faculty.firstName ?? '').toLowerCase().includes(q) ||
+                    (faculty.lastName ?? '').toLowerCase().includes(q)
+                  );
+                });
+
+                return (
+                  <div>
+                    <DropdownMenu open={instructorMenuOpen} onOpenChange={setInstructorMenuOpen}>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="border-input h-9 w-full justify-between bg-transparent px-3 py-1 text-sm shadow-xs"
+                        >
+                          <span
+                            className={cn('truncate', !hasSelection && 'text-muted-foreground')}
+                          >
+                            {selectedNames || 'Select faculty'}
+                          </span>
+                          <ChevronDown className="text-muted-foreground h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="w-[var(--radix-dropdown-menu-trigger-width)] p-2">
+                        <Input
+                          placeholder="Search faculty..."
+                          value={instructorSearch}
+                          onChange={(e) => setInstructorSearch(e.target.value)}
+                          onKeyDown={(e) => e.stopPropagation()}
+                          className="mb-2"
+                        />
+                        <div className="max-h-64 overflow-auto rounded border">
+                          {filteredFaculty.length === 0 ? (
+                            <div className="text-muted-foreground p-3 text-center text-sm">
+                              No faculty found.
+                            </div>
+                          ) : (
+                            filteredFaculty.map((faculty) => {
+                              const checked = selectedIds.includes(faculty.id);
+                              return (
+                                <label
+                                  key={faculty.id}
+                                  className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 px-3 py-2 text-sm"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => {
+                                      const set = new Set(selectedIds);
+                                      if (set.has(faculty.id)) set.delete(faculty.id);
+                                      else set.add(faculty.id);
+                                      field.onChange(Array.from(set));
+                                    }}
+                                  />
+                                  <span>
+                                    {faculty.firstName} {faculty.lastName}
+                                  </span>
+                                </label>
+                              );
+                            })
+                          )}
+                        </div>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    {errors.instructorIds ? (
+                      <p className="mt-1 text-xs text-red-600">{errors.instructorIds.message}</p>
+                    ) : null}
+                  </div>
+                );
+              }}
+            />
+          </div>
 
           {/* PUBLISH STATUS TOGGLE */}
           <Controller

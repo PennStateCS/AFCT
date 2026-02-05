@@ -46,7 +46,7 @@ function ActionsCell({
 
   // Treat site ADMIN as having course management privileges
   const isSiteAdmin = viewerDefaultRole === 'ADMIN';
-  const isCourseAdmin = currentCourseRole === 'INSTRUCTOR' || isSiteAdmin;
+  const isCourseAdmin = currentCourseRole === 'ADMIN' || isSiteAdmin;
 
   const handleDelete = async () => {
     try {
@@ -93,10 +93,10 @@ function ActionsCell({
     // Site admin can remove anyone
     if (isSiteAdmin) return true;
     if (!viewer) return false;
-    // Instructors can remove anyone except other instructors
-    if (viewer === 'INSTRUCTOR') return target !== 'INSTRUCTOR';
-    // Faculty can remove anyone except instructors and other faculty
-    if (viewer === 'FACULTY') return target !== 'INSTRUCTOR' && target !== 'FACULTY';
+    // Course admins can remove anyone except other course admins
+    if (viewer === 'ADMIN') return target !== 'ADMIN';
+    // Faculty can remove anyone except course admins and other faculty
+    if (viewer === 'FACULTY') return target !== 'ADMIN' && target !== 'FACULTY';
     return false;
   };
 
@@ -108,7 +108,7 @@ function ActionsCell({
 
   const deleteDescription = viewerCanDelete
     ? `This will remove the user from the roster for this course. This action cannot be undone.`
-    : 'Contact the instructor to remove this user.';
+    : 'Contact the course admin to remove this user.';
   // compute UI flags used in JSX
   const removeDisabled = courseIsArchived || hasSubmissions || !viewerCanDelete;
   const removeTitle = courseIsArchived
@@ -123,7 +123,7 @@ function ActionsCell({
     <div className="flex items-center gap-2">
       <EditUserDialog user={user} open={open} setOpen={setOpen} onSave={handleSave} />
 
-      {/* Edit button: visible to instructors or site ADMINs */}
+      {/* Edit button: visible to course admins or site ADMINs */}
       {isCourseAdmin && (
         <Button
           variant="secondary"
@@ -136,7 +136,7 @@ function ActionsCell({
         </Button>
       )}
 
-      {/* Inline delete button for Faculty only (Manage dropdown provides remove action for instructors) */}
+      {/* Inline delete button for Faculty only (Manage dropdown provides remove action for course admins) */}
       {currentCourseRole === 'FACULTY' && (
         <Button
           variant="destructive"
@@ -214,7 +214,7 @@ export const userColumns = (
   const currentCourseRole = viewerRole ?? null;
   const isSiteAdmin = viewerDefaultRole === 'ADMIN';
   const viewerHasActions =
-    isSiteAdmin || currentCourseRole === 'INSTRUCTOR' || currentCourseRole === 'FACULTY';
+    isSiteAdmin || currentCourseRole === 'ADMIN' || currentCourseRole === 'FACULTY';
 
   const cols: ColumnDef<User>[] = [
     {
