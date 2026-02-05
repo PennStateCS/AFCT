@@ -35,6 +35,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -49,7 +50,8 @@ jobs:
         continue-on-error: true
 
       - name: Retry build and push on failure
-        if: failure()
+        id: retry
+        if: steps.build.outcome == 'failure'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -59,6 +61,12 @@ jobs:
           tags: |
             ghcr.io/pennstatewilkes-barre/afct-dashboard:main
             ghcr.io/pennstatewilkes-barre/afct-dashboard:sha-${{ github.sha }}
+
+      - name: Fail if build did not succeed
+        if: steps.build.outcome == 'failure' && steps.retry.outcome == 'failure'
+        run: |
+          echo "Build failed in both attempts."
+          exit 1
 
       - name: Move cache
         run: |
