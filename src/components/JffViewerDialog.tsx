@@ -5,7 +5,16 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Grid, Waypoints, Download, ImageDown, Copy, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import {
+  Grid,
+  Waypoints,
+  Download,
+  ImageDown,
+  Copy,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+} from 'lucide-react';
 
 /* ───────────────────────────── Types & consts ───────────────────────────── */
 
@@ -13,28 +22,41 @@ type MachineType = 'fa' | 'pda' | 'tm' | 'unknown';
 
 type Parsed = {
   type: MachineType;
-  states: { id: string; name: string; xPos: number, yPos: number, initial: boolean; final: boolean }[];
+  states: {
+    id: string;
+    name: string;
+    xPos: number;
+    yPos: number;
+    initial: boolean;
+    final: boolean;
+  }[];
   transitions: Array<{
     from: string;
     to: string;
     read?: string;
     write?: string; // TM
-    move?: string;  // TM (L/R/S)
-    pop?: string;   // PDA
-    push?: string;  // PDA
-    __idx: number;  // original XML order
+    move?: string; // TM (L/R/S)
+    pop?: string; // PDA
+    push?: string; // PDA
+    __idx: number; // original XML order
   }>;
 };
 
-const NODE_FILL = typeof window !== 'undefined'
-  ? (getComputedStyle(document.documentElement).getPropertyValue('--node-color').trim() || '#38bdf8')
-  : '#38bdf8';
-const STROKE = typeof window !== 'undefined'
-  ? (getComputedStyle(document.documentElement).getPropertyValue('--foreground').trim() || '#0f172a')
-  : '#0f172a';
-const TEXT_COLOR = typeof window !== 'undefined'
-  ? (getComputedStyle(document.documentElement).getPropertyValue('--foreground').trim() || '#0f172a')
-  : '#0f172a';
+const NODE_FILL =
+  typeof window !== 'undefined'
+    ? getComputedStyle(document.documentElement).getPropertyValue('--node-color').trim() ||
+      '#38bdf8'
+    : '#38bdf8';
+const STROKE =
+  typeof window !== 'undefined'
+    ? getComputedStyle(document.documentElement).getPropertyValue('--foreground').trim() ||
+      '#0f172a'
+    : '#0f172a';
+const TEXT_COLOR =
+  typeof window !== 'undefined'
+    ? getComputedStyle(document.documentElement).getPropertyValue('--foreground').trim() ||
+      '#0f172a'
+    : '#0f172a';
 const EDGE_WIDTH = 1.6;
 const DEFAULT_EPS = 'λ';
 
@@ -54,7 +76,12 @@ function parseJflap(xmlText: string): Parsed {
   let type: MachineType = 'unknown';
   if (rawType.includes('pda')) type = 'pda';
   else if (rawType.includes('turing') || rawType.includes('tm')) type = 'tm';
-  else if (rawType.includes('fa') || rawType.includes('finite') || rawType.includes('dfa') || rawType.includes('nfa'))
+  else if (
+    rawType.includes('fa') ||
+    rawType.includes('finite') ||
+    rawType.includes('dfa') ||
+    rawType.includes('nfa')
+  )
     type = 'fa';
 
   const states = Array.from(automaton.querySelectorAll('state')).map((s, i) => {
@@ -87,7 +114,7 @@ function labelFor(t: Parsed['transitions'][number], type: MachineType, eps: stri
   switch (type) {
     case 'pda': {
       const read = t.read || eps;
-      const pop  = t.pop  || eps;
+      const pop = t.pop || eps;
       const push = t.push || eps;
       return `${read} , ${pop} ; ${push}`;
     }
@@ -106,16 +133,23 @@ function labelFor(t: Parsed['transitions'][number], type: MachineType, eps: stri
 function wrapLines(lines: string[], maxLen = 26): string[] {
   const out: string[] = [];
   for (const line of lines) {
-    if (line.length <= maxLen) { out.push(line); continue; }
+    if (line.length <= maxLen) {
+      out.push(line);
+      continue;
+    }
     let s = line.trim();
     while (s.length > maxLen) {
       const slice = s.slice(0, maxLen + 8);
       const idx =
-        slice.lastIndexOf(' ') >= 14 ? slice.lastIndexOf(' ') :
-        slice.lastIndexOf(',') >= 14 ? slice.lastIndexOf(',') :
-        slice.lastIndexOf(';') >= 14 ? slice.lastIndexOf(';') :
-        slice.lastIndexOf('|') >= 14 ? slice.lastIndexOf('|') :
-        maxLen;
+        slice.lastIndexOf(' ') >= 14
+          ? slice.lastIndexOf(' ')
+          : slice.lastIndexOf(',') >= 14
+            ? slice.lastIndexOf(',')
+            : slice.lastIndexOf(';') >= 14
+              ? slice.lastIndexOf(';')
+              : slice.lastIndexOf('|') >= 14
+                ? slice.lastIndexOf('|')
+                : maxLen;
       out.push(s.slice(0, idx).trim());
       s = s.slice(idx).replace(/^[\s,;|]+/, '');
     }
@@ -129,7 +163,7 @@ function bundleEdges(
   type: MachineType,
   eps: string,
   wrap = true,
-  maxLen = 26
+  maxLen = 26,
 ): Array<{ from: string; to: string; label: string }> {
   const map = new Map<string, { idx: number; text: string }[]>();
   for (const tr of transitions) {
@@ -143,7 +177,7 @@ function bundleEdges(
     // JFLAP shows later-entered transitions first
     items.sort((a, b) => b.idx - a.idx);
     const [from, to] = key.split('→');
-    const lines = items.map(i => i.text);
+    const lines = items.map((i) => i.text);
     const finalLines = wrap ? wrapLines(lines, maxLen) : lines;
     return { from, to, label: finalLines.join('\n') };
   });
@@ -222,7 +256,13 @@ function debounce(fn: () => void, ms: number) {
 }
 
 export function JffCytoscapeViewer({
-  src, title, height = '72vh', epsSymbol = DEFAULT_EPS, darkMode = false, showGridDefault = false, honorPositionsDefault = false,
+  src,
+  title,
+  height = '72vh',
+  epsSymbol = DEFAULT_EPS,
+  darkMode = false,
+  showGridDefault = false,
+  honorPositionsDefault = false,
 }: {
   src: string;
   title?: string;
@@ -243,7 +283,12 @@ export function JffCytoscapeViewer({
   //
 
   const backgroundStyle: React.CSSProperties = grid
-    ? { backgroundImage: 'linear-gradient(#e5e7eb 1px, transparent 1px), linear-gradient(90deg, #e5e7eb 1px, transparent 1px)', backgroundSize: '24px 24px', backgroundPosition: 'center center' }
+    ? {
+        backgroundImage:
+          'linear-gradient(#e5e7eb 1px, transparent 1px), linear-gradient(90deg, #e5e7eb 1px, transparent 1px)',
+        backgroundSize: '24px 24px',
+        backgroundPosition: 'center center',
+      }
     : {};
 
   // Customization variables
@@ -256,94 +301,99 @@ export function JffCytoscapeViewer({
   // Utility: Reposition start nodes for !honorPositions
   function repositionStartNodes(cy: any) {
     // For each initial node, ensure a start node and edge exist, and position the start node
-    cy.nodes().filter((n: any) => n.data('initial')).forEach((node: any, idx: number) => {
-      const nodePos = node.position();
-      const directions = Array.from({ length: 8 }, (_, i) => i * (Math.PI / 4)); // 0, 45, ..., 315 deg
-      const radius = 1.5 * NODE_DIAMETER;
+    cy.nodes()
+      .filter((n: any) => n.data('initial'))
+      .forEach((node: any, idx: number) => {
+        const nodePos = node.position();
+        const directions = Array.from({ length: 8 }, (_, i) => i * (Math.PI / 4)); // 0, 45, ..., 315 deg
+        const radius = 1.5 * NODE_DIAMETER;
 
-      // Exclude both the current node and its corresponding start node from the calculation
-      const startNodeId = `__start${idx}`;
-      const otherNodes = cy.nodes().filter((n2: any) => n2.id() !== node.id() && n2.id() !== startNodeId);
-      const otherNodePositions = otherNodes.map((n2: any) => n2.position());
+        // Exclude both the current node and its corresponding start node from the calculation
+        const startNodeId = `__start${idx}`;
+        const otherNodes = cy
+          .nodes()
+          .filter((n2: any) => n2.id() !== node.id() && n2.id() !== startNodeId);
+        const otherNodePositions = otherNodes.map((n2: any) => n2.position());
 
-      // Gather incoming edge angles
-      const incomingEdges = node.incomers('edge');
-      const incomingAngles = incomingEdges.map((e: any) => {
-        const src = e.source().position();
-        return Math.atan2(nodePos.y - src.y, nodePos.x - src.x);
-      });
-
-      // For each direction, compute a clutter score
-      const scores = directions.map((angle) => {
-        // Position where start node would be placed
-        const testX = nodePos.x + Math.cos(angle) * radius;
-        const testY = nodePos.y + Math.sin(angle) * radius;
-
-        // Score: sum of inverse distances to other nodes (closer = higher score)
-        let score = 0;
-        for (const pos of otherNodePositions) {
-          const dx = testX - pos.x;
-          const dy = testY - pos.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < NODE_DIAMETER * 1.1) score += 1000; // heavy penalty for overlap
-          else score += 1 / dist;
-        }
-
-        // Penalty for being close to incoming edge directions
-        for (const edgeAngle of incomingAngles) {
-          let diff = Math.abs(angle - edgeAngle);
-          if (diff > Math.PI) diff = 2 * Math.PI - diff;
-          if (diff < Math.PI / 6) score += 10; // penalty for being within 30deg of an incoming edge
-        }
-        return score;
-      });
-
-      // Find the direction with the lowest score
-      let bestIdx = 0;
-      let bestScore = scores[0];
-      for (let i = 1; i < scores.length; ++i) {
-        if (scores[i] < bestScore) {
-          bestScore = scores[i];
-          bestIdx = i;
-        }
-      }
-
-      // Apply best angle
-      const bestAngle = directions[bestIdx];
-      const pos = {
-        x: nodePos.x + Math.cos(bestAngle) * radius,
-        y: nodePos.y + Math.sin(bestAngle) * radius,
-      };
-      
-      let startNode = cy.getElementById(`__start${idx}`);
-      if (!startNode || startNode.empty()) {
-        // Create the start node if it doesn't exist
-        cy.add({
-          group: 'nodes',
-          data: { id: `__start${idx}` },
-          position: pos,
-          classes: 'start',
+        // Gather incoming edge angles
+        const incomingEdges = node.incomers('edge');
+        const incomingAngles = incomingEdges.map((e: any) => {
+          const src = e.source().position();
+          return Math.atan2(nodePos.y - src.y, nodePos.x - src.x);
         });
-        startNode = cy.getElementById(`__start${idx}`);
-      } else {
-        startNode.position(pos);
-      }
-      // Ensure the start edge exists
-      const startEdgeId = `__startEdge${idx}`;
-      const startEdge = cy.getElementById(startEdgeId);
-      if (!startEdge || startEdge.empty()) {
-        cy.add({
-          group: 'edges',
-          data: {
-            id: startEdgeId,
-            source: `__start${idx}`,
-            target: node.id(),
-            label: '',
-          },
-          classes: 'startEdge',
+
+        // For each direction, compute a clutter score
+        const scores = directions.map((angle) => {
+          // Position where start node would be placed
+          const testX = nodePos.x + Math.cos(angle) * radius;
+          const testY = nodePos.y + Math.sin(angle) * radius;
+
+          // Score: sum of inverse distances to other nodes (closer = higher score)
+          let score = 0;
+          for (const pos of otherNodePositions) {
+            const dx = testX - pos.x;
+            const dy = testY - pos.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < NODE_DIAMETER * 1.1)
+              score += 1000; // heavy penalty for overlap
+            else score += 1 / dist;
+          }
+
+          // Penalty for being close to incoming edge directions
+          for (const edgeAngle of incomingAngles) {
+            let diff = Math.abs(angle - edgeAngle);
+            if (diff > Math.PI) diff = 2 * Math.PI - diff;
+            if (diff < Math.PI / 6) score += 10; // penalty for being within 30deg of an incoming edge
+          }
+          return score;
         });
-      }
-    });
+
+        // Find the direction with the lowest score
+        let bestIdx = 0;
+        let bestScore = scores[0];
+        for (let i = 1; i < scores.length; ++i) {
+          if (scores[i] < bestScore) {
+            bestScore = scores[i];
+            bestIdx = i;
+          }
+        }
+
+        // Apply best angle
+        const bestAngle = directions[bestIdx];
+        const pos = {
+          x: nodePos.x + Math.cos(bestAngle) * radius,
+          y: nodePos.y + Math.sin(bestAngle) * radius,
+        };
+
+        let startNode = cy.getElementById(`__start${idx}`);
+        if (!startNode || startNode.empty()) {
+          // Create the start node if it doesn't exist
+          cy.add({
+            group: 'nodes',
+            data: { id: `__start${idx}` },
+            position: pos,
+            classes: 'start',
+          });
+          startNode = cy.getElementById(`__start${idx}`);
+        } else {
+          startNode.position(pos);
+        }
+        // Ensure the start edge exists
+        const startEdgeId = `__startEdge${idx}`;
+        const startEdge = cy.getElementById(startEdgeId);
+        if (!startEdge || startEdge.empty()) {
+          cy.add({
+            group: 'edges',
+            data: {
+              id: startEdgeId,
+              source: `__start${idx}`,
+              target: node.id(),
+              label: '',
+            },
+            classes: 'startEdge',
+          });
+        }
+      });
   }
 
   const load = useMemo(
@@ -382,19 +432,22 @@ export function JffCytoscapeViewer({
                 'background-color': NODE_FILL,
                 'border-color': STROKE,
                 'border-width': 2,
-                'label': 'data(label)',
+                label: 'data(label)',
                 'font-family': 'Inter, ui-sans-serif, system-ui',
                 'font-size': 16,
-                'color': TEXT_COLOR,
+                color: TEXT_COLOR,
                 'text-valign': 'center',
                 'text-halign': 'center',
-                'width': 58,
-                'height': 58,
-                'shape': 'ellipse',
-              }
+                width: 58,
+                height: 58,
+                shape: 'ellipse',
+              },
             },
             { selector: 'node.final', style: { 'border-width': 6 } },
-            { selector: 'node.start', style: { 'width': 4, 'height': 4, 'background-opacity': 0, 'border-opacity': 0 } },
+            {
+              selector: 'node.start',
+              style: { width: 4, height: 4, 'background-opacity': 0, 'border-opacity': 0 },
+            },
 
             /* edges (default) */
             {
@@ -402,21 +455,21 @@ export function JffCytoscapeViewer({
               style: {
                 'curve-style': 'bezier',
                 'line-color': STROKE,
-                'width': EDGE_WIDTH,
+                width: EDGE_WIDTH,
                 'target-arrow-color': STROKE,
                 'source-arrow-color': STROKE,
                 'source-arrow-shape': 'none',
                 'target-arrow-shape': 'triangle',
                 'arrow-scale': 1.1,
-                'label': 'data(label)',
+                label: 'data(label)',
                 'font-family': 'Inter, ui-sans-serif, system-ui',
                 'font-size': 16,
                 'min-zoomed-font-size': 7,
-                'color': TEXT_COLOR,
+                color: TEXT_COLOR,
                 'text-wrap': 'wrap',
                 'text-max-width': 140,
                 'text-rotation': 'autorotate',
-              }
+              },
             },
             /* self-loops on TOP with arrow at start */
             {
@@ -431,7 +484,7 @@ export function JffCytoscapeViewer({
                 'arrow-scale': 0.95,
                 'line-cap': 'round',
                 'text-rotation': 'none',
-              }
+              },
             },
 
             /* initial arrow from hidden start node - make it only node diameter away */
@@ -443,13 +496,13 @@ export function JffCytoscapeViewer({
                 'target-arrow-color': STROKE,
                 'target-arrow-shape': 'triangle',
                 'arrow-scale': 1.1,
-                'width': EDGE_WIDTH,
-                'label': '',
+                width: EDGE_WIDTH,
+                label: '',
                 'source-endpoint': 'outside-to-node',
                 'target-endpoint': 'outside-to-node',
                 'segment-distances': 58, // node diameter
                 'segment-weights': 1,
-              }
+              },
             },
 
             /* interaction */
@@ -461,9 +514,9 @@ export function JffCytoscapeViewer({
                 'source-arrow-color': '#2563eb',
                 'border-color': '#2563eb',
                 'background-color': darkMode ? '#0b1220' : NODE_FILL,
-              }
+              },
             },
-            { selector: '.faded', style: { 'opacity': 0.25 } },
+            { selector: '.faded', style: { opacity: 0.25 } },
           ],
           layout: { name: 'preset' },
         });
@@ -503,19 +556,20 @@ export function JffCytoscapeViewer({
               'text-rotation': 'none',
               'text-margin-y': -12,
             });
-          }
-        )};
+          });
+        }
 
         // Function to fit and resize frame
-        async function fitAndResize(){
+        async function fitAndResize() {
           if (!cyRef.current) return;
 
           const cy = cyRef.current;
           try {
             cy.resize();
-            const elkAspectRatio = (!containerRef.current?.clientWidth || !containerRef.current?.clientHeight)
-              ? '1.6f'
-              : `${containerRef.current.clientWidth / containerRef.current.clientHeight}f`;
+            const elkAspectRatio =
+              !containerRef.current?.clientWidth || !containerRef.current?.clientHeight
+                ? '1.6f'
+                : `${containerRef.current.clientWidth / containerRef.current.clientHeight}f`;
             let layoutOptions;
             if (!honorPositions) {
               layoutOptions = {
@@ -525,20 +579,22 @@ export function JffCytoscapeViewer({
                   algorithm: 'force',
                   'elk.aspectRatio': elkAspectRatio,
                   'elk.spacing.nodeNode': '50',
-                }
+                },
               };
             } else {
               layoutOptions = {
                 name: 'preset',
-                positions: undefined
+                positions: undefined,
               };
             }
 
             // Load the new layout properly based on the layout option
-            if (layoutOptions.name === 'preset') { // honorPositions
+            if (layoutOptions.name === 'preset') {
+              // honorPositions
               cy.layout(layoutOptions).run();
             } else {
-              await new Promise(resolve => { // !honorPositions
+              await new Promise((resolve) => {
+                // !honorPositions
                 const layout = cy.layout(layoutOptions);
                 layout.run();
                 layout.on('layoutstop', resolve);
@@ -554,7 +610,10 @@ export function JffCytoscapeViewer({
             if (nodes.length === 0) return;
 
             // Calculate fit zoom (preserve previous logic for zoom, but use cy.center for center)
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            let minX = Infinity,
+              minY = Infinity,
+              maxX = -Infinity,
+              maxY = -Infinity;
             nodes.forEach((n: any) => {
               const pos = n.position();
               if (pos.x < minX) minX = pos.x;
@@ -577,10 +636,7 @@ export function JffCytoscapeViewer({
 
             // Use cy.center(cy.nodes()) to get the center position
             const center = cy.center(cy.nodes());
-            cy.animate(
-              { zoom: fitZoom, center },
-              { duration: 120 }
-            );
+            cy.animate({ zoom: fitZoom, center }, { duration: 120 });
           } catch {}
         }
 
@@ -593,7 +649,9 @@ export function JffCytoscapeViewer({
 
         // Expose fitAndResize for Fit button and initial layout
         onResizeRef.current = fitAndResize;
-        setTimeout(() => { onResizeRef.current?.(); }, 0);
+        setTimeout(() => {
+          onResizeRef.current?.();
+        }, 0);
 
         // keep size/zoom coherent if dialog resizes
         const debouncedFitAndResize = debounce(fitAndResize, 160);
@@ -615,7 +673,9 @@ export function JffCytoscapeViewer({
             return;
           }
           const ele = evt.target;
-          const neighborhood = ele.closedNeighborhood ? ele.closedNeighborhood() : ele.neighborhood();
+          const neighborhood = ele.closedNeighborhood
+            ? ele.closedNeighborhood()
+            : ele.neighborhood();
           cy.elements().addClass('faded');
           neighborhood.addClass('highlighted').removeClass('faded');
         });
@@ -642,7 +702,9 @@ export function JffCytoscapeViewer({
                 const directions = Array.from({ length: 8 }, (_, i) => i * (Math.PI / 4));
                 const radius = 1.5 * 58; // NODE_DIAMETER
                 const startNodeId = `__start${idx}`;
-                const otherNodes = cy.nodes().filter((n2: any) => n2.id() !== node.id() && n2.id() !== startNodeId);
+                const otherNodes = cy
+                  .nodes()
+                  .filter((n2: any) => n2.id() !== node.id() && n2.id() !== startNodeId);
                 const otherNodePositions = otherNodes.map((n2: any) => n2.position());
                 const incomingEdges = node.incomers('edge');
                 const incomingAngles = incomingEdges.map((e: any) => {
@@ -693,7 +755,7 @@ export function JffCytoscapeViewer({
         setError(e?.message || 'Failed to render .jff');
       }
     },
-    [src, epsSymbol, darkMode, honorPositions]
+    [src, epsSymbol, darkMode, honorPositions],
   );
 
   useEffect(() => {
@@ -710,25 +772,25 @@ export function JffCytoscapeViewer({
 
   /* ── zoom helpers (animated, keep center fixed) ─────────────────────── */
   const animatedZoomTo = (level: number) => {
-    const cy = cyRef.current; if (!cy) return;
+    const cy = cyRef.current;
+    if (!cy) return;
     const min = typeof cy.minZoom === 'function' ? cy.minZoom() : 0.2;
     const max = typeof cy.maxZoom === 'function' ? cy.maxZoom() : 6;
     const next = Math.max(min, Math.min(max, level));
     // Use cy.center(cy.nodes()) to get the center position
     const center = cy.center(cy.nodes());
-    cy.animate(
-      { zoom: next, center },
-      { duration: 120, easing: 'ease-in-out' }
-    );
+    cy.animate({ zoom: next, center }, { duration: 120, easing: 'ease-in-out' });
   };
 
   const zoomIn = () => {
-    const cy = cyRef.current; if (!cy) return;
+    const cy = cyRef.current;
+    if (!cy) return;
     animatedZoomTo(cy.zoom() * 1.2);
   };
 
   const zoomOut = () => {
-    const cy = cyRef.current; if (!cy) return;
+    const cy = cyRef.current;
+    if (!cy) return;
     animatedZoomTo(cy.zoom() / 1.2);
   };
 
@@ -753,7 +815,8 @@ export function JffCytoscapeViewer({
       const dataUrl: string = cyRef.current.png({ scale: 2, full: true, bg: null });
       const res = await fetch(dataUrl);
       const blob = await res.blob();
-      const ClipboardItemCtor: any = (globalThis as any).ClipboardItem || (window as any).ClipboardItem;
+      const ClipboardItemCtor: any =
+        (globalThis as any).ClipboardItem || (window as any).ClipboardItem;
       if (ClipboardItemCtor && navigator.clipboard && (navigator.clipboard as any).write) {
         const item = new ClipboardItemCtor({ [blob.type]: blob });
         await (navigator.clipboard as any).write([item]);
@@ -765,32 +828,54 @@ export function JffCytoscapeViewer({
     }
   };
 
-
-
   const TypeBadge = ({ t }: { t: MachineType }) => {
     const label =
-      t === 'fa' ? 'Finite Automaton' : t === 'pda' ? 'Pushdown Automaton' : t === 'tm' ? 'Turing Machine' : 'Unknown';
+      t === 'fa'
+        ? 'Finite Automaton'
+        : t === 'pda'
+          ? 'Pushdown Automaton'
+          : t === 'tm'
+            ? 'Turing Machine'
+            : 'Unknown';
     const cls =
-      t === 'fa' ? 'bg-orange-100 text-orange-800'
-      : t === 'pda' ? 'bg-purple-100 text-purple-800'
-      : t === 'tm' ? 'bg-sky-100 text-sky-800'
-      : 'bg-gray-100 text-gray-800';
-    return <Badge variant="outline" className={cls}>{label}</Badge>;
+      t === 'fa'
+        ? 'bg-orange-100 text-orange-800'
+        : t === 'pda'
+          ? 'bg-purple-100 text-purple-800'
+          : t === 'tm'
+            ? 'bg-sky-100 text-sky-800'
+            : 'bg-gray-100 text-gray-800';
+    return (
+      <Badge variant="outline" className={cls}>
+        {label}
+      </Badge>
+    );
   };
 
   return (
-    <div className="w-full rounded-md border bg-background">
-      <div className="flex items-center justify-between gap-2 border-b p-2 overflow-x-auto">
-        <div className="flex items-center gap-2 min-w-0">
+    <div className="bg-background w-full rounded-md border">
+      <div className="flex items-center justify-between gap-2 overflow-x-auto border-b p-2">
+        <div className="flex min-w-0 items-center gap-2">
           <div className="truncate text-sm font-medium">{title ?? src}</div>
           <TypeBadge t={type} />
         </div>
         <div className="flex items-center gap-1">
-          <Button size="sm" variant={grid ? 'default' : 'outline'} onClick={() => setGrid((s) => !s)} title="Toggle grid">
+          <Button
+            size="sm"
+            variant={grid ? 'default' : 'outline'}
+            onClick={() => setGrid((s) => !s)}
+            title="Toggle grid"
+          >
             <Grid className="mr-2 h-4 w-4" /> Grid
           </Button>
-          <Button size="sm" variant={honorPositions ? 'default' : 'outline'} onClick={() => setHonorPositions((p) => !p)} title="Original Positions">
-            <Waypoints className="mr-2 h-4 w-4" />Original Positions
+          <Button
+            size="sm"
+            variant={honorPositions ? 'default' : 'outline'}
+            onClick={() => setHonorPositions((p) => !p)}
+            title="Original Positions"
+          >
+            <Waypoints className="mr-2 h-4 w-4" />
+            Original Positions
           </Button>
           <Button size="sm" variant="outline" onClick={zoomOut} title="Zoom out">
             <ZoomOut className="h-4 w-4" />
@@ -798,7 +883,14 @@ export function JffCytoscapeViewer({
           <Button size="sm" variant="outline" onClick={zoomIn} title="Zoom in">
             <ZoomIn className="h-4 w-4" />
           </Button>
-          <Button size="sm" variant="outline" onClick={() => { onResizeRef.current?.(); }} title="Fit">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              onResizeRef.current?.();
+            }}
+            title="Fit"
+          >
             <Maximize2 className="h-4 w-4" />
           </Button>
           <Button size="sm" variant="outline" onClick={downloadSVG} title="Download SVG">
@@ -810,15 +902,16 @@ export function JffCytoscapeViewer({
           <Button size="sm" variant="outline" onClick={copyPNG} title="Copy PNG to clipboard">
             <Copy className="mr-2 h-4 w-4" /> Copy PNG
           </Button>
-
         </div>
       </div>
 
-      <div ref={containerRef} style={{ height, ...backgroundStyle }} className="relative overflow-hidden">
+      <div
+        ref={containerRef}
+        style={{ height, ...backgroundStyle }}
+        className="relative overflow-hidden"
+      >
         {error ? <div className="p-4 text-sm text-red-600">{error}</div> : null}
       </div>
-
-
     </div>
   );
 }
@@ -826,9 +919,15 @@ export function JffCytoscapeViewer({
 /* ───────────────────────────── Dialog wrapper ──────────────────────────── */
 
 export default function JffViewerDialog({
-  open, onOpenChange, src, title,
-  width = '80vw', height = '85vh',
-  epsSymbol = DEFAULT_EPS, darkMode = false, showGridDefault = true,
+  open,
+  onOpenChange,
+  src,
+  title,
+  width = '80vw',
+  height = '85vh',
+  epsSymbol = DEFAULT_EPS,
+  darkMode = false,
+  showGridDefault = true,
   honorPositionsDefault = true,
 }: {
   open: boolean;
@@ -844,7 +943,7 @@ export default function JffViewerDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-none p-0 overflow-hidden" style={{ width }}>
+      <DialogContent className="!max-w-none overflow-hidden p-0" style={{ width }}>
         <DialogHeader className="px-4 pt-4">
           <DialogTitle className="truncate">{title ?? 'JFLAP Viewer'}</DialogTitle>
         </DialogHeader>
