@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
-export async function GET(_: Request, { params }: { params: Promise<{ file: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ file: string }> }) {
   try {
     const { file } = await params;
     if (!file || file.includes('..')) {
@@ -43,7 +43,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ file: stri
 
     const buffer = await fs.promises.readFile(filePath);
 
-    await createEnhancedActivityLog(prisma, null, {
+    await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'DOWNLOAD_PROBLEM_FILE',
       category: 'PROBLEM',

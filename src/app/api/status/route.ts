@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import path from 'path';
+import fs from 'fs';
 import type { PeerCertificate } from 'tls';
 import { prisma } from '@/lib/prisma';
 
@@ -60,6 +62,12 @@ type DatabaseStatus = {
   message: string;
   details?: DatabaseDetails;
   stats?: DatabaseStats;
+};
+
+type AbandonedFilesSummary = {
+  total: number;
+  byCategory: Record<string, number>;
+  samples: Array<{ category: string; fileName: string; path: string }>;
 };
 function getNum(obj: Record<string, unknown>, k: string): number | undefined {
   const v = obj?.[k];
@@ -751,6 +759,74 @@ export async function GET(req: Request) {
     };
   } catch {}
 
+  // ===== Abandoned files =====
+  let abandonedFiles: AbandonedFilesSummary | undefined = undefined;
+  try {
+    const uploadsRoot = path.join('/private', 'uploads');
+    const readFiles = async (dir: string) => {
+      try {
+        const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+        return entries.filter((e) => e.isFile()).map((e) => e.name);
+      } catch {
+        return [] as string[];
+      }
+    };
+
+    const [solutionFiles, submissionFiles, pfpFiles, problemFiles] = await Promise.all([
+      readFiles(path.join(uploadsRoot, 'solutions')),
+      readFiles(path.join(uploadsRoot, 'submissions')),
+      readFiles(path.join(uploadsRoot, 'pfps')),
+      readFiles(path.join(uploadsRoot, 'problems')),
+    ]);
+
+    const [problemRows, submissionRows, userRows] = await Promise.all([
+      prisma.problem.findMany({ select: { fileName: true } }),
+      prisma.submission.findMany({ select: { fileName: true } }),
+      prisma.user.findMany({ select: { avatar: true } }),
+    ]);
+
+    const problemNames = new Set(
+      problemRows.map((r) => r.fileName).filter((n): n is string => !!n),
+    );
+    const submissionNames = new Set(
+      submissionRows.map((r) => r.fileName).filter((n): n is string => !!n),
+    );
+    const avatarNames = new Set(userRows.map((r) => r.avatar).filter((n): n is string => !!n));
+
+    const missingSolutions = solutionFiles.filter((f) => !problemNames.has(f));
+    const missingSubmissions = submissionFiles.filter((f) => !submissionNames.has(f));
+    const missingPfps = pfpFiles.filter((f) => !avatarNames.has(f));
+    const missingProblems = problemFiles.filter((f) => !problemNames.has(f));
+
+    const samples: Array<{ category: string; fileName: string; path: string }> = [];
+    const pushSamples = (category: string, files: string[], folder: string) => {
+      for (const f of files) {
+        if (samples.length >= 50) break;
+        samples.push({ category, fileName: f, path: path.join(folder, f) });
+      }
+    };
+
+    pushSamples('solutions', missingSolutions, '/private/uploads/solutions');
+    pushSamples('submissions', missingSubmissions, '/private/uploads/submissions');
+    pushSamples('pfps', missingPfps, '/private/uploads/pfps');
+    pushSamples('problems', missingProblems, '/private/uploads/problems');
+
+    abandonedFiles = {
+      total:
+        missingSolutions.length +
+        missingSubmissions.length +
+        missingPfps.length +
+        missingProblems.length,
+      byCategory: {
+        solutions: missingSolutions.length,
+        submissions: missingSubmissions.length,
+        pfps: missingPfps.length,
+        problems: missingProblems.length,
+      },
+      samples,
+    };
+  } catch {}
+
   // ===== Build response =====
   const body: Record<string, unknown> = {
     system,
@@ -760,6 +836,7 @@ export async function GET(req: Request) {
     ...(sessionSummary ? { sessionSummary } : {}),
     app,
     ...(network ? { network } : {}),
+    ...(abandonedFiles ? { abandonedFiles } : {}),
     metrics: { provider },
   };
 
