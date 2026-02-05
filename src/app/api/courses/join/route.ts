@@ -1,9 +1,37 @@
+/**
+ * Course Join API
+ *
+ * Responsibilities:
+ * - Accept a 6-character registration code
+ * - Validate course visibility (published + not archived)
+ * - Prevent duplicate enrollment
+ * - Create a roster entry using the user's global role
+ *
+ * Notes:
+ * - Admins cannot join courses via this route.
+ * - For students, unpublished/archived courses are masked as "not found".
+ * - For faculty/admin, unpublished/archived courses return 403 with explicit errors.
+ */
+
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { NextResponse } from 'next/server';
 
 type Role = 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT';
 
+/**
+ * POST /api/courses/join
+ *
+ * Body:
+ * - code: string (6 chars)
+ *
+ * Responses:
+ * - 200: { success: true, message, course }
+ * - 400: invalid code or admin join attempt
+ * - 401: not authenticated
+ * - 403: course unpublished/archived (faculty/admin only)
+ * - 404: course not found (or hidden from students)
+ */
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) {
@@ -37,16 +65,19 @@ export async function POST(req: Request) {
   });
 
   // Handle courses not published or archived
-  if (!course.isPublished && (role == 'ADMIN' || role == 'FACULTY')) { // Notify admin or faculty that the course was not publihsed
-    return NextResponse.json({ error: 'Course not published' }, { status: 403 }); 
+  if (!course.isPublished && (role == 'ADMIN' || role == 'FACULTY')) {
+    // Notify admin or faculty that the course was not publihsed
+    return NextResponse.json({ error: 'Course not published' }, { status: 403 });
   }
 
-  if (course.isArchived && (role === 'ADMIN' || role == 'FACULTY')) { // Notify admin or faculty that the course is archived)
-    return NextResponse.json({ error: 'Course archived' }, { status: 403 }); 
+  if (course.isArchived && (role === 'ADMIN' || role == 'FACULTY')) {
+    // Notify admin or faculty that the course is archived)
+    return NextResponse.json({ error: 'Course archived' }, { status: 403 });
   }
 
-  if (!course.isPublished || course.isArchived) { // Do not tell student course was not published, say it does not exist
-    return NextResponse.json({ error: 'Course not found' }, { status: 404 }); 
+  if (!course.isPublished || course.isArchived) {
+    // Do not tell student course was not published, say it does not exist
+    return NextResponse.json({ error: 'Course not found' }, { status: 404 });
   }
 
   if (role === 'ADMIN') {
