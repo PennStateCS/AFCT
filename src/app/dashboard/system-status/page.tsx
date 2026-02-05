@@ -125,6 +125,11 @@ type StatusResponse = {
   sessionSummary?: SessionSummary;
   app?: Record<string, number | string>;
   metrics?: { provider?: string; latencyMs?: number };
+  abandonedFiles?: {
+    total: number;
+    byCategory: Record<string, number>;
+    samples: Array<{ category: string; fileName: string; path: string }>;
+  };
 };
 
 /* -------------------- utils -------------------- */
@@ -1037,64 +1042,102 @@ export default function SystemStatusPage() {
         </div>
       )}
 
-      {/* App counts + Sessions */}
+      {/* App counts + Sessions + Abandoned files */}
       {!loading && status && (
-        <Card>
-          <CardHeader className="flex items-center justify-between">
-            <CardTitle className="text-lg">
-              App & Sessions
-              {sessionSummary ? (
-                <span className="ml-2 space-x-2">
-                  <Badge variant="outline" className="bg-slate-50 text-slate-700">
-                    24h: {sessionSummary.total24h}
-                  </Badge>
-                  <Badge variant="outline" className="bg-slate-50 text-slate-700">
-                    Users: {sessionSummary.uniqUsers24h}
-                  </Badge>
-                  <Badge variant="outline" className="bg-slate-50 text-slate-700">
-                    5m: {sessionSummary.last5m}
-                  </Badge>
-                  <Badge variant="outline" className="bg-slate-50 text-slate-700">
-                    15m: {sessionSummary.last15m}
-                  </Badge>
-                  <Badge variant="outline" className="bg-slate-50 text-slate-700">
-                    60m: {sessionSummary.last60m}
-                  </Badge>
-                </span>
-              ) : null}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* App counts */}
-            {status.app && Object.keys(status.app).length > 0 && (
-              <div>
-                <div className="text-muted-foreground mb-2 text-sm">App entity counts</div>
-                <ul className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-6">
-                  {Object.entries(status.app).map(([k, v]) => (
-                    <li key={k} className="rounded border p-2 text-center">
-                      <div className="text-muted-foreground text-xs uppercase">{k}</div>
-                      <div className="text-sm font-semibold">{String(v)}</div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Sessions summary */}
-            {sessionSummary ? (
-              <div>
-                <div className="text-muted-foreground mb-2 text-sm">Session summary</div>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-                  <Stat label="Total (24h)" value={sessionSummary.total24h} />
-                  <Stat label="Unique users (24h)" value={sessionSummary.uniqUsers24h} />
-                  <Stat label="Last 5m" value={sessionSummary.last5m} />
-                  <Stat label="Last 15m" value={sessionSummary.last15m} />
-                  <Stat label="Last 60m" value={sessionSummary.last60m} />
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader className="flex items-center justify-between">
+              <CardTitle className="text-lg">
+                App & Sessions
+                {sessionSummary ? (
+                  <span className="ml-2 space-x-2">
+                    <Badge variant="outline" className="bg-slate-50 text-slate-700">
+                      24h: {sessionSummary.total24h}
+                    </Badge>
+                    <Badge variant="outline" className="bg-slate-50 text-slate-700">
+                      Users: {sessionSummary.uniqUsers24h}
+                    </Badge>
+                    <Badge variant="outline" className="bg-slate-50 text-slate-700">
+                      5m: {sessionSummary.last5m}
+                    </Badge>
+                    <Badge variant="outline" className="bg-slate-50 text-slate-700">
+                      15m: {sessionSummary.last15m}
+                    </Badge>
+                    <Badge variant="outline" className="bg-slate-50 text-slate-700">
+                      60m: {sessionSummary.last60m}
+                    </Badge>
+                  </span>
+                ) : null}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* App counts */}
+              {status.app && Object.keys(status.app).length > 0 && (
+                <div>
+                  <div className="text-muted-foreground mb-2 text-sm">App entity counts</div>
+                  <ul className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-6">
+                    {Object.entries(status.app).map(([k, v]) => (
+                      <li key={k} className="rounded border p-2 text-center">
+                        <div className="text-muted-foreground text-xs uppercase">{k}</div>
+                        <div className="text-sm font-semibold">{String(v)}</div>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
+              )}
+
+              {/* Sessions summary */}
+              {sessionSummary ? (
+                <div>
+                  <div className="text-muted-foreground mb-2 text-sm">Session summary</div>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+                    <Stat label="Total (24h)" value={sessionSummary.total24h} />
+                    <Stat label="Unique users (24h)" value={sessionSummary.uniqUsers24h} />
+                    <Stat label="Last 5m" value={sessionSummary.last5m} />
+                    <Stat label="Last 15m" value={sessionSummary.last15m} />
+                    <Stat label="Last 60m" value={sessionSummary.last60m} />
+                  </div>
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex items-center justify-between">
+              <CardTitle className="text-lg">Abandoned Files</CardTitle>
+              <Badge variant="outline" className="bg-slate-50 text-slate-700">
+                Total: {status.abandonedFiles?.total ?? 0}
+              </Badge>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {Object.entries(status.abandonedFiles?.byCategory ?? {}).map(([k, v]) => (
+                  <Stat key={k} label={k} value={v} />
+                ))}
               </div>
-            ) : null}
-          </CardContent>
-        </Card>
+
+              {status.abandonedFiles?.samples?.length ? (
+                <div className="rounded border">
+                  <div className="text-muted-foreground border-b px-3 py-2 text-xs font-semibold">
+                    Sample files (max 50)
+                  </div>
+                  <ul className="max-h-56 overflow-auto px-3 py-2 text-xs">
+                    {status.abandonedFiles.samples.map((f, i) => (
+                      <li key={`${f.category}-${f.fileName}-${i}`} className="mb-1 last:mb-0">
+                        <span className="mr-2 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] uppercase">
+                          {f.category}
+                        </span>
+                        <span className="break-all">{f.path}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <div className="text-sm">No abandoned files found.</div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {/* Active sessions table */}
