@@ -1,15 +1,40 @@
-// /src/app/api/courses/route.ts
+/**
+ * Courses API (collection)
+ *
+ * Responsibilities:
+ * - GET: return all courses with roster and assignment metadata for dashboard use
+ * - POST: create a new course, ensure unique registration code, and seed faculty roster
+ *
+ * Notes:
+ * - Dates are stored in UTC based on the user's effective timezone.
+ * - This route uses Prisma transactions to keep course + roster creation consistent.
+ * - Keep response shapes stable for UI consumers.
+ */
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validationResponse } from '@/lib/zod-error';
 import { auth } from '@/lib/auth';
-import { toEndOfDayInTimezone } from '@/lib/date-utils';
+import { toDateTimeInTimezone } from '@/lib/date-utils';
 import type { Prisma } from '@prisma/client';
+
+/**
+ * Roster item shape used by this route (kept in sync with `include` below).
+ * Prefer a Prisma payload type so it scales with schema changes.
+ */
+type RosterItem = Prisma.RosterGetPayload<{
+  include: {
+    user: { select: { id: true; firstName: true; lastName: true; role: true } };
+  };
+}>;
 
 // ----------------------------------------
 // Utilities
 // ----------------------------------------
+/**
+ * Generate a unique course registration code in the format `ABC123`.
+ * Retries until no collision exists in the database.
+ */
 async function generateUniqueCourseCode() {
   const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   const numbers = '0123456789';
@@ -41,6 +66,10 @@ async function generateUniqueCourseCode() {
 // ----------------------------------------
 // GET /api/courses
 // ----------------------------------------
+/**
+ * Returns all courses ordered by creation date.
+ * Includes roster users (id/name/role) and assignment/problem metadata.
+ */
 export async function GET() {
   try {
     const courses = await prisma.course.findMany({
@@ -84,6 +113,15 @@ export async function GET() {
 // ----------------------------------------
 // POST /api/courses
 // ----------------------------------------
+/**
+ * Creates a course and seeds roster faculty entries.
+ *
+ * Expected payload (validated upstream):
+ * - name, code, semester, credits
+ * - startDate, endDate (datetime-local strings)
+ * - isPublished (optional)
+ * - facultyIds (optional)
+ */
 export async function POST(req: Request) {
   try {
     // 1) Parse payload of information
@@ -129,8 +167,8 @@ export async function POST(req: Request) {
           regCode,
           semester: json.semester,
           credits: json.credits,
-          startDate: toEndOfDayInTimezone(json.startDate, userTimezone),
-          endDate: toEndOfDayInTimezone(json.endDate, userTimezone),
+          startDate: toDateTimeInTimezone(json.startDate, userTimezone),
+          endDate: toDateTimeInTimezone(json.endDate, userTimezone),
           isPublished: json.isPublished ?? false,
           isArchived: false,
         },
@@ -160,8 +198,8 @@ export async function POST(req: Request) {
 
       const faculty =
         withRoster?.roster
-          .filter((r: NonNullable<typeof withRoster>['roster'][number]) => r.role === 'FACULTY')
-          .map((r: NonNullable<typeof withRoster>['roster'][number]) => r.user) ?? [];
+          .filter((r: RosterItem) => r.role === 'FACULTY')
+          .map((r: RosterItem) => r.user) ?? [];
 
       return { course, faculty, withRoster };
     });
@@ -182,7 +220,10 @@ export async function POST(req: Request) {
           isPublished: created.course.isPublished,
           isArchived: created.course.isArchived,
           enrolled:
-            created.withRoster?.roster.map((r: any) => ({ ...r.user, courseRole: r.role })) ?? [],
+            created.withRoster?.roster.map((r: RosterItem) => ({
+              ...r.user,
+              courseRole: r.role,
+            })) ?? [],
         },
       },
       { status: 201 },

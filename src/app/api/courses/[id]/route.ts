@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canArchiveCourse, canUnpublishCourse } from '@/lib/course-status-checks';
-import { toEndOfDayInTimezone } from '@/lib/date-utils';
+import { toDateTimeInTimezone } from '@/lib/date-utils';
 
 // GET: Fetch a course by ID with full metadata
 export async function GET(_: Request, context: { params: Promise<{ id: string }> }) {
@@ -219,8 +219,8 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
         code: body.code,
         semester: body.semester,
         credits: Number(body.credits),
-        startDate: toEndOfDayInTimezone(body.startDate, userTimezone),
-        endDate: toEndOfDayInTimezone(body.endDate, userTimezone),
+        startDate: toDateTimeInTimezone(body.startDate, userTimezone),
+        endDate: toDateTimeInTimezone(body.endDate, userTimezone),
         isPublished: body.isPublished,
         isArchived: body.isArchived,
       },

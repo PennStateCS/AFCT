@@ -14,6 +14,8 @@
     "lint": "next lint",
     "lint:fix": "eslint . --fix",
     "build:analyze": "cross-env ANALYZE=true next build",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "postinstall": "node -e \"if(process.env.SKIP_PRISMA_GENERATE){console.log('skip prisma generate');process.exit(0)}\" || true",
     "seed": "prisma db seed",
     "db:generate": "prisma generate",
@@ -132,7 +134,8 @@
     "prisma-erd-generator": "^2.4.2",
     "tailwindcss": "^4.1.12",
     "tw-animate-css": "^1.3.7",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.9"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
