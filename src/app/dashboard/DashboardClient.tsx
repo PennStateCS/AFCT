@@ -5,7 +5,7 @@ import Link from 'next/link';
 import type { Course, User } from '@prisma/client';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { getCourseStatusTag } from '@/lib/course-status';
-import { formatInstructorNames, getStudentCount } from '@/lib/course-utils';
+import { formatInstructorNames, getStudentCount, getTAs } from '@/lib/course-utils';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatDateTimeInTimeZone } from '@/lib/date';
 
@@ -52,7 +52,7 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
                 >
                   <div
                     role="link"
-                    className="group border-border bg-card flex h-full cursor-pointer overflow-hidden rounded-lg border shadow transition-all hover:bg-accent hover:shadow-md"
+                    className="group border-border bg-card hover:bg-accent flex h-full cursor-pointer overflow-hidden rounded-lg border shadow transition-all hover:shadow-md"
                   >
                     {/* Vertical colored bar */}
                     <div
@@ -96,8 +96,18 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
                           </div>
                         )}
                         <div>
-                          <span className="font-semibold">Instructor(s):</span>{' '}
-                          {formatInstructorNames(course.enrolled as any) }
+                          <span className="font-semibold">Faculty:</span>{' '}
+                          {formatInstructorNames(course.enrolled as any)}
+                        </div>
+                        <div>
+                          <span className="font-semibold">TA(s):</span>{' '}
+                          {(() => {
+                            const taNames = getTAs(course.enrolled as any)
+                              .map((ta) => `${ta.firstName ?? ''} ${ta.lastName ?? ''}`.trim())
+                              .filter(Boolean)
+                              .join(', ');
+                            return taNames || 'None';
+                          })()}
                         </div>
                         <div>
                           <span className="font-semibold">Dates:</span>{' '}

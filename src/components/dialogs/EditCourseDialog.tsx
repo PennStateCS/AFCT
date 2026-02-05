@@ -113,7 +113,7 @@ export function EditCourseDialog({
         const res = await fetch('/api/users?role=FACULTY');
         if (!res.ok) throw new Error('Failed to load faculty');
         const data = await res.json();
-        setFacultyList(data);
+        setFacultyList((Array.isArray(data) ? data : []).filter((user) => user.role === 'FACULTY'));
       } catch {
         toast.error('Failed to load faculty list.');
       }

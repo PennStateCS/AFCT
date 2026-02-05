@@ -220,7 +220,7 @@ export function getTAs(enrolled: EnrolledUser[] | undefined): EnrolledUser[] {
 
 export function getStudents(enrolled: EnrolledUser[] | undefined): EnrolledUser[] {
   if (!Array.isArray(enrolled)) return [];
-  return enrolled.filter((u) => u.courseRole === 'STUDENT');
+  return enrolled.filter((u) => (u.courseRole ?? u.role) === 'STUDENT');
 }
 
 export function getStudentCount(enrolled: EnrolledUser[] | undefined): number {
@@ -228,15 +228,12 @@ export function getStudentCount(enrolled: EnrolledUser[] | undefined): number {
 }
 
 export function formatInstructorNames(enrolled: EnrolledUser[] | undefined): string {
-  const instructors = getInstructors(enrolled);
+  const instructors = getInstructors(enrolled).filter((u) => u.role !== 'ADMIN');
   if (instructors.length === 0) return 'TBA';
-  if (instructors.length === 1)
-    return `${instructors[0].firstName ?? ''} ${instructors[0].lastName ?? ''}`.trim();
-  // Multiple instructors: show the first instructor followed by an ellipsis
-  return (
-    `${(instructors[0].firstName ?? '') + (instructors[0].lastName ? ' ' + instructors[0].lastName : '')}`.trim() +
-    ', ...'
-  );
+  return instructors
+    .map((instructor) => `${instructor.firstName ?? ''} ${instructor.lastName ?? ''}`.trim())
+    .filter(Boolean)
+    .join(', ');
 }
 
 export function deriveRoleSlices(enrolled: EnrolledUser[] | undefined) {
