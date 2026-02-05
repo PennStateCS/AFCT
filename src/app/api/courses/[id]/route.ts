@@ -230,21 +230,21 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
       });
 
       if (instructorIds) {
-        const existingAdmins = await tx.roster.findMany({
-          where: { courseId: id, role: 'ADMIN' },
+        const existingFaculty = await tx.roster.findMany({
+          where: { courseId: id, role: 'FACULTY' },
           select: { userId: true },
         });
-        const existingAdminIds = new Set(existingAdmins.map((r) => r.userId));
-        const desiredAdminIds = new Set(instructorIds);
+        const existingFacultyIds = new Set(existingFaculty.map((r) => r.userId));
+        const desiredFacultyIds = new Set(instructorIds);
 
-        const toAdd = instructorIds.filter((userId: string) => !existingAdminIds.has(userId));
-        const toRemove = Array.from(existingAdminIds).filter(
-          (userId) => !desiredAdminIds.has(userId),
+        const toAdd = instructorIds.filter((userId: string) => !existingFacultyIds.has(userId));
+        const toRemove = Array.from(existingFacultyIds).filter(
+          (userId) => !desiredFacultyIds.has(userId),
         );
 
         if (toRemove.length > 0) {
           await tx.roster.deleteMany({
-            where: { courseId: id, role: 'ADMIN', userId: { in: toRemove } },
+            where: { courseId: id, role: 'FACULTY', userId: { in: toRemove } },
           });
         }
 
@@ -253,7 +253,7 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
             data: toAdd.map((userId: string) => ({
               userId,
               courseId: id,
-              role: 'ADMIN',
+              role: 'FACULTY',
             })),
           });
         }

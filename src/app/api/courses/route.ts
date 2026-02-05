@@ -188,7 +188,7 @@ export async function POST(req: Request) {
           data: instructorIds.map((userId: string) => ({
             userId,
             courseId: course.id,
-            role: 'ADMIN',
+            role: 'FACULTY',
           })),
         });
       }
