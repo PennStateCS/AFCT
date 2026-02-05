@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import type { PeerCertificate } from 'tls';
 import { prisma } from '@/lib/prisma';
 
 export const runtime = 'nodejs';
@@ -113,7 +114,7 @@ async function getTlsExpiry(host?: string | null, port?: number | null): Promise
   try {
     const tls = await import('tls');
     const p = port ?? 443;
-    const cert = await new Promise<tls.PeerCertificate>((resolve, reject) => {
+    const cert = await new Promise<PeerCertificate>((resolve, reject) => {
       const socket = tls.connect(
         { host, port: p, servername: host, rejectUnauthorized: false, timeout: 3000 },
         () => {
