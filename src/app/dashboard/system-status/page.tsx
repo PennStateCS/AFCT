@@ -376,6 +376,7 @@ export default function SystemStatusPage() {
   const [deep, setDeep] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const timerRef = useRef<number | null>(null);
+  const [deletingFiles, setDeletingFiles] = useState<Record<string, boolean>>({});
 
   const fetchStatus = useCallback(async () => {
     setLoading(true);
@@ -406,6 +407,35 @@ export default function SystemStatusPage() {
       if (timerRef.current) window.clearInterval(timerRef.current);
     };
   }, [autoRefresh, fetchStatus]);
+
+  const handleDeleteAbandonedFile = useCallback(
+    async (category: string, fileName: string) => {
+      const key = `${category}/${fileName}`;
+      if (deletingFiles[key]) return;
+      const ok = window.confirm(`Delete abandoned file "${fileName}"?`);
+      if (!ok) return;
+
+      setDeletingFiles((prev) => ({ ...prev, [key]: true }));
+      try {
+        const res = await fetch('/api/status/abandoned-files', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ category, fileName }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => null);
+          throw new Error(err?.error || 'Failed to delete file');
+        }
+        await fetchStatus();
+      } catch (err) {
+        console.error('Delete abandoned file error:', err);
+        window.alert(err instanceof Error ? err.message : 'Failed to delete file');
+      } finally {
+        setDeletingFiles((prev) => ({ ...prev, [key]: false }));
+      }
+    },
+    [deletingFiles, fetchStatus],
+  );
 
   const dbOk = status?.database?.ok ?? false;
   const provider = status?.metrics?.provider ?? 'unknown';
@@ -1122,14 +1152,31 @@ export default function SystemStatusPage() {
                     Sample files (max 50)
                   </div>
                   <ul className="max-h-56 overflow-auto px-3 py-2 text-xs">
-                    {status.abandonedFiles.samples.map((f, i) => (
-                      <li key={`${f.category}-${f.fileName}-${i}`} className="mb-1 last:mb-0">
-                        <span className="mr-2 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] uppercase">
-                          {f.category}
-                        </span>
-                        <span className="break-all">{f.path}</span>
-                      </li>
-                    ))}
+                    {status.abandonedFiles.samples.map((f, i) => {
+                      const key = `${f.category}/${f.fileName}`;
+                      const isDeleting = deletingFiles[key];
+                      return (
+                        <li
+                          key={`${f.category}-${f.fileName}-${i}`}
+                          className="mb-1 flex items-start justify-between gap-2 last:mb-0"
+                        >
+                          <div className="min-w-0">
+                            <span className="mr-2 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] uppercase">
+                              {f.category}
+                            </span>
+                            <span className="break-all">{f.path}</span>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={isDeleting}
+                            onClick={() => handleDeleteAbandonedFile(f.category, f.fileName)}
+                          >
+                            {isDeleting ? 'Deleting…' : 'Delete'}
+                          </Button>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               ) : (
