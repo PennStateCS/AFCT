@@ -16,6 +16,7 @@ import { prisma } from '@/lib/prisma';
 import { validationResponse } from '@/lib/zod-error';
 import { auth } from '@/lib/auth';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import type { Prisma } from '@prisma/client';
 
 /**
@@ -223,6 +224,20 @@ export async function POST(req: Request) {
 
       return { course, faculty, withRoster };
     });
+
+    if (session?.user?.id) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session.user.id,
+        action: 'CREATE_COURSE',
+        category: 'COURSE',
+        courseId: created.course.id,
+        metadata: {
+          courseId: created.course.id,
+          courseName: created.course.name,
+          courseCode: created.course.code,
+        },
+      });
+    }
 
     return NextResponse.json(
       {
