@@ -52,7 +52,7 @@
 :root {
   --radius: 0.65rem;
   --background: #ebebeb;
-  --foreground: oklch(0% 0 0);
+  --foreground: #000000;
   --card: #ffffff;
   --card-foreground: oklch(0% 0 0);
   --popover: oklch(1 0 0);
@@ -89,6 +89,7 @@
   --table-highlight: #ececec;
   --table-background: #ffffff;
   --node-color: #fff59d;
+  --grid-color: #e5e7eb;
 }
 
 /* Cytoscape + ELK JFLAP viewer — tooltip styles (tippy.js) */
@@ -156,7 +157,7 @@
 
 .dark {
   --background: oklch(0.141 0.005 285.823);
-  --foreground: oklch(0.985 0 0);
+  --foreground: #fafafa;
   --card: oklch(0.21 0.006 285.885);
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.21 0.006 285.885);
@@ -193,6 +194,7 @@
   --table-highlight: #0f0f0f;
   --table-background: #1f1f1f;
   --node-color: #caa22b;
+  --grid-color: #1a1814;
 }
 
 @layer base {
