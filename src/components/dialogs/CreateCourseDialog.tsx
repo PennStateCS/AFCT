@@ -51,7 +51,6 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
       startDate: '', // <- strings for input type="datetime-local"
       endDate: '',
       isPublished: false,
-      facultyIds: [],
       instructorIds: [],
     }),
     [],
@@ -66,7 +65,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
   } = useForm<FormValues>({
     resolver: zodResolver(CreateCourseFormSchema),
     defaultValues: defaults,
-    mode: 'onBlur',
+    mode: 'onChange',
     reValidateMode: 'onChange',
   });
 
