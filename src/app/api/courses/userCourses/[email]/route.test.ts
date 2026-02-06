@@ -1,0 +1,59 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const prismaMock = vi.hoisted(() => ({
+  course: { findMany: vi.fn() },
+}));
+
+const verifyTokenMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
+vi.mock('@/app/utils/jwt', () => ({ verifyToken: verifyTokenMock }));
+
+import { GET } from './route';
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+describe('GET /api/courses/userCourses/[email]', () => {
+  it('returns 400 when email missing', async () => {
+    const res = await GET(new Request('http://localhost/api/courses/userCourses/'), {
+      params: Promise.resolve({ email: '' }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 401 when token invalid', async () => {
+    verifyTokenMock.mockReturnValue(null);
+
+    const res = await GET(
+      new Request('http://localhost/api/courses/userCourses/a@example.com', {
+        headers: { authorization: 'Bearer test-token' },
+      }),
+      {
+        params: Promise.resolve({ email: 'a@example.com' }),
+      },
+    );
+
+    expect(res.status).toBe(401);
+  });
+
+  it('returns courses for user', async () => {
+    verifyTokenMock.mockReturnValue({ userId: 'u1' });
+    prismaMock.course.findMany.mockResolvedValue([{ id: 'c1', name: 'Course' }]);
+
+    const res = await GET(
+      new Request('http://localhost/api/courses/userCourses/a@example.com', {
+        headers: { authorization: 'Bearer test-token' },
+      }),
+      {
+        params: Promise.resolve({ email: 'a@example.com' }),
+      },
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual([{ id: 'c1', name: 'Course' }]);
+  });
+});

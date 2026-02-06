@@ -15,14 +15,13 @@ Built with:
 
 ## Table of Contents
 
-- [Tech Stack](#-tech-stack)
-- [Docker Development (Recommended)](#-docker-development-recommended)
-- [Production (Docker)](#-production-docker)
-- [Nginx (Production Port Forwarding)](#-nginx-production-port-forwarding)
-- [Production (Node.js – No Docker)](#-production-nodejs--no-docker)
-- [Database Management](#-database-management)
-- [Troubleshooting](#-troubleshooting)
-- [Contributors](#-contributors)
+- [Tech Stack](#tech-stack)
+- [Production Deployment](#production-deployment)
+- [Docker Development (Recommended)](#docker-development-recommended)
+- [Database Management](#database-management)
+- [Testing](#testing)
+- [Troubleshooting](#troubleshooting)
+- [Contributors](#contributors)
 
 ## 📚 Tech Stack
 
@@ -32,6 +31,12 @@ Built with:
 - Auth.js / NextAuth v5
 - Tailwind CSS
 - Docker + GHCR
+
+## 🏭 Production Deployment
+
+Production deployments pull the **GHCR image** and run via Docker Compose with Nginx reverse proxy.
+
+See the full guide in: [docs/production_setup.md](docs/production_setup.md).
 
 ## 🐳 Docker Development (Recommended)
 
@@ -88,82 +93,6 @@ npm run docker:dev:nuke          # Remove containers, volumes, and data
 - Seed data inserted
 - Next.js dev server launched with hot reload
 
-## 🏭 Production (Docker)
-
-Production deployments pull the **GHCR image** and run via Docker Compose with Nginx reverse proxy.
-
-### Ports
-
-- **HTTP (Port 80)**: Nginx listens, redirects to HTTPS
-- **HTTPS (Port 443)**: Nginx listens, terminates TLS, proxies to app:3000 (internal)
-- **App (Port 3000)**: Only exposed to Nginx container (not to host)
-- **Postgres (Port 5432)**: Internal only
-
-### Environment Configuration
-
-Copy the template file and update with your production values:
-
-**macOS / Linux**
-
-```bash
-cp .env.production.example .env.production
-```
-
-**Windows (PowerShell)**
-
-```powershell
-Copy-Item .env.production.example .env.production
-```
-
-**Windows (Command Prompt)**
-
-```bat
-copy .env.production.example .env.production
-```
-
-See [.env.production.example](.env.production.example) for all available options.
-
-⚠️ **Security**: Use strong, unique passwords. `NEXTAUTH_URL` must match your production domain exactly or login will fail.
-
-**Notes**
-
-- `docker:prod` builds locally using the Dockerfile and starts the stack.
-- `docker:prod:nobuild` starts without building (use after pulling GHCR).
-- To use GHCR directly: `docker pull ghcr.io/pennstatewilkes-barre/afct-dashboard:main` then run `npm run docker:prod:nobuild`.
-
-## 🌐 Nginx (Production Port Forwarding)
-
-**Production only.** Nginx acts as a reverse proxy and TLS terminator:
-
-- **Port 80 (HTTP)**: Client request → Nginx receives → 301 redirect to HTTPS
-- **Port 443 (HTTPS)**: Client request → Nginx receives → Terminates TLS → Proxies to app:3000
-- **Port 3000 (App)**: Only exposed internally to Nginx container
-
-### Custom SSL Certificates
-
-By default, Nginx generates a self‑signed certificate. To use your own:
-
-1. Place cert and key:
-   - `docker/nginx/certs/server.crt`
-   - `docker/nginx/certs/server.key`
-2. Restart Nginx: `docker compose restart nginx`
-
-## 🏭 Production (Node.js – No Docker)
-
-```bash
-npm install         # Install dependencies
-npm run build       # Build the app
-npm run db:generate # Generate Prisma client
-npm run db:deploy   # Apply migrations
-npm start           # Start the production server
-```
-
-Requires:
-
-- Node.js 20+
-- PostgreSQL 15+
-- Java 21+
-
 ## 🗄️ Database Management
 
 ### Prisma (Local / Node)
@@ -183,6 +112,22 @@ npm run seed        # Seed database
 npm run docker:dev:studio # Open Prisma Studio
 npm run docker:dev:seed   # Seed the database
 npm run docker:dev:psql   # Open psql
+```
+
+---
+
+## ✅ Testing
+
+Run all tests:
+
+```bash
+npm test
+```
+
+Watch mode:
+
+```bash
+npm run test:watch
 ```
 
 ---
