@@ -93,7 +93,7 @@ const BaseCourseFormObject = z
  * Create schema — includes publish+instructor selection.
  */
 export const CreateCourseSchema = BaseCourseObject.extend({
-  facultyIds: z.array(z.string()).default([]),
+  //facultyIds: z.array(z.string()).default([]),
   instructorIds: z.array(z.string()).default([]),
 })
   .refine((d) => d.startDate <= d.endDate, {
@@ -120,7 +120,7 @@ export const CreateCourseSchema = BaseCourseObject.extend({
  */
 export const CreateCourseFormSchema = BaseCourseFormObject.extend({
   isPublished: z.boolean(),
-  facultyIds: z.array(z.string()),
+  //facultyIds: z.array(z.string()),
   instructorIds: z.array(z.string()),
 }).superRefine((d, ctx) => {
   // Validate course code format
