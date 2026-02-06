@@ -19,7 +19,7 @@ Built with:
 - [Production Deployment](#production-deployment)
 - [Docker Development (Recommended)](#docker-development-recommended)
 - [Database Management](#database-management)
-- [Testing](#tests)
+- [Testing](#testing)
 - [Troubleshooting](#troubleshooting)
 - [Contributors](#contributors)
 
