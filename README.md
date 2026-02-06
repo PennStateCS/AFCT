@@ -21,6 +21,7 @@ Built with:
 - [Nginx (Production Port Forwarding)](#-nginx-production-port-forwarding)
 - [Production (Node.js – No Docker)](#-production-nodejs--no-docker)
 - [Database Management](#-database-management)
+- [Tests](#-tests)
 - [Troubleshooting](#-troubleshooting)
 - [Contributors](#-contributors)
 
@@ -183,6 +184,22 @@ npm run seed        # Seed database
 npm run docker:dev:studio # Open Prisma Studio
 npm run docker:dev:seed   # Seed the database
 npm run docker:dev:psql   # Open psql
+```
+
+---
+
+## ✅ Tests
+
+Run all tests:
+
+```bash
+npm test
+```
+
+Watch mode:
+
+```bash
+npm run test:watch
 ```
 
 ---
