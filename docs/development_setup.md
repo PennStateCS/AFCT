@@ -101,7 +101,7 @@ cd afct
 
 ## 4) Create Development Environment File
 
-Copy the template and update values in .env.development.
+Copy the template and update values in .env.development. Follow the instructions in the file to customize your values.
 
 ### Windows (PowerShell)
 
@@ -116,8 +116,6 @@ notepad .env.development
 cp .env.development.example .env.development
 nano .env.development
 ```
-
----
 
 ## 5) Start the Stack (Preferred Docker Run)
 
@@ -134,6 +132,12 @@ npm run docker:dev
 - Postgres: 5432
 - Nginx HTTP: 8080
 - Nginx HTTPS: 8443
+
+### Nginx Forwarding and TLS
+
+In development, Nginx listens on ports 8080 (HTTP) and 8443 (HTTPS) and forwards traffic to the app on port 3000.
+
+Nginx uses a self-signed certificate by default. Browsers will show a security warning the first time you visit https://localhost:8443. This is expected in development; you must accept the warning to proceed.
 
 ---
 
