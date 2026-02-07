@@ -24,7 +24,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:reset": "prisma migrate reset --force --skip-generate",
     "db:erd": "npx prisma generate --schema=prisma/schema.prisma",
-    "docker:dev": "docker compose -f docker-compose.dev.yml up --build",
+    "docker:dev": "docker compose -f docker-compose.dev.yml up --build --attach app --no-attach nginx --no-attach postgres",
     "docker:dev:detached": "docker compose -f docker-compose.dev.yml up --build -d",
     "docker:down": "docker compose down",
     "docker:clean": "docker compose down && docker system prune -f",
