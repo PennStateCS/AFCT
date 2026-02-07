@@ -18,8 +18,18 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     make \
     g++ \
     git \
-    openjdk-21-jre-headless \
-    ca-certificates
+    ca-certificates \
+    curl
+
+# Install Java 21 (Temurin JRE)
+ENV JAVA_HOME=/opt/java/openjdk
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
+RUN mkdir -p /opt/java && \
+    curl -fsSL "https://api.adoptium.net/v3/binary/latest/21/ga/linux/x64/jre/hotspot/normal/eclipse" \
+      -o /tmp/temurin21.tar.gz && \
+    tar -xzf /tmp/temurin21.tar.gz -C /opt/java && \
+    ln -s /opt/java/jdk-21* /opt/java/openjdk && \
+    rm -f /tmp/temurin21.tar.gz
 
 # Install all dependencies (including dev) for the build step
 COPY package*.json ./
@@ -45,12 +55,21 @@ WORKDIR /app
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
-    openjdk-21-jre-headless \
     curl \
     postgresql-client \
     netcat-openbsd \
     tini \
     ca-certificates
+
+# Install Java 21 (Temurin JRE)
+ENV JAVA_HOME=/opt/java/openjdk
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
+RUN mkdir -p /opt/java && \
+    curl -fsSL "https://api.adoptium.net/v3/binary/latest/21/ga/linux/x64/jre/hotspot/normal/eclipse" \
+      -o /tmp/temurin21.tar.gz && \
+    tar -xzf /tmp/temurin21.tar.gz -C /opt/java && \
+    ln -s /opt/java/jdk-21* /opt/java/openjdk && \
+    rm -f /tmp/temurin21.tar.gz
 
 # Set npm cache directory
 ENV NPM_CONFIG_CACHE=/tmp/.npm
