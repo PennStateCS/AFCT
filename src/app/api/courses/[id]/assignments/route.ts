@@ -6,7 +6,7 @@ import { verifyToken, JwtPayload } from '@/app/utils/jwt';
 export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   // Await params
   const params = await context.params;
-  const courseId = params.id;
+  const courseId = await params.id;
 
   // 1. Validate courseId
   if (!courseId) {

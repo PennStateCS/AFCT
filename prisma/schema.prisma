@@ -15,7 +15,7 @@ enum Role {
 }
 
 enum CourseRole {
-  ADMIN
+  INSTRUCTOR
   FACULTY
   TA
   STUDENT
@@ -46,6 +46,7 @@ model User {
   submissions   Submission[]
   grades        AssignmentGrade[] // Grades for assignments
   activityLogs  ActivityLog[]
+  groupRosters  GroupRoster[] // Group memberships across courses
   commentsAbout Comment[] @relation("CommentsAboutStudent") // Comments about this student's work
 
   @@index([role])
@@ -54,23 +55,25 @@ model User {
 }
 
 model Course {
-  id          String   @id @default(cuid())
-  name        String
-  code        String
-  regCode     String?  @unique
-  semester    String
-  credits     Int
-  startDate   DateTime
-  endDate     DateTime
-  isPublished Boolean  @default(false)
-  isArchived  Boolean @default(false)
+  id           String   @id @default(cuid())
+  name         String
+  code         String
+  regCode      String?  @unique
+  semester     String
+  credits      Int
+  startDate    DateTime
+  endDate      DateTime
+  isPublished  Boolean  @default(false)
+  isArchived   Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  roster      Roster[] // Users in the course with roles
-  assignments Assignment[]
-  problems    Problem[]
+  roster       Roster[] // Users in the course with roles
+  assignments  Assignment[]
+  problems     Problem[]
+  groups       Group[]
+  groupRosters GroupRoster[]
   activityLogs ActivityLog[]
 
   @@index([isPublished])
@@ -146,6 +149,43 @@ model Problem {
   @@index([courseId])
   @@index([type])
   @@index([createdAt])
+}
+
+model Group {
+  id          String   @id @default(cuid())
+  name        String
+
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  groupRosters GroupRoster[]
+
+  @@index([courseId])
+  @@unique([courseId, name])
+}
+
+model GroupRoster {
+  id   String     @id @default(cuid())
+
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseId String
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  group   Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([courseId])
+  @@index([userId])
+  @@index([groupId])
+  @@unique([groupId, userId])
 }
 
 model AssignmentProblem {
