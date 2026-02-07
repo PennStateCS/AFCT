@@ -1,7 +1,7 @@
 # ----------------------------
 # Builder
 # ----------------------------
-FROM node:20-bullseye-slim AS builder
+FROM node:20-bookworm-slim AS builder
 WORKDIR /app
 
 # Set environment variables for build
@@ -18,7 +18,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     make \
     g++ \
     git \
-    openjdk-17-jre-headless \
+    openjdk-21-jre-headless \
     ca-certificates
 
 # Install all dependencies (including dev) for the build step
@@ -38,14 +38,14 @@ RUN set -e && \
 # ----------------------------
 # Runtime
 # ----------------------------
-FROM node:20-bullseye-slim AS runtime
+FROM node:20-bookworm-slim AS runtime
 WORKDIR /app
 
 # Install runtime tools (combined in single RUN for better caching)
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
-    openjdk-17-jre-headless \
+    openjdk-21-jre-headless \
     curl \
     postgresql-client \
     netcat-openbsd \
