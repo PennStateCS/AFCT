@@ -60,10 +60,10 @@ export default function AdminCoursePage() {
 
   // Enrollment dialog opener
   const openEnrollDialog = useCallback(async () => {
-    await fetchAvailableUsers();
-    dialogStates.setAllUsers(allUsers);
+    const users = await fetchAvailableUsers();
+    dialogStates.setAllUsers(users ?? []);
     dialogStates.setEnrollOpen(true);
-  }, [fetchAvailableUsers, allUsers, dialogStates]);
+  }, [fetchAvailableUsers, dialogStates]);
 
   const openBulkEnrollDialog = useCallback(() => {
     setBulkEnrollOpen(true);
@@ -96,7 +96,6 @@ export default function AdminCoursePage() {
     },
     [dialogStates],
   );
-
   const handleAssignmentDeleteClick = useCallback(
     (assignmentId: string) => {
       dialogStates.setPendingDelete({ id: assignmentId, type: 'assignment' });
