@@ -79,6 +79,23 @@ export async function POST(req: NextRequest) {
   try {
     // 4. Handle file upload
     if (file) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: decoded.userId,
+        action: 'SUBMISSION_FILE_RECEIVED',
+        category: 'SUBMISSION',
+        courseId,
+        assignmentId,
+        problemId,
+        metadata: {
+          userId: decoded.userId,
+          courseId,
+          assignmentId,
+          problemId,
+          fileName: file.name,
+          fileSizeBytes: file.size,
+          fileType: file.type,
+        },
+      });
       if (file.size > maxBytes) {
         return NextResponse.json(
           { error: `File exceeds max upload size (${maxMb} MB).` },
@@ -104,22 +121,23 @@ export async function POST(req: NextRequest) {
         const isDocker = process.env.CFGANALYZER_BINARY !== undefined;
 
         if (!isDocker && os.platform() === 'win32') {
+          console.log('[submissions] Evaluator mode: Windows PowerShell');
           // Windows local development: Count lines as before
           const result = execSync(`powershell -Command "(Get-Content '${filePath}').Count"`, {
             encoding: 'utf-8',
           });
           feedback = `File has ${result.trim()} lines (Windows).`;
         } else {
+          console.log('[submissions] Evaluator mode: Docker/JavaRunner');
           // Docker/Linux: Use afct-evaluator.jar with JavaRunner
           const answerFileName = link.problem.fileName;
           if (answerFileName) {
-            const answerFilePath = path.join(
-              process.cwd(),
-              'private',
-              'uploads',
-              'problems',
+            const answerFilePath = path.join('/private', 'uploads', 'solutions', answerFileName);
+
+            console.log('[submissions] Answer file lookup:', {
               answerFileName,
-            );
+              answerFilePath,
+            });
 
             // Check if answer file exists
             if (fs.existsSync(answerFilePath)) {
@@ -146,10 +164,18 @@ export async function POST(req: NextRequest) {
                   timeout: 30000,
                 });
 
+                const stdoutTrimmed = result.stdout?.trim() ?? '';
+                console.log('[submissions] Evaluator stdout length:', stdoutTrimmed.length);
+                console.log('[submissions] Evaluator stdout:', stdoutTrimmed || '<empty>');
+                if (result.stderr?.trim()) {
+                  console.error('[submissions] Evaluator stderr:', result.stderr.trim());
+                }
+
                 // Parse the JSON response
                 try {
                   const evaluation = JSON.parse(result.stdout.trim());
                   if (evaluation && typeof evaluation === 'object') {
+                    console.log('[submissions] Evaluator JSON:', evaluation);
                     // Extract correct field if present
                     if (typeof evaluation.correct === 'boolean') {
                       correct = evaluation.correct;
@@ -170,12 +196,30 @@ export async function POST(req: NextRequest) {
                 }
               } catch (evaluatorErr) {
                 console.error('JavaRunner execution failed:', evaluatorErr);
+                await createEnhancedActivityLog(prisma, req, {
+                  userId: decoded.userId,
+                  action: 'SUBMISSION_EVALUATION_ERROR',
+                  category: 'SUBMISSION',
+                  courseId,
+                  assignmentId,
+                  problemId,
+                  metadata: {
+                    userId: decoded.userId,
+                    courseId,
+                    assignmentId,
+                    problemId,
+                    error:
+                      evaluatorErr instanceof Error ? evaluatorErr.message : String(evaluatorErr),
+                  },
+                });
                 feedback = `ERROR: Evaluation failed - ${evaluatorErr instanceof Error ? evaluatorErr.message : 'Unknown error'}`;
               }
             } else {
+              console.warn('[submissions] Answer file not found on server:', answerFilePath);
               feedback = 'ERROR: Answer file not found on server.';
             }
           } else {
+            console.warn('[submissions] No answer file configured for this problem.');
             feedback = 'ERROR: No answer file configured for this problem.';
           }
         }

@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM node:20-bullseye-slim
+FROM node:20-bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssl \
@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     make \
     g++ \
     git \
-    openjdk-17-jre-headless \
+    openjdk-21-jre-headless \
     tini \
     netcat-openbsd \
     postgresql-client \
