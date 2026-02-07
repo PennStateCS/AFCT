@@ -11,6 +11,7 @@ interface Submission {
   submittedAt: Date,
   feedback: string,
   correct: boolean,
+  evaluationRaw?: unknown,
   fileName: string,
   originalFileName: string,
   problemId: string,
@@ -75,6 +76,7 @@ export async function GET(
         submittedAt: true,
         feedback: true,
         correct: true,
+        evaluationRaw: true,
         fileName: true,
         originalFileName: true,
         problemId: true,
@@ -99,6 +101,7 @@ export async function GET(
           submittedAt: Date;
           feedback: string | null;
           correct: boolean | null;
+          evaluationRaw?: unknown | null;
           fileName: string | null;
           originalFileName: string | null;
         }[];
@@ -114,6 +117,7 @@ export async function GET(
           submittedAt: s.submittedAt,
           feedback: s.feedback,
           correct: s.correct,
+          evaluationRaw: s.evaluationRaw ?? null,
           fileName: s.fileName,
           originalFileName: s.originalFileName,
         })),
