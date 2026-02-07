@@ -7,6 +7,7 @@ const prismaMock = vi.hoisted(() => ({
   },
   roster: {
     findUnique: vi.fn(),
+    create: vi.fn(),
   },
   problem: {
     findFirst: vi.fn(),
@@ -71,6 +72,34 @@ describe('POST /api/comments', () => {
     expect(res.status).toBe(201);
     expect(prismaMock.comment.create).toHaveBeenCalled();
     expect(activityLogMock).toHaveBeenCalled();
+  });
+
+  it('allows admin to add comment without roster entry', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
+    prismaMock.roster.findUnique.mockResolvedValue(null);
+    prismaMock.roster.create.mockResolvedValue({ id: 'r-admin', role: 'ADMIN' });
+    prismaMock.problem.findFirst.mockResolvedValue({ id: 'p1', courseId: 'c1' });
+    prismaMock.comment.create.mockResolvedValue({
+      id: 'cm-admin',
+      content: 'Admin note',
+      createdAt: new Date('2025-01-01T00:00:00.000Z'),
+      roster: {
+        role: 'ADMIN',
+        user: { id: 'admin-1', firstName: 'Admin', lastName: 'User', avatar: null, role: 'ADMIN' },
+      },
+    });
+
+    const req = new NextRequest('http://localhost/api/comments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: 'Admin note', assignmentId: 'a1', problemId: 'p1' }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(201);
+    expect(prismaMock.roster.create).toHaveBeenCalled();
+    expect(prismaMock.comment.create).toHaveBeenCalled();
   });
 });
 

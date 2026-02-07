@@ -75,6 +75,7 @@ export async function POST(req: NextRequest) {
   let originalFileName: string | null = null;
   let feedback: string | null = null;
   let correct: boolean | undefined = undefined;
+  let evaluationRaw: unknown | null = null;
 
   try {
     // 4. Handle file upload
@@ -121,23 +122,16 @@ export async function POST(req: NextRequest) {
         const isDocker = process.env.CFGANALYZER_BINARY !== undefined;
 
         if (!isDocker && os.platform() === 'win32') {
-          console.log('[submissions] Evaluator mode: Windows PowerShell');
           // Windows local development: Count lines as before
           const result = execSync(`powershell -Command "(Get-Content '${filePath}').Count"`, {
             encoding: 'utf-8',
           });
           feedback = `File has ${result.trim()} lines (Windows).`;
         } else {
-          console.log('[submissions] Evaluator mode: Docker/JavaRunner');
           // Docker/Linux: Use afct-evaluator.jar with JavaRunner
           const answerFileName = link.problem.fileName;
           if (answerFileName) {
             const answerFilePath = path.join('/private', 'uploads', 'solutions', answerFileName);
-
-            console.log('[submissions] Answer file lookup:', {
-              answerFileName,
-              answerFilePath,
-            });
 
             // Check if answer file exists
             if (fs.existsSync(answerFilePath)) {
@@ -165,17 +159,36 @@ export async function POST(req: NextRequest) {
                 });
 
                 const stdoutTrimmed = result.stdout?.trim() ?? '';
-                console.log('[submissions] Evaluator stdout length:', stdoutTrimmed.length);
-                console.log('[submissions] Evaluator stdout:', stdoutTrimmed || '<empty>');
-                if (result.stderr?.trim()) {
-                  console.error('[submissions] Evaluator stderr:', result.stderr.trim());
+                const stderrTrimmed = result.stderr?.trim() ?? '';
+                const truncate = (val: string, max = 2000) =>
+                  val.length > max ? `${val.slice(0, max)}…` : val;
+                console.info('Evaluator output', {
+                  stdout: truncate(stdoutTrimmed),
+                  stderr: truncate(stderrTrimmed),
+                });
+                if (stderrTrimmed) {
+                  await createEnhancedActivityLog(prisma, req, {
+                    userId: decoded.userId,
+                    action: 'SUBMISSION_EVALUATION_STDERR',
+                    category: 'SUBMISSION',
+                    courseId,
+                    assignmentId,
+                    problemId,
+                    metadata: {
+                      userId: decoded.userId,
+                      courseId,
+                      assignmentId,
+                      problemId,
+                      stderr: truncate(stderrTrimmed),
+                    },
+                  });
                 }
 
                 // Parse the JSON response
                 try {
                   const evaluation = JSON.parse(result.stdout.trim());
+                  evaluationRaw = evaluation;
                   if (evaluation && typeof evaluation === 'object') {
-                    console.log('[submissions] Evaluator JSON:', evaluation);
                     // Extract correct field if present
                     if (typeof evaluation.correct === 'boolean') {
                       correct = evaluation.correct;
@@ -183,19 +196,71 @@ export async function POST(req: NextRequest) {
 
                     // Extract feedback if present
                     if (typeof evaluation.feedback === 'string') {
-                      feedback = evaluation.feedback;
+                      const isJavaStreamString = /java\.lang\..*Stream@/i.test(evaluation.feedback);
+                      feedback = isJavaStreamString
+                        ? `Evaluation completed - correct: ${correct}`
+                        : evaluation.feedback;
                     } else {
                       feedback = `Evaluation completed - correct: ${correct}`;
                     }
+
+                    await createEnhancedActivityLog(prisma, req, {
+                      userId: decoded.userId,
+                      action: 'SUBMISSION_EVALUATION_SUCCESS',
+                      category: 'SUBMISSION',
+                      courseId,
+                      assignmentId,
+                      problemId,
+                      metadata: {
+                        userId: decoded.userId,
+                        courseId,
+                        assignmentId,
+                        problemId,
+                        correct,
+                        evaluation,
+                      },
+                    });
                   } else {
-                    feedback = `ERROR: Invalid JSON response from evaluator: ${result.stdout.trim()}`;
+                    const errorMessage = `Invalid JSON response from evaluator: ${stdoutTrimmed}`;
+                    await createEnhancedActivityLog(prisma, req, {
+                      userId: decoded.userId,
+                      action: 'SUBMISSION_EVALUATION_ERROR',
+                      category: 'SUBMISSION',
+                      courseId,
+                      assignmentId,
+                      problemId,
+                      metadata: {
+                        userId: decoded.userId,
+                        courseId,
+                        assignmentId,
+                        problemId,
+                        error: errorMessage,
+                      },
+                    });
+                    feedback = `ERROR: ${errorMessage}`;
                   }
                 } catch (parseErr) {
-                  console.error('Failed to parse evaluator JSON:', parseErr);
-                  feedback = `ERROR: Failed to parse evaluation result - ${result.stdout.trim()}`;
+                  evaluationRaw = stdoutTrimmed || null;
+                  const errorMessage = `Failed to parse evaluation result - ${stdoutTrimmed}`;
+                  await createEnhancedActivityLog(prisma, req, {
+                    userId: decoded.userId,
+                    action: 'SUBMISSION_EVALUATION_ERROR',
+                    category: 'SUBMISSION',
+                    courseId,
+                    assignmentId,
+                    problemId,
+                    metadata: {
+                      userId: decoded.userId,
+                      courseId,
+                      assignmentId,
+                      problemId,
+                      error: errorMessage,
+                      parseError: parseErr instanceof Error ? parseErr.message : String(parseErr),
+                    },
+                  });
+                  feedback = `ERROR: ${errorMessage}`;
                 }
               } catch (evaluatorErr) {
-                console.error('JavaRunner execution failed:', evaluatorErr);
                 await createEnhancedActivityLog(prisma, req, {
                   userId: decoded.userId,
                   action: 'SUBMISSION_EVALUATION_ERROR',
@@ -215,17 +280,61 @@ export async function POST(req: NextRequest) {
                 feedback = `ERROR: Evaluation failed - ${evaluatorErr instanceof Error ? evaluatorErr.message : 'Unknown error'}`;
               }
             } else {
-              console.warn('[submissions] Answer file not found on server:', answerFilePath);
+              await createEnhancedActivityLog(prisma, req, {
+                userId: decoded.userId,
+                action: 'SUBMISSION_EVALUATION_ERROR',
+                category: 'SUBMISSION',
+                courseId,
+                assignmentId,
+                problemId,
+                metadata: {
+                  userId: decoded.userId,
+                  courseId,
+                  assignmentId,
+                  problemId,
+                  error: 'Answer file not found on server.',
+                  answerFilePath,
+                },
+              });
               feedback = 'ERROR: Answer file not found on server.';
             }
           } else {
-            console.warn('[submissions] No answer file configured for this problem.');
+            await createEnhancedActivityLog(prisma, req, {
+              userId: decoded.userId,
+              action: 'SUBMISSION_EVALUATION_ERROR',
+              category: 'SUBMISSION',
+              courseId,
+              assignmentId,
+              problemId,
+              metadata: {
+                userId: decoded.userId,
+                courseId,
+                assignmentId,
+                problemId,
+                error: 'No answer file configured for this problem.',
+              },
+            });
             feedback = 'ERROR: No answer file configured for this problem.';
           }
         }
       } catch (cmdErr) {
-        console.error('Command execution failed:', cmdErr);
         const isDocker = process.env.CFGANALYZER_BINARY !== undefined;
+
+        await createEnhancedActivityLog(prisma, req, {
+          userId: decoded.userId,
+          action: 'SUBMISSION_EVALUATION_ERROR',
+          category: 'SUBMISSION',
+          courseId,
+          assignmentId,
+          problemId,
+          metadata: {
+            userId: decoded.userId,
+            courseId,
+            assignmentId,
+            problemId,
+            error: cmdErr instanceof Error ? cmdErr.message : String(cmdErr),
+          },
+        });
 
         if (!isDocker && os.platform() === 'win32') {
           feedback = 'ERROR: Failed to analyze file.';
@@ -245,6 +354,7 @@ export async function POST(req: NextRequest) {
         originalFileName,
         feedback,
         correct,
+        evaluationRaw,
       },
     });
 
@@ -269,8 +379,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(submission, { status: 201 });
   } catch (error: unknown) {
-    console.error('Submission error:', error);
-
     await createEnhancedActivityLog(prisma, req, {
       userId: decoded.userId,
       action: 'SUBMISSION_ERROR',
