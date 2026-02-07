@@ -2,7 +2,17 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Eye, FileText, MessageSquare, ChevronDown } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  FileText,
+  MessageSquare,
+  ChevronDown,
+  Check,
+  X,
+  Minus,
+} from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -10,6 +20,7 @@ import {
   DropdownMenuItem,
 } from './ui/dropdown-menu';
 import { Button } from './ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -149,35 +160,85 @@ function SubmissionTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Attempt #</TableHead>
             <TableHead>Submitted At</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead>Score</TableHead>
+            <TableHead>Feedback</TableHead>
             <TableHead>Action</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {sorted.map((s, idx) => (
-            <TableRow key={s.id} className={s.id === latestId ? 'bg-muted/50' : ''}>
-              <TableCell>{sorted.length - idx}</TableCell>
-              <TableCell>{new Date(s.submittedAt).toLocaleString()}</TableCell>
-              <TableCell>
-                <Badge variant="outline">
-                  {s.correct === true ? 'Correct' : s.correct === false ? 'Incorrect' : 'Submitted'}
-                </Badge>
-              </TableCell>
-              <TableCell>{'—'}</TableCell>
-              <TableCell>
-                {s.fileName ? (
-                  <Button size="sm" variant="secondary" onClick={() => onView(s)}>
-                    <Eye className="mr-2 h-4 w-4" /> View
-                  </Button>
-                ) : (
-                  <span className="text-muted-foreground text-sm">No file</span>
-                )}
-              </TableCell>
-            </TableRow>
-          ))}
+          {sorted.map((s) => {
+            const rawJson = s.evaluationRaw
+              ? typeof s.evaluationRaw === 'string'
+                ? s.evaluationRaw
+                : JSON.stringify(s.evaluationRaw, null, 2)
+              : null;
+
+            return (
+              <TableRow
+                key={s.id}
+                className={`${s.id === latestId ? 'bg-muted/50' : ''} hover:bg-transparent`}
+              >
+                <TableCell>
+                  <div className="flex flex-col">
+                    <span>{new Date(s.submittedAt).toLocaleDateString()}</span>
+                    <span className="text-muted-foreground text-xs">
+                      {new Date(s.submittedAt).toLocaleTimeString()}
+                    </span>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  {s.correct === true ? (
+                    <div className="flex justify-center">
+                      <Check className="h-4 w-4 text-green-600" />
+                    </div>
+                  ) : s.correct === false ? (
+                    <div className="flex justify-center">
+                      <X className="h-4 w-4 text-red-600" />
+                    </div>
+                  ) : (
+                    <div className="text-muted-foreground flex items-center gap-2">
+                      <Minus className="h-4 w-4" />
+                      <span className="text-sm">Submitted</span>
+                    </div>
+                  )}
+                </TableCell>
+                <TableCell className="break-words whitespace-normal">
+                  {s.feedback ? (
+                    <span className="text-sm">{s.feedback}</span>
+                  ) : (
+                    <span className="text-muted-foreground text-sm">No feedback</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2 whitespace-nowrap">
+                    {s.fileName ? (
+                      <Button size="sm" variant="secondary" onClick={() => onView(s)}>
+                        <Eye className="mr-2 h-4 w-4" /> View
+                      </Button>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">No file</span>
+                    )}
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button size="sm" variant="outline" disabled={!rawJson}>
+                          JSON
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-2xl">
+                        <DialogHeader>
+                          <DialogTitle>Raw evaluation JSON</DialogTitle>
+                        </DialogHeader>
+                        <pre className="bg-muted max-h-[60vh] overflow-auto rounded-md p-3 text-xs leading-relaxed">
+                          {rawJson ?? 'No raw JSON available.'}
+                        </pre>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </div>
@@ -460,8 +521,9 @@ export default function AssignmentSubmissions({
         return;
       }
       try {
+        const validProblems = problems.filter((p): p is Problem => Boolean(p?.id));
         const entries = await Promise.all(
-          problems.map(async (p) => {
+          validProblems.map(async (p) => {
             try {
               const res = await fetch(
                 `/api/comments?assignmentId=${assignmentId}&problemId=${p.id}&studentId=${selectedStudent.id}`,
@@ -479,6 +541,7 @@ export default function AssignmentSubmissions({
       } catch (err) {
         console.error('Load comments error:', err);
         showToast.error('Failed to load comments');
+        setComments({});
       }
     };
     if (problems.length > 0) loadComments();

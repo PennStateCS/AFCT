@@ -69,12 +69,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 
-    // Verify author is in this course
-    const rosterEntry = await prisma.roster.findUnique({
+    // Verify author is in this course (admins can be added automatically)
+    let rosterEntry = await prisma.roster.findUnique({
       where: { courseId_userId: { courseId: assignment.courseId, userId: user.id } },
     });
     if (!rosterEntry) {
-      return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
+      if (user.role === 'ADMIN') {
+        rosterEntry = await prisma.roster.create({
+          data: {
+            courseId: assignment.courseId,
+            userId: user.id,
+            role: 'ADMIN',
+          },
+        });
+      } else {
+        return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
+      }
     }
 
     // Verify problem belongs to course
@@ -96,7 +106,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create comment
-    const comment = await prisma.comment.create({
+    const comment = (await prisma.comment.create({
       data: {
         content,
         assignmentId,
@@ -120,7 +130,7 @@ export async function POST(request: NextRequest) {
           },
         },
       },
-    }) as CommentDB;
+    })) as CommentDB;
 
     await createEnhancedActivityLog(prisma, request, {
       userId: user.id,
@@ -155,12 +165,15 @@ export async function POST(request: NextRequest) {
           role: comment.roster.role ?? comment.roster.user.role ?? null,
         },
       },
-      { status: 201 }
+      { status: 201 },
     );
   } catch (error) {
     console.error('Error creating comment:', error);
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Invalid request data', details: error.issues }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Invalid request data', details: error.issues },
+        { status: 400 },
+      );
     }
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
@@ -182,7 +195,7 @@ export async function GET(request: NextRequest) {
     if (!assignmentId || !problemId) {
       return NextResponse.json(
         { error: 'assignmentId and problemId are required' },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -211,7 +224,7 @@ export async function GET(request: NextRequest) {
         }
       : { assignmentId, problemId };
 
-    const comments: CommentDB[] = await prisma.comment.findMany({
+    const comments: CommentDB[] = (await prisma.comment.findMany({
       where: whereClause,
       include: {
         roster: {
@@ -230,7 +243,7 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: { createdAt: 'asc' },
-    }) as CommentDB[];
+    })) as CommentDB[];
 
     const formatted: CommentResponse[] = comments.map((c) => ({
       id: c.id,
@@ -298,8 +311,7 @@ export async function DELETE(request: NextRequest) {
       courseId: comment.assignment.courseId,
       assignmentId: comment.assignmentId,
       problemId: comment.problemId,
-      metadata: 
-      {
+      metadata: {
         userId: user.id,
         action: 'DELETE_COMMENT',
         category: 'ASSIGNMENT',
