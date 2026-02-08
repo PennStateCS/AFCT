@@ -145,4 +145,119 @@ describe('GET /api/status', () => {
     expect(software?.buildHash).toBe('abcdef0123456789abcdef0123456789abcdef01');
     expect(software?.imageTag).toBe('v1.2.3');
   });
+
+  it('supports deep query parameter for extended diagnostics', async () => {
+    prismaMock.$queryRaw.mockResolvedValue([{ version: '14.1' }]);
+
+    const req = new Request('http://localhost/api/status?deep=1');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body).toBeTruthy();
+  });
+
+  it('handles Postgres database provider', async () => {
+    process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/db';
+    prismaMock.$queryRaw.mockResolvedValue([{ version: '14.1' }]);
+    prismaMock.$queryRawUnsafe.mockResolvedValue([]);
+
+    const req = new Request('http://localhost/api/status');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    const database = body.database as { ok?: boolean; details?: Record<string, unknown> };
+    expect(database?.ok).toBe(true);
+  });
+
+  it('collects counts from database', async () => {
+    prismaMock.user.count.mockResolvedValue(25);
+    prismaMock.course.count.mockResolvedValue(5);
+    prismaMock.assignment.count.mockResolvedValue(15);
+    prismaMock.problem.count.mockResolvedValue(50);
+    prismaMock.submission.count.mockResolvedValue(200);
+    prismaMock.activityLog.count.mockResolvedValue(1000);
+
+    const req = new Request('http://localhost/api/status');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    const app = body.app as Record<string, unknown>;
+    expect(app.users).toBe(25);
+    expect(app.courses).toBe(5);
+    expect(app.assignments).toBe(15);
+    expect(app.problems).toBe(50);
+    expect(app.submissions).toBe(200);
+  });
+
+  it('handles database connection errors gracefully', async () => {
+    prismaMock.$queryRaw.mockRejectedValue(new Error('Connection failed'));
+
+    const req = new Request('http://localhost/api/status');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    const database = body.database as { ok?: boolean; message?: string };
+    expect(database?.ok).toBe(false);
+    expect(database?.message).toContain('failed');
+  });
+
+  it('includes environment variables in env section', async () => {
+    process.env.NEXTAUTH_URL = 'https://example.com';
+    process.env.NODE_ENV = 'production';
+
+    const req = new Request('http://localhost/api/status');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    const env = body.env as Record<string, unknown>;
+    expect(env.public).toBeTruthy();
+    expect(env.masked).toBeTruthy();
+  });
+
+  it('handles activity log queries', async () => {
+    prismaMock.activityLog.findMany.mockResolvedValue([]);
+    prismaMock.activityLog.count.mockResolvedValue(100);
+
+    const req = new Request('http://localhost/api/status');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body).toBeTruthy();
+  });
+
+  it('includes Java version when available', async () => {
+    execSyncMock.mockImplementation((cmd: string) => {
+      if ((cmd as string).includes('java -version')) {
+        return 'openjdk version "21.0.10" 2024-01-16';
+      }
+      return '';
+    });
+
+    const req = new Request('http://localhost/api/status');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    const app = body.app as { javaVersion?: string };
+    expect(app?.javaVersion).toBeTruthy();
+  });
+
+  it('handles missing Java gracefully', async () => {
+    execSyncMock.mockImplementation(() => {
+      throw new Error('java not found');
+    });
+
+    const req = new Request('http://localhost/api/status');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body).toBeTruthy();
+  });
 });
