@@ -549,4 +549,43 @@ describe('POST /api/submissions', () => {
     );
     expect(successLogCall).toBeDefined();
   });
+
+  it('handles submission creation error in catch block', async () => {
+    vi.mocked(os.platform).mockReturnValue('linux');
+
+    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
+    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
+      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
+    });
+    prismaMock.submission.create.mockRejectedValue(new Error('Database error'));
+
+    const existsSyncMock = vi.mocked(fs.existsSync);
+    existsSyncMock.mockReturnValue(true);
+
+    javaRunnerExecuteMock.mockResolvedValue({
+      stdout: JSON.stringify({ correct: true, feedback: 'Correct' }),
+      stderr: '',
+    });
+
+    const file = makeFile(10, 'submission.jff');
+    const formData = new FormData();
+    formData.set('courseId', 'course-1');
+    formData.set('assignmentId', 'assignment-1');
+    formData.set('problemId', 'problem-1');
+    formData.set('file', file);
+
+    const req = {
+      headers: new Headers({ authorization: 'Bearer token' }),
+      formData: async () => formData,
+    } as unknown as NextRequest;
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(500);
+    const errorLogCall = activityLogMock.mock.calls.find(
+      (call) => call[2]?.action === 'SUBMISSION_ERROR',
+    );
+    expect(errorLogCall).toBeDefined();
+    expect(errorLogCall?.[2]?.metadata?.error).toContain('Database error');
+  });
 });
