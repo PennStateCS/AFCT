@@ -16,6 +16,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -26,7 +29,22 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
+      # Generates consistent tags + OCI labels (including a UTC build timestamp)
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/pennstatewilkes-barre/afct-dashboard
+          tags: |
+            type=raw,value=main
+            type=sha,format=short,prefix=sha-
+            type=raw,value=build-{{date 'YYYYMMDD-HHmm' tz='UTC'}}
+          labels: |
+            org.opencontainers.image.title=afct-dashboard
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Build and push (attempt 1)
         id: build
         uses: docker/build-push-action@v6
         with:
@@ -34,27 +52,29 @@ jobs:
           push: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          build-contexts: |
-            context=.
-          tags: |
-            ghcr.io/pennstatewilkes-barre/afct-dashboard:main
-            ghcr.io/pennstatewilkes-barre/afct-dashboard:sha-${{ github.sha }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
 
-      - name: Retry build and push on failure
+      - name: Build and push (attempt 2)
         id: retry
-        if: steps.build.outcome == 'failure'
+        if: failure()
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          tags: |
-            ghcr.io/pennstatewilkes-barre/afct-dashboard:main
-            ghcr.io/pennstatewilkes-barre/afct-dashboard:sha-${{ github.sha }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
 
-      - name: Fail if build did not succeed
-        if: steps.build.outcome == 'failure' && steps.retry.outcome == 'failure'
+      - name: Print published digest
+        if: always()
         run: |
-          echo "Build failed in both attempts."
-          exit 1
+          echo "Tags pushed:"
+          echo "${{ steps.meta.outputs.tags }}"
+          echo ""
+          echo "Digest:"
+          echo "${{ steps.build.outputs.digest || steps.retry.outputs.digest }}"
+          echo ""
+          echo "Image ID:"
+          echo "${{ steps.build.outputs.imageid || steps.retry.outputs.imageid }}"
