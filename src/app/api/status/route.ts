@@ -674,7 +674,11 @@ export async function GET(req: Request) {
   } catch {}
 
   try {
-    const javaOutput = execSync('java -version', { encoding: 'utf-8', stdio: 'pipe' }) as string;
+    const javaOutput = execSync('java -version 2>&1', {
+      encoding: 'utf-8',
+      stdio: 'pipe',
+      shell: true,
+    }) as string;
     const versionMatch = javaOutput.match(/version\s+"(.+?)"/i);
     if (versionMatch?.[1]) app.javaVersion = versionMatch[1];
   } catch {}
