@@ -46,6 +46,11 @@ type DatabaseStats = {
     connections_by_state?: Record<string, number>;
     connections_idle_in_xact?: number | null;
     db_size_mb?: number | null;
+    cache_hit_ratio?: number | null;
+    seq_scans?: number | null;
+    idx_scans?: number | null;
+    transactions_per_sec?: number | null;
+    slow_query_count?: number | null;
     top_queries?: Array<{ pid: number; state: string | null; age_ms: number; query_trunc: string }>;
   };
   sqlite?: {
