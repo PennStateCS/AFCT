@@ -149,4 +149,221 @@ describe('POST /api/submissions/[id]/rerun', () => {
     expect(body.success).toBe(true);
     expect(prismaMock.submission.update).toHaveBeenCalled();
   });
+
+  it('returns 400 when problem not linked', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.submission.findUnique.mockResolvedValue({
+      id: 's1',
+      assignmentId: 'a1',
+      problemId: 'p1',
+      studentId: 'u2',
+      fileName: 'sub.txt',
+      originalFileName: 'sub.txt',
+    });
+    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
+    prismaMock.assignmentProblem.findUnique.mockResolvedValue(null);
+
+    const req = new NextRequest('http://localhost/api/submissions/s1/rerun', { method: 'POST' });
+    const res = await POST(req, { params: Promise.resolve({ id: 's1' }) });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when no answer file configured', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.submission.findUnique.mockResolvedValue({
+      id: 's1',
+      assignmentId: 'a1',
+      problemId: 'p1',
+      studentId: 'u2',
+      fileName: 'sub.txt',
+      originalFileName: 'sub.txt',
+    });
+    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
+    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
+      problem: { fileName: null, maxStates: null, isDeterministic: null, type: 'RE' },
+    });
+    existsSyncMock.mockImplementation((filePath: string) => {
+      const normalized = filePath.toString();
+      if (normalized.includes('submissions')) return true;
+      return false;
+    });
+
+    const req = new NextRequest('http://localhost/api/submissions/s1/rerun', { method: 'POST' });
+    const res = await POST(req, { params: Promise.resolve({ id: 's1' }) });
+
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error).toContain('No answer file');
+  });
+
+  it('returns 404 when answer file missing from disk', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'TA' } });
+    prismaMock.submission.findUnique.mockResolvedValue({
+      id: 's1',
+      assignmentId: 'a1',
+      problemId: 'p1',
+      studentId: 'u2',
+      fileName: 'sub.txt',
+      originalFileName: 'sub.txt',
+    });
+    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
+    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
+      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
+    });
+    existsSyncMock.mockImplementation((filePath: string) => {
+      const normalized = filePath.toString();
+      if (normalized.includes('solutions')) return false;
+      return true;
+    });
+
+    const req = new NextRequest('http://localhost/api/submissions/s1/rerun', { method: 'POST' });
+    const res = await POST(req, { params: Promise.resolve({ id: 's1' }) });
+
+    expect(res.status).toBe(404);
+    const json = await res.json();
+    expect(json.error).toContain('Answer file not found');
+  });
+
+  it('handles FA type with maxStates and deterministic', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.submission.findUnique.mockResolvedValue({
+      id: 's1',
+      assignmentId: 'a1',
+      problemId: 'p1',
+      studentId: 'u2',
+      fileName: 'sub.txt',
+      originalFileName: 'sub.txt',
+    });
+    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
+    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
+      problem: { fileName: 'answer.jff', maxStates: 10, isDeterministic: true, type: 'FA' },
+    });
+    existsSyncMock.mockReturnValue(true);
+    executeMock.mockResolvedValue({
+      stdout: '{"correct":false,"feedback":"too many"}',
+      stderr: '',
+    });
+    prismaMock.submission.update.mockResolvedValue({
+      id: 's1',
+      feedback: 'too many',
+      correct: false,
+      evaluationRaw: { correct: false, feedback: 'too many' },
+      updatedAt: new Date().toISOString(),
+    });
+
+    const req = new NextRequest('http://localhost/api/submissions/s1/rerun', { method: 'POST' });
+    const res = await POST(req, { params: Promise.resolve({ id: 's1' }) });
+
+    expect(res.status).toBe(200);
+    expect(executeMock).toHaveBeenCalledWith(
+      expect.arrayContaining(['10', 'true']),
+      expect.any(Object),
+    );
+  });
+
+  it('handles stderr output during evaluation', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.submission.findUnique.mockResolvedValue({
+      id: 's1',
+      assignmentId: 'a1',
+      problemId: 'p1',
+      studentId: 'u2',
+      fileName: 'sub.txt',
+      originalFileName: 'sub.txt',
+    });
+    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
+    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
+      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
+    });
+    existsSyncMock.mockReturnValue(true);
+    executeMock.mockResolvedValue({
+      stdout: '{"correct":true,"feedback":"ok"}',
+      stderr: 'Warning message',
+    });
+    prismaMock.submission.update.mockResolvedValue({
+      id: 's1',
+      feedback: 'ok',
+      correct: true,
+      evaluationRaw: { correct: true, feedback: 'ok' },
+      updatedAt: new Date().toISOString(),
+    });
+
+    const req = new NextRequest('http://localhost/api/submissions/s1/rerun', { method: 'POST' });
+    const res = await POST(req, { params: Promise.resolve({ id: 's1' }) });
+
+    expect(res.status).toBe(200);
+    const stderrCall = activityLogMock.mock.calls.find(
+      (call) => call[2]?.action === 'SUBMISSION_RERUN_STDERR',
+    );
+    expect(stderrCall).toBeDefined();
+  });
+
+  it('handles invalid JSON from evaluator', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.submission.findUnique.mockResolvedValue({
+      id: 's1',
+      assignmentId: 'a1',
+      problemId: 'p1',
+      studentId: 'u2',
+      fileName: 'sub.txt',
+      originalFileName: 'sub.txt',
+    });
+    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
+    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
+      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
+    });
+    existsSyncMock.mockReturnValue(true);
+    executeMock.mockResolvedValue({ stdout: 'invalid json', stderr: '' });
+    prismaMock.submission.update.mockResolvedValue({
+      id: 's1',
+      feedback: 'ERROR: Failed to parse evaluation result - invalid json',
+      correct: undefined,
+      evaluationRaw: 'invalid json',
+      updatedAt: new Date().toISOString(),
+    });
+
+    const req = new NextRequest('http://localhost/api/submissions/s1/rerun', { method: 'POST' });
+    const res = await POST(req, { params: Promise.resolve({ id: 's1' }) });
+
+    expect(res.status).toBe(200);
+    const errorCall = activityLogMock.mock.calls.find(
+      (call) => call[2]?.action === 'SUBMISSION_RERUN_ERROR',
+    );
+    expect(errorCall).toBeDefined();
+  });
+
+  it('handles evaluator execution error', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.submission.findUnique.mockResolvedValue({
+      id: 's1',
+      assignmentId: 'a1',
+      problemId: 'p1',
+      studentId: 'u2',
+      fileName: 'sub.txt',
+      originalFileName: 'sub.txt',
+    });
+    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
+    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
+      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
+    });
+    existsSyncMock.mockReturnValue(true);
+    executeMock.mockRejectedValue(new Error('Timeout'));
+    prismaMock.submission.update.mockResolvedValue({
+      id: 's1',
+      feedback: 'ERROR: Evaluation failed - Timeout',
+      correct: undefined,
+      evaluationRaw: null,
+      updatedAt: new Date().toISOString(),
+    });
+
+    const req = new NextRequest('http://localhost/api/submissions/s1/rerun', { method: 'POST' });
+    const res = await POST(req, { params: Promise.resolve({ id: 's1' }) });
+
+    expect(res.status).toBe(200);
+    const errorCall = activityLogMock.mock.calls.find(
+      (call) => call[2]?.action === 'SUBMISSION_RERUN_ERROR',
+    );
+    expect(errorCall).toBeDefined();
+  });
 });
