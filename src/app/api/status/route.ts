@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import type { PeerCertificate } from 'tls';
 import { prisma } from '@/lib/prisma';
+import { execSync } from 'child_process';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -670,6 +671,22 @@ export async function GET(req: Request) {
         }),
       ),
     ]);
+  } catch {}
+
+  try {
+    const javaOutput = execSync('java -version', { encoding: 'utf-8', stdio: 'pipe' }) as string;
+    const versionMatch = javaOutput.match(/version\s+"(.+?)"/i);
+    if (versionMatch?.[1]) app.javaVersion = versionMatch[1];
+  } catch {}
+
+  try {
+    const evaluatorPath = path.join(process.cwd(), 'jars', 'afct-evaluator.jar');
+    const evaluatorRaw = execSync(`java -jar "${evaluatorPath}" -v -j`, {
+      encoding: 'utf-8',
+      stdio: 'pipe',
+    }) as string;
+    const parsed = JSON.parse(evaluatorRaw.trim()) as { version?: string };
+    if (parsed?.version) app.evaluatorVersion = parsed.version;
   } catch {}
 
   // ===== Network =====
