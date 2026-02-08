@@ -7,14 +7,14 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 // Types
 interface Submission {
-  id: string,
-  submittedAt: Date,
-  feedback: string,
-  correct: boolean,
-  evaluationRaw?: unknown,
-  fileName: string,
-  originalFileName: string,
-  problemId: string,
+  id: string;
+  submittedAt: Date;
+  feedback: string;
+  correct: boolean;
+  evaluationRaw?: unknown;
+  fileName: string;
+  originalFileName: string;
+  problemId: string;
 }
 
 export async function GET(
@@ -42,6 +42,17 @@ export async function GET(
       return NextResponse.json({ error: 'Assignment not found for this course' }, { status: 404 });
     }
 
+    // Ensure viewer is allowed (admin can view any, others must be on roster)
+    if (user.role !== 'ADMIN') {
+      const rosterEntry = await prisma.roster.findFirst({
+        where: { courseId, userId: user.id },
+        select: { id: true },
+      });
+      if (!rosterEntry) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    }
+
     // Get all problems linked to the assignment
     const assignmentProblems = await prisma.assignmentProblem.findMany({
       where: { assignmentId },
@@ -65,7 +76,7 @@ export async function GET(
     }
 
     // Fetch all submissions for the student for this assignment
-    const submissions = await prisma.submission.findMany({
+    const submissions = (await prisma.submission.findMany({
       where: {
         assignmentId,
         studentId,
@@ -81,7 +92,7 @@ export async function GET(
         originalFileName: true,
         problemId: true,
       },
-    }) as Submission[];
+    })) as Submission[];
 
     // Group submissions by problemId and attach related problem metadata
     const result: Record<
@@ -109,7 +120,9 @@ export async function GET(
     > = {};
 
     for (const { problem } of assignmentProblems) {
-      const subsForProblem = submissions.filter((s: (typeof submissions)[number]) => s.problemId === problem.id);
+      const subsForProblem = submissions.filter(
+        (s: (typeof submissions)[number]) => s.problemId === problem.id,
+      );
       result[problem.id] = {
         problem,
         submissions: subsForProblem.map((s: (typeof subsForProblem)[number]) => ({

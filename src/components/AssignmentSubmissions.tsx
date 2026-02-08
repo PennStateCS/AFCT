@@ -584,7 +584,7 @@ export default function AssignmentSubmissions({
         `/api/courses/${courseId}/${assignmentId}/submissions/${selectedStudent.id}`,
       );
       if (!res.ok) {
-        if (res.status === 404) {
+        if ([401, 403, 404].includes(res.status)) {
           setSubmissions({});
           return;
         }
