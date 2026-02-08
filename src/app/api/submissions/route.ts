@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { verifyToken } from '@/app/utils/jwt';
 import fs from 'fs';
 import path from 'path';
@@ -354,7 +355,7 @@ export async function POST(req: NextRequest) {
         originalFileName,
         feedback,
         correct,
-        evaluationRaw,
+        evaluationRaw: evaluationRaw as Prisma.InputJsonValue | null,
       },
     });
 
