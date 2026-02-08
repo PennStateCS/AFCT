@@ -729,6 +729,8 @@ export default function SystemStatusPage() {
               {/* Basic stats */}
               <div className="grid gap-4 sm:grid-cols-2">
                 <Stat label="App Version" value={pkg.version} />
+                <Stat label="Evaluator Version" value={status.app?.evaluatorVersion ?? '—'} />
+                <Stat label="Java Version" value={status.app?.javaVersion ?? '—'} />
                 <Stat label="System Uptime" value={formatUptime(status.system?.uptime)} />
                 <Stat
                   label="Node / Process"
