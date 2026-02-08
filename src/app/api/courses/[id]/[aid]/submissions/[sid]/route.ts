@@ -18,6 +18,27 @@ interface Submission {
   problemId: string;
 }
 
+const submissionSelectWithEvaluation = {
+  id: true,
+  submittedAt: true,
+  feedback: true,
+  correct: true,
+  evaluationRaw: true,
+  fileName: true,
+  originalFileName: true,
+  problemId: true,
+} as const;
+
+const submissionSelectWithoutEvaluation = {
+  id: true,
+  submittedAt: true,
+  feedback: true,
+  correct: true,
+  fileName: true,
+  originalFileName: true,
+  problemId: true,
+} as const;
+
 export async function GET(
   req: Request,
   context: { params: Promise<{ id: string; aid: string; sid: string }> },
@@ -85,16 +106,7 @@ export async function GET(
           studentId,
         },
         orderBy: { submittedAt: 'desc' },
-        select: {
-          id: true,
-          submittedAt: true,
-          feedback: true,
-          correct: true,
-          evaluationRaw: true,
-          fileName: true,
-          originalFileName: true,
-          problemId: true,
-        },
+        select: submissionSelectWithEvaluation as unknown as Prisma.SubmissionSelect,
       })) as Submission[];
     } catch (error) {
       if (
@@ -108,15 +120,7 @@ export async function GET(
             studentId,
           },
           orderBy: { submittedAt: 'desc' },
-          select: {
-            id: true,
-            submittedAt: true,
-            feedback: true,
-            correct: true,
-            fileName: true,
-            originalFileName: true,
-            problemId: true,
-          },
+          select: submissionSelectWithoutEvaluation,
         })) as Submission[];
       } else {
         throw error;
