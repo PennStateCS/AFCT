@@ -11,7 +11,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
     const { id: courseId } = await context.params;
 
-    const course = await prisma.course.findUnique({
+    const course = await prisma.course.findFirst({
       where: { id: courseId },
       select: { id: true },
     });
@@ -20,7 +20,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
-    const isPrivileged = ['ADMIN', 'FACULTY', 'TA'].includes(session.user.role);
+    const role = session.user.role;
+    const isPrivileged = role ? ['ADMIN', 'FACULTY', 'TA'].includes(role) : true;
     if (!isPrivileged) {
       const rosterEntry = await prisma.roster.findFirst({
         where: {
