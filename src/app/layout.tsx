@@ -22,7 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Toaster
               position="top-center"
               theme="light"
-              closeButton
+              closeButton={false}
               expand={true}
               offset={20}
               icons={{
