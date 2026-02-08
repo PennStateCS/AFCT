@@ -39,7 +39,6 @@ jobs:
           tags: |
             ghcr.io/pennstatewilkes-barre/afct-dashboard:main
             ghcr.io/pennstatewilkes-barre/afct-dashboard:sha-${{ github.sha }}
-        continue-on-error: true
 
       - name: Retry build and push on failure
         id: retry
