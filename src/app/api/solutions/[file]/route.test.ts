@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import fs from 'fs';
 
 const prismaMock = vi.hoisted(() => ({
   problem: {
@@ -11,9 +12,29 @@ const prismaMock = vi.hoisted(() => ({
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
+const activityLogMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
+vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
+vi.mock('fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('fs')>();
+  const existsSync = vi.fn().mockReturnValue(true);
+  return {
+    ...actual,
+    existsSync,
+    promises: {
+      readFile: vi.fn().mockResolvedValue(Buffer.from('solution content')),
+    },
+    default: {
+      ...actual,
+      existsSync,
+      promises: {
+        readFile: vi.fn().mockResolvedValue(Buffer.from('solution content')),
+      },
+    },
+  };
+});
 
 import { GET } from './route';
 
@@ -64,5 +85,142 @@ describe('GET /api/solutions/[file]', () => {
     });
 
     expect(res.status).toBe(403);
+  });
+
+  it('returns 404 when file does not exist on disk', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN' } });
+    prismaMock.problem.findFirst.mockResolvedValue({
+      id: 'problem-1',
+      courseId: 'course-1',
+      fileName: 'file.txt',
+      originalFileName: 'solution.txt',
+    });
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+
+    const res = await GET(new NextRequest('http://localhost/api/solutions/file.txt'), {
+      params: Promise.resolve({ file: 'file.txt' }),
+    });
+
+    expect(res.status).toBe(404);
+    const json = await res.json();
+    expect(json.error).toBe('File not found on disk');
+  });
+
+  it('serves solution file for admin user', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN' } });
+    prismaMock.problem.findFirst.mockResolvedValue({
+      id: 'problem-1',
+      courseId: 'course-1',
+      fileName: 'file.txt',
+      originalFileName: 'solution.txt',
+    });
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+
+    const res = await GET(new NextRequest('http://localhost/api/solutions/file.txt'), {
+      params: Promise.resolve({ file: 'file.txt' }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toBe('application/octet-stream');
+    expect(res.headers.get('Content-Disposition')).toContain('solution.txt');
+  });
+
+  it('serves solution file for faculty user', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'FACULTY' } });
+    prismaMock.problem.findFirst.mockResolvedValue({
+      id: 'problem-1',
+      courseId: 'course-1',
+      fileName: 'file.txt',
+      originalFileName: 'solution.txt',
+    });
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+
+    const res = await GET(new NextRequest('http://localhost/api/solutions/file.txt'), {
+      params: Promise.resolve({ file: 'file.txt' }),
+    });
+
+    expect(res.status).toBe(200);
+  });
+
+  it('serves solution file for TA user', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'TA' } });
+    prismaMock.problem.findFirst.mockResolvedValue({
+      id: 'problem-1',
+      courseId: 'course-1',
+      fileName: 'file.txt',
+      originalFileName: 'solution.txt',
+    });
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+
+    const res = await GET(new NextRequest('http://localhost/api/solutions/file.txt'), {
+      params: Promise.resolve({ file: 'file.txt' }),
+    });
+
+    expect(res.status).toBe(200);
+  });
+
+  it('logs download activity when download=1 param is present', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN' } });
+    prismaMock.problem.findFirst.mockResolvedValue({
+      id: 'problem-1',
+      courseId: 'course-1',
+      fileName: 'file.txt',
+      originalFileName: 'solution.txt',
+    });
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+
+    const req = new NextRequest('http://localhost/api/solutions/file.txt?download=1');
+    const res = await GET(req, {
+      params: Promise.resolve({ file: 'file.txt' }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      req,
+      expect.objectContaining({
+        userId: 'user-1',
+        action: 'DOWNLOAD_SOLUTION_FILE',
+        category: 'PROBLEM',
+        courseId: 'course-1',
+        problemId: 'problem-1',
+      }),
+    );
+  });
+
+  it('does not log download when download param is absent', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN' } });
+    prismaMock.problem.findFirst.mockResolvedValue({
+      id: 'problem-1',
+      courseId: 'course-1',
+      fileName: 'file.txt',
+      originalFileName: 'solution.txt',
+    });
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+
+    const res = await GET(new NextRequest('http://localhost/api/solutions/file.txt'), {
+      params: Promise.resolve({ file: 'file.txt' }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(activityLogMock).not.toHaveBeenCalled();
+  });
+
+  it('uses fileName when originalFileName is null', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN' } });
+    prismaMock.problem.findFirst.mockResolvedValue({
+      id: 'problem-1',
+      courseId: 'course-1',
+      fileName: 'file.txt',
+      originalFileName: null,
+    });
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+
+    const res = await GET(new NextRequest('http://localhost/api/solutions/file.txt'), {
+      params: Promise.resolve({ file: 'file.txt' }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Disposition')).toContain('file.txt');
   });
 });

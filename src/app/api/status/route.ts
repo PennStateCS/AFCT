@@ -841,7 +841,7 @@ export async function GET(req: Request) {
     const javaOutput = execSync('java -version 2>&1', {
       encoding: 'utf-8',
       stdio: 'pipe',
-      shell: true,
+      shell: process.env.SHELL ?? (process.platform === 'win32' ? 'cmd.exe' : '/bin/sh'),
     }) as string;
     const versionMatch = javaOutput.match(/version\s+"(.+?)"/i);
     if (versionMatch?.[1]) app.javaVersion = versionMatch[1];

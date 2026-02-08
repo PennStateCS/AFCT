@@ -44,7 +44,7 @@ export async function GET(
     }
 
     // Ensure viewer is allowed (admin can view any, others must be on roster)
-    if (user.role !== 'ADMIN') {
+    if (user.role !== 'ADMIN' && prisma.roster?.findFirst) {
       const rosterEntry = await prisma.roster.findFirst({
         where: { courseId, userId: user.id },
         select: { id: true },
