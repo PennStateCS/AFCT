@@ -583,7 +583,13 @@ export default function AssignmentSubmissions({
       const res = await fetch(
         `/api/courses/${courseId}/${assignmentId}/submissions/${selectedStudent.id}`,
       );
-      if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load submissions');
+      if (!res.ok) {
+        if (res.status === 404) {
+          setSubmissions({});
+          return;
+        }
+        throw new Error((await res.json())?.error || 'Failed to load submissions');
+      }
       const data = await res.json();
       setSubmissions(data || {});
     } catch (err) {
