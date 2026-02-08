@@ -5,7 +5,7 @@ import * as os from 'os';
 
 const prismaMock = vi.hoisted(() => ({
   assignmentProblem: { findUnique: vi.fn() },
-  submission: { create: vi.fn() },
+  submission: { create: vi.fn(), update: vi.fn() },
 }));
 
 const verifyTokenMock = vi.hoisted(() => vi.fn());
@@ -57,6 +57,8 @@ import { POST } from './route';
 beforeEach(() => {
   vi.clearAllMocks();
   uploadLimitMock.mockResolvedValue({ maxBytes: 5 * 1024 * 1024, maxMb: 5 });
+  prismaMock.submission.create.mockResolvedValue({ id: 'submission-1' });
+  prismaMock.submission.update.mockResolvedValue({ id: 'submission-1' });
   if (!('arrayBuffer' in File.prototype)) {
     File.prototype.arrayBuffer = async function () {
       return new Uint8Array(this.size).buffer;
@@ -118,7 +120,6 @@ describe('POST /api/submissions', () => {
     prismaMock.assignmentProblem.findUnique.mockResolvedValue({
       problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
     });
-    prismaMock.submission.create.mockResolvedValue({ id: 'submission-1' });
 
     const formData = new FormData();
     formData.set('courseId', 'course-1');
@@ -141,6 +142,7 @@ describe('POST /api/submissions', () => {
 
     expect(res.status).toBe(201);
     expect(prismaMock.submission.create).toHaveBeenCalled();
+    expect(prismaMock.submission.update).not.toHaveBeenCalled();
     expect(activityLogMock).toHaveBeenCalled();
   });
 
@@ -178,7 +180,6 @@ describe('POST /api/submissions', () => {
     prismaMock.assignmentProblem.findUnique.mockResolvedValue({
       problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
     });
-    prismaMock.submission.create.mockResolvedValue({ id: 'submission-1' });
 
     const existsSyncMock = vi.mocked(fs.existsSync);
     existsSyncMock.mockImplementation((p) =>
@@ -208,6 +209,7 @@ describe('POST /api/submissions', () => {
 
     expect(res.status).toBe(201);
     expect(javaRunnerExecuteMock).toHaveBeenCalled();
+    expect(prismaMock.submission.update).toHaveBeenCalled();
   });
 
   it('returns evaluation error when answer file missing', async () => {
@@ -216,7 +218,6 @@ describe('POST /api/submissions', () => {
     prismaMock.assignmentProblem.findUnique.mockResolvedValue({
       problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
     });
-    prismaMock.submission.create.mockResolvedValue({ id: 'submission-1' });
 
     const existsSyncMock = vi.mocked(fs.existsSync);
     existsSyncMock.mockImplementation((p) =>
@@ -239,6 +240,7 @@ describe('POST /api/submissions', () => {
 
     expect(res.status).toBe(201);
     expect(activityLogMock).toHaveBeenCalled();
+    expect(prismaMock.submission.update).toHaveBeenCalled();
   });
 
   it('handles FA type problem with maxStates and deterministic flags', async () => {
@@ -257,7 +259,6 @@ describe('POST /api/submissions', () => {
         type: 'FA',
       },
     });
-    prismaMock.submission.create.mockResolvedValue({ id: 'submission-1' });
 
     const existsSyncMock = vi.mocked(fs.existsSync);
     existsSyncMock.mockReturnValue(true);
@@ -281,6 +282,7 @@ describe('POST /api/submissions', () => {
       expect.arrayContaining(['5', 'true']),
       expect.any(Object),
     );
+    expect(prismaMock.submission.update).toHaveBeenCalled();
   });
 
   it('handles PDA type problem with maxStates', async () => {
@@ -299,7 +301,6 @@ describe('POST /api/submissions', () => {
         type: 'PDA',
       },
     });
-    prismaMock.submission.create.mockResolvedValue({ id: 'submission-1' });
 
     const existsSyncMock = vi.mocked(fs.existsSync);
     existsSyncMock.mockReturnValue(true);
@@ -323,6 +324,7 @@ describe('POST /api/submissions', () => {
       expect.arrayContaining(['10']),
       expect.any(Object),
     );
+    expect(prismaMock.submission.update).toHaveBeenCalled();
   });
 
   it('handles evaluator stderr output', async () => {
@@ -336,7 +338,6 @@ describe('POST /api/submissions', () => {
     prismaMock.assignmentProblem.findUnique.mockResolvedValue({
       problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
     });
-    prismaMock.submission.create.mockResolvedValue({ id: 'submission-1' });
 
     const existsSyncMock = vi.mocked(fs.existsSync);
     existsSyncMock.mockReturnValue(true);
@@ -360,6 +361,7 @@ describe('POST /api/submissions', () => {
       (call) => call[2]?.action === 'SUBMISSION_EVALUATION_STDERR',
     );
     expect(stderrLogCall).toBeDefined();
+    expect(prismaMock.submission.update).toHaveBeenCalled();
   });
 
   it('handles invalid JSON from evaluator', async () => {
@@ -373,7 +375,6 @@ describe('POST /api/submissions', () => {
     prismaMock.assignmentProblem.findUnique.mockResolvedValue({
       problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
     });
-    prismaMock.submission.create.mockResolvedValue({ id: 'submission-1' });
 
     const existsSyncMock = vi.mocked(fs.existsSync);
     existsSyncMock.mockReturnValue(true);
@@ -397,6 +398,7 @@ describe('POST /api/submissions', () => {
       (call) => call[2]?.action === 'SUBMISSION_EVALUATION_ERROR',
     );
     expect(errorLogCall).toBeDefined();
+    expect(prismaMock.submission.update).toHaveBeenCalled();
   });
 
   it('handles evaluator execution error', async () => {
@@ -407,7 +409,6 @@ describe('POST /api/submissions', () => {
     prismaMock.assignmentProblem.findUnique.mockResolvedValue({
       problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
     });
-    prismaMock.submission.create.mockResolvedValue({ id: 'submission-1' });
 
     const existsSyncMock = vi.mocked(fs.existsSync);
     existsSyncMock.mockReturnValue(true);
@@ -432,6 +433,7 @@ describe('POST /api/submissions', () => {
     );
     expect(errorLogCall).toBeDefined();
     expect(errorLogCall?.[2]?.metadata?.error).toContain('Timeout');
+    expect(prismaMock.submission.update).toHaveBeenCalled();
   });
 
   it('handles missing answer file configuration', async () => {
@@ -441,7 +443,6 @@ describe('POST /api/submissions', () => {
     prismaMock.assignmentProblem.findUnique.mockResolvedValue({
       problem: { fileName: null, maxStates: null, isDeterministic: null, type: 'RE' },
     });
-    prismaMock.submission.create.mockResolvedValue({ id: 'submission-1' });
 
     const existsSyncMock = vi.mocked(fs.existsSync);
     existsSyncMock.mockReturnValue(true);
@@ -467,6 +468,7 @@ describe('POST /api/submissions', () => {
         call[2]?.metadata?.error?.includes('No answer file configured'),
     );
     expect(errorLogCall).toBeDefined();
+    expect(prismaMock.submission.update).toHaveBeenCalled();
   });
 
   it('handles Java stream string in feedback', async () => {
@@ -483,7 +485,6 @@ describe('POST /api/submissions', () => {
     prismaMock.assignmentProblem.findUnique.mockResolvedValue({
       problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
     });
-    prismaMock.submission.create.mockResolvedValue({ id: 'submission-1' });
 
     const existsSyncMock = vi.mocked(fs.existsSync);
     existsSyncMock.mockReturnValue(true);
@@ -503,8 +504,9 @@ describe('POST /api/submissions', () => {
     const res = await POST(req);
 
     expect(res.status).toBe(201);
-    expect(prismaMock.submission.create).toHaveBeenCalledWith(
+    expect(prismaMock.submission.update).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: { id: 'submission-1' },
         data: expect.objectContaining({
           feedback: 'Evaluation completed - correct: true',
         }),
@@ -523,7 +525,6 @@ describe('POST /api/submissions', () => {
     prismaMock.assignmentProblem.findUnique.mockResolvedValue({
       problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
     });
-    prismaMock.submission.create.mockResolvedValue({ id: 'submission-1' });
 
     const existsSyncMock = vi.mocked(fs.existsSync);
     existsSyncMock.mockReturnValue(true);
@@ -548,6 +549,7 @@ describe('POST /api/submissions', () => {
       (call) => call[2]?.action === 'SUBMISSION_EVALUATION_SUCCESS',
     );
     expect(successLogCall).toBeDefined();
+    expect(prismaMock.submission.update).toHaveBeenCalled();
   });
 
   it('handles submission creation error in catch block', async () => {
