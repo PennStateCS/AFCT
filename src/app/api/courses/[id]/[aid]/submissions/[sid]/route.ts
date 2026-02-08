@@ -2,6 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
@@ -76,23 +77,51 @@ export async function GET(
     }
 
     // Fetch all submissions for the student for this assignment
-    const submissions = (await prisma.submission.findMany({
-      where: {
-        assignmentId,
-        studentId,
-      },
-      orderBy: { submittedAt: 'desc' },
-      select: {
-        id: true,
-        submittedAt: true,
-        feedback: true,
-        correct: true,
-        evaluationRaw: true,
-        fileName: true,
-        originalFileName: true,
-        problemId: true,
-      },
-    })) as Submission[];
+    let submissions: Submission[] = [];
+    try {
+      submissions = (await prisma.submission.findMany({
+        where: {
+          assignmentId,
+          studentId,
+        },
+        orderBy: { submittedAt: 'desc' },
+        select: {
+          id: true,
+          submittedAt: true,
+          feedback: true,
+          correct: true,
+          evaluationRaw: true,
+          fileName: true,
+          originalFileName: true,
+          problemId: true,
+        },
+      })) as Submission[];
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2022' &&
+        String(error.meta?.column ?? '').includes('evaluationRaw')
+      ) {
+        submissions = (await prisma.submission.findMany({
+          where: {
+            assignmentId,
+            studentId,
+          },
+          orderBy: { submittedAt: 'desc' },
+          select: {
+            id: true,
+            submittedAt: true,
+            feedback: true,
+            correct: true,
+            fileName: true,
+            originalFileName: true,
+            problemId: true,
+          },
+        })) as Submission[];
+      } else {
+        throw error;
+      }
+    }
 
     // Group submissions by problemId and attach related problem metadata
     const result: Record<
