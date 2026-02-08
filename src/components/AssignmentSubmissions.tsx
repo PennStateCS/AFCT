@@ -13,6 +13,7 @@ import {
   X,
   Minus,
   RefreshCw,
+  Download,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -244,6 +245,16 @@ function SubmissionTable({
                             <RefreshCw className="h-4 w-4" />
                             {rerunning[s.id] ? 'Rerunning…' : 'Rerun Evaluator'}
                           </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              if (!s.fileName) return;
+                              const url = `/api/uploads/submissions/${encodeURIComponent(s.fileName)}`;
+                              window.open(url, '_blank', 'noopener,noreferrer');
+                            }}
+                            className="flex items-center gap-2"
+                          >
+                            <Download className="h-4 w-4" /> Download Submission
+                          </DropdownMenuItem>
                           <Dialog>
                             <DialogTrigger asChild>
                               <DropdownMenuItem
@@ -436,6 +447,7 @@ export default function AssignmentSubmissions({
   const [savingComments, setSavingComments] = useState<Record<string, boolean>>({});
   const [deletingComments, setDeletingComments] = useState<Record<string, boolean>>({});
   const [rerunning, setRerunning] = useState<Record<string, boolean>>({});
+  const [gradeStatus, setGradeStatus] = useState<Record<string, boolean>>({});
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
   // Grade editing state (robust, GradesCard style)
   const [editingGrade, setEditingGrade] = useState<string>('');
@@ -689,6 +701,29 @@ export default function AssignmentSubmissions({
     fetchGrade();
   }, [courseId, assignmentId, selectedStudent]);
 
+  // Fetch grade status for all students (used for dropdown indicators)
+  useEffect(() => {
+    if (!courseId || !assignmentId) return;
+    const fetchGradeStatus = async () => {
+      try {
+        const res = await fetch(`/api/courses/${courseId}/grades`);
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          grades?: Record<string, Record<string, number | null>>;
+        };
+        const grades = data?.grades ?? {};
+        const status: Record<string, boolean> = {};
+        Object.keys(grades).forEach((studentId) => {
+          status[studentId] = grades[studentId]?.[assignmentId] != null;
+        });
+        setGradeStatus(status);
+      } catch (err) {
+        console.warn('Fetch grade status error:', err);
+      }
+    };
+    fetchGradeStatus();
+  }, [courseId, assignmentId]);
+
   const saveComment = useCallback(
     async (problemId: string) => {
       const commentText = commentTexts[problemId]?.trim();
@@ -794,6 +829,10 @@ export default function AssignmentSubmissions({
       setEditingGrade(
         numericValue !== null && numericValue !== undefined ? String(numericValue) : '',
       );
+      setGradeStatus((prev) => ({
+        ...prev,
+        [selectedStudent.id]: numericValue !== null && numericValue !== undefined,
+      }));
       setGradeError(null);
       showToast.success(
         `Grade ${numericValue ?? 'cleared'} saved for ${selectedStudent.firstName} ${selectedStudent.lastName}`,
@@ -850,10 +889,22 @@ export default function AssignmentSubmissions({
                       variant="outline"
                       className="bg-card text-foreground border-border hover:bg-input focus:ring-primary-300 flex w-[320px] items-center justify-between gap-2 border focus:ring-2 focus:ring-offset-1"
                     >
-                      <span className="truncate">
-                        {selectedStudent
-                          ? `${selectedStudent.firstName} ${selectedStudent.lastName}`
-                          : 'Select student'}
+                      <span className="flex items-center gap-2 truncate">
+                        {selectedStudent ? (
+                          <>
+                            <span
+                              className={`h-2.5 w-2.5 rounded-full ${
+                                gradeStatus[selectedStudent.id] ? 'bg-green-500' : 'bg-red-500'
+                              }`}
+                              aria-hidden="true"
+                            />
+                            <span className="truncate">
+                              {selectedStudent.firstName} {selectedStudent.lastName}
+                            </span>
+                          </>
+                        ) : (
+                          'Select student'
+                        )}
                       </span>
                       <ChevronDown className="h-4 w-4" />
                     </Button>
@@ -900,7 +951,13 @@ export default function AssignmentSubmissions({
                               setMenuOpen(false);
                             }}
                           >
-                            <span className="truncate">
+                            <span className="flex items-center gap-2 truncate">
+                              <span
+                                className={`h-2.5 w-2.5 rounded-full ${
+                                  gradeStatus[s.id] ? 'bg-green-500' : 'bg-red-500'
+                                }`}
+                                aria-hidden="true"
+                              />
                               {s.firstName} {s.lastName}
                             </span>
                           </DropdownMenuItem>
