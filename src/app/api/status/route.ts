@@ -147,6 +147,64 @@ async function getTlsExpiry(host?: string | null, port?: number | null): Promise
   }
 }
 
+type DiskIoSample = { device: string; readSectors: number; writeSectors: number };
+const normalizeBlockDevice = (devPath: string) => {
+  const name = devPath.replace('/dev/', '');
+  if (/^nvme\d+n\d+p\d+$/i.test(name)) return name.replace(/p\d+$/i, '');
+  if (/^mmcblk\d+p\d+$/i.test(name)) return name.replace(/p\d+$/i, '');
+  return name.replace(/\d+$/i, '');
+};
+const readDiskStatsSample = async (): Promise<DiskIoSample | null> => {
+  if (!fs.existsSync('/proc/diskstats')) return null;
+  let rootDev: string | null = null;
+  try {
+    const mounts = await fs.promises.readFile('/proc/mounts', 'utf8');
+    const rootLine = mounts
+      .split('\n')
+      .map((l) => l.trim())
+      .find((l) => l && l.split(' ')[1] === '/');
+    const dev = rootLine?.split(' ')[0] ?? null;
+    if (dev && dev.startsWith('/dev/')) rootDev = normalizeBlockDevice(dev);
+  } catch {}
+
+  try {
+    const raw = await fs.promises.readFile('/proc/diskstats', 'utf8');
+    const stats: Record<string, { readSectors: number; writeSectors: number }> = {};
+    raw
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .forEach((line) => {
+        const cols = line.split(/\s+/);
+        if (cols.length < 14) return;
+        const name = cols[2];
+        const readSectors = Number(cols[5] ?? 0);
+        const writeSectors = Number(cols[9] ?? 0);
+        if (!Number.isFinite(readSectors) || !Number.isFinite(writeSectors)) return;
+        stats[name] = { readSectors, writeSectors };
+      });
+
+    if (rootDev && stats[rootDev]) {
+      return { device: rootDev, ...stats[rootDev] };
+    }
+
+    const candidates = Object.keys(stats).filter(
+      (n) => !/^loop\d+$/i.test(n) && !/^ram\d+$/i.test(n),
+    );
+    const preferred = candidates.find(
+      (n) =>
+        /^(sd|vd|xvd)[a-z]/i.test(n) ||
+        /^nvme\d+n\d+/i.test(n) ||
+        /^mmcblk\d+/i.test(n) ||
+        /^dm-\d+/i.test(n),
+    );
+    const pick = preferred ?? candidates[0];
+    return pick ? { device: pick, ...stats[pick] } : null;
+  } catch {
+    return null;
+  }
+};
+
 export async function GET(req: Request) {
   const t0 = performance.now();
   const url = new URL(req.url);
@@ -162,13 +220,29 @@ export async function GET(req: Request) {
   const cores = os.cpus()?.length ?? 1;
   const cpu0 = process.cpuUsage();
   const time0 = process.hrtime.bigint();
+  const disk0 = await readDiskStatsSample();
   await sleep(100);
   const cpu1 = process.cpuUsage(cpu0);
   const time1 = process.hrtime.bigint();
+  const disk1 = await readDiskStatsSample();
   const elapsedMicros = Number((time1 - time0) / 1000n); // wall micros
   const procCpuMicros = cpu1.user + cpu1.system;
   const cpuPct =
     elapsedMicros > 0 ? Math.min(100, (procCpuMicros / elapsedMicros) * (100 / cores)) : 0;
+  const diskIo = (() => {
+    if (!disk0 || !disk1 || disk0.device !== disk1.device) return undefined;
+    const elapsedSec = elapsedMicros / 1_000_000;
+    if (!Number.isFinite(elapsedSec) || elapsedSec <= 0) return undefined;
+    const readDelta = disk1.readSectors - disk0.readSectors;
+    const writeDelta = disk1.writeSectors - disk0.writeSectors;
+    if (readDelta < 0 || writeDelta < 0) return undefined;
+    const sectorBytes = 512;
+    return {
+      device: disk1.device,
+      readBytesPerSec: (readDelta * sectorBytes) / elapsedSec,
+      writeBytesPerSec: (writeDelta * sectorBytes) / elapsedSec,
+    };
+  })();
 
   const system = {
     ok: true,
@@ -226,6 +300,7 @@ export async function GET(req: Request) {
         return Number(((rss / total) * 100).toFixed(2));
       })(),
       cpuProcessPct: Number(cpuPct.toFixed(2)),
+      diskIo,
       uptimeBreakdown: (() => {
         const secs = Math.floor(process.uptime());
         const d = Math.floor(secs / 86400);
@@ -236,6 +311,48 @@ export async function GET(req: Request) {
       })(),
     },
   };
+
+  // ===== Docker =====
+  const docker = await (async () => {
+    const indicators: string[] = [];
+    let cgroupPaths: string[] = [];
+    let containerId: string | undefined;
+
+    try {
+      if (fs.existsSync('/.dockerenv')) indicators.push('/.dockerenv');
+    } catch {}
+
+    try {
+      const raw = await fs.promises.readFile('/proc/1/cgroup', 'utf8');
+      cgroupPaths = raw
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean);
+      if (/docker|containerd|kubepods/i.test(raw)) indicators.push('/proc/1/cgroup');
+      const m = raw.match(/([0-9a-f]{64})/);
+      if (m) containerId = m[1];
+    } catch {}
+
+    if (process.env.DOCKER_CONTAINER === '1' || process.env.CONTAINER === '1') {
+      indicators.push('CONTAINER env');
+    }
+
+    const envHostname = process.env.HOSTNAME;
+    if (envHostname && envHostname !== system.hostname) indicators.push('HOSTNAME env');
+
+    const isDocker = indicators.length > 0;
+    if (!isDocker) return undefined;
+
+    return {
+      isDocker,
+      containerId,
+      containerIdShort: containerId ? containerId.slice(0, 12) : undefined,
+      hostname: system.hostname,
+      envHostname,
+      indicators,
+      cgroupPaths,
+    };
+  })();
 
   // ===== Database =====
   const dbDetails: DatabaseDetails = {};
@@ -349,6 +466,48 @@ export async function GET(req: Request) {
         dbDetails.pg_database_size_bytes = dbsize ?? null;
         dbStats.pg.db_size_mb =
           typeof dbsize === 'number' ? Math.round(dbsize / 1024 / 1024) : null;
+      } catch {}
+      try {
+        const hit = (await prisma.$queryRaw`
+          SELECT
+            CASE WHEN (blks_hit + blks_read) = 0 THEN 0
+                 ELSE (blks_hit::float / (blks_hit + blks_read)) * 100 END AS ratio
+          FROM pg_stat_database WHERE datname = current_database()
+        `) as Array<{ ratio?: number }>;
+        const ratio = hit?.[0]?.ratio;
+        dbStats.pg.cache_hit_ratio =
+          typeof ratio === 'number' && Number.isFinite(ratio) ? Number(ratio.toFixed(1)) : null;
+      } catch {}
+      try {
+        const scans = (await prisma.$queryRaw`
+          SELECT
+            COALESCE(SUM(seq_scan),0)::bigint AS seq_scans,
+            COALESCE(SUM(idx_scan),0)::bigint AS idx_scans
+          FROM pg_stat_user_tables
+        `) as Array<{ seq_scans?: number; idx_scans?: number }>;
+        dbStats.pg.seq_scans = getNum(scans?.[0] ?? {}, 'seq_scans') ?? null;
+        dbStats.pg.idx_scans = getNum(scans?.[0] ?? {}, 'idx_scans') ?? null;
+      } catch {}
+      try {
+        const tps = (await prisma.$queryRaw`
+          SELECT
+            CASE WHEN EXTRACT(EPOCH FROM (now() - stats_reset)) <= 0 THEN NULL
+                 ELSE ROUND(((xact_commit + xact_rollback) / EXTRACT(EPOCH FROM (now() - stats_reset)))::numeric, 2)
+            END AS tps
+          FROM pg_stat_database WHERE datname = current_database()
+        `) as Array<{ tps?: number | null }>;
+        const val = tps?.[0]?.tps;
+        dbStats.pg.transactions_per_sec =
+          typeof val === 'number' && Number.isFinite(val) ? val : null;
+      } catch {}
+      try {
+        const slow = (await prisma.$queryRaw`
+          SELECT count(*)::int AS cnt
+          FROM pg_stat_activity
+          WHERE state = 'active'
+            AND now() - query_start > interval '5 seconds'
+        `) as Array<{ cnt?: number }>;
+        dbStats.pg.slow_query_count = getNum(slow?.[0] ?? {}, 'cnt') ?? null;
       } catch {}
       try {
         const cs = (await prisma.$queryRaw`
@@ -848,6 +1007,33 @@ export async function GET(req: Request) {
     };
   } catch {}
 
+  // ===== Software metadata =====
+  const softwareInfo = {
+    deployEnv:
+      process.env.VERCEL_ENV ??
+      process.env.APP_ENV ??
+      process.env.ENVIRONMENT ??
+      process.env.NODE_ENV ??
+      undefined,
+    buildHash:
+      process.env.VERCEL_GIT_COMMIT_SHA ??
+      process.env.GIT_COMMIT ??
+      process.env.COMMIT_SHA ??
+      process.env.SOURCE_VERSION ??
+      process.env.GITHUB_SHA ??
+      process.env.RENDER_GIT_COMMIT ??
+      undefined,
+    imageTag:
+      process.env.IMAGE_TAG ??
+      process.env.DOCKER_IMAGE_TAG ??
+      process.env.CONTAINER_IMAGE_TAG ??
+      process.env.IMAGE_VERSION ??
+      process.env.GIT_TAG ??
+      process.env.VERCEL_GIT_COMMIT_REF ??
+      undefined,
+  };
+  const hasSoftwareInfo = Object.values(softwareInfo).some((v) => !!v);
+
   // ===== Build response =====
   const body: Record<string, unknown> = {
     system,
@@ -856,6 +1042,8 @@ export async function GET(req: Request) {
     ...(activeSessions ? { activeSessions } : {}),
     ...(sessionSummary ? { sessionSummary } : {}),
     app,
+    ...(docker ? { docker } : {}),
+    ...(hasSoftwareInfo ? { software: softwareInfo } : {}),
     ...(network ? { network } : {}),
     ...(abandonedFiles ? { abandonedFiles } : {}),
     metrics: { provider },

@@ -18,6 +18,7 @@ type SystemStats = {
   memProcess?: Record<string, number>;
   memProcessPctOfSystem?: number;
   cpuProcessPct?: number;
+  diskIo?: { device?: string; readBytesPerSec?: number; writeBytesPerSec?: number };
   uptimeBreakdown?: { days: number; hours: number; minutes: number; seconds: number };
 };
 type PgStats = {
@@ -115,6 +116,20 @@ type SessionSummary = {
   last15m: number;
   last60m: number;
 };
+type SoftwareInfo = {
+  deployEnv?: string;
+  buildHash?: string;
+  imageTag?: string;
+};
+type DockerInfo = {
+  isDocker: boolean;
+  containerId?: string;
+  containerIdShort?: string;
+  hostname?: string;
+  envHostname?: string;
+  indicators?: string[];
+  cgroupPaths?: string[];
+};
 
 type StatusResponse = {
   system: SystemBlock;
@@ -124,6 +139,8 @@ type StatusResponse = {
   activeSessions?: SessionItem[];
   sessionSummary?: SessionSummary;
   app?: Record<string, number | string>;
+  docker?: DockerInfo;
+  software?: SoftwareInfo;
   metrics?: { provider?: string; latencyMs?: number };
   abandonedFiles?: {
     total: number;
@@ -167,6 +184,25 @@ const formatLoad = (arr?: number[] | null) => {
   if (!Array.isArray(arr) || arr.length === 0) return '—';
   return arr.map((n) => n.toFixed(2)).join(' / ');
 };
+const formatDbVersion = (v?: string | null) => {
+  if (!v) return '—';
+  const pg = v.match(/(PostgreSQL\s+\d+(?:\.\d+)?)/i)?.[1];
+  const bits = v.match(/(\d+-bit)/i)?.[1];
+  if (pg) return [pg, bits].filter(Boolean).join(' ');
+  return v.split(',')[0]?.trim() || v;
+};
+const formatBytesPerSec = (b?: number | null) =>
+  typeof b === 'number' && Number.isFinite(b) ? `${formatBytes(b)}/s` : '—';
+const formatHash = (v?: string | null) => {
+  if (!v) return '—';
+  return v.length > 12 ? v.slice(0, 12) : v;
+};
+const toTitleCase = (s?: string | null) =>
+  s ? s.replace(/\w\S*/g, (w) => w[0].toUpperCase() + w.slice(1).toLowerCase()) : '—';
+const getPkgDep = (name: string) =>
+  (pkg.dependencies as Record<string, string> | undefined)?.[name] ??
+  (pkg.devDependencies as Record<string, string> | undefined)?.[name] ??
+  '—';
 const copy = async (text?: string | null) => {
   if (!text) return;
   try {
@@ -186,6 +222,7 @@ type HistoryPoint = {
   ts: number;
   cpuPct?: number;
   memPct?: number;
+  diskIoBps?: number;
   dbSizeMB?: number;
   dbTables?: number | null;
   sessions24h?: number;
@@ -474,6 +511,7 @@ export default function SystemStatusPage() {
       ts: Date.now(),
       cpuPct: sStats?.cpuProcessPct,
       memPct: sStats?.memProcessPctOfSystem,
+      diskIoBps: (sStats?.diskIo?.readBytesPerSec ?? 0) + (sStats?.diskIo?.writeBytesPerSec ?? 0),
       dbSizeMB: dbSizeBytes ? Math.round(dbSizeBytes / 1024 / 1024) : undefined,
       dbTables: dbTables,
       sessions24h: status.sessionSummary?.total24h,
@@ -644,107 +682,17 @@ export default function SystemStatusPage() {
         </Card>
       )}
 
-      {/* Trends & Sparklines */}
-      {!loading && status && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Trends ({windowHours}h)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-              <div className="space-y-2 rounded border p-3">
-                <div className="text-muted-foreground text-xs font-semibold">CPU %</div>
-                <Sparkline
-                  points={readHistory()
-                    .filter((p) => Date.now() - p.ts <= windowHours * 3600_000)
-                    .map((p) => p.cpuPct ?? 0)}
-                  width={100}
-                  height={30}
-                />
-              </div>
-              <div className="space-y-2 rounded border p-3">
-                <div className="text-muted-foreground text-xs font-semibold">Mem %</div>
-                <Sparkline
-                  points={readHistory()
-                    .filter((p) => Date.now() - p.ts <= windowHours * 3600_000)
-                    .map((p) => p.memPct ?? 0)}
-                  width={100}
-                  height={30}
-                />
-              </div>
-              <div className="space-y-2 rounded border p-3">
-                <div className="text-muted-foreground text-xs font-semibold">DB Size (MB)</div>
-                <Sparkline
-                  points={readHistory()
-                    .filter((p) => Date.now() - p.ts <= windowHours * 3600_000)
-                    .map((p) => p.dbSizeMB ?? 0)}
-                  width={100}
-                  height={30}
-                />
-              </div>
-              <div className="space-y-2 rounded border p-3">
-                <div className="text-muted-foreground text-xs font-semibold">Sessions (24h)</div>
-                <Sparkline
-                  points={readHistory()
-                    .filter((p) => Date.now() - p.ts <= windowHours * 3600_000)
-                    .map((p) => p.sessions24h ?? 0)}
-                  width={100}
-                  height={30}
-                />
-              </div>
-              <div className="space-y-2 rounded border p-3">
-                <div className="text-muted-foreground text-xs font-semibold">Latency (ms)</div>
-                <Sparkline
-                  points={readHistory()
-                    .filter((p) => Date.now() - p.ts <= windowHours * 3600_000)
-                    .map((p) => p.latencyMs ?? 0)}
-                  width={100}
-                  height={30}
-                />
-              </div>
-              <div className="space-y-2 rounded border p-3">
-                <div className="text-muted-foreground text-xs font-semibold">DB Tables</div>
-                <Sparkline
-                  points={readHistory()
-                    .filter((p) => Date.now() - p.ts <= windowHours * 3600_000)
-                    .map((p) => p.dbTables ?? 0)}
-                  width={100}
-                  height={30}
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Main content */}
       {!loading && status && (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
           {/* System Overview (CPUs included) */}
           <Card className="xl:col-span-2">
             <CardHeader>
-              <CardTitle className="text-lg">System Overview</CardTitle>
+              <CardTitle className="text-lg">Performance</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-6">
               {/* Basic stats */}
               <div className="grid gap-4 sm:grid-cols-2">
-                <Stat label="App Version" value={pkg.version} />
-                <Stat label="Evaluator Version" value={status.app?.evaluatorVersion ?? '—'} />
-                <Stat label="Java Version" value={status.app?.javaVersion ?? '—'} />
-                <Stat label="System Uptime" value={formatUptime(status.system?.uptime)} />
-                <Stat
-                  label="Node / Process"
-                  value={
-                    <>
-                      {status.system?.nodeVersion ?? '—'} —{' '}
-                      {formatUptime(status.system?.processUptime)}
-                    </>
-                  }
-                />
-                <Stat
-                  label="Platform"
-                  value={`${status.system?.platform ?? '—'}${status.system?.release ? ` ${status.system.release}` : ''}`}
-                />
                 <Stat
                   label="Arch / CPUs"
                   value={`${status.system?.arch ?? '—'} / ${status.system?.cpuCount ?? status.system?.cpus?.length ?? '—'}`}
@@ -757,7 +705,6 @@ export default function SystemStatusPage() {
                       : '—'
                   }
                 />
-                <Stat label="Load avg (1/5/15)" value={formatLoad(status.system?.loadavg)} />
               </div>
 
               {/* Process meters */}
@@ -778,29 +725,223 @@ export default function SystemStatusPage() {
                 </div>
               </div>
 
-              {/* CPU details */}
-              <div>
-                <div className="text-muted-foreground mb-2 text-sm">CPU Details</div>
-                {status.system?.cpus?.length ? (
-                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                    {status.system.cpus.slice(0, 12).map((c, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center justify-between rounded border p-2 text-sm"
-                      >
-                        <div className="truncate">{c.model ?? 'n/a'}</div>
-                        <div className="text-muted-foreground ml-2">{c.speed ?? 'n/a'} MHz</div>
-                      </div>
-                    ))}
-                    {status.system.cpus.length > 12 ? (
-                      <div className="text-muted-foreground self-center text-sm">
-                        +{status.system.cpus.length - 12} more
-                      </div>
-                    ) : null}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-4">
+                  <div className="space-y-2 rounded border p-3">
+                    <div className="text-muted-foreground text-xs font-semibold">
+                      CPU % (last {windowHours}h)
+                    </div>
+                    <Sparkline
+                      points={readHistory()
+                        .filter((p) => Date.now() - p.ts <= windowHours * 3600_000)
+                        .map((p) => p.cpuPct ?? 0)}
+                      width={100}
+                      height={30}
+                    />
                   </div>
-                ) : (
-                  <div className="text-sm">—</div>
-                )}
+                  <div className="space-y-2 rounded border p-3">
+                    <div className="text-muted-foreground text-xs font-semibold">
+                      Latency (ms) (last {windowHours}h)
+                    </div>
+                    <Sparkline
+                      points={readHistory()
+                        .filter((p) => Date.now() - p.ts <= windowHours * 3600_000)
+                        .map((p) => p.latencyMs ?? 0)}
+                      width={100}
+                      height={30}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div className="space-y-2 rounded border p-3">
+                    <div className="text-muted-foreground text-xs font-semibold">
+                      Mem % (last {windowHours}h)
+                    </div>
+                    <Sparkline
+                      points={readHistory()
+                        .filter((p) => Date.now() - p.ts <= windowHours * 3600_000)
+                        .map((p) => p.memPct ?? 0)}
+                      width={100}
+                      height={30}
+                    />
+                  </div>
+                  <div className="space-y-2 rounded border p-3">
+                    <div className="text-muted-foreground text-xs font-semibold">
+                      Disk IO (MB/s) (last {windowHours}h)
+                    </div>
+                    <Sparkline
+                      points={readHistory()
+                        .filter((p) => Date.now() - p.ts <= windowHours * 3600_000)
+                        .map((p) => (p.diskIoBps ?? 0) / 1024 / 1024)}
+                      width={100}
+                      height={30}
+                    />
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Software</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Stat label="AFCT Dashboard" value={pkg.version} />
+              <Stat label="AFCT Evaluator" value={status.app?.evaluatorVersion ?? '—'} />
+              <Stat
+                label="Deployment Environment"
+                value={toTitleCase(status.software?.deployEnv)}
+              />
+              <Stat label="Node" value={status.system?.nodeVersion ?? '—'} />
+              <Stat label="Next.js" value={getPkgDep('next')} />
+              <Stat label="Java" value={status.app?.javaVersion ?? '—'} />
+              {status.database?.details?.version && (
+                <Stat label="Database" value={formatDbVersion(status.database.details.version)} />
+              )}
+              {status.database?.details?.sqlite_version && (
+                <Stat label="SQLite Version" value={status.database.details.sqlite_version} />
+              )}
+
+              <Stat
+                label="OS / Arch"
+                value={`${status.system?.platform ?? '—'}${status.system?.release ? ` ${status.system.release}` : ''} / ${status.system?.arch ?? '—'}`}
+              />
+            </CardContent>
+          </Card>
+
+          <Card className="xl:col-span-2">
+            <CardHeader className="flex items-center justify-between">
+              <CardTitle className="text-lg">Database Overview</CardTitle>
+              <Badge
+                variant="outline"
+                className={`${dbOk ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}
+              >
+                {dbOk ? 'OK' : 'DOWN'}
+              </Badge>
+            </CardHeader>
+            <CardContent>
+              <div className="mb-3 text-sm">
+                <span className="text-muted-foreground">Message: </span>
+                {status.database?.message ?? '—'}
+              </div>
+
+              {/* Two column layout */}
+              <div className="grid gap-6 lg:grid-cols-2">
+                {/* Left column */}
+                <div className="space-y-4">
+                  {/* Migrations */}
+                  {status.database?.details?.last_migration_name && (
+                    <div>
+                      <div className="text-muted-foreground mb-2 text-sm font-semibold">
+                        Last Migration
+                      </div>
+                      <div className="space-y-2">
+                        <Stat
+                          label="Name"
+                          value={status.database.details.last_migration_name}
+                          onCopy={() => copy(status.database?.details?.last_migration_name)}
+                        />
+                        <Stat
+                          label="Finished At"
+                          value={
+                            status.database.details.last_migration_finished_at
+                              ? formatDateTimeInTimeZone(
+                                  new Date(status.database.details.last_migration_finished_at),
+                                  timezone,
+                                )
+                              : '—'
+                          }
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Details */}
+                  <div>
+                    <div className="text-muted-foreground mb-2 text-sm font-semibold">Details</div>
+                    <div className="space-y-2">
+                      {status.database?.details?.current_time_iso && (
+                        <Stat
+                          label="DB Time"
+                          value={formatDateTimeInTimeZone(
+                            status.database.details.current_time_iso,
+                            timezone,
+                          )}
+                        />
+                      )}
+                      {status.database?.details?.current_database && (
+                        <Stat label="DB Name" value={status.database.details.current_database} />
+                      )}
+                      <Stat label="Tables" value={dbTables == null ? '—' : dbTables} />
+                      <Stat label="DB Size" value={formatDbSize(dbSizeBytes)} />
+                      {status.database?.details?.sqlite_file_path && (
+                        <Stat
+                          label="SQLite file"
+                          value={
+                            <>
+                              <span>{status.database.details.sqlite_file_path}</span>
+                              {status.database.details.sqlite_file_bytes ? (
+                                <span className="text-muted-foreground">
+                                  {' '}
+                                  (
+                                  {(
+                                    Number(status.database.details.sqlite_file_bytes) /
+                                    1024 /
+                                    1024
+                                  ).toFixed(2)}{' '}
+                                  MB)
+                                </span>
+                              ) : null}
+                            </>
+                          }
+                          onCopy={() => copy(status.database!.details!.sqlite_file_path!)}
+                        />
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right column */}
+                <div className="space-y-4">
+                  {/* Performance (PostgreSQL only) */}
+                  {status.database?.stats?.pg && (
+                    <div>
+                      <div className="text-muted-foreground mb-2 text-sm font-semibold">
+                        Performance
+                      </div>
+                      <div className="space-y-2">
+                        {status.database.stats.pg.cache_hit_ratio != null && (
+                          <Stat
+                            label="Cache Hit Ratio"
+                            value={`${status.database.stats.pg.cache_hit_ratio}%`}
+                          />
+                        )}
+                        {status.database.stats.pg.seq_scans != null && (
+                          <Stat
+                            label="Sequential Scans"
+                            value={status.database.stats.pg.seq_scans}
+                          />
+                        )}
+                        {status.database.stats.pg.idx_scans != null && (
+                          <Stat label="Index Scans" value={status.database.stats.pg.idx_scans} />
+                        )}
+                        {status.database.stats.pg.transactions_per_sec != null && (
+                          <Stat
+                            label="Transactions/sec"
+                            value={status.database.stats.pg.transactions_per_sec}
+                          />
+                        )}
+                        {status.database.stats.pg.slow_query_count != null && (
+                          <Stat
+                            label="Slow Queries (>5s)"
+                            value={status.database.stats.pg.slow_query_count}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -887,254 +1028,10 @@ export default function SystemStatusPage() {
         </div>
       )}
 
-      {/* Database Migration Status */}
-      {!loading && status && (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-          <Card className="xl:col-span-2">
-            <CardHeader className="flex items-center justify-between">
-              <CardTitle className="text-lg">Database Overview</CardTitle>
-              <Badge
-                variant="outline"
-                className={`${dbOk ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}
-              >
-                {dbOk ? 'OK' : 'DOWN'}
-              </Badge>
-            </CardHeader>
-            <CardContent>
-              <div className="mb-3 text-sm">
-                <span className="text-muted-foreground">Message: </span>
-                {status.database?.message ?? '—'}
-              </div>
-
-              {/* Two column layout */}
-              <div className="grid gap-6 lg:grid-cols-2">
-                {/* Left column */}
-                <div className="space-y-4">
-                  {/* Migrations */}
-                  {status.database?.details?.last_migration_name && (
-                    <div>
-                      <div className="text-muted-foreground mb-2 text-sm font-semibold">
-                        Last Migration
-                      </div>
-                      <div className="space-y-2">
-                        <Stat
-                          label="Name"
-                          value={status.database.details.last_migration_name}
-                          onCopy={() => copy(status.database?.details?.last_migration_name)}
-                        />
-                        <Stat
-                          label="Finished At"
-                          value={
-                            status.database.details.last_migration_finished_at
-                              ? formatDateTimeInTimeZone(
-                                  new Date(status.database.details.last_migration_finished_at),
-                                  timezone,
-                                )
-                              : '—'
-                          }
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Details */}
-                  <div>
-                    <div className="text-muted-foreground mb-2 text-sm font-semibold">Details</div>
-                    <div className="space-y-2">
-                      {status.database?.details?.current_time_iso && (
-                        <Stat
-                          label="DB Time"
-                          value={formatDateTimeInTimeZone(
-                            status.database.details.current_time_iso,
-                            timezone,
-                          )}
-                        />
-                      )}
-                      {status.database?.details?.current_database && (
-                        <Stat label="DB Name" value={status.database.details.current_database} />
-                      )}
-                      {status.database?.details?.version && (
-                        <Stat label="Version" value={status.database.details.version} />
-                      )}
-                      {status.database?.details?.sqlite_version && (
-                        <Stat
-                          label="SQLite Version"
-                          value={status.database.details.sqlite_version}
-                        />
-                      )}
-                      <Stat label="Tables" value={dbTables == null ? '—' : dbTables} />
-                      <Stat label="DB Size" value={formatDbSize(dbSizeBytes)} />
-                      {status.database?.details?.sqlite_file_path && (
-                        <Stat
-                          label="SQLite file"
-                          value={
-                            <>
-                              <span>{status.database.details.sqlite_file_path}</span>
-                              {status.database.details.sqlite_file_bytes ? (
-                                <span className="text-muted-foreground">
-                                  {' '}
-                                  (
-                                  {(
-                                    Number(status.database.details.sqlite_file_bytes) /
-                                    1024 /
-                                    1024
-                                  ).toFixed(2)}{' '}
-                                  MB)
-                                </span>
-                              ) : null}
-                            </>
-                          }
-                          onCopy={() => copy(status.database!.details!.sqlite_file_path!)}
-                        />
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right column */}
-                <div className="space-y-4">
-                  {/* Performance (PostgreSQL only) */}
-                  {status.database?.stats?.pg && (
-                    <div>
-                      <div className="text-muted-foreground mb-2 text-sm font-semibold">
-                        Performance
-                      </div>
-                      <div className="space-y-2">
-                        {status.database.stats.pg.cache_hit_ratio != null && (
-                          <Stat
-                            label="Cache Hit Ratio"
-                            value={`${status.database.stats.pg.cache_hit_ratio}%`}
-                          />
-                        )}
-                        {status.database.stats.pg.seq_scans != null && (
-                          <Stat
-                            label="Sequential Scans"
-                            value={status.database.stats.pg.seq_scans}
-                          />
-                        )}
-                        {status.database.stats.pg.idx_scans != null && (
-                          <Stat label="Index Scans" value={status.database.stats.pg.idx_scans} />
-                        )}
-                        {status.database.stats.pg.transactions_per_sec != null && (
-                          <Stat
-                            label="Transactions/sec"
-                            value={status.database.stats.pg.transactions_per_sec}
-                          />
-                        )}
-                        {status.database.stats.pg.slow_query_count != null && (
-                          <Stat
-                            label="Slow Queries (>5s)"
-                            value={status.database.stats.pg.slow_query_count}
-                          />
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          {!!status.env ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Environment</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <details>
-                  <summary className="cursor-pointer text-sm">
-                    Public vars ({Object.keys(status.env.public ?? {}).length})
-                  </summary>
-                  <ul className="mt-2 space-y-1 rounded border p-2">
-                    {Object.entries(status.env.public ?? {}).map(([k, v]) => (
-                      <li key={k} className="flex items-center justify-between gap-4">
-                        <span className="text-sm">{k}</span>
-                        <span className="text-xs break-all">{v}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-                <details>
-                  <summary className="cursor-pointer text-sm">
-                    Masked vars ({Object.keys(status.env.masked ?? {}).length})
-                  </summary>
-                  <ul className="mt-2 space-y-1 rounded border p-2">
-                    {Object.entries(status.env.masked ?? {}).map(([k, v]) => (
-                      <li key={k} className="flex items-center justify-between gap-4">
-                        <span className="text-sm">{k}</span>
-                        <span className="text-xs break-all">{String(v)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="hidden xl:block" />
-          )}
-        </div>
-      )}
-
       {/* App counts + Sessions + Abandoned files */}
       {!loading && status && (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Card>
-            <CardHeader className="flex items-center justify-between">
-              <CardTitle className="text-lg">
-                App & Sessions
-                {sessionSummary ? (
-                  <span className="ml-2 space-x-2">
-                    <Badge variant="outline" className="bg-slate-50 text-slate-700">
-                      24h: {sessionSummary.total24h}
-                    </Badge>
-                    <Badge variant="outline" className="bg-slate-50 text-slate-700">
-                      Users: {sessionSummary.uniqUsers24h}
-                    </Badge>
-                    <Badge variant="outline" className="bg-slate-50 text-slate-700">
-                      5m: {sessionSummary.last5m}
-                    </Badge>
-                    <Badge variant="outline" className="bg-slate-50 text-slate-700">
-                      15m: {sessionSummary.last15m}
-                    </Badge>
-                    <Badge variant="outline" className="bg-slate-50 text-slate-700">
-                      60m: {sessionSummary.last60m}
-                    </Badge>
-                  </span>
-                ) : null}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* App counts */}
-              {status.app && Object.keys(status.app).length > 0 && (
-                <div>
-                  <div className="text-muted-foreground mb-2 text-sm">App entity counts</div>
-                  <ul className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-6">
-                    {Object.entries(status.app).map(([k, v]) => (
-                      <li key={k} className="rounded border p-2 text-center">
-                        <div className="text-muted-foreground text-xs uppercase">{k}</div>
-                        <div className="text-sm font-semibold">{String(v)}</div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Sessions summary */}
-              {sessionSummary ? (
-                <div>
-                  <div className="text-muted-foreground mb-2 text-sm">Session summary</div>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-                    <Stat label="Total (24h)" value={sessionSummary.total24h} />
-                    <Stat label="Unique users (24h)" value={sessionSummary.uniqUsers24h} />
-                    <Stat label="Last 5m" value={sessionSummary.last5m} />
-                    <Stat label="Last 15m" value={sessionSummary.last15m} />
-                    <Stat label="Last 60m" value={sessionSummary.last60m} />
-                  </div>
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
-
-          <Card>
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Card className="lg:col-span-2">
             <CardHeader className="flex items-center justify-between">
               <CardTitle className="text-lg">Abandoned Files</CardTitle>
               <Badge variant="outline" className="bg-slate-50 text-slate-700">
@@ -1186,58 +1083,147 @@ export default function SystemStatusPage() {
               )}
             </CardContent>
           </Card>
+
+          {status.docker?.isDocker ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Docker</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Stat
+                  label="Container ID"
+                  value={status.docker.containerIdShort ?? status.docker.containerId ?? '—'}
+                  onCopy={
+                    status.docker.containerId
+                      ? () => copy(status.docker?.containerId ?? '')
+                      : undefined
+                  }
+                />
+                <Stat
+                  label="Hostname"
+                  value={status.docker.envHostname ?? status.docker.hostname ?? '—'}
+                />
+                <Stat
+                  label="Indicators"
+                  value={
+                    (status.docker.indicators ?? []).length
+                      ? (status.docker.indicators ?? []).join(', ')
+                      : '—'
+                  }
+                />
+                <div>
+                  <div className="text-muted-foreground mb-1 text-sm">Cgroup</div>
+                  {status.docker.cgroupPaths?.length ? (
+                    <ul className="divide-y rounded border">
+                      {status.docker.cgroupPaths.slice(0, 6).map((line, i) => (
+                        <li key={i} className="px-2 py-1 text-xs break-all">
+                          {line}
+                        </li>
+                      ))}
+                      {status.docker.cgroupPaths.length > 6 ? (
+                        <li className="text-muted-foreground px-2 py-1 text-xs">
+                          +{status.docker.cgroupPaths.length - 6} more
+                        </li>
+                      ) : null}
+                    </ul>
+                  ) : (
+                    <div className="text-sm">—</div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
         </div>
       )}
 
       {/* Active sessions table */}
       {!loading && status && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Active Sessions (last 24h)</CardTitle>
+          <CardHeader className="flex items-center justify-between">
+            <CardTitle className="text-lg">
+              Sessions
+              {sessionSummary ? (
+                <span className="ml-2 space-x-2">
+                  <Badge variant="outline" className="bg-slate-50 text-slate-700">
+                    24h: {sessionSummary.total24h}
+                  </Badge>
+                  <Badge variant="outline" className="bg-slate-50 text-slate-700">
+                    Users: {sessionSummary.uniqUsers24h}
+                  </Badge>
+                  <Badge variant="outline" className="bg-slate-50 text-slate-700">
+                    5m: {sessionSummary.last5m}
+                  </Badge>
+                  <Badge variant="outline" className="bg-slate-50 text-slate-700">
+                    15m: {sessionSummary.last15m}
+                  </Badge>
+                  <Badge variant="outline" className="bg-slate-50 text-slate-700">
+                    60m: {sessionSummary.last60m}
+                  </Badge>
+                </span>
+              ) : null}
+            </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-6">
+            {/* Sessions summary */}
+            {sessionSummary ? (
+              <div>
+                <div className="text-muted-foreground mb-2 text-sm">Session summary</div>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+                  <Stat label="Total (24h)" value={sessionSummary.total24h} />
+                  <Stat label="Unique users (24h)" value={sessionSummary.uniqUsers24h} />
+                  <Stat label="Last 5m" value={sessionSummary.last5m} />
+                  <Stat label="Last 15m" value={sessionSummary.last15m} />
+                  <Stat label="Last 60m" value={sessionSummary.last60m} />
+                </div>
+              </div>
+            ) : null}
+
+            {/* Active sessions table */}
             {status.activeSessions?.length ? (
-              <div className="overflow-auto rounded border">
-                <table className="w-full text-sm">
-                  <thead className="text-muted-foreground text-left text-xs">
-                    <tr className="border-b">
-                      <th className="py-2 pr-3">User</th>
-                      <th className="py-2 pr-3">IP</th>
-                      <th className="py-2 pr-3">Last Seen</th>
-                      <th className="py-2">User Agent</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {status.activeSessions!.map((s, i) => (
-                      <tr key={i} className="border-b last:border-0">
-                        <td className="py-2 pr-3">
-                          <div className="font-medium">{s.email ?? s.userId ?? 'Unknown'}</div>
-                        </td>
-                        <td className="py-2 pr-3">
-                          <div className="flex items-center gap-2">
-                            <span>{s.ipAddress ?? '—'}</span>
-                            {s.ipAddress ? (
-                              <button
-                                className="text-muted-foreground text-xs underline hover:opacity-80"
-                                onClick={() => copy(s.ipAddress)}
-                              >
-                                Copy
-                              </button>
-                            ) : null}
-                          </div>
-                        </td>
-                        <td className="py-2 pr-3">
-                          {s.lastSeen ? formatDateTimeInTimeZone(s.lastSeen, timezone) : '—'}
-                        </td>
-                        <td className="py-2">
-                          <div className="max-w-[50ch] truncate" title={s.userAgent ?? ''}>
-                            {s.userAgent ?? '—'}
-                          </div>
-                        </td>
+              <div>
+                <div className="text-muted-foreground mb-2 text-sm">Active sessions (last 24h)</div>
+                <div className="overflow-auto rounded border">
+                  <table className="w-full text-sm">
+                    <thead className="text-muted-foreground text-left text-xs">
+                      <tr className="border-b">
+                        <th className="py-2 pr-3">User</th>
+                        <th className="py-2 pr-3">IP</th>
+                        <th className="py-2 pr-3">Last Seen</th>
+                        <th className="py-2">User Agent</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {status.activeSessions!.map((s, i) => (
+                        <tr key={i} className="border-b last:border-0">
+                          <td className="py-2 pr-3">
+                            <div className="font-medium">{s.email ?? s.userId ?? 'Unknown'}</div>
+                          </td>
+                          <td className="py-2 pr-3">
+                            <div className="flex items-center gap-2">
+                              <span>{s.ipAddress ?? '—'}</span>
+                              {s.ipAddress ? (
+                                <button
+                                  className="text-muted-foreground text-xs underline hover:opacity-80"
+                                  onClick={() => copy(s.ipAddress)}
+                                >
+                                  Copy
+                                </button>
+                              ) : null}
+                            </div>
+                          </td>
+                          <td className="py-2 pr-3">
+                            {s.lastSeen ? formatDateTimeInTimeZone(s.lastSeen, timezone) : '—'}
+                          </td>
+                          <td className="py-2">
+                            <div className="max-w-[50ch] truncate" title={s.userAgent ?? ''}>
+                              {s.userAgent ?? '—'}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             ) : (
               <div className="text-sm">No active sessions found.</div>
