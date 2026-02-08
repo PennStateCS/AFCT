@@ -74,7 +74,7 @@ export const useProblemColumns = ({
         if (!file || !fileName) return '—';
         return (
           <a
-            href={`/api/solutions/${fileName}`}
+            href={`/api/solutions/${fileName}?download=1`}
             download={file}
             className="text-sm break-all text-blue-600 hover:underline"
           >
