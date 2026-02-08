@@ -77,6 +77,7 @@ export async function POST(req: NextRequest) {
   let feedback: string | null = null;
   let correct: boolean | undefined = undefined;
   let evaluationRaw: unknown | null = null;
+  let uploadedFilePath: string | null = null;
 
   try {
     // 4. Handle file upload
@@ -116,7 +117,65 @@ export async function POST(req: NextRequest) {
       const filePath = path.join(uploadDir, fileName);
       const buffer = Buffer.from(await file.arrayBuffer());
       fs.writeFileSync(filePath, buffer, { mode: 0o755 });
+      uploadedFilePath = filePath;
+    }
 
+    // 5. Store the submission
+    let submission = await prisma.submission.create({
+      data: {
+        assignmentId,
+        problemId,
+        studentId: decoded.userId,
+        fileName,
+        originalFileName,
+        feedback,
+        correct,
+        evaluationRaw:
+          evaluationRaw === null ? Prisma.JsonNull : (evaluationRaw as Prisma.InputJsonValue),
+      },
+    });
+
+    if (fileName) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: decoded.userId,
+        action: 'SUBMISSION_FILE_STORED',
+        category: 'SUBMISSION',
+        courseId,
+        assignmentId,
+        problemId,
+        submissionId: submission.id,
+        metadata: {
+          userId: decoded.userId,
+          courseId,
+          assignmentId,
+          problemId,
+          submissionId: submission.id,
+          fileName,
+          originalFileName,
+        },
+      });
+    }
+
+    // 6. Log successful submission
+    await createEnhancedActivityLog(prisma, req, {
+      userId: decoded.userId,
+      action: 'SUBMISSION_CREATED',
+      category: 'SUBMISSION',
+      courseId,
+      assignmentId,
+      problemId,
+      submissionId: submission.id,
+      metadata: {
+        userId: decoded.userId,
+        courseId: courseId,
+        assignmentId: assignmentId,
+        problemId: problemId,
+        submissionId: submission.id,
+        fileName: fileName,
+      },
+    });
+
+    if (uploadedFilePath) {
       // 4b. Run system command to analyze the uploaded file
       try {
         // Check if we're running in Docker (has CFGANALYZER_BINARY env var)
@@ -124,9 +183,12 @@ export async function POST(req: NextRequest) {
 
         if (!isDocker && os.platform() === 'win32') {
           // Windows local development: Count lines as before
-          const result = execSync(`powershell -Command "(Get-Content '${filePath}').Count"`, {
-            encoding: 'utf-8',
-          });
+          const result = execSync(
+            `powershell -Command "(Get-Content '${uploadedFilePath}').Count"`,
+            {
+              encoding: 'utf-8',
+            },
+          );
           feedback = `File has ${result.trim()} lines (Windows).`;
         } else {
           // Docker/Linux: Use afct-evaluator.jar with JavaRunner
@@ -141,7 +203,7 @@ export async function POST(req: NextRequest) {
                 const evaluator = new JavaRunner('./jars/afct-evaluator.jar');
 
                 // Build command arguments
-                const args = ['--json', answerFilePath, filePath];
+                const args = ['--json', answerFilePath, uploadedFilePath];
 
                 // Add optional arguments based on problem type
                 if (link.problem.type === 'FA' || link.problem.type === 'PDA') {
@@ -343,41 +405,36 @@ export async function POST(req: NextRequest) {
           feedback = `ERROR: Evaluation failed - ${cmdErr instanceof Error ? cmdErr.message : 'Unknown error'}`;
         }
       }
-    }
 
-    // 5. Store the submission
-    const submission = await prisma.submission.create({
-      data: {
+      submission = await prisma.submission.update({
+        where: { id: submission.id },
+        data: {
+          feedback,
+          correct,
+          evaluationRaw:
+            evaluationRaw === null ? Prisma.JsonNull : (evaluationRaw as Prisma.InputJsonValue),
+        },
+      });
+
+      await createEnhancedActivityLog(prisma, req, {
+        userId: decoded.userId,
+        action: 'SUBMISSION_EVALUATED',
+        category: 'SUBMISSION',
+        courseId,
         assignmentId,
         problemId,
-        studentId: decoded.userId,
-        fileName,
-        originalFileName,
-        feedback,
-        correct,
-        evaluationRaw:
-          evaluationRaw === null ? Prisma.JsonNull : (evaluationRaw as Prisma.InputJsonValue),
-      },
-    });
-
-    // 6. Log successful submission
-    await createEnhancedActivityLog(prisma, req, {
-      userId: decoded.userId,
-      action: 'SUBMISSION_CREATED',
-      category: 'SUBMISSION',
-      courseId,
-      assignmentId,
-      problemId,
-      submissionId: submission.id,
-      metadata: {
-        userId: decoded.userId,
-        courseId: courseId,
-        assignmentId: assignmentId,
-        problemId: problemId,
         submissionId: submission.id,
-        fileName: fileName,
-      },
-    });
+        metadata: {
+          userId: decoded.userId,
+          courseId,
+          assignmentId,
+          problemId,
+          submissionId: submission.id,
+          correct,
+          feedback,
+        },
+      });
+    }
 
     return NextResponse.json(submission, { status: 201 });
   } catch (error: unknown) {
