@@ -355,7 +355,8 @@ export async function POST(req: NextRequest) {
         originalFileName,
         feedback,
         correct,
-        evaluationRaw: evaluationRaw as Prisma.InputJsonValue | null,
+        evaluationRaw:
+          evaluationRaw === null ? Prisma.JsonNull : (evaluationRaw as Prisma.InputJsonValue),
       },
     });
 
