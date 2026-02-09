@@ -225,10 +225,6 @@ export async function POST(req: NextRequest) {
                 const stderrTrimmed = result.stderr?.trim() ?? '';
                 const truncate = (val: string, max = 2000) =>
                   val.length > max ? `${val.slice(0, max)}…` : val;
-                console.info('Evaluator output', {
-                  stdout: truncate(stdoutTrimmed),
-                  stderr: truncate(stderrTrimmed),
-                });
                 if (stderrTrimmed) {
                   await createEnhancedActivityLog(prisma, req, {
                     userId: decoded.userId,
