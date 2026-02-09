@@ -1,3 +1,4 @@
+import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, vi } from 'vitest';
 
 let warnSpy: ReturnType<typeof vi.spyOn> | undefined;
