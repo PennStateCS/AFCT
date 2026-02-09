@@ -1,6 +1,7 @@
 'use client';
 import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
+import LoadingSpinner from '@/components/ui/loading-spinner';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -213,7 +214,7 @@ export default function AssignmentDashboardPage() {
     setEditProblemDialogOpen(true);
   };
 
-  if (loading) return <div className="p-6">Loading assignment...</div>;
+  if (loading) return <LoadingSpinner label="Loading" />;
   if (!assignment) return <div className="p-6 text-red-500">Assignment not found.</div>;
 
   return (
@@ -230,9 +231,36 @@ export default function AssignmentDashboardPage() {
           Edit Assignment
         </Button>
         <div>
-          <h1 className="text-2xl">
-            <span className="font-semibold">Assignment:</span> {assignment.title}
-          </h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl">
+              <span className="font-semibold">Assignment:</span> {assignment.title}
+            </h1>
+            {(() => {
+              let status = '';
+              let badgeClass = '';
+
+              if (assignment.isPublished) {
+                if (new Date(assignment.dueDate) <= new Date()) {
+                  status = 'Past Due';
+                  badgeClass = 'border-red-200 bg-red-50 text-red-700';
+                } else {
+                  status = 'Published';
+                  badgeClass = 'border-green-200 bg-green-50 text-green-700';
+                }
+              } else {
+                status = 'Not Published';
+                badgeClass = 'border-yellow-200 bg-yellow-50 text-yellow-700';
+              }
+
+              return (
+                <span
+                  className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${badgeClass}`}
+                >
+                  {status}
+                </span>
+              );
+            })()}
+          </div>
           <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-2 text-sm">
             {/* Show course name/code as a link to the course page (fallback to courseId) */}
             <Link
@@ -246,45 +274,10 @@ export default function AssignmentDashboardPage() {
                   ? ` (${assignment.courseCode})`
                   : ''}
             </Link>
-            <span className="text-muted-foreground">•</span>
-
-            {(() => {
-              let status = '';
-              let txtColor = '';
-
-              // Published
-              if (assignment.isPublished) {
-                // Ended
-                if (new Date(assignment.dueDate) <= new Date()) {
-                  status = 'Past Due';
-                  txtColor = 'text-red-600';
-                }
-
-                // Published
-                else {
-                  status = 'Published';
-                  txtColor = 'text-green-600';
-                }
-              }
-
-              // Not Published
-              else {
-                status = 'Not Published';
-                txtColor = 'text-yellow-600';
-              }
-
-              return <span className={`font-semibold ${txtColor}`}>{status}</span>;
-            })()}
-
-            <span className="text-muted-foreground">•</span>
-            <span className="text-sm">
-              <span className="font-semibold">Max Points:</span> {assignment.maxPoints}
-            </span>
-            <span className="text-muted-foreground">•</span>
-            <span className="text-sm">
-              <span className="font-semibold">Due:</span>{' '}
-              {formatDateTimeInTimeZone(assignment.dueDate, timezone)}
-            </span>
+          </div>
+          <div className="text-muted-foreground mt-1 text-sm">
+            <span className="font-semibold">Due:</span>{' '}
+            {formatDateTimeInTimeZone(assignment.dueDate, timezone)}
           </div>
         </div>
         <div>
@@ -420,7 +413,7 @@ export default function AssignmentDashboardPage() {
                     header: 'Solution File',
                     cell: ({ row }: { row: { original: Problem } }) => {
                       const fileUrl = row.original.fileName
-                        ? `/api/solutions/${row.original.fileName}`
+                        ? `/api/solutions/${row.original.fileName}?download=1`
                         : null;
                       const fileName = row.original.originalFileName || 'Download';
                       return fileUrl ? (
@@ -488,7 +481,7 @@ export default function AssignmentDashboardPage() {
                             disabled={!row.original.fileName}
                             onClick={() => {
                               const url = row.original.fileName
-                                ? `/api/solutions/${row.original.fileName}`
+                                ? `/api/solutions/${row.original.fileName}?download=1`
                                 : null;
                               if (!url) return;
                               window.open(url, '_blank', 'noopener,noreferrer');

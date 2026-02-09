@@ -39,6 +39,16 @@ describe('GET /api/courses/[id]/roster/[userId]', () => {
     expect(res.status).toBe(401);
   });
 
+  it('returns 404 when roster entry not found', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue(null);
+
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/u2');
+    const res = await GET(req, { params: Promise.resolve({ id: 'c1', userId: 'u2' }) });
+
+    expect(res.status).toBe(404);
+  });
+
   it('returns roster data when found', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
     prismaMock.roster.findFirst
@@ -57,6 +67,33 @@ describe('GET /api/courses/[id]/roster/[userId]', () => {
     expect(body.success).toBe(true);
     expect(body.roster).toBeTruthy();
     expect(body.viewerCourseRole).toBe('ADMIN');
+  });
+
+  it('resolves "me" to current user', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst
+      .mockResolvedValueOnce({
+        id: 'r1',
+        role: 'STUDENT',
+        user: { id: 'u1', firstName: 'A', lastName: 'B', email: 'u1@example.com', role: 'STUDENT' },
+      })
+      .mockResolvedValueOnce({ role: 'STUDENT' });
+
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/me');
+    const res = await GET(req, { params: Promise.resolve({ id: 'c1', userId: 'me' }) });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.roster.user.id).toBe('u1');
+  });
+
+  it('handles server errors gracefully', async () => {
+    authMock.mockRejectedValue(new Error('DB error'));
+
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/u1');
+    const res = await GET(req, { params: Promise.resolve({ id: 'c1', userId: 'u1' }) });
+
+    expect(res.status).toBe(500);
   });
 });
 
@@ -80,6 +117,85 @@ describe('DELETE /api/courses/[id]/roster/[userId]', () => {
     expect(res.status).toBe(403);
   });
 
+  it('returns 403 when TA tries to remove user', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'TA' });
+
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/u2', { method: 'DELETE' });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'c1', userId: 'u2' }) });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 403 when faculty tries to remove admin', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst
+      .mockResolvedValueOnce({ role: 'FACULTY' })
+      .mockResolvedValueOnce({ role: 'ADMIN' });
+
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/u2', { method: 'DELETE' });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'c1', userId: 'u2' }) });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 403 when faculty tries to remove another faculty', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst
+      .mockResolvedValueOnce({ role: 'FACULTY' })
+      .mockResolvedValueOnce({ role: 'FACULTY' });
+
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/u2', { method: 'DELETE' });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'c1', userId: 'u2' }) });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 403 when course admin tries to remove another course admin', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst
+      .mockResolvedValueOnce({ role: 'ADMIN' })
+      .mockResolvedValueOnce({ role: 'ADMIN' });
+
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/u2', { method: 'DELETE' });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'c1', userId: 'u2' }) });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 400 when user has submissions', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ role: 'STUDENT' });
+    prismaMock.assignment.findMany.mockResolvedValue([{ id: 'a1' }]);
+    prismaMock.submission.findFirst.mockResolvedValue({ id: 's1' });
+
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/u2', { method: 'DELETE' });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'c1', userId: 'u2' }) });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain('submissions');
+  });
+
+  it('returns 400 when removing only faculty member', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ role: 'FACULTY' })
+      .mockResolvedValueOnce({ role: 'FACULTY' });
+    prismaMock.assignment.findMany.mockResolvedValue([]);
+    prismaMock.roster.count.mockResolvedValue(1);
+
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/u2', { method: 'DELETE' });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'c1', userId: 'u2' }) });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain('only faculty member');
+  });
+
   it('removes roster entry when allowed', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
     prismaMock.roster.findFirst
@@ -94,6 +210,15 @@ describe('DELETE /api/courses/[id]/roster/[userId]', () => {
 
     expect(res.status).toBe(200);
     expect(activityLogMock).toHaveBeenCalled();
+  });
+
+  it('handles server errors gracefully', async () => {
+    authMock.mockRejectedValue(new Error('DB error'));
+
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/u2', { method: 'DELETE' });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'c1', userId: 'u2' }) });
+
+    expect(res.status).toBe(500);
   });
 });
 

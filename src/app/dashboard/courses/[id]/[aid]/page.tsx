@@ -3,12 +3,13 @@
 import { useSession } from 'next-auth/react';
 import StudentAssignmentView from '@/components/assignments/StudentAssignmentView';
 import PrivilegeAssignmentView from '@/components/assignments/PrivilegeAssignmentView';
+import LoadingSpinner from '@/components/ui/loading-spinner';
 
 export default function AssignmentPageRouter() {
   const { data: session, status } = useSession();
 
   if (status === 'loading') {
-    return <div className="p-6">Loading assignment...</div>;
+    return <LoadingSpinner label="Loading" />;
   }
 
   if (status === 'unauthenticated' || !session) {
@@ -17,7 +18,7 @@ export default function AssignmentPageRouter() {
 
   const role = session.user?.role;
 
-  console.log(role)
+  console.log(role);
   if (role === 'STUDENT') {
     return <StudentAssignmentView />;
   }

@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM node:20-bullseye-slim
+FROM node:20-bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssl \
@@ -7,12 +7,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     make \
     g++ \
     git \
-    openjdk-17-jre-headless \
     tini \
     netcat-openbsd \
     postgresql-client \
     ca-certificates \
+    curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Java 21 (Temurin JRE)
+ENV JAVA_HOME=/opt/java/openjdk
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
+RUN mkdir -p /opt/java && \
+    curl -fsSL "https://api.adoptium.net/v3/binary/latest/21/ga/linux/x64/jre/hotspot/normal/eclipse" \
+      -o /tmp/temurin21.tar.gz && \
+    tar -xzf /tmp/temurin21.tar.gz -C /opt/java && \
+    ln -s /opt/java/jdk-21* /opt/java/openjdk && \
+    rm -f /tmp/temurin21.tar.gz
 
 # Environment variables
 ENV NODE_ENV=development

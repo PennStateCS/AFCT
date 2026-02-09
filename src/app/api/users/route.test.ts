@@ -57,6 +57,17 @@ describe('GET /api/users', () => {
     expect(body).toEqual([{ id: 'u2', email: 'u2@example.com' }]);
     expect(activityLogMock).toHaveBeenCalled();
   });
+
+  it('returns 500 when database query fails', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.user.findMany.mockRejectedValue(new Error('Database error'));
+
+    const res = await GET(new Request('http://localhost/api/users'));
+
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).toBe('Failed to fetch users');
+  });
 });
 
 describe('POST /api/users', () => {
@@ -193,5 +204,29 @@ describe('POST /api/users', () => {
     expect(res.status).toBe(201);
     expect(prismaMock.user.create).toHaveBeenCalled();
     expect(activityLogMock).toHaveBeenCalled();
+  });
+
+  it('returns 500 when user creation fails', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.user.findUnique.mockResolvedValue(null);
+    prismaMock.systemSettings.findUnique.mockResolvedValue({ id: 1, timezone: 'UTC' });
+    prismaMock.user.create.mockRejectedValue(new Error('Database error'));
+
+    const req = new Request('http://localhost/api/users', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: 'test@example.com',
+        firstName: 'A',
+        lastName: 'B',
+        password: 'Strong1!a',
+        role: 'STUDENT',
+      }),
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).toBe('Internal Server Error');
   });
 });
