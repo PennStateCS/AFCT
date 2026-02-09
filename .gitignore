@@ -24,6 +24,7 @@ docker-compose.override.yml
 postgres-data/
 db-data/
 *.sql
+!prisma/migrations/**/*.sql
 *.dump
 
 # Yarn / pnpm / npm logs
