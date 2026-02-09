@@ -58,20 +58,22 @@ services:
       disable: true
 
   nginx:
-    build:
-      context: ./docker/nginx
-      dockerfile: Dockerfile
+    image: nginx:alpine
     container_name: afct-dev-nginx
     restart: unless-stopped
 
     ports:
-      - '3001:80' # HTTP redirect
-      - '3002:443' # HTTPS
+      - '8080:80' # HTTP redirect
+      - '8443:443' # HTTPS
     depends_on:
       app:
         condition: service_started
     volumes:
       - nginx_certs:/etc/nginx/certs
+      - afct-dev-uploads-data:/usr/share/nginx/html/uploads
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./docker/nginx/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ['/bin/sh', '/entrypoint.sh']
     healthcheck:
       disable: true
 

@@ -16,11 +16,10 @@ Built with:
 ## Table of Contents
 
 - [Tech Stack](#tech-stack)
+- [Funding Acknowledgement](#funding-acknowledgement)
 - [Production Deployment](#production-deployment)
-- [Docker Development (Recommended)](#docker-development-recommended)
-- [Database Management](#database-management)
+- [Development Setup](#development-setup)
 - [Testing](#testing)
-- [Troubleshooting](#troubleshooting)
 - [Contributors](#contributors)
 
 ## 📚 Tech Stack
@@ -32,89 +31,21 @@ Built with:
 - Tailwind CSS
 - Docker + GHCR
 
+## Funding Acknowledgement
+
+This project was supported by grant funding.
+
+[Add more here ]
+
 ## 🏭 Production Deployment
 
-Production deployments pull the **GHCR image** and run via Docker Compose with Nginx reverse proxy.
+Production deployments pull the GHCR image and run via Docker Compose with Nginx reverse proxy.
 
 See the full guide in: [docs/production_setup.md](docs/production_setup.md).
 
-## 🐳 Docker Development (Recommended)
+## 🧰 Development Setup
 
-### Ports
-
-- **App (HTTP)**: localhost:3000
-- **Prisma Studio**: localhost:5555
-- **Postgres**: localhost:5432
-
-### Environment Configuration
-
-Copy the template file and update with your local values:
-
-**macOS / Linux**
-
-```bash
-cp .env.development.example .env.development
-```
-
-**Windows (PowerShell)**
-
-```powershell
-Copy-Item .env.development.example .env.development
-```
-
-**Windows (Command Prompt)**
-
-```bat
-copy .env.development.example .env.development
-```
-
-See [.env.development.example](.env.development.example) for all available options.
-
-### Main Commands
-
-```bash
-npm run docker:dev               # Build and run
-npm run docker:dev:detached      # Build and run in background
-npm run docker:dev:seed          # Seed the database
-npm run docker:dev:migrate       # Run database migrations
-npm run docker:dev:psql          # Open psql
-npm run docker:dev:emptydb       # Truncate all tables
-npm run docker:dev:down          # Stop containers (keep volumes)
-npm run docker:dev:clean         # Stop and prune unused resources
-npm run docker:dev:down:volumes  # Stop containers (remove volumes)
-npm run docker:dev:resetdb       # Stop containers remove database
-npm run docker:dev:nuke          # Remove containers, volumes, and data
-```
-
-### What Happens on Startup
-
-- PostgreSQL container starts
-- Prisma migrations applied
-- Seed data inserted
-- Next.js dev server launched with hot reload
-
-## 🗄️ Database Management
-
-### Prisma (Local / Node)
-
-```bash
-npm run db:generate # Generate Prisma client
-npm run db:migrate  # Create and run migrations (dev)
-npm run db:deploy   # Apply migrations (prod)
-npm run db:studio   # Open Prisma Studio
-npm run db:reset    # Reset database
-npm run seed        # Seed database
-```
-
-### Inside Docker
-
-```bash
-npm run docker:dev:studio # Open Prisma Studio
-npm run docker:dev:seed   # Seed the database
-npm run docker:dev:psql   # Open psql
-```
-
----
+A full set of development instructions can be found in the development setup guide: [docs/development_setup.md](docs/development_setup.md).
 
 ## ✅ Testing
 
@@ -131,29 +62,6 @@ npm run test:watch
 ```
 
 ---
-
-## 🔍 Troubleshooting
-
-**Database**
-
-```bash
-docker logs afct-dev-postgres                          # View Postgres logs
-docker exec -it afct-dev-postgres pg_isready -U afct_user # Check Postgres readiness
-```
-
-**Auth / Login**
-
-```bash
-docker exec -it afct-dev sh -lc 'echo $NEXTAUTH_URL' # Verify NEXTAUTH_URL in container
-docker exec -it afct-dev sh -lc 'echo $NEXTAUTH_SECRET' # Verify NEXTAUTH_SECRET in container
-docker logs afct-dev | tail                          # Tail app logs
-```
-
-**File Uploads / Permissions**
-
-```bash
-docker exec -it afct-dev sh -lc 'ls -ld /private/uploads /app/public/uploads'
-```
 
 ## 👥 Contributors
 

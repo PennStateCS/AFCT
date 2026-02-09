@@ -7,11 +7,11 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import { getClientIp } from './ip-utils';
 
 export type ActivityCategory =
-  | 'SYSTEM'      // Login, logout, session extend
-  | 'USER'        // User CRUD, password changes
-  | 'COURSE'      // Course CRUD, enrollment
-  | 'ASSIGNMENT'  // Assignment CRUD, publishing
-  | 'PROBLEM'     // Problem CRUD
+  | 'SYSTEM' // Login, logout, session extend
+  | 'USER' // User CRUD, password changes
+  | 'COURSE' // Course CRUD, enrollment
+  | 'ASSIGNMENT' // Assignment CRUD, publishing
+  | 'PROBLEM' // Problem CRUD
   | 'SUBMISSION'; // Submission CRUD, grading
 
 export interface EnhancedActivityLogData {
@@ -24,6 +24,11 @@ export interface EnhancedActivityLogData {
   submissionId?: string | null;
   // Prisma JSON input type for flexible structured metadata
   metadata?: Prisma.InputJsonValue | null;
+  /**
+   * When true (default), the helper will attach human-readable context such as
+   * course names or assignment titles based on the provided foreign keys.
+   */
+  includeDisplayMetadata?: boolean;
 }
 
 /**
@@ -32,10 +37,18 @@ export interface EnhancedActivityLogData {
 export function getActivityCategory(action: string): ActivityCategory {
   const upperAction = action.toUpperCase();
 
-  if (upperAction.includes('LOGIN') || upperAction.includes('LOGOUT') || upperAction.includes('SESSION')) {
+  if (
+    upperAction.includes('LOGIN') ||
+    upperAction.includes('LOGOUT') ||
+    upperAction.includes('SESSION')
+  ) {
     return 'SYSTEM';
   }
-  if (upperAction.includes('USER') || upperAction.includes('PASSWORD') || upperAction.includes('PROFILE')) {
+  if (
+    upperAction.includes('USER') ||
+    upperAction.includes('PASSWORD') ||
+    upperAction.includes('PROFILE')
+  ) {
     return 'USER';
   }
   if (upperAction.includes('COURSE') || upperAction.includes('ENROLL')) {
@@ -116,7 +129,7 @@ export const ActivityLogQueries = {
   inDateRange: (
     startDate: Date,
     endDate: Date,
-    filters?: { courseId?: string; category?: ActivityCategory }
+    filters?: { courseId?: string; category?: ActivityCategory },
   ) => ({
     where: {
       timestamp: {
@@ -145,22 +158,105 @@ export const ActivityLogQueries = {
 export async function createEnhancedActivityLog(
   prisma: PrismaClient,
   req: Request,
-  data: EnhancedActivityLogData
+  data: EnhancedActivityLogData,
 ): Promise<void> {
   const category = data.category || getActivityCategory(data.action);
   const ipAddress = getClientIp(req);
   const userAgent = req.headers.get('user-agent') || undefined;
+  const includeDisplayMetadata = data.includeDisplayMetadata !== false;
+
+  const baseMetadata: Record<string, unknown> =
+    data.metadata && typeof data.metadata === 'object' && !Array.isArray(data.metadata)
+      ? { ...(data.metadata as Record<string, unknown>) }
+      : data.metadata !== undefined
+        ? { value: data.metadata }
+        : {};
 
   // Verify user exists if a userId was provided
   let safeUserId: string | null = data.userId ?? null;
+  let userDisplay: {
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
+  } | null = null;
   if (safeUserId) {
-    const exists = await prisma.user.findUnique({
+    const userRecord = await prisma.user.findUnique({
       where: { id: safeUserId },
-      select: { id: true },
+      select: { id: true, firstName: true, lastName: true, email: true },
     });
-    if (!exists) {
+    if (!userRecord) {
       // Drop the FK so the log still records without crashing
       safeUserId = null;
+    } else {
+      userDisplay = userRecord;
+    }
+  }
+
+  if (includeDisplayMetadata && userDisplay) {
+    const displayName = [userDisplay.firstName, userDisplay.lastName]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+    if (displayName) {
+      baseMetadata.userName = displayName;
+    }
+    if (userDisplay.email) {
+      baseMetadata.userEmail = userDisplay.email;
+    }
+  }
+
+  if (includeDisplayMetadata) {
+    const [courseRecord, assignmentRecord, problemRecord, submissionRecord] = await Promise.all([
+      data.courseId
+        ? prisma.course.findUnique({
+            where: { id: data.courseId },
+            select: { name: true, code: true },
+          })
+        : Promise.resolve(null),
+      data.assignmentId
+        ? prisma.assignment.findUnique({
+            where: { id: data.assignmentId },
+            select: { title: true },
+          })
+        : Promise.resolve(null),
+      data.problemId
+        ? prisma.problem.findUnique({
+            where: { id: data.problemId },
+            select: { title: true },
+          })
+        : Promise.resolve(null),
+      data.submissionId
+        ? prisma.submission.findUnique({
+            where: { id: data.submissionId },
+            select: { fileName: true, originalFileName: true },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    if (courseRecord) {
+      if (courseRecord.name) {
+        baseMetadata.courseName = courseRecord.name;
+      }
+      if (courseRecord.code) {
+        baseMetadata.courseCode = courseRecord.code;
+      }
+    }
+
+    if (assignmentRecord?.title) {
+      baseMetadata.assignmentTitle = assignmentRecord.title;
+    }
+
+    if (problemRecord?.title) {
+      baseMetadata.problemTitle = problemRecord.title;
+    }
+
+    if (submissionRecord) {
+      if (submissionRecord.originalFileName) {
+        baseMetadata.submissionOriginalFileName = submissionRecord.originalFileName;
+      }
+      if (submissionRecord.fileName) {
+        baseMetadata.submissionFileName = submissionRecord.fileName;
+      }
     }
   }
 
@@ -176,8 +272,8 @@ export async function createEnhancedActivityLog(
         submissionId: data.submissionId ?? null,
         ipAddress,
         userAgent,
-  // Ensure a Prisma-compatible JSON value; default to empty object
-  metadata: (data.metadata ?? {}) as Prisma.InputJsonValue,
+        // Ensure a Prisma-compatible JSON value; default to empty object
+        metadata: (baseMetadata as Prisma.InputJsonValue) ?? Prisma.JsonNull,
       },
     });
   } catch (err) {

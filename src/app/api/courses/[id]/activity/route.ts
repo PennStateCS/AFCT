@@ -2,10 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 
-export async function GET(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
@@ -13,21 +10,30 @@ export async function GET(
     }
 
     const { id: courseId } = await context.params;
-    
-    // Verify user has access to this course
+
     const course = await prisma.course.findFirst({
-      where: {
-        id: courseId,
-        roster: {
-          some: {
-            userId: session.user.id,
-          },
-        },
-      },
+      where: { id: courseId },
+      select: { id: true },
     });
 
     if (!course) {
-      return NextResponse.json({ error: 'Course not found or access denied' }, { status: 404 });
+      return NextResponse.json({ error: 'Course not found' }, { status: 404 });
+    }
+
+    const role = session.user.role;
+    const isPrivileged = role ? ['ADMIN', 'FACULTY', 'TA'].includes(role) : true;
+    if (!isPrivileged) {
+      const rosterEntry = await prisma.roster.findFirst({
+        where: {
+          courseId,
+          userId: session.user.id,
+        },
+        select: { id: true },
+      });
+
+      if (!rosterEntry) {
+        return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+      }
     }
 
     // Get URL search params for pagination
@@ -42,40 +48,40 @@ export async function GET(
           // Direct course activities (most efficient with foreign key)
           { courseId: courseId },
           // Assignment activities in this course
-          { 
-            assignment: { courseId: courseId }
-          },
-          // Problem activities in this course  
           {
-            problem: { courseId: courseId }
+            assignment: { courseId: courseId },
+          },
+          // Problem activities in this course
+          {
+            problem: { courseId: courseId },
           },
           // Submission activities for assignments in this course
           {
-            submission: { 
-              assignmentProblem: { 
-                assignment: { courseId: courseId }
-              }
-            }
+            submission: {
+              assignmentProblem: {
+                assignment: { courseId: courseId },
+              },
+            },
           },
           // Login activities from course members (last 24 hours for better context)
           {
             AND: [
               { action: { contains: 'LOGIN' } },
-              { 
+              {
                 timestamp: {
-                  gte: new Date(Date.now() - 24 * 60 * 60 * 1000)
-                }
+                  gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
+                },
               },
               {
                 user: {
                   rosterEntries: {
-                    some: { courseId: courseId }
-                  }
-                }
-              }
-            ]
-          }
-        ]
+                    some: { courseId: courseId },
+                  },
+                },
+              },
+            ],
+          },
+        ],
       },
       include: {
         user: {
@@ -131,37 +137,37 @@ export async function GET(
       where: {
         OR: [
           { courseId: courseId },
-          { 
-            assignment: { courseId: courseId }
+          {
+            assignment: { courseId: courseId },
           },
           {
-            problem: { courseId: courseId }
+            problem: { courseId: courseId },
           },
           {
-            submission: { 
-              assignmentProblem: { 
-                assignment: { courseId: courseId }
-              }
-            }
+            submission: {
+              assignmentProblem: {
+                assignment: { courseId: courseId },
+              },
+            },
           },
           {
             AND: [
               { action: { contains: 'LOGIN' } },
-              { 
+              {
                 timestamp: {
-                  gte: new Date(Date.now() - 24 * 60 * 60 * 1000)
-                }
+                  gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
+                },
               },
               {
                 user: {
                   rosterEntries: {
-                    some: { courseId: courseId }
-                  }
-                }
-              }
-            ]
-          }
-        ]
+                    some: { courseId: courseId },
+                  },
+                },
+              },
+            ],
+          },
+        ],
       },
     });
 

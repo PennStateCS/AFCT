@@ -2,12 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const prismaMock = vi.hoisted(() => ({
-  assignment: { findUnique: vi.fn(), update: vi.fn(), create: vi.fn() },
+  assignment: { findUnique: vi.fn(), update: vi.fn(), create: vi.fn(), delete: vi.fn() },
   roster: { findFirst: vi.fn() },
-  assignmentProblem: { findFirst: vi.fn() },
+  assignmentProblem: { findFirst: vi.fn(), deleteMany: vi.fn() },
   assignmentGrade: { findFirst: vi.fn() },
   user: { findUnique: vi.fn() },
   systemSettings: { findUnique: vi.fn() },
+  submission: { count: vi.fn() },
+  comment: { count: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -20,7 +22,7 @@ vi.mock('@/lib/date-utils', () => ({
   toEndOfDayInTimezone: vi.fn().mockReturnValue(new Date('2025-01-01T00:00:00.000Z')),
 }));
 
-import { GET, PUT, PATCH, POST } from './route';
+import { GET, PUT, PATCH, POST, DELETE } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -46,7 +48,7 @@ describe('GET /api/assignments/[id]', () => {
     expect(res.status).toBe(404);
   });
 
-  it('returns 404 when student cannot access', async () => {
+  it('returns 404 when student cannot access unpublished assignment', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
     prismaMock.assignment.findUnique.mockResolvedValue({
       id: 'a1',
@@ -58,6 +60,86 @@ describe('GET /api/assignments/[id]', () => {
     const res = await GET(req, { params: Promise.resolve({ id: 'a1' }) });
 
     expect(res.status).toBe(404);
+  });
+
+  it('returns 404 when student not enrolled in course', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.assignment.findUnique.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      isPublished: true,
+    });
+    prismaMock.roster.findFirst.mockResolvedValue(null);
+
+    const req = new NextRequest('http://localhost/api/assignments/a1');
+    const res = await GET(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(404);
+  });
+
+  it('returns assignment when student is enrolled and assignment is published', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.assignment.findUnique.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      isPublished: true,
+      title: 'Assignment 1',
+    });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
+
+    const req = new NextRequest('http://localhost/api/assignments/a1');
+    const res = await GET(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.id).toBe('a1');
+  });
+
+  it('returns 404 when FACULTY/TA not in course roster', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.assignment.findUnique.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+    });
+    prismaMock.roster.findFirst.mockResolvedValue(null);
+
+    const req = new NextRequest('http://localhost/api/assignments/a1');
+    const res = await GET(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(404);
+  });
+
+  it('returns assignment when FACULTY/TA has access', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.assignment.findUnique.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      title: 'Assignment 1',
+    });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'FACULTY' });
+
+    const req = new NextRequest('http://localhost/api/assignments/a1');
+    const res = await GET(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.id).toBe('a1');
+  });
+
+  it('returns assignment when ADMIN', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.assignment.findUnique.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      title: 'Assignment 1',
+    });
+
+    const req = new NextRequest('http://localhost/api/assignments/a1');
+    const res = await GET(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.id).toBe('a1');
   });
 });
 
@@ -74,8 +156,54 @@ describe('PUT /api/assignments/[id]', () => {
     expect(res.status).toBe(403);
   });
 
+  it('returns 403 when student attempts to update', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', {
+      method: 'PUT',
+      body: JSON.stringify({ title: 'A' }),
+    });
+    const res = await PUT(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 403 when unpublishing assignment with submissions', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
+    prismaMock.assignmentProblem.findFirst.mockResolvedValue({ assignmentId: 'a1' });
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', {
+      method: 'PUT',
+      body: JSON.stringify({ title: 'A', isPublished: false }),
+    });
+    const res = await PUT(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(403);
+    const json = await res.json();
+    expect(json.error).toContain('submissions');
+  });
+
+  it('returns 403 when unpublishing assignment with grades', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
+    prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
+    prismaMock.assignmentGrade.findFirst.mockResolvedValue({ assignmentId: 'a1' });
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', {
+      method: 'PUT',
+      body: JSON.stringify({ title: 'A', isPublished: false }),
+    });
+    const res = await PUT(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(403);
+    const json = await res.json();
+    expect(json.error).toContain('grades');
+  });
+
   it('updates assignment and logs activity', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
     prismaMock.assignmentGrade.findFirst.mockResolvedValue(null);
     prismaMock.assignment.update.mockResolvedValue({ id: 'a1', courseId: 'c1' });
@@ -89,6 +217,23 @@ describe('PUT /api/assignments/[id]', () => {
     expect(res.status).toBe(200);
     expect(prismaMock.assignment.update).toHaveBeenCalled();
     expect(activityLogMock).toHaveBeenCalled();
+  });
+
+  it('uses system timezone when user timezone not available', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.user.findUnique.mockResolvedValue(null);
+    prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
+    prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
+    prismaMock.assignmentGrade.findFirst.mockResolvedValue(null);
+    prismaMock.assignment.update.mockResolvedValue({ id: 'a1', courseId: 'c1' });
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', {
+      method: 'PUT',
+      body: JSON.stringify({ title: 'A', dueDate: '2025-01-01' }),
+    });
+    const res = await PUT(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(200);
   });
 });
 
@@ -104,6 +249,85 @@ describe('PATCH /api/assignments/[id]', () => {
 
     expect(res.status).toBe(403);
   });
+
+  it('partially updates assignment with only provided fields', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
+    prismaMock.assignment.update.mockResolvedValue({ id: 'a1', courseId: 'c1', title: 'Updated' });
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', {
+      method: 'PATCH',
+      body: JSON.stringify({ title: 'Updated' }),
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.assignment.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'a1' },
+        data: { title: 'Updated' },
+      }),
+    );
+  });
+
+  it('returns 403 when unpublishing with submissions', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'TA' } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
+    prismaMock.assignmentProblem.findFirst.mockResolvedValue({ assignmentId: 'a1' });
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', {
+      method: 'PATCH',
+      body: JSON.stringify({ isPublished: false }),
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 403 when unpublishing with grades', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
+    prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
+    prismaMock.assignmentGrade.findFirst.mockResolvedValue({ assignmentId: 'a1' });
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', {
+      method: 'PATCH',
+      body: JSON.stringify({ isPublished: false }),
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('updates multiple fields when provided', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
+    prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
+    prismaMock.assignmentGrade.findFirst.mockResolvedValue(null);
+    prismaMock.assignment.update.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      title: 'New Title',
+      maxPoints: 100,
+    });
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        title: 'New Title',
+        description: 'New description',
+        maxPoints: 100,
+        dueDate: '2025-01-15',
+      }),
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(200);
+    const updateCall = prismaMock.assignment.update.mock.calls[0][0];
+    expect(updateCall.data).toHaveProperty('title', 'New Title');
+    expect(updateCall.data).toHaveProperty('description', 'New description');
+    expect(updateCall.data).toHaveProperty('maxPoints', 100);
+  });
 });
 
 describe('POST /api/assignments/[id]', () => {
@@ -117,5 +341,217 @@ describe('POST /api/assignments/[id]', () => {
     const res = await POST(req);
 
     expect(res.status).toBe(403);
+  });
+
+  it('returns 403 when student attempts to create', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', {
+      method: 'POST',
+      body: JSON.stringify({ title: 'A', courseId: 'c1' }),
+    });
+    const res = await POST(req);
+
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 400 when missing required fields (title)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', {
+      method: 'POST',
+      body: JSON.stringify({ courseId: 'c1' }),
+    });
+    const res = await POST(req);
+
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when missing required fields (courseId)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', {
+      method: 'POST',
+      body: JSON.stringify({ title: 'Assignment 1' }),
+    });
+    const res = await POST(req);
+
+    expect(res.status).toBe(400);
+  });
+
+  it('creates assignment with defaults and logs activity', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
+    prismaMock.assignment.create.mockResolvedValue({
+      id: 'a1',
+      title: 'Assignment 1',
+      courseId: 'c1',
+      maxPoints: 0,
+      isPublished: false,
+    });
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', {
+      method: 'POST',
+      body: JSON.stringify({ title: 'Assignment 1', courseId: 'c1' }),
+    });
+    const res = await POST(req);
+
+    expect(res.status).toBe(201);
+    expect(prismaMock.assignment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          title: 'Assignment 1',
+          courseId: 'c1',
+          maxPoints: 0,
+          isPublished: false,
+        }),
+      }),
+    );
+    expect(activityLogMock).toHaveBeenCalled();
+  });
+
+  it('creates assignment with all fields provided', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
+    prismaMock.assignment.create.mockResolvedValue({
+      id: 'a2',
+      title: 'Homework 1',
+      description: 'Complete all problems',
+      courseId: 'c1',
+      maxPoints: 100,
+      isPublished: true,
+    });
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: 'Homework 1',
+        description: 'Complete all problems',
+        courseId: 'c1',
+        maxPoints: 100,
+        isPublished: true,
+        dueDate: '2025-02-01',
+      }),
+    });
+    const res = await POST(req);
+
+    expect(res.status).toBe(201);
+    const json = await res.json();
+    expect(json.maxPoints).toBe(100);
+    expect(json.isPublished).toBe(true);
+  });
+});
+
+describe('DELETE /api/assignments/[id]', () => {
+  it('returns 403 when unauthorized', async () => {
+    authMock.mockResolvedValue(null);
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', { method: 'DELETE' });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 403 when student attempts to delete', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', { method: 'DELETE' });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 404 when assignment not found', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.assignment.findUnique.mockResolvedValue(null);
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', { method: 'DELETE' });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 400 when assignment has submissions', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.assignment.findUnique.mockResolvedValue({ id: 'a1', courseId: 'c1' });
+    prismaMock.submission.count.mockResolvedValue(5);
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', { method: 'DELETE' });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error).toContain('submissions');
+  });
+
+  it('returns 400 when assignment has comments', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.assignment.findUnique.mockResolvedValue({ id: 'a1', courseId: 'c1' });
+    prismaMock.submission.count.mockResolvedValue(0);
+    prismaMock.comment.count.mockResolvedValue(3);
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', { method: 'DELETE' });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error).toContain('comments');
+  });
+
+  it('deletes assignment and associated problems, then logs activity', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.assignment.findUnique.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      title: 'Assignment 1',
+    });
+    prismaMock.submission.count.mockResolvedValue(0);
+    prismaMock.comment.count.mockResolvedValue(0);
+    prismaMock.assignment.delete.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      title: 'Assignment 1',
+    });
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', { method: 'DELETE' });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.assignmentProblem.deleteMany).toHaveBeenCalledWith({
+      where: { assignmentId: 'a1' },
+    });
+    expect(prismaMock.assignment.delete).toHaveBeenCalledWith({ where: { id: 'a1' } });
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.any(Object),
+      expect.objectContaining({
+        action: 'DELETE_ASSIGNMENT',
+        assignmentId: 'a1',
+      }),
+    );
+  });
+
+  it('handles activity log errors gracefully', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.assignment.findUnique.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      title: 'Assignment 1',
+    });
+    prismaMock.submission.count.mockResolvedValue(0);
+    prismaMock.comment.count.mockResolvedValue(0);
+    prismaMock.assignment.delete.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      title: 'Assignment 1',
+    });
+    activityLogMock.mockRejectedValue(new Error('Log failed'));
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', { method: 'DELETE' });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.success).toBe(true);
   });
 });

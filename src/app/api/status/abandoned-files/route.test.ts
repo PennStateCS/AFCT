@@ -109,4 +109,84 @@ describe('DELETE /api/status/abandoned-files', () => {
     expect(res.status).toBe(200);
     expect(fsUnlinkMock).toHaveBeenCalled();
   });
+
+  it('checks submissions category for references', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.submission.findFirst.mockResolvedValue({ id: 's1' });
+
+    const req = new Request('http://localhost/api/status/abandoned-files', {
+      method: 'DELETE',
+      body: JSON.stringify({ category: 'submissions', fileName: 'submission.txt' }),
+    });
+
+    const res = await DELETE(req);
+
+    expect(res.status).toBe(409);
+    expect(prismaMock.submission.findFirst).toHaveBeenCalledWith({
+      where: { fileName: 'submission.txt' },
+    });
+  });
+
+  it('checks pfps category for references', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.user.findFirst.mockResolvedValue({ id: 'u1' });
+
+    const req = new Request('http://localhost/api/status/abandoned-files', {
+      method: 'DELETE',
+      body: JSON.stringify({ category: 'pfps', fileName: 'avatar.jpg' }),
+    });
+
+    const res = await DELETE(req);
+
+    expect(res.status).toBe(409);
+    expect(prismaMock.user.findFirst).toHaveBeenCalledWith({
+      where: { avatar: 'avatar.jpg' },
+    });
+  });
+
+  it('deletes unreferenced submission file', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.submission.findFirst.mockResolvedValue(null);
+    fsExistsSyncMock.mockReturnValue(true);
+
+    const req = new Request('http://localhost/api/status/abandoned-files', {
+      method: 'DELETE',
+      body: JSON.stringify({ category: 'submissions', fileName: 'old.txt' }),
+    });
+
+    const res = await DELETE(req);
+
+    expect(res.status).toBe(200);
+    expect(fsUnlinkMock).toHaveBeenCalled();
+  });
+
+  it('deletes unreferenced pfp file', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.user.findFirst.mockResolvedValue(null);
+    fsExistsSyncMock.mockReturnValue(true);
+
+    const req = new Request('http://localhost/api/status/abandoned-files', {
+      method: 'DELETE',
+      body: JSON.stringify({ category: 'pfps', fileName: 'old-avatar.jpg' }),
+    });
+
+    const res = await DELETE(req);
+
+    expect(res.status).toBe(200);
+    expect(fsUnlinkMock).toHaveBeenCalled();
+  });
+
+  it('returns 500 on unexpected errors', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.problem.findFirst.mockRejectedValue(new Error('Database error'));
+
+    const req = new Request('http://localhost/api/status/abandoned-files', {
+      method: 'DELETE',
+      body: JSON.stringify({ category: 'solutions', fileName: 'file.txt' }),
+    });
+
+    const res = await DELETE(req);
+
+    expect(res.status).toBe(500);
+  });
 });

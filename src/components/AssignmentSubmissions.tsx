@@ -2,7 +2,19 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Eye, FileText, MessageSquare, ChevronDown } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  FileText,
+  MessageSquare,
+  ChevronDown,
+  Check,
+  X,
+  Minus,
+  RefreshCw,
+  Download,
+} from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -10,6 +22,7 @@ import {
   DropdownMenuItem,
 } from './ui/dropdown-menu';
 import { Button } from './ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -96,7 +109,9 @@ function ProblemList({
         <ScrollArea className="h-[520px]">
           <ul className="divide-border divide-y">
             {problems.map((p) => {
-              const count = extractSubs(submissions[p.id]).length;
+              const subs = extractSubs(submissions[p.id]);
+              const count = subs.length;
+              const hasCorrect = subs.some((s) => s.correct === true);
               const active = selectedProblemId === p.id;
               return (
                 <li key={p.id}>
@@ -108,8 +123,15 @@ function ProblemList({
                     }`}
                   >
                     <span className="truncate">{p.title}</span>
-                    <Badge variant="outline" className="shrink-0">
-                      {count}
+                    <Badge variant="outline" className="shrink-0 bg-white text-slate-900">
+                      <span className="flex items-center gap-1">
+                        {hasCorrect ? (
+                          <Check className="h-3 w-3 text-green-600" />
+                        ) : (
+                          <X className="h-3 w-3 text-red-600" />
+                        )}
+                        {count}
+                      </span>
                     </Badge>
                   </button>
                 </li>
@@ -125,10 +147,14 @@ function ProblemList({
 function SubmissionTable({
   submissions,
   onView,
+  onRerun,
+  rerunning,
   className = '',
 }: {
   submissions: Submission[];
   onView: (submission: Submission) => void;
+  onRerun: (submission: Submission) => void;
+  rerunning: Record<string, boolean>;
   className?: string;
 }) {
   if (!submissions.length) {
@@ -142,42 +168,122 @@ function SubmissionTable({
   const sorted = [...submissions].sort(
     (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
   );
-  const latestId = sorted[0]?.id;
 
   return (
     <div className={`overflow-hidden rounded-md border ${className}`}>
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Attempt #</TableHead>
-            <TableHead>Submitted At</TableHead>
+            <TableHead>Submitted</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead>Score</TableHead>
+            <TableHead>Feedback</TableHead>
             <TableHead>Action</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {sorted.map((s, idx) => (
-            <TableRow key={s.id} className={s.id === latestId ? 'bg-muted/50' : ''}>
-              <TableCell>{sorted.length - idx}</TableCell>
-              <TableCell>{new Date(s.submittedAt).toLocaleString()}</TableCell>
-              <TableCell>
-                <Badge variant="outline">
-                  {s.correct === true ? 'Correct' : s.correct === false ? 'Incorrect' : 'Submitted'}
-                </Badge>
-              </TableCell>
-              <TableCell>{'—'}</TableCell>
-              <TableCell>
-                {s.fileName ? (
-                  <Button size="sm" variant="secondary" onClick={() => onView(s)}>
-                    <Eye className="mr-2 h-4 w-4" /> View
-                  </Button>
-                ) : (
-                  <span className="text-muted-foreground text-sm">No file</span>
-                )}
-              </TableCell>
-            </TableRow>
-          ))}
+          {sorted.map((s) => {
+            const rawJson = s.evaluationRaw
+              ? typeof s.evaluationRaw === 'string'
+                ? s.evaluationRaw
+                : JSON.stringify(s.evaluationRaw, null, 2)
+              : null;
+
+            return (
+              <TableRow key={s.id} className="hover:bg-transparent">
+                <TableCell>
+                  <div className="flex flex-col">
+                    <span>{new Date(s.submittedAt).toLocaleDateString()}</span>
+                    <span className="text-muted-foreground text-xs">
+                      {new Date(s.submittedAt).toLocaleTimeString()}
+                    </span>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  {s.correct === true ? (
+                    <div className="flex justify-center">
+                      <Check className="h-4 w-4 text-green-600" />
+                    </div>
+                  ) : s.correct === false ? (
+                    <div className="flex justify-center">
+                      <X className="h-4 w-4 text-red-600" />
+                    </div>
+                  ) : (
+                    <div className="text-muted-foreground flex items-center gap-2">
+                      <Minus className="h-4 w-4" />
+                      <span className="text-sm">Submitted</span>
+                    </div>
+                  )}
+                </TableCell>
+                <TableCell className="break-words whitespace-normal">
+                  {s.feedback ? (
+                    <span className="text-sm">{s.feedback}</span>
+                  ) : (
+                    <span className="text-muted-foreground text-sm">No feedback</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2 whitespace-nowrap">
+                    {s.fileName ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="sm" variant="secondary">
+                            <ChevronDown className="mr-1 h-4 w-4" /> Manage
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => onView(s)}
+                            className="flex items-center gap-2"
+                          >
+                            <Eye className="h-4 w-4" /> View Solution
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => onRerun(s)}
+                            disabled={rerunning[s.id]}
+                            className="flex items-center gap-2"
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                            {rerunning[s.id] ? 'Rerunning…' : 'Rerun Evaluator'}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              if (!s.fileName) return;
+                              const url = `/api/uploads/submissions/${encodeURIComponent(s.fileName)}`;
+                              window.open(url, '_blank', 'noopener,noreferrer');
+                            }}
+                            className="flex items-center gap-2"
+                          >
+                            <Download className="h-4 w-4" /> Download Submission
+                          </DropdownMenuItem>
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <DropdownMenuItem
+                                disabled={!rawJson}
+                                className="flex items-center gap-2"
+                                onSelect={(event) => event.preventDefault()}
+                              >
+                                <FileText className="h-4 w-4" /> View Raw JSON
+                              </DropdownMenuItem>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-2xl">
+                              <DialogHeader>
+                                <DialogTitle>Raw evaluation JSON</DialogTitle>
+                              </DialogHeader>
+                              <pre className="max-h-[60vh] overflow-auto rounded-md bg-white p-3 text-xs leading-relaxed text-slate-900">
+                                {rawJson ?? 'No raw JSON available.'}
+                              </pre>
+                            </DialogContent>
+                          </Dialog>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">No file</span>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </div>
@@ -195,6 +301,8 @@ function ProblemWorkspace({
   isSaving,
   deletingComments,
   onViewSubmission,
+  onRerunSubmission,
+  rerunning,
   courseIsArchived,
 }: {
   problem: Problem | null;
@@ -207,6 +315,8 @@ function ProblemWorkspace({
   isSaving?: boolean;
   deletingComments?: Record<string, boolean>;
   onViewSubmission: (submission: Submission) => void;
+  onRerunSubmission: (submission: Submission) => void;
+  rerunning: Record<string, boolean>;
   courseIsArchived: boolean;
 }) {
   if (!problem) {
@@ -222,23 +332,28 @@ function ProblemWorkspace({
   return (
     <Card className="print:border-0 print:shadow-none">
       <CardHeader>
-        <CardTitle className="text-lg">{problem.title}</CardTitle>
-        <div className="text-muted-foreground mt-2 flex flex-wrap items-center gap-4 text-xs">
-          {(() => {
-            const badge = getTypeBadge(problem.type);
-            return badge ? (
-              <Badge variant="outline" className={badge.className}>
-                {badge.label}
-              </Badge>
-            ) : null;
-          })()}
-          {typeof problem.maxStates === 'number' ? (
-            <span>Max States: {problem.maxStates === -1 ? 'Unlimited' : problem.maxStates}</span>
-          ) : null}
-          {typeof problem.isDeterministic === 'boolean' ? (
-            <span>{problem.isDeterministic ? 'Deterministic' : 'Nondeterministic'}</span>
-          ) : null}
+        <div className="flex flex-wrap items-center gap-3">
+          <CardTitle className="text-lg">{problem.title}</CardTitle>
+          <div className="text-muted-foreground flex flex-wrap items-center gap-4 text-xs">
+            {(() => {
+              const badge = getTypeBadge(problem.type);
+              return badge ? (
+                <Badge variant="outline" className={badge.className}>
+                  {badge.label}
+                </Badge>
+              ) : null;
+            })()}
+            {typeof problem.maxStates === 'number' ? (
+              <span>Max States: {problem.maxStates === -1 ? 'Unlimited' : problem.maxStates}</span>
+            ) : null}
+            {typeof problem.isDeterministic === 'boolean' ? (
+              <span>{problem.isDeterministic ? 'Deterministic' : 'Nondeterministic'}</span>
+            ) : null}
+          </div>
         </div>
+        {problem.description ? (
+          <div className="text-muted-foreground mt-2 text-sm">{problem.description}</div>
+        ) : null}
       </CardHeader>
       <CardContent>
         <div className="grid items-stretch gap-4 lg:grid-cols-[60%_40%]">
@@ -250,6 +365,8 @@ function ProblemWorkspace({
               <SubmissionTable
                 submissions={submissions}
                 onView={onViewSubmission}
+                onRerun={onRerunSubmission}
+                rerunning={rerunning}
                 className="h-full"
               />
             </div>
@@ -329,6 +446,8 @@ export default function AssignmentSubmissions({
   const [commentTexts, setCommentTexts] = useState<Record<string, string>>({});
   const [savingComments, setSavingComments] = useState<Record<string, boolean>>({});
   const [deletingComments, setDeletingComments] = useState<Record<string, boolean>>({});
+  const [rerunning, setRerunning] = useState<Record<string, boolean>>({});
+  const [gradeStatus, setGradeStatus] = useState<Record<string, boolean>>({});
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
   // Grade editing state (robust, GradesCard style)
   const [editingGrade, setEditingGrade] = useState<string>('');
@@ -369,6 +488,15 @@ export default function AssignmentSubmissions({
     [router, searchParams],
   );
 
+  const updateStudentQuery = useCallback(
+    (studentId: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('studentId', studentId);
+      router.replace(`?${params.toString()}`, { scroll: false });
+    },
+    [router, searchParams],
+  );
+
   useEffect(() => {
     if (problems.length === 0) return;
     const paramProblemId = searchParams.get('problemId');
@@ -390,6 +518,7 @@ export default function AssignmentSubmissions({
   }, [menuOpen]);
 
   const selectedStudent = students[selectedIndex] ?? null;
+  const selectedStudentId = selectedStudent?.id ?? null;
 
   const handleSelectProblem = useCallback(
     (problemId: string) => {
@@ -419,7 +548,16 @@ export default function AssignmentSubmissions({
           return 0;
         });
         setStudents(data);
-        if (data.length > 0) setSelectedIndex(0);
+        if (data.length > 0) {
+          const paramStudentId = searchParams.get('studentId');
+          const initialIndex = paramStudentId ? data.findIndex((s) => s.id === paramStudentId) : -1;
+          if (initialIndex !== -1) {
+            setSelectedIndex(initialIndex);
+          } else {
+            setSelectedIndex(0);
+            updateStudentQuery(data[0].id);
+          }
+        }
       } catch (err) {
         console.error('Fetch students error:', err);
         showToast.error('Failed to load students');
@@ -427,30 +565,69 @@ export default function AssignmentSubmissions({
       }
     };
     fetchStudents();
-  }, [courseId]);
+  }, [courseId, searchParams, updateStudentQuery]);
+
+  useEffect(() => {
+    if (!selectedStudent) return;
+    const paramStudentId = searchParams.get('studentId');
+    if (paramStudentId !== selectedStudent.id) {
+      updateStudentQuery(selectedStudent.id);
+    }
+  }, [searchParams, selectedStudent, updateStudentQuery]);
+
+  const fetchSubmissions = useCallback(async () => {
+    if (!selectedStudentId) {
+      setSubmissions({});
+      return;
+    }
+    try {
+      const res = await fetch(
+        `/api/courses/${courseId}/${assignmentId}/submissions/${selectedStudentId}`,
+      );
+      if (!res.ok) {
+        if ([401, 403, 404].includes(res.status)) {
+          setSubmissions({});
+          return;
+        }
+        throw new Error((await res.json())?.error || 'Failed to load submissions');
+      }
+      const data = await res.json();
+      setSubmissions(data || {});
+    } catch (err) {
+      console.error('Fetch submissions error:', err);
+      showToast.error('Failed to load submissions');
+      setSubmissions({});
+    }
+  }, [courseId, assignmentId, selectedStudentId]);
 
   // Fetch submissions for selected student
   useEffect(() => {
-    const fetchSubmissions = async () => {
-      if (!selectedStudent) {
-        setSubmissions({});
-        return;
-      }
-      try {
-        const res = await fetch(
-          `/api/courses/${courseId}/${assignmentId}/submissions/${selectedStudent.id}`,
-        );
-        if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load submissions');
-        const data = await res.json();
-        setSubmissions(data || {});
-      } catch (err) {
-        console.error('Fetch submissions error:', err);
-        showToast.error('Failed to load submissions');
-        setSubmissions({});
-      }
-    };
     fetchSubmissions();
-  }, [courseId, assignmentId, selectedStudent]);
+  }, [fetchSubmissions]);
+
+  const handleRerunSubmission = useCallback(
+    async (submission: Submission) => {
+      if (!submission?.id) return;
+      setRerunning((prev) => ({ ...prev, [submission.id]: true }));
+      try {
+        const res = await fetch(`/api/submissions/${submission.id}/rerun`, {
+          method: 'POST',
+        });
+        if (!res.ok) {
+          const error = await res.json().catch(() => ({}));
+          throw new Error(error?.error || 'Failed to rerun submission');
+        }
+        showToast.success('Submission re-evaluated');
+        await fetchSubmissions();
+      } catch (err) {
+        console.error('Rerun submission error:', err);
+        showToast.error(err instanceof Error ? err.message : 'Failed to rerun submission');
+      } finally {
+        setRerunning((prev) => ({ ...prev, [submission.id]: false }));
+      }
+    },
+    [fetchSubmissions],
+  );
 
   // Fetch comments for all problems
   useEffect(() => {
@@ -460,8 +637,9 @@ export default function AssignmentSubmissions({
         return;
       }
       try {
+        const validProblems = problems.filter((p): p is Problem => Boolean(p?.id));
         const entries = await Promise.all(
-          problems.map(async (p) => {
+          validProblems.map(async (p) => {
             try {
               const res = await fetch(
                 `/api/comments?assignmentId=${assignmentId}&problemId=${p.id}&studentId=${selectedStudent.id}`,
@@ -479,6 +657,7 @@ export default function AssignmentSubmissions({
       } catch (err) {
         console.error('Load comments error:', err);
         showToast.error('Failed to load comments');
+        setComments({});
       }
     };
     if (problems.length > 0) loadComments();
@@ -528,6 +707,29 @@ export default function AssignmentSubmissions({
     };
     fetchGrade();
   }, [courseId, assignmentId, selectedStudent]);
+
+  // Fetch grade status for all students (used for dropdown indicators)
+  useEffect(() => {
+    if (!courseId || !assignmentId) return;
+    const fetchGradeStatus = async () => {
+      try {
+        const res = await fetch(`/api/courses/${courseId}/grades`);
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          grades?: Record<string, Record<string, number | null>>;
+        };
+        const grades = data?.grades ?? {};
+        const status: Record<string, boolean> = {};
+        Object.keys(grades).forEach((studentId) => {
+          status[studentId] = grades[studentId]?.[assignmentId] != null;
+        });
+        setGradeStatus(status);
+      } catch (err) {
+        console.warn('Fetch grade status error:', err);
+      }
+    };
+    fetchGradeStatus();
+  }, [courseId, assignmentId]);
 
   const saveComment = useCallback(
     async (problemId: string) => {
@@ -634,6 +836,10 @@ export default function AssignmentSubmissions({
       setEditingGrade(
         numericValue !== null && numericValue !== undefined ? String(numericValue) : '',
       );
+      setGradeStatus((prev) => ({
+        ...prev,
+        [selectedStudent.id]: numericValue !== null && numericValue !== undefined,
+      }));
       setGradeError(null);
       showToast.success(
         `Grade ${numericValue ?? 'cleared'} saved for ${selectedStudent.firstName} ${selectedStudent.lastName}`,
@@ -690,10 +896,22 @@ export default function AssignmentSubmissions({
                       variant="outline"
                       className="bg-card text-foreground border-border hover:bg-input focus:ring-primary-300 flex w-[320px] items-center justify-between gap-2 border focus:ring-2 focus:ring-offset-1"
                     >
-                      <span className="truncate">
-                        {selectedStudent
-                          ? `${selectedStudent.firstName} ${selectedStudent.lastName}`
-                          : 'Select student'}
+                      <span className="flex items-center gap-2 truncate">
+                        {selectedStudent ? (
+                          <>
+                            <span
+                              className={`h-2.5 w-2.5 rounded-full ${
+                                gradeStatus[selectedStudent.id] ? 'bg-green-500' : 'bg-red-500'
+                              }`}
+                              aria-hidden="true"
+                            />
+                            <span className="truncate">
+                              {selectedStudent.firstName} {selectedStudent.lastName}
+                            </span>
+                          </>
+                        ) : (
+                          'Select student'
+                        )}
                       </span>
                       <ChevronDown className="h-4 w-4" />
                     </Button>
@@ -740,7 +958,13 @@ export default function AssignmentSubmissions({
                               setMenuOpen(false);
                             }}
                           >
-                            <span className="truncate">
+                            <span className="flex items-center gap-2 truncate">
+                              <span
+                                className={`h-2.5 w-2.5 rounded-full ${
+                                  gradeStatus[s.id] ? 'bg-green-500' : 'bg-red-500'
+                                }`}
+                                aria-hidden="true"
+                              />
                               {s.firstName} {s.lastName}
                             </span>
                           </DropdownMenuItem>
@@ -758,7 +982,7 @@ export default function AssignmentSubmissions({
                   Next <ChevronRight className="h-4 w-4" />
                 </Button>
                 <span className="text-muted-foreground ml-2 text-sm">
-                  {selectedIndex + 1} of {students.length}
+                  Student {selectedIndex + 1} of {students.length}
                 </span>
               </div>
 
@@ -817,6 +1041,7 @@ export default function AssignmentSubmissions({
                     })()
                   }
                   variant="secondary"
+                  className="h-9"
                 >
                   {isSavingGrade ? 'Saving…' : 'Save Grade'}
                 </Button>
@@ -868,6 +1093,8 @@ export default function AssignmentSubmissions({
                         isSaving={selectedProblem ? savingComments[selectedProblem.id] : false}
                         deletingComments={deletingComments}
                         onViewSubmission={(submission) => setOpenDialog({ open: true, submission })}
+                        onRerunSubmission={handleRerunSubmission}
+                        rerunning={rerunning}
                         courseIsArchived={courseIsArchived}
                       />
                     </div>
