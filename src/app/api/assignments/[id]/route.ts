@@ -125,6 +125,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
   }
 
+  // Prevent changing the assignment's group mode if submissions exist
+  if (data.isGroup !== undefined) {
+    const hasAnySubmission = !!(await prisma.submission.findFirst({ where: { assignmentId: id } }));
+    if (hasAnySubmission) {
+      return NextResponse.json({ error: 'Cannot change assignment group mode after submissions exist' }, { status: 403 });
+    }
+  }
+
   try {
     const updated = await prisma.assignment.update({
       where: { id },
@@ -134,6 +142,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         dueDate: toEndOfDayInTimezone(data.dueDate, userTimezone),
         maxPoints: data.maxPoints,
         isPublished: data.isPublished,
+        isGroup: data.isGroup === undefined ? undefined : data.isGroup,
       },
     });
 
@@ -196,6 +205,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
+  // Prevent changing the assignment's group mode if submissions exist
+  if (data.isGroup !== undefined) {
+    const hasAnySubmission = !!(await prisma.submission.findFirst({ where: { assignmentId: id } }));
+    if (hasAnySubmission) {
+      return NextResponse.json({ error: 'Cannot change assignment group mode after submissions exist' }, { status: 403 });
+    }
+  }
+
   try {
     // Build update data object with only provided fields
     const updateData: {
@@ -204,6 +221,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       dueDate?: Date;
       maxPoints?: number;
       isPublished?: boolean;
+      isGroup?: boolean;
     } = {};
 
     if (data.title !== undefined) updateData.title = data.title;
@@ -213,6 +231,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
     if (data.maxPoints !== undefined) updateData.maxPoints = data.maxPoints;
     if (data.isPublished !== undefined) updateData.isPublished = data.isPublished;
+    if (data.isGroup !== undefined) updateData.isGroup = data.isGroup;
 
     const updated = await prisma.assignment.update({
       where: { id },
@@ -263,6 +282,7 @@ export async function POST(req: NextRequest) {
         dueDate: toEndOfDayInTimezone(data.dueDate, userTimezone),
         maxPoints: data.maxPoints || 0,
         isPublished: data.isPublished || false,
+        isGroup: !!data.isGroup,
         courseId: data.courseId,
       },
     });
@@ -279,6 +299,7 @@ export async function POST(req: NextRequest) {
         assignmentId: created.id,
         title: created.title,
         maxPoints: created.maxPoints,
+        isGroup: created.isGroup,
       },
     });
 

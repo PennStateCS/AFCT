@@ -51,6 +51,8 @@ export async function POST(
     }
 
     const problemIds: string[] = Array.isArray(body.problemIds) ? body.problemIds : [];
+    // Optional group assignment: either a specific group id or 'ALL' for all groups
+    const groupId: string | undefined = typeof body.groupId === 'string' ? body.groupId : undefined;
     // parsed problemIds available
 
     // Validate that all problems exist and belong to the specified course
@@ -101,12 +103,46 @@ export async function POST(
           problemId: pid,
         })),
       });
+
+      // If a group mapping was requested and the assignment supports group assignments,
+      // create group mappings for the requested problems. This now includes existing
+      // assignment problems as well so users can assign problems to groups after the
+      // problem is already part of the assignment.
+      if (groupId) {
+        // Fetch the updated assignment to inspect isGroup and course
+        const updatedAssignment = await prisma.assignment.findUnique({ where: { id: assignmentId } });
+
+        if (updatedAssignment?.isGroup) {
+          let groupIdsToMap: string[] = [];
+          if (groupId === 'ALL') {
+            const groups = await prisma.group.findMany({ where: { courseId } });
+            groupIdsToMap = groups.map((g) => g.id);
+          } else {
+            // Validate the group exists and belongs to the course
+            const group = await prisma.group.findUnique({ where: { id: groupId } });
+            if (group && group.courseId === courseId) groupIdsToMap = [groupId];
+          }
+
+          if (groupIdsToMap.length > 0) {
+            const mappings = [] as { assignmentId: string; problemId: string; groupId: string }[];
+            // We will map for all validIds (problems that exist in the course) to
+            // allow mapping for problems already in the assignment as well as newly added ones.
+            for (const pid of validIds) {
+              for (const gid of groupIdsToMap) {
+                mappings.push({ assignmentId, problemId: pid, groupId: gid });
+              }
+            }
+            if (mappings.length > 0) {
+              await prisma.groupAssignmentProblem.createMany({ data: mappings, skipDuplicates: true });
+            }
+          }
+        }
+      }
     }
 
     // Final set includes all existing problems + new problems
     const finalProblemIds = [...existingProblemIds, ...newProblemIds];
 
-    // Fetch the updated assignment with its problems
     const updated = await prisma.assignment.findUnique({
       where: { id: assignmentId },
       include: {

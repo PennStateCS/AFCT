@@ -61,6 +61,7 @@ type AssignmentWithDetails = {
   dueDate: string | Date;
   maxPoints: number;
   isPublished: boolean;
+  isGroup?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
   problems: Array<{ problem: Problem }>;
@@ -91,6 +92,11 @@ export default function AssignmentDashboardPage() {
   const [problemToEdit, setProblemToEdit] = useState<Problem | null>(null);
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState(searchParams.get('tab') || 'problems');
+
+  // Group mapping support (for group assignments)
+  const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
+  const [groupsLoading, setGroupsLoading] = useState(false);
+  const [groupProblemsMap, setGroupProblemsMap] = useState<Record<string, string[]>>({});
   const [descOpen, setDescOpen] = useState(false);
   const [descText, setDescText] = useState<string | null>(null);
   const courseIsArchived = assignment?.course?.isArchived ?? false;
@@ -157,14 +163,70 @@ export default function AssignmentDashboardPage() {
       .finally(() => setLoading(false));
   }, [id, aid]);
 
-  async function handleAddProblems(problemIds: string[]) {
+  // When this is a group assignment, fetch groups and the mapping of problems -> groups
+  useEffect(() => {
+    if (!id || !aid || !assignment?.isGroup) {
+      setGroups([]);
+      setGroupProblemsMap({});
+      return;
+    }
+
+    let aborted = false;
+    const ac = new AbortController();
+    async function fetchGroupsAndMappings() {
+      setGroupsLoading(true);
+      try {
+        const [grRes, gpRes] = await Promise.all([
+          fetch(`/api/courses/${id}/groups`, { signal: ac.signal }),
+          fetch(`/api/courses/${id}/${aid}/group-problems`, { signal: ac.signal }),
+        ]);
+
+        if (!aborted) {
+          if (grRes.ok) {
+            const gr = await grRes.json();
+            setGroups(Array.isArray(gr) ? gr : gr.groups ?? []);
+          } else {
+            setGroups([]);
+          }
+
+          if (gpRes.ok) {
+            const gp = await gpRes.json();
+            const map: Record<string, string[]> = {};
+            for (const g of gp.groups ?? []) map[g.id] = g.problemIds || [];
+            setGroupProblemsMap(map);
+          } else {
+            setGroupProblemsMap({});
+          }
+        }
+      } catch (err: any) {
+        if (err?.name === 'AbortError') return;
+        console.error('Failed to fetch groups/mappings:', err);
+        setGroups([]);
+        setGroupProblemsMap({});
+      } finally {
+        if (!aborted) setGroupsLoading(false);
+      }
+    }
+
+    fetchGroupsAndMappings();
+    return () => {
+      aborted = true;
+      ac.abort();
+      setGroupsLoading(false);
+    };
+  }, [id, aid, assignment?.isGroup]);
+
+  async function handleAddProblems(problemIds: string[], groupId?: string) {
     if (!id || !aid) return;
     if (!canManageProblems) return;
     try {
+      const payload: any = { problemIds };
+      if (groupId) payload.groupId = groupId;
+
       const res = await fetch(`/api/courses/${id}/${aid}/add-problems`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ problemIds }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error();
       showToast.success('Problems added');
@@ -382,7 +444,7 @@ export default function AssignmentDashboardPage() {
                           className="text-blue-600 underline hover:text-blue-800"
                           title="View description"
                         >
-                          View
+                          View Description
                         </button>
                       ) : (
                         <span className="text-muted-foreground text-xs">—</span>
@@ -391,6 +453,33 @@ export default function AssignmentDashboardPage() {
                     meta: { priority: 2 },
                     enableSorting: false,
                   },
+                  // Group column: only present for group assignments
+                  ...(assignment.isGroup
+                    ? [
+                        {
+                          id: 'group',
+                          header: 'Group',
+                          cell: ({ row }: { row: { original: Problem } }) => {
+                            const pid = row.original.id;
+                            const groupIds = Object.keys(groupProblemsMap).filter((gid) =>
+                              (groupProblemsMap[gid] || []).includes(pid),
+                            );
+
+                            if (groupIds.length === 0) return <span title="All students">All students</span>;
+
+                            const names = groupIds.map((gid) => groups.find((g) => g.id === gid)?.name || gid);
+                            if (names.length === 1) return <span className="truncate" title={names[0]}>{names[0]}</span>;
+                            return (
+                              <span className="truncate" title={names.join(', ')}>
+                                {names[0]} (+{names.length - 1})
+                              </span>
+                            );
+                          },
+                          meta: { priority: 2 },
+                          enableSorting: false,
+                        },
+                      ]
+                    : []),
                   {
                     accessorKey: 'type',
                     header: 'Type',
@@ -433,7 +522,6 @@ export default function AssignmentDashboardPage() {
                             aria-label="Render file"
                           >
                             <Eye className="h-4 w-4" />
-                            <span>View</span>
                           </Button>
                           <Button asChild variant="secondary" size="sm">
                             <a
@@ -443,7 +531,6 @@ export default function AssignmentDashboardPage() {
                               aria-label={`Download ${fileName}`}
                             >
                               <Download className="h-4 w-4" aria-hidden="true" />
-                              <span>Download</span>
                             </a>
                           </Button>
                         </div>
@@ -564,6 +651,8 @@ export default function AssignmentDashboardPage() {
       <AssociateProblemsDialog
         open={addProblemDialogOpen}
         onClose={() => setAddProblemDialogOpen(false)}
+        courseId={id}
+        assignmentId={aid}
         courseIsArchived={courseIsArchived}
         allProblems={allProblems.map((p: Problem) => ({
           ...p,
@@ -575,10 +664,10 @@ export default function AssignmentDashboardPage() {
           description: ap.problem.description ?? undefined,
           type: typeof ap.problem.type === 'string' ? ap.problem.type : undefined,
         }))}
-        onAddProblems={(selectedProblemIds) => {
+        onAddProblems={(selectedProblemIds, groupId) => {
           const existingIds = assignment.problems.map((ap: { problem: Problem }) => ap.problem.id);
           const merged = Array.from(new Set([...existingIds, ...selectedProblemIds]));
-          handleAddProblems(merged);
+          handleAddProblems(merged, groupId);
         }}
       />
       <CreateProblemDialog
@@ -586,9 +675,10 @@ export default function AssignmentDashboardPage() {
         setOpen={setCreateProblemOpen}
         courseId={id}
         courseIsArchived={courseIsArchived}
+        assignmentId={aid}
         onCreated={async (created) => {
           await fetchProblems();
-          if (created?.id) {
+          if (created?.id && !aid) {
             await handleAddProblems([created.id]);
           }
         }}
@@ -621,6 +711,7 @@ export default function AssignmentDashboardPage() {
               typeof assignment.dueDate === 'string'
                 ? new Date(assignment.dueDate)
                 : assignment.dueDate,
+            isGroup: assignment.isGroup ?? false,
           }}
           onSave={() => {
             setLoading(true);
