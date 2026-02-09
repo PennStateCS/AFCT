@@ -411,25 +411,6 @@ export async function POST(req: NextRequest) {
             evaluationRaw === null ? Prisma.JsonNull : (evaluationRaw as Prisma.InputJsonValue),
         },
       });
-
-      await createEnhancedActivityLog(prisma, req, {
-        userId: decoded.userId,
-        action: 'SUBMISSION_EVALUATED',
-        category: 'SUBMISSION',
-        courseId,
-        assignmentId,
-        problemId,
-        submissionId: submission.id,
-        metadata: {
-          userId: decoded.userId,
-          courseId,
-          assignmentId,
-          problemId,
-          submissionId: submission.id,
-          correct,
-          feedback,
-        },
-      });
     }
 
     return NextResponse.json(submission, { status: 201 });
