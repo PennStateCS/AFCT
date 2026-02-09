@@ -5,6 +5,7 @@ const prismaMock = vi.hoisted(() => ({
   group: { findUnique: vi.fn() },
   roster: { findMany: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn() },
   groupRoster: { findMany: vi.fn(), createMany: vi.fn(), deleteMany: vi.fn(), findUnique: vi.fn(), create: vi.fn(), upsert: vi.fn() },
+  user: { findUnique: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());

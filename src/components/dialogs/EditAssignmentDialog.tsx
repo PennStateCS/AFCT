@@ -17,6 +17,7 @@ import { Textarea } from '@/components/ui/textarea';
 import InputGroup from '@/components/ui/InputGroup';
 
 import { useEffect, useMemo, useState } from 'react';
+
 import { useForm, Controller } from 'react-hook-form';
 import { showToast } from '@/lib/toast';
 import { z } from 'zod';
@@ -76,6 +77,7 @@ export function EditAssignmentDialog({
       maxPoints: String(assignment.maxPoints ?? 100),
       dueDate: toDateTimeLocalInTimeZone(assignment.dueDate, timeZone), // string for input
       isPublished: assignment.isPublished ?? false,
+      isGroup: assignment.isGroup ?? false,
       courseId: assignment.courseId,
     }),
     [assignment, timeZone],
@@ -142,6 +144,7 @@ export function EditAssignmentDialog({
           ...payload,
           maxPoints: Number(payload.maxPoints), // Convert to number for API
           dueDate: payload.dueDate,
+          isGroup: payload.isGroup ?? false,
         }),
       });
       if (!res.ok) {
@@ -185,6 +188,8 @@ export function EditAssignmentDialog({
             Update the assignment details and save your changes.
           </DialogDescription>
         </DialogHeader>
+
+
 
         <form className="space-y-4" onSubmit={onSubmitWrapper}>
           {/* Title */}
@@ -260,6 +265,18 @@ export function EditAssignmentDialog({
             )}
           />
 
+          {/* Is a group assignment switch */}
+          <Controller
+            name="isGroup"
+            control={control}
+            render={({ field }) => (
+              <div className="flex items-center justify-between">
+                <Label htmlFor="isGroup">Group Assignment</Label>
+                <Switch id="isGroup" checked={!!field.value} onCheckedChange={field.onChange} onBlur={field.onBlur} />
+              </div>
+            )}
+          />
+
           {/* Published switch (kept outside the form schema) */}
           {/* Published switch (controlled by RHF) */}
           <Controller
@@ -309,6 +326,8 @@ export function EditAssignmentDialog({
             </Button>
           </DialogFooter>
         </form>
+
+
       </DialogContent>
     </Dialog>
   );

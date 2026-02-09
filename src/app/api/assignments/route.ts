@@ -46,6 +46,8 @@ export async function POST(req: NextRequest) {
         dueDate: toEndOfDayInTimezone(data.dueDate, userTimezone),
         maxPoints: data.maxPoints || 0,
         isPublished: data.isPublished || false,
+        // Persist isGroup when provided (default to false)
+        isGroup: !!data.isGroup,
         courseId: data.courseId,
       },
     });
@@ -65,6 +67,7 @@ export async function POST(req: NextRequest) {
         description: created.description ? created.description : '',
         maxPoints: created.maxPoints,
         isPublished: created.isPublished,
+        isGroup: created.isGroup,
         dueDate: created.dueDate.toISOString(),
       },
     });
