@@ -518,6 +518,7 @@ export default function AssignmentSubmissions({
   }, [menuOpen]);
 
   const selectedStudent = students[selectedIndex] ?? null;
+  const selectedStudentId = selectedStudent?.id ?? null;
 
   const handleSelectProblem = useCallback(
     (problemId: string) => {
@@ -575,13 +576,13 @@ export default function AssignmentSubmissions({
   }, [searchParams, selectedStudent, updateStudentQuery]);
 
   const fetchSubmissions = useCallback(async () => {
-    if (!selectedStudent) {
+    if (!selectedStudentId) {
       setSubmissions({});
       return;
     }
     try {
       const res = await fetch(
-        `/api/courses/${courseId}/${assignmentId}/submissions/${selectedStudent.id}`,
+        `/api/courses/${courseId}/${assignmentId}/submissions/${selectedStudentId}`,
       );
       if (!res.ok) {
         if ([401, 403, 404].includes(res.status)) {
@@ -597,7 +598,7 @@ export default function AssignmentSubmissions({
       showToast.error('Failed to load submissions');
       setSubmissions({});
     }
-  }, [courseId, assignmentId, selectedStudent]);
+  }, [courseId, assignmentId, selectedStudentId]);
 
   // Fetch submissions for selected student
   useEffect(() => {
