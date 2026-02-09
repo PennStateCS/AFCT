@@ -6,6 +6,7 @@ const prismaMock = vi.hoisted(() => ({
   roster: { findFirst: vi.fn() },
   assignmentProblem: { findFirst: vi.fn() },
   assignmentGrade: { findFirst: vi.fn() },
+  submission: { findFirst: vi.fn() },
   user: { findUnique: vi.fn() },
   systemSettings: { findUnique: vi.fn() },
 }));
@@ -99,6 +100,19 @@ describe('PATCH /api/assignments/[id]', () => {
     const req = new NextRequest('http://localhost/api/assignments/a1', {
       method: 'PATCH',
       body: JSON.stringify({ title: 'A' }),
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('prevents changing group mode if submissions exist', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.submission.findFirst.mockResolvedValue({ id: 's1' });
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', {
+      method: 'PATCH',
+      body: JSON.stringify({ groupId: 'g1' }),
     });
     const res = await PATCH(req, { params: Promise.resolve({ id: 'a1' }) });
 

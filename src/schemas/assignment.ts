@@ -54,6 +54,7 @@ const BaseAssignmentSchema = z
       .min(0, 'Max points cannot be negative.')
       .max(100000, 'Max points is too large.'),
     dueDate: DateTimeLocal,
+    isGroup: z.boolean().optional(),
     courseId: z.string().min(1, 'Course id is required.'),
   })
   .strict();
@@ -73,6 +74,7 @@ const BaseAssignmentFormSchema = z
     maxPoints: z.string().min(1, 'Max points are required.'),
     dueDate: DateTimeLocalForm,
     isPublished: z.boolean(),
+    isGroup: z.boolean().optional(),
     courseId: z.string().min(1, 'Course id is required.'),
   })
   .strict();
