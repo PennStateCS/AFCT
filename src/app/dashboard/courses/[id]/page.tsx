@@ -22,6 +22,7 @@ import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { CourseHeader } from '@/components/course/CourseHeader';
 import { StudentCourseView } from '@/components/course/StudentCourseView';
 import { AdminCourseView } from '@/components/course/AdminCourseView';
+import LoadingSpinner from '@/components/ui/loading-spinner';
 import { CourseDialogs } from '@/components/course/CourseDialogs';
 import DuplicateCourseDialog from '@/components/dialogs/DuplicateCourseDialog';
 
@@ -180,7 +181,7 @@ export default function AdminCoursePage() {
     [handlers, dialogStates],
   );
 
-  if (!course) return <div className="p-6">Loading course...</div>;
+  if (!course) return <LoadingSpinner label="Loading" />;
 
   return (
     <div className="space-y-6 p-0">

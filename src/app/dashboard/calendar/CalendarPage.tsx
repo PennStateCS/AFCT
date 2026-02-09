@@ -16,6 +16,7 @@ import {
   subMonths,
 } from 'date-fns';
 import DayAssignmentsDialog from '@/components/dialogs/DayAssignmentsDialog';
+import { DueDateModule } from '@/components/modules/DueDateModule';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { toEndOfDayInTimezone } from '@/lib/date-utils';
 import { Button } from '@/components/ui/button';
@@ -143,100 +144,98 @@ export default function CalendarPage() {
   };
 
   return (
-    <div className="flex h-full w-full flex-col">
-      <Card className="flex h-full w-full flex-col p-4">
-        <CardHeader className="relative flex flex-row items-center justify-between pb-4">
+    <div className="space-y-4 pb-8">
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-2xl">Calendar</CardTitle>
           <div className="w-8" aria-hidden="true" />
         </CardHeader>
-        <CardContent className="flex min-h-0 flex-1 flex-col pt-2">
-          <div className="mx-auto mb-2 flex w-full max-w-6xl items-center justify-center gap-2 px-2">
-            <Button
-              type="button"
-              variant="default"
-              size="sm"
-              className="h-8 w-8 p-0"
-              onClick={goToPreviousMonth}
-              aria-label="Previous month"
-            >
-              <ChevronLeftIcon className="h-4 w-4" />
-            </Button>
-            <div className="w-56 px-4 text-center text-lg font-medium">{monthLabel}</div>
-            <Button
-              type="button"
-              variant="default"
-              size="sm"
-              className="h-8 w-8 p-0"
-              onClick={goToNextMonth}
-              aria-label="Next month"
-            >
-              <ChevronRightIcon className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="h-full w-full overflow-auto">
-            <Calendar
-              mode="single"
-              selected={selected}
-              onSelect={setSelected}
-              formatters={{
-                formatWeekdayName: (date) =>
-                  new Intl.DateTimeFormat('en-US', {
-                    weekday: 'short',
-                    timeZone: timezone,
-                  }).format(date),
-              }}
-              month={currentMonth}
-              onMonthChange={(month: Date) => {
-                setCurrentMonth(month);
-                fetchForMonth(month);
-              }}
-              className="text-foreground bg-card mx-auto h-full w-full max-w-6xl [--cell-size:3.25rem] sm:[--cell-size:3.5rem]"
-              timeZone={timezone}
-              classNames={{
-                nav: 'hidden',
-                month_caption: 'hidden',
-                caption_label: 'hidden',
-                dropdowns: 'hidden',
-              }}
-              components={{
-                DayButton: (props: any) => {
-                  const dateStr = localDateKey(props.day.date);
-                  const dayAssignments = (assignmentsByDate[dateStr] || [])
-                    .slice()
-                    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+      </Card>
 
-                  // Ref and state to compute how many of the first few assignment links fit without overflowing
-                  const dayContentRef = useRef<HTMLDivElement | null>(null);
-                  const visibleCount = useVisibleItemCount(dayContentRef, dayAssignments.length, {
-                    conservativeMargin: 10,
-                    sampleText: dayAssignments[0]?.title,
-                  });
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
+        <Card className="flex h-full w-full flex-col">
+          <CardContent className="flex min-h-0 flex-1 flex-col pt-6">
+            <div className="mx-auto mb-2 flex w-full max-w-6xl items-center justify-center gap-2 px-2">
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                className="h-8 w-8 p-0"
+                onClick={goToPreviousMonth}
+                aria-label="Previous month"
+              >
+                <ChevronLeftIcon className="h-4 w-4" />
+              </Button>
+              <div className="w-56 px-4 text-center text-lg font-medium">{monthLabel}</div>
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                className="h-8 w-8 p-0"
+                onClick={goToNextMonth}
+                aria-label="Next month"
+              >
+                <ChevronRightIcon className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="h-full w-full overflow-auto">
+              <Calendar
+                mode="single"
+                selected={selected}
+                onSelect={setSelected}
+                formatters={{
+                  formatWeekdayName: (date) =>
+                    new Intl.DateTimeFormat('en-US', {
+                      weekday: 'short',
+                      timeZone: timezone,
+                    }).format(date),
+                }}
+                month={currentMonth}
+                onMonthChange={(month: Date) => {
+                  setCurrentMonth(month);
+                  fetchForMonth(month);
+                }}
+                className="text-foreground bg-card mx-auto h-full w-full max-w-6xl [--cell-size:3.25rem] sm:[--cell-size:3.5rem]"
+                timeZone={timezone}
+                classNames={{
+                  nav: 'hidden',
+                  month_caption: 'hidden',
+                  caption_label: 'hidden',
+                  dropdowns: 'hidden',
+                  weekday:
+                    'text-muted-foreground rounded-md flex-1 font-semibold text-[0.8rem] select-none text-center',
+                  day: 'relative w-full h-full p-0 text-center [&:first-child[data-selected=true]_button]:rounded-l-md [&:last-child[data-selected=true]_button]:rounded-r-md group/day aspect-square select-none border border-gray-300/60 dark:border-neutral-700',
+                }}
+                components={{
+                  DayButton: (props: any) => {
+                    const dateStr = localDateKey(props.day.date);
+                    const dayAssignments = (assignmentsByDate[dateStr] || [])
+                      .slice()
+                      .sort(
+                        (a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
+                      );
 
-                  const todayDate = new Date();
-                  const dayDate = props.day.date;
-                  const isToday =
-                    dayDate.getFullYear() === todayDate.getFullYear() &&
-                    dayDate.getMonth() === todayDate.getMonth() &&
-                    dayDate.getDate() === todayDate.getDate();
-                  const isWeekend = dayDate.getDay() === 0 || dayDate.getDay() === 6;
+                    // Ref and state to compute how many of the first few assignment links fit without overflowing
+                    const dayContentRef = useRef<HTMLDivElement | null>(null);
+                    const visibleCount = useVisibleItemCount(dayContentRef, dayAssignments.length, {
+                      conservativeMargin: 10,
+                      sampleText: dayAssignments[0]?.title,
+                    });
 
-                  return (
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      aria-current={isToday ? 'date' : undefined}
-                      onClick={(e) => {
-                        const dayOnly = new Date(
-                          props.day.date.getFullYear(),
-                          props.day.date.getMonth(),
-                          props.day.date.getDate(),
-                        );
-                        openDayDialog(dayOnly, dayAssignments);
-                        props.onClick?.(e as any);
-                      }}
-                      onKeyDown={(e: any) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
+                    const todayDate = new Date();
+                    const dayDate = props.day.date;
+                    const isToday =
+                      dayDate.getFullYear() === todayDate.getFullYear() &&
+                      dayDate.getMonth() === todayDate.getMonth() &&
+                      dayDate.getDate() === todayDate.getDate();
+                    const isWeekend = dayDate.getDay() === 0 || dayDate.getDay() === 6;
+
+                    return (
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        aria-current={isToday ? 'date' : undefined}
+                        onClick={(e) => {
                           const dayOnly = new Date(
                             props.day.date.getFullYear(),
                             props.day.date.getMonth(),
@@ -244,64 +243,79 @@ export default function CalendarPage() {
                           );
                           openDayDialog(dayOnly, dayAssignments);
                           props.onClick?.(e as any);
-                        }
-                      }}
-                      className={cn(
-                        'box-border grid min-h-0 w-full min-w-0 grid-rows-[auto_1fr] overflow-hidden border border-gray-400/60',
-                        isToday
-                          ? 'bg-gray-200 dark:bg-neutral-800'
-                          : 'bg-white dark:bg-neutral-900',
-                        !isToday && isWeekend && 'dark:bg-neutral-850 bg-slate-50',
-                        'dark:border-neutral-700',
-                      )}
-                      style={{ aspectRatio: '1 / 1' }}
-                    >
-                      <span className="grid p-1 text-xs select-none">
-                        {props.day.date.getDate()}
-                      </span>
-                      <div
-                        ref={dayContentRef}
-                        onClick={() =>
-                          openDayDialog(
-                            new Date(
+                        }}
+                        onKeyDown={(e: any) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            const dayOnly = new Date(
                               props.day.date.getFullYear(),
                               props.day.date.getMonth(),
                               props.day.date.getDate(),
-                            ),
-                            dayAssignments,
-                          )
-                        }
-                        className="grid min-h-0 w-full min-w-0 cursor-default content-start gap-1 overflow-hidden p-1"
-                      >
-                        {dayAssignments.slice(0, visibleCount).map((a: any) => (
-                          <Link
-                            key={a.id}
-                            href={`/dashboard/courses/${a.courseId}/${a.id}`}
-                            className={cn(
-                              'assignment-link box-border block min-h-[1rem] w-full min-w-0 cursor-pointer truncate overflow-hidden rounded bg-sky-700 py-0.5 pl-1 text-left text-xs leading-tight whitespace-nowrap text-white hover:bg-sky-800 dark:bg-sky-600 dark:hover:bg-sky-700',
-                              a.crossedOut && 'line-through opacity-80',
-                            )}
-                            title={`${a.course?.code ?? a.courseName ?? ''} - ${a.title}`}
-                            onClick={(e: any) => e.stopPropagation()}
-                          >
-                            {`${a.course?.code ?? a.courseName ?? ''} - ${a.title}`}
-                          </Link>
-                        ))}
-                        {dayAssignments.length > visibleCount && (
-                          <div
-                            aria-hidden={true}
-                            className="h-2 w-2 self-center justify-self-center rounded-full bg-blue-500"
-                          ></div>
+                            );
+                            openDayDialog(dayOnly, dayAssignments);
+                            props.onClick?.(e as any);
+                          }
+                        }}
+                        className={cn(
+                          'box-border grid min-h-0 w-full min-w-0 grid-rows-[auto_1fr] overflow-hidden',
+                          isToday
+                            ? 'bg-gray-200 dark:bg-neutral-800'
+                            : 'bg-white dark:bg-neutral-900',
+                          !isToday && isWeekend && 'dark:bg-neutral-850 bg-slate-50',
                         )}
+                        style={{ aspectRatio: '1 / 1' }}
+                      >
+                        <span className="grid p-1 text-xs select-none">
+                          {props.day.date.getDate()}
+                        </span>
+                        <div
+                          ref={dayContentRef}
+                          onClick={() =>
+                            openDayDialog(
+                              new Date(
+                                props.day.date.getFullYear(),
+                                props.day.date.getMonth(),
+                                props.day.date.getDate(),
+                              ),
+                              dayAssignments,
+                            )
+                          }
+                          className="grid min-h-0 w-full min-w-0 cursor-default content-start gap-1 overflow-hidden p-1"
+                        >
+                          {dayAssignments.slice(0, visibleCount).map((a: any) => (
+                            <Link
+                              key={a.id}
+                              href={`/dashboard/courses/${a.courseId}/${a.id}`}
+                              className={cn(
+                                'assignment-link box-border block min-h-[1rem] w-full min-w-0 cursor-pointer truncate overflow-hidden rounded bg-sky-700 py-0.5 pl-1 text-left text-xs leading-tight whitespace-nowrap text-white hover:bg-sky-800 dark:bg-sky-600 dark:hover:bg-sky-700',
+                                a.crossedOut && 'line-through opacity-80',
+                              )}
+                              title={`${a.course?.code ?? a.courseName ?? ''} - ${a.title}`}
+                              onClick={(e: any) => e.stopPropagation()}
+                            >
+                              {`${a.course?.code ?? a.courseName ?? ''} - ${a.title}`}
+                            </Link>
+                          ))}
+                          {dayAssignments.length > visibleCount && (
+                            <div
+                              aria-hidden={true}
+                              className="h-2 w-2 self-center justify-self-center rounded-full bg-blue-500"
+                            ></div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                },
-              }}
-            />
-          </div>
-        </CardContent>
-      </Card>
+                    );
+                  },
+                }}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="w-full">
+          <DueDateModule assignments={assignments} />
+        </div>
+      </div>
       <DayAssignmentsDialog
         open={dayDialogOpen}
         onOpenChange={(open) => {

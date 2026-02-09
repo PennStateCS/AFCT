@@ -41,17 +41,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ file
     // Read file into buffer and return as response
     const buffer = await fs.promises.readFile(filePath);
 
-    await createEnhancedActivityLog(prisma, req, {
-      userId: session.user.id,
-      action: 'DOWNLOAD_SOLUTION_FILE',
-      category: 'PROBLEM',
-      courseId: problem.courseId,
-      problemId: problem.id,
-      metadata: {
-        fileName: file,
-        originalFileName: problem.originalFileName ?? null,
-      },
-    });
+    const shouldLogDownload = req.nextUrl.searchParams.get('download') === '1';
+    if (shouldLogDownload) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session.user.id,
+        action: 'DOWNLOAD_SOLUTION_FILE',
+        category: 'PROBLEM',
+        courseId: problem.courseId,
+        problemId: problem.id,
+        metadata: {
+          fileName: file,
+          originalFileName: problem.originalFileName ?? null,
+        },
+      });
+    }
     const headers: Record<string, string> = {
       'Content-Type': 'application/octet-stream',
       'Content-Disposition': `attachment; filename="${problem.originalFileName ?? file}"`,

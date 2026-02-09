@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -164,6 +165,7 @@ model Submission {
   submittedAt DateTime @default(now())
   feedback    String?
   correct     Boolean?
+  evaluationRaw Json?
 
   fileName         String?
   originalFileName String?
