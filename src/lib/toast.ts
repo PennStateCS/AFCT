@@ -10,9 +10,17 @@ interface ToastOptions {
   };
 }
 
+type ToastKind = 'success' | 'error' | 'warning' | 'info' | 'loading';
+
+const getA11yOptions = (type: ToastKind) => ({
+  role: type === 'error' ? 'alert' : 'status',
+  ariaLive: 'assertive' as const,
+});
+
 export const showToast = {
   success: (message: string, options?: ToastOptions) => {
     return sonnerToast.success(message, {
+      ...getA11yOptions('success'),
       description: options?.description,
       duration: options?.duration || 4000,
       action: options?.action,
@@ -21,6 +29,7 @@ export const showToast = {
 
   error: (message: string, options?: ToastOptions) => {
     return sonnerToast.error(message, {
+      ...getA11yOptions('error'),
       description: options?.description,
       duration: options?.duration || 6000,
       action: options?.action,
@@ -29,6 +38,7 @@ export const showToast = {
 
   warning: (message: string, options?: ToastOptions) => {
     return sonnerToast.warning(message, {
+      ...getA11yOptions('warning'),
       description: options?.description,
       duration: options?.duration || 5000,
       action: options?.action,
@@ -37,6 +47,7 @@ export const showToast = {
 
   info: (message: string, options?: ToastOptions) => {
     return sonnerToast.info(message, {
+      ...getA11yOptions('info'),
       description: options?.description,
       duration: options?.duration || 4000,
       action: options?.action,
@@ -46,6 +57,7 @@ export const showToast = {
   loading: (message: string, options?: { description?: string }) => {
     // Don't dismiss loading toasts as they may be intentionally replaced
     return sonnerToast.loading(message, {
+      ...getA11yOptions('loading'),
       description: options?.description,
     });
   },
@@ -53,30 +65,35 @@ export const showToast = {
   // Convenience methods for common use cases
   created: (itemName: string) => {
     return sonnerToast.success(`${itemName} created successfully`, {
+      ...getA11yOptions('success'),
       duration: 4000,
     });
   },
 
   updated: (itemName: string) => {
     return sonnerToast.success(`${itemName} updated successfully`, {
+      ...getA11yOptions('success'),
       duration: 4000,
     });
   },
 
   deleted: (itemName: string) => {
     return sonnerToast.success(`${itemName} deleted successfully`, {
+      ...getA11yOptions('success'),
       duration: 4000,
     });
   },
 
   saved: (itemName?: string) => {
     return sonnerToast.success(itemName ? `${itemName} saved` : 'Changes saved', {
+      ...getA11yOptions('success'),
       duration: 3000,
     });
   },
 
   validationError: (message?: string) => {
     return sonnerToast.error('Validation Error', {
+      ...getA11yOptions('error'),
       description: message || 'Please check all required fields.',
       duration: 6000,
     });
@@ -84,6 +101,7 @@ export const showToast = {
 
   networkError: () => {
     return sonnerToast.error('Connection Error', {
+      ...getA11yOptions('error'),
       description: 'Please check your internet connection and try again.',
       duration: 8000,
       action: {
@@ -95,6 +113,7 @@ export const showToast = {
 
   unauthorized: () => {
     return sonnerToast.error('Access Denied', {
+      ...getA11yOptions('error'),
       description: 'You do not have permission to perform this action.',
       duration: 6000,
     });
@@ -102,15 +121,22 @@ export const showToast = {
 
   serverError: () => {
     return sonnerToast.error('Server Error', {
+      ...getA11yOptions('error'),
       description: 'Something went wrong on our end. Please try again later.',
       duration: 8000,
     });
   },
 
   // Update existing toast
-  update: (id: string | number, type: 'success' | 'error' | 'warning' | 'info', message: string, options?: ToastOptions) => {
+  update: (
+    id: string | number,
+    type: 'success' | 'error' | 'warning' | 'info',
+    message: string,
+    options?: ToastOptions,
+  ) => {
     return sonnerToast[type](message, {
       id,
+      ...getA11yOptions(type),
       description: options?.description,
       duration: options?.duration,
       action: options?.action,
