@@ -27,6 +27,7 @@ interface InputGroupProps extends Omit<
   fieldProps?: RHFFieldProps;
   error?: string;
   description?: string;
+  additionalDescribedBy?: string | string[];
   showStatus?: boolean;
   isValid?: boolean;
   isChecking?: boolean | string;
@@ -47,6 +48,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
     fieldProps,
     error,
     description,
+    additionalDescribedBy,
     showStatus,
     isValid,
     isChecking,
@@ -108,8 +110,21 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
 
   const inputPaddingRight = hasStatus && hasEye ? 'pr-16' : hasStatus || hasEye ? 'pr-10' : '';
 
-  const describedByIds = [error ? `${inputId}-error` : null, description ? `${inputId}-desc` : null]
-    .filter(Boolean)
+  const describedByIds: Array<string | null> = [
+    error ? `${inputId}-error` : null,
+    description ? `${inputId}-desc` : null,
+  ];
+
+  if (additionalDescribedBy) {
+    if (Array.isArray(additionalDescribedBy)) {
+      describedByIds.push(...additionalDescribedBy);
+    } else {
+      describedByIds.push(additionalDescribedBy);
+    }
+  }
+
+  const describedByAttr = describedByIds
+    .filter((id): id is string => !!id && id.trim().length > 0)
     .join(' ')
     .trim();
 
@@ -133,7 +148,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
           placeholder={placeholder}
           disabled={disabled}
           aria-invalid={!!error || undefined}
-          aria-describedby={describedByIds || undefined}
+          aria-describedby={describedByAttr || undefined}
           className={cn(
             'h-11 transition-all duration-150',
             'focus-visible:ring-0',
