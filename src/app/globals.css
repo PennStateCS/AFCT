@@ -380,12 +380,12 @@ body {
     box-shadow: 0 20px 45px rgba(15, 23, 42, 0.12) !important;
     color: var(--toast-text) !important;
     display: flex !important;
-    align-items: stretch !important;
-    gap: 0 !important;
-    min-width: 320px !important;
-    max-width: 440px !important;
-    overflow: hidden !important;
-    padding: 0 !important;
+    align-items: center !important;
+    gap: 16px !important;
+    min-width: 260px !important;
+    max-width: 380px !important;
+    overflow: visible !important;
+    padding: 16px 22px !important;
     font-family: var(--font-geist-sans, 'Inter', 'Segoe UI', sans-serif) !important;
   }
 
@@ -481,12 +481,14 @@ body {
 
   .custom-toast [data-icon] {
     align-items: center !important;
-    background: var(--toast-accent) !important;
-    border-right: 1px solid var(--toast-border) !important;
+    background: transparent !important;
+    border-right: none !important;
     display: flex !important;
     justify-content: center !important;
-    min-width: 92px !important;
+    min-width: auto !important;
     padding: 0 !important;
+    margin: 0 !important;
+    flex-shrink: 0 !important;
   }
 
   .toast-icon-symbol {
@@ -495,13 +497,13 @@ body {
     border-radius: 999px !important;
     color: #ffffff !important;
     display: flex !important;
-    font-size: 20px !important;
+    font-size: 18px !important;
     font-weight: 600 !important;
-    height: 44px !important;
+    height: 36px !important;
     justify-content: center !important;
     letter-spacing: 0.02em !important;
     text-transform: none !important;
-    width: 44px !important;
+    width: 36px !important;
     box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18) !important;
   }
 
@@ -520,7 +522,8 @@ body {
 
   .custom-toast [data-content] {
     flex: 1 !important;
-    padding: 18px 24px !important;
+    min-width: 0 !important;
+    padding: 0 !important;
   }
 
   .custom-toast [data-title] {
