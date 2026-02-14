@@ -122,7 +122,7 @@ cd afct
 Create your production environment file from the template.
 
 ```bash
-cp .env.production.template .env.production
+cp .env.production.example .env.production
 nano .env.production
 ```
 
@@ -139,6 +139,8 @@ openssl rand -base64 64
 ```
 https://your-domain.com
 ```
+
+- **hCaptcha** — set both `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` and `HCAPTCHA_SECRET_KEY` using keys generated in the hCaptcha dashboard (<https://dashboard.hcaptcha.com/sites>). Each environment should have its own key pair; never reuse the public test keys in production.
 
 ---
 
