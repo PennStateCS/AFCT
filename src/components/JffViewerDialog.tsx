@@ -63,7 +63,6 @@ const GRID_COLOR =
       '#0f172a'
     : '#0f172a';
 
-console.log(GRID_COLOR);
 
 const EDGE_WIDTH = 1.6;
 const DEFAULT_EPS = 'λ';
