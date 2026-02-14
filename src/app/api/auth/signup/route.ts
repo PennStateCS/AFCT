@@ -4,6 +4,14 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import {
+  applyBotFriction,
+  evaluateSignupRateLimit,
+  formatRetryAfterSeconds,
+  getClientIp,
+  recordSignupSuccess,
+} from '@/lib/security/rate-limiter';
+import { verifyCaptchaToken } from '@/lib/security/captcha';
 
 // Regex utilities for validating email and password
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -17,8 +25,17 @@ const isStrongPassword = (pw: string) =>
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { firstName, lastName, email, password, role = 'STUDENT' } = body;
+    const {
+      firstName,
+      lastName,
+      email,
+      password,
+      role = 'STUDENT',
+      interactionMs,
+      captchaToken,
+    } = body;
     const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : email;
+    const ipAddress = getClientIp(req);
 
     // Check for required fields
     if (!normalizedEmail || !password || !firstName || !lastName) {
@@ -39,6 +56,52 @@ export async function POST(req: Request) {
         },
         { status: 400 },
       );
+    }
+
+    const rateDecision = evaluateSignupRateLimit({
+      ip: ipAddress,
+      identifier: normalizedEmail,
+      interactionMs: Number.isFinite(Number(interactionMs)) ? Number(interactionMs) : undefined,
+    });
+
+    if (rateDecision.status === 'blocked') {
+      await logSecurityEvent('SIGNUP_RATE_LIMIT', {
+        ip: ipAddress,
+        identifier: normalizedEmail,
+      });
+      return NextResponse.json(
+        { error: 'Too many signup attempts. Please try again later.' },
+        {
+          status: 429,
+          headers: { 'Retry-After': formatRetryAfterSeconds(rateDecision.retryAfterMs) },
+        },
+      );
+    }
+
+    if (rateDecision.status === 'challenge') {
+      const captchaValid = await verifyCaptchaToken(captchaToken, ipAddress);
+      if (!captchaValid) {
+        await logSecurityEvent('SIGNUP_CHALLENGE_REQUIRED', {
+          ip: ipAddress,
+          identifier: normalizedEmail,
+        });
+        return NextResponse.json(
+          { error: 'Please slow down. Wait a moment before creating another account.' },
+          {
+            status: 428,
+            headers: { 'Retry-After': formatRetryAfterSeconds(rateDecision.retryAfterMs) },
+          },
+        );
+      }
+
+      await logSecurityEvent('SIGNUP_CHALLENGE_SOLVED', {
+        ip: ipAddress,
+        identifier: normalizedEmail,
+      });
+    }
+
+    if (rateDecision.applyFriction) {
+      await applyBotFriction(rateDecision.frictionDelayMs);
     }
 
     // Check for existing user
@@ -76,10 +139,34 @@ export async function POST(req: Request) {
       },
     });
 
+    recordSignupSuccess({ ip: ipAddress, identifier: normalizedEmail });
+
     // Return success response
     return NextResponse.json({ message: 'User created', userId: newUser.id }, { status: 201 });
   } catch (err) {
     console.error('[SIGNUP_ERROR]', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+type SignupSecurityEventAction =
+  | 'SIGNUP_RATE_LIMIT'
+  | 'SIGNUP_CHALLENGE_REQUIRED'
+  | 'SIGNUP_CHALLENGE_SOLVED';
+
+async function logSecurityEvent(
+  action: SignupSecurityEventAction,
+  metadata: { ip?: string | null; identifier?: string | null },
+) {
+  try {
+    await prisma.activityLog.create({
+      data: {
+        action,
+        category: 'SECURITY',
+        metadata,
+      },
+    });
+  } catch (error) {
+    console.error('[signup] security log failure', error);
   }
 }

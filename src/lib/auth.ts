@@ -4,6 +4,13 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
 import { Role } from '@prisma/client';
+import {
+  applyBotFriction,
+  evaluateLoginRateLimit,
+  getClientIp,
+  recordLoginSuccess,
+} from '@/lib/security/rate-limiter';
+import { verifyCaptchaToken } from '@/lib/security/captcha';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma) as any,
@@ -14,14 +21,56 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
       },
-      async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
+      async authorize(credentials, request) {
+        const emailInput = (credentials?.email as string | undefined)?.trim().toLowerCase();
+        const interactionMs = Number(
+          (credentials as Record<string, unknown> | undefined)?.interactionMs,
+        );
+        const ipAddress = getClientIp(request ?? undefined);
+        const captchaToken = (credentials as Record<string, unknown> | undefined)?.captchaToken as
+          | string
+          | undefined;
+
+        if (!emailInput || !credentials?.password) {
           return null;
+        }
+
+        const rateDecision = evaluateLoginRateLimit({
+          ip: ipAddress,
+          identifier: emailInput,
+          interactionMs: Number.isFinite(interactionMs) ? interactionMs : undefined,
+        });
+
+        if (rateDecision.status === 'blocked') {
+          void logSecurityEvent('LOGIN_RATE_LIMIT', {
+            ip: ipAddress,
+            identifier: emailInput,
+          });
+          throw new Error('RateLimitExceeded');
+        }
+
+        if (rateDecision.status === 'challenge') {
+          const captchaValid = await verifyCaptchaToken(captchaToken, ipAddress);
+          if (!captchaValid) {
+            void logSecurityEvent('LOGIN_CHALLENGE_REQUIRED', {
+              ip: ipAddress,
+              identifier: emailInput,
+            });
+            throw new Error('BotChallengeRequired');
+          }
+          void logSecurityEvent('LOGIN_CHALLENGE_SOLVED', {
+            ip: ipAddress,
+            identifier: emailInput,
+          });
+        }
+
+        if (rateDecision.applyFriction) {
+          await applyBotFriction(rateDecision.frictionDelayMs);
         }
 
         const user = await prisma.user.findFirst({
           where: {
-            email: (credentials.email as string).trim().toLowerCase(),
+            email: emailInput,
             inactive: false,
           },
         });
@@ -35,6 +84,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!valid) {
           return null;
         }
+
+        recordLoginSuccess({ ip: ipAddress, identifier: emailInput });
 
         return {
           id: user.id,
@@ -131,3 +182,25 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   secret: process.env.NEXTAUTH_SECRET,
 });
+
+type SecurityEventAction =
+  | 'LOGIN_RATE_LIMIT'
+  | 'LOGIN_CHALLENGE_REQUIRED'
+  | 'LOGIN_CHALLENGE_SOLVED';
+
+const logSecurityEvent = async (
+  action: SecurityEventAction,
+  metadata: { ip?: string; identifier?: string },
+) => {
+  try {
+    await prisma.activityLog.create({
+      data: {
+        action,
+        category: 'SECURITY',
+        metadata,
+      },
+    });
+  } catch (error) {
+    console.error('[auth] security log failure', error);
+  }
+};
