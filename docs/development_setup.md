@@ -117,6 +117,13 @@ cp .env.development.example .env.development
 nano .env.development
 ```
 
+After copying the file, confirm the captcha keys are present:
+
+- `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` — defaults to the hCaptcha test site key for local use.
+- `HCAPTCHA_SECRET_KEY` — defaults to the hCaptcha test secret. Replace both values with real keys if you want to exercise the full challenge flow using your own hCaptcha account.
+
+You can create new keys anytime at <https://dashboard.hcaptcha.com/sites>. Local development works with the provided test credentials, but production-style testing should use your own keys.
+
 ## 5) Start the Stack (Preferred Docker Run)
 
 ```bash
