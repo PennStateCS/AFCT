@@ -6,10 +6,9 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import LoginPage from './page';
 
-const { signInMock, toastErrorMock, toastSuccessMock, searchState } = vi.hoisted(() => ({
+const { signInMock, showToastErrorMock, searchState } = vi.hoisted(() => ({
   signInMock: vi.fn(),
-  toastErrorMock: vi.fn(),
-  toastSuccessMock: vi.fn(),
+  showToastErrorMock: vi.fn(),
   searchState: { current: new URLSearchParams() },
 }));
 
@@ -17,10 +16,10 @@ vi.mock('next-auth/react', () => ({
   signIn: signInMock,
 }));
 
-vi.mock('sonner', () => ({
-  toast: {
-    error: toastErrorMock,
-    success: toastSuccessMock,
+vi.mock('@/lib/toast', () => ({
+  showToast: {
+    error: showToastErrorMock,
+    success: vi.fn(),
   },
 }));
 
@@ -34,6 +33,8 @@ vi.mock('@/components/ui/InputGroup', () => ({
     setValue,
     type = 'text',
     onBlur,
+    error,
+    additionalDescribedBy,
   }: {
     label: string;
     id?: string;
@@ -42,8 +43,15 @@ vi.mock('@/components/ui/InputGroup', () => ({
     setValue?: (val: string) => void;
     type?: string;
     onBlur?: (event: React.FocusEvent<HTMLInputElement>) => void;
+    error?: string;
+    additionalDescribedBy?: string;
   }) => {
     const inputId = id ?? name;
+    const errorId = `${inputId}-error`;
+    const describedByTokens = [] as string[];
+    if (additionalDescribedBy) describedByTokens.push(additionalDescribedBy);
+    if (error) describedByTokens.push(errorId);
+    const describedBy = describedByTokens.length ? describedByTokens.join(' ') : undefined;
     return (
       <label htmlFor={inputId}>
         {label}
@@ -52,9 +60,16 @@ vi.mock('@/components/ui/InputGroup', () => ({
           name={name}
           type={type}
           value={value}
+          aria-invalid={error ? 'true' : undefined}
+          aria-describedby={describedBy}
           onChange={(event) => setValue?.(event.target.value)}
           onBlur={onBlur}
         />
+        {error && (
+          <span id={errorId} role="alert">
+            {error}
+          </span>
+        )}
       </label>
     );
   },
@@ -117,6 +132,9 @@ const createJsonResponse = <T,>(data: T, ok = true) =>
     json: async () => data,
   } as Response);
 
+const LOGIN_SUBMIT_LABEL = 'Sign In';
+const SIGNUP_SUBMIT_LABEL = 'Create Account';
+
 const getButtonByType = (label: string | RegExp, type: 'submit' | 'button') => {
   const buttons = screen.getAllByRole('button', { name: label });
   const target = buttons.find((btn) => btn.getAttribute('type') === type);
@@ -126,12 +144,12 @@ const getButtonByType = (label: string | RegExp, type: 'submit' | 'button') => {
   return target;
 };
 
-const switchMode = async (user: ReturnType<typeof userEvent.setup>, label: string) => {
+const switchMode = async (user: ReturnType<typeof userEvent.setup>, label: string | RegExp) => {
   const toggle = getButtonByType(label, 'button');
   await user.click(toggle);
 };
 
-const getSubmitButton = (label: string) => getButtonByType(label, 'submit');
+const getSubmitButton = (label: string | RegExp) => getButtonByType(label, 'submit');
 
 beforeAll(() => {
   (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -168,8 +186,8 @@ describe('LoginPage', () => {
     fireEvent.change(screen.getByLabelText(/^password$/i), {
       target: { value: 'StrongPass1!' },
     });
-    await waitFor(() => expect(getSubmitButton('Login')).not.toBeDisabled());
-    await user.click(getSubmitButton('Login'));
+    await waitFor(() => expect(getSubmitButton(LOGIN_SUBMIT_LABEL)).not.toBeDisabled());
+    await user.click(getSubmitButton(LOGIN_SUBMIT_LABEL));
 
     await waitFor(() =>
       expect(signInMock).toHaveBeenCalledWith('credentials', {
@@ -186,13 +204,23 @@ describe('LoginPage', () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
+    expect(getSubmitButton(LOGIN_SUBMIT_LABEL)).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText(/email/i), {
+      target: { value: 'not-an-email' },
+    });
+    await waitFor(() => expect(getSubmitButton(LOGIN_SUBMIT_LABEL)).toBeDisabled());
+
     fireEvent.change(screen.getByLabelText(/email/i), {
       target: { value: 'incomplete@example.com' },
     });
-    await waitFor(() => expect(getSubmitButton('Login')).not.toBeDisabled());
-    await user.click(getSubmitButton('Login'));
+    await waitFor(() => expect(getSubmitButton(LOGIN_SUBMIT_LABEL)).not.toBeDisabled());
+    await user.click(getSubmitButton(LOGIN_SUBMIT_LABEL));
 
-    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Please fill in both fields.'));
+    await waitFor(() =>
+      expect(showToastErrorMock).toHaveBeenCalledWith('Please correct the highlighted fields.'),
+    );
+    expect(screen.getByText('Password is required.')).toBeInTheDocument();
     expect(signInMock).not.toHaveBeenCalled();
   });
 
@@ -200,7 +228,9 @@ describe('LoginPage', () => {
     setSearchParams({ error: 'CredentialsSignin' });
     render(<LoginPage />);
 
-    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Invalid email or password.'));
+    await waitFor(() =>
+      expect(showToastErrorMock).toHaveBeenCalledWith('Invalid email or password.'),
+    );
   });
 
   it('prefills login form using quick role buttons', async () => {
@@ -211,15 +241,36 @@ describe('LoginPage', () => {
 
     expect(screen.getByLabelText(/email/i)).toHaveValue('admin@example.com');
     expect(screen.getByLabelText(/^password$/i)).toHaveValue('password123');
+    expect(getSubmitButton(LOGIN_SUBMIT_LABEL)).not.toBeDisabled();
+  });
+
+  it('shows field error when NextAuth rejects credentials', async () => {
+    const user = userEvent.setup();
+    signInMock.mockResolvedValueOnce({ error: 'CredentialsSignin' });
+
+    render(<LoginPage />);
+
+    fireEvent.change(screen.getByLabelText(/email/i), {
+      target: { value: 'admin@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText(/^password$/i), {
+      target: { value: 'WrongPass1!' },
+    });
+
+    await user.click(getSubmitButton(LOGIN_SUBMIT_LABEL));
+
+    await waitFor(() =>
+      expect(showToastErrorMock).toHaveBeenCalledWith('Invalid email or password.'),
+    );
+    expect(screen.getByText('Email or password is incorrect.')).toBeInTheDocument();
+    await waitFor(() => expect(signInMock).toHaveBeenCalled());
   });
 
   it("prevents signup when passwords don't match", async () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
-    await switchMode(user, 'Sign Up');
-
-    fetchMock.mockImplementation(() => createJsonResponse({ exists: false }));
+    await switchMode(user, /Sign up/i);
 
     fireEvent.change(screen.getByLabelText('First Name'), { target: { value: 'Ada' } });
     fireEvent.change(screen.getByLabelText('Last Name'), { target: { value: 'Lovelace' } });
@@ -230,10 +281,13 @@ describe('LoginPage', () => {
       target: { value: 'Mismatch1!' },
     });
 
-    await waitFor(() => expect(getSubmitButton('Sign Up')).not.toBeDisabled());
-    await user.click(getSubmitButton('Sign Up'));
+    await user.click(getSubmitButton(SIGNUP_SUBMIT_LABEL));
 
-    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith("Passwords don't match."));
+    await waitFor(() =>
+      expect(showToastErrorMock).toHaveBeenCalledWith('Please correct the highlighted fields.'),
+    );
+    expect(screen.getByText("Passwords don't match.")).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
     expect(signInMock).not.toHaveBeenCalled();
   });
 
@@ -241,17 +295,9 @@ describe('LoginPage', () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
-    await switchMode(user, 'Sign Up');
+    await switchMode(user, /Sign up/i);
 
-    fetchMock.mockImplementation((url, options) => {
-      if (typeof url === 'string' && url.includes('/api/auth/check-email')) {
-        return createJsonResponse({ exists: false });
-      }
-      if (url === '/api/auth/signup') {
-        return createJsonResponse({});
-      }
-      throw new Error(`Unhandled fetch call: ${url}`);
-    });
+    fetchMock.mockImplementation(() => createJsonResponse({}, true));
 
     fireEvent.change(screen.getByLabelText('First Name'), { target: { value: 'Grace' } });
     fireEvent.change(screen.getByLabelText('Last Name'), { target: { value: 'Hopper' } });
@@ -264,15 +310,23 @@ describe('LoginPage', () => {
 
     signInMock.mockResolvedValue({ error: null });
 
-    await waitFor(() => expect(getSubmitButton('Sign Up')).not.toBeDisabled());
-    await user.click(getSubmitButton('Sign Up'));
+    await user.click(getSubmitButton(SIGNUP_SUBMIT_LABEL));
 
-    await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith('/api/auth/signup', expect.any(Object)),
-    );
-    await waitFor(() =>
-      expect(toastSuccessMock).toHaveBeenCalledWith('Account created! Logging you in...'),
-    );
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [signupUrl, signupInit] = fetchMock.mock.calls[0];
+    expect(signupUrl).toBe('/api/auth/signup');
+    expect(signupInit).toMatchObject({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    expect(JSON.parse((signupInit as RequestInit).body as string)).toEqual({
+      firstName: 'Grace',
+      lastName: 'Hopper',
+      email: 'grace@example.com',
+      password: 'StrongPass1!',
+      role: 'STUDENT',
+    });
+
     await waitFor(() =>
       expect(signInMock).toHaveBeenCalledWith('credentials', {
         email: 'grace@example.com',
@@ -281,5 +335,29 @@ describe('LoginPage', () => {
       }),
     );
     await waitFor(() => expect(window.location.href).toBe('/dashboard'));
+    expect(showToastErrorMock).not.toHaveBeenCalled();
+  });
+
+  it('handles signup API failure gracefully', async () => {
+    const user = userEvent.setup();
+    render(<LoginPage />);
+
+    await switchMode(user, /Sign up/i);
+
+    fetchMock.mockImplementation(() => createJsonResponse({}, false));
+
+    fireEvent.change(screen.getByLabelText('First Name'), { target: { value: 'Linus' } });
+    fireEvent.change(screen.getByLabelText('Last Name'), { target: { value: 'Torvalds' } });
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'linus@example.com' } });
+    fireEvent.change(screen.getByLabelText(/^Password$/), { target: { value: 'StrongPass1!' } });
+    fireEvent.change(screen.getByLabelText('Confirm Password'), {
+      target: { value: 'StrongPass1!' },
+    });
+
+    await user.click(getSubmitButton(SIGNUP_SUBMIT_LABEL));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(showToastErrorMock).toHaveBeenCalledWith('Signup failed.'));
+    expect(signInMock).not.toHaveBeenCalled();
   });
 });
