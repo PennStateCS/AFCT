@@ -64,7 +64,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           });
         }
 
-        if (rateDecision.applyFriction) {
+        if (rateDecision.status === 'ok' && rateDecision.applyFriction) {
           await applyBotFriction(rateDecision.frictionDelayMs);
         }
 
