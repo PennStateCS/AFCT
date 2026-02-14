@@ -13,6 +13,7 @@ import InputGroup from '@/components/ui/InputGroup';
 
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
+// Shared rules are referenced both for live validation and helper rendering.
 const passwordRules = [
   { label: 'At least 8 characters', test: (pw: string) => pw.length >= 8 },
   { label: 'At least one uppercase letter', test: (pw: string) => /[A-Z]/.test(pw) },
@@ -23,12 +24,19 @@ const passwordRules = [
 
 const isStrongPassword = (password: string) => passwordRules.every((rule) => rule.test(password));
 
+// Dev-only quick login shortcuts so QA can impersonate common roles fast.
 const testLoginButtons = [
   { role: 'admin', label: 'Admin', classes: 'bg-[#2F4A8A] text-white hover:bg-[#253972]' },
   { role: 'faculty', label: 'Faculty', classes: 'bg-[#486AAE] text-white hover:bg-[#3B5793]' },
   { role: 'ta', label: 'TA', classes: 'bg-[#5F9EA0] text-white hover:bg-[#4E7E80]' },
   { role: 'student', label: 'Student', classes: 'bg-[#8BD3CF] text-gray-900 hover:bg-[#78BBB7]' },
 ];
+
+type LoginField = 'email' | 'password';
+type SignupField = 'first' | 'last' | 'email' | 'password' | 'confirm';
+
+type LoginErrors = Partial<Record<LoginField, string>>;
+type SignupErrors = Partial<Record<SignupField, string>>;
 
 /* ================================================= */
 
@@ -48,57 +56,88 @@ export default function LoginPage() {
   const [showSignupConfirm, setShowSignupConfirm] = useState(false);
 
   const [loading, setLoading] = useState(false);
+  const [loginErrors, setLoginErrors] = useState<LoginErrors>({});
+  const [signupErrors, setSignupErrors] = useState<SignupErrors>({});
 
   const searchParams = useSearchParams();
   const isDev = process.env.NODE_ENV !== 'production';
 
+  // Keep focus on first field whenever the user toggles between login/signup modes.
   useEffect(() => {
     document.getElementById(mode === 'login' ? 'login-email' : 'signup-first')?.focus();
   }, [mode]);
 
+  // Surface NextAuth error query params as toast feedback.
   useEffect(() => {
     const error = searchParams.get('error');
     if (error) showToast.error('Invalid email or password.');
   }, [searchParams]);
 
+  // Basic credential flow with minimal client-side validation before delegating to NextAuth.
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!loginEmail || !loginPassword) {
-      showToast.error('Please fill in both fields.');
+    const trimmedEmail = loginEmail.trim();
+    const trimmedPassword = loginPassword.trim();
+
+    const errors: LoginErrors = {};
+    if (!trimmedEmail) errors.email = 'Email is required.';
+    else if (!isValidEmail(trimmedEmail)) errors.email = 'Enter a valid email address.';
+    if (!trimmedPassword) errors.password = 'Password is required.';
+
+    setLoginErrors(errors);
+    if (Object.keys(errors).length) {
+      showToast.error('Please correct the highlighted fields.');
       return;
     }
 
     setLoading(true);
 
     const result = await signIn('credentials', {
-      email: loginEmail,
-      password: loginPassword,
+      email: trimmedEmail,
+      password: trimmedPassword,
       redirect: false,
     });
 
     if (result?.error) {
       showToast.error('Invalid email or password.');
+      setLoginErrors({ password: 'Email or password is incorrect.' });
       setLoading(false);
     } else {
+      setLoginErrors({});
       window.location.href = '/dashboard';
     }
   };
 
+  // Calls the signup route, then signs the new user in with the same credentials.
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!signupFirst || !signupLast || !signupEmail || !signupPassword || !signupConfirm) {
-      showToast.error('Please fill in all fields.');
-      return;
+    const trimmed = {
+      first: signupFirst.trim(),
+      last: signupLast.trim(),
+      email: signupEmail.trim(),
+      password: signupPassword,
+      confirm: signupConfirm,
+    };
+
+    const errors: SignupErrors = {};
+    if (!trimmed.first) errors.first = 'First name is required.';
+    if (!trimmed.last) errors.last = 'Last name is required.';
+    if (!trimmed.email) errors.email = 'Email is required.';
+    else if (!isValidEmail(trimmed.email)) errors.email = 'Enter a valid email address.';
+    if (!trimmed.password) errors.password = 'Password is required.';
+    else if (!isStrongPassword(trimmed.password)) {
+      errors.password = 'Password must meet all requirements.';
+    }
+    if (!trimmed.confirm) errors.confirm = 'Confirm your password.';
+    else if (trimmed.password !== trimmed.confirm) {
+      errors.confirm = "Passwords don't match.";
     }
 
-    if (!isStrongPassword(signupPassword)) {
-      showToast.error('Password must meet all requirements.');
-      return;
-    }
+    setSignupErrors(errors);
 
-    if (signupPassword !== signupConfirm) {
-      showToast.error("Passwords don't match.");
+    if (Object.keys(errors).length) {
+      showToast.error('Please correct the highlighted fields.');
       return;
     }
 
@@ -108,10 +147,10 @@ export default function LoginPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        firstName: signupFirst,
-        lastName: signupLast,
-        email: signupEmail,
-        password: signupPassword,
+        firstName: trimmed.first,
+        lastName: trimmed.last,
+        email: trimmed.email,
+        password: trimmed.password,
         role: 'STUDENT',
       }),
     });
@@ -124,11 +163,12 @@ export default function LoginPage() {
     }
 
     await signIn('credentials', {
-      email: signupEmail,
-      password: signupPassword,
+      email: trimmed.email,
+      password: trimmed.password,
       redirect: false,
     });
 
+    setSignupErrors({});
     window.location.href = '/dashboard';
   };
 
@@ -139,6 +179,7 @@ export default function LoginPage() {
     passed: rule.test(signupPassword),
   }));
 
+  // Prefills login credentials for the given role and forces the login form visible.
   const applyTestLogin = (role: string) => {
     setLoginEmail(`${role}@example.com`);
     setLoginPassword('password123');
@@ -192,6 +233,7 @@ export default function LoginPage() {
                   value={loginEmail}
                   setValue={setLoginEmail}
                   type="email"
+                  error={loginErrors.email}
                 />
 
                 <InputGroup
@@ -204,6 +246,7 @@ export default function LoginPage() {
                   showEye
                   isPasswordVisible={showLoginPassword}
                   togglePasswordVisibility={() => setShowLoginPassword((v) => !v)}
+                  error={loginErrors.password}
                 />
 
                 <Button
@@ -245,6 +288,7 @@ export default function LoginPage() {
                   autoComplete="off"
                   value={signupFirst}
                   setValue={setSignupFirst}
+                  error={signupErrors.first}
                 />
 
                 <InputGroup
@@ -253,6 +297,7 @@ export default function LoginPage() {
                   autoComplete="off"
                   value={signupLast}
                   setValue={setSignupLast}
+                  error={signupErrors.last}
                 />
 
                 <InputGroup
@@ -262,6 +307,7 @@ export default function LoginPage() {
                   value={signupEmail}
                   setValue={setSignupEmail}
                   type="email"
+                  error={signupErrors.email}
                 />
 
                 <InputGroup
@@ -275,6 +321,7 @@ export default function LoginPage() {
                   isPasswordVisible={showSignupPassword}
                   togglePasswordVisibility={() => setShowSignupPassword((v) => !v)}
                   additionalDescribedBy={passwordHelperId}
+                  error={signupErrors.password}
                 />
 
                 <InputGroup
@@ -287,6 +334,7 @@ export default function LoginPage() {
                   showEye
                   isPasswordVisible={showSignupConfirm}
                   togglePasswordVisibility={() => setShowSignupConfirm((v) => !v)}
+                  error={signupErrors.confirm}
                 />
 
                 <PasswordRulesHelper id={passwordHelperId} rules={passwordRuleStatuses} />
@@ -320,7 +368,7 @@ export default function LoginPage() {
             <span className="mb-3 block text-center text-[0.65rem] font-semibold tracking-[0.35em] text-gray-500 uppercase">
               Test Logins
             </span>
-            <div className="flex w-full flex-col gap-2 text-sm font-semibold">
+            <div className="flex w-full flex-col gap-2 text-xs font-semibold">
               {testLoginButtons.map(({ role, label, classes }) => (
                 <button
                   key={role}
