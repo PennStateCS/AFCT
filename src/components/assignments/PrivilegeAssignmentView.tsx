@@ -160,7 +160,7 @@ export default function AssignmentDashboardPage() {
       .catch(() => setAssignment(null))
       .finally(() => setLoading(false));
   }, [id, aid]);
-
+  
   async function handleAddProblems(problemIds: string[]) {
     if (!id || !aid) return;
     if (!canManageProblems) return;
@@ -546,7 +546,7 @@ export default function AssignmentDashboardPage() {
         />
       )}
 	  {viewerOpen && viewerSrc && ["RE", "CFG"].includes(jffType) && (
-        <RegexCfgViewerDialog />
+        <RegexCfgViewerDialog src={viewerSrc} open={viewerOpen} onOpenChange={setViewerOpen} title={viewerTitle}/>
 	  )}
       {/* Description dialog */}
       <Dialog open={descOpen} onOpenChange={(v) => setDescOpen(v)}>
