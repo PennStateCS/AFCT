@@ -62,6 +62,8 @@ type AssignmentWithDetails = {
   dueDate: string | Date;
   maxPoints: number;
   isPublished: boolean;
+  allowLateSubmissions?: boolean;
+  lateCutoff?: string | Date | null;
   createdAt?: Date;
   updatedAt?: Date;
   problems: Array<{ problem: Problem }>;
@@ -614,6 +616,15 @@ export default function AssignmentDashboardPage() {
               typeof assignment.dueDate === 'string'
                 ? new Date(assignment.dueDate)
                 : assignment.dueDate,
+            allowLateSubmissions:
+              typeof assignment.allowLateSubmissions === 'boolean'
+                ? assignment.allowLateSubmissions
+                : true,
+            lateCutoff: assignment.lateCutoff
+              ? typeof assignment.lateCutoff === 'string'
+                ? new Date(assignment.lateCutoff)
+                : assignment.lateCutoff
+              : null,
           }}
           onSave={() => {
             setLoading(true);
