@@ -100,7 +100,7 @@ export async function POST(req: Request) {
       });
     }
 
-    if (rateDecision.applyFriction) {
+    if (rateDecision.status === 'ok' && rateDecision.applyFriction) {
       await applyBotFriction(rateDecision.frictionDelayMs);
     }
 
