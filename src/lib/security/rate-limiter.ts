@@ -1,0 +1,291 @@
+const buckets = new Map<string, RateLimiterBucket>();
+
+const randomBetween = (min: number, max: number) => Math.random() * (max - min) + min;
+
+const LOGIN_IP_CONFIG: BucketConfig = {
+  windowMs: 10 * 60 * 1000,
+  maxAttempts: 20,
+  frictionThreshold: 8,
+  challengeThreshold: 14,
+  challengeCooldownMs: 90 * 1000,
+  blockDurationMs: 30 * 60 * 1000,
+  frictionDelayMs: 350,
+};
+
+const LOGIN_ACCOUNT_CONFIG: BucketConfig = {
+  windowMs: 15 * 60 * 1000,
+  maxAttempts: 10,
+  frictionThreshold: 4,
+  challengeThreshold: 7,
+  challengeCooldownMs: 2 * 60 * 1000,
+  blockDurationMs: 45 * 60 * 1000,
+  frictionDelayMs: 450,
+};
+
+const SIGNUP_IP_CONFIG: BucketConfig = {
+  windowMs: 30 * 60 * 1000,
+  maxAttempts: 12,
+  frictionThreshold: 3,
+  challengeThreshold: 6,
+  challengeCooldownMs: 2 * 60 * 1000,
+  blockDurationMs: 60 * 60 * 1000,
+  frictionDelayMs: 600,
+};
+
+const SIGNUP_IDENTIFIER_CONFIG: BucketConfig = {
+  windowMs: 24 * 60 * 60 * 1000,
+  maxAttempts: 3,
+  frictionThreshold: 2,
+  challengeThreshold: 3,
+  challengeCooldownMs: 10 * 60 * 1000,
+  blockDurationMs: 6 * 60 * 60 * 1000,
+  frictionDelayMs: 750,
+};
+
+const HUMAN_DELAY_THRESHOLD_MS = 600;
+
+export type LimitReason = 'ip' | 'account';
+
+export type RateLimitDecision =
+  | { status: 'ok'; applyFriction: boolean; frictionDelayMs: number }
+  | { status: 'challenge'; retryAfterMs: number; reason: LimitReason }
+  | { status: 'blocked'; retryAfterMs: number; reason: LimitReason };
+
+type BucketConfig = {
+  windowMs: number;
+  maxAttempts: number;
+  frictionThreshold: number;
+  challengeThreshold: number;
+  challengeCooldownMs: number;
+  blockDurationMs: number;
+  frictionDelayMs: number;
+};
+
+type RateLimiterBucket = {
+  count: number;
+  resetAt: number;
+  blockedUntil?: number;
+  challengeUntil?: number;
+};
+
+type BucketEvaluation =
+  | { type: 'blocked'; retryAfterMs: number }
+  | { type: 'challenge'; retryAfterMs: number }
+  | { type: 'ok'; applyFriction: boolean; frictionDelayMs: number };
+
+const sanitizeKey = (value?: string | null) => {
+  if (!value) return 'unknown';
+  return value.toLowerCase().trim().slice(0, 200) || 'unknown';
+};
+
+const bucketKey = (scope: string, identifier?: string | null) =>
+  `${scope}:${sanitizeKey(identifier)}`;
+
+const hydrateBucket = (key: string, config: BucketConfig, now: number) => {
+  const existing = buckets.get(key);
+  if (existing && now < existing.resetAt) {
+    return existing;
+  }
+  const fresh: RateLimiterBucket = {
+    count: 0,
+    resetAt: now + config.windowMs,
+  };
+  buckets.set(key, fresh);
+  return fresh;
+};
+
+const hitBucket = (key: string, config: BucketConfig, now: number): BucketEvaluation => {
+  const bucket = hydrateBucket(key, config, now);
+
+  if (bucket.blockedUntil && now < bucket.blockedUntil) {
+    return { type: 'blocked', retryAfterMs: bucket.blockedUntil - now };
+  }
+
+  if (bucket.challengeUntil && now < bucket.challengeUntil) {
+    return { type: 'challenge', retryAfterMs: bucket.challengeUntil - now };
+  }
+
+  bucket.count += 1;
+
+  if (bucket.count > config.maxAttempts) {
+    bucket.blockedUntil = now + config.blockDurationMs;
+    return { type: 'blocked', retryAfterMs: config.blockDurationMs };
+  }
+
+  if (bucket.count >= config.challengeThreshold) {
+    bucket.challengeUntil = now + config.challengeCooldownMs;
+    return { type: 'challenge', retryAfterMs: config.challengeCooldownMs };
+  }
+
+  const shouldFriction = bucket.count >= config.frictionThreshold;
+  return { type: 'ok', applyFriction: shouldFriction, frictionDelayMs: config.frictionDelayMs };
+};
+
+const combineResults = (
+  evaluations: Array<{ evaluation: BucketEvaluation; reason: LimitReason }>,
+  interactionMs?: number,
+): RateLimitDecision => {
+  let frictionDelayMs = 0;
+  let hasFriction = false;
+  let pendingChallenge: { retryAfterMs: number; reason: LimitReason } | null = null;
+
+  for (const { evaluation, reason } of evaluations) {
+    if (evaluation.type === 'blocked') {
+      return { status: 'blocked', retryAfterMs: evaluation.retryAfterMs, reason };
+    }
+
+    if (evaluation.type === 'challenge') {
+      if (!pendingChallenge || evaluation.retryAfterMs > pendingChallenge.retryAfterMs) {
+        pendingChallenge = { retryAfterMs: evaluation.retryAfterMs, reason };
+      }
+      continue;
+    }
+
+    if (evaluation.applyFriction) {
+      hasFriction = true;
+      frictionDelayMs = Math.max(frictionDelayMs, evaluation.frictionDelayMs);
+    }
+  }
+
+  if (pendingChallenge) {
+    return {
+      status: 'challenge',
+      retryAfterMs: pendingChallenge.retryAfterMs,
+      reason: pendingChallenge.reason,
+    };
+  }
+
+  if (
+    typeof interactionMs === 'number' &&
+    interactionMs >= 0 &&
+    interactionMs < HUMAN_DELAY_THRESHOLD_MS
+  ) {
+    hasFriction = true;
+    frictionDelayMs = Math.max(frictionDelayMs, HUMAN_DELAY_THRESHOLD_MS - interactionMs + 150);
+  }
+
+  return {
+    status: 'ok',
+    applyFriction: hasFriction,
+    frictionDelayMs: hasFriction ? Math.min(1200, Math.max(250, frictionDelayMs || 300)) : 0,
+  };
+};
+
+const ensureEvaluations = (
+  configs: Array<{ key: string; config: BucketConfig; reason: LimitReason }>,
+  interactionMs?: number,
+) => {
+  const now = Date.now();
+  const evaluations = configs.map(({ key, config, reason }) => ({
+    evaluation: hitBucket(key, config, now),
+    reason,
+  }));
+
+  return combineResults(evaluations, interactionMs);
+};
+
+export const evaluateLoginRateLimit = (params: {
+  ip?: string;
+  identifier?: string;
+  interactionMs?: number;
+}): RateLimitDecision => {
+  const configs = [
+    { key: bucketKey('login:ip', params.ip), config: LOGIN_IP_CONFIG, reason: 'ip' as LimitReason },
+  ];
+
+  if (params.identifier) {
+    configs.push({
+      key: bucketKey('login:account', params.identifier),
+      config: LOGIN_ACCOUNT_CONFIG,
+      reason: 'account',
+    });
+  }
+
+  return ensureEvaluations(configs, params.interactionMs);
+};
+
+export const evaluateSignupRateLimit = (params: {
+  ip?: string;
+  identifier?: string;
+  interactionMs?: number;
+}): RateLimitDecision => {
+  const configs = [
+    {
+      key: bucketKey('signup:ip', params.ip),
+      config: SIGNUP_IP_CONFIG,
+      reason: 'ip' as LimitReason,
+    },
+  ];
+
+  if (params.identifier) {
+    configs.push({
+      key: bucketKey('signup:identifier', params.identifier),
+      config: SIGNUP_IDENTIFIER_CONFIG,
+      reason: 'account',
+    });
+  }
+
+  return ensureEvaluations(configs, params.interactionMs);
+};
+
+export const applyBotFriction = async (delayMs?: number) => {
+  if (!delayMs || delayMs <= 0) {
+    return;
+  }
+  const boundedDelay = delayMs + randomBetween(50, 200);
+  await new Promise((resolve) => setTimeout(resolve, boundedDelay));
+};
+
+export const clearBucketsFor = (keys: string[]) => {
+  keys.forEach((key) => buckets.delete(key));
+};
+
+export const recordLoginSuccess = (params: { ip?: string; identifier?: string }) => {
+  const keys = [bucketKey('login:ip', params.ip)];
+  if (params.identifier) {
+    keys.push(bucketKey('login:account', params.identifier));
+  }
+  clearBucketsFor(keys);
+};
+
+export const recordSignupSuccess = (params: { ip?: string; identifier?: string }) => {
+  const keys = [bucketKey('signup:ip', params.ip)];
+  if (params.identifier) {
+    keys.push(bucketKey('signup:identifier', params.identifier));
+  }
+  clearBucketsFor(keys);
+};
+
+export const getClientIp = (
+  source?:
+    | Request
+    | { headers?: Headers | HeadersInit | Record<string, string | string[]>; ip?: string | null }
+    | null,
+): string => {
+  if (!source) return 'unknown';
+
+  const headers: Headers | null =
+    source instanceof Request
+      ? source.headers
+      : source && 'headers' in source && source.headers
+        ? source.headers instanceof Headers
+          ? source.headers
+          : new Headers(source.headers as HeadersInit)
+        : null;
+
+  const fromHeader = headers?.get('x-forwarded-for') || headers?.get('x-real-ip');
+  if (fromHeader) {
+    const first = fromHeader.split(',')[0]?.trim();
+    if (first) return first;
+  }
+
+  if ('ip' in (source as any) && (source as any).ip) {
+    return String((source as any).ip);
+  }
+
+  return 'unknown';
+};
+
+export const formatRetryAfterSeconds = (ms: number) => Math.max(1, Math.ceil(ms / 1000)).toString();
+
+export const __dangerousResetRateLimiter = () => buckets.clear();

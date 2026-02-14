@@ -12,6 +12,11 @@ const { signInMock, showToastErrorMock, searchState } = vi.hoisted(() => ({
   searchState: { current: new URLSearchParams() },
 }));
 
+const nowRef = { value: 0 };
+const getMockTime = () => nowRef.value;
+let performanceNowSpy: ReturnType<typeof vi.spyOn> | null = null;
+let originalCaptchaKey: string | undefined;
+
 vi.mock('next-auth/react', () => ({
   signIn: signInMock,
 }));
@@ -111,6 +116,15 @@ vi.mock('@radix-ui/react-popover', () => ({
   Arrow: () => null,
 }));
 
+vi.mock('@hcaptcha/react-hcaptcha', () => ({
+  __esModule: true,
+  default: ({ onVerify }: { onVerify?: (token: string) => void }) => (
+    <button data-testid="mock-hcaptcha" onClick={() => onVerify?.('mock-token')}>
+      MockCaptcha
+    </button>
+  ),
+}));
+
 const fetchMock = vi.fn();
 let originalFetch: typeof fetch;
 let originalLocation: Location;
@@ -126,9 +140,10 @@ const configureLocation = () => {
   });
 };
 
-const createJsonResponse = <T,>(data: T, ok = true) =>
+const createJsonResponse = <T,>(data: T, status = 200) =>
   Promise.resolve({
-    ok,
+    ok: status >= 200 && status < 300,
+    status,
     json: async () => data,
   } as Response);
 
@@ -155,6 +170,11 @@ beforeAll(() => {
   (globalThis as typeof globalThis & { React?: typeof React }).React = React;
   originalFetch = globalThis.fetch;
   originalLocation = window.location;
+  originalCaptchaKey = process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY;
+  process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY = 'test-hcaptcha-key';
+  if (typeof performance !== 'undefined' && performance.now) {
+    performanceNowSpy = vi.spyOn(performance, 'now').mockImplementation(getMockTime);
+  }
 });
 
 afterAll(() => {
@@ -163,6 +183,8 @@ afterAll(() => {
     configurable: true,
     value: originalLocation,
   });
+  performanceNowSpy?.mockRestore();
+  process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY = originalCaptchaKey;
 });
 
 beforeEach(() => {
@@ -171,6 +193,7 @@ beforeEach(() => {
   fetchMock.mockReset();
   globalThis.fetch = fetchMock as unknown as typeof fetch;
   configureLocation();
+  nowRef.value = 0;
 });
 
 describe('LoginPage', () => {
@@ -190,11 +213,15 @@ describe('LoginPage', () => {
     await user.click(getSubmitButton(LOGIN_SUBMIT_LABEL));
 
     await waitFor(() =>
-      expect(signInMock).toHaveBeenCalledWith('credentials', {
-        email: 'admin@example.com',
-        password: 'StrongPass1!',
-        redirect: false,
-      }),
+      expect(signInMock).toHaveBeenCalledWith(
+        'credentials',
+        expect.objectContaining({
+          email: 'admin@example.com',
+          password: 'StrongPass1!',
+          redirect: false,
+          interactionMs: expect.any(Number),
+        }),
+      ),
     );
 
     await waitFor(() => expect(window.location.href).toBe('/dashboard'));
@@ -233,6 +260,28 @@ describe('LoginPage', () => {
     );
   });
 
+  it('shows toast for rate limited search param', async () => {
+    setSearchParams({ error: 'RateLimitExceeded' });
+    render(<LoginPage />);
+
+    await waitFor(() =>
+      expect(showToastErrorMock).toHaveBeenCalledWith(
+        'Too many attempts. Please wait before trying again.',
+      ),
+    );
+  });
+
+  it('shows toast for bot challenge search param', async () => {
+    setSearchParams({ error: 'BotChallengeRequired' });
+    render(<LoginPage />);
+
+    await waitFor(() =>
+      expect(showToastErrorMock).toHaveBeenCalledWith(
+        'We detected unusual activity. Please slow down then retry.',
+      ),
+    );
+  });
+
   it('prefills login form using quick role buttons', async () => {
     const user = userEvent.setup();
     render(<LoginPage />);
@@ -266,6 +315,53 @@ describe('LoginPage', () => {
     await waitFor(() => expect(signInMock).toHaveBeenCalled());
   });
 
+  it('surfaces rate limit errors from signIn', async () => {
+    const user = userEvent.setup();
+    signInMock.mockResolvedValueOnce({ error: 'RateLimitExceeded' });
+
+    render(<LoginPage />);
+
+    fireEvent.change(screen.getByLabelText(/email/i), {
+      target: { value: 'admin@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText(/^password$/i), {
+      target: { value: 'StrongPass1!' },
+    });
+
+    await user.click(getSubmitButton(LOGIN_SUBMIT_LABEL));
+
+    await waitFor(() =>
+      expect(showToastErrorMock).toHaveBeenCalledWith(
+        'Too many login attempts. Please wait a few minutes and try again.',
+      ),
+    );
+    expect(signInMock).toHaveBeenCalled();
+  });
+
+  it('surfaces bot challenge errors from signIn', async () => {
+    const user = userEvent.setup();
+    signInMock.mockResolvedValueOnce({ error: 'BotChallengeRequired' });
+
+    render(<LoginPage />);
+
+    fireEvent.change(screen.getByLabelText(/email/i), {
+      target: { value: 'admin@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText(/^password$/i), {
+      target: { value: 'StrongPass1!' },
+    });
+
+    await user.click(getSubmitButton(LOGIN_SUBMIT_LABEL));
+
+    await waitFor(() =>
+      expect(showToastErrorMock).toHaveBeenCalledWith(
+        'We detected unusual activity. Please pause briefly before retrying.',
+      ),
+    );
+    expect(signInMock).toHaveBeenCalled();
+    expect(screen.getAllByTestId('mock-hcaptcha').length).toBeGreaterThanOrEqual(1);
+  });
+
   it("prevents signup when passwords don't match", async () => {
     const user = userEvent.setup();
     render(<LoginPage />);
@@ -297,7 +393,7 @@ describe('LoginPage', () => {
 
     await switchMode(user, /Sign up/i);
 
-    fetchMock.mockImplementation(() => createJsonResponse({}, true));
+    fetchMock.mockImplementation(() => createJsonResponse({}, 200));
 
     fireEvent.change(screen.getByLabelText('First Name'), { target: { value: 'Grace' } });
     fireEvent.change(screen.getByLabelText('Last Name'), { target: { value: 'Hopper' } });
@@ -319,20 +415,27 @@ describe('LoginPage', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     });
-    expect(JSON.parse((signupInit as RequestInit).body as string)).toEqual({
-      firstName: 'Grace',
-      lastName: 'Hopper',
-      email: 'grace@example.com',
-      password: 'StrongPass1!',
-      role: 'STUDENT',
-    });
-
-    await waitFor(() =>
-      expect(signInMock).toHaveBeenCalledWith('credentials', {
+    expect(JSON.parse((signupInit as RequestInit).body as string)).toEqual(
+      expect.objectContaining({
+        firstName: 'Grace',
+        lastName: 'Hopper',
         email: 'grace@example.com',
         password: 'StrongPass1!',
-        redirect: false,
+        role: 'STUDENT',
+        interactionMs: expect.any(Number),
       }),
+    );
+
+    await waitFor(() =>
+      expect(signInMock).toHaveBeenCalledWith(
+        'credentials',
+        expect.objectContaining({
+          email: 'grace@example.com',
+          password: 'StrongPass1!',
+          redirect: false,
+          interactionMs: expect.any(Number),
+        }),
+      ),
     );
     await waitFor(() => expect(window.location.href).toBe('/dashboard'));
     expect(showToastErrorMock).not.toHaveBeenCalled();
@@ -344,7 +447,7 @@ describe('LoginPage', () => {
 
     await switchMode(user, /Sign up/i);
 
-    fetchMock.mockImplementation(() => createJsonResponse({}, false));
+    fetchMock.mockImplementation(() => createJsonResponse({}, 500));
 
     fireEvent.change(screen.getByLabelText('First Name'), { target: { value: 'Linus' } });
     fireEvent.change(screen.getByLabelText('Last Name'), { target: { value: 'Torvalds' } });
@@ -358,6 +461,56 @@ describe('LoginPage', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(showToastErrorMock).toHaveBeenCalledWith('Signup failed.'));
+    expect(signInMock).not.toHaveBeenCalled();
+  });
+
+  it('shows slowdown toast when signup route responds with 428', async () => {
+    const user = userEvent.setup();
+    render(<LoginPage />);
+
+    await switchMode(user, /Sign up/i);
+    fetchMock.mockResolvedValue(createJsonResponse({}, 428));
+
+    fireEvent.change(screen.getByLabelText('First Name'), { target: { value: 'Linus' } });
+    fireEvent.change(screen.getByLabelText('Last Name'), { target: { value: 'Torvalds' } });
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'linus@example.com' } });
+    fireEvent.change(screen.getByLabelText(/^Password$/), { target: { value: 'StrongPass1!' } });
+    fireEvent.change(screen.getByLabelText('Confirm Password'), {
+      target: { value: 'StrongPass1!' },
+    });
+
+    await user.click(getSubmitButton(SIGNUP_SUBMIT_LABEL));
+
+    await waitFor(() =>
+      expect(showToastErrorMock).toHaveBeenCalledWith(
+        'Please slow down before creating another account.',
+      ),
+    );
+    expect(signInMock).not.toHaveBeenCalled();
+  });
+
+  it('shows rate limit toast when signup route responds with 429', async () => {
+    const user = userEvent.setup();
+    render(<LoginPage />);
+
+    await switchMode(user, /Sign up/i);
+    fetchMock.mockResolvedValue(createJsonResponse({}, 429));
+
+    fireEvent.change(screen.getByLabelText('First Name'), { target: { value: 'Linus' } });
+    fireEvent.change(screen.getByLabelText('Last Name'), { target: { value: 'Torvalds' } });
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'linus@example.com' } });
+    fireEvent.change(screen.getByLabelText(/^Password$/), { target: { value: 'StrongPass1!' } });
+    fireEvent.change(screen.getByLabelText('Confirm Password'), {
+      target: { value: 'StrongPass1!' },
+    });
+
+    await user.click(getSubmitButton(SIGNUP_SUBMIT_LABEL));
+
+    await waitFor(() =>
+      expect(showToastErrorMock).toHaveBeenCalledWith(
+        'Too many signup attempts. Please try again later.',
+      ),
+    );
     expect(signInMock).not.toHaveBeenCalled();
   });
 });
