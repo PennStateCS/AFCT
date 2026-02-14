@@ -4,14 +4,16 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
+import { showToast } from '@/lib/toast';
 import { motion, AnimatePresence } from 'framer-motion';
-import * as Popover from '@radix-ui/react-popover';
-import { Info } from 'lucide-react';
+import { Wrench } from 'lucide-react';
 import InputGroup from '@/components/ui/InputGroup';
 
-// Simple validators
+/* ---------------- Validators ---------------- */
+
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+// Shared rules are referenced both for live validation and helper rendering.
 const passwordRules = [
   { label: 'At least 8 characters', test: (pw: string) => pw.length >= 8 },
   { label: 'At least one uppercase letter', test: (pw: string) => /[A-Z]/.test(pw) },
@@ -19,17 +21,32 @@ const passwordRules = [
   { label: 'At least one number', test: (pw: string) => /\d/.test(pw) },
   { label: 'At least one special character', test: (pw: string) => /[^A-Za-z0-9]/.test(pw) },
 ];
+
 const isStrongPassword = (password: string) => passwordRules.every((rule) => rule.test(password));
+
+// Dev-only quick login shortcuts so QA can impersonate common roles fast.
+const testLoginButtons = [
+  { role: 'admin', label: 'Admin', classes: 'bg-[#2F4A8A] text-white hover:bg-[#253972]' },
+  { role: 'faculty', label: 'Faculty', classes: 'bg-[#486AAE] text-white hover:bg-[#3B5793]' },
+  { role: 'ta', label: 'TA', classes: 'bg-[#5F9EA0] text-white hover:bg-[#4E7E80]' },
+  { role: 'student', label: 'Student', classes: 'bg-[#8BD3CF] text-gray-900 hover:bg-[#78BBB7]' },
+];
+
+type LoginField = 'email' | 'password';
+type SignupField = 'first' | 'last' | 'email' | 'password' | 'confirm';
+
+type LoginErrors = Partial<Record<LoginField, string>>;
+type SignupErrors = Partial<Record<SignupField, string>>;
+
+/* ================================================= */
 
 export default function LoginPage() {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
 
-  // Login state
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
 
-  // Signup state
   const [signupFirst, setSignupFirst] = useState('');
   const [signupLast, setSignupLast] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
@@ -39,358 +56,356 @@ export default function LoginPage() {
   const [showSignupConfirm, setShowSignupConfirm] = useState(false);
 
   const [loading, setLoading] = useState(false);
-  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
-  const [isEmailAvailable, setIsEmailAvailable] = useState<boolean | null>(null);
+  const [loginErrors, setLoginErrors] = useState<LoginErrors>({});
+  const [signupErrors, setSignupErrors] = useState<SignupErrors>({});
 
   const searchParams = useSearchParams();
+  const isDev = process.env.NODE_ENV !== 'production';
 
-  // Focus the right field on mode change
+  // Keep focus on first field whenever the user toggles between login/signup modes.
   useEffect(() => {
-    if (mode === 'login') {
-      document.getElementById('login-email')?.focus();
-    } else {
-      document.getElementById('signup-first')?.focus();
-    }
+    document.getElementById(mode === 'login' ? 'login-email' : 'signup-first')?.focus();
   }, [mode]);
 
-  // Surface next-auth errors from callback
+  // Surface NextAuth error query params as toast feedback.
   useEffect(() => {
     const error = searchParams.get('error');
-    if (error === 'CredentialsSignin') toast.error('Invalid email or password.');
-    else if (error) toast.error('Login failed. Please try again.');
+    if (error) showToast.error('Invalid email or password.');
   }, [searchParams]);
 
-  const checkEmailAvailability = async (email: string) => {
-    if (!isValidEmail(email)) {
-      setIsEmailAvailable(null);
-      return;
-    }
-    setIsCheckingEmail(true);
-    try {
-      const res = await fetch(`/api/auth/check-email?email=${encodeURIComponent(email)}`);
-      const data = await res.json();
-      setIsEmailAvailable(!data.exists);
-    } catch {
-      setIsEmailAvailable(null);
-    } finally {
-      setIsCheckingEmail(false);
-    }
-  };
-
+  // Basic credential flow with minimal client-side validation before delegating to NextAuth.
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!loginEmail || !loginPassword) {
-      toast.error('Please fill in both fields.');
+    const trimmedEmail = loginEmail.trim();
+    const trimmedPassword = loginPassword.trim();
+
+    const errors: LoginErrors = {};
+    if (!trimmedEmail) errors.email = 'Email is required.';
+    else if (!isValidEmail(trimmedEmail)) errors.email = 'Enter a valid email address.';
+    if (!trimmedPassword) errors.password = 'Password is required.';
+
+    setLoginErrors(errors);
+    if (Object.keys(errors).length) {
+      showToast.error('Please correct the highlighted fields.');
       return;
     }
-    setLoading(true);
-    try {
-      const result = await signIn('credentials', {
-        email: loginEmail,
-        password: loginPassword,
-        redirect: false, // Handle redirect manually
-      });
 
-      if (result?.error) {
-        setLoading(false);
-        toast.error(
-          result.error === 'CredentialsSignin' ? 'Invalid email or password.' : 'Login failed.',
-        );
-      } else {
-        // Successful login - redirect to dashboard
-        window.location.href = '/dashboard';
-      }
-    } catch {
+    setLoading(true);
+
+    const result = await signIn('credentials', {
+      email: trimmedEmail,
+      password: trimmedPassword,
+      redirect: false,
+    });
+
+    if (result?.error) {
+      showToast.error('Invalid email or password.');
+      setLoginErrors({ password: 'Email or password is incorrect.' });
       setLoading(false);
-      toast.error('Login failed. Please try again.');
+    } else {
+      setLoginErrors({});
+      window.location.href = '/dashboard';
     }
   };
 
+  // Calls the signup route, then signs the new user in with the same credentials.
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!signupFirst || !signupLast || !signupEmail || !signupPassword || !signupConfirm) {
-      toast.error('Please fill in all fields.');
-      return;
+    const trimmed = {
+      first: signupFirst.trim(),
+      last: signupLast.trim(),
+      email: signupEmail.trim(),
+      password: signupPassword,
+      confirm: signupConfirm,
+    };
+
+    const errors: SignupErrors = {};
+    if (!trimmed.first) errors.first = 'First name is required.';
+    if (!trimmed.last) errors.last = 'Last name is required.';
+    if (!trimmed.email) errors.email = 'Email is required.';
+    else if (!isValidEmail(trimmed.email)) errors.email = 'Enter a valid email address.';
+    if (!trimmed.password) errors.password = 'Password is required.';
+    else if (!isStrongPassword(trimmed.password)) {
+      errors.password = 'Password must meet all requirements.';
     }
-    if (!isStrongPassword(signupPassword)) {
-      toast.error('Password must meet all requirements.');
-      return;
-    }
-    if (signupPassword !== signupConfirm) {
-      toast.error("Passwords don't match.");
-      return;
+    if (!trimmed.confirm) errors.confirm = 'Confirm your password.';
+    else if (trimmed.password !== trimmed.confirm) {
+      errors.confirm = "Passwords don't match.";
     }
 
-    // Optional: immediate availability check
-    try {
-      const checkRes = await fetch(
-        `/api/auth/check-email?email=${encodeURIComponent(signupEmail)}`,
-      );
-      const checkData = await checkRes.json();
-      if (checkData.exists) {
-        toast.error('Email is already registered.');
-        return;
-      }
-    } catch {
-      /* ignore — we still attempt signup */
+    setSignupErrors(errors);
+
+    if (Object.keys(errors).length) {
+      showToast.error('Please correct the highlighted fields.');
+      return;
     }
 
     setLoading(true);
+
     const res = await fetch('/api/auth/signup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        firstName: signupFirst,
-        lastName: signupLast,
-        email: signupEmail,
-        password: signupPassword,
-        role: 'STUDENT', // default role
+        firstName: trimmed.first,
+        lastName: trimmed.last,
+        email: trimmed.email,
+        password: trimmed.password,
+        role: 'STUDENT',
       }),
     });
+
     setLoading(false);
 
     if (!res.ok) {
-      const { error } = await res.json().catch(() => ({ error: 'Signup failed.' }));
-      toast.error(error || 'Signup failed.');
+      showToast.error('Signup failed.');
       return;
     }
 
-    toast.success('Account created! Logging you in...');
-    setLoading(true);
-    await new Promise((r) => setTimeout(r, 600));
-    try {
-      const result = await signIn('credentials', {
-        email: signupEmail,
-        password: signupPassword,
-        redirect: false,
-      });
+    await signIn('credentials', {
+      email: trimmed.email,
+      password: trimmed.password,
+      redirect: false,
+    });
 
-      if (result?.error) {
-        toast.error('Signup succeeded but login failed.');
-        setLoading(false);
-      } else {
-        window.location.href = '/dashboard';
-      }
-    } catch {
-      toast.error('Signup succeeded but login failed.');
-      setLoading(false);
-    }
+    setSignupErrors({});
+    window.location.href = '/dashboard';
   };
 
   const isLoginEmailValid = isValidEmail(loginEmail);
-  const isSignupEmailValid = isValidEmail(signupEmail);
+  const passwordHelperId = 'signup-password-helper';
+  const passwordRuleStatuses = passwordRules.map((rule) => ({
+    label: rule.label,
+    passed: rule.test(signupPassword),
+  }));
+
+  // Prefills login credentials for the given role and forces the login form visible.
+  const applyTestLogin = (role: string) => {
+    setLoginEmail(`${role}@example.com`);
+    setLoginPassword('password123');
+    setMode('login');
+  };
 
   return (
-    <div className="from-background to-primary/10 relative flex min-h-screen w-full items-center justify-center bg-gradient-to-tr">
-      {' '}
-      <div className="bg-card relative z-10 mx-2 w-full max-w-[400px] rounded-2xl border px-5 py-8 shadow-2xl">
-        {/* Floating Login Test Menu */}
-        {process.env.NODE_ENV !== 'production' && (
-          <div
-            style={{ right: '-150px' }}
-            className="absolute top-1/2 z-50 flex -translate-y-1/2 flex-col gap-2 rounded-xl border bg-white/90 p-4 shadow-lg dark:border-gray-700 dark:bg-gray-800/90"
-          >
-          <span className="mb-2 text-xs font-semibold text-gray-600 dark:text-gray-300">
-            Test Logins
-          </span>
-          {['admin', 'faculty', 'ta', 'student'].map((role) => (
-            <button
-              key={role}
-              className={`rounded px-3 py-1 text-xs font-medium transition ${
-                role === 'admin'
-                  ? 'bg-red-100 text-red-900 border border-red-900 hover:bg-red-200'
-                  : role === 'faculty'
-                    ? 'bg-blue-100 text-blue-900 border border-blue-900 hover:bg-blue-200'
-                    : role === 'ta'
-                      ? 'bg-slate-100 text-slate-900 border border-slate-900 hover:bg-slate-200'
-                      : 'bg-green-100 text-green-900 border border-green-900 hover:bg-green-200'
-              }`}
-              onClick={() => {
-                setLoginEmail(`${role}@example.com`);
-                setLoginPassword('password123');
-                setMode('login');
-                setTimeout(() => document.getElementById('login-email')?.focus(), 10);
-              }}
-            >
-              {role === 'ta' ? 'TA' : role.charAt(0).toUpperCase() + role.slice(1)}
-            </button>
-          ))}
+    <div className="relative flex min-h-screen w-full items-start justify-center pt-24 md:pt-[14vh]">
+      {/* Background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-[#5F9EA0] via-[#6FAFB2] to-[#2F4A8A]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.15),transparent_70%)]" />
+
+      {/* DEV BADGE */}
+      {isDev && (
+        <div className="fixed top-4 left-1/2 z-50 flex -translate-x-1/2 items-center justify-center">
+          <div className="flex items-center gap-2 rounded-full border border-white/50 bg-white/95 px-4 py-1.5 text-[0.68rem] font-semibold tracking-[0.25em] text-[#2F4A8A] uppercase shadow-xl backdrop-blur-lg">
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#2F4A8A] text-white shadow">
+              <Wrench className="h-3.5 w-3.5" strokeWidth={2.3} />
+            </span>
+            Development Build
           </div>
-        )}
+        </div>
+      )}
 
-        <h1 className="p-2 text-center text-2xl font-bold text-foreground">AFCT Dashboard</h1>
+      {/* CARD + DEV PANEL */}
+      <div className="relative z-10 mx-4 w-full max-w-[430px]">
+        <div className="rounded-2xl bg-white p-8 shadow-[0_25px_60px_rgba(0,0,0,0.25)]">
+          <div className="mb-6 text-center">
+            <h1 className="text-2xl font-bold text-gray-800">AFCT Dashboard</h1>
+            <p className="mt-1 text-base text-gray-700">Automated Feedback for Computing Theory</p>
+          </div>
 
-        <div className="bg-secondary/20 my-6 flex justify-center gap-x-2 rounded-xl shadow">
-          {(['login', 'signup'] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              className={`flex-1 rounded-xl py-1 text-base transition-all ${
-                mode === m ? 'bg-secondary text-white shadow' : 'text-gray-900 dark:text-gray-400'
-              }`}
-              onClick={() => setMode(m)}
-              disabled={mode === m}
-            >
-              {m === 'login' ? 'Login' : 'Sign Up'}
-            </button>
-          ))}
+          <AnimatePresence mode="wait" initial={false}>
+            {mode === 'login' ? (
+              <motion.form
+                key="login"
+                id="login-panel"
+                autoComplete="off"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 6 }}
+                transition={{ duration: 0.2 }}
+                onSubmit={handleLogin}
+                className="space-y-5"
+              >
+                <InputGroup
+                  id="login-email"
+                  label="Email"
+                  name="login-email"
+                  autoComplete="username"
+                  value={loginEmail}
+                  setValue={setLoginEmail}
+                  type="email"
+                  error={loginErrors.email}
+                />
+
+                <InputGroup
+                  label="Password"
+                  name="login-password"
+                  autoComplete="current-password"
+                  value={loginPassword}
+                  setValue={setLoginPassword}
+                  type="password"
+                  showEye
+                  isPasswordVisible={showLoginPassword}
+                  togglePasswordVisibility={() => setShowLoginPassword((v) => !v)}
+                  error={loginErrors.password}
+                />
+
+                <Button
+                  type="submit"
+                  disabled={loading || !isLoginEmailValid}
+                  aria-disabled={loading || !isLoginEmailValid}
+                  className="w-full bg-[#2F4A8A] text-white disabled:bg-[#2F4A8A] disabled:opacity-80"
+                >
+                  {loading ? 'Logging in...' : 'Sign In'}
+                </Button>
+
+                <div className="text-center text-sm text-gray-600">
+                  <span className="font-semibold text-gray-500">Don&apos;t have an account?</span>{' '}
+                  <button
+                    type="button"
+                    className="font-semibold text-[#2F4A8A] underline-offset-2 hover:underline"
+                    onClick={() => setMode('signup')}
+                  >
+                    Sign up
+                  </button>
+                </div>
+              </motion.form>
+            ) : (
+              <motion.form
+                key="signup"
+                id="signup-panel"
+                autoComplete="off"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 6 }}
+                transition={{ duration: 0.2 }}
+                onSubmit={handleSignup}
+                className="space-y-5"
+              >
+                <InputGroup
+                  id="signup-first"
+                  label="First Name"
+                  name="signup-first"
+                  autoComplete="off"
+                  value={signupFirst}
+                  setValue={setSignupFirst}
+                  error={signupErrors.first}
+                />
+
+                <InputGroup
+                  label="Last Name"
+                  name="signup-last"
+                  autoComplete="off"
+                  value={signupLast}
+                  setValue={setSignupLast}
+                  error={signupErrors.last}
+                />
+
+                <InputGroup
+                  label="Email"
+                  name="signup-email"
+                  autoComplete="username"
+                  value={signupEmail}
+                  setValue={setSignupEmail}
+                  type="email"
+                  error={signupErrors.email}
+                />
+
+                <InputGroup
+                  label="Password"
+                  name="signup-password"
+                  autoComplete="new-password"
+                  value={signupPassword}
+                  setValue={setSignupPassword}
+                  type="password"
+                  showEye
+                  isPasswordVisible={showSignupPassword}
+                  togglePasswordVisibility={() => setShowSignupPassword((v) => !v)}
+                  additionalDescribedBy={passwordHelperId}
+                  error={signupErrors.password}
+                />
+
+                <InputGroup
+                  label="Confirm Password"
+                  name="signup-confirm"
+                  autoComplete="new-password"
+                  value={signupConfirm}
+                  setValue={setSignupConfirm}
+                  type="password"
+                  showEye
+                  isPasswordVisible={showSignupConfirm}
+                  togglePasswordVisibility={() => setShowSignupConfirm((v) => !v)}
+                  error={signupErrors.confirm}
+                />
+
+                <PasswordRulesHelper id={passwordHelperId} rules={passwordRuleStatuses} />
+
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  aria-disabled={loading}
+                  className="w-full bg-[#2F4A8A] text-white disabled:bg-[#2F4A8A] disabled:opacity-80"
+                >
+                  {loading ? 'Signing up...' : 'Create Account'}
+                </Button>
+
+                <div className="text-center text-sm text-gray-600">
+                  <span className="font-semibold text-gray-500">Already have an account?</span>{' '}
+                  <button
+                    type="button"
+                    className="font-semibold text-[#2F4A8A] underline-offset-2 hover:underline"
+                    onClick={() => setMode('login')}
+                  >
+                    Login
+                  </button>
+                </div>
+              </motion.form>
+            )}
+          </AnimatePresence>
         </div>
 
-        <AnimatePresence initial={false} mode="wait">
-          {mode === 'login' ? (
-            <motion.form
-              key="login"
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
-              transition={{ duration: 0.22, ease: 'easeInOut' }}
-              onSubmit={handleLogin}
-              className="space-y-5"
-            >
-              <InputGroup
-                id="login-email"
-                label="Email"
-                name="login-email"
-                value={loginEmail}
-                setValue={setLoginEmail}
-                type="email"
-                showStatus
-                isValid={isLoginEmailValid}
-              />
-
-              <InputGroup
-                label="Password"
-                name="login-password"
-                value={loginPassword}
-                setValue={setLoginPassword}
-                type="password"
-                showEye
-                showStatus={false}
-                isPasswordVisible={showLoginPassword}
-                togglePasswordVisibility={() => setShowLoginPassword((v) => !v)}
-              />
-
-              <Button type="submit" disabled={loading || !isLoginEmailValid}>
-                {loading ? 'Logging in...' : 'Login'}
-              </Button>
-            </motion.form>
-          ) : (
-            <motion.form
-              key="signup"
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
-              transition={{ duration: 0.22, ease: 'easeInOut' }}
-              onSubmit={handleSignup}
-              className="space-y-5"
-            >
-              <InputGroup
-                id="signup-first"
-                label="First Name"
-                name="signup-first"
-                value={signupFirst}
-                setValue={setSignupFirst}
-              />
-              <InputGroup
-                label="Last Name"
-                name="signup-last"
-                value={signupLast}
-                setValue={setSignupLast}
-              />
-              <InputGroup
-                label="Email"
-                name="signup-email"
-                value={signupEmail}
-                setValue={(val) => {
-                  setSignupEmail(val);
-                  setIsEmailAvailable(null);
-                }}
-                type="email"
-                showStatus
-                isValid={isSignupEmailValid && isEmailAvailable === true}
-                onBlur={() => checkEmailAvailability(signupEmail)}
-                isChecking={isCheckingEmail}
-              />
-
-              <InputGroup
-                label="Password"
-                name="signup-password"
-                value={signupPassword}
-                setValue={setSignupPassword}
-                type="password"
-                showStatus
-                isValid={signupPassword.length > 0 && isStrongPassword(signupPassword)}
-                showEye
-                isPasswordVisible={showSignupPassword}
-                togglePasswordVisibility={() => setShowSignupPassword((v) => !v)}
-              />
-
-              <InputGroup
-                label="Confirm Password"
-                name="signup-confirm"
-                value={signupConfirm}
-                setValue={setSignupConfirm}
-                type="password"
-                showEye
-                isPasswordVisible={showSignupConfirm}
-                togglePasswordVisibility={() => setShowSignupConfirm((v) => !v)}
-                showStatus
-                isValid={signupConfirm.length > 0 && signupConfirm === signupPassword}
-              />
-
-              <div className="flex justify-center">
-                <Popover.Root>
-                  <Popover.Trigger asChild>
-                    <button
-                      type="button"
-                      className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-sm italic"
-                    >
-                      <Info size={16} />
-                      Password Requirements
-                    </button>
-                  </Popover.Trigger>
-                  <Popover.Portal>
-                    <Popover.Content className="z-50 w-64 rounded border bg-white p-3 text-sm shadow-xl dark:bg-gray-800">
-                      <p className="text-muted-foreground mb-2 font-semibold">
-                        Password must contain:
-                      </p>
-                      <ul className="space-y-1">
-                        {passwordRules.map((rule) => {
-                          const passed = rule.test(signupPassword);
-                          return (
-                            <li
-                              key={rule.label}
-                              className={passed ? 'text-green-600' : 'text-red-500'}
-                            >
-                              {passed ? '✔' : '✘'} {rule.label}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                      <Popover.Arrow className="fill-current text-white dark:text-gray-800" />
-                    </Popover.Content>
-                  </Popover.Portal>
-                </Popover.Root>
-              </div>
-
-              <Button
-                type="submit"
-                disabled={
-                  loading ||
-                  !signupFirst ||
-                  !signupLast ||
-                  !isSignupEmailValid ||
-                  !signupPassword ||
-                  !signupConfirm
-                }
-              >
-                {loading ? 'Signing up...' : 'Sign Up'}
-              </Button>
-            </motion.form>
-          )}
-        </AnimatePresence>
+        {isDev && (
+          <div className="fixed top-6 right-6 z-40 w-32 rounded-2xl border border-white/40 bg-white/95 p-4 text-gray-700 shadow-2xl backdrop-blur-md">
+            <span className="mb-3 block text-center text-[0.65rem] font-semibold tracking-[0.35em] text-gray-500 uppercase">
+              Test Logins
+            </span>
+            <div className="flex w-full flex-col gap-2 text-xs font-semibold">
+              {testLoginButtons.map(({ role, label, classes }) => (
+                <button
+                  key={role}
+                  className={`w-full rounded-lg px-4 py-2 transition focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:outline-none ${classes}`}
+                  onClick={() => applyTestLogin(role)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+type PasswordRuleStatus = {
+  label: string;
+  passed: boolean;
+};
+function PasswordRulesHelper({ id, rules }: { id: string; rules: PasswordRuleStatus[] }) {
+  return (
+    <div
+      id={id}
+      aria-live="polite"
+      className="rounded-xl bg-gray-50 px-4 py-3 text-xs text-gray-700"
+    >
+      <p className="mb-2 font-semibold text-gray-800">Password must include:</p>
+      <ul className="space-y-1">
+        {rules.map((rule) => (
+          <li key={rule.label} className="flex items-center gap-2">
+            <span aria-hidden="true">{rule.passed ? '✅' : '⚠️'}</span>
+            <span className={rule.passed ? 'text-green-700' : 'text-gray-700'}>{rule.label}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
