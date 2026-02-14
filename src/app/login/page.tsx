@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,7 @@ import { showToast } from '@/lib/toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Wrench } from 'lucide-react';
 import InputGroup from '@/components/ui/InputGroup';
+import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 /* ---------------- Validators ---------------- */
 
@@ -58,19 +59,57 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [loginErrors, setLoginErrors] = useState<LoginErrors>({});
   const [signupErrors, setSignupErrors] = useState<SignupErrors>({});
+  const [captchaVisible, setCaptchaVisible] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const interactionStartRef = useRef(
+    typeof performance !== 'undefined' ? performance.now() : Date.now(),
+  );
 
   const searchParams = useSearchParams();
   const isDev = process.env.NODE_ENV !== 'production';
+  const captchaSiteKey = process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY;
+
+  const getMonotonicNow = () =>
+    typeof performance !== 'undefined' ? performance.now() : Date.now();
+  const computeInteractionMs = () =>
+    Math.max(0, Math.round(getMonotonicNow() - interactionStartRef.current));
+  const shouldRenderCaptcha = Boolean(captchaVisible && captchaSiteKey);
+
+  const requestCaptchaIfAvailable = () => {
+    if (!captchaSiteKey) {
+      showToast.error('Security challenge unavailable. Please contact support.');
+      return;
+    }
+    setCaptchaVisible(true);
+    setCaptchaToken(null);
+  };
+
+  const handleCaptchaVerify = (token: string) => setCaptchaToken(token);
+  const handleCaptchaReset = () => setCaptchaToken(null);
 
   // Keep focus on first field whenever the user toggles between login/signup modes.
   useEffect(() => {
     document.getElementById(mode === 'login' ? 'login-email' : 'signup-first')?.focus();
+    interactionStartRef.current = getMonotonicNow();
   }, [mode]);
 
   // Surface NextAuth error query params as toast feedback.
   useEffect(() => {
     const error = searchParams.get('error');
-    if (error) showToast.error('Invalid email or password.');
+    if (!error) return;
+
+    if (error === 'RateLimitExceeded') {
+      showToast.error('Too many attempts. Please wait before trying again.');
+      return;
+    }
+
+    if (error === 'BotChallengeRequired') {
+      showToast.error('We detected unusual activity. Please slow down then retry.');
+      requestCaptchaIfAvailable();
+      return;
+    }
+
+    showToast.error('Invalid email or password.');
   }, [searchParams]);
 
   // Basic credential flow with minimal client-side validation before delegating to NextAuth.
@@ -95,15 +134,27 @@ export default function LoginPage() {
     const result = await signIn('credentials', {
       email: trimmedEmail,
       password: trimmedPassword,
+      interactionMs: computeInteractionMs(),
+      captchaToken: captchaToken ?? undefined,
       redirect: false,
     });
 
     if (result?.error) {
-      showToast.error('Invalid email or password.');
-      setLoginErrors({ password: 'Email or password is incorrect.' });
+      if (result.error === 'RateLimitExceeded') {
+        showToast.error('Too many login attempts. Please wait a few minutes and try again.');
+        setLoginErrors({ password: 'Temporarily locked due to too many attempts.' });
+      } else if (result.error === 'BotChallengeRequired') {
+        showToast.error('We detected unusual activity. Please pause briefly before retrying.');
+        requestCaptchaIfAvailable();
+      } else {
+        showToast.error('Invalid email or password.');
+        setLoginErrors({ password: 'Email or password is incorrect.' });
+      }
       setLoading(false);
     } else {
       setLoginErrors({});
+      setCaptchaVisible(false);
+      setCaptchaToken(null);
       window.location.href = '/dashboard';
     }
   };
@@ -152,10 +203,23 @@ export default function LoginPage() {
         email: trimmed.email,
         password: trimmed.password,
         role: 'STUDENT',
+        interactionMs: computeInteractionMs(),
+        captchaToken: captchaToken ?? undefined,
       }),
     });
 
     setLoading(false);
+
+    if (res.status === 428) {
+      showToast.error('Please slow down before creating another account.');
+      requestCaptchaIfAvailable();
+      return;
+    }
+
+    if (res.status === 429) {
+      showToast.error('Too many signup attempts. Please try again later.');
+      return;
+    }
 
     if (!res.ok) {
       showToast.error('Signup failed.');
@@ -165,6 +229,8 @@ export default function LoginPage() {
     await signIn('credentials', {
       email: trimmed.email,
       password: trimmed.password,
+      interactionMs: computeInteractionMs(),
+      captchaToken: captchaToken ?? undefined,
       redirect: false,
     });
 
@@ -179,6 +245,22 @@ export default function LoginPage() {
     passed: rule.test(signupPassword),
   }));
 
+  const renderCaptchaGate = () => {
+    if (!shouldRenderCaptcha) return null;
+    return (
+      <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+        <p className="mb-2 font-semibold text-gray-800">Complete the security check to continue.</p>
+        <HCaptcha
+          sitekey={captchaSiteKey as string}
+          onVerify={handleCaptchaVerify}
+          onExpire={handleCaptchaReset}
+          onError={handleCaptchaReset}
+          reCaptchaCompat={false}
+          theme="light"
+        />
+      </div>
+    );
+  };
   // Prefills login credentials for the given role and forces the login form visible.
   const applyTestLogin = (role: string) => {
     setLoginEmail(`${role}@example.com`);
@@ -257,6 +339,8 @@ export default function LoginPage() {
                 >
                   {loading ? 'Logging in...' : 'Sign In'}
                 </Button>
+
+                {renderCaptchaGate()}
 
                 <div className="text-center text-sm text-gray-600">
                   <span className="font-semibold text-gray-500">Don&apos;t have an account?</span>{' '}
@@ -347,6 +431,8 @@ export default function LoginPage() {
                 >
                   {loading ? 'Signing up...' : 'Create Account'}
                 </Button>
+
+                {renderCaptchaGate()}
 
                 <div className="text-center text-sm text-gray-600">
                   <span className="font-semibold text-gray-500">Already have an account?</span>{' '}
