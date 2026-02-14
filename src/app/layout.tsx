@@ -26,11 +26,31 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               expand={true}
               offset={20}
               icons={{
-                success: '✓',
-                error: '✕',
-                warning: '⚠',
-                info: 'i',
-                loading: '○',
+                success: (
+                  <span aria-hidden="true" className="toast-icon-symbol">
+                    ✓
+                  </span>
+                ),
+                error: (
+                  <span aria-hidden="true" className="toast-icon-symbol">
+                    !
+                  </span>
+                ),
+                warning: (
+                  <span aria-hidden="true" className="toast-icon-symbol">
+                    !
+                  </span>
+                ),
+                info: (
+                  <span aria-hidden="true" className="toast-icon-symbol">
+                    i
+                  </span>
+                ),
+                loading: (
+                  <span aria-hidden="true" className="toast-icon-symbol">
+                    ↻
+                  </span>
+                ),
               }}
               toastOptions={{
                 style: {},
