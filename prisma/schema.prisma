@@ -35,7 +35,7 @@ model User {
   firstName String?
   lastName  String?
   password  String
-  role      Role    @default(STUDENT) // Global role
+  role      Role    @default(STUDENT)
   avatar    String?
   timezone  String?
   inactive  Boolean @default(false)
@@ -43,11 +43,11 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  rosterEntries Roster[] // Per-course memberships with roles
+  rosterEntries Roster[]
   submissions   Submission[]
-  grades        AssignmentGrade[] // Grades for assignments
+  grades        AssignmentGrade[]
   activityLogs  ActivityLog[]
-  commentsAbout Comment[] @relation("CommentsAboutStudent") // Comments about this student's work
+  commentsAbout Comment[] @relation("CommentsAboutStudent")
 
   @@index([role])
   @@index([inactive])
@@ -64,23 +64,29 @@ model Course {
   startDate   DateTime
   endDate     DateTime
   isPublished Boolean  @default(false)
-  isArchived  Boolean @default(false)
+  isArchived  Boolean  @default(false)
+
+  // Registration window
+  registrationOpenAt  DateTime?
+  registrationCloseAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  roster      Roster[] // Users in the course with roles
-  assignments Assignment[]
-  problems    Problem[]
+  roster       Roster[]
+  assignments  Assignment[]
+  problems     Problem[]
   activityLogs ActivityLog[]
 
   @@index([isPublished])
   @@index([createdAt])
+  @@index([registrationOpenAt])
+  @@index([registrationCloseAt])
 }
 
 model Roster {
   id   String     @id @default(cuid())
-  role CourseRole // Role for the user in this course
+  role CourseRole
 
   course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
   courseId String
@@ -91,9 +97,9 @@ model Roster {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  comments Comment[] // Comments by this roster member
+  comments Comment[]
 
-  @@unique([courseId, userId]) // Ensures one role per user per course
+  @@unique([courseId, userId])
   @@index([courseId])
   @@index([userId])
   @@index([role])
@@ -107,20 +113,25 @@ model Assignment {
   maxPoints   Float
   isPublished Boolean  @default(false)
 
+  // Late submission controls
+  allowLateSubmissions Boolean  @default(true)
+  lateCutoff           DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
   courseId String
 
-  problems AssignmentProblem[]
-  comments Comment[]
+  problems     AssignmentProblem[]
+  comments     Comment[]
   activityLogs ActivityLog[]
-  grades   AssignmentGrade[] // Student grades for this assignment
+  grades       AssignmentGrade[]
 
   @@index([courseId])
   @@index([isPublished])
   @@index([dueDate])
+  @@index([lateCutoff])
   @@index([courseId, isPublished])
 }
 
@@ -140,8 +151,8 @@ model Problem {
   course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
   courseId String
 
-  assignments AssignmentProblem[]
-  comments    Comment[]
+  assignments  AssignmentProblem[]
+  comments     Comment[]
   activityLogs ActivityLog[]
 
   @@index([courseId])
@@ -155,9 +166,15 @@ model AssignmentProblem {
   problem      Problem    @relation(fields: [problemId], references: [id], onDelete: Cascade)
   problemId    String
 
+  // Per-assignment configuration
+  maxPoints         Float   @default(0)
+  maxSubmissions    Int     @default(1)
+  autograderEnabled Boolean @default(true)
+
   submissions Submission[]
 
   @@id([assignmentId, problemId])
+  @@index([assignmentId])
 }
 
 model Submission {
@@ -174,8 +191,9 @@ model Submission {
   updatedAt DateTime @updatedAt
 
   assignmentProblem AssignmentProblem @relation(fields: [assignmentId, problemId], references: [assignmentId, problemId], onDelete: Cascade)
-  assignmentId      String
-  problemId         String
+
+  assignmentId String
+  problemId    String
 
   student   User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   studentId String
@@ -185,13 +203,17 @@ model Submission {
   @@index([assignmentId])
   @@index([studentId])
   @@index([assignmentId, problemId, studentId])
+
+  // Performance indexes
+  @@index([assignmentId, problemId])
+  @@index([studentId, assignmentId, problemId, submittedAt])
 }
 
 model AssignmentGrade {
-  id    String @id @default(cuid())
-  grade Float
+  id      String @id @default(cuid())
+  grade   Float
   feedback String?
-  
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -201,7 +223,7 @@ model AssignmentGrade {
   student   User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   studentId String
 
-  @@unique([assignmentId, studentId]) // One grade per student per assignment
+  @@unique([assignmentId, studentId])
   @@index([assignmentId])
   @@index([studentId])
 }
@@ -240,7 +262,6 @@ model ActivityLog {
   timestamp DateTime @default(now())
   metadata  Json?
 
-  // Normalized foreign keys for fast filtering
   courseId     String?
   course       Course?     @relation(fields: [courseId], references: [id], onDelete: SetNull)
   assignmentId String?
@@ -250,10 +271,9 @@ model ActivityLog {
   submissionId String?
   submission   Submission? @relation(fields: [submissionId], references: [id], onDelete: SetNull)
 
-  // Additional categorization
-  category    String? // SYSTEM, COURSE, ASSIGNMENT, PROBLEM, SUBMISSION, USER
-  ipAddress   String?
-  userAgent   String?
+  category   String?
+  ipAddress  String?
+  userAgent  String?
 
   @@index([timestamp])
   @@index([userId])
@@ -270,10 +290,9 @@ model ActivityLog {
 }
 
 model SystemSettings {
-  /// Singleton row (id=1)
-  id       Int      @id @default(1)
-  timezone String   @default("UTC")
-  maxUploadSizeMb Int @default(25)
+  id              Int      @id @default(1)
+  timezone        String   @default("UTC")
+  maxUploadSizeMb Int      @default(25)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -282,6 +301,5 @@ model SystemSettings {
 generator erd {
   provider = "prisma-erd-generator"
   output   = "ERD.svg"
-  // Only run locally when explicitly enabled
   disabled = env("DISABLE_ERD")
 }
