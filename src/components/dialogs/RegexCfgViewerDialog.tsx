@@ -21,7 +21,7 @@ function parseRegexCfg(xmlText: string){
   const rawType = (doc.querySelector('type')?.textContent || '').toLowerCase();
   let type: MachineType = 'unknown';
   if (rawType.includes('re')) type = 're';
-  else if (rawType.includes('cfg')) type = 'cfg';
+  else if (rawType.includes('cfg') || rawType.includes('grammar')) type = 'cfg';
 
   if (type === 'unknown'){
     throw new Error(`${rawType} not regular expression or context free grammar`);
@@ -29,14 +29,17 @@ function parseRegexCfg(xmlText: string){
 
   if (type === 're'){
     let expression = doc.querySelector('expression').textContent;
-	console.log("EXPRESSION: " + expression);
 	return { type: type, expression: expression }; 
   }
 
   let productions = doc.querySelectorAll('production');
-
-  let left = prodcutions.querySelectorAll('left');
-  let right = productions.querySelectorAll('right');
+  let left = [];
+  let right = []; 
+  productions.forEach(node => {
+	const [lNode, rNode] = node.children;
+	left.push(lNode.textContent);
+	right.push(rNode.textContent);
+  });
 
   return { type: type, left: left, right: right };
 }
@@ -81,4 +84,24 @@ export function RegexCfgViewerDialog({ src, open, onOpenChange, title }: { src: 
     </div>
   );
   }
+  if (parsed.type === "cfg"){
+  return (
+    <div className="p-8">
+
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="truncate">{title ?? 'JFLAP Viewer'}</DialogTitle>
+            <DialogDescription>
+			  <div className="h-full p-4 pt-2" style={{ textAlign: 'center' }}>
+                {"This is a cfg"}
+              </div>	
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+  }
+  return null;
 }
