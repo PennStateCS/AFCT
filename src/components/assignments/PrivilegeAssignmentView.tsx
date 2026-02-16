@@ -614,6 +614,12 @@ export default function AssignmentDashboardPage() {
               fileName: ap.problem.fileName ?? undefined,
               originalFileName: ap.problem.originalFileName ?? undefined,
             }))}
+            // Group-assignment support: pass group list and mapping so the submissions
+            // view can filter problems to the student's group (assignment-level problems
+            // still apply to all students).
+            assignmentIsGroup={assignment.isGroup ?? false}
+            groups={groups}
+            groupProblemsMap={groupProblemsMap}
           />
         </TabsContent>
       </Tabs>
