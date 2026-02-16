@@ -20,9 +20,6 @@ import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import { Check, ChevronDown, Search as SearchIcon } from 'lucide-react';
 
@@ -132,9 +129,6 @@ export function CreateProblemDialog({
   })();
 
   useEffect(() => {
-    let aborted = false;
-    const ac = new AbortController();
-
     async function init() {
       setInitializing(true);
       setInternalOpen(false);
@@ -145,7 +139,7 @@ export function CreateProblemDialog({
 
       try {
         if (assignmentId) {
-          const res = await fetch(`/api/courses/${courseId}/${assignmentId}`, { signal: ac.signal });
+          const res = await fetch(`/api/courses/${courseId}/${assignmentId}`);
           if (!res.ok) {
             // treat as non-group assignment on failure
             setAssignmentIsGroup(false);
@@ -155,7 +149,7 @@ export function CreateProblemDialog({
             if (data?.isGroup) {
               setGroupsLoading(true);
               try {
-                const gr = await fetch(`/api/courses/${courseId}/groups`, { signal: ac.signal });
+                const gr = await fetch(`/api/courses/${courseId}/groups`);
                 if (gr.ok) {
                   const gdata = await gr.json();
                   setGroups(Array.isArray(gdata) ? gdata : []);
@@ -163,7 +157,6 @@ export function CreateProblemDialog({
                   setGroups([]);
                 }
               } catch (err: any) {
-                if (err?.name === 'AbortError') return;
                 console.error('Failed to load groups:', err);
                 setGroups([]);
               } finally {
@@ -178,23 +171,20 @@ export function CreateProblemDialog({
           setGroups([]);
         }
       } catch (err: any) {
-        if (err?.name === 'AbortError') return;
         console.error('Failed to load assignment info:', err);
         setAssignmentIsGroup(false);
         setGroups([]);
         setGroupsLoading(false);
       } finally {
-        if (!aborted) {
-          // Ready to open the dialog: reset form and show
-          reset(defaults, {
-            keepDirty: false,
-            keepTouched: false,
-            keepErrors: false,
-            keepValues: false,
-          });
-          setInternalOpen(true);
-          setInitializing(false);
-        }
+        // Ready to open the dialog: reset form and show
+        reset(defaults, {
+          keepDirty: false,
+          keepTouched: false,
+          keepErrors: false,
+          keepValues: false,
+        });
+        setInternalOpen(true);
+        setInitializing(false);
       }
     }
 
@@ -217,8 +207,7 @@ export function CreateProblemDialog({
     }
 
     return () => {
-      aborted = true;
-      ac.abort();
+      // No abort logic needed
     };
   }, [open, defaults, reset, assignmentId, courseId]);
 
