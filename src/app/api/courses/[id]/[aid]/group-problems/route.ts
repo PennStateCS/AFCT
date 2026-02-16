@@ -11,10 +11,18 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
 
     // Fetch groups for the course and their assignment problem mappings
-    const groups = await prisma.group.findMany({ where: { courseId }, select: { id: true, name: true } });
+    const groups = await prisma.group.findMany({
+      where: { courseId },
+      select: {
+        id: true,
+        name: true
+      }
+    });
 
     // Fetch groupAssignmentProblem rows for this assignment
-    const mappings = await prisma.groupAssignmentProblem.findMany({ where: { assignmentId } });
+    const mappings = await prisma.groupAssignmentProblem.findMany({
+      where: { assignmentId }
+    });
 
     const mapByGroup: Record<string, string[]> = {};
     for (const m of mappings) {
@@ -22,7 +30,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       mapByGroup[m.groupId].push(m.problemId);
     }
 
-    const result = groups.map((g) => ({ id: g.id, name: g.name, problemIds: mapByGroup[g.id] ?? [] }));
+    const result = groups.map((g) => ({id: g.id, name: g.name, problemIds: mapByGroup[g.id] ?? [] }));
 
     return NextResponse.json({ success: true, groups: result });
   } catch (err) {
