@@ -92,11 +92,27 @@ export function RegexCfgViewerDialog({ src, open, onOpenChange, title }: { src: 
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="truncate">{title ?? 'JFLAP Viewer'}</DialogTitle>
-            <DialogDescription>
-			  <div className="h-full p-4 pt-2" style={{ textAlign: 'center' }}>
-                {"This is a cfg"}
-              </div>	
-            </DialogDescription>
+			  <table className="w-full text-sm">
+                <thead className="border-b border-foreground">
+                  <tr>
+				    <th className="text-center font-medium py-2 text-foreground border-r border-foreground">LHS</th>
+					<th className="text-center font-medium py-2 text-foreground">RHS</th>
+				  </tr>
+				</thead>
+
+			  <tbody>
+			    {parsed.left.map((left, index) => (
+				  <tr key={index} className="border-b border-foreground last:border-0">
+				    <td className="text-center font-medium py-2 text-foreground border-r border-foreground">
+					  {left}
+					</td>
+				    <td className="text-center font-medium py-2 text-foreground">
+					  {parsed.right[index]}
+					</td>
+				  </tr>
+				))}
+			  </tbody>	
+			</table>
           </DialogHeader>
         </DialogContent>
       </Dialog>
