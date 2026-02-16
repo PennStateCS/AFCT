@@ -12,10 +12,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { showToast } from '@/lib/toast';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent } from '@/components/ui/dropdown-menu';
 import { ChevronDown, Search as SearchIcon, Check } from 'lucide-react';
+import { showToast } from '@/lib/toast';
 
 type Problem = {
   id: string;
@@ -61,8 +61,6 @@ export function AssociateProblemsDialog({
   const [movedProblems, setMovedProblems] = React.useState<Problem[]>([]);
   // Track problems that were unassigned from the selected group during this dialog
   const [removedProblemIds, setRemovedProblemIds] = React.useState<string[]>([]);
-  // Track submitting state
-  const [submitting, setSubmitting] = React.useState(false);
 
   // Groups and group-assignment mapping
   const [assignmentIsGroup, setAssignmentIsGroup] = React.useState(false);
@@ -77,6 +75,9 @@ export function AssociateProblemsDialog({
   const [initializing, setInitializing] = React.useState(false);
 
   React.useEffect(() => {
+    let aborted = false;
+    const ac = new AbortController();
+
     async function init() {
       setInitializing(true);
       setInternalOpen(false);
@@ -90,19 +91,20 @@ export function AssociateProblemsDialog({
         // Determine assignment group support
         let isGroup = false;
         if (assignmentId) {
-          const aRes = await fetch(`/api/courses/${courseId}/${assignmentId}`);
+          const aRes = await fetch(`/api/courses/${courseId}/${assignmentId}`, { signal: ac.signal });
           if (aRes.ok) {
             const aData = await aRes.json();
             isGroup = !!aData?.isGroup;
           }
         }
+        if (aborted) return;
         setAssignmentIsGroup(isGroup);
 
         if (isGroup) {
           setGroupsLoading(true);
           const [grRes, gpRes] = await Promise.all([
-            fetch(`/api/courses/${courseId}/groups`),
-            fetch(`/api/courses/${courseId}/${assignmentId}/group-problems`),
+            fetch(`/api/courses/${courseId}/groups`, { signal: ac.signal }),
+            fetch(`/api/courses/${courseId}/${assignmentId}/group-problems`, { signal: ac.signal }),
           ]);
 
           if (grRes.ok) {
@@ -123,16 +125,19 @@ export function AssociateProblemsDialog({
           setGroupsLoading(false);
         }
 
-        setInternalOpen(true);
+        if (!aborted) {
+          setInternalOpen(true);
+        }
       } catch (err: any) {
+        if (err?.name === 'AbortError') return;
         console.error('Failed to initialize AssociateProblemsDialog:', err);
         // Fallback: show the simple dialog (non-group)
         setAssignmentIsGroup(false);
         setGroups([]);
         setGroupProblemsMap({});
-        setInternalOpen(true);
+        if (!aborted) setInternalOpen(true);
       } finally {
-        setInitializing(false);
+        if (!aborted) setInitializing(false);
       }
     }
 
@@ -145,7 +150,8 @@ export function AssociateProblemsDialog({
     }
 
     return () => {
-      // No abort logic needed
+      aborted = true;
+      ac.abort();
       setInitializing(false);
     };
   }, [open, courseId, assignmentId]);
@@ -179,17 +185,23 @@ export function AssociateProblemsDialog({
     return s;
   }, [selectedGroupId, unassignedInAssignment, groupProblemsMap]);
 
-  // Left column: problems assigned to the selected group (or assignment if ALL).
-  // Exclude problems the user has removed during this dialog so they disappear immediately
+  // Left column: problems assigned to the selected group (or assignment if ALL)
   const leftProblems = React.useMemo(() => {
-    const removedSet = new Set(removedProblemIds);
-    // Preserve original assigned problems (unless removed)
-    const assignedArr = allProblems.filter((p) => originalAssignedIds.has(p.id) && !removedSet.has(p.id));
-    const assignedIds = new Set(assignedArr.map((p) => p.id));
-    // Include user-moved problems (that are not duplicates and not removed)
-    const newly = movedProblems.filter((p) => !assignedIds.has(p.id) && !removedSet.has(p.id));
-    return [...assignedArr, ...newly];
-  }, [allProblems, originalAssignedIds, movedProblems, removedProblemIds]);
+    const assigned = allProblems.filter((p) => originalAssignedIds.has(p.id));
+    // Add newly moved problems that aren't already assigned
+    const newly = movedProblems.filter((p) => !originalAssignedIds.has(p.id));
+    return [...assigned, ...newly];
+  }, [allProblems, originalAssignedIds, movedProblems]);
+
+  // Right column: all problems not currently assigned to the selected group (and not newly moved)
+  const rightProblems = React.useMemo(() => {
+    return allProblems.filter((p) => !originalAssignedIds.has(p.id) && !movedIds.has(p.id));
+  }, [allProblems, originalAssignedIds, movedIds]);
+
+  // For non-group assignments: available problems are those not in the assignment (and not newly moved)
+  const unusedProblems = React.useMemo(() => {
+    return allProblems.filter((p) => !assignmentProblemIds.has(p.id) && !movedIds.has(p.id));
+  }, [allProblems, assignmentProblemIds, movedIds]);
 
   const combinedUsedProblems = [...usedProblems, ...movedProblems];
 
@@ -200,8 +212,6 @@ export function AssociateProblemsDialog({
   }, [selectedGroupId]);
 
   const handleDialogOpenChange = (isOpen: boolean) => {
-    // Prevent closing while submitting
-    if (submitting) return;
     // only propagate close events back to parent
     if (!isOpen) {
       setInternalOpen(false);
@@ -211,7 +221,6 @@ export function AssociateProblemsDialog({
 
   // Remove a just-added problem from the right (put it back to available)
   const removeFromAssignment = (problem: Problem) => {
-    if (submitting) return;
     // If this problem was just moved in this session, undo that
     if (movedIds.has(problem.id)) {
       setMovedProblems(movedProblems.filter((p) => p.id !== problem.id));
@@ -240,114 +249,46 @@ export function AssociateProblemsDialog({
   if (initializing) return null;
 
   const handleAdd = async () => {
-    if (!assignmentId) {
-      showToast.error('Missing assignment — cannot modify problems.');
-      return;
-    }
-
-    setSubmitting(true);
+    const allProblemIds = combinedUsedProblems.map((p) => p.id);
+    const groupIdToSend = selectedGroupId === 'ALL' ? undefined : selectedGroupId;
 
     try {
-      // Persist removals (only meaningful for a specific group)
-      if (removedProblemIds.length > 0) {
-        for (const pid of removedProblemIds) {
-          // Remove the mapping for this specific group
-          const delRes = await fetch(`/api/courses/${courseId}/${assignmentId}/group-problems/problem`, {
+      // If there are removals from a specific group, call the DELETE endpoint for group mappings first
+      if (groupIdToSend && removedProblemIds.length > 0) {
+        try {
+          const r = await fetch(`/api/courses/${courseId}/${assignmentId}/group-problems`, {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ problemId: pid, groupId: selectedGroupId }),
+            body: JSON.stringify({ problemIds: removedProblemIds, groupId: groupIdToSend }),
           });
-          if (!delRes.ok) {
-            const txt = await delRes.text().catch(() => delRes.statusText);
-            throw new Error(`Failed to remove problem from group: ${txt || delRes.status}`);
-          }
-
-          // After removing this group's mapping, check if the problem is still mapped to any group.
-          // If no groups remain, remove the problem from the assignment entirely so it doesn't become
-          // an assignment-level (visible-to-all-groups) problem.
-          const gpRes = await fetch(`/api/courses/${courseId}/${assignmentId}/group-problems/problem`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ problemId: pid }),
-          });
-
-          if (gpRes.ok) {
-            const gpData = await gpRes.json().catch(() => ({}));
-            const mappedGroups: string[] = Array.isArray(gpData?.groups) ? gpData.groups : [];
-
-            if (mappedGroups.length === 0) {
-              // No remaining group mappings — delete the assignment-level link as well
-              const remRes = await fetch(`/api/courses/${courseId}/${assignmentId}/remove-problem`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ problemId: pid }),
-              });
-
-              if (!remRes.ok) {
-                const txt = await remRes.text().catch(() => remRes.statusText);
-                throw new Error(`Failed to remove problem from assignment after group deletion: ${txt || remRes.status}`);
-              }
-            }
-          }
+          if (!r.ok) throw new Error('Failed to remove group mappings');
+          // Clear removals
+          setRemovedProblemIds([]);
+          showToast.success('Removed group mappings');
+        } catch (remErr) {
+          console.error('Failed to remove group mappings:', remErr);
+          showToast.error('Failed to remove group mappings');
         }
       }
 
-      // Only include problems the user newly added in this dialog (moved from right -> left)
-      const newProblemIds = Array.from(new Set(movedProblems.map((p) => p.id).filter((id) => !removedProblemIds.includes(id))));
-      let groupIdToSend = selectedGroupId === 'ALL' ? undefined : selectedGroupId;
-
-      // If there are new problems, clean up any existing group mappings for those
-      if (newProblemIds.length > 0) {
-        for (const pid of newProblemIds) {
-          const res = await fetch(`/api/courses/${courseId}/${assignmentId}/group-problems/problem`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ problemId: pid }),
-          });
-
-          if (!res.ok) continue; // nothing to do for this problem
-
-          const data = await res.json();
-          const mappedGroups: string[] = Array.isArray(data?.groups) ? data.groups : [];
-
-          if (mappedGroups.length > 0 && ((!groupIdToSend) || mappedGroups.length + 1 === groups.length)) {
-            for (const gid of mappedGroups) {
-              const delRes = await fetch(`/api/courses/${courseId}/${assignmentId}/group-problems/problem`, {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ problemId: pid, groupId: gid }),
-              });
-              if (!delRes.ok) {
-                const txt = await delRes.text().catch(() => delRes.statusText);
-                throw new Error(`Failed to remove existing group mapping: ${txt || delRes.status}`);
-              }
-            }
-            // If we removed mappings for all groups, we'll save the problem as an assignment-level problem
-            groupIdToSend = undefined;
-          }
+      // When a specific group is selected, only add the newly moved problems scoped to that group.
+      // This prevents accidentally assigning problems to all students.
+      if (groupIdToSend) {
+        if (movedProblems.length > 0) {
+          await Promise.resolve(onAddProblems(movedProblems.map((p) => p.id), groupIdToSend));
         }
-
-        // Persist assignment / group assignment changes for only the newly added problems
-        const addRes = await fetch(`/api/courses/${courseId}/${assignmentId}/add-problems`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ problemIds: newProblemIds, groupId: groupIdToSend }),
-        });
-
-        if (!addRes.ok) {
-          const txt = await addRes.text().catch(() => addRes.statusText);
-          throw new Error(`Failed to save problems: ${txt || addRes.status}`);
-        }
+      } else {
+        // No group selected: update assignment-level problems for all students
+        await Promise.resolve(onAddProblems(allProblemIds));
       }
 
-      showToast.success('Problems updated');
+      setMovedProblems([]);
       setInternalOpen(false);
       onClose();
-    } catch (err: any) {
-      console.error('AssociateProblemsDialog.handleAdd error:', err);
-      showToast.error(err?.message ?? 'Failed to update problems');
-    } finally {
-      setSubmitting(false);
+    } catch (err) {
+      console.error('Failed to add problems:', err);
+      setInternalOpen(false);
+      onClose();
     }
   };
 
@@ -364,8 +305,8 @@ export function AssociateProblemsDialog({
     <Dialog open={internalOpen} onOpenChange={handleDialogOpenChange}>
       <DialogContent
         className="bg-card !max-w-2xl"
-        onInteractOutside={(e) => { if (submitting) e.preventDefault(); }}
-        onEscapeKeyDown={(e) => { if (submitting) e.preventDefault(); }}
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
       >
         <DialogHeader>
           <DialogTitle>Add Existing Problems to Assignment</DialogTitle>
@@ -450,6 +391,7 @@ export function AssociateProblemsDialog({
                       <div className="text-muted-foreground text-center text-xs italic">None</div>
                     ) : (
                       leftProblems.map((problem) => {
+                        const isOriginal = originalAssignedIds.has(problem.id);
                         // Allow removal if the problem was just moved OR if it was originally mapped to this specific group
                         const isOriginallyMappedToGroup = selectedGroupId !== 'ALL' && (groupProblemsMap[selectedGroupId] || []).includes(problem.id);
                         const isRemovable = movedIds.has(problem.id) || isOriginallyMappedToGroup;
@@ -457,11 +399,11 @@ export function AssociateProblemsDialog({
                         return (
                           <div
                             key={problem.id}
-                            className={`bg-background flex items-center rounded border px-1.5 py-1 transition ${isRemovable && !submitting ? 'cursor-pointer hover:bg-red-100' : 'opacity-70'}`}
+                            className={`bg-background flex items-center rounded border px-1.5 py-1 transition ${isRemovable ? 'cursor-pointer hover:bg-red-100' : 'opacity-70'}`}
                             style={{ minHeight: '32px' }}
-                            onClick={isRemovable && !submitting ? () => removeFromAssignment(problem) : undefined}
-                            tabIndex={isRemovable && !submitting ? 0 : -1}
-                            role={isRemovable && !submitting ? 'button' : undefined}
+                            onClick={isRemovable ? () => removeFromAssignment(problem) : undefined}
+                            tabIndex={isRemovable ? 0 : -1}
+                            role={isRemovable ? 'button' : undefined}
                           >
                             <span className="truncate pr-2 text-xs font-medium">{problem.title}</span>
                             <AbbrevBadge type={problem.type} />
@@ -480,43 +422,19 @@ export function AssociateProblemsDialog({
                       <div className="text-muted-foreground text-center text-xs italic">None</div>
                     ) : (
                       (() => {
-                        const leftIdsSet = new Set(leftProblems.map((p) => p.id));
+                        const selectedSet = new Set(leftProblems.map((p) => p.id));
                         return allProblems.map((problem) => {
-                          const isSelected = leftIdsSet.has(problem.id);
+                          const isSelected = selectedSet.has(problem.id);
                           return (
                             <div
                               key={problem.id}
-                              className={`bg-background flex items-center rounded border px-1.5 py-1 transition ${isSelected || submitting ? 'opacity-60 pointer-events-none bg-primary/10' : 'hover:bg-green-100 cursor-pointer'}`}
+                              className={`bg-background flex items-center rounded border px-1.5 py-1 transition ${isSelected ? 'opacity-60 pointer-events-none bg-primary/10' : 'hover:bg-green-100 cursor-pointer'}`}
                               style={{ minHeight: '32px' }}
                               onClick={() => {
-                                if (isSelected || submitting) return;
-
-                                // Re-add a problem the user previously removed in this dialog
-                                if (removedProblemIds.includes(problem.id)) {
-                                  // Undo the removal for this group
-                                  setRemovedProblemIds((prev) => prev.filter((id) => id !== problem.id));
-
-                                  // If this was originally assigned to this group, restore it in the local map
-                                  if (originalAssignedIds.has(problem.id) && selectedGroupId !== 'ALL') {
-                                    setGroupProblemsMap((prev) => ({
-                                      ...prev,
-                                      [selectedGroupId]: Array.from(new Set([...(prev[selectedGroupId] ?? []), problem.id])),
-                                    }));
-                                    return;
-                                  }
-
-                                  // Otherwise treat as a re-add from right -> left
-                                  if (!movedIds.has(problem.id)) setMovedProblems((prev) => [...prev, problem]);
-                                  return;
-                                }
-
-                                // Normal add from right -> left for non-original problems
-                                if (!movedIds.has(problem.id)) {
-                                  setMovedProblems((prev) => [...prev, problem]);
-                                }
+                                if (!isSelected) setMovedProblems([...movedProblems, problem]);
                               }}
-                              tabIndex={isSelected || submitting ? -1 : 0}
-                              role={isSelected || submitting ? undefined : 'button'}
+                              tabIndex={isSelected ? -1 : 0}
+                              role={isSelected ? undefined : 'button'}
                             >
                               <span className="truncate pr-2 text-xs font-medium">{problem.title}</span>
                               <AbbrevBadge type={problem.type} />
@@ -579,26 +497,19 @@ export function AssociateProblemsDialog({
                   <div className="text-muted-foreground text-center text-xs italic">None</div>
                 ) : (
                   (() => {
-                    const leftIdsSet = new Set(leftProblems.map((p) => p.id));
+                    const selectedSet = new Set(combinedUsedProblems.map((p) => p.id));
                     return allProblems.map((problem) => {
-                      const isSelected = leftIdsSet.has(problem.id);
+                      const isSelected = selectedSet.has(problem.id);
                       return (
                         <div
                           key={problem.id}
-                          className={`bg-background flex items-center rounded border px-1.5 py-1 transition ${isSelected || submitting ? 'opacity-60 cursor-not-allowed bg-primary/10' : 'hover:bg-green-100 cursor-pointer'}`}
+                          className={`bg-background flex items-center rounded border px-1.5 py-1 transition ${isSelected ? 'opacity-60 cursor-not-allowed bg-primary/10' : 'hover:bg-green-100 cursor-pointer'}`}
                           style={{ minHeight: '32px' }}
                           onClick={() => {
-                            if (isSelected || submitting) return;
-
-                            if (removedProblemIds.includes(problem.id)) {
-                              setRemovedProblemIds((prev) => prev.filter((id) => id !== problem.id));
-                              return;
-                            }
-
-                            if (!movedIds.has(problem.id)) setMovedProblems((prev) => [...prev, problem]);
+                            if (!isSelected) setMovedProblems([...movedProblems, problem]);
                           }}
-                          tabIndex={isSelected || submitting ? -1 : 0}
-                          role={isSelected || submitting ? undefined : 'button'}
+                          tabIndex={isSelected ? -1 : 0}
+                          role={isSelected ? undefined : 'button'}
                         >
                           <span className="truncate pr-2 text-xs font-medium">{problem.title}</span>
                           <AbbrevBadge type={problem.type} />
@@ -623,12 +534,12 @@ export function AssociateProblemsDialog({
                       <div
                         key={problem.id}
                         className={`bg-background flex items-center rounded border px-1.5 py-1 transition ${
-                          isRemovable && !submitting ? 'cursor-pointer hover:bg-red-100' : 'opacity-70'
+                          isRemovable ? 'cursor-pointer hover:bg-red-100' : 'opacity-70'
                         }`}
                         style={{ minHeight: '32px' }}
-                        onClick={isRemovable && !submitting ? () => removeFromAssignment(problem) : undefined}
-                        tabIndex={isRemovable && !submitting ? 0 : -1}
-                        role={isRemovable && !submitting ? 'button' : undefined}
+                        onClick={isRemovable ? () => removeFromAssignment(problem) : undefined}
+                        tabIndex={isRemovable ? 0 : -1}
+                        role={isRemovable ? 'button' : undefined}
                       >
                         <span className="truncate pr-2 text-xs font-medium">{problem.title}</span>
                         <AbbrevBadge type={problem.type} />
@@ -643,22 +554,19 @@ export function AssociateProblemsDialog({
         <DialogFooter>
           <Button
             variant="secondary"
-            disabled={submitting}
             onClick={() => {
-              if (!submitting) {
-                setInternalOpen(false);
-                onClose();
-              }
+              setInternalOpen(false);
+              onClose();
             }}
           >
             Cancel
           </Button>
           <Button
             variant="default"
-            disabled={submitting || (movedProblems.length === 0 && removedProblemIds.length === 0) || courseIsArchived}
-            onClick={submitting ? undefined : handleAdd}
+            disabled={(movedProblems.length === 0 && removedProblemIds.length === 0) || courseIsArchived}
+            onClick={handleAdd}
           >
-            {submitting ? 'Saving…' : 'Save Changes'}
+            Save Changes
           </Button>
         </DialogFooter>
       </DialogContent>

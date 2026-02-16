@@ -152,35 +152,21 @@ export default function RandomGroupsDialog({ open, setOpen, courseId, students, 
                 <ul>
                   {students.filter((s) => ((s.firstName || '') + ' ' + (s.lastName || '') + ' ' + (s.email || '')).toLowerCase().includes(filter.trim().toLowerCase())).slice(0, 500).map((s) => (
                     <li key={s.id} className="px-3 py-2">
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      className={`flex items-center gap-2 cursor-pointer ${excluded.has(s.id) ? 'opacity-60' : ''}`}
-                      onClick={() => {
-                        setExcluded((prev) => {
-                          const copy = new Set(prev);
-                          if (copy.has(s.id)) copy.delete(s.id); else copy.add(s.id);
-                          return copy;
-                        });
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={excluded.has(s.id)} onChange={() => {
                           setExcluded((prev) => {
                             const copy = new Set(prev);
                             if (copy.has(s.id)) copy.delete(s.id); else copy.add(s.id);
                             return copy;
                           });
-                        }
-                      }}
-                    >
-                      <div className="flex-1 text-sm">
-                        <div>{s.firstName} {s.lastName}</div>
-                        <div className="text-xs text-muted-foreground">{s.email}</div>
-                      </div>
-                      <div className="text-xs text-muted-foreground">{excluded.has(s.id) ? 'Excluded' : ''}</div>
-                    </div>
-                  </li>
+                        }} />
+                        <div className="flex-1 text-sm">
+                          <div>{s.firstName} {s.lastName}</div>
+                          <div className="text-xs text-muted-foreground">{s.email}</div>
+                        </div>
+                        <div className="text-xs text-muted-foreground">{excluded.has(s.id) ? 'Excluded' : ''}</div>
+                      </label>
+                    </li>
                   ))}
                 </ul>
               )}
