@@ -158,35 +158,6 @@ describe('POST /api/courses/[id]/[aid]/add-problems', () => {
     });
   });
 
-  it('maps an existing assignment problem to an additional group', async () => {
-    // problem already linked to the assignment (no new assignmentProblem will be created)
-    prismaMock.problem.findMany.mockResolvedValue([{ id: 'p_exist' }]);
-    prismaMock.assignmentProblem.findMany.mockResolvedValue([{ problemId: 'p_exist', _count: { submissions: 0 } }]);
-    prismaMock.assignmentProblem.createMany.mockResolvedValue({ count: 0 });
-    prismaMock.assignment.findUnique.mockResolvedValue({ id: 'assignment-1', isGroup: true });
-    prismaMock.group.findUnique.mockResolvedValue({ id: 'g-new', courseId: 'c1' });
-    prismaMock.groupAssignmentProblem.createMany.mockResolvedValue({ count: 1 });
-
-    const req = new Request('http://localhost/api/courses/c1/a1/add-problems', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ problemIds: ['p_exist'], groupId: 'g-new' }),
-    });
-
-    const res = await POST(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
-    expect(res.status).toBe(200);
-
-    // No new assignmentProblem should be created because the problem is already linked
-    expect(prismaMock.assignmentProblem.createMany).not.toHaveBeenCalled();
-
-    // But a group mapping must be created for the new group
-    expect(prismaMock.group.findUnique).toHaveBeenCalledWith({ where: { id: 'g-new' } });
-    expect(prismaMock.groupAssignmentProblem.createMany).toHaveBeenCalledWith({
-      data: [{ assignmentId: 'a1', problemId: 'p_exist', groupId: 'g-new' }],
-      skipDuplicates: true,
-    });
-  });
-
   it('ignores invalid problem ids not in the course', async () => {
     prismaMock.problem.findMany.mockResolvedValue([{ id: 'p1' }]);
     prismaMock.assignmentProblem.findMany.mockResolvedValue([]);

@@ -9,8 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { showToast } from '@/lib/toast';
-import RandomGradesDialog from '@/components/dialogs/RandomGradesDialog';
-import { Stamp, Download, TrendingUp, Users, Target, RefreshCw, Shuffle } from 'lucide-react';
+import { Stamp, Download, TrendingUp, Users, Target, RefreshCw } from 'lucide-react';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatTimeInTimeZone } from '@/lib/date';
 
@@ -49,7 +48,6 @@ export default function GradesCard({ courseId }: { courseId: string }) {
   const [editingValue, setEditingValue] = useState<string>('');
   const [savingGrades, setSavingGrades] = useState<Set<string>>(new Set());
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [openRandomGrades, setOpenRandomGrades] = useState(false);
 
   const fetchGrades = useCallback(async () => {
     setLoading(true);
@@ -416,17 +414,6 @@ export default function GradesCard({ courseId }: { courseId: string }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setOpenRandomGrades(true)}
-              disabled={loading || assignments.length === 0 || students.length === 0}
-              className="flex items-center gap-2"
-            >
-              <Shuffle className="h-4 w-4" />
-              Randomize Grades
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
               onClick={fetchGrades}
               disabled={loading}
               className="flex items-center gap-2"
@@ -526,15 +513,6 @@ export default function GradesCard({ courseId }: { courseId: string }) {
         </div>
 
         <DataTable columns={columns} data={students} loading={loading} />
-
-        <RandomGradesDialog
-          open={openRandomGrades}
-          setOpen={setOpenRandomGrades}
-          courseId={courseId}
-          assignments={assignments}
-          students={students.map((s) => ({ id: s.id, firstName: String((s as any).firstName || ''), lastName: String((s as any).lastName || ''), email: s.email ? String(s.email) : null }))}
-          onApplied={fetchGrades}
-        />
       </CardContent>
     </Card>
   );

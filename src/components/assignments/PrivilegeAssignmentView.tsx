@@ -171,40 +171,47 @@ export default function AssignmentDashboardPage() {
       return;
     }
 
+    let aborted = false;
+    const ac = new AbortController();
     async function fetchGroupsAndMappings() {
       setGroupsLoading(true);
       try {
         const [grRes, gpRes] = await Promise.all([
-          fetch(`/api/courses/${id}/groups`),
-          fetch(`/api/courses/${id}/${aid}/group-problems`),
+          fetch(`/api/courses/${id}/groups`, { signal: ac.signal }),
+          fetch(`/api/courses/${id}/${aid}/group-problems`, { signal: ac.signal }),
         ]);
 
-        if (grRes.ok) {
-          const gr = await grRes.json();
-          setGroups(Array.isArray(gr) ? gr : gr.groups ?? []);
-        } else {
-          setGroups([]);
-        }
+        if (!aborted) {
+          if (grRes.ok) {
+            const gr = await grRes.json();
+            setGroups(Array.isArray(gr) ? gr : gr.groups ?? []);
+          } else {
+            setGroups([]);
+          }
 
-        if (gpRes.ok) {
-          const gp = await gpRes.json();
-          const map: Record<string, string[]> = {};
-          for (const g of gp.groups ?? []) map[g.id] = g.problemIds || [];
-          setGroupProblemsMap(map);
-        } else {
-          setGroupProblemsMap({});
+          if (gpRes.ok) {
+            const gp = await gpRes.json();
+            const map: Record<string, string[]> = {};
+            for (const g of gp.groups ?? []) map[g.id] = g.problemIds || [];
+            setGroupProblemsMap(map);
+          } else {
+            setGroupProblemsMap({});
+          }
         }
       } catch (err: any) {
+        if (err?.name === 'AbortError') return;
         console.error('Failed to fetch groups/mappings:', err);
         setGroups([]);
         setGroupProblemsMap({});
       } finally {
-        setGroupsLoading(false);
+        if (!aborted) setGroupsLoading(false);
       }
     }
 
     fetchGroupsAndMappings();
     return () => {
+      aborted = true;
+      ac.abort();
       setGroupsLoading(false);
     };
   }, [id, aid, assignment?.isGroup]);
@@ -658,8 +665,9 @@ export default function AssignmentDashboardPage() {
           type: typeof ap.problem.type === 'string' ? ap.problem.type : undefined,
         }))}
         onAddProblems={(selectedProblemIds, groupId) => {
-          // Only send the explicitly selected problems — do not re-map the entire assignment
-          handleAddProblems(selectedProblemIds, groupId);
+          const existingIds = assignment.problems.map((ap: { problem: Problem }) => ap.problem.id);
+          const merged = Array.from(new Set([...existingIds, ...selectedProblemIds]));
+          handleAddProblems(merged, groupId);
         }}
       />
       <CreateProblemDialog
