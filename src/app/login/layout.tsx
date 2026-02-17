@@ -4,6 +4,22 @@ import { redirect } from 'next/navigation';
 
 export const metadata: Metadata = {
   title: 'AFCT Dashboard - Login',
+  description: 'Sign in to the AFCT Dashboard to manage courses, assignments, and submissions.',
+  robots: {
+    index: false,
+    follow: false,
+  },
+  openGraph: {
+    title: 'AFCT Dashboard - Login',
+    description: 'Sign in to the AFCT Dashboard to manage courses, assignments, and submissions.',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'AFCT Dashboard - Login',
+    description: 'Sign in to the AFCT Dashboard to manage courses, assignments, and submissions.',
+  },
+  themeColor: '#0F172A',
 };
 
 export default async function LoginLayout({ children }: { children: React.ReactNode }) {

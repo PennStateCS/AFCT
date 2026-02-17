@@ -115,6 +115,8 @@ describe('POST /api/courses', () => {
       credits: 3,
       startDate: '2026-08-25T09:00',
       endDate: '2026-12-15T17:00',
+      registrationOpenAt: '2026-08-01T09:00',
+      registrationCloseAt: '2026-08-31T17:00',
       isPublished: false,
       facultyIds: ['u1'],
     };
@@ -160,6 +162,8 @@ describe('POST /api/courses', () => {
         credits: 3,
         startDate: '2026-08-25T09:00',
         endDate: '2026-12-15T17:00',
+        registrationOpenAt: '2026-08-01T09:00',
+        registrationCloseAt: '2026-08-31T17:00',
       }),
     });
 
@@ -207,6 +211,8 @@ describe('POST /api/courses', () => {
         credits: 3,
         startDate: '2026-08-25T09:00',
         endDate: '2026-12-15T17:00',
+        registrationOpenAt: '2026-08-01T09:00',
+        registrationCloseAt: '2026-08-31T17:00',
         facultyIds: [],
       }),
     });

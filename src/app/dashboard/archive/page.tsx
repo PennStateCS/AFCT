@@ -1,8 +1,13 @@
+import type { Metadata } from 'next';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import DashboardClient from '../DashboardClient';
 
-export default async function DashboardPage() {
+export const metadata: Metadata = {
+  title: 'Archived Courses',
+};
+
+export default async function ArchivedCoursesPage() {
   const session = await auth();
 
   if (!session?.user) {
@@ -17,11 +22,11 @@ export default async function DashboardPage() {
 
   // Get all courses for the user via roster entries
   const rosterEntries = await prisma.roster.findMany({
-    where: { 
-        userId: id,
-        course: {
-            isArchived: true,
-        },
+    where: {
+      userId: id,
+      course: {
+        isArchived: true,
+      },
     },
     include: {
       course: {
@@ -51,7 +56,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="h-full w-full flex-col lg:flex-row">
-        <DashboardClient sessionUser={session.user} courses={courses} title={"Archived Courses"} />
+      <DashboardClient sessionUser={session.user} courses={courses} title={'Archived Courses'} />
     </div>
   );
 }
