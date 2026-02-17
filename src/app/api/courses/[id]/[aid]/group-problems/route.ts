@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string; aid: string }> }) {
   const { id: courseId, aid: assignmentId } = await params;
@@ -23,6 +24,20 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     }
 
     const result = groups.map((g) => ({ id: g.id, name: g.name, problemIds: mapByGroup[g.id] ?? [] }));
+
+    // Activity log: user viewed group -> problem mappings for an assignment
+    try {
+      await createEnhancedActivityLog(prisma, _ as Request, {
+        userId: user.id,
+        action: 'VIEW_GROUP_PROBLEMS',
+        category: 'ASSIGNMENT',
+        courseId,
+        assignmentId,
+        metadata: { courseId, assignmentId },
+      });
+    } catch (logErr) {
+      console.error('[group-problems] activityLog.create failed:', logErr);
+    }
 
     return NextResponse.json({ success: true, groups: result });
   } catch (err) {
@@ -78,6 +93,21 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     } else {
       // No group specified - ambiguous
       return NextResponse.json({ error: 'groupId is required for DELETE' }, { status: 400 });
+    }
+
+    // Activity log: group -> problem mappings were removed
+    try {
+      await createEnhancedActivityLog(prisma, req as Request, {
+        userId: user.id,
+        action: 'REMOVE_GROUP_PROBLEMS',
+        category: 'ASSIGNMENT',
+        courseId,
+        assignmentId,
+        metadata: { courseId, assignmentId, groupId: groupId ?? 'ALL', problemIds },
+      });
+    } catch (logErr) {
+      console.error('[group-problems] activityLog.create failed:', logErr);
+      // do not fail the request due to logging
     }
 
     return NextResponse.json({ success: true });
