@@ -10,7 +10,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 
-function parseRegexCfg(xmlText: string){
+function parseCfg(xmlText: string){
   const doc = new DOMParser().parseFromString(xmlText, 'application/xml');
   const parseError = doc.querySelector('parsererror');
   if (parseError) {
@@ -20,16 +20,10 @@ function parseRegexCfg(xmlText: string){
   
   const rawType = (doc.querySelector('type')?.textContent || '').toLowerCase();
   let type: MachineType = 'unknown';
-  if (rawType.includes('re')) type = 're';
-  else if (rawType.includes('cfg') || rawType.includes('grammar')) type = 'cfg';
+  if (rawType.includes('cfg') || rawType.includes('grammar')) type = 'cfg';
 
   if (type === 'unknown'){
-    throw new Error(`${rawType} not regular expression or context free grammar`);
-  }
-
-  if (type === 're'){
-    let expression = doc.querySelector('expression').textContent;
-	return { type: type, expression: expression }; 
+    throw new Error(`${rawType} not context free grammar`);
   }
 
   let productions = doc.querySelectorAll('production');
@@ -44,7 +38,7 @@ function parseRegexCfg(xmlText: string){
   return { type: type, left: left, right: right };
 }
 
-export function RegexCfgViewerDialog({ src, open, onOpenChange, title }: { src: string; open: boolean; onOpenChange: (v: boolean) => void; title: string;}){
+export function CfgViewerDialog({ src, open, onOpenChange, title }: { src: string; open: boolean; onOpenChange: (v: boolean) => void; title: string;}){
 
   const [data, setData] = React.useState(null);
 
@@ -64,27 +58,7 @@ export function RegexCfgViewerDialog({ src, open, onOpenChange, title }: { src: 
 	load();
   }, [src, open]);
   if (!data) return null;
-  let parsed = parseRegexCfg(data);
-  if (parsed.type === "re"){
-  return (
-    <div className="p-8">
-
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="truncate">{title ?? 'JFLAP Viewer'}</DialogTitle>
-            <DialogDescription>
-			  <div className="h-full p-4 pt-2" style={{ textAlign: 'center' }}>
-                {parsed.expression}
-              </div>
-            </DialogDescription>
-          </DialogHeader>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-  }
-  if (parsed.type === "cfg"){
+  let parsed = parseCfg(data);
   return (
     <div className="p-8">
 
@@ -118,6 +92,4 @@ export function RegexCfgViewerDialog({ src, open, onOpenChange, title }: { src: 
       </Dialog>
     </div>
   );
-  }
-  return null;
 }
