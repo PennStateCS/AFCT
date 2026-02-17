@@ -13,16 +13,10 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-} from '@/components/ui/dropdown-menu';
 import { User } from '@prisma/client';
 import { toast } from 'sonner';
 import InputGroup from '@/components/ui/InputGroup';
-import { ChevronDown } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
 
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -50,6 +44,8 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
       credits: '3',
       startDate: '', // <- strings for input type="datetime-local"
       endDate: '',
+      registrationOpenAt: '',
+      registrationCloseAt: '',
       isPublished: false,
       instructorIds: [],
     }),
@@ -71,9 +67,6 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
 
   const isPublished = watch('isPublished');
   const startDateStr = watch('startDate'); // string (YYYY-MM-DDTHH:MM)
-
-  const [instructorSearch, setInstructorSearch] = useState('');
-  const [instructorMenuOpen, setInstructorMenuOpen] = useState(false);
 
   // Fetch faculty list when dialog opens
   const [facultyList, setFacultyList] = useState<User[]>([]);
@@ -100,18 +93,21 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
     });
 
   const onSubmit = async (raw: FormValues) => {
-    // Convert form values to the format expected by the API schema
-    const formData = {
-      ...raw,
-      credits: Number(raw.credits), // Convert string to number for API schema
-      // Date strings remain as-is for API schema to transform
-    };
+    const { registrationOpenAt, registrationCloseAt, ...rest } = raw;
 
-    const payload = {
-      ...formData,
+    const payload: Record<string, unknown> = {
+      ...rest,
       code: raw.code.trim().replace(/\s+/g, ' ').toUpperCase(),
       credits: Number(raw.credits),
     };
+
+    if (registrationOpenAt) {
+      payload.registrationOpenAt = registrationOpenAt;
+    }
+
+    if (registrationCloseAt) {
+      payload.registrationCloseAt = registrationCloseAt;
+    }
 
     const res = await fetch('/api/courses', {
       method: 'POST',
@@ -176,177 +172,151 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
                 label="Course Code"
                 name="code"
                 fieldProps={field}
-                placeholder="e.g., CMPSC 221"
+                placeholder="CMPSC 131"
                 error={errors.code?.message}
                 showStatus
               />
             )}
           />
 
-          {/* SEMESTER */}
-          <Controller
-            control={control}
-            name="semester"
-            render={({ field }) => (
-              <InputGroup
-                label="Semester"
-                name="semester"
-                fieldProps={field}
-                placeholder="Fall 2025"
-                error={errors.semester?.message}
-              />
-            )}
-          />
-
-          {/* CREDITS */}
-          <Controller
-            control={control}
-            name="credits"
-            render={({ field }) => (
-              <InputGroup
-                label="Credits"
-                name="credits"
-                type="number"
-                fieldProps={field}
-                min={1}
-                max={6}
-                step={1}
-                error={errors.credits?.message}
-              />
-            )}
-          />
-
-          {/* START datetime-local (string) */}
-          <Controller
-            control={control}
-            name="startDate"
-            render={({ field }) => (
-              <InputGroup
-                label="Start Date & Time"
-                name="startDate"
-                type="datetime-local"
-                fieldProps={{
-                  ...field,
-                  value: field.value ?? '', // expect a string for datetime-local
-                  onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                    field.onChange(e.target.value),
-                }}
-                error={errors.startDate?.message}
-              />
-            )}
-          />
-
-          {/* END datetime-local (string) */}
-          <Controller
-            control={control}
-            name="endDate"
-            render={({ field }) => (
-              <InputGroup
-                label="End Date & Time"
-                name="endDate"
-                type="datetime-local"
-                fieldProps={{
-                  ...field,
-                  value: field.value ?? '',
-                  onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                    field.onChange(e.target.value),
-                }}
-                error={errors.endDate?.message}
-                min={startDateStr || undefined} // prevent picking an end earlier than start
-              />
-            )}
-          />
-
-          <div>
-            <Label className="pb-2">Assign Faculty</Label>
+          <div className="grid gap-4 md:grid-cols-2">
             <Controller
               control={control}
-              name="instructorIds"
-              render={({ field }) => {
-                const selectedIds = field.value ?? [];
-                const selectedNames = facultyList
-                  .filter((f) => selectedIds.includes(f.id))
-                  .map((f) => `${f.firstName} ${f.lastName}`.trim())
-                  .filter(Boolean)
-                  .join(', ');
-                const hasSelection = selectedNames.length > 0;
+              name="semester"
+              render={({ field }) => (
+                <InputGroup
+                  label="Semester"
+                  name="semester"
+                  fieldProps={field}
+                  placeholder="Fall 2025"
+                  error={errors.semester?.message}
+                />
+              )}
+            />
 
-                const filteredFaculty = facultyList.filter((faculty) => {
-                  const q = instructorSearch.toLowerCase();
-                  if (!q) return true;
-                  return (
-                    (faculty.firstName ?? '').toLowerCase().includes(q) ||
-                    (faculty.lastName ?? '').toLowerCase().includes(q)
-                  );
-                });
-
-                return (
-                  <div>
-                    <DropdownMenu open={instructorMenuOpen} onOpenChange={setInstructorMenuOpen}>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="border-input h-9 w-full justify-between bg-transparent px-3 py-1 text-sm shadow-xs"
-                        >
-                          <span
-                            className={cn('truncate', !hasSelection && 'text-muted-foreground')}
-                          >
-                            {selectedNames || 'Select faculty'}
-                          </span>
-                          <ChevronDown className="text-muted-foreground h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent className="w-[var(--radix-dropdown-menu-trigger-width)] p-2">
-                        <Input
-                          placeholder="Search faculty..."
-                          value={instructorSearch}
-                          onChange={(e) => setInstructorSearch(e.target.value)}
-                          onKeyDown={(e) => e.stopPropagation()}
-                          className="mb-2"
-                        />
-                        <div className="max-h-64 overflow-auto rounded border">
-                          {filteredFaculty.length === 0 ? (
-                            <div className="text-muted-foreground p-3 text-center text-sm">
-                              No faculty found.
-                            </div>
-                          ) : (
-                            filteredFaculty.map((faculty) => {
-                              const checked = selectedIds.includes(faculty.id);
-                              return (
-                                <label
-                                  key={faculty.id}
-                                  className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 px-3 py-2 text-sm"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={checked}
-                                    onChange={() => {
-                                      const set = new Set(selectedIds);
-                                      if (set.has(faculty.id)) set.delete(faculty.id);
-                                      else set.add(faculty.id);
-                                      field.onChange(Array.from(set));
-                                    }}
-                                  />
-                                  <span>
-                                    {faculty.firstName} {faculty.lastName}
-                                  </span>
-                                </label>
-                              );
-                            })
-                          )}
-                        </div>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    {errors.instructorIds ? (
-                      <p className="mt-1 text-xs text-red-600">{errors.instructorIds.message}</p>
-                    ) : null}
-                  </div>
-                );
-              }}
+            <Controller
+              control={control}
+              name="credits"
+              render={({ field }) => (
+                <InputGroup
+                  label="Credits"
+                  name="credits"
+                  type="number"
+                  fieldProps={field}
+                  min={1}
+                  max={6}
+                  step={1}
+                  error={errors.credits?.message}
+                />
+              )}
             />
           </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* START datetime-local (string) */}
+            <Controller
+              control={control}
+              name="startDate"
+              render={({ field }) => (
+                <InputGroup
+                  label="Start Date & Time"
+                  name="startDate"
+                  type="datetime-local"
+                  fieldProps={{
+                    ...field,
+                    value: field.value ?? '', // expect a string for datetime-local
+                    onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                      field.onChange(e.target.value),
+                  }}
+                  error={errors.startDate?.message}
+                />
+              )}
+            />
+
+            {/* END datetime-local (string) */}
+            <Controller
+              control={control}
+              name="endDate"
+              render={({ field }) => (
+                <InputGroup
+                  label="End Date & Time"
+                  name="endDate"
+                  type="datetime-local"
+                  fieldProps={{
+                    ...field,
+                    value: field.value ?? '',
+                    onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                      field.onChange(e.target.value),
+                  }}
+                  error={errors.endDate?.message}
+                  min={startDateStr || undefined} // prevent picking an end earlier than start
+                />
+              )}
+            />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <Controller
+              control={control}
+              name="registrationOpenAt"
+              render={({ field }) => (
+                <InputGroup
+                  label="Self Registration Opens"
+                  name="registrationOpenAt"
+                  type="datetime-local"
+                  fieldProps={{
+                    ...field,
+                    value: field.value ?? '',
+                    onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                      field.onChange(e.target.value),
+                  }}
+                  error={errors.registrationOpenAt?.message}
+                />
+              )}
+            />
+
+            <Controller
+              control={control}
+              name="registrationCloseAt"
+              render={({ field }) => (
+                <InputGroup
+                  label="Self Registration Closes"
+                  name="registrationCloseAt"
+                  type="datetime-local"
+                  fieldProps={{
+                    ...field,
+                    value: field.value ?? '',
+                    onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                      field.onChange(e.target.value),
+                  }}
+                  error={errors.registrationCloseAt?.message}
+                />
+              )}
+            />
+          </div>
+
+          <Controller
+            control={control}
+            name="instructorIds"
+            render={({ field }) => (
+              <SearchableMultiSelect
+                label="Assign Faculty"
+                items={facultyList.map((faculty) => ({
+                  id: faculty.id,
+                  label:
+                    `${faculty.firstName ?? ''} ${faculty.lastName ?? ''}`.trim() ||
+                    faculty.email ||
+                    'Unknown user',
+                }))}
+                value={field.value ?? []}
+                onChange={(value) => field.onChange(value)}
+                placeholder="Select faculty"
+                searchPlaceholder="Search faculty..."
+                emptyStateText="No faculty found."
+                error={errors.instructorIds?.message}
+              />
+            )}
+          />
 
           {/* PUBLISH SWITCH */}
           <div className="flex items-center justify-between">
