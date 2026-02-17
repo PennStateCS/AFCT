@@ -364,6 +364,43 @@ export function AssociateProblemsDialog({
 
       // Perform API call directly with the left-column IDs (handle errors locally)
       const leftProblemIds = leftProblems.map((p) => p.id);
+
+      // Special-case: user selected "All Students" (assignment-level). If any of the
+      // selected problems were previously mapped to one or more groups, delete those
+      // group-specific mappings first so the problem becomes an assignment-level problem.
+      if (groupIdToSend === undefined && leftProblemIds.length > 0) {
+        // problems that currently have any group mapping
+        const problemsWithGroupMapping = leftProblemIds.filter((pid) => allMappedIds.has(pid));
+        if (problemsWithGroupMapping.length > 0) {
+          try {
+            const delRes = await fetch(`/api/courses/${courseId}/${assignmentId}/group-problems`, {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' },
+              // Use groupId = 'ALL' to remove mappings for every group for these problems
+              body: JSON.stringify({ problemIds: problemsWithGroupMapping, groupId: 'ALL' }),
+            });
+            if (!delRes.ok) throw new Error('Failed to remove existing group mappings');
+
+            // Update local map immediately for UI feedback
+            setGroupProblemsMap((prev) => {
+              const copy: Record<string, string[]> = {};
+              for (const [gid, arr] of Object.entries(prev)) {
+                copy[gid] = arr.filter((id) => !problemsWithGroupMapping.includes(id));
+              }
+              return copy;
+            });
+
+            // If any of these were queued for removal in removedProblemIds, clear them
+            setRemovedProblemIds((prev) => prev.filter((id) => !problemsWithGroupMapping.includes(id)));
+
+            showToast.success('Cleared group-specific mappings for selected problems');
+          } catch (err) {
+            console.error('Failed to clear existing group mappings for All:', err);
+            showToast.error('Failed to clear existing group mappings');
+          }
+        }
+      }
+
       if (leftProblemIds.length > 0) {
         try {
           const res = await fetch(`/api/courses/${courseId}/${assignmentId}/add-problems`, {
