@@ -93,21 +93,11 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
     });
 
   const onSubmit = async (raw: FormValues) => {
-    const { registrationOpenAt, registrationCloseAt, ...rest } = raw;
-
     const payload: Record<string, unknown> = {
-      ...rest,
+      ...raw,
       code: raw.code.trim().replace(/\s+/g, ' ').toUpperCase(),
       credits: Number(raw.credits),
     };
-
-    if (registrationOpenAt) {
-      payload.registrationOpenAt = registrationOpenAt;
-    }
-
-    if (registrationCloseAt) {
-      payload.registrationCloseAt = registrationCloseAt;
-    }
 
     const res = await fetch('/api/courses', {
       method: 'POST',
@@ -229,6 +219,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
                       field.onChange(e.target.value),
                   }}
                   error={errors.startDate?.message}
+                  requiredMark
                 />
               )}
             />
@@ -250,6 +241,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
                   }}
                   error={errors.endDate?.message}
                   min={startDateStr || undefined} // prevent picking an end earlier than start
+                  requiredMark
                 />
               )}
             />
@@ -271,6 +263,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
                       field.onChange(e.target.value),
                   }}
                   error={errors.registrationOpenAt?.message}
+                  requiredMark
                 />
               )}
             />
@@ -290,6 +283,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
                       field.onChange(e.target.value),
                   }}
                   error={errors.registrationCloseAt?.message}
+                  requiredMark
                 />
               )}
             />

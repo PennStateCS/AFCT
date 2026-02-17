@@ -208,8 +208,9 @@ describe('PUT /api/courses/[id]', () => {
         }),
       },
       roster: {
-        findMany: vi.fn().mockResolvedValue([{ userId: 'u1' }]),
+        findMany: vi.fn().mockResolvedValue([{ userId: 'u1', role: 'FACULTY' }]),
         deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         createMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
     };
@@ -229,6 +230,8 @@ describe('PUT /api/courses/[id]', () => {
         credits: 3,
         startDate: '2026-08-25T09:00',
         endDate: '2026-12-15T17:00',
+        registrationOpenAt: '2026-07-01T09:00',
+        registrationCloseAt: '2026-09-01T09:00',
         isPublished: true,
         isArchived: false,
         instructorIds: ['u1', 'u2'],

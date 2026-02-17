@@ -14,21 +14,13 @@ import { Course, User } from '@prisma/client';
 import { useEffect, useMemo, useState } from 'react';
 import InputGroup from '@/components/ui/InputGroup';
 import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-} from '@/components/ui/dropdown-menu';
+import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
 
 import { useForm, Controller } from 'react-hook-form';
 import { showToast } from '@/lib/toast';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CourseFormSchema } from '@/schemas/course';
-import { ChevronDown } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { getInstructors, EnrolledUser } from '@/lib/course-utils';
 
@@ -79,6 +71,12 @@ export function EditCourseDialog({
       credits: String(course.credits ?? 3),
       startDate: toDateTimeLocalInTimeZone(course.startDate, timeZone),
       endDate: toDateTimeLocalInTimeZone(course.endDate, timeZone),
+      registrationOpenAt: course.registrationOpenAt
+        ? toDateTimeLocalInTimeZone(course.registrationOpenAt, timeZone)
+        : '',
+      registrationCloseAt: course.registrationCloseAt
+        ? toDateTimeLocalInTimeZone(course.registrationCloseAt, timeZone)
+        : '',
       isPublished: course.isPublished ?? false,
       isArchived: course.isArchived ?? false,
       instructorIds: getInstructors(course.enrolled).map((u) => u.id),
@@ -102,8 +100,6 @@ export function EditCourseDialog({
   // Keep min (end) in sync with start
   const startDateStr = watch('startDate');
 
-  const [instructorSearch, setInstructorSearch] = useState('');
-  const [instructorMenuOpen, setInstructorMenuOpen] = useState(false);
   const [facultyList, setFacultyList] = useState<User[]>([]);
 
   useEffect(() => {
@@ -129,15 +125,11 @@ export function EditCourseDialog({
 
   const onSubmit = async (raw: FormValues) => {
     // Convert form values to the format expected by the API
-    const formData = {
+    const payload: Record<string, unknown> = {
+      id: course.id,
       ...raw,
       credits: Number(raw.credits), // Convert string to number
       code: raw.code.trim().replace(/\s+/g, ' ').toUpperCase(), // Normalize code
-    };
-
-    const payload = {
-      id: course.id,
-      ...formData,
     };
 
     try {
@@ -228,170 +220,146 @@ export function EditCourseDialog({
             )}
           />
 
-          {/* SEMESTER */}
-          <Controller
-            name="semester"
-            control={control}
-            render={({ field }) => (
-              <InputGroup
-                name="semester"
-                label="Semester"
-                fieldProps={field}
-                placeholder="Fall 2025"
-                error={errors.semester?.message}
-              />
-            )}
-          />
-
-          {/* CREDITS */}
-          <Controller
-            name="credits"
-            control={control}
-            render={({ field }) => (
-              <InputGroup
-                name="credits"
-                label="Credits"
-                type="number"
-                fieldProps={field}
-                min={1}
-                max={6}
-                step={1}
-                error={errors.credits?.message}
-              />
-            )}
-          />
-
-          {/* START datetime-local (string) */}
-          <Controller
-            name="startDate"
-            control={control}
-            render={({ field }) => (
-              <InputGroup
-                name="startDate"
-                label="Start Date & Time"
-                type="datetime-local"
-                fieldProps={{
-                  ...field,
-                  value: field.value ?? '',
-                  onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                    field.onChange(e.target.value),
-                }}
-                error={errors.startDate?.message}
-              />
-            )}
-          />
-
-          {/* END datetime-local (string) */}
-          <Controller
-            name="endDate"
-            control={control}
-            render={({ field }) => (
-              <InputGroup
-                name="endDate"
-                label="End Date & Time"
-                type="datetime-local"
-                fieldProps={{
-                  ...field,
-                  value: field.value ?? '',
-                  onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                    field.onChange(e.target.value),
-                }}
-                error={errors.endDate?.message}
-                min={startDateStr || undefined}
-              />
-            )}
-          />
-
-          <div>
-            <Label className="pb-2">Assign Faculty</Label>
+          <div className="grid gap-4 md:grid-cols-2">
             <Controller
+              name="semester"
               control={control}
-              name="instructorIds"
-              render={({ field }) => {
-                const selectedIds = field.value ?? [];
-                const selectedNames = facultyList
-                  .filter((f) => selectedIds.includes(f.id))
-                  .map((f) => `${f.firstName} ${f.lastName}`.trim())
-                  .filter(Boolean)
-                  .join(', ');
-                const hasSelection = selectedNames.length > 0;
+              render={({ field }) => (
+                <InputGroup
+                  name="semester"
+                  label="Semester"
+                  fieldProps={field}
+                  placeholder="Fall 2025"
+                  error={errors.semester?.message}
+                />
+              )}
+            />
 
-                const filteredFaculty = facultyList.filter((faculty) => {
-                  const q = instructorSearch.toLowerCase();
-                  if (!q) return true;
-                  return (
-                    (faculty.firstName ?? '').toLowerCase().includes(q) ||
-                    (faculty.lastName ?? '').toLowerCase().includes(q)
-                  );
-                });
-
-                return (
-                  <div>
-                    <DropdownMenu open={instructorMenuOpen} onOpenChange={setInstructorMenuOpen}>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="border-input h-9 w-full justify-between bg-transparent px-3 py-1 text-sm shadow-xs"
-                        >
-                          <span
-                            className={cn('truncate', !hasSelection && 'text-muted-foreground')}
-                          >
-                            {selectedNames || 'Select faculty'}
-                          </span>
-                          <ChevronDown className="text-muted-foreground h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent className="w-[var(--radix-dropdown-menu-trigger-width)] p-2">
-                        <Input
-                          placeholder="Search faculty..."
-                          value={instructorSearch}
-                          onChange={(e) => setInstructorSearch(e.target.value)}
-                          onKeyDown={(e) => e.stopPropagation()}
-                          className="mb-2"
-                        />
-                        <div className="max-h-64 overflow-auto rounded border">
-                          {filteredFaculty.length === 0 ? (
-                            <div className="text-muted-foreground p-3 text-center text-sm">
-                              No faculty found.
-                            </div>
-                          ) : (
-                            filteredFaculty.map((faculty) => {
-                              const checked = selectedIds.includes(faculty.id);
-                              return (
-                                <label
-                                  key={faculty.id}
-                                  className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 px-3 py-2 text-sm"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={checked}
-                                    onChange={() => {
-                                      const set = new Set(selectedIds);
-                                      if (set.has(faculty.id)) set.delete(faculty.id);
-                                      else set.add(faculty.id);
-                                      field.onChange(Array.from(set));
-                                    }}
-                                  />
-                                  <span>
-                                    {faculty.firstName} {faculty.lastName}
-                                  </span>
-                                </label>
-                              );
-                            })
-                          )}
-                        </div>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    {errors.instructorIds ? (
-                      <p className="mt-1 text-xs text-red-600">{errors.instructorIds.message}</p>
-                    ) : null}
-                  </div>
-                );
-              }}
+            <Controller
+              name="credits"
+              control={control}
+              render={({ field }) => (
+                <InputGroup
+                  name="credits"
+                  label="Credits"
+                  type="number"
+                  fieldProps={field}
+                  min={1}
+                  max={6}
+                  step={1}
+                  error={errors.credits?.message}
+                />
+              )}
             />
           </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <Controller
+              name="startDate"
+              control={control}
+              render={({ field }) => (
+                <InputGroup
+                  name="startDate"
+                  label="Start Date & Time"
+                  type="datetime-local"
+                  fieldProps={{
+                    ...field,
+                    value: field.value ?? '',
+                    onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                      field.onChange(e.target.value),
+                  }}
+                  error={errors.startDate?.message}
+                  requiredMark
+                />
+              )}
+            />
+
+            <Controller
+              name="endDate"
+              control={control}
+              render={({ field }) => (
+                <InputGroup
+                  name="endDate"
+                  label="End Date & Time"
+                  type="datetime-local"
+                  fieldProps={{
+                    ...field,
+                    value: field.value ?? '',
+                    onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                      field.onChange(e.target.value),
+                  }}
+                  error={errors.endDate?.message}
+                  min={startDateStr || undefined}
+                  requiredMark
+                />
+              )}
+            />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <Controller
+              name="registrationOpenAt"
+              control={control}
+              render={({ field }) => (
+                <InputGroup
+                  name="registrationOpenAt"
+                  label="Self Registration Opens"
+                  type="datetime-local"
+                  fieldProps={{
+                    ...field,
+                    value: field.value ?? '',
+                    onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                      field.onChange(e.target.value),
+                  }}
+                  error={errors.registrationOpenAt?.message}
+                  requiredMark
+                />
+              )}
+            />
+
+            <Controller
+              name="registrationCloseAt"
+              control={control}
+              render={({ field }) => (
+                <InputGroup
+                  name="registrationCloseAt"
+                  label="Self Registration Closes"
+                  type="datetime-local"
+                  fieldProps={{
+                    ...field,
+                    value: field.value ?? '',
+                    onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                      field.onChange(e.target.value),
+                  }}
+                  error={errors.registrationCloseAt?.message}
+                  requiredMark
+                />
+              )}
+            />
+          </div>
+
+          <Controller
+            control={control}
+            name="instructorIds"
+            render={({ field }) => (
+              <SearchableMultiSelect
+                label="Assign Faculty"
+                items={facultyList.map((faculty) => ({
+                  id: faculty.id,
+                  label:
+                    `${faculty.firstName ?? ''} ${faculty.lastName ?? ''}`.trim() ||
+                    faculty.email ||
+                    'Unknown user',
+                }))}
+                value={field.value ?? []}
+                onChange={(value) => field.onChange(value)}
+                placeholder="Select faculty"
+                searchPlaceholder="Search faculty..."
+                emptyStateText="No faculty found."
+                error={errors.instructorIds?.message}
+              />
+            )}
+          />
 
           {/* PUBLISH STATUS TOGGLE */}
           <Controller
