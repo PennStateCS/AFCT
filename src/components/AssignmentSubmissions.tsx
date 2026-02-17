@@ -47,7 +47,7 @@ type Props = {
   courseId: string;
   assignmentId: string;
   maxAssignmentGrade: number;
-  problems: Problem[];
+  problems?: Problem[];
   // When assignmentIsGroup is true the parent will pass `groups` and
   // `groupProblemsMap` so this component can show only the problems
   // assigned to the student's group (unassigned problems apply to all).
@@ -344,6 +344,34 @@ export default function AssignmentSubmissions({
   const [selectedStudentGroupId, setSelectedStudentGroupId] = useState<string | null>(null);
   const studentGroupCache = useRef<Record<string, string | null>>({});
 
+  // Load all course problems and prefer client-side filtering for the submissions tab.
+  // Fall back to `problems` prop if the fetch fails or isn't provided.
+  const [allProblems, setAllProblems] = useState<Problem[]>(problems ?? []);
+  const [problemsLoading, setProblemsLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadAllProblems() {
+      if (!courseId) return;
+      setProblemsLoading(true);
+      try {
+        const res = await fetch(`/api/courses/${courseId}/problems`);
+        if (!res.ok) throw new Error('Failed to load problems');
+        const data = await res.json();
+        if (!cancelled) setAllProblems(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error('Failed to load problems:', err);
+        if (!cancelled) setAllProblems(problems ?? []);
+      } finally {
+        if (!cancelled) setProblemsLoading(false);
+      }
+    }
+    loadAllProblems();
+    return () => {
+      cancelled = true;
+    };
+  }, [courseId, problems]);
+
   // Grade editing state (robust, GradesCard style)
   const [editingGrade, setEditingGrade] = useState<string>('');
   const [isEditing, setIsEditing] = useState(false);
@@ -383,35 +411,45 @@ export default function AssignmentSubmissions({
     [router, searchParams],
   );
 
+  // Build the assignment-specific problem list using the fetched `allProblems` (prefer enriched objects).
+  const assignmentProblems = useMemo(() => {
+    if (!problems || problems.length === 0) {
+      // parent didn't pass assignment problems — fall back to `allProblems`
+      return allProblems;
+    }
+    // Prefer enriched problem objects from `allProblems` when available.
+    return problems.map((ap) => allProblems.find((p) => p.id === ap.id) ?? ap);
+  }, [problems, allProblems]);
+
   // Compute which problems should be visible for the selected student when
   // this is a group assignment. Rules:
   // - Problems mapped to the student's group are visible
   // - Problems not mapped to any group (assignment-level) are visible to all
   // - If group mapping isn't available yet, fall back to showing all problems
   const visibleProblems = useMemo(() => {
-    // If this is not a group assignment, show all problems
-    if (!assignmentIsGroup) return problems;
+    // If this is not a group assignment, show all assignment problems
+    if (!assignmentIsGroup) return assignmentProblems;
 
     const gpMap = groupProblemsMap ?? {};
     const allMapped = new Set<string>(Object.values(gpMap).flat());
 
     // Assignment-level problems = problems not mapped to any group
-    const assignmentLevel = problems.filter((p) => !allMapped.has(p.id));
+    const assignmentLevel = assignmentProblems.filter((p) => !allMapped.has(p.id));
 
-    // If mappings not loaded yet -> fall back to showing all problems
-    if (!gpMap || Object.keys(gpMap).length === 0) return problems;
+    // If mappings not loaded yet -> fall back to showing all assignment problems
+    if (!gpMap || Object.keys(gpMap).length === 0) return assignmentProblems;
 
     // If we don't yet know the student's group, show assignment-level + all group-mapped (safe fallback)
     if (!selectedStudentGroupId) {
       const byGroup = new Set<string>([...assignmentLevel.map((p) => p.id), ...Object.values(gpMap).flat()]);
-      return problems.filter((p) => byGroup.has(p.id));
+      return assignmentProblems.filter((p) => byGroup.has(p.id));
     }
 
     // Visible = assignment-level + problems mapped to the student's group
     const allowed = new Set<string>(assignmentLevel.map((p) => p.id));
     for (const pid of gpMap[selectedStudentGroupId] ?? []) allowed.add(pid);
-    return problems.filter((p) => allowed.has(p.id));
-  }, [problems, selectedStudentGroupId, groupProblemsMap, assignmentIsGroup]);
+    return assignmentProblems.filter((p) => allowed.has(p.id));
+  }, [assignmentProblems, selectedStudentGroupId, groupProblemsMap, assignmentIsGroup]);
 
   // Initialize selected problem from the URL, but only from the set of
   // currently visible problems (handles group assignment filtering).
@@ -922,7 +960,7 @@ export default function AssignmentSubmissions({
           </CardHeader>
 
           <CardContent>
-            {problems.length === 0 ? (
+            {assignmentProblems.length === 0 ? (
               <div className="text-muted-foreground rounded-md border border-dashed p-6 text-center text-sm">
                 No problems have been added to this assignment yet.
               </div>
