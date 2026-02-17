@@ -50,7 +50,7 @@ function getDateKeyInTimeZone(date: Date | string, timeZone: string): string {
   return `${year}-${month}-${day}`;
 }
 
-export default function CalendarPage() {
+export default function CalendarClient() {
   const { timezone } = useEffectiveTimezone();
   const [assignments, setAssignments] = useState<any[]>([]);
   const [selected, setSelected] = useState<Date | undefined>(undefined);

@@ -1,5 +1,10 @@
-import CalendarPage from './CalendarPage';
+import type { Metadata } from 'next';
+import CalendarClient from './CalendarClient';
 
-export default function Page() {
-  return <CalendarPage />;
+export const metadata: Metadata = {
+  title: 'Calendar',
+};
+
+export default function CalendarPage() {
+  return <CalendarClient />;
 }
