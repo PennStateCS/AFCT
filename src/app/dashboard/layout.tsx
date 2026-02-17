@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
@@ -6,6 +7,13 @@ import DashboardSidebarShell from '@/components/DashboardSidebarShell';
 import Navbar from '@/components/Navbar';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import AuthGate from '@/components/AuthGate';
+
+export const metadata: Metadata = {
+  title: {
+    default: 'AFCT Dashboard',
+    template: 'AFCT Dashboard - %s',
+  },
+};
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();

@@ -150,6 +150,10 @@ export async function POST(req: Request) {
       }
     }
 
+    if (!json.registrationOpenAt || !json.registrationCloseAt) {
+      return NextResponse.json({ message: 'Registration window is required.' }, { status: 400 });
+    }
+
     // 4) Optional uniqueness check (code + semester)
     const exists = await prisma.course.findFirst({
       where: { code: json.code, semester: json.semester },
@@ -176,6 +180,12 @@ export async function POST(req: Request) {
           credits: json.credits,
           startDate: toDateTimeInTimezone(json.startDate, userTimezone),
           endDate: toDateTimeInTimezone(json.endDate, userTimezone),
+          registrationOpenAt: json.registrationOpenAt
+            ? toDateTimeInTimezone(json.registrationOpenAt, userTimezone)
+            : null,
+          registrationCloseAt: json.registrationCloseAt
+            ? toDateTimeInTimezone(json.registrationCloseAt, userTimezone)
+            : null,
           isPublished: json.isPublished ?? false,
           isArchived: false,
         },
@@ -252,6 +262,8 @@ export async function POST(req: Request) {
           credits: created.course.credits,
           startDate: created.course.startDate,
           endDate: created.course.endDate,
+          registrationOpenAt: created.course.registrationOpenAt,
+          registrationCloseAt: created.course.registrationCloseAt,
           isPublished: created.course.isPublished,
           isArchived: created.course.isArchived,
           enrolled:
