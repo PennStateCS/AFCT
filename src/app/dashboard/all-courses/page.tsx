@@ -1,8 +1,13 @@
+import type { Metadata } from 'next';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import DashboardClient from '../DashboardClient';
 
-export default async function DashboardPage() {
+export const metadata: Metadata = {
+  title: 'All Courses',
+};
+
+export default async function AllCoursesPage() {
   const session = await auth();
 
   if (!session?.user) {

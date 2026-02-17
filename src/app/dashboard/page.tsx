@@ -1,9 +1,14 @@
+import type { Metadata } from 'next';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import DashboardClient from './DashboardClient';
 import { DueDateModule } from '@/components/modules/DueDateModule';
 import { JoinCourseModule } from '@/components/modules/JoinCourseModule';
 import { SubmissionsModule } from '@/components/modules/SubmissionsModule';
+
+export const metadata: Metadata = {
+  title: 'AFCT Dashboard',
+};
 
 export default async function DashboardPage() {
   const session = await auth();
