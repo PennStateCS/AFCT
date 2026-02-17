@@ -39,6 +39,21 @@ describe('GET /api/courses/[id]/[aid]/group-problems', () => {
     expect(logArgs.action).toBe('VIEW_GROUP_PROBLEMS');
     expect(logArgs.assignmentId).toBe('a1');
   });
+
+  it('supports POST { action: "list" } to return groups+mapping (no-signal client)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.group.findMany.mockResolvedValue([{ id: 'g1', name: 'G1' }]);
+    prismaMock.groupAssignmentProblem.findMany.mockResolvedValue([{ assignmentId: 'a1', problemId: 'p1', groupId: 'g1' }]);
+
+    const req = new NextRequest('http://localhost/api/courses/c1/a1/group-problems', { method: 'POST', body: JSON.stringify({ action: 'list' }) });
+    const res = await (await import('./route')).POST(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) } as any);
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(Array.isArray(body.groups)).toBe(true);
+    expect(body.groups[0].problemIds).toEqual(['p1']);
+    expect(activityLogMock).toHaveBeenCalled();
+  });
 });
 
 describe('DELETE /api/courses/[id]/[aid]/group-problems', () => {

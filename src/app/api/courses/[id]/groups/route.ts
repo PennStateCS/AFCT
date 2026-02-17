@@ -37,7 +37,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-// POST: create group for a course
+// POST: supports both create and "list via body" to avoid client-side use of AbortController.signal.
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const { id } = await params;
 
@@ -56,6 +56,25 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   try {
     const data = await req.json();
+
+    // Support a POST body { action: 'list' } so clients don't need to use AbortController.signal
+    if (data?.action === 'list') {
+      try {
+        const groups = await prisma.group.findMany({ where: { courseId: id }, orderBy: { name: 'asc' } });
+        await createEnhancedActivityLog(prisma, req, {
+          userId: session.user.id,
+          action: 'VIEW_GROUPS',
+          category: 'COURSE',
+          metadata: { courseId: id },
+        });
+        return NextResponse.json(groups);
+      } catch (err) {
+        console.error('[COURSE_GROUPS_POST_LIST_ERROR]', err);
+        return NextResponse.json({ error: 'Failed to fetch groups' }, { status: 500 });
+      }
+    }
+
+    // Otherwise treat as create
     const name = (data.name ?? '').trim();
 
     if (!name) return NextResponse.json({ error: 'Name not found' }, { status: 422 });

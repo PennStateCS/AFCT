@@ -177,8 +177,8 @@ export default function AssignmentDashboardPage() {
       setGroupsLoading(true);
       try {
         const [grRes, gpRes] = await Promise.all([
-          fetch(`/api/courses/${id}/groups`, { signal: ac.signal }),
-          fetch(`/api/courses/${id}/${aid}/group-problems`, { signal: ac.signal }),
+          fetch(`/api/courses/${id}/groups`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'list' }) }),
+          fetch(`/api/courses/${id}/${aid}/group-problems`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'list' }) }),
         ]);
 
         if (!aborted) {
