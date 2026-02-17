@@ -20,9 +20,6 @@ import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import { Check, ChevronDown, Search as SearchIcon } from 'lucide-react';
 

@@ -110,8 +110,6 @@ export function CreateAssignmentDialog({
   });
 
   // Refresh defaults on open; also clear state on close to avoid flicker
-  const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
-
   useEffect(() => {
     if (open) {
       reset(defaults, {
@@ -120,18 +118,6 @@ export function CreateAssignmentDialog({
         keepErrors: false,
         keepValues: false,
       });
-
-      (async () => {
-        try {
-          const res = await fetch(`/api/courses/${courseId}/groups`);
-          if (res.ok) {
-            const body = await res.json();
-            setGroups(Array.isArray(body) ? body : []);
-          }
-        } catch {
-          setGroups([]);
-        }
-      })();
     } else {
       reset(defaults, {
         keepDirty: false,
@@ -140,7 +126,7 @@ export function CreateAssignmentDialog({
         keepValues: false,
       });
     }
-  }, [open, defaults, reset, courseId]);
+  }, [open, defaults, reset]);
 
   const resetForm = () =>
     reset(defaults, {

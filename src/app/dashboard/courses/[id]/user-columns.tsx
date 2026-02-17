@@ -1,7 +1,7 @@
 'use client';
 
 import { ColumnDef } from '@tanstack/react-table';
-import { Delete, Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import { User } from '@prisma/client';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { EditUserDialog } from '@/components/dialogs/EditUserDialog';
@@ -196,7 +196,7 @@ export const userColumns = (onChange: () => void, courseId: string, courseIsArch
       cell: ({ row }) => {
         const user = row.original;
         const initials = `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase();
-        const avatarUrl = user.avatar ? `/uploads/pfps/${user.avatar}` : '/uploads/pfps/default-avatar.png';
+        const avatarUrl = user.avatar ? `/api/uploads/pfps/${user.avatar}` : '/api/uploads/pfps/default-avatar.png';
         
         return (
           <Avatar className="h-10 w-10">

@@ -97,9 +97,9 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     const members = Array.isArray(body?.members) ? (body.members as unknown[]).map(String) : null;
     if (!members) return NextResponse.json({ error: 'Missing members array' }, { status: 422 });
 
-    // Check permissions: site admin or course staff (ADMIN/FACULTY/TA) in the course
+    // Check permissions: site admin or course staff (INSTRUCTOR/FACULTY/TA) in the course
     const currentRoster = await prisma.roster.findFirst({ where: { courseId: id, userId: currentUser.id } });
-    const isAllowed = currentUser.role === 'ADMIN' || ['ADMIN', 'FACULTY', 'TA'].includes(currentRoster?.role ?? '');
+    const isAllowed = currentUser.role === 'ADMIN' || ['INSTRUCTOR', 'FACULTY', 'TA'].includes(currentRoster?.role ?? '');
     if (!isAllowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     // Ensure group exists and belongs to course

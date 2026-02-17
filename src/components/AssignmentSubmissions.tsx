@@ -497,27 +497,18 @@ export default function AssignmentSubmissions({
         return;
       }
 
-      // If no groups available, treat as not in any group
-      if (!groups || groups.length === 0) {
-        studentGroupCache.current[selectedStudent.id] = null;
-        setSelectedStudentGroupId(null);
-        return;
-      }
-
       try {
-        // Fetch members for all groups in parallel and find which contains the student
-        const ops = groups.map((g) =>
-          fetch(`/api/courses/${courseId}/groups/${g.id}/members`)
-            .then((res) => (res.ok ? res.json() : Promise.resolve({ members: [] })))
-            .then((data) => ({ id: g.id, members: data?.members ?? [] }))
-            .catch(() => ({ id: g.id, members: [] })),
-        );
-        const results = await Promise.all(ops);
-        if (cancelled) return;
-        const found = results.find((r) => r.members.some((m: any) => m.userId === selectedStudent.id));
-        const gid = found ? found.id : null;
+        // Fetch the student's group membership using the optimized endpoint
+        const res = await fetch(`/api/courses/${courseId}/group-membership?userId=${selectedStudent.id}`);
+        if (!res.ok) {
+          studentGroupCache.current[selectedStudent.id] = null;
+          if (!cancelled) setSelectedStudentGroupId(null);
+          return;
+        }
+        const data = await res.json();
+        const gid = data?.groupId ?? null;
         studentGroupCache.current[selectedStudent.id] = gid;
-        setSelectedStudentGroupId(gid);
+        if (!cancelled) setSelectedStudentGroupId(gid);
       } catch (err) {
         console.error('Failed to resolve student group:', err);
         studentGroupCache.current[selectedStudent.id] = null;
@@ -529,7 +520,7 @@ export default function AssignmentSubmissions({
     return () => {
       cancelled = true;
     };
-  }, [assignmentIsGroup, selectedStudent, groups, courseId]);
+  }, [assignmentIsGroup, selectedStudent, courseId]);
 
   const handleSelectProblem = useCallback(
     (problemId: string) => {

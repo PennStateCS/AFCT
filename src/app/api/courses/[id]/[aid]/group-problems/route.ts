@@ -9,7 +9,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   try {
     const session = await auth();
     const user = session?.user;
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     // Fetch groups for the course and their assignment problem mappings
     const groups = await prisma.group.findMany({ where: { courseId }, select: { id: true, name: true } });
@@ -54,7 +54,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   try {
     const session = await auth();
     const user = session?.user;
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json().catch(() => ({}));
     if (body?.action !== 'list') {

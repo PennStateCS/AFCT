@@ -9,6 +9,6 @@ export const UpdateGroupSchema = z.object({
   name: z.string().min(1, 'Name is required'),
 });
 
-export type CreateGroupRaw = z.infer<typeof CreateGroupSchema>;
-export type CreateGroupInput = z.infer<typeof CreateGroupSchema>;
-export type UpdateGroupInput = z.infer<typeof UpdateGroupSchema>;
+export type CreateGroupRaw = z.input<typeof CreateGroupSchema>;
+export type CreateGroupInput = z.output<typeof CreateGroupSchema>;
+export type UpdateGroupInput = z.output<typeof UpdateGroupSchema>;

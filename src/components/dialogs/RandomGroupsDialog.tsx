@@ -212,8 +212,8 @@ export default function RandomGroupsDialog({ open, setOpen, courseId, students, 
               <Button
                 variant="outline"
                 className="h-9 w-9 p-0 rounded-full"
-                onClick={() => setNumGroups((n) => Math.min(Math.max(1, students.length), Math.floor(n) + 1))}
-                disabled={numGroups >= Math.max(1, students.length) || students.length === 0}
+                onClick={() => setNumGroups((n) => Math.min(Math.max(1, available), Math.floor(n) + 1))}
+                disabled={numGroups >= Math.max(1, available) || available === 0}
                 aria-label="Increase groups"
                 title="Increase groups"
               >
