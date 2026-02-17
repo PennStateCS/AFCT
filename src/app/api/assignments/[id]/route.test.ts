@@ -112,7 +112,7 @@ describe('PATCH /api/assignments/[id]', () => {
 
     const req = new NextRequest('http://localhost/api/assignments/a1', {
       method: 'PATCH',
-      body: JSON.stringify({ groupId: 'g1' }),
+      body: JSON.stringify({ isGroup: true }),
     });
     const res = await PATCH(req, { params: Promise.resolve({ id: 'a1' }) });
 

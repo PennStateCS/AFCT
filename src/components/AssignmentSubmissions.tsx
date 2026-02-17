@@ -341,8 +341,9 @@ export default function AssignmentSubmissions({
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
   // If this is a group assignment we'll compute the student's group and
   // filter which problems are shown. Cache per-student group lookups.
-  const [selectedStudentGroupId, setSelectedStudentGroupId] = useState<string | null>(null);
-  const studentGroupCache = useRef<Record<string, string | null>>({});
+  // undefined = not yet resolved; null = resolved -> student is not in any group
+  const [selectedStudentGroupId, setSelectedStudentGroupId] = useState<string | null | undefined>(undefined);
+  const studentGroupCache = useRef<Record<string, string | null | undefined>>({});
 
   // Load all course problems and prefer client-side filtering for the submissions tab.
   // Fall back to `problems` prop if the fetch fails or isn't provided.
@@ -439,10 +440,15 @@ export default function AssignmentSubmissions({
     // If mappings not loaded yet -> fall back to showing all assignment problems
     if (!gpMap || Object.keys(gpMap).length === 0) return assignmentProblems;
 
-    // If we don't yet know the student's group, show assignment-level + all group-mapped (safe fallback)
-    if (!selectedStudentGroupId) {
+    // If we don't yet know the student's group (undefined), show assignment-level + all group-mapped (safe fallback)
+    if (selectedStudentGroupId === undefined) {
       const byGroup = new Set<string>([...assignmentLevel.map((p) => p.id), ...Object.values(gpMap).flat()]);
       return assignmentProblems.filter((p) => byGroup.has(p.id));
+    }
+
+    // If the student is resolved to be NOT in any group (null), show only assignment-level problems
+    if (selectedStudentGroupId === null) {
+      return assignmentLevel;
     }
 
     // Visible = assignment-level + problems mapped to the student's group
