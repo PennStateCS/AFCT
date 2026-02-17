@@ -32,8 +32,9 @@ type AddProblemModalProps = {
   courseIsArchived: boolean;
   allProblems: Problem[];
   usedProblems: Problem[];
-  // optionally pass a groupId when adding problems
-  onAddProblems: (problemIds: string[], groupId?: string) => void;
+  // optionally pass a groupId when adding problems; returns a Promise so the dialog
+  // can await the parent-side API operation (no Promise.resolve wrapper needed)
+  onAddProblems: (problemIds: string[], groupId?: string) => Promise<void>;
 };
 
 const TYPE_COLORS: Record<string, string> = {
@@ -262,6 +263,7 @@ export function AssociateProblemsDialog({
             body: JSON.stringify({ problemIds: removedProblemIds, groupId: groupIdToSend }),
           });
           if (!r.ok) throw new Error('Failed to remove group mappings');
+
           // Clear removals
           setRemovedProblemIds([]);
           showToast.success('Removed group mappings');
@@ -271,15 +273,26 @@ export function AssociateProblemsDialog({
         }
       }
 
-      // When a specific group is selected, only add the newly moved problems scoped to that group.
-      // This prevents accidentally assigning problems to all students.
-      if (groupIdToSend) {
-        if (movedProblems.length > 0) {
-          await Promise.resolve(onAddProblems(movedProblems.map((p) => p.id), groupIdToSend));
+      // Perform API call directly with the left-column IDs (handle errors locally)
+      const leftProblemIds = leftProblems.map((p) => p.id);
+      if (leftProblemIds.length > 0) {
+        try {
+          const res = await fetch(`/api/courses/${courseId}/${assignmentId}/add-problems`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ problemIds: leftProblemIds, groupId: groupIdToSend }),
+          });
+
+          if (!res.ok) {
+            console.error('add-problems returned non-OK status', res.status);
+            showToast.error('Failed to update problems (server error)');
+          } else {
+            showToast.success('Group problem mappings updated');
+          }
+        } catch (fetchErr) {
+          console.error('Network error when calling add-problems:', fetchErr);
+          showToast.error('Network error — failed to update problems');
         }
-      } else {
-        // No group selected: update assignment-level problems for all students
-        await Promise.resolve(onAddProblems(allProblemIds));
       }
 
       setMovedProblems([]);
