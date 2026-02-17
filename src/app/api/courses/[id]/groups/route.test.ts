@@ -38,6 +38,17 @@ describe('GET /api/courses/[id]/groups', () => {
 });
 
 describe('POST /api/courses/[id]/groups', () => {
+  it('supports POST { action: "list" } to return groups (no-signal client)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.group.findMany.mockResolvedValue([{ id: 'g1', name: 'A' }]);
+
+    const res = await POST(new NextRequest('http://localhost/api/courses/c1/groups', { method: 'POST', body: JSON.stringify({ action: 'list' }) }), { params: { id: 'c1' } } as any);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual([{ id: 'g1', name: 'A' }]);
+    expect(activityLogMock).toHaveBeenCalled();
+  });
+
   it('returns 422 when name missing', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
 

@@ -63,6 +63,16 @@ export function AssociateProblemsDialog({
   // Track problems that were unassigned from the selected group during this dialog
   const [removedProblemIds, setRemovedProblemIds] = React.useState<string[]>([]);
 
+  // Local copy of course problems. We refresh this on open and whenever the
+  // parent `allProblems` prop changes so deleted problems are removed
+  // immediately from the dialog UI and any local "moved" state is cleaned up.
+  const [localAllProblems, setLocalAllProblems] = React.useState<Problem[]>(allProblems);
+  React.useEffect(() => {
+    setLocalAllProblems(allProblems);
+    // remove any movedProblems that no longer exist (e.g. deleted elsewhere)
+    setMovedProblems((prev) => prev.filter((p) => allProblems.some((a) => a.id === p.id)));
+  }, [allProblems]);
+
   // Groups and group-assignment mapping
   const [assignmentIsGroup, setAssignmentIsGroup] = React.useState(false);
   const [groups, setGroups] = React.useState<{ id: string; name: string }[]>([]);
@@ -104,8 +114,16 @@ export function AssociateProblemsDialog({
         if (isGroup) {
           setGroupsLoading(true);
           const [grRes, gpRes] = await Promise.all([
-            fetch(`/api/courses/${courseId}/groups`, { signal: ac.signal }),
-            fetch(`/api/courses/${courseId}/${assignmentId}/group-problems`, { signal: ac.signal }),
+            fetch(`/api/courses/${courseId}/groups`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'list' }),
+            }),
+            fetch(`/api/courses/${courseId}/${assignmentId}/group-problems`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'list' }),
+            }),
           ]);
 
           if (grRes.ok) {
@@ -124,6 +142,24 @@ export function AssociateProblemsDialog({
             setGroupProblemsMap({});
           }
           setGroupsLoading(false);
+        }
+
+        // Refresh the authoritative problem list for this course when the dialog
+        // opens so deleted problems don't remain selectable in the UI.
+        try {
+          const pRes = await fetch(`/api/courses/${courseId}/problems`, { signal: ac.signal });
+          if (pRes.ok) {
+            const pData = await pRes.json();
+            const list = Array.isArray(pData) ? pData : [];
+            setLocalAllProblems(list);
+            // ensure any "moved" entries that were deleted are removed
+            setMovedProblems((prev) => prev.filter((p) => list.some((x) => x.id === p.id)));
+          } else {
+            setLocalAllProblems(allProblems);
+          }
+        } catch (err: any) {
+          if (err?.name !== 'AbortError') console.error('Failed to fetch problems for dialog:', err);
+          setLocalAllProblems(allProblems);
         }
 
         if (!aborted) {
@@ -188,21 +224,21 @@ export function AssociateProblemsDialog({
 
   // Left column: problems assigned to the selected group (or assignment if ALL)
   const leftProblems = React.useMemo(() => {
-    const assigned = allProblems.filter((p) => originalAssignedIds.has(p.id));
+    const assigned = localAllProblems.filter((p) => originalAssignedIds.has(p.id));
     // Add newly moved problems that aren't already assigned
     const newly = movedProblems.filter((p) => !originalAssignedIds.has(p.id));
     return [...assigned, ...newly];
-  }, [allProblems, originalAssignedIds, movedProblems]);
+  }, [localAllProblems, originalAssignedIds, movedProblems]);
 
   // Right column: all problems not currently assigned to the selected group (and not newly moved)
   const rightProblems = React.useMemo(() => {
-    return allProblems.filter((p) => !originalAssignedIds.has(p.id) && !movedIds.has(p.id));
-  }, [allProblems, originalAssignedIds, movedIds]);
+    return localAllProblems.filter((p) => !originalAssignedIds.has(p.id) && !movedIds.has(p.id));
+  }, [localAllProblems, originalAssignedIds, movedIds]);
 
   // For non-group assignments: available problems are those not in the assignment (and not newly moved)
   const unusedProblems = React.useMemo(() => {
-    return allProblems.filter((p) => !assignmentProblemIds.has(p.id) && !movedIds.has(p.id));
-  }, [allProblems, assignmentProblemIds, movedIds]);
+    return localAllProblems.filter((p) => !assignmentProblemIds.has(p.id) && !movedIds.has(p.id));
+  }, [localAllProblems, assignmentProblemIds, movedIds]);
 
   const combinedUsedProblems = [...usedProblems, ...movedProblems];
 
@@ -211,6 +247,59 @@ export function AssociateProblemsDialog({
     setMovedProblems([]);
     setRemovedProblemIds([]);
   }, [selectedGroupId]);
+
+  // Keep the dialog in sync with external changes while it's open.
+  // This covers cases where problems/group mappings are modified elsewhere
+  // (remove-problem, delete problem, admin actions) so the UI won't show
+  // stale mappings or deleted problems while user has the dialog open.
+  React.useEffect(() => {
+    if (!internalOpen) return;
+    let aborted = false;
+    const ac = new AbortController();
+
+    async function syncExternal() {
+      try {
+        // Fetch latest course problems
+        const pReq = fetch(`/api/courses/${courseId}/problems`, { signal: ac.signal });
+        // Fetch group->problem mappings only for assignments that support groups (use POST body instead of signal)
+        const gpReq = assignmentId
+          ? fetch(`/api/courses/${courseId}/${assignmentId}/group-problems`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'list' }),
+            })
+          : Promise.resolve(null);
+
+        const [pRes, gpRes] = await Promise.all([pReq, gpReq]);
+
+        if (!aborted) {
+          if (pRes && pRes.ok) {
+            const pData = await pRes.json();
+            const list = Array.isArray(pData) ? pData : [];
+            setLocalAllProblems(list);
+            // remove any movedProblems/removedProblemIds for items that no longer exist
+            setMovedProblems((prev) => prev.filter((m) => list.some((x) => x.id === m.id)));
+            setRemovedProblemIds((prev) => prev.filter((id) => list.some((x) => x.id === id)));
+          }
+
+          if (gpRes && gpRes.ok) {
+            const gp = await gpRes.json();
+            const map: Record<string, string[]> = {};
+            for (const g of gp.groups ?? []) map[g.id] = g.problemIds || [];
+            setGroupProblemsMap(map);
+          }
+        }
+      } catch (err: any) {
+        if (err?.name !== 'AbortError') console.error('Failed to sync AssociateProblemsDialog state:', err);
+      }
+    }
+
+    syncExternal();
+    return () => {
+      aborted = true;
+      ac.abort();
+    };
+  }, [internalOpen, usedProblems, assignmentId, courseId]);
 
   const handleDialogOpenChange = (isOpen: boolean) => {
     // only propagate close events back to parent
@@ -431,12 +520,12 @@ export function AssociateProblemsDialog({
                 <Card className="flex w-1/2 flex-col p-2">
                   <div className="font-semibold text-sm truncate">All Problems</div>
                   <div className="flex max-h-72 min-h-[200px] flex-col gap-1 overflow-y-auto">
-                    {allProblems.length === 0 ? (
+                    {localAllProblems.length === 0 ? (
                       <div className="text-muted-foreground text-center text-xs italic">None</div>
                     ) : (
                       (() => {
                         const selectedSet = new Set(leftProblems.map((p) => p.id));
-                        return allProblems.map((problem) => {
+                        return localAllProblems.map((problem) => {
                           const isSelected = selectedSet.has(problem.id);
                           return (
                             <div
@@ -484,7 +573,7 @@ export function AssociateProblemsDialog({
                             return <div className="text-muted-foreground text-xs italic">No problems assigned to this group.</div>;
                           }
                           return assignedArr.map((pid) => {
-                            const p = allProblems.find((x) => x.id === pid);
+                            const p = localAllProblems.find((x) => x.id === pid);
                             if (!p) return null;
                             return (
                               <div key={pid} className="flex items-center gap-2 rounded border px-2 py-1">
@@ -506,12 +595,12 @@ export function AssociateProblemsDialog({
             <Card className="flex w-1/2 flex-col p-2">
               <div className="font-semibold">All Problems</div>
               <div className="flex max-h-72 min-h-[200px] flex-col gap-1 overflow-y-auto">
-                {allProblems.length === 0 ? (
+                {localAllProblems.length === 0 ? (
                   <div className="text-muted-foreground text-center text-xs italic">None</div>
                 ) : (
                   (() => {
                     const selectedSet = new Set(combinedUsedProblems.map((p) => p.id));
-                    return allProblems.map((problem) => {
+                    return localAllProblems.map((problem) => {
                       const isSelected = selectedSet.has(problem.id);
                       return (
                         <div
@@ -526,7 +615,7 @@ export function AssociateProblemsDialog({
                         >
                           <span className="truncate pr-2 text-xs font-medium">{problem.title}</span>
                           <AbbrevBadge type={problem.type} />
-                                                  </div>
+                        </div>
                       );
                     });
                   })()

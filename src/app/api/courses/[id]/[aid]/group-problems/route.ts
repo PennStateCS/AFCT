@@ -46,6 +46,53 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   }
 }
 
+// Support POST { action: 'list' } as an alternative to GET so clients do not
+// need to use AbortController.signal when requesting group mappings.
+export async function POST(req: Request, { params }: { params: Promise<{ id: string; aid: string }> }) {
+  const { id: courseId, aid: assignmentId } = await params;
+
+  try {
+    const session = await auth();
+    const user = session?.user;
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+
+    const body = await req.json().catch(() => ({}));
+    if (body?.action !== 'list') {
+      return NextResponse.json({ error: 'Unsupported POST action' }, { status: 400 });
+    }
+
+    // Reuse GET logic to build response
+    const groups = await prisma.group.findMany({ where: { courseId }, select: { id: true, name: true } });
+    const mappings = await prisma.groupAssignmentProblem.findMany({ where: { assignmentId } });
+
+    const mapByGroup: Record<string, string[]> = {};
+    for (const m of mappings) {
+      if (!mapByGroup[m.groupId]) mapByGroup[m.groupId] = [];
+      mapByGroup[m.groupId].push(m.problemId);
+    }
+
+    const result = groups.map((g) => ({ id: g.id, name: g.name, problemIds: mapByGroup[g.id] ?? [] }));
+
+    try {
+      await createEnhancedActivityLog(prisma, req as Request, {
+        userId: user.id,
+        action: 'VIEW_GROUP_PROBLEMS',
+        category: 'ASSIGNMENT',
+        courseId,
+        assignmentId,
+        metadata: { courseId, assignmentId },
+      });
+    } catch (logErr) {
+      console.error('[group-problems] activityLog.create failed:', logErr);
+    }
+
+    return NextResponse.json({ success: true, groups: result });
+  } catch (err) {
+    console.error('Failed to POST group-problems:', err);
+    return NextResponse.json({ error: 'Failed to fetch group problems' }, { status: 500 });
+  }
+}
+
 // DELETE: remove group->problem mappings for an assignment
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string; aid: string }> }) {
   const { id: courseId, aid: assignmentId } = await params;
