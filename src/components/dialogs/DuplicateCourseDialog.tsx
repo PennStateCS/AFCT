@@ -63,6 +63,12 @@ export default function DuplicateCourseDialog({
     credits: String(course?.credits ?? 3),
     startDate: course ? toDateTimeLocalInTimeZone(course.startDate, timeZone) : '',
     endDate: course ? toDateTimeLocalInTimeZone(course.endDate, timeZone) : '',
+    registrationOpenAt: course?.registrationOpenAt
+      ? toDateTimeLocalInTimeZone(course.registrationOpenAt, timeZone)
+      : '',
+    registrationCloseAt: course?.registrationCloseAt
+      ? toDateTimeLocalInTimeZone(course.registrationCloseAt, timeZone)
+      : '',
     copyMode: 'assignments_with_problems',
     copyFaculty: false,
     copyTAs: false,
@@ -89,6 +95,7 @@ export default function DuplicateCourseDialog({
 
   // Keep min (end) in sync with start
   const startDateStr = watch('startDate');
+  const registrationOpenAtStr = watch('registrationOpenAt');
 
   useEffect(() => {
     if (!open) return;
@@ -100,6 +107,12 @@ export default function DuplicateCourseDialog({
       credits: String(course?.credits ?? 3),
       startDate: course ? toDateTimeLocalInTimeZone(course.startDate, timeZone) : '',
       endDate: course ? toDateTimeLocalInTimeZone(course.endDate, timeZone) : '',
+      registrationOpenAt: course?.registrationOpenAt
+        ? toDateTimeLocalInTimeZone(course.registrationOpenAt, timeZone)
+        : '',
+      registrationCloseAt: course?.registrationCloseAt
+        ? toDateTimeLocalInTimeZone(course.registrationCloseAt, timeZone)
+        : '',
       copyMode: 'assignments_with_problems',
       copyFaculty: false,
       copyTAs: false,
@@ -118,6 +131,8 @@ export default function DuplicateCourseDialog({
       semester: raw.semester,
       startDate: raw.startDate,
       endDate: raw.endDate,
+      registrationOpenAt: raw.registrationOpenAt,
+      registrationCloseAt: raw.registrationCloseAt,
       credits: Number(raw.credits),
       copyAssignments: mode === 'assignments' || mode === 'assignments_with_problems',
       copyProblems: mode === 'problems' || mode === 'assignments_with_problems',
@@ -154,11 +169,23 @@ export default function DuplicateCourseDialog({
     | 'credits'
     | 'startDate'
     | 'endDate'
+    | 'registrationOpenAt'
+    | 'registrationCloseAt'
     | 'copyMode'
     | 'copyFaculty'
     | 'copyTAs';
   const fieldsForStep = (s: number): FieldName[] => {
-    if (s === 1) return ['name', 'code', 'semester', 'credits', 'startDate', 'endDate'];
+    if (s === 1)
+      return [
+        'name',
+        'code',
+        'semester',
+        'credits',
+        'startDate',
+        'endDate',
+        'registrationOpenAt',
+        'registrationCloseAt',
+      ];
     if (s === 2) return ['copyMode', 'copyFaculty', 'copyTAs'];
     return [];
   };
@@ -275,6 +302,37 @@ export default function DuplicateCourseDialog({
                     fieldProps={{ ...field, value: field.value ?? '' }}
                     error={errors.endDate?.message as string | undefined}
                     min={startDateStr || undefined}
+                  />
+                )}
+              />
+
+              <Controller
+                control={control}
+                name="registrationOpenAt"
+                render={({ field }) => (
+                  <InputGroup
+                    label="Self Registration Opens"
+                    name="registrationOpenAt"
+                    type="datetime-local"
+                    isValid={!field.value}
+                    fieldProps={{ ...field, value: field.value ?? '' }}
+                    error={errors.registrationOpenAt?.message as string | undefined}
+                  />
+                )}
+              />
+
+              <Controller
+                control={control}
+                name="registrationCloseAt"
+                render={({ field }) => (
+                  <InputGroup
+                    label="Self Registration Closes"
+                    name="registrationCloseAt"
+                    type="datetime-local"
+                    isValid={!field.value}
+                    fieldProps={{ ...field, value: field.value ?? '' }}
+                    error={errors.registrationCloseAt?.message as string | undefined}
+                    min={registrationOpenAtStr || undefined}
                   />
                 )}
               />
@@ -406,6 +464,10 @@ export default function DuplicateCourseDialog({
                       </div>
                       <div>
                         <strong>Dates:</strong> {v.startDate || '—'} to {v.endDate || '—'}
+                      </div>
+                      <div>
+                        <strong>Self registration:</strong> {v.registrationOpenAt || '—'} to{' '}
+                        {v.registrationCloseAt || '—'}
                       </div>
                       <div>
                         <strong>Credits:</strong> {v.credits}

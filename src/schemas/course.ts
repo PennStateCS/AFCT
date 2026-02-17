@@ -253,6 +253,23 @@ export const DuplicateFormSchema = BaseCourseFormObject.extend({
   .refine((d) => d.startDate <= d.endDate, {
     path: ['endDate'],
     message: 'End date/time must be on or after the start date/time.',
+  })
+  .superRefine((d, ctx) => {
+    const registrationOpenAt = new Date(d.registrationOpenAt);
+    const registrationCloseAt = new Date(d.registrationCloseAt);
+
+    if (registrationOpenAt > registrationCloseAt) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['registrationOpenAt'],
+        message: 'Self registration open must be on or before the close date.',
+      });
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['registrationCloseAt'],
+        message: 'Self registration close must be on or after the open date.',
+      });
+    }
   });
 
 /** Types */

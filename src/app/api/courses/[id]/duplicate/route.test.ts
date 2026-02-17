@@ -23,17 +23,26 @@ beforeEach(() => {
 });
 
 describe('POST /api/courses/[id]/duplicate', () => {
+  const basePayload = {
+    title: 'New',
+    code: 'C1',
+    semester: 'Fall',
+    startDate: '2025-01-01T09:00',
+    endDate: '2025-05-01T09:00',
+    registrationOpenAt: '2024-12-01T09:00',
+    registrationCloseAt: '2025-01-15T09:00',
+  } as const;
+  const makePayload = (overrides: Record<string, unknown> = {}) => ({
+    ...basePayload,
+    ...overrides,
+  });
+
   it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
     const req = new NextRequest('http://localhost/api/courses/c1/duplicate', {
       method: 'POST',
-      body: JSON.stringify({
-        title: 'New',
-        semester: 'Fall',
-        startDate: '2025-01-01',
-        endDate: '2025-05-01',
-      }),
+      body: JSON.stringify(makePayload()),
     });
 
     const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
@@ -46,12 +55,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
 
     const req = new NextRequest('http://localhost/api/courses/c1/duplicate', {
       method: 'POST',
-      body: JSON.stringify({
-        title: 'New',
-        semester: 'Fall',
-        startDate: '2025-01-01',
-        endDate: '2025-05-01',
-      }),
+      body: JSON.stringify(makePayload()),
     });
 
     const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
@@ -91,14 +95,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
 
     const req = new NextRequest('http://localhost/api/courses/c1/duplicate', {
       method: 'POST',
-      body: JSON.stringify({
-        title: 'New',
-        code: 'C1',
-        semester: 'Fall',
-        startDate: '2025-01-01',
-        endDate: '2025-05-01',
-        copyMode: 'assignments',
-      }),
+      body: JSON.stringify(makePayload({ copyMode: 'assignments' })),
     });
 
     const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
@@ -130,14 +127,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
 
     const req = new NextRequest('http://localhost/api/courses/c1/duplicate', {
       method: 'POST',
-      body: JSON.stringify({
-        title: 'New',
-        code: 'C1',
-        semester: 'Fall',
-        startDate: '2025-01-01',
-        endDate: '2025-05-01',
-        copyMode: 'problems',
-      }),
+      body: JSON.stringify(makePayload({ copyMode: 'problems' })),
     });
 
     const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
@@ -179,14 +169,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
 
     const req = new NextRequest('http://localhost/api/courses/c1/duplicate', {
       method: 'POST',
-      body: JSON.stringify({
-        title: 'New',
-        code: 'C1',
-        semester: 'Fall',
-        startDate: '2025-01-01',
-        endDate: '2025-05-01',
-        copyMode: 'assignments_with_problems',
-      }),
+      body: JSON.stringify(makePayload({ copyMode: 'assignments_with_problems' })),
     });
 
     const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
@@ -221,15 +204,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
 
     const req = new NextRequest('http://localhost/api/courses/c1/duplicate', {
       method: 'POST',
-      body: JSON.stringify({
-        title: 'New',
-        code: 'C1',
-        semester: 'Fall',
-        startDate: '2025-01-01',
-        endDate: '2025-05-01',
-        copyFaculty: true,
-        copyTAs: true,
-      }),
+      body: JSON.stringify(makePayload({ copyFaculty: true, copyTAs: true })),
     });
 
     const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
@@ -257,13 +232,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
 
     const req = new NextRequest('http://localhost/api/courses/c1/duplicate', {
       method: 'POST',
-      body: JSON.stringify({
-        title: 'New',
-        code: 'C1',
-        semester: 'Fall',
-        startDate: '2025-01-01',
-        endDate: '2025-05-01',
-      }),
+      body: JSON.stringify(makePayload()),
     });
 
     const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
@@ -296,15 +265,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
 
     const req = new NextRequest('http://localhost/api/courses/c1/duplicate', {
       method: 'POST',
-      body: JSON.stringify({
-        title: 'New',
-        code: 'C1',
-        semester: 'Fall',
-        startDate: '2025-01-01',
-        endDate: '2025-05-01',
-        copyAssignments: true,
-        copyProblems: true,
-      }),
+      body: JSON.stringify(makePayload({ copyAssignments: true, copyProblems: true })),
     });
 
     const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
