@@ -673,7 +673,7 @@ export default function AssignmentDashboardPage() {
         onAddProblems={(selectedProblemIds, groupId) => {
           const existingIds = assignment.problems.map((ap: { problem: Problem }) => ap.problem.id);
           const merged = Array.from(new Set([...existingIds, ...selectedProblemIds]));
-          handleAddProblems(merged, groupId);
+          return handleAddProblems(merged, groupId);
         }}
       />
       <CreateProblemDialog
