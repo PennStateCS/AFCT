@@ -137,6 +137,8 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
       credits: course.credits,
       startDate: course.startDate,
       endDate: course.endDate,
+      registrationOpenAt: course.registrationOpenAt,
+      registrationCloseAt: course.registrationCloseAt,
       isPublished: course.isPublished,
       isArchived: course.isArchived,
       createdAt: course.createdAt,
@@ -210,6 +212,10 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
     }
   }
 
+  if (!body.registrationOpenAt || !body.registrationCloseAt) {
+    return NextResponse.json({ error: 'Registration window is required.' }, { status: 400 });
+  }
+
   try {
     const instructorIds = Array.isArray(body.instructorIds) ? body.instructorIds : null;
     if (Array.isArray(instructorIds) && instructorIds.length === 0) {
@@ -230,20 +236,39 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
           credits: Number(body.credits),
           startDate: toDateTimeInTimezone(body.startDate, userTimezone),
           endDate: toDateTimeInTimezone(body.endDate, userTimezone),
+          registrationOpenAt: body.registrationOpenAt
+            ? toDateTimeInTimezone(body.registrationOpenAt, userTimezone)
+            : null,
+          registrationCloseAt: body.registrationCloseAt
+            ? toDateTimeInTimezone(body.registrationCloseAt, userTimezone)
+            : null,
           isPublished: body.isPublished,
           isArchived: body.isArchived,
         },
       });
 
       if (instructorIds) {
-        const existingFaculty = await tx.roster.findMany({
-          where: { courseId: id, role: 'FACULTY' },
-          select: { userId: true },
+        const existingRoster = await tx.roster.findMany({
+          where: { courseId: id },
+          select: { userId: true, role: true },
         });
-        const existingFacultyIds = new Set(existingFaculty.map((r) => r.userId));
+        const existingFacultyIds = new Set(
+          existingRoster.filter((r) => r.role === 'FACULTY').map((r) => r.userId),
+        );
         const desiredFacultyIds = new Set(instructorIds);
 
-        const toAdd = instructorIds.filter((userId: string) => !existingFacultyIds.has(userId));
+        const toAdd: string[] = [];
+        const toPromote: string[] = [];
+        instructorIds.forEach((userId: string) => {
+          const existing = existingRoster.find((r) => r.userId === userId);
+          if (!existing) {
+            toAdd.push(userId);
+            return;
+          }
+          if (existing.role !== 'FACULTY') {
+            toPromote.push(userId);
+          }
+        });
         const toRemove = Array.from(existingFacultyIds).filter(
           (userId) => !desiredFacultyIds.has(userId),
         );
@@ -254,6 +279,13 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
           });
         }
 
+        if (toPromote.length > 0) {
+          await tx.roster.updateMany({
+            where: { courseId: id, userId: { in: toPromote } },
+            data: { role: 'FACULTY' },
+          });
+        }
+
         if (toAdd.length > 0) {
           await tx.roster.createMany({
             data: toAdd.map((userId: string) => ({
@@ -261,6 +293,7 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
               courseId: id,
               role: 'FACULTY',
             })),
+            skipDuplicates: true,
           });
         }
       }
@@ -384,6 +417,8 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
       credits: updatedCourse.credits,
       startDate: updatedCourse.startDate,
       endDate: updatedCourse.endDate,
+      registrationOpenAt: updatedCourse.registrationOpenAt,
+      registrationCloseAt: updatedCourse.registrationCloseAt,
       isPublished: updatedCourse.isPublished,
       isArchived: updatedCourse.isArchived,
       createdAt: updatedCourse.createdAt,
