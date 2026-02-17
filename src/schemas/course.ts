@@ -45,6 +45,11 @@ const DateTimeLocalForm = z
     }
   });
 
+const OptionalDateTimeLocalForm = z
+  .union([z.literal(''), DateTimeLocalForm])
+  .optional()
+  .default('');
+
 /**
  * Normalize helpers
  */
@@ -71,6 +76,8 @@ const BaseCourseObject = z
     credits: z.coerce.number().int('Credits must be an integer.').min(1).max(6),
     startDate: DateTimeLocal,
     endDate: DateTimeLocal,
+    registrationOpenAt: DateTimeLocal.optional(),
+    registrationCloseAt: DateTimeLocal.optional(),
     isPublished: z.boolean().default(false),
   })
   .strict();
@@ -86,6 +93,8 @@ const BaseCourseFormObject = z
     credits: z.string().min(1, 'Credits are required.'),
     startDate: DateTimeLocalForm,
     endDate: DateTimeLocalForm,
+    registrationOpenAt: OptionalDateTimeLocalForm,
+    registrationCloseAt: OptionalDateTimeLocalForm,
   })
   .strict();
 
@@ -164,6 +173,28 @@ export const CreateCourseFormSchema = BaseCourseFormObject.extend({
       code: z.ZodIssueCode.custom,
       path: ['instructorIds'],
       message: 'Pick at least one instructor.',
+    });
+  }
+
+  const parseOptionalDate = (value?: string) => {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  };
+
+  const registrationOpenAt = parseOptionalDate(d.registrationOpenAt);
+  const registrationCloseAt = parseOptionalDate(d.registrationCloseAt);
+
+  if (registrationOpenAt && registrationCloseAt && registrationOpenAt > registrationCloseAt) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['registrationOpenAt'],
+      message: 'Self registration open must be on or before the close date.',
+    });
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['registrationCloseAt'],
+      message: 'Self registration close must be on or after the open date.',
     });
   }
 });
