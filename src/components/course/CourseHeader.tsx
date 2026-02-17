@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -20,6 +20,7 @@ import type { FullCourse } from '@/types/course';
 import { getInstructors, getStudentCount } from '@/lib/course-utils';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatDateTimeInTimeZone } from '@/lib/date';
+import { getCourseStatusTag } from '@/lib/course-status';
 
 interface CourseHeaderProps {
   course: FullCourse;
@@ -41,7 +42,7 @@ export function CourseHeader({
   const { timezone } = useEffectiveTimezone();
   // -- helpers ---------------------------------------------------------------
   // Get course status tag at the top
-  const { status, bgColor } = require('@/lib/course-status').getCourseStatusTag(course);
+  const { status, bgColor } = getCourseStatusTag(course);
   const regCodeFormatted = useMemo(() => {
     if (!course.regCode) return null;
     const rc = course.regCode.toUpperCase().replace(/[^A-Z0-9]/g, '');
