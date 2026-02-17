@@ -56,6 +56,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       semester,
       startDate,
       endDate,
+      registrationOpenAt,
+      registrationCloseAt,
       credits,
       copyAssignments: bodyCopyAssignments,
       copyProblems: bodyCopyProblems,
@@ -80,7 +82,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     // Validate minimal fields
-    if (!title || !semester || !startDate || !endDate) {
+    if (
+      !title ||
+      !semester ||
+      !startDate ||
+      !endDate ||
+      !registrationOpenAt ||
+      !registrationCloseAt
+    ) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
@@ -112,6 +121,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           credits: Number(credits) || 0,
           startDate: toDateTimeInTimezone(startDate, userTimezone),
           endDate: toDateTimeInTimezone(endDate, userTimezone),
+          registrationOpenAt: toDateTimeInTimezone(registrationOpenAt, userTimezone),
+          registrationCloseAt: toDateTimeInTimezone(registrationCloseAt, userTimezone),
           isPublished: false,
           isArchived: false,
           regCode,
