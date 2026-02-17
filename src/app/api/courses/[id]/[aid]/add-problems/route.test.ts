@@ -122,6 +122,7 @@ describe('POST /api/courses/[id]/[aid]/add-problems', () => {
     });
 
     const res = await POST(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
+
     expect(res.status).toBe(200);
 
     expect(prismaMock.group.findMany).toHaveBeenCalledWith({ where: { courseId: 'c1' } });
@@ -154,6 +155,31 @@ describe('POST /api/courses/[id]/[aid]/add-problems', () => {
     expect(prismaMock.group.findUnique).toHaveBeenCalledWith({ where: { id: 'g-x' } });
     expect(prismaMock.groupAssignmentProblem.createMany).toHaveBeenCalledWith({
       data: [{ assignmentId: 'a1', problemId: 'p4', groupId: 'g-x' }],
+      skipDuplicates: true,
+    });
+  });
+
+  it('allows assigning an already-present assignment problem to a group', async () => {
+    // Problem is already part of the assignment (assignmentProblem.findMany returns it)
+    prismaMock.problem.findMany.mockResolvedValue([{ id: 'p5' }]);
+    prismaMock.assignmentProblem.findMany.mockResolvedValue([{ problemId: 'p5', _count: { submissions: 0 } }]);
+    prismaMock.assignmentProblem.createMany.mockResolvedValue({ count: 0 });
+    prismaMock.assignment.findUnique.mockResolvedValue({ id: 'assignment-1', isGroup: true });
+    prismaMock.group.findUnique.mockResolvedValue({ id: 'g-y', courseId: 'c1' });
+    prismaMock.groupAssignmentProblem.createMany.mockResolvedValue({ count: 1 });
+
+    const req = new Request('http://localhost/api/courses/c1/a1/add-problems', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ problemIds: ['p5'], groupId: 'g-y' }),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
+    expect(res.status).toBe(200);
+
+    expect(prismaMock.group.findUnique).toHaveBeenCalledWith({ where: { id: 'g-y' } });
+    expect(prismaMock.groupAssignmentProblem.createMany).toHaveBeenCalledWith({
+      data: [{ assignmentId: 'a1', problemId: 'p5', groupId: 'g-y' }],
       skipDuplicates: true,
     });
   });
