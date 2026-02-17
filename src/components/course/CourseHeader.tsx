@@ -6,11 +6,20 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { CalendarDays, Pencil, Copy, CopyCheck, Layers as DuplicateIcon } from 'lucide-react';
+import {
+  Pencil,
+  Copy,
+  CopyCheck,
+  Layers as DuplicateIcon,
+  Users,
+  ClipboardList,
+  BookOpen,
+  Inbox,
+} from 'lucide-react';
 import type { FullCourse } from '@/types/course';
 import { getInstructors, getStudentCount } from '@/lib/course-utils';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { formatDateInTimeZone, formatDateTimeInTimeZone } from '@/lib/date';
+import { formatDateTimeInTimeZone } from '@/lib/date';
 
 interface CourseHeaderProps {
   course: FullCourse;
@@ -33,24 +42,80 @@ export function CourseHeader({
   // -- helpers ---------------------------------------------------------------
   // Get course status tag at the top
   const { status, bgColor } = require('@/lib/course-status').getCourseStatusTag(course);
-  const formatRange = (start?: string | Date | null, end?: string | Date | null) => {
-    const toDate = (v?: string | Date | null) => (!v ? null : v instanceof Date ? v : new Date(v));
-    const s = toDate(start);
-    const e = toDate(end);
-    if (!s && !e) return 'Dates TBD';
-    if (s && !e) return `${formatDateTimeInTimeZone(s, timezone)} to TBD`;
-    if (!s && e) return `TBD to ${formatDateTimeInTimeZone(e, timezone)}`;
-    if (s && e && Number.isFinite(s.getTime()) && Number.isFinite(e.getTime())) {
-      return `${formatDateTimeInTimeZone(s, timezone)} to ${formatDateTimeInTimeZone(e, timezone)}`;
-    }
-    return 'Invalid dates';
-  };
-
   const regCodeFormatted = useMemo(() => {
     if (!course.regCode) return null;
     const rc = course.regCode.toUpperCase().replace(/[^A-Z0-9]/g, '');
     return rc.length <= 3 ? rc : `${rc.slice(0, 3)}-${rc.slice(3)}`;
   }, [course.regCode]);
+
+  const normalizeDate = (value?: string | Date | null) => {
+    if (!value) return null;
+    const date = value instanceof Date ? value : new Date(value);
+    return Number.isFinite(date.getTime()) ? date : null;
+  };
+  const startDate = normalizeDate(course.startDate);
+  const endDate = normalizeDate(course.endDate);
+  const registrationOpenAt = normalizeDate(course.registrationOpenAt);
+  const registrationCloseAt = normalizeDate(course.registrationCloseAt);
+  const formatRegistrationDate = (value: Date | null) =>
+    value ? formatDateTimeInTimeZone(value, timezone) : 'Not set';
+  const formatCourseDate = (value: Date | null) =>
+    value ? formatDateTimeInTimeZone(value, timezone) : 'Not set';
+  const badgeTheme = {
+    upcoming: {
+      className: 'bg-blue-100 text-blue-900 border border-blue-200',
+    },
+    open: {
+      className: 'bg-green-100 text-green-900 border border-green-200',
+    },
+    closed: {
+      className: 'bg-gray-200 text-gray-900 border border-gray-300',
+    },
+  } as const;
+
+  const registrationStatus = (() => {
+    if (!registrationOpenAt || !registrationCloseAt) {
+      return {
+        label: 'Closed',
+        theme: badgeTheme.closed,
+        detail: null,
+      };
+    }
+    const now = Date.now();
+    if (now >= registrationOpenAt.getTime() && now <= registrationCloseAt.getTime()) {
+      return {
+        label: 'Open',
+        theme: badgeTheme.open,
+        detail: `Closes ${formatDateTimeInTimeZone(registrationCloseAt, timezone)}`,
+      };
+    }
+    if (now < registrationOpenAt.getTime()) {
+      return {
+        label: 'Upcoming',
+        theme: badgeTheme.upcoming,
+        detail: `Opens ${formatDateTimeInTimeZone(registrationOpenAt, timezone)}`,
+      };
+    }
+    return {
+      label: 'Closed',
+      theme: badgeTheme.closed,
+      detail: `Closed ${formatDateTimeInTimeZone(registrationCloseAt, timezone)}`,
+    };
+  })();
+
+  const courseStatus = (() => {
+    if (!startDate || !endDate) {
+      return { label: 'Upcoming', theme: badgeTheme.upcoming };
+    }
+    const now = Date.now();
+    if (now < startDate.getTime()) {
+      return { label: 'Upcoming', theme: badgeTheme.upcoming };
+    }
+    if (now > endDate.getTime()) {
+      return { label: 'Closed', theme: badgeTheme.closed };
+    }
+    return { label: 'Open', theme: badgeTheme.open };
+  })();
 
   const [copied, setCopied] = useState(false);
   const copyRegCode = async () => {
@@ -148,12 +213,6 @@ export function CourseHeader({
               <span className="text-muted-foreground">: </span>
               {course.name}
             </CardTitle>
-            {/* Course status tag (shared logic) */}
-            <span
-              className={`inline-block rounded ${bgColor} px-2 py-1 text-sm text-white shadow-sm ring-1 ring-gray-900/30`}
-            >
-              {status}
-            </span>
           </div>
 
           {/* meta row */}
@@ -162,10 +221,6 @@ export function CourseHeader({
             <Badge variant="outline">
               {course.credits} credit{course.credits === 1 ? '' : 's'}
             </Badge>
-            <span className="text-muted-foreground inline-flex items-center gap-1">
-              <CalendarDays className="h-4 w-4" aria-hidden />
-              {formatRange(course.startDate, course.endDate)}
-            </span>
           </div>
         </div>
 
@@ -224,7 +279,7 @@ export function CourseHeader({
       </CardHeader>
 
       {/* Three cards; spacing kept exactly as before (px-6 pt-1 pb-1 + gap-3) */}
-      <CardContent className="grid gap-7 px-6 pt-1 pb-1 sm:grid-cols-2 lg:grid-cols-3">
+      <CardContent className="grid gap-7 px-6 pt-1 pb-1 sm:grid-cols-2 lg:grid-cols-4">
         {!isStudent && (
           <>
             {/* Course Access (flush colored header touching border) */}
@@ -234,9 +289,63 @@ export function CourseHeader({
               </div>
               <div className="px-2.5 pt-2 pb-2.5">
                 <div className="grid grid-cols-1 gap-y-2 text-sm">
-                  {/* Registration Code */}
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground text-xs">Registration Code:</span>
+                    <span className="text-muted-foreground text-xs">Status</span>
+                    <Badge className={`text-xs font-medium ${courseStatus.theme.className}`}>
+                      {courseStatus.label}
+                    </Badge>
+                  </div>
+                  {/* Published */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground text-[11px]">Published</span>
+                    <Switch
+                      checked={course.isPublished}
+                      onCheckedChange={onPublishToggle}
+                      aria-label="Toggle course publishability"
+                      disabled={course.isArchived}
+                    />
+                  </div>
+
+                  {/* Archived */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground text-[11px]">Archived</span>
+                    <Switch
+                      checked={course.isArchived}
+                      onCheckedChange={onArchiveToggle}
+                      aria-label="Toggle course archive"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground text-[11px]">Start Date</span>
+                    <span className="text-right text-xs leading-snug">
+                      {formatCourseDate(startDate)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground text-[11px]">End Date</span>
+                    <span className="text-right text-xs leading-snug">
+                      {formatCourseDate(endDate)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Self Registration (flush colored header touching border) */}
+            <div className="rounded-md border">
+              <div className="bg-sidebar/80 rounded-t-md border-b px-2.5 py-2 text-sm leading-none font-medium text-white">
+                Self Registration
+              </div>
+              <div className="px-2.5 pt-2 pb-2.5">
+                <div className="grid gap-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground text-xs">Status</span>
+                    <Badge className={`text-xs font-medium ${registrationStatus.theme.className}`}>
+                      {registrationStatus.label}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground text-xs">Registration Code</span>
                     <div className="flex items-center gap-2">
                       <span className="text-xs">{regCodeFormatted ?? 'Not set'}</span>
                       {regCodeFormatted && (
@@ -263,26 +372,17 @@ export function CourseHeader({
                       )}
                     </div>
                   </div>
-
-                  {/* Published */}
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground text-[11px]">Published:</span>
-                    <Switch
-                      checked={course.isPublished}
-                      onCheckedChange={onPublishToggle}
-                      aria-label="Toggle course publishability"
-                      disabled={course.isArchived}
-                    />
+                    <span className="text-muted-foreground text-xs">Opens</span>
+                    <span className="text-right text-xs leading-snug">
+                      {formatRegistrationDate(registrationOpenAt)}
+                    </span>
                   </div>
-
-                  {/* Archived */}
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground text-[11px]">Archived:</span>
-                    <Switch
-                      checked={course.isArchived}
-                      onCheckedChange={onArchiveToggle}
-                      aria-label="Toggle course archive"
-                    />
+                    <span className="text-muted-foreground text-xs">Closes</span>
+                    <span className="text-right text-xs leading-snug">
+                      {formatRegistrationDate(registrationCloseAt)}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -313,30 +413,34 @@ export function CourseHeader({
                 Course Metrics
               </div>
               <div className="px-2.5 pt-2 pb-2.5">
-                <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                  <div className="flex justify-between">
-                    <dt className="text-muted-foreground text-[11px]">Assignments</dt>
-                    <dd className="font-medium">{metrics.assignments}</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-muted-foreground text-[11px]">Problems</dt>
-                    <dd className="font-medium">{metrics.problems}</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-muted-foreground text-[11px]">Students</dt>
+                <dl className="grid gap-1.5 text-sm">
+                  <div className="flex items-center justify-between">
+                    <dt className="text-muted-foreground flex items-center gap-1.5 text-[11px]">
+                      <Users className="h-3.5 w-3.5 text-blue-500" aria-hidden />
+                      Students
+                    </dt>
                     <dd className="font-medium">{metrics.students}</dd>
                   </div>
-                  <div className="flex justify-between">
-                    <dt className="text-muted-foreground text-[11px]">Submissions</dt>
+                  <div className="flex items-center justify-between">
+                    <dt className="text-muted-foreground flex items-center gap-1.5 text-[11px]">
+                      <ClipboardList className="h-3.5 w-3.5 text-emerald-500" aria-hidden />
+                      Assignments
+                    </dt>
+                    <dd className="font-medium">{metrics.assignments}</dd>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <dt className="text-muted-foreground flex items-center gap-1.5 text-[11px]">
+                      <BookOpen className="h-3.5 w-3.5 text-amber-500" aria-hidden />
+                      Problems
+                    </dt>
+                    <dd className="font-medium">{metrics.problems}</dd>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <dt className="text-muted-foreground flex items-center gap-1.5 text-[11px]">
+                      <Inbox className="h-3.5 w-3.5 text-purple-500" aria-hidden />
+                      Submissions
+                    </dt>
                     <dd className="font-medium">{metrics.submissions}</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-muted-foreground text-[11px]">Needs Grading</dt>
-                    <dd className="font-medium">{metrics.needsGrading}</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-muted-foreground text-[11px]">Comments</dt>
-                    <dd className="font-medium">{metrics.comments}</dd>
                   </div>
                 </dl>
               </div>
