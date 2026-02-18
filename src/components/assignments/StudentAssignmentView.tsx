@@ -42,6 +42,7 @@ type AssignmentProblem = {
 type AssignmentWithDetails = Assignment & {
   course: Course;
   problems: AssignmentProblem[];
+  maxPoints: number;
 };
 
 type Submission = {

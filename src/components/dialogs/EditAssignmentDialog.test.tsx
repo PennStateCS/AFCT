@@ -92,7 +92,6 @@ const baseAssignment: Assignment = {
   title: 'Original Title',
   description: 'Old description',
   dueDate: new Date('2026-09-01T23:59:00Z'),
-  maxPoints: 50,
   isPublished: false,
   allowLateSubmissions: true,
   lateCutoff: null,
@@ -173,7 +172,6 @@ describe('EditAssignmentDialog', () => {
       title: 'Original Title Updated',
       description: baseAssignment.description,
       courseId: baseAssignment.courseId,
-      maxPoints: 50,
       isPublished: true,
     });
 

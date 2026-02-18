@@ -140,7 +140,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         title: data.title,
         description: data.description,
         dueDate: toEndOfDayInTimezone(data.dueDate, userTimezone),
-        maxPoints: data.maxPoints,
         isPublished: data.isPublished,
       },
     });
@@ -210,7 +209,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       title?: string;
       description?: string;
       dueDate?: Date;
-      maxPoints?: number;
       isPublished?: boolean;
     } = {};
 
@@ -219,7 +217,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (data.dueDate !== undefined) {
       updateData.dueDate = toEndOfDayInTimezone(data.dueDate, userTimezone);
     }
-    if (data.maxPoints !== undefined) updateData.maxPoints = data.maxPoints;
     if (data.isPublished !== undefined) updateData.isPublished = data.isPublished;
 
     const updated = await prisma.assignment.update({
@@ -269,7 +266,6 @@ export async function POST(req: NextRequest) {
         title: data.title,
         description: data.description,
         dueDate: toEndOfDayInTimezone(data.dueDate, userTimezone),
-        maxPoints: data.maxPoints || 0,
         isPublished: data.isPublished || false,
         courseId: data.courseId,
       },
@@ -286,7 +282,6 @@ export async function POST(req: NextRequest) {
         courseId: created.courseId,
         assignmentId: created.id,
         title: created.title,
-        maxPoints: created.maxPoints,
       },
     });
 

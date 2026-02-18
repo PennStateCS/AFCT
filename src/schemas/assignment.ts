@@ -49,10 +49,6 @@ const BaseAssignmentSchema = z
       .max(20000, 'Description is too long.')
       .optional()
       .or(z.literal('')),
-    maxPoints: z.coerce
-      .number({ message: 'Max points are required.' })
-      .min(0, 'Max points cannot be negative.')
-      .max(100000, 'Max points is too large.'),
     dueDate: DateTimeLocal,
     courseId: z.string().min(1, 'Course id is required.'),
   })
@@ -70,7 +66,6 @@ const BaseAssignmentFormSchema = z
       .max(20000, 'Description is too long.')
       .optional()
       .or(z.literal('')),
-    maxPoints: z.string().min(1, 'Max points are required.'),
     dueDate: DateTimeLocalForm,
     isPublished: z.boolean(),
     courseId: z.string().min(1, 'Course id is required.'),
@@ -82,14 +77,6 @@ const BaseAssignmentFormSchema = z
  */
 export const CreateAssignmentSchema = BaseAssignmentSchema.extend({
   isPublished: z.boolean().default(false),
-}).superRefine((d, ctx) => {
-  if (d.isPublished && d.maxPoints <= 0) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['maxPoints'],
-      message: 'Max points must be greater than 0 to publish.',
-    });
-  }
 });
 
 /**
@@ -98,33 +85,6 @@ export const CreateAssignmentSchema = BaseAssignmentSchema.extend({
  */
 export const CreateAssignmentFormSchema = BaseAssignmentFormSchema.extend({
   isPublished: z.boolean(),
-}).superRefine((d, ctx) => {
-  const maxPoints = Number(d.maxPoints);
-  if (isNaN(maxPoints)) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['maxPoints'],
-      message: 'Max points must be a valid number.',
-    });
-  } else if (maxPoints < 0) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['maxPoints'],
-      message: 'Max points cannot be negative.',
-    });
-  } else if (maxPoints > 100000) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['maxPoints'],
-      message: 'Max points is too large.',
-    });
-  } else if (d.isPublished && maxPoints <= 0) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['maxPoints'],
-      message: 'Max points must be greater than 0 to publish.',
-    });
-  }
 });
 
 /**
@@ -133,24 +93,6 @@ export const CreateAssignmentFormSchema = BaseAssignmentFormSchema.extend({
 export const UpdateAssignmentSchema = BaseAssignmentFormSchema.partial().extend({
   id: z.string().min(1, 'Assignment id is required.'),
   isPublished: z.boolean().optional(),
-}).superRefine((d, ctx) => {
-  // Only validate maxPoints vs publish if both are provided
-  if (d.isPublished && d.maxPoints !== undefined) {
-    const maxPoints = Number(d.maxPoints);
-    if (isNaN(maxPoints)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['maxPoints'],
-        message: 'Max points must be a valid number.',
-      });
-    } else if (d.isPublished && maxPoints <= 0) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['maxPoints'],
-        message: 'Max points must be greater than 0 to publish.',
-      });
-    }
-  }
 });
 
 /** Export a form-only schema for UI, if you want the bare form without publish logic */

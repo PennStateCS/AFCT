@@ -308,7 +308,6 @@ describe('PATCH /api/assignments/[id]', () => {
       id: 'a1',
       courseId: 'c1',
       title: 'New Title',
-      maxPoints: 100,
     });
 
     const req = new NextRequest('http://localhost/api/assignments/a1', {
@@ -316,7 +315,6 @@ describe('PATCH /api/assignments/[id]', () => {
       body: JSON.stringify({
         title: 'New Title',
         description: 'New description',
-        maxPoints: 100,
         dueDate: '2025-01-15',
       }),
     });
@@ -326,7 +324,6 @@ describe('PATCH /api/assignments/[id]', () => {
     const updateCall = prismaMock.assignment.update.mock.calls[0][0];
     expect(updateCall.data).toHaveProperty('title', 'New Title');
     expect(updateCall.data).toHaveProperty('description', 'New description');
-    expect(updateCall.data).toHaveProperty('maxPoints', 100);
   });
 });
 
@@ -386,7 +383,6 @@ describe('POST /api/assignments/[id]', () => {
       id: 'a1',
       title: 'Assignment 1',
       courseId: 'c1',
-      maxPoints: 0,
       isPublished: false,
     });
 
@@ -402,7 +398,6 @@ describe('POST /api/assignments/[id]', () => {
         data: expect.objectContaining({
           title: 'Assignment 1',
           courseId: 'c1',
-          maxPoints: 0,
           isPublished: false,
         }),
       }),
@@ -418,7 +413,6 @@ describe('POST /api/assignments/[id]', () => {
       title: 'Homework 1',
       description: 'Complete all problems',
       courseId: 'c1',
-      maxPoints: 100,
       isPublished: true,
     });
 
@@ -428,7 +422,6 @@ describe('POST /api/assignments/[id]', () => {
         title: 'Homework 1',
         description: 'Complete all problems',
         courseId: 'c1',
-        maxPoints: 100,
         isPublished: true,
         dueDate: '2025-02-01',
       }),
@@ -437,7 +430,6 @@ describe('POST /api/assignments/[id]', () => {
 
     expect(res.status).toBe(201);
     const json = await res.json();
-    expect(json.maxPoints).toBe(100);
     expect(json.isPublished).toBe(true);
   });
 });
