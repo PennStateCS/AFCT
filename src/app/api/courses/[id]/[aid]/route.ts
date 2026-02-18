@@ -18,8 +18,11 @@ interface AssignmentWithProblemsAndCourse {
       isDeterministic: boolean | null;
       fileName: string | null;
       originalFileName: string | null;
-    }
-  }[]
+    };
+    maxPoints: number;
+    maxSubmissions: number;
+    autograderEnabled: boolean;
+  }[];
 
   course: {
     name: string;
@@ -44,48 +47,51 @@ export async function GET(_: Request, context: { params: Promise<{ id: string; a
   try {
     // Query the assignment from the database
     const assignment = await prisma.assignment.findFirst({
-    where: {
-      id: assignmentId,
-      courseId,
-    },
-    include: {
-      problems: {
-        select: {
-          problem: {
-            select: {
-              id: true,
-              title: true,
-              description: true,
-              type: true,
-              maxStates: true,
-              isDeterministic: true,
-              fileName: true,
-              originalFileName: true,
+      where: {
+        id: assignmentId,
+        courseId,
+      },
+      include: {
+        problems: {
+          select: {
+            maxPoints: true,
+            maxSubmissions: true,
+            autograderEnabled: true,
+            problem: {
+              select: {
+                id: true,
+                title: true,
+                description: true,
+                type: true,
+                maxStates: true,
+                isDeterministic: true,
+                fileName: true,
+                originalFileName: true,
+              },
             },
           },
         },
-      },
-      course: {
-        select: {
-          name: true,
-          code: true,
-          isArchived: true,
-          roster: {
-            select: {
-              role: true,
-              user: {
-                select: {
-                  id: true,
-                  firstName: true,
-                  lastName: true,
+        course: {
+          select: {
+            name: true,
+            code: true,
+            isArchived: true,
+            roster: {
+              select: {
+                role: true,
+                user: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                  },
                 },
               },
             },
           },
         },
       },
-    },
-  }) as AssignmentWithProblemsAndCourse | null;
+    }) as AssignmentWithProblemsAndCourse | null;
 
     // Return 404 if no matching assignment was found
     if (!assignment) {
@@ -93,18 +99,21 @@ export async function GET(_: Request, context: { params: Promise<{ id: string; a
     }
 
     // Keep problems in the structure that the frontend expects
-      const problemsWithRelation = assignment.problems.map((ap: (typeof assignment.problems)[number]) => ({
-      problem: {
-        id: ap.problem.id,
-        title: ap.problem.title,
-        description: ap.problem.description,
-        type: ap.problem.type,
-        maxStates: ap.problem.maxStates,
-        isDeterministic: ap.problem.isDeterministic,
-        fileName: ap.problem.fileName,
-        originalFileName: ap.problem.originalFileName,
-      },
-    }));
+    const problemsWithRelation = assignment.problems.map((ap: (typeof assignment.problems)[number]) => ({
+        problem: {
+          id: ap.problem.id,
+          title: ap.problem.title,
+          description: ap.problem.description,
+          type: ap.problem.type,
+          maxStates: ap.problem.maxStates,
+          isDeterministic: ap.problem.isDeterministic,
+          fileName: ap.problem.fileName,
+          originalFileName: ap.problem.originalFileName,
+        },
+        maxPoints: ap.maxPoints,
+        maxSubmissions: ap.maxSubmissions,
+        autograderEnabled: ap.autograderEnabled,
+      }));
 
     // Extract the course roster and keep in the structure that the frontend expects
     const roster = assignment.course.roster || [];

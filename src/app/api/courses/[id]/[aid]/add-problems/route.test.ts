@@ -93,7 +93,15 @@ describe('POST /api/courses/[id]/[aid]/add-problems', () => {
 
     const body = await res.json();
     expect(prismaMock.assignmentProblem.createMany).toHaveBeenCalledWith({
-      data: [{ assignmentId: 'a1', problemId: 'p2' }],
+      data: [
+        {
+          assignmentId: 'a1',
+          problemId: 'p2',
+          maxPoints: 0,
+          maxSubmissions: 1,
+          autograderEnabled: true,
+        },
+      ],
     });
     expect(body.problems).toHaveLength(2);
     expect(body.metadata.newProblemsAdded).toBe(1);
@@ -113,7 +121,50 @@ describe('POST /api/courses/[id]/[aid]/add-problems', () => {
     const res = await POST(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
     expect(res.status).toBe(200);
     expect(prismaMock.assignmentProblem.createMany).toHaveBeenCalledWith({
-      data: [{ assignmentId: 'a1', problemId: 'p1' }],
+      data: [
+        {
+          assignmentId: 'a1',
+          problemId: 'p1',
+          maxPoints: 0,
+          maxSubmissions: 1,
+          autograderEnabled: true,
+        },
+      ],
+    });
+  });
+
+  it('applies provided problem settings for new problems', async () => {
+    prismaMock.problem.findMany.mockResolvedValue([{ id: 'p2' }]);
+    prismaMock.assignmentProblem.findMany.mockResolvedValue([]);
+
+    const req = new Request('http://localhost/api/courses/c1/a1/add-problems', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        problemIds: ['p2'],
+        problemSettings: [
+          {
+            problemId: 'p2',
+            maxPoints: 15,
+            maxSubmissions: -1,
+            autograderEnabled: false,
+          },
+        ],
+      }),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
+    expect(res.status).toBe(200);
+    expect(prismaMock.assignmentProblem.createMany).toHaveBeenCalledWith({
+      data: [
+        {
+          assignmentId: 'a1',
+          problemId: 'p2',
+          maxPoints: 15,
+          maxSubmissions: -1,
+          autograderEnabled: false,
+        },
+      ],
     });
   });
 });
