@@ -7,7 +7,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { toEndOfDayInTimezone } from '@/lib/date-utils';
 
 async function resolveUserTimezone(userId?: string | null) {
-  let tz = 'America/New_York';
+  const tz = 'America/New_York';
   if (!userId) return tz;
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -44,7 +44,6 @@ export async function POST(req: NextRequest) {
         title: data.title,
         description: data.description,
         dueDate: toEndOfDayInTimezone(data.dueDate, userTimezone),
-        maxPoints: data.maxPoints || 0,
         isPublished: data.isPublished || false,
         courseId: data.courseId,
       },
@@ -63,7 +62,6 @@ export async function POST(req: NextRequest) {
         assignmentId: created.id,
         title: created.title,
         description: created.description ? created.description : '',
-        maxPoints: created.maxPoints,
         isPublished: created.isPublished,
         dueDate: created.dueDate.toISOString(),
       },

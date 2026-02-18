@@ -3,6 +3,10 @@ import { Course, User, Assignment, Problem, Role } from '@prisma/client';
 // Assignment with problem count as returned by API
 export type AssignmentWithProblemCount = Assignment & {
   problemCount: number;
+  maxPoints: number;
+  hasSubmissionsOrComments?: boolean;
+  submissionCount?: number;
+  commentCount?: number;
 };
 
 export type FullCourse = Course & {

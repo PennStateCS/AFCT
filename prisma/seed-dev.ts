@@ -265,7 +265,6 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
           title: assignmentSeed.title,
           description: assignmentSeed.description,
           dueDate: new Date(dueDateMs),
-          maxPoints: assignmentSeed.maxPoints,
           isPublished: assignmentSeed.isPublished,
           courseId: course.id,
         };

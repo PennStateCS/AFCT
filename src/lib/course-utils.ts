@@ -51,7 +51,7 @@ export function updateCourseAfterAssignmentSave(
   return {
     ...course,
     assignments: course.assignments.map((a) =>
-      a.id === updatedAssignment.id ? { ...updatedAssignment, problemCount: a.problemCount } : a,
+      a.id === updatedAssignment.id ? { ...a, ...updatedAssignment } : a,
     ),
   };
 }
@@ -83,7 +83,17 @@ export function updateCourseAfterAssignmentCreate(
 ): FullCourse {
   return {
     ...course,
-    assignments: [...course.assignments, { ...newAssignment, problemCount: 0 }],
+    assignments: [
+      ...course.assignments,
+      {
+        ...newAssignment,
+        problemCount: 0,
+        maxPoints: 0,
+        submissionCount: 0,
+        commentCount: 0,
+        hasSubmissionsOrComments: false,
+      },
+    ],
   };
 }
 

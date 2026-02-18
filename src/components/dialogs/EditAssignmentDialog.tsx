@@ -23,7 +23,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 import {
-  AssignmentFormSchema, // form-only schema (title, description, maxPoints, dueDate, courseId)
+  AssignmentFormSchema, // form-only schema (title, description, dueDate, courseId)
   UpdateAssignmentSchema, // partial + id + publish rule
 } from '@/schemas/assignment';
 
@@ -73,7 +73,6 @@ export function EditAssignmentDialog({
     () => ({
       title: assignment.title ?? '',
       description: assignment.description ?? '',
-      maxPoints: String(assignment.maxPoints ?? 100),
       dueDate: toDateTimeLocalInTimeZone(assignment.dueDate, timeZone), // string for input
       isPublished: assignment.isPublished ?? false,
       courseId: assignment.courseId,
@@ -131,7 +130,7 @@ export function EditAssignmentDialog({
     // Use the update schema with form values (keep strings as strings)
     const payload = UpdateAssignmentSchema.parse({
       id: assignment.id,
-      ...raw, // Keep maxPoints as string for schema validation
+      ...raw,
     });
 
     try {
@@ -140,7 +139,6 @@ export function EditAssignmentDialog({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...payload,
-          maxPoints: Number(payload.maxPoints), // Convert to number for API
           dueDate: payload.dueDate,
         }),
       });
@@ -241,13 +239,6 @@ export function EditAssignmentDialog({
                 error={errors.dueDate?.message}
               />
             )}
-          />
-
-          {/* Hidden max points field (preserve current value without exposing input) */}
-          <Controller
-            name="maxPoints"
-            control={control}
-            render={({ field }) => <input type="hidden" {...field} />}
           />
 
           {/* Published switch (kept outside the form schema) */}

@@ -209,7 +209,6 @@ export const assignmentData = [
     description:
       'For this assignment, you will be creating finite automation machines for varying types of flip-flops.',
     dueFraction: 0.35,
-    maxPoints: 20,
     isPublished: true,
     courseIndex: 0,
   },
@@ -218,7 +217,6 @@ export const assignmentData = [
     description:
       'For this assignment, you will be creating finite automation machines solving real world problems.',
     dueFraction: 0.75,
-    maxPoints: 20,
     isPublished: true,
     courseIndex: 0,
   },
@@ -227,7 +225,6 @@ export const assignmentData = [
     description:
       'For this assignment, you will be creating finite automation machines for varying types of flip-flops.',
     dueFraction: 0.35,
-    maxPoints: 20,
     isPublished: true,
     courseIndex: 1,
   },
@@ -236,7 +233,6 @@ export const assignmentData = [
     description:
       'For this assignment, you will be creating finite automation machines solving real world problems.',
     dueFraction: 0.75,
-    maxPoints: 20,
     isPublished: true,
     courseIndex: 1,
   },

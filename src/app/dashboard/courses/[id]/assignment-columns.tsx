@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
 import { Assignment } from '@prisma/client';
+import type { AssignmentWithProblemCount } from '@/types/course';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { NotebookText, Pencil, Trash2, ChevronDown, BookOpen } from 'lucide-react';
@@ -17,14 +18,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
-
-// Extended assignment type with problem count
-type AssignmentWithProblemCount = Assignment & {
-  problemCount: number;
-  hasSubmissionsOrComments?: boolean;
-  submissionCount?: number;
-  commentCount?: number;
-};
 
 // Component for the publish switch with confirmation dialog
 function PublishSwitchCell({
