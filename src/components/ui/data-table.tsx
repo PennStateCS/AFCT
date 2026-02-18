@@ -1,5 +1,7 @@
 'use client';
 
+import React from 'react';
+
 import {
   ColumnDef,
   flexRender,
@@ -330,7 +332,7 @@ export function DataTable<TData, TValue>({
                 </TableRow>
               ))
             ) : (
-              <TableRow>
+              <TableRow className="hover:bg-transparent">
                 <TableCell colSpan={columns.length} className="py-8 text-center">
                   <div className="text-muted-foreground flex flex-col items-center">
                     <Inbox className="mb-2 h-10 w-10 text-gray-400" />
@@ -351,7 +353,7 @@ export function DataTable<TData, TValue>({
             >
               <TableCell colSpan={columns.length}>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="bg-header-background flex items-center gap-2 font-normal text-foreground">
+                  <div className="bg-header-background text-foreground flex items-center gap-2 font-normal">
                     <span>
                       Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
                       &nbsp;&nbsp;&nbsp;
