@@ -45,7 +45,7 @@ model User {
 
   rosterEntries Roster[]
   submissions   Submission[]
-  grades        AssignmentGrade[]
+  problemGrades AssignmentProblemGrade[]
   activityLogs  ActivityLog[]
   commentsAbout Comment[] @relation("CommentsAboutStudent")
 
@@ -126,7 +126,6 @@ model Assignment {
   problems     AssignmentProblem[]
   comments     Comment[]
   activityLogs ActivityLog[]
-  grades       AssignmentGrade[]
 
   @@index([courseId])
   @@index([isPublished])
@@ -172,6 +171,7 @@ model AssignmentProblem {
   autograderEnabled Boolean @default(true)
 
   submissions Submission[]
+  grades      AssignmentProblemGrade[]
 
   @@id([assignmentId, problemId])
   @@index([assignmentId])
@@ -209,22 +209,22 @@ model Submission {
   @@index([studentId, assignmentId, problemId, submittedAt])
 }
 
-model AssignmentGrade {
-  id      String @id @default(cuid())
-  grade   Float
-  feedback String?
+model AssignmentProblemGrade {
+  id           String  @id @default(cuid())
+  grade        Float?
+  feedback     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  assignmentProblem AssignmentProblem @relation(fields: [assignmentId, problemId], references: [assignmentId, problemId], onDelete: Cascade, onUpdate: Cascade)
   assignmentId String
+  problemId    String
 
   student   User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   studentId String
 
-  @@unique([assignmentId, studentId])
-  @@index([assignmentId])
+  @@unique([assignmentId, problemId, studentId])
+  @@index([assignmentId, problemId])
   @@index([studentId])
 }
 
