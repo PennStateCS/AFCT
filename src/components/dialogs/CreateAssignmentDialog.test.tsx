@@ -147,7 +147,6 @@ describe('CreateAssignmentDialog', () => {
       dueDate: '2026-09-01T23:59',
       courseId: 'course-123',
       isPublished: true,
-      maxPoints: 100,
     });
 
     expect(setOpen).toHaveBeenCalledWith(false);

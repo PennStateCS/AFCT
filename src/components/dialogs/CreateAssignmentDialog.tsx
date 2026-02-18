@@ -88,7 +88,6 @@ export function CreateAssignmentDialog({
     () => ({
       title: '',
       description: '',
-      maxPoints: '100',
       dueDate: defaultDueLocalString(timeZone),
       isPublished: false,
       courseId: courseId,
@@ -139,7 +138,6 @@ export function CreateAssignmentDialog({
     // Convert form values to the format expected by the API schema
     const formData = {
       ...raw,
-      maxPoints: Number(raw.maxPoints), // Convert string to number for API schema
       dueDate: raw.dueDate, // Keep as string for API timezone conversion
     };
 
@@ -240,13 +238,6 @@ export function CreateAssignmentDialog({
                 error={errors.dueDate?.message}
               />
             )}
-          />
-
-          {/* Hidden max points field (preserve schema alignment without showing input) */}
-          <Controller
-            control={control}
-            name="maxPoints"
-            render={({ field }) => <input type="hidden" {...field} />}
           />
 
           {/* Publish switch */}

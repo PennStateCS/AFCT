@@ -110,7 +110,6 @@ model Assignment {
   title       String
   description String?
   dueDate     DateTime
-  maxPoints   Float
   isPublished Boolean  @default(false)
 
   // Late submission controls

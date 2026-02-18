@@ -151,7 +151,6 @@ describe('POST /api/courses/[id]/duplicate', () => {
             id: 'a1',
             title: 'Assignment 1',
             dueDate: new Date(),
-            maxPoints: 100,
             problems: [{ problemId: 'p1', problem: { id: 'p1', title: 'P1' } }],
           },
         ]),
@@ -252,9 +251,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
       assignment: {
         findMany: vi
           .fn()
-          .mockResolvedValue([
-            { id: 'a1', title: 'A1', dueDate: new Date(), maxPoints: 10, problems: [] },
-          ]),
+          .mockResolvedValue([{ id: 'a1', title: 'A1', dueDate: new Date(), problems: [] }]),
         create: vi.fn(),
       },
       problem: { findMany: vi.fn().mockResolvedValue([{ id: 'p1' }]), create: vi.fn() },

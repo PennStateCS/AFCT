@@ -58,14 +58,13 @@ describe('POST /api/assignments', () => {
       title: 'A',
       description: null,
       dueDate: new Date('2025-01-01T00:00:00.000Z'),
-      maxPoints: 10,
       isPublished: false,
       courseId: 'c1',
     });
 
     const req = new NextRequest('http://localhost/api/assignments', {
       method: 'POST',
-      body: JSON.stringify({ title: 'A', courseId: 'c1', dueDate: '2025-01-01', maxPoints: 10 }),
+      body: JSON.stringify({ title: 'A', courseId: 'c1', dueDate: '2025-01-01' }),
     });
 
     const res = await POST(req);
