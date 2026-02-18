@@ -243,21 +243,11 @@ export function EditAssignmentDialog({
             )}
           />
 
-          {/* Max Points */}
+          {/* Hidden max points field (preserve current value without exposing input) */}
           <Controller
             name="maxPoints"
             control={control}
-            render={({ field }) => (
-              <InputGroup
-                label="Max Points"
-                name="maxPoints"
-                type="number"
-                fieldProps={field}
-                min={0}
-                step={1}
-                error={errors.maxPoints?.message}
-              />
-            )}
+            render={({ field }) => <input type="hidden" {...field} />}
           />
 
           {/* Published switch (kept outside the form schema) */}

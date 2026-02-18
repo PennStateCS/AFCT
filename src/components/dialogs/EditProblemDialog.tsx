@@ -88,7 +88,6 @@ export function EditProblemDialog({
     },
   );
 
-  const assignmentUnlimited = assignmentConfig.maxSubmissions === -1;
   const assignmentDirty = Boolean(
     assignmentSettings &&
     assignmentDefaults &&
@@ -146,6 +145,12 @@ export function EditProblemDialog({
       });
       if (assignmentDefaults) {
         setAssignmentConfig(assignmentDefaults);
+      } else {
+        setAssignmentConfig({
+          maxPoints: assignmentSettings?.maxPoints ?? 0,
+          maxSubmissions: assignmentSettings?.maxSubmissions ?? -1,
+          autograderEnabled: assignmentSettings?.autograderEnabled ?? true,
+        });
       }
     } else {
       reset(defaults, {
@@ -156,9 +161,15 @@ export function EditProblemDialog({
       });
       if (assignmentDefaults) {
         setAssignmentConfig(assignmentDefaults);
+      } else {
+        setAssignmentConfig({
+          maxPoints: assignmentSettings?.maxPoints ?? 0,
+          maxSubmissions: assignmentSettings?.maxSubmissions ?? -1,
+          autograderEnabled: assignmentSettings?.autograderEnabled ?? true,
+        });
       }
     }
-  }, [open, defaults, reset, assignmentDefaults]);
+  }, [open, defaults, reset, assignmentDefaults, assignmentSettings]);
 
   const resetForm = () => {
     reset(defaults, {
@@ -169,12 +180,18 @@ export function EditProblemDialog({
     });
     if (assignmentDefaults) {
       setAssignmentConfig(assignmentDefaults);
+    } else {
+      setAssignmentConfig({
+        maxPoints: assignmentSettings?.maxPoints ?? 0,
+        maxSubmissions: assignmentSettings?.maxSubmissions ?? -1,
+        autograderEnabled: assignmentSettings?.autograderEnabled ?? true,
+      });
     }
   };
 
   const onSubmit = async (raw: FormValues) => {
     try {
-      if (assignmentMaxPointsInvalid || assignmentMaxSubmissionsInvalid) {
+      if (assignmentMaxSubmissionsInvalid || assignmentMaxPointsInvalid) {
         showToast.error('Fix assignment settings before saving.');
         return;
       }
@@ -228,13 +245,14 @@ export function EditProblemDialog({
       const updatedProblem = await res.json().catch(() => null);
 
       if (assignmentSettings && assignmentDirty) {
+        const assignmentMaxPoints = Math.max(0, assignmentConfig.maxPoints ?? 0);
         const assignmentRes = await fetch(
           `/api/courses/${assignmentSettings.courseId}/${assignmentSettings.assignmentId}/problems/${problem.id}`,
           {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              maxPoints: Math.max(0, assignmentConfig.maxPoints),
+              maxPoints: assignmentMaxPoints,
               maxSubmissions: assignmentConfig.maxSubmissions,
               autograderEnabled: assignmentConfig.autograderEnabled,
             }),
@@ -443,18 +461,20 @@ export function EditProblemDialog({
                     id="assignment-max-points"
                     type="number"
                     min={0}
-                    step="0.5"
-                    value={assignmentConfig.maxPoints}
+                    step="1"
+                    value={assignmentConfig.maxPoints ?? 0}
                     onChange={(event) => {
                       const next = Number(event.target.value);
+                      if (!Number.isFinite(next)) return;
                       setAssignmentConfig((prev) => ({
                         ...prev,
-                        maxPoints: Number.isFinite(next) ? Math.max(0, next) : prev.maxPoints,
+                        maxPoints: Math.max(0, Math.floor(next)),
                       }));
                     }}
+                    className="sm:flex-1"
                   />
-                  {Number.isFinite(assignmentConfig.maxPoints) && assignmentConfig.maxPoints < 0 ? (
-                    <p className="mt-1 text-xs text-red-600">Max points must be 0 or greater.</p>
+                  {assignmentMaxPointsInvalid ? (
+                    <p className="mt-1 text-xs text-red-600">Max points must be zero or greater.</p>
                   ) : null}
                 </div>
                 <div>
@@ -548,13 +568,15 @@ export function EditProblemDialog({
               title={
                 !isValid
                   ? 'Fix validation errors to save'
-                  : assignmentMaxPointsInvalid || assignmentMaxSubmissionsInvalid
+                  : assignmentMaxPointsInvalid
                     ? 'Fix assignment settings to save'
-                    : !isDirty && !assignmentDirty
-                      ? 'Make changes before saving'
-                      : isSubmitting
-                        ? 'Submitting...'
-                        : undefined
+                    : assignmentMaxSubmissionsInvalid
+                      ? 'Fix assignment settings to save'
+                      : !isDirty && !assignmentDirty
+                        ? 'Make changes before saving'
+                        : isSubmitting
+                          ? 'Submitting...'
+                          : undefined
               }
             >
               {isSubmitting ? 'Saving…' : 'Save Changes'}

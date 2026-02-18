@@ -27,14 +27,14 @@ type AssignmentWithProblemCount = Assignment & {
 };
 
 // Component for the publish switch with confirmation dialog
-function PublishSwitchCell({ 
-  assignment, 
-  onPublishToggle, 
+function PublishSwitchCell({
+  assignment,
+  onPublishToggle,
   disabled,
-}: { 
-  assignment: AssignmentWithProblemCount; 
+}: {
+  assignment: AssignmentWithProblemCount;
   onPublishToggle: (assignmentId: string, newValue: boolean) => void;
-  disabled: boolean
+  disabled: boolean;
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingValue, setPendingValue] = useState(false);
@@ -112,7 +112,7 @@ export function useAssignmentColumns(
     {
       accessorKey: 'maxPoints',
       header: () => 'Points',
-      cell: ({ row }) => <div>{row.original.maxPoints}</div>,
+      cell: ({ row }) => <div>{row.original.maxPoints ?? 0}</div>,
     },
     {
       id: 'problemCount',
@@ -153,7 +153,7 @@ export function useAssignmentColumns(
       id: 'actions',
       header: '',
       cell: ({ row }) => {
-  const disabled = !!(row.original.hasSubmissionsOrComments) || courseIsArchived;
+        const disabled = !!row.original.hasSubmissionsOrComments || courseIsArchived;
         const title = disabled ? 'Cannot delete' : undefined;
 
         return (
@@ -194,7 +194,7 @@ export function useAssignmentColumns(
                   }}
                   hidden={courseIsArchived}
                   title={title}
-                  className={`flex items-center gap-2 ${disabled ? 'opacity-50 cursor-not-allowed text-gray-500' : 'focus:text-red-600 text-red-600'}`}
+                  className={`flex items-center gap-2 ${disabled ? 'cursor-not-allowed text-gray-500 opacity-50' : 'text-red-600 focus:text-red-600'}`}
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
                   Delete Assignment

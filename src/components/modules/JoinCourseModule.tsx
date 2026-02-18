@@ -61,14 +61,12 @@ export function JoinCourseModule() {
           <InputOTP
             maxLength={6}
             value={code.toUpperCase()}
-            onPaste={
-              (e) => {
-                e.preventDefault(); // Prevent the typical pasteing-in of data
-                const pastedData = e.clipboardData.getData('text/plain'); // Get what the user is trying to paste
-                const processedData = pastedData.replace(/[^A-Z0-9a-z]/g, ''); // Replace all characters that are not A-Z0-9a-z with whitespace
-                setCode(processedData); // Set the processed data to the box
-              }
-            }
+            onPaste={(e) => {
+              e.preventDefault(); // Prevent the typical pasteing-in of data
+              const pastedData = e.clipboardData.getData('text/plain'); // Get what the user is trying to paste
+              const processedData = pastedData.replace(/[^A-Z0-9a-z]/g, ''); // Replace all characters that are not A-Z0-9a-z with whitespace
+              setCode(processedData); // Set the processed data to the box
+            }}
             onChange={setCode}
             pattern="[A-Z0-9a-z]+$"
             containerClassName="justify-start"
