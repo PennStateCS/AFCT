@@ -20,6 +20,20 @@ interface AssignmentProblemCount {
   problemId: string;
 }
 
+const ProblemSettingsSchema = z.object({
+  problemId: z.string(),
+  maxPoints: z.number().min(0),
+  maxSubmissions: z
+    .number()
+    .int()
+    .refine((value) => value === -1 || value >= 1, {
+      message: 'Max submissions must be -1 (unlimited) or at least 1.',
+    }),
+  autograderEnabled: z.boolean(),
+});
+
+type ProblemSettingsInput = z.infer<typeof ProblemSettingsSchema>;
+
 // POST: Replace problems for a given assignment in a specific course
 export async function POST(
   req: Request,
@@ -51,6 +65,13 @@ export async function POST(
     }
 
     const problemIds: string[] = Array.isArray(body.problemIds) ? body.problemIds : [];
+    const problemSettingsResult = ProblemSettingsSchema.array().safeParse(
+      Array.isArray(body.problemSettings) ? body.problemSettings : [],
+    );
+    const problemSettings: ProblemSettingsInput[] = problemSettingsResult.success
+      ? problemSettingsResult.data
+      : [];
+    const settingsByProblemId = new Map(problemSettings.map((setting) => [setting.problemId, setting]));
     // parsed problemIds available
 
     // Validate that all problems exist and belong to the specified course
@@ -96,10 +117,21 @@ export async function POST(
 
     if (newProblemIds.length > 0) {
       await prisma.assignmentProblem.createMany({
-        data: newProblemIds.map((pid: string) => ({
-          assignmentId,
-          problemId: pid,
-        })),
+        data: newProblemIds.map((pid: string) => {
+          const config = settingsByProblemId.get(pid);
+          const resolvedMaxSubmissions =
+            config?.maxSubmissions === -1
+              ? -1
+              : Math.max(1, config?.maxSubmissions ?? 1);
+
+          return {
+            assignmentId,
+            problemId: pid,
+            maxPoints: config?.maxPoints ?? 0,
+            maxSubmissions: resolvedMaxSubmissions,
+            autograderEnabled: config?.autograderEnabled ?? true,
+          };
+        }),
       });
     }
 

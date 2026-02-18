@@ -51,6 +51,13 @@ const problemTypeLabels: Record<string, string> = {
   // Add your problem type labels here
 };
 
+type AssignmentProblemLink = {
+  problem: Problem;
+  maxPoints: number;
+  maxSubmissions: number;
+  autograderEnabled: boolean;
+};
+
 type AssignmentWithDetails = {
   id: string;
   title: string;
@@ -66,13 +73,20 @@ type AssignmentWithDetails = {
   lateCutoff?: string | Date | null;
   createdAt?: Date;
   updatedAt?: Date;
-  problems: Array<{ problem: Problem }>;
+  problems: AssignmentProblemLink[];
   course?: {
     id: string;
     name: string;
     code?: string;
     isArchived?: boolean;
   };
+};
+
+type ProblemLinkSettings = {
+  problemId: string;
+  maxPoints: number;
+  maxSubmissions: number;
+  autograderEnabled: boolean;
 };
 
 export default function AssignmentDashboardPage() {
@@ -160,14 +174,33 @@ export default function AssignmentDashboardPage() {
       .finally(() => setLoading(false));
   }, [id, aid]);
 
-  async function handleAddProblems(problemIds: string[]) {
+  const isProblemSettingsArray = (
+    payload: string[] | ProblemLinkSettings[],
+  ): payload is ProblemLinkSettings[] =>
+    Array.isArray(payload) && payload.length > 0 && typeof payload[0] === 'object';
+
+  async function handleAddProblems(problemPayload: string[] | ProblemLinkSettings[]) {
     if (!id || !aid) return;
     if (!canManageProblems) return;
+    let problemIds: string[] = [];
+    let problemSettings: ProblemLinkSettings[] | undefined;
+
+    if (isProblemSettingsArray(problemPayload)) {
+      problemSettings = problemPayload;
+      problemIds = problemPayload.map((cfg) => cfg.problemId);
+    } else {
+      problemIds = problemPayload;
+    }
+
+    const requestBody: Record<string, unknown> = { problemIds };
+    if (problemSettings?.length) {
+      requestBody.problemSettings = problemSettings;
+    }
     try {
       const res = await fetch(`/api/courses/${id}/${aid}/add-problems`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ problemIds }),
+        body: JSON.stringify(requestBody),
       });
       if (!res.ok) throw new Error();
       showToast.success('Problems added');
@@ -218,6 +251,25 @@ export default function AssignmentDashboardPage() {
 
   if (loading) return <LoadingSpinner label="Loading" />;
   if (!assignment) return <div className="p-6 text-red-500">Assignment not found.</div>;
+
+  const estimatedProblemPoints = Math.max(
+    1,
+    Math.round((assignment.maxPoints || 100) / Math.max(assignment.problems.length || 1, 1)),
+  );
+
+  const assignmentProblemForDialog = problemToEdit
+    ? (assignment.problems.find((ap) => ap.problem.id === problemToEdit.id) ?? null)
+    : null;
+
+  const assignmentSettingsForDialog = assignmentProblemForDialog
+    ? {
+        assignmentId: aid,
+        courseId: id,
+        maxPoints: assignmentProblemForDialog.maxPoints,
+        maxSubmissions: assignmentProblemForDialog.maxSubmissions,
+        autograderEnabled: assignmentProblemForDialog.autograderEnabled,
+      }
+    : undefined;
 
   return (
     <div className="mx-auto w-full text-sm">
@@ -403,6 +455,50 @@ export default function AssignmentDashboardPage() {
                     enableSorting: true,
                   },
                   {
+                    accessorKey: 'assignmentMaxPoints',
+                    header: 'Max Points',
+                    cell: ({
+                      row,
+                    }: {
+                      row: { original: Problem & { assignmentMaxPoints?: number } };
+                    }) =>
+                      typeof row.original.assignmentMaxPoints === 'number'
+                        ? row.original.assignmentMaxPoints
+                        : '—',
+                    meta: { priority: 1 },
+                    enableSorting: true,
+                  },
+                  {
+                    accessorKey: 'assignmentMaxSubmissions',
+                    header: 'Max Submissions',
+                    cell: ({
+                      row,
+                    }: {
+                      row: { original: Problem & { assignmentMaxSubmissions?: number } };
+                    }) => {
+                      const value = row.original.assignmentMaxSubmissions;
+                      if (typeof value !== 'number') return '—';
+                      return value === -1 ? 'Unlimited' : value;
+                    },
+                    meta: { priority: 1 },
+                    enableSorting: false,
+                  },
+                  {
+                    accessorKey: 'assignmentAutograderEnabled',
+                    header: 'Autograder',
+                    cell: ({
+                      row,
+                    }: {
+                      row: { original: Problem & { assignmentAutograderEnabled?: boolean } };
+                    }) => {
+                      const value = row.original.assignmentAutograderEnabled;
+                      if (typeof value !== 'boolean') return '—';
+                      return value ? 'On' : 'Off';
+                    },
+                    meta: { priority: 2 },
+                    enableSorting: false,
+                  },
+                  {
                     accessorKey: 'isDeterministic',
                     header: 'Deterministic',
                     cell: ({ row }: { row: { original: Problem } }) =>
@@ -505,9 +601,12 @@ export default function AssignmentDashboardPage() {
                     meta: { priority: 1 },
                   },
                 ]}
-                data={assignment.problems.map((ap: { problem: Problem }) => ({
+                data={assignment.problems.map((ap) => ({
                   ...ap.problem,
                   description: ap.problem.description ?? null,
+                  assignmentMaxPoints: ap.maxPoints,
+                  assignmentMaxSubmissions: ap.maxSubmissions,
+                  assignmentAutograderEnabled: ap.autograderEnabled,
                 }))}
               />
             </CardContent>
@@ -519,7 +618,7 @@ export default function AssignmentDashboardPage() {
             courseId={id}
             assignmentId={aid}
             maxAssignmentGrade={assignment.maxPoints}
-            problems={assignment.problems.map((ap: { problem: Problem }) => ({
+            problems={assignment.problems.map((ap) => ({
               id: ap.problem.id,
               title: ap.problem.title,
               description: ap.problem.description ?? undefined,
@@ -528,6 +627,9 @@ export default function AssignmentDashboardPage() {
               isDeterministic: ap.problem.isDeterministic ?? undefined,
               fileName: ap.problem.fileName ?? undefined,
               originalFileName: ap.problem.originalFileName ?? undefined,
+              maxPoints: ap.maxPoints,
+              maxSubmissions: ap.maxSubmissions,
+              autograderEnabled: ap.autograderEnabled,
             }))}
           />
         </TabsContent>
@@ -565,15 +667,17 @@ export default function AssignmentDashboardPage() {
           description: p.description ?? undefined,
           type: typeof p.type === 'string' ? p.type : undefined,
         }))}
-        usedProblems={assignment.problems.map((ap: { problem: Problem }) => ({
+        usedProblems={assignment.problems.map((ap) => ({
           ...ap.problem,
           description: ap.problem.description ?? undefined,
           type: typeof ap.problem.type === 'string' ? ap.problem.type : undefined,
         }))}
-        onAddProblems={(selectedProblemIds) => {
-          const existingIds = assignment.problems.map((ap: { problem: Problem }) => ap.problem.id);
-          const merged = Array.from(new Set([...existingIds, ...selectedProblemIds]));
-          handleAddProblems(merged);
+        defaultMaxPoints={0}
+        defaultMaxSubmissions={-1}
+        defaultAutograderEnabled={true}
+        onAddProblems={(problemSettings) => {
+          if (problemSettings.length === 0) return;
+          handleAddProblems(problemSettings);
         }}
       />
       <CreateProblemDialog
@@ -640,6 +744,7 @@ export default function AssignmentDashboardPage() {
           courseIsArchived={courseIsArchived}
           open={editProblemDialogOpen}
           setOpen={setEditProblemDialogOpen}
+          assignmentSettings={assignmentSettingsForDialog}
           problem={
             problemToEdit
               ? {
