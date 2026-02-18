@@ -34,9 +34,9 @@ interface AssignmentWithProblemsAndCourse {
         id: string;
         firstName: string;
         lastName: string;
-      }
-    }[]
-  }
+      };
+    }[];
+  };
 }
 
 // GET: Fetch a specific assignment and related data within a course
@@ -46,7 +46,7 @@ export async function GET(_: Request, context: { params: Promise<{ id: string; a
 
   try {
     // Query the assignment from the database
-    const assignment = await prisma.assignment.findFirst({
+    const assignment = (await prisma.assignment.findFirst({
       where: {
         id: assignmentId,
         courseId,
@@ -91,7 +91,7 @@ export async function GET(_: Request, context: { params: Promise<{ id: string; a
           },
         },
       },
-    }) as AssignmentWithProblemsAndCourse | null;
+    })) as AssignmentWithProblemsAndCourse | null;
 
     // Return 404 if no matching assignment was found
     if (!assignment) {
@@ -99,7 +99,8 @@ export async function GET(_: Request, context: { params: Promise<{ id: string; a
     }
 
     // Keep problems in the structure that the frontend expects
-    const problemsWithRelation = assignment.problems.map((ap: (typeof assignment.problems)[number]) => ({
+    const problemsWithRelation = assignment.problems.map(
+      (ap: (typeof assignment.problems)[number]) => ({
         problem: {
           id: ap.problem.id,
           title: ap.problem.title,
@@ -113,7 +114,13 @@ export async function GET(_: Request, context: { params: Promise<{ id: string; a
         maxPoints: ap.maxPoints,
         maxSubmissions: ap.maxSubmissions,
         autograderEnabled: ap.autograderEnabled,
-      }));
+      }),
+    );
+
+    const totalProblemPoints = assignment.problems.reduce((sum, ap) => {
+      const value = typeof ap.maxPoints === 'number' ? ap.maxPoints : 0;
+      return sum + (Number.isFinite(value) ? value : 0);
+    }, 0);
 
     // Extract the course roster and keep in the structure that the frontend expects
     const roster = assignment.course.roster || [];
@@ -125,6 +132,7 @@ export async function GET(_: Request, context: { params: Promise<{ id: string; a
     // Return structured assignment matching the frontend's expected format
     return NextResponse.json({
       ...assignmentData,
+      maxPoints: totalProblemPoints,
       problems: problemsWithRelation,
       course: {
         id: courseId,

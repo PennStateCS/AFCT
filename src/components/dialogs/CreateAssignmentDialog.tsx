@@ -242,21 +242,11 @@ export function CreateAssignmentDialog({
             )}
           />
 
-          {/* Max Points */}
+          {/* Hidden max points field (preserve schema alignment without showing input) */}
           <Controller
             control={control}
             name="maxPoints"
-            render={({ field }) => (
-              <InputGroup
-                label="Max Points"
-                name="maxPoints"
-                type="number"
-                fieldProps={field}
-                min={0}
-                step={1}
-                error={errors.maxPoints?.message}
-              />
-            )}
+            render={({ field }) => <input type="hidden" {...field} />}
           />
 
           {/* Publish switch */}

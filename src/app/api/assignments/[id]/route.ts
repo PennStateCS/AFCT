@@ -80,7 +80,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
-    return NextResponse.json(assignment);
+    const totalProblemPoints = (assignment.problems ?? []).reduce((sum, ap) => {
+      const value = typeof ap.maxPoints === 'number' ? ap.maxPoints : 0;
+      return sum + (Number.isFinite(value) ? value : 0);
+    }, 0);
+
+    return NextResponse.json({
+      ...assignment,
+      maxPoints: totalProblemPoints,
+    });
   } catch (error) {
     console.error('Failed to fetch assignment:', error);
     return NextResponse.json({ error: 'Failed to fetch assignment' }, { status: 500 });
