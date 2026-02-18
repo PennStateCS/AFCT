@@ -481,7 +481,16 @@ export default function AssignmentDashboardPage() {
                       return value === -1 ? 'Unlimited' : value;
                     },
                     meta: { priority: 1 },
-                    enableSorting: false,
+                    enableSorting: true,
+                    sortingFn: (rowA, rowB, columnId) => {
+                      const normalize = (val: unknown) => {
+                        if (typeof val !== 'number') return Number.POSITIVE_INFINITY;
+                        return val === -1 ? Number.POSITIVE_INFINITY : val;
+                      };
+                      const a = normalize(rowA.getValue(columnId));
+                      const b = normalize(rowB.getValue(columnId));
+                      return a === b ? 0 : a > b ? 1 : -1;
+                    },
                   },
                   {
                     accessorKey: 'assignmentAutograderEnabled',
@@ -496,7 +505,16 @@ export default function AssignmentDashboardPage() {
                       return value ? 'On' : 'Off';
                     },
                     meta: { priority: 2 },
-                    enableSorting: false,
+                    enableSorting: true,
+                    sortingFn: (rowA, rowB, columnId) => {
+                      const toNumber = (val: unknown) => {
+                        if (typeof val === 'boolean') return val ? 1 : 0;
+                        return -1;
+                      };
+                      const a = toNumber(rowA.getValue(columnId));
+                      const b = toNumber(rowB.getValue(columnId));
+                      return a === b ? 0 : a > b ? 1 : -1;
+                    },
                   },
                   {
                     accessorKey: 'isDeterministic',

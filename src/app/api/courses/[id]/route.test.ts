@@ -104,7 +104,8 @@ describe('GET /api/courses/[id]', () => {
           createdAt: new Date('2026-01-01T00:00:00.000Z'),
           updatedAt: new Date('2026-01-02T00:00:00.000Z'),
           courseId: 'course-1',
-          _count: { problems: 1 },
+          problems: [{ maxPoints: 60 }, { maxPoints: 40 }],
+          _count: { problems: 2 },
         },
       ],
     });
@@ -130,6 +131,7 @@ describe('GET /api/courses/[id]', () => {
     );
     expect(body.assignments[0]).toEqual(
       expect.objectContaining({
+        maxPoints: 100,
         submissionCount: 2,
         commentCount: 1,
         hasSubmissionsOrComments: true,
@@ -196,7 +198,8 @@ describe('PUT /api/courses/[id]', () => {
               createdAt: new Date('2026-01-01T00:00:00.000Z'),
               updatedAt: new Date('2026-01-02T00:00:00.000Z'),
               courseId: 'course-1',
-              _count: { problems: 1 },
+              problems: [{ maxPoints: 25 }, { maxPoints: 25 }, { maxPoints: 50 }],
+              _count: { problems: 3 },
             },
           ],
           roster: [
