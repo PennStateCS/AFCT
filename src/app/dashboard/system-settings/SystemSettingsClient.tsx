@@ -2,19 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
 import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from '@/components/ui/select';
 import InputGroup from '@/components/ui/InputGroup';
+import SelectField from '@/components/ui/SelectField';
 
 type SystemSettingsResponse = {
   timezone: string;
@@ -103,31 +96,17 @@ export default function SystemSettingsClient() {
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="grid max-w-xl gap-4">
-            <div className="flex flex-col">
-              <Label className="pb-2" htmlFor="timezone">
-                Timezone
-              </Label>
-              <Select
-                value={loading ? '' : timezone}
-                onValueChange={(val) => setTimezone(val)}
-                disabled={loading || saving}
-              >
-                <SelectTrigger className="w-full" id="timezone">
-                  <SelectValue placeholder={loading ? 'Loading timezone...' : 'Select timezone'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {timezoneOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-muted-foreground mt-1 text-xs">
-                This is the default timezone for the server. User-specific timezones can be set in
-                their profile settings.
-              </p>
-            </div>
+            <SelectField
+              label="Timezone"
+              name="timezone"
+              id="timezone"
+              placeholder={loading ? 'Loading timezone...' : 'Select timezone'}
+              value={loading ? '' : timezone}
+              onValueChange={(val) => setTimezone(val)}
+              disabled={loading || saving}
+              description="This is the default timezone for the server. User-specific timezones can be set in their profile settings."
+              options={timezoneOptions}
+            />
             <InputGroup
               label="Max upload size (MB)"
               name="maxUploadSizeMb"
