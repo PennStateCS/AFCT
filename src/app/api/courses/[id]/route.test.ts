@@ -100,6 +100,8 @@ describe('GET /api/courses/[id]', () => {
           description: null,
           dueDate: new Date('2026-09-01T00:00:00.000Z'),
           isPublished: true,
+          allowLateSubmissions: true,
+          lateCutoff: new Date('2026-09-05T00:00:00.000Z'),
           createdAt: new Date('2026-01-01T00:00:00.000Z'),
           updatedAt: new Date('2026-01-02T00:00:00.000Z'),
           courseId: 'course-1',
@@ -134,6 +136,8 @@ describe('GET /api/courses/[id]', () => {
         submissionCount: 2,
         commentCount: 1,
         hasSubmissionsOrComments: true,
+        allowLateSubmissions: true,
+        lateCutoff: '2026-09-05T00:00:00.000Z',
       }),
     );
     expect(body.viewerRole).toBe('FACULTY');
