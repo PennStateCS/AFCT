@@ -27,7 +27,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { AssociateProblemsDialog } from '@/components/dialogs/AssociateProblemsDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
-import { RegexCfgViewerDialog } from '@/components/dialogs/RegexCfgViewerDialog';
+import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
+import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
 import { CreateProblemDialog } from '@/components/dialogs/CreateProblemDialog';
 import {
   Dialog,
@@ -545,8 +546,11 @@ export default function AssignmentDashboardPage() {
           showGridDefault={true}
         />
       )}
-	  {viewerOpen && viewerSrc && ["RE", "CFG"].includes(jffType) && (
-        <RegexCfgViewerDialog src={viewerSrc} open={viewerOpen} onOpenChange={setViewerOpen} title={viewerTitle}/>
+	  {viewerOpen && viewerSrc && ("RE" === jffType) && (
+        <RegexViewerDialog src={viewerSrc} open={viewerOpen} onOpenChange={setViewerOpen} title={viewerTitle}/>
+	  )}
+	  {viewerOpen && viewerSrc && ("CFG" === jffType) && (
+        <CfgViewerDialog src={viewerSrc} open={viewerOpen} onOpenChange={setViewerOpen} title={viewerTitle}/>
 	  )}
       {/* Description dialog */}
       <Dialog open={descOpen} onOpenChange={(v) => setDescOpen(v)}>
