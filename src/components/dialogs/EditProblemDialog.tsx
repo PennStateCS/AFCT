@@ -58,8 +58,11 @@ export function EditProblemDialog({
     () => ({
       title: problem.title ?? '',
       description: problem.description ?? '',
+      maxSubmissions: problem.maxSubmissions,
+      isUnlimitedSubmissions: problem.maxSubmissions == null || problem.maxSubmissions < 0,
+      maxPoints: problem.maxPoints,
       type: problem.type as z.infer<typeof ProblemTypeEnum>,
-      isUnlimited: problem.maxStates == null || problem.maxStates < 0,
+      isUnlimitedStates: problem.maxStates == null || problem.maxStates < 0,
       maxStates: problem.maxStates ?? undefined,
       isDeterministic:
         problem.type === 'FA'
@@ -117,7 +120,8 @@ export function EditProblemDialog({
 
   // Drive conditional UI
   const type = watch('type');
-  const isUnlimited = watch('isUnlimited');
+  const isUnlimitedStates = watch('isUnlimitedStates');
+  const isUnlimitedSubmissions = watch('isUnlimitedSubmissions');
 
   const fileErrorMessage = (() => {
     const e = errors.file;
@@ -209,7 +213,7 @@ export function EditProblemDialog({
       formData.append('courseId', payload.courseId ?? '');
 
       if (payload.type === 'FA' || payload.type === 'PDA') {
-        const normalizedMax = payload.isUnlimited ? -1 : Number(payload.maxStates ?? 0);
+        const normalizedMax = payload.isUnlimitedStates ? -1 : Number(payload.maxStates ?? 0);
         formData.append('maxStates', String(normalizedMax));
       }
 
@@ -361,6 +365,67 @@ export function EditProblemDialog({
             )}
           />
 
+          {/* Max Submissions */}
+          <Controller
+            control={control}
+            name="maxSubmissions"
+            render={({ field }) => (
+              <div>
+                <InputGroup
+                  label="Max Submissions"
+                  name="maxSubmissions"
+                  type="number"
+                  fieldProps={{
+                    ...field,
+                    value: isUnlimitedSubmissions ? '' : String(field.value || ''),
+                  }}
+                  min={1}
+                  max={1_000}
+                  disabled={isUnlimitedSubmissions}
+                  error={errors.maxSubmissions?.message}
+                />
+                <div className="mt-1 flex items-center gap-2">
+                  <Controller
+                    control={control}
+                    name="isUnlimitedSubmissions"
+                    render={({ field: uf }) => (
+                      <>
+                        <input
+                          type="checkbox"
+                          checked={!!uf.value}
+                          onChange={(e) => uf.onChange(e.target.checked)}
+                        />
+                        <span className="text-muted-foreground text-sm">Unlimited</span>
+                      </>
+                    )}
+                  />
+                </div>
+              </div>
+            )}
+          />
+
+          {/* Max Grade */}
+          <Controller
+            control={control}
+            name="maxPoints"
+            render={({ field }) => (
+              <div>
+                <InputGroup
+                  label="Max Points"
+                  name="maxPoints"
+                  type="number"
+                  fieldProps={{
+                    ...field,
+                    value: String(field.value),
+                  }}
+                  min={1}
+                  max={10_000}
+                  error={errors.maxPoints?.message}
+                />
+              </div>
+            )}
+          />
+
           {/* Max States (FA/PDA only) */}
           {(type === 'FA' || type === 'PDA') && (
             <Controller
@@ -374,19 +439,19 @@ export function EditProblemDialog({
                     type="number"
                     fieldProps={{
                       ...field,
-                      value: isUnlimited ? '' : String(Math.abs(field.value ?? 0) || ''),
+                      value: isUnlimitedStates ? '' : String(Math.abs(field.value ?? 0) || ''),
                       onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
                         field.onChange(e.target.value),
                     }}
                     min={1}
-                    max={1000}
-                    disabled={isUnlimited}
+                    max={1_000}
+                    disabled={isUnlimitedStates}
                     error={errors.maxStates?.message}
                   />
                   <div className="mt-1 flex items-center gap-2">
                     <Controller
                       control={control}
-                      name="isUnlimited"
+                      name="isUnlimitedStates"
                       render={({ field: uf }) => (
                         <>
                           <input

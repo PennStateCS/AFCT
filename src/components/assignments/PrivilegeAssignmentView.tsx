@@ -635,7 +635,6 @@ export default function AssignmentDashboardPage() {
             courseIsArchived={courseIsArchived}
             courseId={id}
             assignmentId={aid}
-            maxAssignmentGrade={assignment.maxPoints}
             problems={assignment.problems.map((ap) => ({
               id: ap.problem.id,
               title: ap.problem.title,
