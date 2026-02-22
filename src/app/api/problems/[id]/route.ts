@@ -37,6 +37,8 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
     const title = formData.get('title') as string;
     const description = formData.get('description') as string;
     const type = formData.get('type') as string;
+    const maxSubmissions = formData.get('maxSubmissions') as string | null;
+    const maxPoints = formData.get('maxPoints') as string;
     const courseId = formData.get('courseId') as string;
     const maxStates = formData.get('maxStates') as string | null;
     const isDeterministic = formData.get('isDeterministic') === 'true';
