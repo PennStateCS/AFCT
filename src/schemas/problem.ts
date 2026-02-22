@@ -42,7 +42,12 @@ const BaseProblemObject = z.object({
   title: z.string().trim().min(3, 'Title must be at least 3 characters.'),
   description: z.string().trim().max(20000).optional().or(z.literal('')),
   type: ProblemTypeEnum,
-  isUnlimited: z.boolean().default(true),
+  isUnlimitedSubmissions: z.boolean().default(true),
+  maxSubmissions: z
+    .union([z.coerce.number().int(), z.null()])
+    .optional(),
+  isUnlimitedStates: z.boolean().default(true),
+  maxPoints: z.coerce.number().int(),
   maxStates: z
     .union([z.coerce.number().int(), z.null()])
     .optional(),
@@ -58,7 +63,7 @@ function addProblemValidation<T extends z.ZodRawShape>(schema: z.ZodObject<T>) {
   return schema.superRefine((d, ctx) => {
     const isFAorPDA = d.type === 'FA' || d.type === 'PDA';
 
-    if (isFAorPDA && !d.isUnlimited) {
+    if (isFAorPDA && !d.isUnlimitedStates) {
       // Check if maxStates is required when unlimited is unchecked
       if (d.maxStates === null || d.maxStates === undefined) {
         ctx.addIssue({
