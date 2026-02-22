@@ -57,6 +57,13 @@ const TEXT_COLOR =
     ? getComputedStyle(document.documentElement).getPropertyValue('--foreground').trim() ||
       '#0f172a'
     : '#0f172a';
+const GRID_COLOR =
+  typeof window !== 'undefined'
+    ? getComputedStyle(document.documentElement).getPropertyValue('--grid-color').trim() ||
+      '#0f172a'
+    : '#0f172a';
+
+
 const EDGE_WIDTH = 1.6;
 const DEFAULT_EPS = 'λ';
 
@@ -285,7 +292,7 @@ export function JffCytoscapeViewer({
   const backgroundStyle: React.CSSProperties = grid
     ? {
         backgroundImage:
-          'linear-gradient(#e5e7eb 1px, transparent 1px), linear-gradient(90deg, #e5e7eb 1px, transparent 1px)',
+          `linear-gradient(${GRID_COLOR} 1px, transparent 1px), linear-gradient(90deg, ${GRID_COLOR} 1px, transparent 1px)`,
         backgroundSize: '24px 24px',
         backgroundPosition: 'center center',
       }
