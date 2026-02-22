@@ -27,6 +27,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { AssociateProblemsDialog } from '@/components/dialogs/AssociateProblemsDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
+import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
+import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
 import { CreateProblemDialog } from '@/components/dialogs/CreateProblemDialog';
 import {
   Dialog,
@@ -103,6 +105,7 @@ export default function AssignmentDashboardPage() {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerSrc, setViewerSrc] = useState<string | null>(null);
   const [viewerTitle, setViewerTitle] = useState<string | undefined>(undefined);
+  const [jffType, setJffType] = useState<string | null>(null);
 
   // Allow optional file fields even if not in generated Prisma type
   type ProblemFileFields = Problem & { fileName?: string | null; originalFileName?: string | null };
@@ -119,6 +122,7 @@ export default function AssignmentDashboardPage() {
     setViewerSrc(src);
     setViewerTitle(`${original || fileName} - ${problem.title}`);
     setViewerOpen(true);
+	setJffType(problem.type);
   };
 
   const openDescription = (text: string | null) => {
@@ -159,7 +163,7 @@ export default function AssignmentDashboardPage() {
       .catch(() => setAssignment(null))
       .finally(() => setLoading(false));
   }, [id, aid]);
-
+  
   async function handleAddProblems(problemIds: string[]) {
     if (!id || !aid) return;
     if (!canManageProblems) return;
@@ -533,7 +537,7 @@ export default function AssignmentDashboardPage() {
         </TabsContent>
       </Tabs>
       {/* JFLAP Viewer Dialog */}
-      {viewerOpen && viewerSrc && (
+      {viewerOpen && viewerSrc && ["FA", "PDA"].includes(jffType) && (
         <JffViewerDialog
           open={viewerOpen}
           onOpenChange={setViewerOpen}
@@ -544,6 +548,12 @@ export default function AssignmentDashboardPage() {
           showGridDefault={true}
         />
       )}
+	  {viewerOpen && viewerSrc && ("RE" === jffType) && (
+        <RegexViewerDialog src={viewerSrc} open={viewerOpen} onOpenChange={setViewerOpen} title={viewerTitle}/>
+	  )}
+	  {viewerOpen && viewerSrc && ("CFG" === jffType) && (
+        <CfgViewerDialog src={viewerSrc} open={viewerOpen} onOpenChange={setViewerOpen} title={viewerTitle}/>
+	  )}
       {/* Description dialog */}
       <Dialog open={descOpen} onOpenChange={(v) => setDescOpen(v)}>
         <DialogContent className="bg-white">
