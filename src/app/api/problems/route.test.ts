@@ -105,6 +105,8 @@ describe('POST /api/problems', () => {
     formData.set('description', 'Desc');
     formData.set('type', 'FA');
     formData.set('courseId', 'course-1');
+    formData.set('maxSubmissions', '10');
+    formData.set('maxPoints', '50');
     formData.set('maxStates', '5');
     formData.set('isDeterministic', 'true');
     formData.set('file', file);
@@ -117,7 +119,14 @@ describe('POST /api/problems', () => {
     const res = await POST(req);
 
     expect(res.status).toBe(200);
-    expect(prismaMock.problem.create).toHaveBeenCalled();
+    expect(prismaMock.problem.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          maxSubmissions: 10,
+          maxPoints: 50,
+        }),
+      }),
+    );
     expect(activityLogMock).toHaveBeenCalled();
   });
 });

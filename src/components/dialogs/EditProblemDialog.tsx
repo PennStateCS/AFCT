@@ -210,6 +210,8 @@ export function EditProblemDialog({
       formData.append('title', payload.title ?? '');
       formData.append('description', payload.description ?? '');
       formData.append('type', payload.type ?? '');
+      formData.append('maxSubmissions', String(payload.isUnlimitedSubmissions ? -1 : payload.maxSubmissions ?? 0));
+      formData.append('maxPoints', String(payload.maxPoints ?? 0));
       formData.append('courseId', payload.courseId ?? '');
 
       if (payload.type === 'FA' || payload.type === 'PDA') {

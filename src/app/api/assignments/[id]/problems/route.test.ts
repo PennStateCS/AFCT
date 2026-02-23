@@ -79,6 +79,7 @@ describe('GET /api/assignments/[id]/problems', () => {
           isDeterministic: null,
         },
         submissions: [{ id: 's1' }],
+        AssignmentProblemGrade: { grade: 85 },
       },
     ]);
 
@@ -89,6 +90,6 @@ describe('GET /api/assignments/[id]/problems', () => {
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body[0]).toMatchObject({ id: 'p1', solved: true });
+    expect(body[0]).toMatchObject({ id: 'p1', solved: true, grade: 85 });
   });
 });

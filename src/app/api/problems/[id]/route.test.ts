@@ -122,6 +122,8 @@ describe('PUT /api/problems/[id]', () => {
     formData.set('description', 'Desc');
     formData.set('type', 'FA');
     formData.set('courseId', 'course-1');
+    formData.set('maxSubmissions', '10');
+    formData.set('maxPoints', '50');
     formData.set('maxStates', '5');
     formData.set('isDeterministic', 'true');
 
@@ -133,7 +135,15 @@ describe('PUT /api/problems/[id]', () => {
     const res = await PUT(req, { params: Promise.resolve({ id: 'problem-1' }) });
 
     expect(res.status).toBe(200);
-    expect(prismaMock.problem.update).toHaveBeenCalled();
+    expect(prismaMock.problem.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'problem-1' },
+        data: expect.objectContaining({
+          maxSubmissions: 10,
+          maxPoints: 50,
+        }),
+      }),
+    );
     expect(activityLogMock).toHaveBeenCalled();
   });
 });
