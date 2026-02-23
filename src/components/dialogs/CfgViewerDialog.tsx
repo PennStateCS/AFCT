@@ -41,7 +41,7 @@ function parseCfg(xmlText: string){
 
 export function CfgViewerDialog({ src, open, onOpenChange, title }: { src: string; open: boolean; onOpenChange: (v: boolean) => void; title: string | null | undefined;}){
 
-  const [data, setData] = React.useState(null);
+  const [data, setData] = React.useState<string | null>(null);
   
   if (!title){
     title = ""; 
