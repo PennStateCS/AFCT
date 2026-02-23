@@ -30,10 +30,13 @@ function parseRegex(xmlText: string){
   return { type: type, expression: expression }; 
 }
 
-export function RegexViewerDialog({ src, open, onOpenChange, title }: { src: string; open: boolean; onOpenChange: (v: boolean) => void; title: string;}){
+export function RegexViewerDialog({ src, open, onOpenChange, title }: { src: string; open: boolean; onOpenChange: (v: boolean) => void; title: string | null;}){
 
   const [data, setData] = React.useState(null);
 
+  if (!title){
+    title = "";
+  }
   React.useEffect(() => {
 	
 	const load = async () => {
