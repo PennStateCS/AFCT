@@ -43,17 +43,15 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
         id: true,
         title: true,
         dueDate: true,
-        grades: {
-          select: {
-            grade: true
-          },
-        },
         description: true,
       },
       orderBy: {
         dueDate: 'asc',
       },
     });
+
+    // 5. Fetch grade for assignment from problems
+    // TODO
 
     return NextResponse.json(assignments);
   } catch (error) {
