@@ -33,7 +33,10 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
-    // 4. Fetch all published assignments
+    // 4. Fetch all published assignments along with problem info needed to
+    //    compute a student’s total and max grade.  We select the nested
+    //    `problems` relation in order to sum `maxPoints` and any existing
+    //    `AssignmentProblemGrade` for the current user.
     const assignments = await prisma.assignment.findMany({
       where: {
         courseId: courseId,
@@ -44,16 +47,44 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
         title: true,
         dueDate: true,
         description: true,
+        problems: {
+          select: {
+            maxPoints: true,
+            grades: {
+              where: { studentId: decoded.userId },
+              select: { grade: true },
+            },
+          },
+        },
       },
       orderBy: {
         dueDate: 'asc',
       },
     });
 
-    // 5. Fetch grade for assignment from problems
-    // TODO
+    // 5. Compute grade totals per assignment for this student
+    const assignmentsWithGrades = assignments.map((a) => {
+      const maxGrade = a.problems.reduce(
+        (sum, p) => sum + (p.maxPoints ?? 0),
+        0,
+      );
+      const totalGrade = a.problems.reduce(
+        (sum, p) =>
+          sum + (p.grades?.[0]?.grade ?? 0),
+        0,
+      );
 
-    return NextResponse.json(assignments);
+      return {
+        id: a.id,
+        title: a.title,
+        dueDate: a.dueDate,
+        description: a.description,
+        totalGrade,
+        maxGrade,
+      };
+    });
+
+    return NextResponse.json(assignmentsWithGrades);
   } catch (error) {
     console.error('API GET ASSIGNMENTS error:', error);
     return NextResponse.json({ error: 'Failed to fetch assignments.' }, { status: 500 });
