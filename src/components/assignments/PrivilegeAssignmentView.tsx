@@ -537,7 +537,7 @@ export default function AssignmentDashboardPage() {
         </TabsContent>
       </Tabs>
       {/* JFLAP Viewer Dialog */}
-      {viewerOpen && viewerSrc && ["FA", "PDA"].includes(jffType) && (
+      {viewerOpen && viewerSrc && ["FA", "PDA"].includes(jffType ?? "") && (
         <JffViewerDialog
           open={viewerOpen}
           onOpenChange={setViewerOpen}
