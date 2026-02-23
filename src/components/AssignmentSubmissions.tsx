@@ -1108,7 +1108,7 @@ export default function AssignmentSubmissions({
         </Card>
       )}
 
-      {openDialog.submission && ["FA", "PDA"].includes(problems.find((p) => p.id === selectedProblemId)?.type) && (
+      {openDialog.submission && ["FA", "PDA"].includes(problems.find((p) => p.id === selectedProblemId)?.type ?? "") && (
         <JffViewerDialog
           open={openDialog.open}
           onOpenChange={(open) => setOpenDialog({ open, submission: null })}
@@ -1120,7 +1120,7 @@ export default function AssignmentSubmissions({
           height="70vh"
         />
       )}
-      {openDialog.submission && problems.find((p) => p.id === selectedProblemId)?.type === "RE" && (
+      {openDialog.submission && (problems.find((p) => p.id === selectedProblemId)?.type ?? "") === "RE" && (
         <RegexViewerDialog
           open={openDialog.open}
           onOpenChange={(open) => setOpenDialog({ open, submission: null })}
@@ -1130,7 +1130,7 @@ export default function AssignmentSubmissions({
           title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
 		/> 
 	  )}
-      {openDialog.submission && problems.find((p) => p.id === selectedProblemId)?.type === "CFG" && (
+      {openDialog.submission && (problems.find((p) => p.id === selectedProblemId)?.type ?? "") === "CFG" && (
         <CfgViewerDialog
           open={openDialog.open}
           onOpenChange={(open) => setOpenDialog({ open, submission: null })}
