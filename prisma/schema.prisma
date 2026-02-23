@@ -140,7 +140,6 @@ model Problem {
   fileName         String?
   originalFileName String?
   maxSubmissions   Int?
-  currPoints       Int?
   maxPoints        Int         @default(100)
   type             ProblemType?
   maxStates        Int?
