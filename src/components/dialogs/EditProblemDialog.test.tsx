@@ -172,6 +172,11 @@ describe('EditProblemDialog assignment settings', () => {
       '/api/problems/problem-1',
       expect.objectContaining({ method: 'PUT' }),
     );
+    // ensure updated fields are sent in form data
+    const firstCallArgs = fetchMock.mock.calls[0][1] as RequestInit;
+    const formData = firstCallArgs.body as FormData;
+    expect(formData.get('maxSubmissions')).toBe('5');
+    expect(formData.get('maxPoints')).toBe('15');
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
@@ -209,5 +214,10 @@ describe('EditProblemDialog assignment settings', () => {
       '/api/problems/problem-1',
       expect.objectContaining({ method: 'PUT' }),
     );
+    // when only title changed, max fields remain untouched (they use defaults)
+    const onlyCallArgs = fetchMock.mock.calls[0][1] as RequestInit;
+    const fd2 = onlyCallArgs.body as FormData;
+    expect(fd2.get('maxSubmissions')).toBeTruthy();
+    expect(fd2.get('maxPoints')).toBeTruthy();
   });
 });
