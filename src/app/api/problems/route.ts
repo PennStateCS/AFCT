@@ -62,6 +62,8 @@ export async function POST(req: Request) {
         title,
         description,
         type: type as ProblemType,
+        maxSubmissions: parseInt(maxSubmissions || '0', 10),
+        maxPoints: parseInt(maxPoints || '0', 10),
         courseId,
         fileName,
         originalFileName: file.name,
