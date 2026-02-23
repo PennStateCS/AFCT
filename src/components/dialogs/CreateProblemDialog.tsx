@@ -141,8 +141,8 @@ export function CreateProblemDialog({
       formData.append('title', values.title);
       formData.append('description', values.description ?? '');
       formData.append('type', values.type);
-      formData.append('maxSubmissions', values.maxSubmissions);
-      formData.append('maxPoints', values.maxPoints);
+      formData.append('maxSubmissions', values.isUnlimitedSubmissions ? '-1' : String(values.maxSubmissions ?? 0));
+      formData.append('maxPoints', String(values.maxPoints));
       formData.append('courseId', values.courseId);
 
       if (values.type === 'FA' || values.type === 'PDA') {
