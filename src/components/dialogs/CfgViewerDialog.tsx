@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog';
 
 function parseCfg(xmlText: string){
+  type MachineType = 'cfg' | 're' | 'fa' | 'pda' | 'unknown';
   const doc = new DOMParser().parseFromString(xmlText, 'application/xml');
   const parseError = doc.querySelector('parsererror');
   if (parseError) {
