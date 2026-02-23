@@ -725,7 +725,7 @@ export default function StudentAssignmentPage() {
         </Card>
       )}
       {/* JffViewerDialog for viewing submitted files */}
-      {openDialog.submission && ["FA", "PDA"].includes(assignment.problems.find(u => u.problem.id === openDialog.submission.problemId)?.problem?.type ?? "") && (
+      {openDialog.submission && ["FA", "PDA"].includes(assignment.problems.find(u => u.problem.id === openDialog?.submission?.problemId)?.problem?.type ?? "") && (
         <JffViewerDialog
           open={openDialog.open}
           onOpenChange={(open) => setOpenDialog({ open, submission: null })}
@@ -735,15 +735,15 @@ export default function StudentAssignmentPage() {
           height="70vh"
         />
       )}
-      {openDialog.submission && assignment.problems.find(u => u.problem.id === openDialog.submission.problemId)?.problem?.type === "RE" && (
+      {openDialog.submission && assignment.problems.find(u => u.problem.id === openDialog?.submission?.problemId)?.problem?.type === "RE" && (
 	    <RegexViewerDialog
           open={openDialog.open}
           onOpenChange={(open) => setOpenDialog({ open, submission: null })}
           src={`/api/uploads/submissions/${encodeURIComponent(openDialog.submission.fileName ?? '')}`}
-          title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
+          title={`${openDialog.submission.originalFileName || openDialog?.submission?.fileName} - Submission`}
 		/>
 	  )}
-      {openDialog.submission && assignment.problems.find(u => u.problem.id === openDialog.submission.problemId)?.problem?.type === "CFG" && (
+      {openDialog.submission && assignment.problems.find(u => u.problem.id === openDialog?.submission?.problemId)?.problem?.type === "CFG" && (
 	    <CfgViewerDialog
           open={openDialog.open}
           onOpenChange={(open) => setOpenDialog({ open, submission: null })}
