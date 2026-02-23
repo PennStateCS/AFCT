@@ -27,7 +27,7 @@ function parseRegex(xmlText: string){
     throw new Error(`${rawType} not regular expression`);
   }
 
-  let expression = doc.querySelector('expression').textContent;
+  let expression = doc.querySelector('expression')?.textContent ?? '';
   return { type: type, expression: expression }; 
 }
 
