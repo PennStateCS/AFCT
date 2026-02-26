@@ -62,6 +62,7 @@ export function CreateProblemDialog({
       isUnlimitedSubmissions: true,
       maxSubmissions: 100,
       maxPoints: 100,
+      autograderEnabled: true,
       isUnlimitedStates: true,
       maxStates: 100,
       isDeterministic: false,
@@ -143,6 +144,7 @@ export function CreateProblemDialog({
       formData.append('type', values.type);
       formData.append('maxSubmissions', values.isUnlimitedSubmissions ? '-1' : String(values.maxSubmissions ?? 0));
       formData.append('maxPoints', String(values.maxPoints));
+      formData.append('autograderEnabled', String(values.autograderEnabled));
       formData.append('courseId', values.courseId);
 
       if (values.type === 'FA' || values.type === 'PDA') {
@@ -316,6 +318,22 @@ export function CreateProblemDialog({
             )}
           />
 
+          {/* Automatic Grading */ }
+          <div className="flex items-center justify-between">
+            <Label htmlFor="autograderEnabled">Automatic Grading</Label>
+            <Controller
+              control={control}
+              name="autograderEnabled"
+              render={({ field }) => (
+                <Switch
+                  id="autograderEnabled"
+                  checked={!!field.value}
+                  onCheckedChange={(checked) => field.onChange(!!checked)}
+                />
+              )}
+            />
+          </div>
+
           {/* Max States (FA/PDA only) */}
           {(type === 'FA' || type === 'PDA') && (
             <Controller
@@ -365,11 +383,13 @@ export function CreateProblemDialog({
                 control={control}
                 name="isDeterministic"
                 render={({ field }) => (
-                  <Switch
-                    id="isDeterministic"
-                    checked={!!field.value}
-                    onCheckedChange={(checked) => field.onChange(!!checked)}
-                  />
+                  <div>
+                    <Switch
+                      id="isDeterministic"
+                      checked={!!field.value}
+                      onCheckedChange={(checked) => field.onChange(!!checked)}
+                    />
+                  </div>
                 )}
               />
             </div>
