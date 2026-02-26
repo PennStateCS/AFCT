@@ -158,6 +158,9 @@ describe('EditProblemDialog assignment settings', () => {
 
     const pointsInput = screen.getByLabelText('Max Points');
     const submissionsInput = screen.getByLabelText('Max Submissions');
+    // automatic grading toggle should be present and checked by default
+    expect(screen.getByLabelText('Automatic Grading')).toBeInTheDocument();
+    expect(screen.getByLabelText('Automatic Grading')).toBeChecked();
     fireEvent.change(pointsInput, { target: { value: '15' } });
     fireEvent.change(submissionsInput, { target: { value: '5' } });
 

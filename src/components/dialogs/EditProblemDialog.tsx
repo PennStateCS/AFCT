@@ -68,6 +68,7 @@ export function EditProblemDialog({
         problem.type === 'FA'
           ? !!(problem as Problem & { isDeterministic?: boolean }).isDeterministic
           : false,
+      autograderEnabled: !!(problem as Problem & { autograderEnabled?: boolean }).autograderEnabled,
       file: undefined as File | undefined, // optional in edit; user can choose a new file
       courseId: problem.courseId,
     }),
@@ -212,6 +213,7 @@ export function EditProblemDialog({
       formData.append('type', payload.type ?? '');
       formData.append('maxSubmissions', String(payload.isUnlimitedSubmissions ? -1 : payload.maxSubmissions ?? 0));
       formData.append('maxPoints', String(payload.maxPoints ?? 0));
+      formData.append('autograderEnabled', String(payload.autograderEnabled));
       formData.append('courseId', payload.courseId ?? '');
 
       if (payload.type === 'FA' || payload.type === 'PDA') {
@@ -428,6 +430,22 @@ export function EditProblemDialog({
             )}
           />
 
+          {/* Automatic Grading */ }
+          <div className="flex items-center justify-between">
+            <Label htmlFor="autograderEnabled">Automatic Grading</Label>
+            <Controller
+              control={control}
+              name="autograderEnabled"
+              render={({ field }) => (
+                <Switch
+                  id="autograderEnabled"
+                  checked={!!field.value}
+                  onCheckedChange={(checked) => field.onChange(!!checked)}
+                />
+              )}
+            />
+          </div>
+
           {/* Max States (FA/PDA only) */}
           {(type === 'FA' || type === 'PDA') && (
             <Controller
@@ -596,13 +614,13 @@ export function EditProblemDialog({
                 </div>
                 <div className="flex items-center justify-between rounded-md border px-3 py-2">
                   <div>
-                    <p className="text-sm font-semibold">Autograder</p>
+                    <p className="text-sm font-semibold">Automatic Grading</p>
                     <p className="text-muted-foreground text-xs">
-                      Controls autograder behavior for this assignment only.
+                      Controls automatic grading for this assignment only.
                     </p>
                   </div>
                   <Switch
-                    id="assignment-autograder"
+                    id="assignment-automatic-grading"
                     checked={assignmentConfig.autograderEnabled}
                     onCheckedChange={(checked) =>
                       setAssignmentConfig((prev) => ({

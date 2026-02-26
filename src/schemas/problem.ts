@@ -48,6 +48,7 @@ const BaseProblemObject = z.object({
     .optional(),
   isUnlimitedStates: z.boolean().default(true),
   maxPoints: z.coerce.number().int(),
+  automaticGrading: z.boolean().default(true),
   maxStates: z
     .union([z.coerce.number().int(), z.null()])
     .optional(),
