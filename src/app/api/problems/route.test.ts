@@ -109,6 +109,7 @@ describe('POST /api/problems', () => {
     formData.set('maxPoints', '50');
     formData.set('maxStates', '5');
     formData.set('isDeterministic', 'true');
+    formData.set('autograderEnabled', 'false');
     formData.set('file', file);
 
     const req = new Request('http://localhost/api/problems', {
@@ -124,6 +125,7 @@ describe('POST /api/problems', () => {
         data: expect.objectContaining({
           maxSubmissions: 10,
           maxPoints: 50,
+          autograderEnabled: false,
         }),
       }),
     );

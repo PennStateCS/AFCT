@@ -31,6 +31,8 @@ export async function POST(req: Request) {
     const courseId = formData.get('courseId') as string;
     const maxStates = formData.get('maxStates') as string | null;
     const isDeterministic = formData.get('isDeterministic') === 'true';
+    const autograderEnabled = formData.get('autograderEnabled');
+    const autograderBool = autograderEnabled === 'false' ? false : true;
     const file = formData.get('file') as File | null;
 
     // Validate required fields
@@ -67,6 +69,7 @@ export async function POST(req: Request) {
         courseId,
         fileName,
         originalFileName: file.name,
+        autograderEnabled: autograderBool,
         maxStates: ['FA', 'PDA'].includes(type) ? parseInt(maxStates || '0', 10) || null : null,
         isDeterministic: type === 'FA' ? isDeterministic : null,
       },
