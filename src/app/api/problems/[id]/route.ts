@@ -42,6 +42,7 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
     const courseId = formData.get('courseId') as string;
     const maxStates = formData.get('maxStates') as string | null;
     const isDeterministic = formData.get('isDeterministic') === 'true';
+    const autograderEnabled = formData.get('autograderEnabled') === 'true';
     const file = formData.get('file') as File | null;
 
     // Validate required fields
@@ -97,9 +98,9 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
         maxPoints: maxPoints ? parseInt(maxPoints, 10) : undefined,
         maxStates: ['FA', 'PDA'].includes(type) ? parseInt(maxStates || '0', 10) || null : null,
         isDeterministic: type === 'FA' ? isDeterministic : null,
+        ...(autograderEnabled !== undefined && { autograderEnabled: autograderEnabled }),
       },
     });
-
     // Log update activity
     await createEnhancedActivityLog(prisma, req, {
       userId: user.id,
