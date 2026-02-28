@@ -10,3 +10,6 @@ ALTER TABLE "public"."AssignmentProblemGrade" RENAME CONSTRAINT "AssignmentProbl
 
 -- RenameIndex
 ALTER INDEX "public"."AssignmentProblemGrade_assignment_problem_idx" RENAME TO "AssignmentProblemGrade_assignmentId_problemId_idx";
+
+-- Adding autograder to problem
+ALTER TABLE "Problem" ADD COLUMN IF NOT EXISTS "autograderEnabled" BOOLEAN NOT NULL DEFAULT TRUE;

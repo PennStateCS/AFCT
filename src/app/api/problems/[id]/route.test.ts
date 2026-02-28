@@ -126,6 +126,7 @@ describe('PUT /api/problems/[id]', () => {
     formData.set('maxPoints', '50');
     formData.set('maxStates', '5');
     formData.set('isDeterministic', 'true');
+    formData.set('autograderEnabled', 'true');
 
     const req = new NextRequest('http://localhost/api/problems/problem-1', {
       method: 'PUT',
@@ -141,6 +142,7 @@ describe('PUT /api/problems/[id]', () => {
         data: expect.objectContaining({
           maxSubmissions: 10,
           maxPoints: 50,
+          autograderEnabled: true,
         }),
       }),
     );

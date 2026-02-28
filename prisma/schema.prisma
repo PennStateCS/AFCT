@@ -141,6 +141,7 @@ model Problem {
   originalFileName String?
   maxSubmissions   Int?
   maxPoints        Int         @default(100)
+  autograderEnabled Boolean    @default(true)
   type             ProblemType?
   maxStates        Int?
   isDeterministic  Boolean?
