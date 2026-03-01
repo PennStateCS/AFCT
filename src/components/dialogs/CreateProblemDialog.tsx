@@ -73,6 +73,8 @@ export function CreateProblemDialog({
     handleSubmit,
     reset,
     watch,
+	setError,
+	clearError,
     formState: { errors, isSubmitting, isValid },
   } = useForm<FormValues>({
     resolver: zodResolver(ProblemFormSchema),
@@ -145,11 +147,35 @@ export function CreateProblemDialog({
       if (values.type === 'FA') {
         formData.append('isDeterministic', String(!!values.isDeterministic));
       }
+      
+      await new Promise<void>((resolve, reject) => {	  
+	    const reader = new FileReader();
+ 
+	    reader.onload = function(e) {
+          const parser = new DOMParser(); 
+		  const jff = parser.parseFromString(e.target.result, 'text/xml');
+
+		  if (jff.querySelector('parseerror')){
+            reject('JFF file not a vaild XML');
+		  }
+
+		  const rawType = (jff.querySelector('type')?.textContent || '').toUpperCase();
+
+          if (rawType !== values.type){
+            console.error(`The JFF file must be of type ${values.type}`);
+            reject(`The JFF file must be of type ${values.type}`);
+		    return;
+	      }
+	    }
+
+		reader.onerror = () => reject('Error reading file');
+
+	    reader.readAsText(values.file);
+      });
 
       formData.append('file', values.file);
-
       const res = await fetch('/api/problems', { method: 'POST', body: formData });
-
+      
       if (res.ok) {
         const created = await res.json().catch(() => null);
         onCreated?.(created);
@@ -161,6 +187,10 @@ export function CreateProblemDialog({
       }
     } catch (error) {
       console.error('Form submission error:', error);
+	  if (typeof error === "string") {
+        setError('file', { type: 'manual', message: error });
+        return;
+      }
       if (error instanceof z.ZodError) {
         // Handle Zod validation errors
         const message = error.errors?.map((e) => e.message).join();
