@@ -58,6 +58,7 @@ export async function POST(req: NextRequest) {
         select: {
           fileName: true,
           maxStates: true,
+          autograderEnabled: true,
           isDeterministic: true,
           type: true,
         },
@@ -409,6 +410,42 @@ export async function POST(req: NextRequest) {
           correct,
           evaluationRaw:
             evaluationRaw === null ? Prisma.JsonNull : (evaluationRaw as Prisma.InputJsonValue),
+        },
+      });
+    }
+
+    // 7. Autograde submission
+    if (link.autograderEnabled == true) {
+      const ap = await prisma.assignmentProblem.findUnique({
+        where: { 
+          assignmentId_problemId: {
+            assignmentId,
+            problemId,
+          },
+        },
+        select: { maxPoints: true }
+      });
+
+      const earnedPoints = (correct === true) ? (ap?.maxPoints ?? 0) : 0
+
+      await prisma.assignmentProblemGrade.upsert({
+        where: {
+          assignmentId_problemId_studentId: {
+            assignmentId: assignmentId,
+            problemId: problemId,
+            studentId: decoded.userId,
+          },
+        },
+        create: {
+          assignmentId: assignmentId,
+          problemId: problemId,
+          studentId: decoded.userId,
+          grade: earnedPoints,
+          feedback: feedback,
+        },
+        update: {
+          grade: earnedPoints,
+          feedback: feedback,
         },
       });
     }
