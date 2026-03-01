@@ -65,6 +65,8 @@ export function EditProblemDialog({
     handleSubmit,
     reset,
     watch,
+	setError,
+	clearError,
     formState: { errors, isSubmitting, isValid, isDirty },
   } = useForm<FormValues>({
     resolver: zodResolver(ProblemFormSchema),
@@ -143,10 +145,37 @@ export function EditProblemDialog({
       if (payload.type === 'FA') {
         formData.append('isDeterministic', String(!!payload.isDeterministic));
       }
-
+      
+	  if ((payload.type !== problem.type) && !(payload.file instanceof File)){
+        throw 'Upload a new solution file';
+	  }
       // Include file ONLY if user selected a new one
       if (payload.file instanceof File) {
         formData.append('file', payload.file);
+        await new Promise<void>((resolve, reject) => {	  
+	      const reader = new FileReader();
+ 
+	      reader.onload = function(e) {
+            const parser = new DOMParser(); 
+		    const jff = parser.parseFromString(e.target.result, 'text/xml');
+
+		    if (jff.querySelector('parseerror')){
+              reject('JFF file not a vaild XML');
+		    }
+
+		    const rawType = (jff.querySelector('type')?.textContent || '').toUpperCase();
+            
+            if (rawType !== ((payload.type === 'CFG') ? 'GRAMMAR' : payload.type)){
+              reject(`The JFF file must be of type ${payload.type}`);
+		      return;
+	        }
+			resolve();
+	      }
+
+		  reader.onerror = () => reject('Error reading file');
+
+	      reader.readAsText(payload.file);
+        });
       }
 
       // Sending PUT request
@@ -179,7 +208,11 @@ export function EditProblemDialog({
       onSaved?.(updated ?? undefined);
       setOpen(false);
     } catch (error) {
-      console.error('Edit problem submission error:', error);
+      //console.error('Edit problem submission error:', error);
+	  if (typeof error === "string"){
+	    setError('file', { type: 'manual', message:error });
+		return;
+	  }
       if (error instanceof z.ZodError) {
         // validation errors
       }
@@ -332,7 +365,7 @@ export function EditProblemDialog({
             render={({ field }) => (
               <div>
                 <Label htmlFor="answer-file" className="mb-2 block">
-                  Replace Answer File (optional)
+                  {problem.type === type ? "Replace Answer File (optional)" : "Replace Answer File"}
                 </Label>
                 <Input
                   id="answer-file"

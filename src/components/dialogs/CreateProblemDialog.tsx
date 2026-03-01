@@ -161,11 +161,12 @@ export function CreateProblemDialog({
 
 		  const rawType = (jff.querySelector('type')?.textContent || '').toUpperCase();
 
-          if (rawType !== values.type){
+          if (rawType !== ((values.type === 'CFG') ? 'GRAMMAR' : values.type)){
             console.error(`The JFF file must be of type ${values.type}`);
             reject(`The JFF file must be of type ${values.type}`);
 		    return;
 	      }
+		  resolve();
 	    }
 
 		reader.onerror = () => reject('Error reading file');
