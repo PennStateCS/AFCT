@@ -11,6 +11,7 @@ import { execSync } from 'child_process';
 import os from 'os';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
+import { XMLValidator, XMLParser } from 'fast-xml-parser';
 
 // Import JavaRunner for JAR execution
 import JavaRunner from '../../../../lib/java-runner';
@@ -78,6 +79,22 @@ export async function POST(req: NextRequest) {
   let correct: boolean | undefined = undefined;
   let evaluationRaw: unknown | null = null;
   let uploadedFilePath: string | null = null;
+
+  const xml = await file.text();
+
+  const parser = new XMLParser();
+  
+  const isValidXml = XMLValidator.validate(xml);
+
+  if (isValidXml !== true){
+    return NextResponse.json({ error: 'Submission file not xml' }, { status: 400 });
+  }
+
+  const jff = parser.parse(xml);
+
+  if (!jff.structure || jff.structure.type !== ((link.problem.type === 'CFG') ? 'GRAMMAR' : link.problem.type)){
+    return NextResponse.json({ error: `Submission file should be of type ${link.problem.type}` }, { status: 400 });
+  }
 
   try {
     // 4. Handle file upload
