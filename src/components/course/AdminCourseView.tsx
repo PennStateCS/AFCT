@@ -3,12 +3,13 @@ import { ActivityCard } from '@/components/ActivityCard';
 import { AssignmentsCard } from '@/components/AssignmentsCard';
 import { ProblemsCard } from '@/components/ProblemsCard';
 import { RosterCard } from '@/components/RosterCard';
+import { PrivilegeGradesCard } from '@/components/PrivilegeGradesCard';
 import { userColumns } from '@/app/dashboard/courses/[id]/user-columns';
 import { useAssignmentColumns } from '@/app/dashboard/courses/[id]/assignment-columns';
 import { useProblemColumns } from '@/app/dashboard/courses/[id]/problem-columns';
 import { FullCourse, TabType } from '@/types/course';
 import { getInstructors } from '@/lib/course-utils';
-import { NotebookText, FileText, Users, Activity } from 'lucide-react';
+import { NotebookText, FileText, Users, GraduationCap, Activity } from 'lucide-react';
 import { Assignment, Problem } from '@prisma/client';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
@@ -92,6 +93,15 @@ export function AdminCourseView({
         </TabsTrigger>
         <TabsTrigger
           className="data-[state=active]:bg-secondary w-50 hover:bg-gray-200 data-[state=active]:text-white"
+          value="grades"
+        >
+          <div className="flex items-center gap-2">
+            <GraduationCap className="h-4 w-4" />
+            Grades
+          </div>
+        </TabsTrigger>
+        <TabsTrigger
+          className="data-[state=active]:bg-secondary w-50 hover:bg-gray-200 data-[state=active]:text-white"
           value="activity"
         >
           <div className="flex items-center gap-2">
@@ -147,6 +157,12 @@ export function AdminCourseView({
             onEnrollUser={onEnrollUser}
             onBulkEnroll={onBulkEnroll}
           />
+        </div>
+      </TabsContent>
+
+      <TabsContent value="grades" className="animate-fade-in-up transition-opacity duration-300">
+        <div className="mb-8 space-y-6">
+          <PrivilegeGradesCard courseId={course.id} />
         </div>
       </TabsContent>
 
