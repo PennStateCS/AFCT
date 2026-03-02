@@ -181,7 +181,8 @@ export function GradeBreakdownDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {/* widen the content for better data table fit */}
-      <DialogContent className="sm:max-w-2xl">
+      {/* expanded max width to accommodate more content without wrapping */}
+      <DialogContent className="sm:max-w-3xl lg:max-w-4xl bg-card">
         <DialogHeader>
           <DialogTitle>
             {studentName} &ndash; {assignmentTitle}
