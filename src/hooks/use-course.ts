@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { showToast } from '@/lib/toast';
@@ -72,7 +74,7 @@ export function useDialogStates() {
   // Publish confirm
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
   const [pendingPublish, setPendingPublish] = useState<boolean | null>(null);
-  
+
   // Archive confirm
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
   const [pendingArchive, setPendingArchive] = useState<boolean | null>(null);
@@ -112,7 +114,7 @@ export function useDialogStates() {
     setArchiveConfirmOpen,
     pendingArchive,
     setPendingArchive,
-    
+
     enrollOpen,
     setEnrollOpen,
     allUsers,
@@ -128,7 +130,7 @@ export function useEnrollment(course: FullCourse | null) {
       const res = await fetch('/api/users');
       if (!res.ok) throw new Error('Failed to fetch users');
       const users: User[] = await res.json();
-      
+
       if (course) {
         const inCourseIds = new Set(getEnrolledIds(course.enrolled as any[]));
         setAllUsers(users.filter((u) => !inCourseIds.has(u.id)));
@@ -139,21 +141,24 @@ export function useEnrollment(course: FullCourse | null) {
     }
   }, [course]);
 
-  const handleEnrollUser = useCallback(async (user: EnrollableUser, courseId: string, refetchCourse: () => void) => {
-    try {
-      const res = await fetch(`/api/courses/${courseId}/enroll`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id }),
-      });
-      if (!res.ok) throw new Error('Failed to enroll user');
-      showToast.success('User enrolled!');
-      refetchCourse();
-    } catch (error) {
-      showToast.error('Error enrolling user');
-      console.error('Error enrolling user:', error);
-    }
-  }, []);
+  const handleEnrollUser = useCallback(
+    async (user: EnrollableUser, courseId: string, refetchCourse: () => void) => {
+      try {
+        const res = await fetch(`/api/courses/${courseId}/enroll`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id }),
+        });
+        if (!res.ok) throw new Error('Failed to enroll user');
+        showToast.success('User enrolled!');
+        refetchCourse();
+      } catch (error) {
+        showToast.error('Error enrolling user');
+        console.error('Error enrolling user:', error);
+      }
+    },
+    [],
+  );
 
   return {
     allUsers,

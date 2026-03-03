@@ -51,7 +51,7 @@ export function updateCourseAfterAssignmentSave(
   return {
     ...course,
     assignments: course.assignments.map((a) =>
-      a.id === updatedAssignment.id ? { ...updatedAssignment, problemCount: a.problemCount } : a,
+      a.id === updatedAssignment.id ? { ...a, ...updatedAssignment } : a,
     ),
   };
 }
@@ -83,7 +83,17 @@ export function updateCourseAfterAssignmentCreate(
 ): FullCourse {
   return {
     ...course,
-    assignments: [...course.assignments, { ...newAssignment, problemCount: 0 }],
+    assignments: [
+      ...course.assignments,
+      {
+        ...newAssignment,
+        problemCount: 0,
+        maxPoints: 0,
+        submissionCount: 0,
+        commentCount: 0,
+        hasSubmissionsOrComments: false,
+      },
+    ],
   };
 }
 
@@ -210,7 +220,8 @@ export function isEnrolled(
 
 export function getInstructors(enrolled: EnrolledUser[] | undefined): EnrolledUser[] {
   if (!Array.isArray(enrolled)) return [];
-  return enrolled.filter((u) => u.courseRole === 'FACULTY');
+  // Treat both FACULTY and INSTRUCTOR as instructors (schema supports both)
+  return enrolled.filter((u) => u.courseRole === 'FACULTY' || u.courseRole === 'INSTRUCTOR');
 }
 
 export function getTAs(enrolled: EnrolledUser[] | undefined): EnrolledUser[] {

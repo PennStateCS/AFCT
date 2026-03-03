@@ -11,18 +11,12 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { showToast } from '@/lib/toast';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Trash2, Delete } from 'lucide-react';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { courseRoleOptions, formatCourseRole } from '@/lib/roles';
+import SelectField from '@/components/ui/SelectField';
 
 type Props = {
   open: boolean;
@@ -274,24 +268,17 @@ export default function CourseEditUserDialog({
                 </div>
               </div>
 
-              <div>
-                <label className="mb-2 block text-sm font-medium">Course Role</label>
-                <Select
-                  value={roster.role}
-                  onValueChange={(v) => setRoster({ ...roster, role: v })}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {courseRoleOptions.map((r) => (
-                      <SelectItem key={r} value={r}>
-                        {formatCourseRole(r)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <SelectField
+                label="Course Role"
+                name="courseRole"
+                value={roster.role}
+                onValueChange={(v) => setRoster({ ...roster, role: v })}
+                placeholder="Select role"
+                options={courseRoleOptions.map((r) => ({
+                  value: r,
+                  label: formatCourseRole(r),
+                }))}
+              />
 
               <div className="pt-2">
                 <div className="mt-2 flex gap-2">

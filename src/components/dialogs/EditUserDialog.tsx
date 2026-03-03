@@ -12,14 +12,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from '@/components/ui/select';
 import InputGroup from '@/components/ui/InputGroup';
+import SelectField from '@/components/ui/SelectField';
 import { UploadCloud, Trash2 } from 'lucide-react';
 
 import { useEffect, useMemo, useState } from 'react';
@@ -293,26 +287,18 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
             control={control}
             name="timezone"
             render={({ field }) => (
-              <div>
-                <label className="mb-2 block text-sm font-medium" htmlFor="timezone">
-                  Timezone
-                </label>
-                <Select
-                  value={field.value || serverTimezone}
-                  onValueChange={(v) => field.onChange(v)}
-                >
-                  <SelectTrigger className="w-full" id="timezone">
-                    <SelectValue placeholder="Select timezone" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {COMMON_TIMEZONES.map((tz) => (
-                      <SelectItem key={tz} value={tz}>
-                        {formatTimezoneLabel(tz)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <SelectField
+                label="Timezone"
+                name="timezone"
+                id="timezone"
+                value={field.value || serverTimezone}
+                onValueChange={(v) => field.onChange(v)}
+                placeholder="Select timezone"
+                options={COMMON_TIMEZONES.map((tz) => ({
+                  value: tz,
+                  label: formatTimezoneLabel(tz),
+                }))}
+              />
             )}
           />
 
@@ -334,24 +320,15 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
             name="role"
             render={({ field }) => {
               return (
-                <div>
-                  <label className="mb-2 block text-sm font-medium">Default Role</label>
-                  <Select value={field.value} onValueChange={(v) => field.onChange(v)}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select a default role" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {roleOptions.map((r) => (
-                        <SelectItem key={r} value={r}>
-                          {formatRole(r)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {errors.role && (
-                    <p className="mt-1 text-xs text-red-600">{errors.role.message}</p>
-                  )}
-                </div>
+                <SelectField
+                  label="Default Role"
+                  name="role"
+                  value={field.value}
+                  onValueChange={(v) => field.onChange(v)}
+                  placeholder="Select a default role"
+                  options={roleOptions.map((r) => ({ value: r, label: formatRole(r) }))}
+                  error={errors.role?.message}
+                />
               );
             }}
           />
@@ -361,24 +338,18 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
             control={control}
             name="inactive"
             render={({ field }) => (
-              <div>
-                <label className="mb-2 block text-sm font-medium">Status</label>
-                <Select
-                  value={field.value ? 'true' : 'false'}
-                  onValueChange={(v) => field.onChange(v === 'true')}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select activity type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="false">Active</SelectItem>
-                    <SelectItem value="true">Inactive</SelectItem>
-                  </SelectContent>
-                </Select>
-                {errors.inactive && (
-                  <p className="mt-1 text-xs text-red-600">{errors.inactive.message}</p>
-                )}
-              </div>
+              <SelectField
+                label="Status"
+                name="inactive"
+                value={field.value ? 'true' : 'false'}
+                onValueChange={(v) => field.onChange(v === 'true')}
+                placeholder="Select activity type"
+                options={[
+                  { value: 'false', label: 'Active' },
+                  { value: 'true', label: 'Inactive' },
+                ]}
+                error={errors.inactive?.message}
+              />
             )}
           />
 

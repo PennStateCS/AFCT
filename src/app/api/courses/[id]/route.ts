@@ -37,6 +37,11 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
         problems: true,
         assignments: {
           include: {
+            problems: {
+              select: {
+                maxPoints: true,
+              },
+            },
             _count: {
               select: { problems: true },
             },
@@ -77,6 +82,11 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
     // Attach problem counts and safety flags to assignments
     const assignmentsWithProblemCount = await Promise.all(
       course.assignments.map(async (assignment: (typeof course.assignments)[number]) => {
+        const totalProblemPoints = (assignment.problems ?? []).reduce((sum, ap) => {
+          const value = typeof ap.maxPoints === 'number' ? ap.maxPoints : 0;
+          return sum + (Number.isFinite(value) ? value : 0);
+        }, 0);
+
         // Check for submissions and comments
         const submissionCount = await prisma.submission.count({
           where: { assignmentId: assignment.id },
@@ -89,7 +99,9 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
           title: assignment.title,
           description: assignment.description,
           dueDate: assignment.dueDate,
-          maxPoints: assignment.maxPoints,
+          allowLateSubmissions: assignment.allowLateSubmissions,
+          lateCutoff: assignment.lateCutoff,
+          maxPoints: totalProblemPoints,
           isPublished: assignment.isPublished,
           createdAt: assignment.createdAt,
           updatedAt: assignment.updatedAt,
@@ -304,6 +316,11 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
           problems: true,
           assignments: {
             include: {
+              problems: {
+                select: {
+                  maxPoints: true,
+                },
+              },
               _count: {
                 select: { problems: true },
               },
@@ -355,6 +372,11 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
     const assignmentsWithProblemCount = await Promise.all(
       updatedCourse.assignments.map(
         async (assignment: (typeof updatedCourse.assignments)[number]) => {
+          const totalProblemPoints = (assignment.problems ?? []).reduce((sum, ap) => {
+            const value = typeof ap.maxPoints === 'number' ? ap.maxPoints : 0;
+            return sum + (Number.isFinite(value) ? value : 0);
+          }, 0);
+
           const submissionCount = await prisma.submission.count({
             where: { assignmentId: assignment.id },
           });
@@ -368,7 +390,7 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
             title: assignment.title,
             description: assignment.description,
             dueDate: assignment.dueDate,
-            maxPoints: assignment.maxPoints,
+            maxPoints: totalProblemPoints,
             isPublished: assignment.isPublished,
             createdAt: assignment.createdAt,
             updatedAt: assignment.updatedAt,

@@ -43,13 +43,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const assignmentIds = assignments.map((a: (typeof assignments)[number]) => a.id);
     const studentIds = students.map((s: (typeof students)[number]) => s.id);
 
-    // Fetch all assignment grades for these students and assignments
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const assignmentGrades = await (prisma as any).assignmentGrade.findMany({
+    // Fetch summed grades for each student/assignment pair.  Using
+    // groupBy allows us to collapse the individual problem grades within an
+    // assignment into a single total per student, which is what the UI
+    // expects.
+    const gradeRows = await prisma.assignmentProblemGrade.groupBy({
+      by: ['studentId', 'assignmentId'],
       where: {
         assignmentId: { in: assignmentIds },
         studentId: { in: studentIds },
       },
+      _sum: { grade: true },
     });
 
     // Build nested map: grades[studentId][assignmentId] = grade
@@ -62,9 +66,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     // Populate with actual grades
-    assignmentGrades.forEach((g: { studentId: string; assignmentId: string; grade: number }) => {
+    gradeRows.forEach((g) => {
+      const sum = g._sum.grade ?? 0;
       if (grades[g.studentId]) {
-        grades[g.studentId][g.assignmentId] = g.grade;
+        grades[g.studentId][g.assignmentId] = sum;
       }
     });
 
