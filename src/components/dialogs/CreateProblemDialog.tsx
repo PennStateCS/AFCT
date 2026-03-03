@@ -90,6 +90,7 @@ export function CreateProblemDialog({
     handleSubmit,
     reset,
     watch,
+    setError,
     formState: { errors, isSubmitting, isValid },
   } = useForm<FormValues>({
     resolver: zodResolver(ProblemFormSchema),
@@ -271,7 +272,6 @@ export function CreateProblemDialog({
       }
 
       formData.append('file', values.file);
-
       const res = await fetch('/api/problems', { method: 'POST', body: formData });
 
       if (res.ok) {
@@ -311,6 +311,10 @@ export function CreateProblemDialog({
       }
     } catch (error) {
       console.error('Form submission error:', error);
+      if (typeof error === 'string') {
+        setError('file', { type: 'manual', message: error });
+        return;
+      }
       if (error instanceof z.ZodError) {
         // Handle Zod validation errors
         const message = error.errors?.map((e) => e.message).join();

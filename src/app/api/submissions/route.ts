@@ -417,16 +417,16 @@ export async function POST(req: NextRequest) {
     // 7. Autograde submission
     if (link.autograderEnabled == true) {
       const ap = await prisma.assignmentProblem.findUnique({
-        where: { 
+        where: {
           assignmentId_problemId: {
             assignmentId,
             problemId,
           },
         },
-        select: { maxPoints: true }
+        select: { maxPoints: true },
       });
 
-      const earnedPoints = (correct === true) ? (ap?.maxPoints ?? 0) : 0
+      const earnedPoints = correct === true ? (ap?.maxPoints ?? 0) : 0;
 
       await prisma.assignmentProblemGrade.upsert({
         where: {
