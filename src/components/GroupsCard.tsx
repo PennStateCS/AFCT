@@ -16,7 +16,13 @@ import ManageGroupMembersDialog from '@/components/dialogs/ManageGroupDialog';
 import RandomGroupsDialog from '@/components/dialogs/RandomGroupsDialog';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
-export function GroupsCard({ courseId, courseIsArchived }: { courseId: string; courseIsArchived?: boolean }) {
+export function GroupsCard({
+  courseId,
+  courseIsArchived,
+}: {
+  courseId: string;
+  courseIsArchived?: boolean;
+}) {
   const { timezone } = useEffectiveTimezone();
   const [loading, setLoading] = useState(true);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -33,10 +39,14 @@ export function GroupsCard({ courseId, courseIsArchived }: { courseId: string; c
   const fetchGroups = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/courses/${courseId}/groups`);
+      const res = await fetch(`/api/courses/${courseId}/groups`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'list' }),
+      });
       if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load groups');
       const data = await res.json();
-      setGroups(data);
+      setGroups(Array.isArray(data) ? data : (data?.groups ?? []));
     } catch (err) {
       console.error('Fetch groups error:', err);
       showToast.error('Failed to load groups');
@@ -45,7 +55,9 @@ export function GroupsCard({ courseId, courseIsArchived }: { courseId: string; c
     }
   }, [courseId]);
 
-  useEffect(() => { fetchGroups(); }, [fetchGroups]);
+  useEffect(() => {
+    fetchGroups();
+  }, [fetchGroups]);
 
   useEffect(() => {
     let mounted = true;
@@ -60,13 +72,17 @@ export function GroupsCard({ courseId, courseIsArchived }: { courseId: string; c
         console.error('Fetch students error:', err);
       }
     })();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, [courseId]);
 
   const handleDelete = async () => {
     if (!deletingGroup) return;
     try {
-      const res = await fetch(`/api/courses/${courseId}/groups/${deletingGroup.id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/courses/${courseId}/groups/${deletingGroup.id}`, {
+        method: 'DELETE',
+      });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         showToast.error(body.error || 'Failed to delete group');
@@ -82,51 +98,91 @@ export function GroupsCard({ courseId, courseIsArchived }: { courseId: string; c
     }
   };
 
-  const columns = useMemo<ColumnDef<Group, any>[]>(() => [
-    { accessorKey: 'name', header: 'Name', meta: { priority: 1 } },
-    { accessorKey: 'createdAt', header: 'Created At', meta: { priority: 3 }, cell: ({ row }) => formatDateTimeInTimeZone((row.original as any).createdAt, timezone) },
+  const columns = useMemo<ColumnDef<Group, any>[]>(
+    () => [
+      { accessorKey: 'name', header: 'Name', meta: { priority: 1 } },
+      {
+        accessorKey: 'createdAt',
+        header: 'Created At',
+        meta: { priority: 3 },
+        cell: ({ row }) => formatDateTimeInTimeZone((row.original as any).createdAt, timezone),
+      },
 
-    { id: 'manage', header: 'Manage Users', meta: { priority: 1 }, cell: ({ row }) => {
-      const g = row.original as Group;
-      return (
-        <Button variant="secondary" onClick={() => { setManagingGroup(g); setManageOpen(true); }}>
-          Manage
-        </Button>
-      );
-    } },
+      {
+        id: 'manage',
+        header: 'Manage Users',
+        meta: { priority: 1 },
+        cell: ({ row }) => {
+          const g = row.original as Group;
+          return (
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setManagingGroup(g);
+                setManageOpen(true);
+              }}
+            >
+              Manage
+            </Button>
+          );
+        },
+      },
 
-    { id: 'edit', header: 'Edit', meta: { priority: 1 }, cell: ({ row }) => {
-      const g = row.original as Group;
-      return (
-        <Button variant="secondary" onClick={() => { setEditingGroup(g); setEditOpen(true); }} disabled={!!courseIsArchived} title={courseIsArchived ? 'Cannot edit group in archived course' : undefined}>
-          Edit
-        </Button>
-      );
-    } },
+      {
+        id: 'edit',
+        header: 'Edit',
+        meta: { priority: 1 },
+        cell: ({ row }) => {
+          const g = row.original as Group;
+          return (
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setEditingGroup(g);
+                setEditOpen(true);
+              }}
+              disabled={!!courseIsArchived}
+              title={courseIsArchived ? 'Cannot edit group in archived course' : undefined}
+            >
+              Edit
+            </Button>
+          );
+        },
+      },
 
-    { id: 'delete', header: 'Delete', meta: { priority: 1 }, cell: ({ row }) => {
-      const g = row.original as Group;
-      return (
-        <Button
-          variant="destructive"
-          onClick={() => {
-            if (courseIsArchived) return;
-            setDeletingGroup(g);
-            setConfirmOpen(true);
-          }}
-          disabled={!!courseIsArchived}
-          title={courseIsArchived ? 'Cannot delete group from archived course' : undefined}
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
-      );
-    } },
-  ], [timezone, courseIsArchived]);
+      {
+        id: 'delete',
+        header: 'Delete',
+        meta: { priority: 1 },
+        cell: ({ row }) => {
+          const g = row.original as Group;
+          return (
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (courseIsArchived) return;
+                setDeletingGroup(g);
+                setConfirmOpen(true);
+              }}
+              disabled={!!courseIsArchived}
+              title={courseIsArchived ? 'Cannot delete group from archived course' : undefined}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          );
+        },
+      },
+    ],
+    [timezone, courseIsArchived],
+  );
 
   return (
     <Card className="p-4">
       <CardHeader className="flex flex-row items-center justify-between pb-4">
-        <CardTitle className="text-2xl flex items-center gap-2"><Users className="h-5 w-5" />Groups</CardTitle>
+        <CardTitle className="flex items-center gap-2 text-2xl">
+          <Users className="h-5 w-5" />
+          Groups
+        </CardTitle>
         <div className="flex items-center gap-2">
           <Button variant="default" onClick={() => setCreateOpen(true)} hidden={courseIsArchived}>
             <Plus /> Create Group
@@ -141,12 +197,44 @@ export function GroupsCard({ courseId, courseIsArchived }: { courseId: string; c
         <DataTable columns={columns} data={groups} loading={loading} />
       </CardContent>
 
-      <CreateGroupDialog open={createOpen} setOpen={setCreateOpen} courseId={courseId} onSuccess={fetchGroups} />
-      <RandomGroupsDialog open={randomOpen} setOpen={setRandomOpen} courseId={courseId} students={students} onCreated={fetchGroups} />
-      <EditGroupDialog open={editOpen} setOpen={setEditOpen} group={editingGroup ?? undefined} courseId={courseId} onSuccess={fetchGroups} />
-      <ManageGroupMembersDialog open={manageOpen} setOpen={setManageOpen} courseId={courseId} group={managingGroup ?? null} onChanged={fetchGroups} initialStudents={students} />
+      <CreateGroupDialog
+        open={createOpen}
+        setOpen={setCreateOpen}
+        courseId={courseId}
+        onSuccess={fetchGroups}
+      />
+      <RandomGroupsDialog
+        open={randomOpen}
+        setOpen={setRandomOpen}
+        courseId={courseId}
+        students={students}
+        onCreated={fetchGroups}
+      />
+      <EditGroupDialog
+        open={editOpen}
+        setOpen={setEditOpen}
+        group={editingGroup ?? undefined}
+        courseId={courseId}
+        onSuccess={fetchGroups}
+      />
+      <ManageGroupMembersDialog
+        open={manageOpen}
+        setOpen={setManageOpen}
+        courseId={courseId}
+        group={managingGroup ?? null}
+        onChanged={fetchGroups}
+        initialStudents={students}
+      />
 
-      <ConfirmDialog open={confirmOpen} onCancel={() => setConfirmOpen(false)} onConfirm={handleDelete} title="Delete Group" description={`Are you sure you want to delete group ${deletingGroup?.name}?`} confirmText="Delete" cancelText="Cancel" />
+      <ConfirmDialog
+        open={confirmOpen}
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={handleDelete}
+        title="Delete Group"
+        description={`Are you sure you want to delete group ${deletingGroup?.name}?`}
+        confirmText="Delete"
+        cancelText="Cancel"
+      />
     </Card>
   );
 }

@@ -50,7 +50,7 @@ type CreateProblemDialogProps = {
   // Optional assignment context: when provided, the dialog will automatically
   // add the created problem to the assignment and optionally assign it to a group.
   assignmentId?: string;
-  onCreated?: (created?: Problem) => void;
+  onCreated?: (created?: Problem, createdSuccessfully?: boolean) => void;
 };
 
 // RHF state BEFORE transforms
@@ -119,8 +119,6 @@ export function CreateProblemDialog({
   const [internalOpen, setInternalOpen] = useState(false);
   const [initializing, setInitializing] = useState(false);
 
-
-
   const fileErrorMessage = (() => {
     const e = errors.file;
     if (!e) return '';
@@ -150,7 +148,9 @@ export function CreateProblemDialog({
 
       try {
         if (assignmentId) {
-          const res = await fetch(`/api/courses/${courseId}/${assignmentId}`, { signal: ac.signal });
+          const res = await fetch(`/api/courses/${courseId}/${assignmentId}`, {
+            signal: ac.signal,
+          });
           if (!res.ok) {
             // treat as non-group assignment on failure
             setAssignmentIsGroup(false);
@@ -252,13 +252,19 @@ export function CreateProblemDialog({
       formData.append('title', values.title);
       formData.append('description', values.description ?? '');
       formData.append('type', values.type);
-      formData.append('maxSubmissions', values.isUnlimitedSubmissions ? '-1' : String(values.maxSubmissions ?? 0));
+      formData.append(
+        'maxSubmissions',
+        values.isUnlimitedSubmissions ? '-1' : String(values.maxSubmissions ?? 0),
+      );
       formData.append('maxPoints', String(values.maxPoints));
       formData.append('autograderEnabled', String(!!values.autograderEnabled));
       formData.append('courseId', values.courseId);
 
       if (values.type === 'FA' || values.type === 'PDA') {
-        formData.append('maxStates', values.isUnlimitedStates ? '-1' : String(values.maxStates ?? 0));
+        formData.append(
+          'maxStates',
+          values.isUnlimitedStates ? '-1' : String(values.maxStates ?? 0),
+        );
       }
       if (values.type === 'FA') {
         formData.append('isDeterministic', String(!!values.isDeterministic));
@@ -296,7 +302,7 @@ export function CreateProblemDialog({
           }
         }
 
-        onCreated?.(created);
+        onCreated?.(created, true);
         resetForm();
         setOpen(false);
       } else {
@@ -406,7 +412,7 @@ export function CreateProblemDialog({
                   <div>
                     <button
                       type="button"
-                      className="w-full rounded border p-2 flex items-center justify-between text-left"
+                      className="flex w-full items-center justify-between rounded border p-2 text-left"
                       aria-haspopup="listbox"
                     >
                       <span className="truncate">
@@ -421,7 +427,7 @@ export function CreateProblemDialog({
                 <DropdownMenuContent className="w-80 max-w-[90vw] p-2" align="start">
                   <div className="mb-2">
                     <div className="relative">
-                      <SearchIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <SearchIcon className="text-muted-foreground absolute top-3 left-3 h-4 w-4" />
                       <Input
                         className="pl-10"
                         placeholder="Search groups"
@@ -432,13 +438,13 @@ export function CreateProblemDialog({
                     </div>
                   </div>
 
-                  <div className="max-h-64 overflow-auto rounded-md border bg-card">
+                  <div className="bg-card max-h-64 overflow-auto rounded-md border">
                     <ul>
                       <li>
                         <button
                           type="button"
                           onClick={() => setSelectedGroupId('ALL')}
-                          className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-primary/10 ${
+                          className={`hover:bg-primary/10 flex w-full items-center justify-between gap-2 px-3 py-2 text-left ${
                             selectedGroupId === 'ALL' ? 'bg-primary/10' : ''
                           }`}
                         >
@@ -447,16 +453,16 @@ export function CreateProblemDialog({
                         </button>
                       </li>
                       {groupsLoading ? (
-                        <li className="p-3 text-sm text-muted-foreground">Loading…</li>
+                        <li className="text-muted-foreground p-3 text-sm">Loading…</li>
                       ) : filteredGroups.length === 0 ? (
-                        <li className="p-3 text-sm text-muted-foreground">No groups available</li>
+                        <li className="text-muted-foreground p-3 text-sm">No groups available</li>
                       ) : (
                         filteredGroups.map((g) => (
                           <li key={g.id}>
                             <button
                               type="button"
                               onClick={() => setSelectedGroupId(g.id)}
-                              className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-primary/10 ${
+                              className={`hover:bg-primary/10 flex w-full items-center justify-between gap-2 px-3 py-2 text-left ${
                                 selectedGroupId === g.id ? 'bg-primary/10' : ''
                               }`}
                             >
@@ -534,7 +540,20 @@ export function CreateProblemDialog({
             </div>
           )}
 
-
+          <div className="flex items-center justify-between">
+            <Label htmlFor="autograderEnabled">Automatically Graded</Label>
+            <Controller
+              control={control}
+              name="autograderEnabled"
+              render={({ field }) => (
+                <Switch
+                  id="autograderEnabled"
+                  checked={!!field.value}
+                  onCheckedChange={(checked) => field.onChange(!!checked)}
+                />
+              )}
+            />
+          </div>
 
           {/* File (avoid InputGroup; file inputs must be uncontrolled) */}
           <Controller

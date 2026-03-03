@@ -58,9 +58,10 @@ export function EditProblemDialog({
     () => ({
       title: problem.title ?? '',
       description: problem.description ?? '',
-      maxSubmissions: problem.maxSubmissions,
-      isUnlimitedSubmissions: problem.maxSubmissions == null || problem.maxSubmissions < 0,
-      maxPoints: problem.maxPoints,
+      maxSubmissions: typeof problem.maxSubmissions === 'number' ? problem.maxSubmissions : 1,
+      isUnlimitedSubmissions:
+        typeof problem.maxSubmissions === 'number' ? problem.maxSubmissions < 0 : false,
+      maxPoints: typeof problem.maxPoints === 'number' ? problem.maxPoints : 1,
       type: problem.type as z.infer<typeof ProblemTypeEnum>,
       isUnlimitedStates: problem.maxStates == null || problem.maxStates < 0,
       maxStates: problem.maxStates ?? undefined,
@@ -68,7 +69,8 @@ export function EditProblemDialog({
         problem.type === 'FA'
           ? !!(problem as Problem & { isDeterministic?: boolean }).isDeterministic
           : false,
-      autograderEnabled: !!(problem as Problem & { autograderEnabled?: boolean }).autograderEnabled,
+      autograderEnabled:
+        (problem as Problem & { autograderEnabled?: boolean }).autograderEnabled ?? true,
       file: undefined as File | undefined, // optional in edit; user can choose a new file
       courseId: problem.courseId,
     }),
@@ -207,12 +209,21 @@ export function EditProblemDialog({
       // 2) Enforce update contract with id (file stays optional)
       const payload = UpdateProblemSchema.parse({ id: problem.id, ...parsed });
 
+      const effectiveMaxSubmissions = assignmentSettings
+        ? assignmentConfig.maxSubmissions
+        : payload.isUnlimitedSubmissions
+          ? -1
+          : (payload.maxSubmissions ?? 0);
+      const effectiveMaxPoints = assignmentSettings
+        ? assignmentConfig.maxPoints
+        : (payload.maxPoints ?? 0);
+
       const formData = new FormData();
       formData.append('title', payload.title ?? '');
       formData.append('description', payload.description ?? '');
       formData.append('type', payload.type ?? '');
-      formData.append('maxSubmissions', String(payload.isUnlimitedSubmissions ? -1 : payload.maxSubmissions ?? 0));
-      formData.append('maxPoints', String(payload.maxPoints ?? 0));
+      formData.append('maxSubmissions', String(effectiveMaxSubmissions));
+      formData.append('maxPoints', String(effectiveMaxPoints));
       formData.append('autograderEnabled', String(payload.autograderEnabled));
       formData.append('courseId', payload.courseId ?? '');
 
@@ -376,7 +387,7 @@ export function EditProblemDialog({
             render={({ field }) => (
               <div>
                 <InputGroup
-                  label="Max Submissions"
+                  label="Problem Max Submissions"
                   name="maxSubmissions"
                   type="number"
                   fieldProps={{
@@ -415,7 +426,7 @@ export function EditProblemDialog({
             render={({ field }) => (
               <div>
                 <InputGroup
-                  label="Max Points"
+                  label="Problem Max Points"
                   name="maxPoints"
                   type="number"
                   fieldProps={{
@@ -430,7 +441,7 @@ export function EditProblemDialog({
             )}
           />
 
-          {/* Automatic Grading */ }
+          {/* Automatic Grading */}
           <div className="flex items-center justify-between">
             <Label htmlFor="autograderEnabled">Automatic Grading</Label>
             <Controller

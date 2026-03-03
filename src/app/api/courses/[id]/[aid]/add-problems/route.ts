@@ -4,7 +4,6 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { ProblemTypeEnum } from '@/schemas/problem';
 import { z } from 'zod';
 
 // Types
@@ -65,6 +64,16 @@ export async function POST(
     }
 
     const problemIds: string[] = Array.isArray(body.problemIds) ? body.problemIds : [];
+    const parsedSettings = z.array(ProblemSettingsSchema).safeParse(body.problemSettings ?? []);
+    if (!parsedSettings.success) {
+      return NextResponse.json(
+        { error: 'Invalid problemSettings in request body', details: parsedSettings.error.issues },
+        { status: 400 },
+      );
+    }
+    const settingsByProblemId = new Map<string, ProblemSettingsInput>(
+      parsedSettings.data.map((setting) => [setting.problemId, setting]),
+    );
     // Optional group assignment: either a specific group id or 'ALL' for all groups
     const groupId: string | undefined = typeof body.groupId === 'string' ? body.groupId : undefined;
     // parsed problemIds available
@@ -115,9 +124,7 @@ export async function POST(
         data: newProblemIds.map((pid: string) => {
           const config = settingsByProblemId.get(pid);
           const resolvedMaxSubmissions =
-            config?.maxSubmissions === -1
-              ? -1
-              : Math.max(1, config?.maxSubmissions ?? 1);
+            config?.maxSubmissions === -1 ? -1 : Math.max(1, config?.maxSubmissions ?? 1);
 
           return {
             assignmentId,
@@ -158,7 +165,10 @@ export async function POST(
             }
           }
           if (mappings.length > 0) {
-            await prisma.groupAssignmentProblem.createMany({ data: mappings, skipDuplicates: true });
+            await prisma.groupAssignmentProblem.createMany({
+              data: mappings,
+              skipDuplicates: true,
+            });
           }
         }
       }
@@ -176,9 +186,9 @@ export async function POST(
       },
     });
 
-    const problems = updated?.problems?.map(
-      (ap: NonNullable<typeof updated>['problems'][number]) => ap.problem,
-    ) ?? [];
+    const problems =
+      updated?.problems?.map((ap: NonNullable<typeof updated>['problems'][number]) => ap.problem) ??
+      [];
 
     // Log the action to the ActivityLog
     try {
