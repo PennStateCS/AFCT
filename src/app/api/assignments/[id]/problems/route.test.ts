@@ -5,6 +5,7 @@ const prismaMock = vi.hoisted(() => ({
   assignment: { findUnique: vi.fn() },
   roster: { findFirst: vi.fn() },
   assignmentProblem: { findMany: vi.fn() },
+  groupRoster: { findFirst: vi.fn() },
 }));
 
 const verifyTokenMock = vi.hoisted(() => vi.fn());
@@ -66,7 +67,7 @@ describe('GET /api/assignments/[id]/problems', () => {
 
   it('returns problems list', async () => {
     verifyTokenMock.mockReturnValue({ userId: 'u1' });
-    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
+    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1', isGroup: false });
     prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1' });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
       {
@@ -91,5 +92,113 @@ describe('GET /api/assignments/[id]/problems', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body[0]).toMatchObject({ id: 'p1', solved: true, grade: 85 });
+  });
+
+  it('group assignment returns only problems for user\'s group + unassigned problems', async () => {
+    verifyTokenMock.mockReturnValue({ userId: 'u1' });
+    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1', isGroup: true });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1' });
+    prismaMock.groupRoster.findFirst.mockResolvedValue({ groupId: 'g1' });
+
+    prismaMock.assignmentProblem.findMany.mockResolvedValue([
+      // unassigned problem -> should be visible
+      {
+        problem: {
+          id: 'p-unassigned',
+          title: 'Unassigned',
+          description: null,
+          type: 'FA',
+          maxStates: null,
+          isDeterministic: null,
+          groupAssignmentProblems: [],
+        },
+        submissions: [],
+      },
+      // mapped to user's group -> visible and marked solved (submission was returned by query)
+      {
+        problem: {
+          id: 'p-g1',
+          title: 'Group 1 Problem',
+          description: null,
+          type: 'FA',
+          maxStates: null,
+          isDeterministic: null,
+          groupAssignmentProblems: [{ groupId: 'g1' }],
+        },
+        submissions: [{ id: 's-g1' }],
+      },
+      // mapped to another group -> should NOT be visible
+      {
+        problem: {
+          id: 'p-g2',
+          title: 'Group 2 Problem',
+          description: null,
+          type: 'FA',
+          maxStates: null,
+          isDeterministic: null,
+          groupAssignmentProblems: [{ groupId: 'g2' }],
+        },
+        submissions: [],
+      },
+    ]);
+
+    const req = new NextRequest('http://localhost/api/assignments/a1/problems', {
+      headers: { authorization: 'Bearer test-token' },
+    });
+    const res = await GET(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const ids = body.map((b: any) => b.id);
+    expect(ids).toContain('p-unassigned');
+    expect(ids).toContain('p-g1');
+    expect(ids).not.toContain('p-g2');
+
+    const solved = body.find((b: any) => b.id === 'p-g1');
+    expect(solved.solved).toBe(true);
+  });
+
+  it('group assignment: user not in a group sees only unassigned problems', async () => {
+    verifyTokenMock.mockReturnValue({ userId: 'u1' });
+    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1', isGroup: true });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1' });
+    prismaMock.groupRoster.findFirst.mockResolvedValue(null); // user not in a group
+
+    prismaMock.assignmentProblem.findMany.mockResolvedValue([
+      {
+        problem: {
+          id: 'p-unassigned',
+          title: 'Unassigned',
+          description: null,
+          type: 'FA',
+          maxStates: null,
+          isDeterministic: null,
+          groupAssignmentProblems: [],
+        },
+        submissions: [],
+      },
+      {
+        problem: {
+          id: 'p-g1',
+          title: 'Group 1 Problem',
+          description: null,
+          type: 'FA',
+          maxStates: null,
+          isDeterministic: null,
+          groupAssignmentProblems: [{ groupId: 'g1' }],
+        },
+        submissions: [],
+      },
+    ]);
+
+    const req = new NextRequest('http://localhost/api/assignments/a1/problems', {
+      headers: { authorization: 'Bearer test-token' },
+    });
+    const res = await GET(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const ids = body.map((b: any) => b.id);
+    expect(ids).toEqual(['p-unassigned']);
   });
 });

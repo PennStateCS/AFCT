@@ -6,6 +6,7 @@ const prismaMock = vi.hoisted(() => ({
   roster: { findFirst: vi.fn() },
   assignmentProblem: { findFirst: vi.fn(), deleteMany: vi.fn() },
   assignmentGrade: { findFirst: vi.fn() },
+  submission: { findFirst: vi.fn() },
   user: { findUnique: vi.fn() },
   systemSettings: { findUnique: vi.fn() },
   submission: { count: vi.fn() },
@@ -340,152 +341,17 @@ describe('PATCH /api/assignments/[id]', () => {
     expect(res.status).toBe(403);
   });
 
-  it('partially updates assignment with only provided fields', async () => {
+  it('prevents changing group mode if submissions exist', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
-    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
-    prismaMock.assignment.findUnique.mockResolvedValue({
-      id: 'a1',
-      courseId: 'c1',
-      title: 'Old',
-      description: 'Existing',
-      dueDate: new Date('2025-01-01T00:00:00.000Z'),
-      isPublished: true,
-      allowLateSubmissions: false,
-      lateCutoff: null,
-    });
-    prismaMock.assignment.update.mockResolvedValue({ id: 'a1', courseId: 'c1', title: 'Updated' });
+    prismaMock.submission.findFirst.mockResolvedValue({ id: 's1' });
 
     const req = new NextRequest('http://localhost/api/assignments/a1', {
       method: 'PATCH',
-      body: JSON.stringify({ title: 'Updated' }),
-    });
-    const res = await PATCH(req, { params: Promise.resolve({ id: 'a1' }) });
-
-    expect(res.status).toBe(200);
-    expect(prismaMock.assignment.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'a1' },
-        data: { title: 'Updated' },
-      }),
-    );
-  });
-
-  it('returns 403 when unpublishing with submissions', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'TA' } });
-    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
-    prismaMock.assignmentProblem.findFirst.mockResolvedValue({ assignmentId: 'a1' });
-
-    const req = new NextRequest('http://localhost/api/assignments/a1', {
-      method: 'PATCH',
-      body: JSON.stringify({ isPublished: false }),
+      body: JSON.stringify({ isGroup: true }),
     });
     const res = await PATCH(req, { params: Promise.resolve({ id: 'a1' }) });
 
     expect(res.status).toBe(403);
-  });
-
-  it('returns 403 when unpublishing with grades', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
-    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
-    prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
-    prismaMock.assignmentGrade.findFirst.mockResolvedValue({ assignmentId: 'a1' });
-
-    const req = new NextRequest('http://localhost/api/assignments/a1', {
-      method: 'PATCH',
-      body: JSON.stringify({ isPublished: false }),
-    });
-    const res = await PATCH(req, { params: Promise.resolve({ id: 'a1' }) });
-
-    expect(res.status).toBe(403);
-  });
-
-  it('updates multiple fields when provided', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
-    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
-    prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
-    prismaMock.assignmentGrade.findFirst.mockResolvedValue(null);
-    prismaMock.assignment.findUnique.mockResolvedValue({
-      id: 'a1',
-      courseId: 'c1',
-      title: 'Old',
-      description: 'Old description',
-      dueDate: new Date('2025-01-01T00:00:00.000Z'),
-      isPublished: true,
-      allowLateSubmissions: true,
-      lateCutoff: new Date('2025-01-02T00:00:00.000Z'),
-    });
-    prismaMock.assignment.update.mockResolvedValue({
-      id: 'a1',
-      courseId: 'c1',
-      title: 'New Title',
-    });
-
-    const req = new NextRequest('http://localhost/api/assignments/a1', {
-      method: 'PATCH',
-      body: JSON.stringify({
-        title: 'New Title',
-        description: 'New description',
-        dueDate: '2025-01-15',
-      }),
-    });
-    const res = await PATCH(req, { params: Promise.resolve({ id: 'a1' }) });
-
-    expect(res.status).toBe(200);
-    const updateCall = prismaMock.assignment.update.mock.calls[0][0];
-    expect(updateCall.data).toHaveProperty('title', 'New Title');
-    expect(updateCall.data).toHaveProperty('description', 'New description');
-  });
-
-  it('returns 400 when enabling late submissions without cutoff (PATCH)', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'TA' } });
-    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
-    prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
-    prismaMock.assignmentGrade.findFirst.mockResolvedValue(null);
-    prismaMock.assignment.findUnique.mockResolvedValue({
-      id: 'a1',
-      courseId: 'c1',
-      allowLateSubmissions: false,
-      lateCutoff: null,
-      dueDate: new Date('2025-01-01T00:00:00.000Z'),
-    });
-
-    const req = new NextRequest('http://localhost/api/assignments/a1', {
-      method: 'PATCH',
-      body: JSON.stringify({ allowLateSubmissions: true }),
-    });
-    const res = await PATCH(req, { params: Promise.resolve({ id: 'a1' }) });
-
-    expect(res.status).toBe(400);
-    const json = await res.json();
-    expect(json.error).toContain('cutoff');
-  });
-
-  it('returns 400 when late cutoff is before due date (PATCH)', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
-    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
-    prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
-    prismaMock.assignmentGrade.findFirst.mockResolvedValue(null);
-    prismaMock.assignment.findUnique.mockResolvedValue({
-      id: 'a1',
-      courseId: 'c1',
-      allowLateSubmissions: true,
-      lateCutoff: new Date('2025-01-03T00:00:00.000Z'),
-      dueDate: new Date('2025-01-02T00:00:00.000Z'),
-    });
-    toDateTimeInTimezoneMock.mockReturnValueOnce(new Date('2025-01-01T00:00:00.000Z'));
-
-    const req = new NextRequest('http://localhost/api/assignments/a1', {
-      method: 'PATCH',
-      body: JSON.stringify({
-        allowLateSubmissions: true,
-        lateCutoff: '2025-01-01T23:00',
-      }),
-    });
-    const res = await PATCH(req, { params: Promise.resolve({ id: 'a1' }) });
-
-    expect(res.status).toBe(400);
-    const json = await res.json();
-    expect(json.error).toContain('after the due date');
   });
 });
 

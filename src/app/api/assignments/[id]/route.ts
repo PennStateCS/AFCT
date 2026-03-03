@@ -195,6 +195,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
   }
 
+  // Prevent changing the assignment's group mode if submissions exist
+  if (data.isGroup !== undefined) {
+    const hasAnySubmission = !!(await prisma.submission.findFirst({ where: { assignmentId: id } }));
+    if (hasAnySubmission) {
+      return NextResponse.json({ error: 'Cannot change assignment group mode after submissions exist' }, { status: 403 });
+    }
+  }
+
   try {
     const existing = await prisma.assignment.findUnique({ where: { id } });
     if (!existing) {
@@ -223,12 +231,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const updated = await prisma.assignment.update({
       where: { id },
       data: {
-        title: data.title ?? existing.title,
-        description: data.description ?? existing.description,
-        dueDate,
-        isPublished: data.isPublished ?? existing.isPublished,
-        allowLateSubmissions,
-        lateCutoff,
+        title: data.title,
+        description: data.description,
+        dueDate: toEndOfDayInTimezone(data.dueDate, userTimezone),
+        maxPoints: data.maxPoints,
+        isPublished: data.isPublished,
+        isGroup: data.isGroup === undefined ? undefined : data.isGroup,
       },
     });
 
@@ -293,6 +301,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
+  // Prevent changing the assignment's group mode if submissions exist
+  if (data.isGroup !== undefined) {
+    const hasAnySubmission = !!(await prisma.submission.findFirst({ where: { assignmentId: id } }));
+    if (hasAnySubmission) {
+      return NextResponse.json({ error: 'Cannot change assignment group mode after submissions exist' }, { status: 403 });
+    }
+  }
+
   try {
     const existing = await prisma.assignment.findUnique({ where: { id } });
     if (!existing) {
@@ -325,8 +341,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       description?: string;
       dueDate?: Date;
       isPublished?: boolean;
-      allowLateSubmissions?: boolean;
-      lateCutoff?: Date | null;
+      isGroup?: boolean;
     } = {};
 
     if (data.title !== undefined) updateData.title = data.title;
@@ -335,16 +350,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       updateData.dueDate = effectiveDueDate;
     }
     if (data.isPublished !== undefined) updateData.isPublished = data.isPublished;
-    if (data.allowLateSubmissions !== undefined) {
-      updateData.allowLateSubmissions = allowLateSubmissions;
-    }
-    if (
-      data.lateCutoff !== undefined ||
-      data.allowLateSubmissions !== undefined ||
-      data.dueDate !== undefined
-    ) {
-      updateData.lateCutoff = lateCutoff;
-    }
+    if (data.isGroup !== undefined) updateData.isGroup = data.isGroup;
 
     const updated = await prisma.assignment.update({
       where: { id },
@@ -428,6 +434,7 @@ export async function POST(req: NextRequest) {
         allowLateSubmissions,
         lateCutoff,
         isPublished: data.isPublished || false,
+        isGroup: !!data.isGroup,
         courseId: data.courseId,
       },
     });
@@ -443,8 +450,8 @@ export async function POST(req: NextRequest) {
         courseId: created.courseId,
         assignmentId: created.id,
         title: created.title,
-        allowLateSubmissions: created.allowLateSubmissions,
-        lateCutoff: created.lateCutoff ? created.lateCutoff.toISOString() : null,
+        maxPoints: created.maxPoints,
+        isGroup: created.isGroup,
       },
     });
 
