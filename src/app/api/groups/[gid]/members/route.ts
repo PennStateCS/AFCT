@@ -4,18 +4,24 @@ import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 // GET: list members for a group
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string; gid: string }> }) {
-  const { id: courseId, gid: groupId } = await params;
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ gid: string; id?: string }> },
+) {
+  const { id: providedCourseId, gid: groupId } = await params;
 
-  if (!courseId || !groupId) return NextResponse.json({ error: 'Missing IDs' }, { status: 400 });
+  if (!groupId) return NextResponse.json({ error: 'Missing group ID' }, { status: 400 });
 
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role))
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   try {
     const group = await prisma.group.findUnique({ where: { id: groupId } });
-    if (!group || group.courseId !== courseId) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+    if (!group) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+    if (providedCourseId && group.courseId !== providedCourseId)
+      return NextResponse.json({ error: 'Group not found' }, { status: 404 });
 
     const members = await prisma.groupRoster.findMany({
       where: { groupId },
@@ -44,18 +50,25 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 // POST: add a member to a group
-export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string; gid: string }> }) {
-  const { id: courseId, gid: groupId } = await params;
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ gid: string; id?: string }> },
+) {
+  const { id: providedCourseId, gid: groupId } = await params;
 
-  if (!courseId || !groupId) return NextResponse.json({ error: 'Missing IDs' }, { status: 400 });
+  if (!groupId) return NextResponse.json({ error: 'Missing group ID' }, { status: 400 });
 
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role))
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   try {
     const group = await prisma.group.findUnique({ where: { id: groupId } });
-    if (!group || group.courseId !== courseId) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+    if (!group) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+    if (providedCourseId && group.courseId !== providedCourseId)
+      return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+    const courseId = group.courseId;
 
     const body = await req.json().catch(() => ({}));
     const userId = body?.userId ?? null;
@@ -69,13 +82,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     // Ensure user is enrolled in course
     const enrollment = await prisma.roster.findFirst({ where: { courseId, userId: user.id } });
-    if (!enrollment) return NextResponse.json({ error: 'User is not enrolled in this course' }, { status: 422 });
+    if (!enrollment)
+      return NextResponse.json({ error: 'User is not enrolled in this course' }, { status: 422 });
 
     // Prevent duplicates
-    const exists = await prisma.groupRoster.findUnique({ where: { groupId_userId: { groupId, userId: user.id } } });
-    if (exists) return NextResponse.json({ error: 'User is already in this group' }, { status: 409 });
+    const exists = await prisma.groupRoster.findUnique({
+      where: { groupId_userId: { groupId, userId: user.id } },
+    });
+    if (exists)
+      return NextResponse.json({ error: 'User is already in this group' }, { status: 409 });
 
-    const created = await prisma.groupRoster.create({ data: { groupId, userId: user.id, courseId } });
+    const created = await prisma.groupRoster.create({
+      data: { groupId, userId: user.id, courseId },
+    });
 
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,

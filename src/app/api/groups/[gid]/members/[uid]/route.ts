@@ -4,10 +4,14 @@ import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 // DELETE: remove a user from a group
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string; gid: string; uid: string }> }) {
-  const { id: courseId, gid: groupId, uid: userId } = await params;
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ gid: string; uid: string; id?: string }> },
+) {
+  const { id: providedCourseId, gid: groupId, uid: userId } = await params;
 
-  if (!courseId || !groupId || !userId) return NextResponse.json({ error: 'Missing IDs' }, { status: 400 });
+  if (!groupId || !userId)
+    return NextResponse.json({ error: 'Missing IDs' }, { status: 400 });
 
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -15,7 +19,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   try {
     const group = await prisma.group.findUnique({ where: { id: groupId } });
-    if (!group || group.courseId !== courseId) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+    if (!group) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+    if (providedCourseId && group.courseId !== providedCourseId)
+      return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+    const courseId = group.courseId;
 
     const entry = await prisma.groupRoster.findUnique({ where: { groupId_userId: { groupId, userId } } });
     if (!entry) return NextResponse.json({ error: 'Membership not found' }, { status: 404 });
