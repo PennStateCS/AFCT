@@ -8,7 +8,7 @@ import { showToast } from '@/lib/toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Wrench } from 'lucide-react';
 import InputGroup from '@/components/ui/InputGroup';
-//import HCaptcha from '@hcaptcha/react-hcaptcha';
+import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 /* ---------------- Validators ---------------- */
 
