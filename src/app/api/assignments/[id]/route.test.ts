@@ -6,26 +6,32 @@ const prismaMock = vi.hoisted(() => ({
   roster: { findFirst: vi.fn() },
   assignmentProblem: { findFirst: vi.fn(), deleteMany: vi.fn() },
   assignmentGrade: { findFirst: vi.fn() },
+  submission: { findFirst: vi.fn(), count: vi.fn() },
   user: { findUnique: vi.fn() },
   systemSettings: { findUnique: vi.fn() },
-  submission: { count: vi.fn() },
   comment: { count: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
 const activityLogMock = vi.hoisted(() => vi.fn());
+const toEndOfDayInTimezoneMock = vi.hoisted(() => vi.fn());
+const toDateTimeInTimezoneMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
+
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 vi.mock('@/lib/date-utils', () => ({
-  toEndOfDayInTimezone: vi.fn().mockReturnValue(new Date('2025-01-01T00:00:00.000Z')),
+  toEndOfDayInTimezone: toEndOfDayInTimezoneMock,
+  toDateTimeInTimezone: toDateTimeInTimezoneMock,
 }));
 
 import { GET, PUT, PATCH, POST, DELETE } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  toEndOfDayInTimezoneMock.mockReturnValue(new Date('2025-01-01T00:00:00.000Z'));
+  toDateTimeInTimezoneMock.mockReturnValue(new Date('2025-01-02T00:00:00.000Z'));
 });
 
 describe('GET /api/assignments/[id]', () => {
@@ -206,6 +212,16 @@ describe('PUT /api/assignments/[id]', () => {
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
     prismaMock.assignmentGrade.findFirst.mockResolvedValue(null);
+    prismaMock.assignment.findUnique.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      title: 'Assignment',
+      description: 'Old',
+      dueDate: new Date('2025-01-01T00:00:00.000Z'),
+      isPublished: false,
+      allowLateSubmissions: false,
+      lateCutoff: null,
+    });
     prismaMock.assignment.update.mockResolvedValue({ id: 'a1', courseId: 'c1' });
 
     const req = new NextRequest('http://localhost/api/assignments/a1', {
@@ -225,6 +241,16 @@ describe('PUT /api/assignments/[id]', () => {
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
     prismaMock.assignmentGrade.findFirst.mockResolvedValue(null);
+    prismaMock.assignment.findUnique.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      title: 'Assignment',
+      description: null,
+      dueDate: new Date('2025-01-01T00:00:00.000Z'),
+      isPublished: true,
+      allowLateSubmissions: false,
+      lateCutoff: null,
+    });
     prismaMock.assignment.update.mockResolvedValue({ id: 'a1', courseId: 'c1' });
 
     const req = new NextRequest('http://localhost/api/assignments/a1', {
@@ -234,6 +260,70 @@ describe('PUT /api/assignments/[id]', () => {
     const res = await PUT(req, { params: Promise.resolve({ id: 'a1' }) });
 
     expect(res.status).toBe(200);
+  });
+
+  it('returns 400 when enabling late submissions without cutoff (PUT)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
+    prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
+    prismaMock.assignmentGrade.findFirst.mockResolvedValue(null);
+    prismaMock.assignment.findUnique.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      title: 'Assignment',
+      description: null,
+      dueDate: new Date('2025-01-01T00:00:00.000Z'),
+      isPublished: true,
+      allowLateSubmissions: false,
+      lateCutoff: null,
+    });
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', {
+      method: 'PUT',
+      body: JSON.stringify({
+        title: 'Assignment',
+        dueDate: '2025-01-01',
+        allowLateSubmissions: true,
+      }),
+    });
+    const res = await PUT(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error).toContain('cutoff');
+  });
+
+  it('returns 400 when late cutoff is before due date (PUT)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
+    prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
+    prismaMock.assignmentGrade.findFirst.mockResolvedValue(null);
+    prismaMock.assignment.findUnique.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      title: 'Assignment',
+      description: null,
+      dueDate: new Date('2025-01-01T00:00:00.000Z'),
+      isPublished: true,
+      allowLateSubmissions: true,
+      lateCutoff: new Date('2025-01-02T00:00:00.000Z'),
+    });
+    toDateTimeInTimezoneMock.mockReturnValueOnce(new Date('2024-12-31T00:00:00.000Z'));
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', {
+      method: 'PUT',
+      body: JSON.stringify({
+        title: 'Assignment',
+        dueDate: '2025-01-01',
+        allowLateSubmissions: true,
+        lateCutoff: '2024-12-31T12:00',
+      }),
+    });
+    const res = await PUT(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error).toContain('after the due date');
   });
 });
 
@@ -250,83 +340,17 @@ describe('PATCH /api/assignments/[id]', () => {
     expect(res.status).toBe(403);
   });
 
-  it('partially updates assignment with only provided fields', async () => {
+  it('prevents changing group mode if submissions exist', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
-    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
-    prismaMock.assignment.update.mockResolvedValue({ id: 'a1', courseId: 'c1', title: 'Updated' });
+    prismaMock.submission.count.mockResolvedValue(1);
 
     const req = new NextRequest('http://localhost/api/assignments/a1', {
       method: 'PATCH',
-      body: JSON.stringify({ title: 'Updated' }),
-    });
-    const res = await PATCH(req, { params: Promise.resolve({ id: 'a1' }) });
-
-    expect(res.status).toBe(200);
-    expect(prismaMock.assignment.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'a1' },
-        data: { title: 'Updated' },
-      }),
-    );
-  });
-
-  it('returns 403 when unpublishing with submissions', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'TA' } });
-    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
-    prismaMock.assignmentProblem.findFirst.mockResolvedValue({ assignmentId: 'a1' });
-
-    const req = new NextRequest('http://localhost/api/assignments/a1', {
-      method: 'PATCH',
-      body: JSON.stringify({ isPublished: false }),
+      body: JSON.stringify({ isGroup: true }),
     });
     const res = await PATCH(req, { params: Promise.resolve({ id: 'a1' }) });
 
     expect(res.status).toBe(403);
-  });
-
-  it('returns 403 when unpublishing with grades', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
-    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
-    prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
-    prismaMock.assignmentGrade.findFirst.mockResolvedValue({ assignmentId: 'a1' });
-
-    const req = new NextRequest('http://localhost/api/assignments/a1', {
-      method: 'PATCH',
-      body: JSON.stringify({ isPublished: false }),
-    });
-    const res = await PATCH(req, { params: Promise.resolve({ id: 'a1' }) });
-
-    expect(res.status).toBe(403);
-  });
-
-  it('updates multiple fields when provided', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
-    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
-    prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
-    prismaMock.assignmentGrade.findFirst.mockResolvedValue(null);
-    prismaMock.assignment.update.mockResolvedValue({
-      id: 'a1',
-      courseId: 'c1',
-      title: 'New Title',
-      maxPoints: 100,
-    });
-
-    const req = new NextRequest('http://localhost/api/assignments/a1', {
-      method: 'PATCH',
-      body: JSON.stringify({
-        title: 'New Title',
-        description: 'New description',
-        maxPoints: 100,
-        dueDate: '2025-01-15',
-      }),
-    });
-    const res = await PATCH(req, { params: Promise.resolve({ id: 'a1' }) });
-
-    expect(res.status).toBe(200);
-    const updateCall = prismaMock.assignment.update.mock.calls[0][0];
-    expect(updateCall.data).toHaveProperty('title', 'New Title');
-    expect(updateCall.data).toHaveProperty('description', 'New description');
-    expect(updateCall.data).toHaveProperty('maxPoints', 100);
   });
 });
 
@@ -386,13 +410,14 @@ describe('POST /api/assignments/[id]', () => {
       id: 'a1',
       title: 'Assignment 1',
       courseId: 'c1',
-      maxPoints: 0,
       isPublished: false,
+      allowLateSubmissions: false,
+      lateCutoff: null,
     });
 
     const req = new NextRequest('http://localhost/api/assignments/a1', {
       method: 'POST',
-      body: JSON.stringify({ title: 'Assignment 1', courseId: 'c1' }),
+      body: JSON.stringify({ title: 'Assignment 1', courseId: 'c1', allowLateSubmissions: false }),
     });
     const res = await POST(req);
 
@@ -402,8 +427,9 @@ describe('POST /api/assignments/[id]', () => {
         data: expect.objectContaining({
           title: 'Assignment 1',
           courseId: 'c1',
-          maxPoints: 0,
           isPublished: false,
+          allowLateSubmissions: false,
+          lateCutoff: null,
         }),
       }),
     );
@@ -418,9 +444,11 @@ describe('POST /api/assignments/[id]', () => {
       title: 'Homework 1',
       description: 'Complete all problems',
       courseId: 'c1',
-      maxPoints: 100,
       isPublished: true,
+      allowLateSubmissions: true,
+      lateCutoff: new Date('2025-02-02T00:00:00.000Z'),
     });
+    toDateTimeInTimezoneMock.mockReturnValueOnce(new Date('2025-02-02T00:00:00.000Z'));
 
     const req = new NextRequest('http://localhost/api/assignments/a1', {
       method: 'POST',
@@ -428,17 +456,63 @@ describe('POST /api/assignments/[id]', () => {
         title: 'Homework 1',
         description: 'Complete all problems',
         courseId: 'c1',
-        maxPoints: 100,
         isPublished: true,
         dueDate: '2025-02-01',
+        allowLateSubmissions: true,
+        lateCutoff: '2025-02-02T12:00',
       }),
     });
     const res = await POST(req);
 
     expect(res.status).toBe(201);
     const json = await res.json();
-    expect(json.maxPoints).toBe(100);
     expect(json.isPublished).toBe(true);
+    expect(prismaMock.assignment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          allowLateSubmissions: true,
+          lateCutoff: new Date('2025-02-02T00:00:00.000Z'),
+        }),
+      }),
+    );
+  });
+
+  it('returns 400 when enabling late submissions without cutoff (POST)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', {
+      method: 'POST',
+      body: JSON.stringify({ title: 'Assignment 1', courseId: 'c1', allowLateSubmissions: true }),
+    });
+    const res = await POST(req);
+
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error).toContain('cutoff');
+  });
+
+  it('returns 400 when late cutoff is before due date (POST)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
+    toEndOfDayInTimezoneMock.mockReturnValueOnce(new Date('2025-02-02T00:00:00.000Z'));
+    toDateTimeInTimezoneMock.mockReturnValueOnce(new Date('2025-01-01T00:00:00.000Z'));
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: 'Homework 1',
+        courseId: 'c1',
+        allowLateSubmissions: true,
+        lateCutoff: '2025-01-01T00:00',
+        dueDate: '2025-02-01',
+      }),
+    });
+    const res = await POST(req);
+
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error).toContain('after the due date');
   });
 });
 

@@ -88,9 +88,11 @@ export function CreateAssignmentDialog({
     () => ({
       title: '',
       description: '',
-      maxPoints: '100',
       dueDate: defaultDueLocalString(timeZone),
+      allowLateSubmissions: false,
+      lateCutoff: undefined,
       isPublished: false,
+      isGroup: false,
       courseId: courseId,
     }),
     [courseId, timeZone],
@@ -100,13 +102,37 @@ export function CreateAssignmentDialog({
     control,
     handleSubmit,
     reset,
+    watch,
+    setValue,
     formState: { errors, isSubmitting, isValid },
   } = useForm<FormValues>({
     resolver: zodResolver(CreateAssignmentFormSchema),
     defaultValues: defaults,
-    mode: 'onBlur',
+    mode: 'onChange',
     reValidateMode: 'onChange',
   });
+
+  const allowLateSubmissions = watch('allowLateSubmissions');
+  const dueDateValue = watch('dueDate');
+  const lateCutoffValue = watch('lateCutoff');
+
+  useEffect(() => {
+    if (!allowLateSubmissions) {
+      setValue('lateCutoff', undefined, {
+        shouldValidate: true,
+        shouldDirty: false,
+      });
+    }
+  }, [allowLateSubmissions, setValue]);
+
+  useEffect(() => {
+    if (allowLateSubmissions && !lateCutoffValue) {
+      setValue('lateCutoff', dueDateValue ?? defaultDueLocalString(timeZone), {
+        shouldValidate: true,
+        shouldDirty: false,
+      });
+    }
+  }, [allowLateSubmissions, dueDateValue, lateCutoffValue, setValue, timeZone]);
 
   // Refresh defaults on open; also clear state on close to avoid flicker
   useEffect(() => {
@@ -139,8 +165,8 @@ export function CreateAssignmentDialog({
     // Convert form values to the format expected by the API schema
     const formData = {
       ...raw,
-      maxPoints: Number(raw.maxPoints), // Convert string to number for API schema
       dueDate: raw.dueDate, // Keep as string for API timezone conversion
+      lateCutoff: raw.allowLateSubmissions ? raw.lateCutoff : null,
     };
 
     const payload = {
@@ -242,26 +268,34 @@ export function CreateAssignmentDialog({
             )}
           />
 
-          {/* Max Points */}
           <Controller
             control={control}
-            name="maxPoints"
+            name="isGroup"
             render={({ field }) => (
-              <InputGroup
-                label="Max Points"
-                name="maxPoints"
-                type="number"
-                fieldProps={field}
-                min={0}
-                step={1}
-                error={errors.maxPoints?.message}
-              />
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="isGroup">Group Assignment</Label>
+                  <p className="text-muted-foreground text-sm">
+                    Students submit and are graded as groups for this assignment.
+                  </p>
+                </div>
+                <Switch
+                  id="isGroup"
+                  checked={!!field.value}
+                  onCheckedChange={(checked) => field.onChange(!!checked)}
+                />
+              </div>
             )}
           />
 
           {/* Publish switch */}
           <div className="flex items-center justify-between">
-            <Label htmlFor="isPublished">Publish Now</Label>
+            <div>
+              <Label htmlFor="isPublished">Publish Now</Label>
+              <p className="text-muted-foreground text-sm">
+                Makes the assignment visible to enrolled students.
+              </p>
+            </div>
             <Controller
               control={control}
               name="isPublished"
@@ -274,6 +308,49 @@ export function CreateAssignmentDialog({
               )}
             />
           </div>
+
+          {/* Late submissions toggle */}
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="allowLateSubmissions">Allow Late Submissions</Label>
+              <p className="text-muted-foreground text-sm">
+                Students can submit after the deadline until a cutoff date.
+              </p>
+            </div>
+            <Controller
+              control={control}
+              name="allowLateSubmissions"
+              render={({ field }) => (
+                <Switch
+                  id="allowLateSubmissions"
+                  checked={!!field.value}
+                  onCheckedChange={(checked) => field.onChange(!!checked)}
+                />
+              )}
+            />
+          </div>
+
+          {allowLateSubmissions && (
+            <Controller
+              control={control}
+              name="lateCutoff"
+              render={({ field }) => (
+                <InputGroup
+                  label="Late Submission Cutoff"
+                  name="lateCutoff"
+                  type="datetime-local"
+                  fieldProps={{
+                    ...field,
+                    value: field.value ?? '',
+                    onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                      field.onChange(e.target.value),
+                  }}
+                  min={dueDateValue ?? nowLocalString(timeZone)}
+                  error={errors.lateCutoff?.message}
+                />
+              )}
+            />
+          )}
 
           <DialogFooter>
             <DialogClose asChild>

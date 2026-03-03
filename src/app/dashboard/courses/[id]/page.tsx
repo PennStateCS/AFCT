@@ -5,6 +5,6 @@ export const metadata: Metadata = {
   title: 'Course',
 };
 
-export default function CoursePage() {
+export default function AdminCoursePage() {
   return <CourseClient />;
 }

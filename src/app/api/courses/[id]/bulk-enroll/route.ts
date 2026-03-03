@@ -4,7 +4,7 @@ import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import type { Prisma } from '@prisma/client';
 
-type CourseRole = 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT';
+type CourseRole = 'INSTRUCTOR' | 'FACULTY' | 'TA' | 'STUDENT';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const resolved = await params;
@@ -26,9 +26,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     // Map global role to course role
     const mapRole = (r: string | null | undefined): CourseRole => {
-      switch (r) {
+        switch (r) {
         case 'ADMIN':
-          return 'ADMIN';
+          return 'INSTRUCTOR';
         case 'FACULTY':
           return 'FACULTY';
         case 'TA':

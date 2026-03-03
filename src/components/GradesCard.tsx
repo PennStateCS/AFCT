@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { showToast } from '@/lib/toast';
-import { GraduationCap, Download, TrendingUp, Users, Target, RefreshCw } from 'lucide-react';
+import { Stamp, Download, TrendingUp, Users, Target, RefreshCw } from 'lucide-react';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatTimeInTimeZone } from '@/lib/date';
 
@@ -407,7 +407,7 @@ export default function GradesCard({ courseId }: { courseId: string }) {
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-2xl">
-            <GraduationCap className="h-5 w-5" />
+            <Stamp className="h-5 w-5" />
             Grades
           </CardTitle>
           <div className="flex items-center gap-2">

@@ -26,9 +26,13 @@ export async function POST(req: Request) {
     const title = formData.get('title') as string;
     const description = formData.get('description') as string;
     const type = formData.get('type') as string;
+    const maxSubmissions = formData.get('maxSubmissions') as string | null;
+    const maxPoints = formData.get('maxPoints') as string;
     const courseId = formData.get('courseId') as string;
     const maxStates = formData.get('maxStates') as string | null;
     const isDeterministic = formData.get('isDeterministic') === 'true';
+    const autograderEnabled = formData.get('autograderEnabled');
+    const autograderBool = autograderEnabled === 'false' ? false : true;
     const file = formData.get('file') as File | null;
 
     // Validate required fields
@@ -60,9 +64,12 @@ export async function POST(req: Request) {
         title,
         description,
         type: type as ProblemType,
+        maxSubmissions: parseInt(maxSubmissions || '0', 10),
+        maxPoints: parseInt(maxPoints || '0', 10),
         courseId,
         fileName,
         originalFileName: file.name,
+        autograderEnabled: autograderBool,
         maxStates: ['FA', 'PDA'].includes(type) ? parseInt(maxStates || '0', 10) || null : null,
         isDeterministic: type === 'FA' ? isDeterministic : null,
       },
