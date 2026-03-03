@@ -23,22 +23,18 @@ export async function GET(req: Request, context: { params: Promise<{ email: stri
   }
 
   try {
-    // Find courses where the user is enrolled in
+    // Find courses where the user is enrolled in and the course has already started
     const courses = await prisma.course.findMany({
-      // Find where user's email (unique identifier) matches
+      // Find where user's enrollment exists and the course is not archived and has started
       where: {
         roster: {
           some: {
-            // Use the userId instead of the user's email
-            // This stops a user from determining what courses a different user is in.
-            // This could be done by giving an email not associated with the account of the user that made the request.
-            // Using the userId instead bypasses this, without requiring an extra DB query.
-            // This also removes the email based join (which is slow as the Roster does not have
-            //    an index on user emails, but does have an index on userIds).
+            // Use the userId instead of the user's email to prevent enumeration
             userId: decoded.userId,
           }
         },
-        isArchived: false
+        isArchived: false,
+        startDate: { lte: new Date() }, // Only return courses whose startDate is in the past (<= now)
       },
 
       // Select the course's id and name

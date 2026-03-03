@@ -135,8 +135,7 @@ const BaseAssignmentSchemaObject = z
       .optional()
       .or(z.literal('')),
     dueDate: DateTimeLocal,
-    allowLateSubmissions: z.boolean().default(true),
-    lateCutoff: DateTimeLocal.optional().nullable(),
+    isGroup: z.boolean().optional(),
     courseId: z.string().min(1, 'Course id is required.'),
   })
   .strict();
@@ -157,6 +156,7 @@ const BaseAssignmentFormSchemaObject = z
     allowLateSubmissions: z.boolean().default(false),
     lateCutoff: DateTimeLocalFormOptional,
     isPublished: z.boolean(),
+    isGroup: z.boolean().optional(),
     courseId: z.string().min(1, 'Course id is required.'),
   })
   .strict();

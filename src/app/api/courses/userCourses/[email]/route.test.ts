@@ -55,5 +55,17 @@ describe('GET /api/courses/userCourses/[email]', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toEqual([{ id: 'c1', name: 'Course' }]);
+
+    // Ensure we filter out courses that haven't started yet by querying startDate <= now
+    expect(prismaMock.course.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          roster: { some: { userId: 'u1' } },
+          isArchived: false,
+          startDate: expect.objectContaining({ lte: expect.any(Date) }),
+        }),
+        select: { id: true, name: true },
+      }),
+    );
   });
 });

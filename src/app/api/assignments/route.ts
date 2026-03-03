@@ -76,6 +76,8 @@ export async function POST(req: NextRequest) {
         allowLateSubmissions,
         lateCutoff: lateCutoffDate,
         isPublished: data.isPublished || false,
+        // Persist isGroup when provided (default to false)
+        isGroup: !!data.isGroup,
         courseId: data.courseId,
       },
     });
@@ -94,6 +96,7 @@ export async function POST(req: NextRequest) {
         title: created.title,
         description: created.description ? created.description : '',
         isPublished: created.isPublished,
+        isGroup: created.isGroup,
         dueDate: created.dueDate.toISOString(),
         allowLateSubmissions: created.allowLateSubmissions,
         lateCutoff: created.lateCutoff ? created.lateCutoff.toISOString() : null,

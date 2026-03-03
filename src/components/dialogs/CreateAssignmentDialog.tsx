@@ -15,7 +15,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import InputGroup from '@/components/ui/InputGroup';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -92,6 +92,7 @@ export function CreateAssignmentDialog({
       allowLateSubmissions: false,
       lateCutoff: undefined,
       isPublished: false,
+      isGroup: false,
       courseId: courseId,
     }),
     [courseId, timeZone],
@@ -134,6 +135,8 @@ export function CreateAssignmentDialog({
   }, [allowLateSubmissions, dueDateValue, lateCutoffValue, setValue, timeZone]);
 
   // Refresh defaults on open; also clear state on close to avoid flicker
+  const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
+
   useEffect(() => {
     if (open) {
       reset(defaults, {
@@ -142,6 +145,18 @@ export function CreateAssignmentDialog({
         keepErrors: false,
         keepValues: false,
       });
+
+      (async () => {
+        try {
+          const res = await fetch(`/api/courses/${courseId}/groups`);
+          if (res.ok) {
+            const body = await res.json();
+            setGroups(Array.isArray(body) ? body : []);
+          }
+        } catch {
+          setGroups([]);
+        }
+      })();
     } else {
       reset(defaults, {
         keepDirty: false,
@@ -150,7 +165,7 @@ export function CreateAssignmentDialog({
         keepValues: false,
       });
     }
-  }, [open, defaults, reset]);
+  }, [open, defaults, reset, courseId]);
 
   const resetForm = () =>
     reset(defaults, {
@@ -264,6 +279,34 @@ export function CreateAssignmentDialog({
                 min={nowLocalString(timeZone)}
                 error={errors.dueDate?.message}
               />
+            )}
+          />
+
+          {/* Max Points */}
+          <Controller
+            control={control}
+            name="maxPoints"
+            render={({ field }) => (
+              <InputGroup
+                label="Max Points"
+                name="maxPoints"
+                type="number"
+                fieldProps={field}
+                min={0}
+                step={1}
+                error={errors.maxPoints?.message}
+              />
+            )}
+          />
+
+          <Controller
+            control={control}
+            name="isGroup"
+            render={({ field }) => (
+              <div className="flex items-center justify-between">
+                <Label htmlFor="isGroup">Group Assignment</Label>
+                <Switch id="isGroup" checked={!!field.value} onCheckedChange={(checked) => field.onChange(!!checked)} />
+              </div>
             )}
           />
 
