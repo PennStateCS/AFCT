@@ -21,17 +21,18 @@ export async function DELETE(
       select: { role: true },
     });
     const currentCourseRole = currentRoster?.role ?? null;
+    const currentCourseRoleValue = String(currentCourseRole ?? '');
 
     // Only global ADMIN or course-level INSTRUCTOR/FACULTY/TA may attempt removal
     if (
       currentUser.role !== 'ADMIN' &&
-      !['INSTRUCTOR', 'FACULTY', 'TA'].includes(currentCourseRole ?? '')
+      !['ADMIN', 'INSTRUCTOR', 'FACULTY', 'TA'].includes(currentCourseRoleValue)
     ) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // TAs and STUDENTs may not remove users
-    if (currentCourseRole === 'TA' || currentCourseRole === 'STUDENT') {
+    if (currentCourseRoleValue === 'TA' || currentCourseRoleValue === 'STUDENT') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -40,18 +41,23 @@ export async function DELETE(
       where: { courseId, userId },
       select: { role: true },
     });
+    const targetCourseRoleValue = String(targetRoster?.role ?? '');
 
     // Faculty may not remove instructor/faculty
     if (
-      currentCourseRole === 'FACULTY' &&
+      currentCourseRoleValue === 'FACULTY' &&
       targetRoster &&
-      (targetRoster.role === 'INSTRUCTOR' || targetRoster.role === 'FACULTY')
+      ['ADMIN', 'INSTRUCTOR', 'FACULTY'].includes(targetCourseRoleValue)
     ) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Instructors may not remove other instructors
-    if (currentCourseRole === 'INSTRUCTOR' && targetRoster && targetRoster.role === 'INSTRUCTOR') {
+    // Course admins/instructors may not remove other course admins/instructors
+    if (
+      ['ADMIN', 'INSTRUCTOR'].includes(currentCourseRoleValue) &&
+      targetRoster &&
+      ['ADMIN', 'INSTRUCTOR'].includes(targetCourseRoleValue)
+    ) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
