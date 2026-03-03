@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, CourseRole } from '@prisma/client';
 
 /**
  * Add a role field to every item in the list.
@@ -32,7 +32,7 @@ export const upsertRoster = async (
   prisma: PrismaClient,
   courseId: string,
   userId: string,
-  role: 'ADMIN' | 'TA' | 'STUDENT',
+  role: CourseRole,
 ) => {
   await prisma.roster.upsert({
     where: {
@@ -117,7 +117,7 @@ export const assignCourseRosters = async (
   for (const course of courses) {
     const instructor = pickRandom(facultyUsers);
     if (instructor) {
-      await upsertRoster(prisma, course.id, instructor.id, 'ADMIN');
+      await upsertRoster(prisma, course.id, instructor.id, 'INSTRUCTOR' as CourseRole);
     }
 
     if (course.assignTa && taUsers.length > 0) {

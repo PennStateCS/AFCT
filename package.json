@@ -34,7 +34,7 @@
     "docker:seed": "docker exec -it afct-dev npx prisma db seed",
     "docker:psql": "docker exec -it afct-dev-postgres psql -U afct_user -d afct",
     "docker:dev:migrate": "docker exec -it afct-dev npx prisma migrate dev",
-    "docker:dev:generate": "docker exec -it afct-dev npx prisma generate dev",
+    "docker:dev:generate": "docker exec -it afct-dev npx prisma generate",
     "docker:dev:down": "npm run docker:down",
     "docker:dev:clean": "npm run docker:clean",
     "docker:dev:down:volumes": "npm run docker:down:volumes",

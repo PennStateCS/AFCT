@@ -69,6 +69,11 @@ export async function POST(
       },
     });
 
+    // Also remove any group-specific mappings for this assignment/problem so
+    // the problem is fully unassigned from groups when removed from the
+    // assignment.
+    await prisma.groupAssignmentProblem.deleteMany({ where: { assignmentId, problemId } });
+
     // Retrieve updated problem list for this assignment
     const updated = await prisma.assignment.findUnique({
       where: { id: assignmentId },

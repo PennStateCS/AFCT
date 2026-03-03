@@ -16,7 +16,7 @@ enum Role {
 }
 
 enum CourseRole {
-  ADMIN
+  INSTRUCTOR
   FACULTY
   TA
   STUDENT
@@ -45,9 +45,11 @@ model User {
 
   rosterEntries Roster[]
   submissions   Submission[]
+  assignmentGrades AssignmentGrade[]
   problemGrades AssignmentProblemGrade[]
   activityLogs  ActivityLog[]
-  commentsAbout Comment[] @relation("CommentsAboutStudent")
+  groupRosters  GroupRoster[] // Group memberships across courses
+  commentsAbout Comment[]         @relation("CommentsAboutStudent") // Comments about this student's work
 
   @@index([role])
   @@index([inactive])
@@ -63,19 +65,19 @@ model Course {
   credits     Int
   startDate   DateTime
   endDate     DateTime
-  isPublished Boolean  @default(false)
-  isArchived  Boolean  @default(false)
-
-  // Registration window
   registrationOpenAt  DateTime?
   registrationCloseAt DateTime?
+  isPublished Boolean  @default(false)
+  isArchived  Boolean  @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  roster       Roster[]
+  roster       Roster[] // Users in the course with roles
   assignments  Assignment[]
   problems     Problem[]
+  groups       Group[]
+  groupRosters GroupRoster[]
   activityLogs ActivityLog[]
 
   @@index([isPublished])
@@ -111,6 +113,7 @@ model Assignment {
   description String?
   dueDate     DateTime
   isPublished Boolean  @default(false)
+  isGroup     Boolean  @default(false) // Whether this assignment is group-based
 
   // Late submission controls
   allowLateSubmissions Boolean  @default(true)
@@ -125,12 +128,15 @@ model Assignment {
   problems     AssignmentProblem[]
   comments     Comment[]
   activityLogs ActivityLog[]
+  grades       AssignmentGrade[] // Student grades for this assignment
+  groupAssignmentProblems GroupAssignmentProblem[]
 
   @@index([courseId])
   @@index([isPublished])
   @@index([dueDate])
   @@index([lateCutoff])
   @@index([courseId, isPublished])
+  @@index([isGroup])
 }
 
 model Problem {
@@ -153,12 +159,55 @@ model Problem {
   courseId String
 
   assignments  AssignmentProblem[]
+  groupAssignmentProblems GroupAssignmentProblem[]
   comments     Comment[]
   activityLogs ActivityLog[]
+
+
 
   @@index([courseId])
   @@index([type])
   @@index([createdAt])
+}
+
+model Group {
+  id   String @id @default(cuid())
+  name String
+
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  groupRosters            GroupRoster[]
+  submissions             Submission[]
+
+  groupAssignmentProblems GroupAssignmentProblem[]
+
+  @@unique([courseId, name])
+  @@index([courseId])
+}
+
+model GroupRoster {
+  id String @id @default(cuid())
+
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseId String
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([groupId, userId])
+  @@index([courseId])
+  @@index([userId])
+  @@index([groupId])
 }
 
 model AssignmentProblem {
@@ -179,6 +228,20 @@ model AssignmentProblem {
   @@index([assignmentId])
 }
 
+model GroupAssignmentProblem {
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  assignmentId String
+  problem      Problem    @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  problemId    String
+  group        Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  groupId      String
+
+  @@id([assignmentId, problemId, groupId])
+  @@index([groupId])
+}
+
+
+
 model Submission {
   id          String   @id @default(cuid())
   submittedAt DateTime @default(now())
@@ -197,13 +260,20 @@ model Submission {
   assignmentId String
   problemId    String
 
+  // For individual submissions this is the submitting student
   student   User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   studentId String
 
+  // Optional group reference for group submissions
+  group   Group?  @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  groupId String?
+
   activityLogs ActivityLog[]
 
+  @@unique([assignmentId, problemId, groupId])
   @@index([assignmentId])
   @@index([studentId])
+  @@index([groupId])
   @@index([assignmentId, problemId, studentId])
 
   // Performance indexes
@@ -211,12 +281,32 @@ model Submission {
   @@index([studentId, assignmentId, problemId, submittedAt])
 }
 
+model AssignmentGrade {
+  id       String  @id @default(cuid())
+  grade    Float
+  feedback String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  assignmentId String
+
+  student   User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+
+  @@unique([assignmentId, studentId])
+  @@index([assignmentId])
+  @@index([studentId])
+}
+
 model AssignmentProblemGrade {
-  id           String  @id @default(cuid())
-  grade        Float?
-  feedback     String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id       String  @id @default(cuid())
+  grade    Float
+  feedback String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   assignmentProblem AssignmentProblem @relation(fields: [assignmentId, problemId], references: [assignmentId, problemId], onDelete: Cascade, onUpdate: Cascade)
   assignmentId String
@@ -227,6 +317,7 @@ model AssignmentProblemGrade {
 
   @@unique([assignmentId, problemId, studentId])
   @@index([assignmentId, problemId])
+  @@index([assignmentId])
   @@index([studentId])
 }
 
@@ -273,9 +364,10 @@ model ActivityLog {
   submissionId String?
   submission   Submission? @relation(fields: [submissionId], references: [id], onDelete: SetNull)
 
-  category   String?
-  ipAddress  String?
-  userAgent  String?
+  // Additional categorization
+  category  String? // SYSTEM, COURSE, ASSIGNMENT, PROBLEM, SUBMISSION, USER
+  ipAddress String?
+  userAgent String?
 
   @@index([timestamp])
   @@index([userId])
@@ -292,9 +384,10 @@ model ActivityLog {
 }
 
 model SystemSettings {
-  id              Int      @id @default(1)
-  timezone        String   @default("UTC")
-  maxUploadSizeMb Int      @default(25)
+  /// Singleton row (id=1)
+  id              Int    @id @default(1)
+  timezone        String @default("UTC")
+  maxUploadSizeMb Int    @default(25)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

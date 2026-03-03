@@ -34,7 +34,7 @@ export async function GET(
 
     const gradeGroups = await prisma.assignmentProblemGrade.groupBy({
       by: ['studentId'],
-      where: { assignmentId, grade: { not: null } },
+      where: { assignmentId },
       _count: { grade: true },
     });
 

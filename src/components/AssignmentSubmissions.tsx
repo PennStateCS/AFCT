@@ -1,11 +1,10 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FileText, MessageSquare, Check, X, Minus } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Table,
   TableBody,
@@ -17,6 +16,7 @@ import {
 import { Submission, User } from '@prisma/client';
 import { showToast } from '@/lib/toast';
 import { Comment as DiscussionComment } from './DiscussionPanel';
+import { ProblemListCard } from '@/components/assignments/ProblemListCard';
 import ProblemDiscussionPanel from './ProblemDiscussionPanel';
 import StudentNavigator from './StudentNavigator';
 import JffViewerDialog from './JffViewerDialog';
@@ -24,6 +24,8 @@ import ProblemHeader from './ProblemHeader';
 import ProblemGradeForm from './ProblemGradeForm';
 import SubmissionActionsMenu from './SubmissionActionsMenu';
 import WorkspacePanel from './WorkspacePanel';
+import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
+import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
 
 type Person = Pick<User, 'firstName' | 'lastName' | 'id'>;
 
@@ -47,7 +49,14 @@ type Props = {
   courseIsArchived: boolean;
   courseId: string;
   assignmentId: string;
-  problems: Problem[];
+  maxAssignmentGrade: number;
+  problems?: Problem[];
+  // When assignmentIsGroup is true the parent will pass `groups` and
+  // `groupProblemsMap` so this component can show only the problems
+  // assigned to the student's group (unassigned problems apply to all).
+  assignmentIsGroup?: boolean;
+  groups?: { id: string; name: string }[];
+  groupProblemsMap?: Record<string, string[]>;
 };
 
 // Helpers
@@ -58,61 +67,6 @@ const extractSubs = (raw?: SubmissionData): Submission[] => {
     return (raw as { submissions: Submission[] }).submissions;
   return [];
 };
-
-function ProblemList({
-  problems,
-  submissions,
-  selectedProblemId,
-  onSelect,
-}: {
-  problems: Problem[];
-  submissions: Record<string, SubmissionData>;
-  selectedProblemId: string | null;
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <Card className="print:hidden">
-      <CardHeader>
-        <CardTitle className="text-base">Problems</CardTitle>
-      </CardHeader>
-      <CardContent className="p-0">
-        <ScrollArea className="h-[520px]">
-          <ul className="divide-border divide-y">
-            {problems.map((p) => {
-              const subs = extractSubs(submissions[p.id]);
-              const count = subs.length;
-              const hasCorrect = subs.some((s) => s.correct === true);
-              const active = selectedProblemId === p.id;
-              return (
-                <li key={p.id}>
-                  <button
-                    type="button"
-                    onClick={() => onSelect(p.id)}
-                    className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition ${
-                      active ? 'bg-secondary text-secondary-foreground' : 'hover:bg-slate-50'
-                    }`}
-                  >
-                    <span className="truncate">{p.title}</span>
-                    <Badge variant="outline" className="shrink-0 bg-white text-slate-900">
-                      <span className="flex items-center gap-1">
-                        {hasCorrect ? (
-                          <Check className="h-3 w-3 text-green-600" />
-                        ) : (
-                          <X className="h-3 w-3 text-red-600" />
-                        )}
-                        {count}
-                      </span>
-                    </Badge>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </ScrollArea>
-      </CardContent>
-    </Card>
-  );
-}
 
 function SubmissionTable({
   submissions,
@@ -201,6 +155,73 @@ function SubmissionTable({
         </TableBody>
       </Table>
     </div>
+  );
+}
+
+type ProblemListProps = {
+  problems: Problem[];
+  submissions: Record<string, SubmissionData>;
+  selectedProblemId: string | null;
+  onSelect: (problemId: string) => void;
+};
+
+function ProblemList({ problems, submissions, selectedProblemId, onSelect }: ProblemListProps) {
+  if (!problems.length) return null;
+
+  const items = problems.map((problem, index) => ({
+    id: problem.id,
+    title: problem.title ? `Problem ${index + 1}: ${problem.title}` : `Problem ${index + 1}`,
+  }));
+
+  const getBadgeContent = (problemId: string) => {
+    const subs = extractSubs(submissions[problemId]);
+    if (!subs.length) {
+      return (
+        <Badge
+          variant="secondary"
+          className="border-transparent bg-slate-100 text-[10px] font-medium text-slate-700"
+        >
+          0
+        </Badge>
+      );
+    }
+
+    const latest = [...subs].sort(
+      (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
+    )[0];
+
+    let label = `${subs.length} ${subs.length === 1 ? 'submission' : 'submissions'}`;
+    let badgeClass = 'bg-slate-100 text-slate-700';
+
+    if (latest?.correct === true) {
+      label = `Correct · ${subs.length}`;
+      badgeClass = 'bg-emerald-100 text-emerald-800';
+    } else if (latest?.correct === false) {
+      label = `Needs review · ${subs.length}`;
+      badgeClass = 'bg-amber-100 text-amber-800';
+    }
+
+    return (
+      <Badge
+        variant="secondary"
+        className={`border-transparent text-[10px] font-semibold ${badgeClass}`}
+      >
+        {label}
+      </Badge>
+    );
+  };
+
+  return (
+    <ProblemListCard
+      problems={items}
+      selectedProblemId={selectedProblemId}
+      onSelect={onSelect}
+      getBadgeContent={getBadgeContent}
+      title="Problems"
+      description="Select a problem to review submissions and discussion."
+      className="h-fit"
+      scrollAreaClassName="max-h-[520px]"
+    />
   );
 }
 
@@ -318,6 +339,9 @@ export default function AssignmentSubmissions({
   courseId,
   assignmentId,
   problems,
+  assignmentIsGroup = false,
+  groups = [],
+  groupProblemsMap = {},
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -330,10 +354,53 @@ export default function AssignmentSubmissions({
   const [deletingComments, setDeletingComments] = useState<Record<string, boolean>>({});
   const [rerunning, setRerunning] = useState<Record<string, boolean>>({});
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
+  // If this is a group assignment we'll compute the student's group and
+  // filter which problems are shown. Cache per-student group lookups.
+  // undefined = not yet resolved; null = resolved -> student is not in any group
+  const [selectedStudentGroupId, setSelectedStudentGroupId] = useState<string | null | undefined>(
+    undefined,
+  );
+  const studentGroupCache = useRef<Record<string, string | null | undefined>>({});
+
+  // Load all course problems and prefer client-side filtering for the submissions tab.
+  // Fall back to `problems` prop if the fetch fails or isn't provided.
+  const [allProblems, setAllProblems] = useState<Problem[]>(problems ?? []);
+  const [problemsLoading, setProblemsLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadAllProblems() {
+      if (!courseId) return;
+      setProblemsLoading(true);
+      try {
+        const res = await fetch(`/api/courses/${courseId}/problems`);
+        if (!res.ok) throw new Error('Failed to load problems');
+        const data = await res.json();
+        if (!cancelled) setAllProblems(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error('Failed to load problems:', err);
+        if (!cancelled) setAllProblems(problems ?? []);
+      } finally {
+        if (!cancelled) setProblemsLoading(false);
+      }
+    }
+    loadAllProblems();
+    return () => {
+      cancelled = true;
+    };
+  }, [courseId, problems]);
+
+  // Grade editing state (robust, GradesCard style)
+  const [editingGrade, setEditingGrade] = useState<string>('');
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSavingGrade, setIsSavingGrade] = useState(false);
+  const [gradeError, setGradeError] = useState<string | null>(null);
+  const [userGrade, setUserGrade] = useState<number | null>(null);
+  const [isLoadingGrade, setIsLoadingGrade] = useState(false);
   const [problemGrades, setProblemGrades] = useState<Record<string, number | null>>({});
   const [gradeInputs, setGradeInputs] = useState<Record<string, string>>({});
-  const [savingProblemGrades, setSavingProblemGrades] = useState<Record<string, boolean>>({});
   const [problemGradeErrors, setProblemGradeErrors] = useState<Record<string, string | null>>({});
+  const [savingProblemGrades, setSavingProblemGrades] = useState<Record<string, boolean>>({});
   const [loadingProblemGrades, setLoadingProblemGrades] = useState(false);
   const [studentGradeStatuses, setStudentGradeStatuses] = useState<Record<string, boolean>>({});
   const [openDialog, setOpenDialog] = useState<{
@@ -359,18 +426,68 @@ export default function AssignmentSubmissions({
     [router, searchParams],
   );
 
+  // Build the assignment-specific problem list using the fetched `allProblems` (prefer enriched objects).
+  const assignmentProblems = useMemo(() => {
+    if (!problems || problems.length === 0) {
+      // parent didn't pass assignment problems — fall back to `allProblems`
+      return allProblems;
+    }
+    // Prefer enriched problem objects from `allProblems` when available.
+    return problems.map((ap) => allProblems.find((p) => p.id === ap.id) ?? ap);
+  }, [problems, allProblems]);
+
+  // Compute which problems should be visible for the selected student when
+  // this is a group assignment. Rules:
+  // - Problems mapped to the student's group are visible
+  // - Problems not mapped to any group (assignment-level) are visible to all
+  // - If group mapping isn't available yet, fall back to showing all problems
+  const visibleProblems = useMemo(() => {
+    // If this is not a group assignment, show all assignment problems
+    if (!assignmentIsGroup) return assignmentProblems;
+
+    const gpMap = groupProblemsMap ?? {};
+    const allMapped = new Set<string>(Object.values(gpMap).flat());
+
+    // Assignment-level problems = problems not mapped to any group
+    const assignmentLevel = assignmentProblems.filter((p) => !allMapped.has(p.id));
+
+    // If mappings not loaded yet -> fall back to showing all assignment problems
+    if (!gpMap || Object.keys(gpMap).length === 0) return assignmentProblems;
+
+    // If we don't yet know the student's group (undefined), show assignment-level + all group-mapped (safe fallback)
+    if (selectedStudentGroupId === undefined) {
+      const byGroup = new Set<string>([
+        ...assignmentLevel.map((p) => p.id),
+        ...Object.values(gpMap).flat(),
+      ]);
+      return assignmentProblems.filter((p) => byGroup.has(p.id));
+    }
+
+    // If the student is resolved to be NOT in any group (null), show only assignment-level problems
+    if (selectedStudentGroupId === null) {
+      return assignmentLevel;
+    }
+
+    // Visible = assignment-level + problems mapped to the student's group
+    const allowed = new Set<string>(assignmentLevel.map((p) => p.id));
+    for (const pid of gpMap[selectedStudentGroupId] ?? []) allowed.add(pid);
+    return assignmentProblems.filter((p) => allowed.has(p.id));
+  }, [assignmentProblems, selectedStudentGroupId, groupProblemsMap, assignmentIsGroup]);
+
+  // Initialize selected problem from the URL, but only from the set of
+  // currently visible problems (handles group assignment filtering).
   useEffect(() => {
-    if (problems.length === 0) return;
+    if (visibleProblems.length === 0) return;
     const paramProblemId = searchParams.get('problemId');
-    const validProblemId = problems.some((p) => p.id === paramProblemId)
+    const validProblemId = visibleProblems.some((p) => p.id === paramProblemId)
       ? (paramProblemId as string)
-      : problems[0].id;
+      : visibleProblems[0].id;
 
     setSelectedProblemId(validProblemId);
     if (paramProblemId !== validProblemId) {
       updateQuery(validProblemId);
     }
-  }, [problems, searchParams, updateQuery]);
+  }, [visibleProblems, searchParams, updateQuery]);
 
   const selectedStudent = students[selectedIndex] ?? null;
   const selectedStudentId = selectedStudent?.id ?? null;
@@ -401,6 +518,58 @@ export default function AssignmentSubmissions({
 
     return { earned: totalEarned, available: totalAvailable };
   }, [problemGrades, problems, selectedStudent]);
+
+  // Determine which group the selected student belongs to (for group assignments).
+  useEffect(() => {
+    let cancelled = false;
+    async function resolveStudentGroup() {
+      if (!assignmentIsGroup || !selectedStudent) {
+        setSelectedStudentGroupId(null);
+        return;
+      }
+
+      // Use cache if present
+      const cached = studentGroupCache.current[selectedStudent.id];
+      if (cached !== undefined) {
+        setSelectedStudentGroupId(cached);
+        return;
+      }
+
+      // If no groups available, treat as not in any group
+      if (!groups || groups.length === 0) {
+        studentGroupCache.current[selectedStudent.id] = null;
+        setSelectedStudentGroupId(null);
+        return;
+      }
+
+      try {
+        // Fetch members for all groups in parallel and find which contains the student
+        const ops = groups.map((g) =>
+          fetch(`/api/courses/${courseId}/groups/${g.id}/members`)
+            .then((res) => (res.ok ? res.json() : Promise.resolve({ members: [] })))
+            .then((data) => ({ id: g.id, members: data?.members ?? [] }))
+            .catch(() => ({ id: g.id, members: [] })),
+        );
+        const results = await Promise.all(ops);
+        if (cancelled) return;
+        const found = results.find((r) =>
+          r.members.some((m: any) => m.userId === selectedStudent.id),
+        );
+        const gid = found ? found.id : null;
+        studentGroupCache.current[selectedStudent.id] = gid;
+        setSelectedStudentGroupId(gid);
+      } catch (err) {
+        console.error('Failed to resolve student group:', err);
+        studentGroupCache.current[selectedStudent.id] = null;
+        if (!cancelled) setSelectedStudentGroupId(null);
+      }
+    }
+
+    resolveStudentGroup();
+    return () => {
+      cancelled = true;
+    };
+  }, [assignmentIsGroup, selectedStudent, groups, courseId]);
 
   const handleSelectProblem = useCallback(
     (problemId: string) => {
@@ -540,7 +709,7 @@ export default function AssignmentSubmissions({
     [fetchSubmissions],
   );
 
-  // Fetch comments for all problems
+  // Fetch comments only for visible problems (honors group filtering)
   useEffect(() => {
     const loadComments = async () => {
       if (!selectedStudent) {
@@ -548,24 +717,25 @@ export default function AssignmentSubmissions({
         return;
       }
       try {
-        const validProblems = problems.filter((p): p is Problem => Boolean(p?.id));
+        const validProblems = visibleProblems.filter((p): p is Problem => Boolean(p?.id));
         const entries = await Promise.all(
           validProblems.map(async (p) => {
+            const problemId = p.id;
             try {
               const res = await fetch(
-                `/api/comments?assignmentId=${assignmentId}&problemId=${p.id}&studentId=${selectedStudent.id}`,
+                `/api/comments?assignmentId=${assignmentId}&problemId=${problemId}&studentId=${selectedStudent.id}`,
               );
               if (!res.ok) {
                 if ([204, 401, 403, 404].includes(res.status)) {
-                  return [p.id, []] as const;
+                  return [problemId, []] as const;
                 }
                 throw new Error('Failed to load comments');
               }
               const list = res.status === 204 ? [] : await res.json();
-              return [p.id, list as DiscussionComment[]] as const;
+              return [problemId, list as DiscussionComment[]] as const;
             } catch (err) {
-              console.error(`Fetch comments error for problem ${p.id}:`, err);
-              return [p.id, []] as const;
+              console.error(`Fetch comments error for problem ${problemId}:`, err);
+              return [problemId, []] as const;
             }
           }),
         );
@@ -576,8 +746,9 @@ export default function AssignmentSubmissions({
         setComments({});
       }
     };
-    if (problems.length > 0) loadComments();
-  }, [assignmentId, problems, selectedStudent]);
+    if (visibleProblems.length > 0) loadComments();
+    else setComments({});
+  }, [assignmentId, visibleProblems, selectedStudent]);
 
   useEffect(() => {
     if (!selectedStudent) {
@@ -864,15 +1035,15 @@ export default function AssignmentSubmissions({
           </CardHeader>
 
           <CardContent>
-            {problems.length === 0 ? (
+            {assignmentProblems.length === 0 ? (
               <div className="text-muted-foreground rounded-md border border-dashed p-6 text-center text-sm">
                 No problems have been added to this assignment yet.
               </div>
             ) : (
               (() => {
                 const selectedProblem = selectedProblemId
-                  ? problems.find((p) => p.id === selectedProblemId) || null
-                  : problems[0] || null;
+                  ? visibleProblems.find((p) => p.id === selectedProblemId) || null
+                  : visibleProblems[0] || null;
                 const selectedSubs = selectedProblem
                   ? extractSubs(submissions[selectedProblem.id])
                   : [];
@@ -881,7 +1052,7 @@ export default function AssignmentSubmissions({
                 return (
                   <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
                     <ProblemList
-                      problems={problems}
+                      problems={visibleProblems}
                       submissions={submissions}
                       selectedProblemId={selectedProblem?.id ?? null}
                       onSelect={handleSelectProblem}
@@ -935,18 +1106,41 @@ export default function AssignmentSubmissions({
         </Card>
       )}
 
-      {openDialog.submission && (
-        <JffViewerDialog
-          open={openDialog.open}
-          onOpenChange={(open) => setOpenDialog({ open, submission: null })}
-          src={`/api/uploads/submissions/${encodeURIComponent(
-            openDialog.submission.fileName ?? '',
-          )}`}
-          title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
-          width="70vw"
-          height="70vh"
-        />
-      )}
+      {openDialog.submission &&
+        ['FA', 'PDA'].includes(problems.find((p) => p.id === selectedProblemId)?.type ?? '') && (
+          <JffViewerDialog
+            open={openDialog.open}
+            onOpenChange={(open) => setOpenDialog({ open, submission: null })}
+            src={`/api/uploads/submissions/${encodeURIComponent(
+              openDialog.submission.fileName ?? '',
+            )}`}
+            title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
+            width="70vw"
+            height="70vh"
+          />
+        )}
+      {openDialog.submission &&
+        (problems.find((p) => p.id === selectedProblemId)?.type ?? '') === 'RE' && (
+          <RegexViewerDialog
+            open={openDialog.open}
+            onOpenChange={(open) => setOpenDialog({ open, submission: null })}
+            src={`/api/uploads/submissions/${encodeURIComponent(
+              openDialog.submission.fileName ?? '',
+            )}`}
+            title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
+          />
+        )}
+      {openDialog.submission &&
+        (problems.find((p) => p.id === selectedProblemId)?.type ?? '') === 'CFG' && (
+          <CfgViewerDialog
+            open={openDialog.open}
+            onOpenChange={(open) => setOpenDialog({ open, submission: null })}
+            src={`/api/uploads/submissions/${encodeURIComponent(
+              openDialog.submission.fileName ?? '',
+            )}`}
+            title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
+          />
+        )}
     </div>
   );
 }
