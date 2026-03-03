@@ -329,9 +329,21 @@ export default function AssignmentDashboardPage() {
                   : ''}
             </Link>
           </div>
-          <div className="text-muted-foreground mt-1 text-sm">
-            <span className="font-semibold">Due:</span>{' '}
-            {formatDateTimeInTimeZone(assignment.dueDate, timezone)}
+          <div className="text-muted-foreground mt-1 flex flex-wrap gap-4 text-sm">
+            <span>
+              <span className="font-semibold">Due:</span>{' '}
+              {formatDateTimeInTimeZone(assignment.dueDate, timezone)}
+            </span>
+            <span>
+              <span className="font-semibold">Allow Late:</span>{' '}
+              {assignment.allowLateSubmissions ? 'Yes' : 'No'}
+            </span>
+            <span>
+              <span className="font-semibold">Late Cutoff:</span>{' '}
+              {assignment.allowLateSubmissions && assignment.lateCutoff
+                ? formatDateTimeInTimeZone(assignment.lateCutoff, timezone)
+                : '—'}
+            </span>
           </div>
         </div>
         <div>

@@ -13,8 +13,16 @@ const activityLogMock = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
+const toEndOfDayInTimezoneMock = vi.hoisted(() =>
+  vi.fn(() => new Date('2025-01-01T00:00:00.000Z')),
+);
+const toDateTimeInTimezoneMock = vi.hoisted(() =>
+  vi.fn(() => new Date('2025-01-02T00:00:00.000Z')),
+);
+
 vi.mock('@/lib/date-utils', () => ({
-  toEndOfDayInTimezone: vi.fn().mockReturnValue(new Date('2025-01-01T00:00:00.000Z')),
+  toEndOfDayInTimezone: toEndOfDayInTimezoneMock,
+  toDateTimeInTimezone: toDateTimeInTimezoneMock,
 }));
 
 import { POST } from './route';
@@ -60,11 +68,19 @@ describe('POST /api/assignments', () => {
       dueDate: new Date('2025-01-01T00:00:00.000Z'),
       isPublished: false,
       courseId: 'c1',
+      allowLateSubmissions: true,
+      lateCutoff: new Date('2025-01-02T00:00:00.000Z'),
     });
 
     const req = new NextRequest('http://localhost/api/assignments', {
       method: 'POST',
-      body: JSON.stringify({ title: 'A', courseId: 'c1', dueDate: '2025-01-01' }),
+      body: JSON.stringify({
+        title: 'A',
+        courseId: 'c1',
+        dueDate: '2025-01-01',
+        allowLateSubmissions: true,
+        lateCutoff: '2025-01-02T04:00',
+      }),
     });
 
     const res = await POST(req);

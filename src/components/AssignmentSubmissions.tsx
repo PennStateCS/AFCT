@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { FileText, MessageSquare, Check, X, Minus } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Table,
   TableBody,
@@ -17,6 +16,7 @@ import {
 import { Submission, User } from '@prisma/client';
 import { showToast } from '@/lib/toast';
 import { Comment as DiscussionComment } from './DiscussionPanel';
+import { ProblemListCard } from '@/components/assignments/ProblemListCard';
 import ProblemDiscussionPanel from './ProblemDiscussionPanel';
 import StudentNavigator from './StudentNavigator';
 import JffViewerDialog from './JffViewerDialog';
@@ -58,61 +58,6 @@ const extractSubs = (raw?: SubmissionData): Submission[] => {
     return (raw as { submissions: Submission[] }).submissions;
   return [];
 };
-
-function ProblemList({
-  problems,
-  submissions,
-  selectedProblemId,
-  onSelect,
-}: {
-  problems: Problem[];
-  submissions: Record<string, SubmissionData>;
-  selectedProblemId: string | null;
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <Card className="print:hidden">
-      <CardHeader>
-        <CardTitle className="text-base">Problems</CardTitle>
-      </CardHeader>
-      <CardContent className="p-0">
-        <ScrollArea className="h-[520px]">
-          <ul className="divide-border divide-y">
-            {problems.map((p) => {
-              const subs = extractSubs(submissions[p.id]);
-              const count = subs.length;
-              const hasCorrect = subs.some((s) => s.correct === true);
-              const active = selectedProblemId === p.id;
-              return (
-                <li key={p.id}>
-                  <button
-                    type="button"
-                    onClick={() => onSelect(p.id)}
-                    className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition ${
-                      active ? 'bg-secondary text-secondary-foreground' : 'hover:bg-slate-50'
-                    }`}
-                  >
-                    <span className="truncate">{p.title}</span>
-                    <Badge variant="outline" className="shrink-0 bg-white text-slate-900">
-                      <span className="flex items-center gap-1">
-                        {hasCorrect ? (
-                          <Check className="h-3 w-3 text-green-600" />
-                        ) : (
-                          <X className="h-3 w-3 text-red-600" />
-                        )}
-                        {count}
-                      </span>
-                    </Badge>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </ScrollArea>
-      </CardContent>
-    </Card>
-  );
-}
 
 function SubmissionTable({
   submissions,
@@ -201,6 +146,73 @@ function SubmissionTable({
         </TableBody>
       </Table>
     </div>
+  );
+}
+
+type ProblemListProps = {
+  problems: Problem[];
+  submissions: Record<string, SubmissionData>;
+  selectedProblemId: string | null;
+  onSelect: (problemId: string) => void;
+};
+
+function ProblemList({ problems, submissions, selectedProblemId, onSelect }: ProblemListProps) {
+  if (!problems.length) return null;
+
+  const items = problems.map((problem, index) => ({
+    id: problem.id,
+    title: problem.title ? `Problem ${index + 1}: ${problem.title}` : `Problem ${index + 1}`,
+  }));
+
+  const getBadgeContent = (problemId: string) => {
+    const subs = extractSubs(submissions[problemId]);
+    if (!subs.length) {
+      return (
+        <Badge
+          variant="secondary"
+          className="border-transparent bg-slate-100 text-[10px] font-medium text-slate-700"
+        >
+          No submissions
+        </Badge>
+      );
+    }
+
+    const latest = [...subs].sort(
+      (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
+    )[0];
+
+    let label = `${subs.length} ${subs.length === 1 ? 'submission' : 'submissions'}`;
+    let badgeClass = 'bg-slate-100 text-slate-700';
+
+    if (latest?.correct === true) {
+      label = `Correct · ${subs.length}`;
+      badgeClass = 'bg-emerald-100 text-emerald-800';
+    } else if (latest?.correct === false) {
+      label = `Needs review · ${subs.length}`;
+      badgeClass = 'bg-amber-100 text-amber-800';
+    }
+
+    return (
+      <Badge
+        variant="secondary"
+        className={`border-transparent text-[10px] font-semibold ${badgeClass}`}
+      >
+        {label}
+      </Badge>
+    );
+  };
+
+  return (
+    <ProblemListCard
+      problems={items}
+      selectedProblemId={selectedProblemId}
+      onSelect={onSelect}
+      getBadgeContent={getBadgeContent}
+      title="Problems"
+      description="Select a problem to review submissions and discussion."
+      className="h-fit"
+      scrollAreaClassName="max-h-[520px]"
+    />
   );
 }
 

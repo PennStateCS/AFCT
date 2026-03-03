@@ -98,11 +98,6 @@ export function useAssignmentColumns(
       cell: ({ row }) => <div>{formatDateTimeInTimeZone(row.original.dueDate, timeZone)}</div>,
     },
     {
-      accessorKey: 'createdAt',
-      header: 'Created At',
-      cell: ({ row }) => <div>{formatDateTimeInTimeZone(row.original.createdAt, timeZone)}</div>,
-    },
-    {
       accessorKey: 'maxPoints',
       header: () => 'Points',
       cell: ({ row }) => <div>{row.original.maxPoints ?? 0}</div>,
@@ -110,12 +105,30 @@ export function useAssignmentColumns(
     {
       id: 'problemCount',
       header: 'Problems',
-      accessorKey: 'problemCount', // match the field returned by API
+      accessorKey: 'problemCount',
       cell: ({ row }) => {
         const count = row.original.problemCount ?? 0;
         return <div>{count}</div>;
       },
       enableSorting: true,
+    },
+    {
+      id: 'allowLateSubmissions',
+      header: 'Allow Late',
+      accessorFn: (row) => (row.allowLateSubmissions ? 'Yes' : 'No'),
+      cell: ({ row }) => <div>{row.original.allowLateSubmissions ? 'Yes' : 'No'}</div>,
+      enableSorting: true,
+    },
+    {
+      accessorKey: 'lateCutoff',
+      header: 'Late Cutoff',
+      cell: ({ row }) => (
+        <div>
+          {row.original.lateCutoff
+            ? formatDateTimeInTimeZone(row.original.lateCutoff, timeZone)
+            : '—'}
+        </div>
+      ),
     },
     {
       id: 'submissionCount',

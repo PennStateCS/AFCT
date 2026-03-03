@@ -1,4 +1,4 @@
-import { boolean, z } from 'zod';
+import { z } from 'zod';
 
 /**
  * Accepts <input type="datetime-local"> like "2025-08-15T23:59"
@@ -36,11 +36,96 @@ const DateTimeLocalForm = z
     }
   });
 
+const DateTimeLocalFormOptional = DateTimeLocalForm.or(z.literal(''))
+  .optional()
+  .transform((val) => {
+    if (!val || val === '') return undefined;
+    return val;
+  });
+
+const validateLateSubmissionDates = (
+  data: {
+    allowLateSubmissions?: boolean;
+    lateCutoff?: Date | null;
+    dueDate?: Date;
+  },
+  ctx: z.RefinementCtx,
+) => {
+  const allowLate = data.allowLateSubmissions ?? true;
+  const dueDate = data.dueDate;
+  const cutoff = data.lateCutoff ?? undefined;
+
+  if (!dueDate) return;
+
+  if (allowLate) {
+    if (!cutoff) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['lateCutoff'],
+        message: 'Provide a cutoff or disable late submissions.',
+      });
+    } else if (cutoff < dueDate) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['lateCutoff'],
+        message: 'Cutoff must be on or after the due date.',
+      });
+    }
+  } else if (cutoff) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['lateCutoff'],
+      message: 'Remove the cutoff or enable late submissions.',
+    });
+  }
+};
+
+const validateLateSubmissionStrings = (
+  data: {
+    allowLateSubmissions?: boolean;
+    lateCutoff?: string;
+    dueDate?: string;
+  },
+  ctx: z.RefinementCtx,
+) => {
+  const allowLate = data.allowLateSubmissions ?? false;
+  const dueRaw = data.dueDate;
+  const cutoffRaw = data.lateCutoff;
+
+  if (!dueRaw) return;
+  const dueDate = new Date(dueRaw);
+
+  if (allowLate) {
+    if (!cutoffRaw) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['lateCutoff'],
+        message: 'Provide a cutoff or disable late submissions.',
+      });
+      return;
+    }
+    const cutoffDate = new Date(cutoffRaw);
+    if (cutoffDate < dueDate) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['lateCutoff'],
+        message: 'Cutoff must be on or after the due date.',
+      });
+    }
+  } else if (cutoffRaw) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['lateCutoff'],
+      message: 'Remove the cutoff or enable late submissions.',
+    });
+  }
+};
+
 /**
  * Base (form) schema for add/edit.
  * Keep aligned with your Prisma model fields.
  */
-const BaseAssignmentSchema = z
+const BaseAssignmentSchemaObject = z
   .object({
     title: z.string().trim().min(3, 'Title must be at least 3 characters.'),
     description: z
@@ -50,6 +135,8 @@ const BaseAssignmentSchema = z
       .optional()
       .or(z.literal('')),
     dueDate: DateTimeLocal,
+    allowLateSubmissions: z.boolean().default(true),
+    lateCutoff: DateTimeLocal.optional().nullable(),
     courseId: z.string().min(1, 'Course id is required.'),
   })
   .strict();
@@ -57,7 +144,7 @@ const BaseAssignmentSchema = z
 /**
  * Form-only schema (no date transformation for forms)
  */
-const BaseAssignmentFormSchema = z
+const BaseAssignmentFormSchemaObject = z
   .object({
     title: z.string().trim().min(3, 'Title must be at least 3 characters.'),
     description: z
@@ -67,6 +154,8 @@ const BaseAssignmentFormSchema = z
       .optional()
       .or(z.literal('')),
     dueDate: DateTimeLocalForm,
+    allowLateSubmissions: z.boolean().default(false),
+    lateCutoff: DateTimeLocalFormOptional,
     isPublished: z.boolean(),
     courseId: z.string().min(1, 'Course id is required.'),
   })
@@ -75,28 +164,78 @@ const BaseAssignmentFormSchema = z
 /**
  * CREATE: includes publish flag and rule: if publishing, maxPoints > 0.
  */
-export const CreateAssignmentSchema = BaseAssignmentSchema.extend({
+export const CreateAssignmentSchema = BaseAssignmentSchemaObject.extend({
   isPublished: z.boolean().default(false),
-});
+}).superRefine(validateLateSubmissionDates);
 
 /**
  * CREATE FORM: includes publish flag and rule: if publishing, maxPoints > 0.
  * Uses form-only date validation (no transformation)
  */
-export const CreateAssignmentFormSchema = BaseAssignmentFormSchema.extend({
-  isPublished: z.boolean(),
-});
+const AssignmentFormSchemaWithValidation = BaseAssignmentFormSchemaObject.superRefine(
+  validateLateSubmissionStrings,
+);
+
+export const CreateAssignmentFormSchema = AssignmentFormSchemaWithValidation;
 
 /**
  * UPDATE: partial base schema + id + optional isPublished with validation.
  */
-export const UpdateAssignmentSchema = BaseAssignmentFormSchema.partial().extend({
-  id: z.string().min(1, 'Assignment id is required.'),
-  isPublished: z.boolean().optional(),
-});
+export const UpdateAssignmentSchema = BaseAssignmentFormSchemaObject.partial()
+  .extend({
+    id: z.string().min(1, 'Assignment id is required.'),
+    isPublished: z.boolean().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (
+      data.allowLateSubmissions === undefined &&
+      data.lateCutoff === undefined &&
+      data.dueDate === undefined
+    ) {
+      return;
+    }
+
+    const allowLate = data.allowLateSubmissions ?? false;
+    const dueRaw = data.dueDate;
+    const cutoffRaw = data.lateCutoff;
+
+    if (!allowLate && !cutoffRaw) {
+      return;
+    }
+
+    if (allowLate && !cutoffRaw) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['lateCutoff'],
+        message: 'Provide a cutoff or disable late submissions.',
+      });
+      return;
+    }
+
+    if (!dueRaw || !cutoffRaw) return;
+
+    const dueDate = new Date(dueRaw);
+    const cutoffDate = new Date(cutoffRaw);
+
+    if (allowLate && cutoffDate < dueDate) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['lateCutoff'],
+        message: 'Cutoff must be on or after the due date.',
+      });
+    }
+
+    if (!allowLate && cutoffRaw) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['lateCutoff'],
+        message: 'Remove the cutoff or enable late submissions.',
+      });
+    }
+  });
 
 /** Export a form-only schema for UI, if you want the bare form without publish logic */
-export const AssignmentFormSchema = BaseAssignmentFormSchema;
+export const AssignmentFormSchema = AssignmentFormSchemaWithValidation;
 
 /** Types */
 export type CreateAssignmentInput = z.infer<typeof CreateAssignmentSchema>;
