@@ -140,7 +140,7 @@ export default function AssignmentDashboardPage() {
     setViewerSrc(src);
     setViewerTitle(`${original || fileName} - ${problem.title}`);
     setViewerOpen(true);
-	setJffType(problem.type);
+    setJffType(problem.type);
   };
 
   const openDescription = (text: string | null) => {
@@ -756,7 +756,7 @@ export default function AssignmentDashboardPage() {
         </TabsContent>
       </Tabs>
       {/* JFLAP Viewer Dialog */}
-      {viewerOpen && viewerSrc && ["FA", "PDA"].includes(jffType ?? "") && (
+      {viewerOpen && viewerSrc && ['FA', 'PDA'].includes(jffType ?? '') && (
         <JffViewerDialog
           open={viewerOpen}
           onOpenChange={setViewerOpen}
@@ -767,12 +767,22 @@ export default function AssignmentDashboardPage() {
           showGridDefault={true}
         />
       )}
-	  {viewerOpen && viewerSrc && ("RE" === jffType) && (
-        <RegexViewerDialog src={viewerSrc} open={viewerOpen} onOpenChange={setViewerOpen} title={viewerTitle}/>
-	  )}
-	  {viewerOpen && viewerSrc && ("CFG" === jffType) && (
-        <CfgViewerDialog src={viewerSrc} open={viewerOpen} onOpenChange={setViewerOpen} title={viewerTitle}/>
-	  )}
+      {viewerOpen && viewerSrc && 'RE' === jffType && (
+        <RegexViewerDialog
+          src={viewerSrc}
+          open={viewerOpen}
+          onOpenChange={setViewerOpen}
+          title={viewerTitle}
+        />
+      )}
+      {viewerOpen && viewerSrc && 'CFG' === jffType && (
+        <CfgViewerDialog
+          src={viewerSrc}
+          open={viewerOpen}
+          onOpenChange={setViewerOpen}
+          title={viewerTitle}
+        />
+      )}
       {/* Description dialog */}
       <Dialog open={descOpen} onOpenChange={(v) => setDescOpen(v)}>
         <DialogContent className="bg-white">
