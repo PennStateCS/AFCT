@@ -38,7 +38,7 @@ export default async function LoginLayout({ children }: { children: React.ReactN
       aria-label="Login page"
       className="bg-background text-foreground flex min-h-screen w-full items-center justify-center font-sans"
     >
-      <section aria-label="Authentication panel" className="w-full">
+      <section aria-label="Authentication panel" className="w-full px-4 py-6">
         {children}
       </section>
     </main>
