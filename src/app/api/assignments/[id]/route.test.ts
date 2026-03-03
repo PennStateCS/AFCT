@@ -6,10 +6,9 @@ const prismaMock = vi.hoisted(() => ({
   roster: { findFirst: vi.fn() },
   assignmentProblem: { findFirst: vi.fn(), deleteMany: vi.fn() },
   assignmentGrade: { findFirst: vi.fn() },
-  submission: { findFirst: vi.fn() },
+  submission: { findFirst: vi.fn(), count: vi.fn() },
   user: { findUnique: vi.fn() },
   systemSettings: { findUnique: vi.fn() },
-  submission: { count: vi.fn() },
   comment: { count: vi.fn() },
 }));
 
@@ -343,7 +342,7 @@ describe('PATCH /api/assignments/[id]', () => {
 
   it('prevents changing group mode if submissions exist', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
-    prismaMock.submission.findFirst.mockResolvedValue({ id: 's1' });
+    prismaMock.submission.count.mockResolvedValue(1);
 
     const req = new NextRequest('http://localhost/api/assignments/a1', {
       method: 'PATCH',

@@ -25,7 +25,7 @@ export async function DELETE(
     // Only global ADMIN or course-level ADMIN/FACULTY/TA may attempt removal
     if (
       currentUser.role !== 'ADMIN' &&
-      !['INSTRUCTOR', 'FACULTY', 'TA'].includes(currentCourseRole ?? '')
+      !['ADMIN', 'INSTRUCTOR', 'FACULTY', 'TA'].includes(currentCourseRole ?? '')
     ) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -45,13 +45,19 @@ export async function DELETE(
     if (
       currentCourseRole === 'FACULTY' &&
       targetRoster &&
-      (targetRoster.role === 'INSTRUCTOR' || targetRoster.role === 'FACULTY')
+      (targetRoster.role === 'ADMIN' ||
+        targetRoster.role === 'INSTRUCTOR' ||
+        targetRoster.role === 'FACULTY')
     ) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // Course admins may not remove other course admins
-    if (currentCourseRole === 'INSTRUCTOR' && targetRoster && targetRoster.role === 'INSTRUCTOR') {
+    if (
+      (currentCourseRole === 'ADMIN' || currentCourseRole === 'INSTRUCTOR') &&
+      targetRoster &&
+      (targetRoster.role === 'ADMIN' || targetRoster.role === 'INSTRUCTOR')
+    ) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -60,7 +66,9 @@ export async function DELETE(
       where: { courseId },
       select: { id: true },
     });
-    const assignmentIdList = assignmentIds.map((a: (typeof assignmentIds)[number]) => a.id);
+    const assignmentIdList = Array.isArray(assignmentIds)
+      ? assignmentIds.map((a: (typeof assignmentIds)[number]) => a.id)
+      : [];
 
     if (assignmentIdList.length > 0) {
       const existingSubmission = await prisma.submission.findFirst({
@@ -201,9 +209,14 @@ export async function PATCH(
 
     // Prevent demoting the only faculty member
     if (target.role === 'INSTRUCTOR' && newRole !== 'INSTRUCTOR') {
-      const instructorCount = await prisma.roster.count({ where: { courseId, role: 'INSTRUCTOR' } });
+      const instructorCount = await prisma.roster.count({
+        where: { courseId, role: 'INSTRUCTOR' },
+      });
       if (instructorCount <= 1) {
-        return NextResponse.json({ error: 'Cannot demote the only course instructor' }, { status: 400 });
+        return NextResponse.json(
+          { error: 'Cannot demote the only course instructor' },
+          { status: 400 },
+        );
       }
     }
 

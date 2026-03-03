@@ -3,7 +3,7 @@ import { ActivityCard } from '@/components/ActivityCard';
 import { AssignmentsCard } from '@/components/AssignmentsCard';
 import { ProblemsCard } from '@/components/ProblemsCard';
 import { RosterCard } from '@/components/RosterCard';
-import GradesCard from '@/components/GradesCard';
+import { PrivilegeGradesCard } from '@/components/PrivilegeGradesCard';
 import GroupsCard from '@/components/GroupsCard';
 import { userColumns } from '@/app/dashboard/courses/[id]/user-columns';
 import { useAssignmentColumns } from '@/app/dashboard/courses/[id]/assignment-columns';
@@ -89,21 +89,30 @@ export function AdminCourseView({
           className="data-[state=active]:bg-secondary w-50 hover:bg-gray-200 data-[state=active]:text-white"
           value="roster"
         >
-          <div className="flex items-center gap-2"><GraduationCap className="h-4 w-4" />Roster</div>
+          <div className="flex items-center gap-2">
+            <GraduationCap className="h-4 w-4" />
+            Roster
+          </div>
         </TabsTrigger>
 
         <TabsTrigger
           className="data-[state=active]:bg-secondary w-50 hover:bg-gray-200 data-[state=active]:text-white"
           value="grades"
         >
-          <div className="flex items-center gap-2"><Stamp className="h-4 w-4" />Grades</div>
+          <div className="flex items-center gap-2">
+            <Stamp className="h-4 w-4" />
+            Grades
+          </div>
         </TabsTrigger>
 
         <TabsTrigger
-          className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white hover:bg-gray-200"
+          className="data-[state=active]:bg-secondary w-50 hover:bg-gray-200 data-[state=active]:text-white"
           value="groups"
         >
-          <div className="flex items-center gap-2"><Users className="h-4 w-4" />Groups</div>
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            Groups
+          </div>
         </TabsTrigger>
 
         <TabsTrigger
@@ -173,16 +182,13 @@ export function AdminCourseView({
       </TabsContent>
 
       <TabsContent value="groups" className="animate-fade-in-up transition-opacity duration-300">
-        <div className="space-y-6 mb-8">
+        <div className="mb-8 space-y-6">
           <GroupsCard courseId={course.id} />
         </div>
       </TabsContent>
 
-      <TabsContent
-        value="activity"
-        className="animate-fade-in-up transition-opacity duration-300"
-      >
-        <div className="space-y-6 mb-8">
+      <TabsContent value="activity" className="animate-fade-in-up transition-opacity duration-300">
+        <div className="mb-8 space-y-6">
           <ActivityCard courseId={course.id} />
         </div>
       </TabsContent>

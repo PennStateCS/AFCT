@@ -197,9 +197,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   // Prevent changing the assignment's group mode if submissions exist
   if (data.isGroup !== undefined) {
-    const hasAnySubmission = !!(await prisma.submission.findFirst({ where: { assignmentId: id } }));
+    const hasAnySubmission = (await prisma.submission.count({ where: { assignmentId: id } })) > 0;
     if (hasAnySubmission) {
-      return NextResponse.json({ error: 'Cannot change assignment group mode after submissions exist' }, { status: 403 });
+      return NextResponse.json(
+        { error: 'Cannot change assignment group mode after submissions exist' },
+        { status: 403 },
+      );
     }
   }
 
@@ -234,7 +237,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         title: data.title,
         description: data.description,
         dueDate: toEndOfDayInTimezone(data.dueDate, userTimezone),
-        maxPoints: data.maxPoints,
+        allowLateSubmissions,
+        lateCutoff,
         isPublished: data.isPublished,
         isGroup: data.isGroup === undefined ? undefined : data.isGroup,
       },
@@ -277,7 +281,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const userTimezone = await resolveUserTimezone(session.user.id);
 
   // Make sure the assignment does not have any submissions or grades when unpublishing
-  if (!data.isPublished) {
+  if (data.isPublished === false) {
     // Note logic appears swapped for isPublished, but that is because isPublished is the next state
     const hasSubmission = !!(await prisma.assignmentProblem.findFirst({
       where: { assignmentId: id, submissions: { some: {} } },
@@ -303,9 +307,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   // Prevent changing the assignment's group mode if submissions exist
   if (data.isGroup !== undefined) {
-    const hasAnySubmission = !!(await prisma.submission.findFirst({ where: { assignmentId: id } }));
+    const hasAnySubmission = (await prisma.submission.count({ where: { assignmentId: id } })) > 0;
     if (hasAnySubmission) {
-      return NextResponse.json({ error: 'Cannot change assignment group mode after submissions exist' }, { status: 403 });
+      return NextResponse.json(
+        { error: 'Cannot change assignment group mode after submissions exist' },
+        { status: 403 },
+      );
     }
   }
 
@@ -340,6 +347,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       title?: string;
       description?: string;
       dueDate?: Date;
+      allowLateSubmissions?: boolean;
+      lateCutoff?: Date | null;
       isPublished?: boolean;
       isGroup?: boolean;
     } = {};
@@ -348,6 +357,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (data.description !== undefined) updateData.description = data.description;
     if (data.dueDate !== undefined) {
       updateData.dueDate = effectiveDueDate;
+    }
+    if (data.allowLateSubmissions !== undefined) {
+      updateData.allowLateSubmissions = allowLateSubmissions;
+    }
+    if (data.lateCutoff !== undefined) {
+      updateData.lateCutoff = lateCutoff;
     }
     if (data.isPublished !== undefined) updateData.isPublished = data.isPublished;
     if (data.isGroup !== undefined) updateData.isGroup = data.isGroup;
@@ -450,7 +465,6 @@ export async function POST(req: NextRequest) {
         courseId: created.courseId,
         assignmentId: created.id,
         title: created.title,
-        maxPoints: created.maxPoints,
         isGroup: created.isGroup,
       },
     });

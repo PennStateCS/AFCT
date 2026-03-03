@@ -35,14 +35,17 @@ type ProblemSettingsPayload = ProblemConfig & { problemId: string };
 type AddProblemModalProps = {
   open: boolean;
   onClose: () => void;
-  courseId: string;
+  courseId?: string;
   assignmentId?: string;
   courseIsArchived: boolean;
   allProblems: Problem[];
   usedProblems: Problem[];
+  defaultMaxPoints?: number;
+  defaultMaxSubmissions?: number;
+  defaultAutograderEnabled?: boolean;
   // optionally pass a groupId when adding problems; returns a Promise so the dialog
   // can await the parent-side API operation (no Promise.resolve wrapper needed)
-  onAddProblems: (problemIds: string[], groupId?: string) => Promise<void>;
+  onAddProblems: (problemIds: string[], groupId?: string) => void | Promise<void>;
 };
 
 const TYPE_COLORS: Record<string, string> = {
@@ -110,6 +113,14 @@ export function AssociateProblemsDialog({
       setGroupProblemsMap({});
 
       try {
+        if (!courseId) {
+          setAssignmentIsGroup(false);
+          setGroups([]);
+          setGroupProblemsMap({});
+          setInternalOpen(true);
+          return;
+        }
+
         // Determine assignment group support
         let isGroup = false;
         if (assignmentId) {
@@ -354,6 +365,17 @@ export function AssociateProblemsDialog({
     const groupIdToSend = selectedGroupId === 'ALL' ? undefined : selectedGroupId;
 
     try {
+      if (allProblemIds.length > 0) {
+        await onAddProblems(allProblemIds, groupIdToSend);
+      }
+
+      if (!assignmentId || !courseId) {
+        setMovedProblems([]);
+        setInternalOpen(false);
+        onClose();
+        return;
+      }
+
       // If there are removals from a specific group, call the DELETE endpoint for group mappings first
       if (groupIdToSend && removedProblemIds.length > 0) {
         try {

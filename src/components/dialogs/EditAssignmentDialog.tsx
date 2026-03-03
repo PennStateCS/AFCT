@@ -206,10 +206,9 @@ export function EditAssignmentDialog({
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...payload,
-          maxPoints: Number(payload.maxPoints), // Convert to number for API
-          dueDate: payload.dueDate,
-          isGroup: payload.isGroup ?? false,
+          ...preparedPayload,
+          dueDate: preparedPayload.dueDate,
+          isGroup: preparedPayload.isGroup ?? false,
         }),
       });
       if (!res.ok) {
@@ -253,8 +252,6 @@ export function EditAssignmentDialog({
             Update the assignment details and save your changes.
           </DialogDescription>
         </DialogHeader>
-
-
 
         <form className="space-y-4" onSubmit={onSubmitWrapper}>
           {/* Title */}
@@ -313,23 +310,6 @@ export function EditAssignmentDialog({
             )}
           />
 
-          {/* Max Points */}
-          <Controller
-            name="maxPoints"
-            control={control}
-            render={({ field }) => (
-              <InputGroup
-                label="Max Points"
-                name="maxPoints"
-                type="number"
-                fieldProps={field}
-                min={0}
-                step={1}
-                error={errors.maxPoints?.message}
-              />
-            )}
-          />
-
           {/* Is a group assignment switch */}
           <Controller
             name="isGroup"
@@ -337,7 +317,12 @@ export function EditAssignmentDialog({
             render={({ field }) => (
               <div className="flex items-center justify-between">
                 <Label htmlFor="isGroup">Group Assignment</Label>
-                <Switch id="isGroup" checked={!!field.value} onCheckedChange={field.onChange} onBlur={field.onBlur} />
+                <Switch
+                  id="isGroup"
+                  checked={!!field.value}
+                  onCheckedChange={field.onChange}
+                  onBlur={field.onBlur}
+                />
               </div>
             )}
           />
@@ -438,8 +423,6 @@ export function EditAssignmentDialog({
             </Button>
           </DialogFooter>
         </form>
-
-
       </DialogContent>
     </Dialog>
   );
