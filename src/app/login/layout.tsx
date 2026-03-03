@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 
@@ -19,6 +19,9 @@ export const metadata: Metadata = {
     title: 'AFCT Dashboard - Login',
     description: 'Sign in to the AFCT Dashboard to manage courses, assignments, and submissions.',
   },
+};
+
+export const viewport: Viewport = {
   themeColor: '#0F172A',
 };
 

@@ -4,6 +4,7 @@ const prismaMock = vi.hoisted(() => ({
   assignment: { findFirst: vi.fn(), findUnique: vi.fn() },
   problem: { findFirst: vi.fn() },
   assignmentProblem: { deleteMany: vi.fn() },
+  groupAssignmentProblem: { deleteMany: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -99,6 +100,8 @@ describe('POST /api/courses/[id]/[aid]/remove-problem', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.problems).toHaveLength(1);
+    // Ensure group mappings were removed along with the assignmentProblem link
+    expect(prismaMock.groupAssignmentProblem.deleteMany).toHaveBeenCalledWith({ where: { assignmentId: 'a1', problemId: 'p1' } });
     expect(activityLogMock).toHaveBeenCalled();
   });
 });

@@ -58,9 +58,10 @@ export function EditProblemDialog({
     () => ({
       title: problem.title ?? '',
       description: problem.description ?? '',
-      maxSubmissions: problem.maxSubmissions,
-      isUnlimitedSubmissions: problem.maxSubmissions == null || problem.maxSubmissions < 0,
-      maxPoints: problem.maxPoints,
+      maxSubmissions: typeof problem.maxSubmissions === 'number' ? problem.maxSubmissions : 1,
+      isUnlimitedSubmissions:
+        typeof problem.maxSubmissions === 'number' ? problem.maxSubmissions < 0 : false,
+      maxPoints: typeof problem.maxPoints === 'number' ? problem.maxPoints : 1,
       type: problem.type as z.infer<typeof ProblemTypeEnum>,
       isUnlimitedStates: problem.maxStates == null || problem.maxStates < 0,
       maxStates: problem.maxStates ?? undefined,
@@ -68,7 +69,8 @@ export function EditProblemDialog({
         problem.type === 'FA'
           ? !!(problem as Problem & { isDeterministic?: boolean }).isDeterministic
           : false,
-      autograderEnabled: !!(problem as Problem & { autograderEnabled?: boolean }).autograderEnabled,
+      autograderEnabled:
+        (problem as Problem & { autograderEnabled?: boolean }).autograderEnabled ?? true,
       file: undefined as File | undefined, // optional in edit; user can choose a new file
       courseId: problem.courseId,
     }),
@@ -207,12 +209,21 @@ export function EditProblemDialog({
       // 2) Enforce update contract with id (file stays optional)
       const payload = UpdateProblemSchema.parse({ id: problem.id, ...parsed });
 
+      const effectiveMaxSubmissions = assignmentSettings
+        ? assignmentConfig.maxSubmissions
+        : payload.isUnlimitedSubmissions
+          ? -1
+          : (payload.maxSubmissions ?? 0);
+      const effectiveMaxPoints = assignmentSettings
+        ? assignmentConfig.maxPoints
+        : (payload.maxPoints ?? 0);
+
       const formData = new FormData();
       formData.append('title', payload.title ?? '');
       formData.append('description', payload.description ?? '');
       formData.append('type', payload.type ?? '');
-      formData.append('maxSubmissions', String(payload.isUnlimitedSubmissions ? -1 : payload.maxSubmissions ?? 0));
-      formData.append('maxPoints', String(payload.maxPoints ?? 0));
+      formData.append('maxSubmissions', String(effectiveMaxSubmissions));
+      formData.append('maxPoints', String(effectiveMaxPoints));
       formData.append('autograderEnabled', String(payload.autograderEnabled));
       formData.append('courseId', payload.courseId ?? '');
 
@@ -369,82 +380,189 @@ export function EditProblemDialog({
             )}
           />
 
-          {/* Max Submissions */}
-          <Controller
-            control={control}
-            name="maxSubmissions"
-            render={({ field }) => (
-              <div>
-                <InputGroup
-                  label="Max Submissions"
-                  name="maxSubmissions"
-                  type="number"
-                  fieldProps={{
-                    ...field,
-                    value: isUnlimitedSubmissions ? '' : String(field.value || ''),
-                  }}
-                  min={1}
-                  max={1_000}
-                  disabled={isUnlimitedSubmissions}
-                  error={errors.maxSubmissions?.message}
-                />
-                <div className="mt-1 flex items-center gap-2">
-                  <Controller
-                    control={control}
-                    name="isUnlimitedSubmissions"
-                    render={({ field: uf }) => (
-                      <>
-                        <input
-                          type="checkbox"
-                          checked={!!uf.value}
-                          onChange={(e) => uf.onChange(e.target.checked)}
-                        />
-                        <span className="text-muted-foreground text-sm">Unlimited</span>
-                      </>
-                    )}
+          {assignmentSettings ? (
+            <>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <Label htmlFor="assignment-max-points" className="mb-2 block">
+                    Max Points
+                  </Label>
+                  <Input
+                    id="assignment-max-points"
+                    type="number"
+                    min={0}
+                    step="1"
+                    value={assignmentConfig.maxPoints ?? 0}
+                    onChange={(event) => {
+                      const next = Number(event.target.value);
+                      if (!Number.isFinite(next)) return;
+                      setAssignmentConfig((prev) => ({
+                        ...prev,
+                        maxPoints: Math.max(0, Math.floor(next)),
+                      }));
+                    }}
+                    className="sm:flex-1"
                   />
+                  {assignmentMaxPointsInvalid ? (
+                    <p className="mt-1 text-xs text-red-600">Max points must be zero or greater.</p>
+                  ) : null}
+                </div>
+
+                <div>
+                  <Label htmlFor="assignment-max-submissions" className="mb-2 block">
+                    Max Submissions
+                  </Label>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <Input
+                      id="assignment-max-submissions"
+                      type="number"
+                      min={1}
+                      step="1"
+                      value={
+                        assignmentConfig.maxSubmissions === -1
+                          ? ''
+                          : assignmentConfig.maxSubmissions
+                      }
+                      disabled={assignmentConfig.maxSubmissions === -1}
+                      onChange={(event) => {
+                        const next = Number(event.target.value);
+                        if (!Number.isFinite(next)) return;
+                        setAssignmentConfig((prev) => ({
+                          ...prev,
+                          maxSubmissions: Math.max(1, Math.floor(next)),
+                        }));
+                      }}
+                      className="sm:flex-1"
+                    />
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        id="assignment-unlimited-submissions"
+                        checked={assignmentConfig.maxSubmissions === -1}
+                        onCheckedChange={(checked) =>
+                          setAssignmentConfig((prev) => ({
+                            ...prev,
+                            maxSubmissions: checked
+                              ? -1
+                              : Math.max(1, prev.maxSubmissions === -1 ? 1 : prev.maxSubmissions),
+                          }))
+                        }
+                      />
+                      <Label htmlFor="assignment-unlimited-submissions" className="text-sm">
+                        Unlimited
+                      </Label>
+                    </div>
+                  </div>
+                  {assignmentConfig.maxSubmissions !== -1 && assignmentConfig.maxSubmissions < 1 ? (
+                    <p className="mt-1 text-xs text-red-600">
+                      Max submissions must be at least 1 or unlimited.
+                    </p>
+                  ) : null}
                 </div>
               </div>
-            )}
-          />
 
-          {/* Max Grade */}
-          <Controller
-            control={control}
-            name="maxPoints"
-            render={({ field }) => (
-              <div>
-                <InputGroup
-                  label="Max Points"
-                  name="maxPoints"
-                  type="number"
-                  fieldProps={{
-                    ...field,
-                    value: String(field.value),
-                  }}
-                  min={1}
-                  max={10_000}
-                  error={errors.maxPoints?.message}
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="assignment-automatic-grading" className="text-sm font-semibold">
+                    Automatic Grading
+                  </Label>
+                  <p className="text-muted-foreground text-xs">
+                    Controls automatic grading for this assignment only.
+                  </p>
+                </div>
+                <Switch
+                  id="assignment-automatic-grading"
+                  checked={assignmentConfig.autograderEnabled}
+                  onCheckedChange={(checked) =>
+                    setAssignmentConfig((prev) => ({
+                      ...prev,
+                      autograderEnabled: !!checked,
+                    }))
+                  }
                 />
               </div>
-            )}
-          />
-
-          {/* Automatic Grading */ }
-          <div className="flex items-center justify-between">
-            <Label htmlFor="autograderEnabled">Automatic Grading</Label>
-            <Controller
-              control={control}
-              name="autograderEnabled"
-              render={({ field }) => (
-                <Switch
-                  id="autograderEnabled"
-                  checked={!!field.value}
-                  onCheckedChange={(checked) => field.onChange(!!checked)}
+            </>
+          ) : (
+            <>
+              <div className="grid gap-4 md:grid-cols-2">
+                {/* Max Submissions */}
+                <Controller
+                  control={control}
+                  name="maxSubmissions"
+                  render={({ field }) => (
+                    <div>
+                      <InputGroup
+                        label="Problem Max Submissions"
+                        name="maxSubmissions"
+                        type="number"
+                        fieldProps={{
+                          ...field,
+                          value: isUnlimitedSubmissions ? '' : String(field.value || ''),
+                        }}
+                        min={1}
+                        max={1_000}
+                        disabled={isUnlimitedSubmissions}
+                        error={errors.maxSubmissions?.message}
+                      />
+                      <div className="mt-1 flex items-center gap-2">
+                        <Controller
+                          control={control}
+                          name="isUnlimitedSubmissions"
+                          render={({ field: uf }) => (
+                            <>
+                              <input
+                                type="checkbox"
+                                checked={!!uf.value}
+                                onChange={(e) => uf.onChange(e.target.checked)}
+                              />
+                              <span className="text-muted-foreground text-sm">Unlimited</span>
+                            </>
+                          )}
+                        />
+                      </div>
+                    </div>
+                  )}
                 />
-              )}
-            />
-          </div>
+
+                {/* Max Grade */}
+                <Controller
+                  control={control}
+                  name="maxPoints"
+                  render={({ field }) => (
+                    <div>
+                      <InputGroup
+                        label="Problem Max Points"
+                        name="maxPoints"
+                        type="number"
+                        fieldProps={{
+                          ...field,
+                          value: String(field.value),
+                        }}
+                        min={1}
+                        max={10_000}
+                        error={errors.maxPoints?.message}
+                      />
+                    </div>
+                  )}
+                />
+              </div>
+
+              {/* Automatic Grading */}
+              <div className="flex items-center justify-between">
+                <Label htmlFor="autograderEnabled">Automatic Grading</Label>
+                <Controller
+                  control={control}
+                  name="autograderEnabled"
+                  render={({ field }) => (
+                    <Switch
+                      id="autograderEnabled"
+                      checked={!!field.value}
+                      onCheckedChange={(checked) => field.onChange(!!checked)}
+                    />
+                  )}
+                />
+              </div>
+            </>
+          )}
 
           {/* Max States (FA/PDA only) */}
           {(type === 'FA' || type === 'PDA') && (
@@ -528,111 +646,6 @@ export function EditProblemDialog({
               </div>
             )}
           />
-
-          {assignmentSettings ? (
-            <div className="rounded-md border p-4">
-              <div className="mb-3">
-                <p className="text-sm font-semibold">Assignment Settings</p>
-                <p className="text-muted-foreground text-xs">
-                  These limits apply only to this assignment.
-                </p>
-              </div>
-              <div className="grid gap-4">
-                <div>
-                  <Label htmlFor="assignment-max-points" className="mb-2 block">
-                    Max Points
-                  </Label>
-                  <Input
-                    id="assignment-max-points"
-                    type="number"
-                    min={0}
-                    step="1"
-                    value={assignmentConfig.maxPoints ?? 0}
-                    onChange={(event) => {
-                      const next = Number(event.target.value);
-                      if (!Number.isFinite(next)) return;
-                      setAssignmentConfig((prev) => ({
-                        ...prev,
-                        maxPoints: Math.max(0, Math.floor(next)),
-                      }));
-                    }}
-                    className="sm:flex-1"
-                  />
-                  {assignmentMaxPointsInvalid ? (
-                    <p className="mt-1 text-xs text-red-600">Max points must be zero or greater.</p>
-                  ) : null}
-                </div>
-                <div>
-                  <Label htmlFor="assignment-max-submissions" className="mb-2 block">
-                    Max Submissions
-                  </Label>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <Input
-                      id="assignment-max-submissions"
-                      type="number"
-                      min={1}
-                      step="1"
-                      value={
-                        assignmentConfig.maxSubmissions === -1
-                          ? ''
-                          : assignmentConfig.maxSubmissions
-                      }
-                      disabled={assignmentConfig.maxSubmissions === -1}
-                      onChange={(event) => {
-                        const next = Number(event.target.value);
-                        if (!Number.isFinite(next)) return;
-                        setAssignmentConfig((prev) => ({
-                          ...prev,
-                          maxSubmissions: Math.max(1, Math.floor(next)),
-                        }));
-                      }}
-                      className="sm:flex-1"
-                    />
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        id="assignment-unlimited-submissions"
-                        checked={assignmentConfig.maxSubmissions === -1}
-                        onCheckedChange={(checked) =>
-                          setAssignmentConfig((prev) => ({
-                            ...prev,
-                            maxSubmissions: checked
-                              ? -1
-                              : Math.max(1, prev.maxSubmissions === -1 ? 1 : prev.maxSubmissions),
-                          }))
-                        }
-                      />
-                      <Label htmlFor="assignment-unlimited-submissions" className="text-sm">
-                        Unlimited
-                      </Label>
-                    </div>
-                  </div>
-                  {assignmentConfig.maxSubmissions !== -1 && assignmentConfig.maxSubmissions < 1 ? (
-                    <p className="mt-1 text-xs text-red-600">
-                      Max submissions must be at least 1 or unlimited.
-                    </p>
-                  ) : null}
-                </div>
-                <div className="flex items-center justify-between rounded-md border px-3 py-2">
-                  <div>
-                    <p className="text-sm font-semibold">Automatic Grading</p>
-                    <p className="text-muted-foreground text-xs">
-                      Controls automatic grading for this assignment only.
-                    </p>
-                  </div>
-                  <Switch
-                    id="assignment-automatic-grading"
-                    checked={assignmentConfig.autograderEnabled}
-                    onCheckedChange={(checked) =>
-                      setAssignmentConfig((prev) => ({
-                        ...prev,
-                        autograderEnabled: !!checked,
-                      }))
-                    }
-                  />
-                </div>
-              </div>
-            </div>
-          ) : null}
 
           <DialogFooter className="mt-4">
             <DialogClose asChild>
