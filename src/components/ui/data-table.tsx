@@ -109,9 +109,15 @@ export function DataTable<TData, TValue>({
     // and internal row caching won't mix rows between pages. Defaults to
     // index-based ids which can cause cells to show stale values when
     // navigating pages.
-    getRowId: (row: TData) => {
+    // provide a stable id for each row; fall back to the index if no
+    // identifier property is available. Previously we returned an empty
+    // string when `id`/`_id` was missing which caused duplicate-key
+    // warnings (see GradeBreakdownDialog). Using the index guarantees
+    // uniqueness across the current page and avoids rendering errors.
+    getRowId: (row: TData, index: number) => {
       const r = row as unknown as Record<string, unknown>;
-      return String(r.id ?? r._id ?? '');
+      // prefer known id properties, otherwise use the row index
+      return String(r.id ?? r._id ?? index);
     },
     state: {
       globalFilter,
