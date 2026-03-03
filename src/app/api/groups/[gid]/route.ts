@@ -5,11 +5,14 @@ import { UpdateGroupSchema } from '@/schemas/group';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 // PATCH: update group name
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string; gid: string }> }) {
-  const { id: courseId, gid } = await params;
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ gid: string; id?: string }> },
+) {
+  const { id: providedCourseId, gid } = await params;
 
-  if (!courseId || !gid) {
-    return NextResponse.json({ error: 'Missing course or group ID' }, { status: 400 });
+  if (!gid) {
+    return NextResponse.json({ error: 'Missing group ID' }, { status: 400 });
   }
 
   const session = await auth();
@@ -24,17 +27,27 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     const body = await req.json();
     const parsed = UpdateGroupSchema.safeParse(body);
-    if (!parsed.success) return NextResponse.json({ error: parsed.error.errors.map((e) => e.message).join(', ') }, { status: 400 });
+    if (!parsed.success)
+      return NextResponse.json(
+        { error: parsed.error.errors.map((e) => e.message).join(', ') },
+        { status: 400 },
+      );
 
     const { name } = parsed.data;
 
     const group = await prisma.group.findUnique({ where: { id: gid } });
     if (!group) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
-    if (group.courseId !== courseId) return NextResponse.json({ error: 'Group does not belong to this course' }, { status: 400 });
+    if (providedCourseId && group.courseId !== providedCourseId)
+      return NextResponse.json({ error: 'Group does not belong to this course' }, { status: 400 });
+    const courseId = group.courseId;
 
     // check unique constraint
     const exists = await prisma.group.findUnique({ where: { courseId_name: { courseId, name } } });
-    if (exists && exists.id !== gid) return NextResponse.json({ error: 'Group name already exists for this course' }, { status: 409 });
+    if (exists && exists.id !== gid)
+      return NextResponse.json(
+        { error: 'Group name already exists for this course' },
+        { status: 409 },
+      );
 
     const updated = await prisma.group.update({ where: { id: gid }, data: { name } });
 
@@ -53,11 +66,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 // DELETE: remove group
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string; gid: string }> }) {
-  const { id: courseId, gid } = await params;
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ gid: string; id?: string }> },
+) {
+  const { id: providedCourseId, gid } = await params;
 
-  if (!courseId || !gid) {
-    return NextResponse.json({ error: 'Missing course or group ID' }, { status: 400 });
+  if (!gid) {
+    return NextResponse.json({ error: 'Missing group ID' }, { status: 400 });
   }
 
   const session = await auth();
@@ -72,7 +88,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     const group = await prisma.group.findUnique({ where: { id: gid } });
     if (!group) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
-    if (group.courseId !== courseId) return NextResponse.json({ error: 'Group does not belong to this course' }, { status: 400 });
+    if (providedCourseId && group.courseId !== providedCourseId)
+      return NextResponse.json({ error: 'Group does not belong to this course' }, { status: 400 });
+    const courseId = group.courseId;
 
     await prisma.group.delete({ where: { id: gid } });
 
