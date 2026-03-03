@@ -179,7 +179,7 @@ function ProblemList({ problems, submissions, selectedProblemId, onSelect }: Pro
           variant="secondary"
           className="border-transparent bg-slate-100 text-[10px] font-medium text-slate-700"
         >
-          No submissions
+          0
         </Badge>
       );
     }
