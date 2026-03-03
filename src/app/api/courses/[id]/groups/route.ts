@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 // GET: list groups for a course
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
   if (!id) {
@@ -21,7 +21,10 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 
   try {
-    const groups = await prisma.group.findMany({ where: { courseId: id }, orderBy: { name: 'asc' } });
+    const groups = await prisma.group.findMany({
+      where: { courseId: id },
+      orderBy: { name: 'asc' },
+    });
 
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
@@ -38,7 +41,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 }
 
 // POST: supports both create and "list via body" to avoid client-side use of AbortController.signal.
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
   if (!id) {
@@ -60,7 +63,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // Support a POST body { action: 'list' } so clients don't need to use AbortController.signal
     if (data?.action === 'list') {
       try {
-        const groups = await prisma.group.findMany({ where: { courseId: id }, orderBy: { name: 'asc' } });
+        const groups = await prisma.group.findMany({
+          where: { courseId: id },
+          orderBy: { name: 'asc' },
+        });
         await createEnhancedActivityLog(prisma, req, {
           userId: session.user.id,
           action: 'VIEW_GROUPS',
@@ -84,8 +90,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (!course) return NextResponse.json({ error: 'Course not found' }, { status: 404 });
 
     // Prevent duplicates (composite unique: [courseId, name])
-    const exists = await prisma.group.findUnique({ where: { courseId_name: { courseId: id, name } } });
-    if (exists) return NextResponse.json({ error: 'Group name already exists for this course' }, { status: 409 });
+    const exists = await prisma.group.findUnique({
+      where: { courseId_name: { courseId: id, name } },
+    });
+    if (exists)
+      return NextResponse.json(
+        { error: 'Group name already exists for this course' },
+        { status: 409 },
+      );
 
     const group = await prisma.group.create({ data: { name, courseId: id } });
 

@@ -84,7 +84,7 @@ const InputGroupMock = ({
   description,
   error,
 }: InputGroupProps) => {
-  const { ref: _ref, ...restFieldProps } = fieldProps ?? {};
+  const restFieldProps = fieldProps ?? {};
   const resolvedValue = value ?? (restFieldProps?.value !== undefined ? restFieldProps.value : '');
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
