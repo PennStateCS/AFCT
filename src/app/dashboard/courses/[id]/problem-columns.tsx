@@ -8,6 +8,8 @@ import { ChevronDown, Pencil, Trash2, FileText, Eye } from 'lucide-react';
 import { Badge } from '@/components/ui/RoleBadge';
 import { Button } from '@/components/ui/button';
 import JffViewerDialog from '@/components/JffViewerDialog';
+import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
+import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
 import { formatDateInTimeZone } from '@/lib/date';
 import {
   DropdownMenu,
@@ -166,16 +168,36 @@ export const useProblemColumns = ({
     },
   ];
 
-  const viewDialog = openDialog.problem ? (
-    <JffViewerDialog
-      open={openDialog.open}
-      onOpenChange={(open) => setOpenDialog({ open, problem: open ? openDialog.problem : null })}
-      src={`/api/solutions/${encodeURIComponent(openDialog.problem.fileName ?? '')}`}
-      title={`${openDialog.problem.originalFileName || openDialog.problem.fileName} - Problem`}
-      width="70vw"
-      height="70vh"
-    />
-  ) : null;
-
+  const viewDialog = (() => {
+	if (!openDialog.problem) return null;
+    switch (openDialog.problem.type){
+      case "FA":
+	  case "PDA":
+        return <JffViewerDialog
+          open={openDialog.open}
+          onOpenChange={(open) => setOpenDialog({ open, problem: open ? openDialog.problem : null })}
+          src={`/api/solutions/${encodeURIComponent(openDialog.problem.fileName ?? '')}`}
+          title={`${openDialog.problem.originalFileName || openDialog.problem.fileName} - Problem`}
+          width="70vw"
+          height="70vh"
+        />;
+	  case "RE":
+        return <RegexViewerDialog
+          open={openDialog.open}
+          onOpenChange={(open) => setOpenDialog({ open, problem: open ? openDialog.problem : null })}
+          src={`/api/solutions/${encodeURIComponent(openDialog.problem.fileName ?? '')}`}
+          title={`${openDialog.problem.originalFileName || openDialog.problem.fileName} - Problem`}
+        />;
+	  case "CFG":
+        return <CfgViewerDialog
+          open={openDialog.open}
+          onOpenChange={(open) => setOpenDialog({ open, problem: open ? openDialog.problem : null })}
+          src={`/api/solutions/${encodeURIComponent(openDialog.problem.fileName ?? '')}`}
+          title={`${openDialog.problem.originalFileName || openDialog.problem.fileName} - Problem`}
+        />;
+      default:
+	    return null;
+	}
+  })();
   return { columns, viewDialog };
 };

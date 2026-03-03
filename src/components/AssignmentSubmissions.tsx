@@ -24,6 +24,8 @@ import ProblemHeader from './ProblemHeader';
 import ProblemGradeForm from './ProblemGradeForm';
 import SubmissionActionsMenu from './SubmissionActionsMenu';
 import WorkspacePanel from './WorkspacePanel';
+import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
+import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
 
 type Person = Pick<User, 'firstName' | 'lastName' | 'id'>;
 
@@ -1104,18 +1106,41 @@ export default function AssignmentSubmissions({
         </Card>
       )}
 
-      {openDialog.submission && (
-        <JffViewerDialog
-          open={openDialog.open}
-          onOpenChange={(open) => setOpenDialog({ open, submission: null })}
-          src={`/api/uploads/submissions/${encodeURIComponent(
-            openDialog.submission.fileName ?? '',
-          )}`}
-          title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
-          width="70vw"
-          height="70vh"
-        />
-      )}
+      {openDialog.submission &&
+        ['FA', 'PDA'].includes(problems.find((p) => p.id === selectedProblemId)?.type ?? '') && (
+          <JffViewerDialog
+            open={openDialog.open}
+            onOpenChange={(open) => setOpenDialog({ open, submission: null })}
+            src={`/api/uploads/submissions/${encodeURIComponent(
+              openDialog.submission.fileName ?? '',
+            )}`}
+            title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
+            width="70vw"
+            height="70vh"
+          />
+        )}
+      {openDialog.submission &&
+        (problems.find((p) => p.id === selectedProblemId)?.type ?? '') === 'RE' && (
+          <RegexViewerDialog
+            open={openDialog.open}
+            onOpenChange={(open) => setOpenDialog({ open, submission: null })}
+            src={`/api/uploads/submissions/${encodeURIComponent(
+              openDialog.submission.fileName ?? '',
+            )}`}
+            title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
+          />
+        )}
+      {openDialog.submission &&
+        (problems.find((p) => p.id === selectedProblemId)?.type ?? '') === 'CFG' && (
+          <CfgViewerDialog
+            open={openDialog.open}
+            onOpenChange={(open) => setOpenDialog({ open, submission: null })}
+            src={`/api/uploads/submissions/${encodeURIComponent(
+              openDialog.submission.fileName ?? '',
+            )}`}
+            title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
+          />
+        )}
     </div>
   );
 }
