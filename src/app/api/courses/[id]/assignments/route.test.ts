@@ -48,10 +48,28 @@ describe('GET /api/courses/[id]/assignments', () => {
     expect(res.status).toBe(404);
   });
 
-  it('returns assignments', async () => {
+  it('returns assignments with grade totals', async () => {
     verifyTokenMock.mockReturnValue({ userId: 'u1' });
     prismaMock.course.findUnique.mockResolvedValue({ id: 'c1' });
-    prismaMock.assignment.findMany.mockResolvedValue([{ id: 'a1', title: 'A' }]);
+    // include problems needed for grade math
+    prismaMock.assignment.findMany.mockResolvedValue([
+      {
+        id: 'a1',
+        title: 'A',
+        dueDate: new Date('2025-01-01T00:00:00Z'),
+        description: null,
+        problems: [
+          {
+            maxPoints: 10,
+            grades: [{ grade: 7 }],
+          },
+          {
+            maxPoints: 5,
+            grades: [{ grade: 3 }],
+          },
+        ],
+      },
+    ]);
 
     const req = new NextRequest('http://localhost/api/courses/c1/assignments', {
       headers: { authorization: 'Bearer test-token' },
@@ -60,6 +78,15 @@ describe('GET /api/courses/[id]/assignments', () => {
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toEqual([{ id: 'a1', title: 'A' }]);
+    expect(body).toEqual([
+      {
+        id: 'a1',
+        title: 'A',
+        dueDate: new Date('2025-01-01T00:00:00.000Z').toISOString(),
+        description: null,
+        totalGrade: 10,
+        maxGrade: 15,
+      },
+    ]);
   });
 });

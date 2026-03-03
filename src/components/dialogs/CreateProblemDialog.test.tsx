@@ -61,6 +61,9 @@ describe('CreateProblemDialog', () => {
     );
 
     await user.type(screen.getByLabelText('Title'), 'DFA #1');
+    // switch should exist and be checked by default
+    expect(screen.getByLabelText('Automatically Graded')).toBeInTheDocument();
+    expect(screen.getByLabelText('Automatically Graded')).toBeChecked();
     await user.upload(screen.getByLabelText('Answer File'), file);
 
     await user.click(screen.getByRole('button', { name: 'Create Problem' }));
@@ -81,7 +84,7 @@ describe('CreateProblemDialog', () => {
     });
     expect(payload.file).toBeInstanceOf(File);
 
-    expect(onCreated).toHaveBeenCalledWith({ id: 'prob-1' });
+    expect(onCreated).toHaveBeenCalledWith({ id: 'prob-1' }, true);
     expect(setOpen).toHaveBeenCalledWith(false);
   });
 
