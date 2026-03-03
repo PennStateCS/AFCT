@@ -25,7 +25,7 @@ export async function DELETE(
     // Only global ADMIN or course-level ADMIN/FACULTY/TA may attempt removal
     if (
       currentUser.role !== 'ADMIN' &&
-      !['ADMIN', 'FACULTY', 'TA'].includes(currentCourseRole ?? '')
+      !['INSTRUCTOR', 'FACULTY', 'TA'].includes(currentCourseRole ?? '')
     ) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -45,13 +45,13 @@ export async function DELETE(
     if (
       currentCourseRole === 'FACULTY' &&
       targetRoster &&
-      (targetRoster.role === 'ADMIN' || targetRoster.role === 'FACULTY')
+      (targetRoster.role === 'INSTRUCTOR' || targetRoster.role === 'FACULTY')
     ) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // Course admins may not remove other course admins
-    if (currentCourseRole === 'ADMIN' && targetRoster && targetRoster.role === 'ADMIN') {
+    if (currentCourseRole === 'INSTRUCTOR' && targetRoster && targetRoster.role === 'INSTRUCTOR') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -181,7 +181,7 @@ export async function PATCH(
 
     const body = await req.json();
     const newRole = body?.role;
-    const allowedRoles = ['ADMIN', 'FACULTY', 'TA', 'STUDENT'];
+    const allowedRoles = ['INSTRUCTOR', 'FACULTY', 'TA', 'STUDENT'];
     if (!allowedRoles.includes(newRole))
       return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
 
@@ -189,7 +189,7 @@ export async function PATCH(
     const currentRoster = await prisma.roster.findFirst({
       where: { courseId, userId: currentUser.id },
     });
-    const isAllowed = currentUser.role === 'ADMIN' || currentRoster?.role === 'ADMIN';
+    const isAllowed = currentUser.role === 'ADMIN' || currentRoster?.role === 'INSTRUCTOR';
     if (!isAllowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     // Ensure roster entry exists
@@ -200,10 +200,10 @@ export async function PATCH(
     if (!target) return NextResponse.json({ error: 'Roster entry not found' }, { status: 404 });
 
     // Prevent demoting the only faculty member
-    if (target.role === 'ADMIN' && newRole !== 'ADMIN') {
-      const adminCount = await prisma.roster.count({ where: { courseId, role: 'ADMIN' } });
-      if (adminCount <= 1) {
-        return NextResponse.json({ error: 'Cannot demote the only course admin' }, { status: 400 });
+    if (target.role === 'INSTRUCTOR' && newRole !== 'INSTRUCTOR') {
+      const instructorCount = await prisma.roster.count({ where: { courseId, role: 'INSTRUCTOR' } });
+      if (instructorCount <= 1) {
+        return NextResponse.json({ error: 'Cannot demote the only course instructor' }, { status: 400 });
       }
     }
 

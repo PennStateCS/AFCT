@@ -3,13 +3,14 @@ import { ActivityCard } from '@/components/ActivityCard';
 import { AssignmentsCard } from '@/components/AssignmentsCard';
 import { ProblemsCard } from '@/components/ProblemsCard';
 import { RosterCard } from '@/components/RosterCard';
-import { PrivilegeGradesCard } from '@/components/PrivilegeGradesCard';
+import GradesCard from '@/components/GradesCard';
+import GroupsCard from '@/components/GroupsCard';
 import { userColumns } from '@/app/dashboard/courses/[id]/user-columns';
 import { useAssignmentColumns } from '@/app/dashboard/courses/[id]/assignment-columns';
 import { useProblemColumns } from '@/app/dashboard/courses/[id]/problem-columns';
 import { FullCourse, TabType } from '@/types/course';
 import { getInstructors } from '@/lib/course-utils';
-import { NotebookText, FileText, Users, GraduationCap, Activity } from 'lucide-react';
+import { NotebookText, FileText, GraduationCap, Stamp, Users, Activity } from 'lucide-react';
 import { Assignment, Problem } from '@prisma/client';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
@@ -73,6 +74,7 @@ export function AdminCourseView({
             Assignments
           </div>
         </TabsTrigger>
+
         <TabsTrigger
           className="data-[state=active]:bg-secondary w-50 hover:bg-gray-200 data-[state=active]:text-white"
           value="problems"
@@ -82,24 +84,28 @@ export function AdminCourseView({
             Problems
           </div>
         </TabsTrigger>
+
         <TabsTrigger
           className="data-[state=active]:bg-secondary w-50 hover:bg-gray-200 data-[state=active]:text-white"
           value="roster"
         >
-          <div className="flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            Roster
-          </div>
+          <div className="flex items-center gap-2"><GraduationCap className="h-4 w-4" />Roster</div>
         </TabsTrigger>
+
         <TabsTrigger
           className="data-[state=active]:bg-secondary w-50 hover:bg-gray-200 data-[state=active]:text-white"
           value="grades"
         >
-          <div className="flex items-center gap-2">
-            <GraduationCap className="h-4 w-4" />
-            Grades
-          </div>
+          <div className="flex items-center gap-2"><Stamp className="h-4 w-4" />Grades</div>
         </TabsTrigger>
+
+        <TabsTrigger
+          className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white hover:bg-gray-200"
+          value="groups"
+        >
+          <div className="flex items-center gap-2"><Users className="h-4 w-4" />Groups</div>
+        </TabsTrigger>
+
         <TabsTrigger
           className="data-[state=active]:bg-secondary w-50 hover:bg-gray-200 data-[state=active]:text-white"
           value="activity"
@@ -166,8 +172,17 @@ export function AdminCourseView({
         </div>
       </TabsContent>
 
-      <TabsContent value="activity" className="animate-fade-in-up transition-opacity duration-300">
-        <div className="mb-8 space-y-6">
+      <TabsContent value="groups" className="animate-fade-in-up transition-opacity duration-300">
+        <div className="space-y-6 mb-8">
+          <GroupsCard courseId={course.id} />
+        </div>
+      </TabsContent>
+
+      <TabsContent
+        value="activity"
+        className="animate-fade-in-up transition-opacity duration-300"
+      >
+        <div className="space-y-6 mb-8">
           <ActivityCard courseId={course.id} />
         </div>
       </TabsContent>
