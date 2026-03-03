@@ -192,14 +192,22 @@ export default function AssignmentDashboardPage() {
       setGroupsLoading(true);
       try {
         const [grRes, gpRes] = await Promise.all([
-          fetch(`/api/courses/${id}/groups`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'list' }) }),
-          fetch(`/api/courses/${id}/${aid}/group-problems`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'list' }) }),
+          fetch(`/api/courses/${id}/groups`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'list' }),
+          }),
+          fetch(`/api/courses/${id}/${aid}/group-problems`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'list' }),
+          }),
         ]);
 
         if (!aborted) {
           if (grRes.ok) {
             const gr = await grRes.json();
-            setGroups(Array.isArray(gr) ? gr : gr.groups ?? []);
+            setGroups(Array.isArray(gr) ? gr : (gr.groups ?? []));
           } else {
             setGroups([]);
           }
@@ -234,20 +242,6 @@ export default function AssignmentDashboardPage() {
   async function handleAddProblems(problemIds: string[], groupId?: string) {
     if (!id || !aid) return;
     if (!canManageProblems) return;
-    let problemIds: string[] = [];
-    let problemSettings: ProblemLinkSettings[] | undefined;
-
-    if (isProblemSettingsArray(problemPayload)) {
-      problemSettings = problemPayload;
-      problemIds = problemPayload.map((cfg) => cfg.problemId);
-    } else {
-      problemIds = problemPayload;
-    }
-
-    const requestBody: Record<string, unknown> = { problemIds };
-    if (problemSettings?.length) {
-      requestBody.problemSettings = problemSettings;
-    }
     try {
       const payload: any = { problemIds };
       if (groupId) payload.groupId = groupId;
@@ -517,10 +511,18 @@ export default function AssignmentDashboardPage() {
                               (groupProblemsMap[gid] || []).includes(pid),
                             );
 
-                            if (groupIds.length === 0) return <span title="All students">All students</span>;
+                            if (groupIds.length === 0)
+                              return <span title="All students">All students</span>;
 
-                            const names = groupIds.map((gid) => groups.find((g) => g.id === gid)?.name || gid);
-                            if (names.length === 1) return <span className="truncate" title={names[0]}>{names[0]}</span>;
+                            const names = groupIds.map(
+                              (gid) => groups.find((g) => g.id === gid)?.name || gid,
+                            );
+                            if (names.length === 1)
+                              return (
+                                <span className="truncate" title={names[0]}>
+                                  {names[0]}
+                                </span>
+                              );
                             return (
                               <span className="truncate" title={names.join(', ')}>
                                 {names[0]} (+{names.length - 1})

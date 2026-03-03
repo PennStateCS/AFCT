@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
 
     const userTimezone = await resolveUserTimezone(session.user.id);
     const allowLateSubmissions =
-      typeof data.allowLateSubmissions === 'boolean' ? data.allowLateSubmissions : true;
+      typeof data.allowLateSubmissions === 'boolean' ? data.allowLateSubmissions : false;
 
     if (!allowLateSubmissions && data.lateCutoff) {
       return NextResponse.json(

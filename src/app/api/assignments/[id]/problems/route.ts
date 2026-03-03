@@ -18,7 +18,7 @@ interface Problem {
 }
 
 interface ProblemWithSolved extends Problem {
-  submissionCount: number;
+  solved: boolean;
   grade: number | null; // grade from AssignmentProblemGrade
 }
 
@@ -75,7 +75,10 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     // ---- Load problems ----
     // If this is a group assignment, determine the user's group for the course
     const userGroupEntry = assignment.isGroup
-      ? await prisma.groupRoster.findFirst({ where: { courseId, userId }, select: { groupId: true } })
+      ? await prisma.groupRoster.findFirst({
+          where: { courseId, userId },
+          select: { groupId: true },
+        })
       : null;
     const userGroupId = userGroupEntry?.groupId ?? null;
 
@@ -123,6 +126,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     const problems: ProblemWithSolved[] = visible.map((ap) => ({
       ...ap.problem,
       solved: ap.submissions.length > 0,
+      grade: (ap as any).AssignmentProblemGrade?.grade ?? (ap as any).grades?.[0]?.grade ?? null,
     }));
 
     // ---- Activity log ----

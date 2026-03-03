@@ -28,6 +28,7 @@ describe('AssociateProblemsDialog', () => {
       <AssociateProblemsDialog
         open
         onClose={onClose}
+        courseId="course-1"
         courseIsArchived={false}
         allProblems={[baseProblem]}
         usedProblems={[]}
@@ -35,26 +36,10 @@ describe('AssociateProblemsDialog', () => {
       />,
     );
 
-    await user.click(screen.getByText('Deterministic FA'));
-    const pointsInput = screen.getByLabelText('Max Points');
-    await user.clear(pointsInput);
-    await user.type(pointsInput, '10');
-
-    const submissionsInput = screen.getByLabelText('Max Submissions');
-    await user.clear(submissionsInput);
-    await user.type(submissionsInput, '3');
-
-    await user.click(screen.getByRole('button', { name: /Approve/i }));
+    await user.click(await screen.findByText('Deterministic FA'));
     await user.click(screen.getByRole('button', { name: 'Save Changes' }));
 
-    expect(onAddProblems).toHaveBeenCalledWith([
-      {
-        problemId: 'p1',
-        maxPoints: 10,
-        maxSubmissions: 3,
-        autograderEnabled: true,
-      },
-    ]);
+    expect(onAddProblems).toHaveBeenCalledWith(['p1'], undefined);
     expect(onClose).toHaveBeenCalled();
   });
 
@@ -65,6 +50,7 @@ describe('AssociateProblemsDialog', () => {
       <AssociateProblemsDialog
         open
         onClose={vi.fn()}
+        courseId="course-1"
         courseIsArchived
         allProblems={[baseProblem]}
         usedProblems={[]}
@@ -72,8 +58,7 @@ describe('AssociateProblemsDialog', () => {
       />,
     );
 
-    await user.click(screen.getByText('Deterministic FA'));
-    await user.click(screen.getByRole('button', { name: /Approve/i }));
+    await user.click(await screen.findByText('Deterministic FA'));
 
     expect(screen.getByRole('button', { name: 'Save Changes' })).toBeDisabled();
   });

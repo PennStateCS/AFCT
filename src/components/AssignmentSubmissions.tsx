@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FileText, MessageSquare, Check, X, Minus } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -355,7 +355,9 @@ export default function AssignmentSubmissions({
   // If this is a group assignment we'll compute the student's group and
   // filter which problems are shown. Cache per-student group lookups.
   // undefined = not yet resolved; null = resolved -> student is not in any group
-  const [selectedStudentGroupId, setSelectedStudentGroupId] = useState<string | null | undefined>(undefined);
+  const [selectedStudentGroupId, setSelectedStudentGroupId] = useState<string | null | undefined>(
+    undefined,
+  );
   const studentGroupCache = useRef<Record<string, string | null | undefined>>({});
 
   // Load all course problems and prefer client-side filtering for the submissions tab.
@@ -393,6 +395,12 @@ export default function AssignmentSubmissions({
   const [gradeError, setGradeError] = useState<string | null>(null);
   const [userGrade, setUserGrade] = useState<number | null>(null);
   const [isLoadingGrade, setIsLoadingGrade] = useState(false);
+  const [problemGrades, setProblemGrades] = useState<Record<string, number | null>>({});
+  const [gradeInputs, setGradeInputs] = useState<Record<string, string>>({});
+  const [problemGradeErrors, setProblemGradeErrors] = useState<Record<string, string | null>>({});
+  const [savingProblemGrades, setSavingProblemGrades] = useState<Record<string, boolean>>({});
+  const [loadingProblemGrades, setLoadingProblemGrades] = useState(false);
+  const [studentGradeStatuses, setStudentGradeStatuses] = useState<Record<string, boolean>>({});
   const [openDialog, setOpenDialog] = useState<{
     open: boolean;
     submission: Submission | null;
@@ -402,6 +410,15 @@ export default function AssignmentSubmissions({
     (problemId: string) => {
       const params = new URLSearchParams(searchParams.toString());
       params.set('problemId', problemId);
+      router.replace(`?${params.toString()}`, { scroll: false });
+    },
+    [router, searchParams],
+  );
+
+  const updateStudentQuery = useCallback(
+    (studentId: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('studentId', studentId);
       router.replace(`?${params.toString()}`, { scroll: false });
     },
     [router, searchParams],
@@ -437,7 +454,10 @@ export default function AssignmentSubmissions({
 
     // If we don't yet know the student's group (undefined), show assignment-level + all group-mapped (safe fallback)
     if (selectedStudentGroupId === undefined) {
-      const byGroup = new Set<string>([...assignmentLevel.map((p) => p.id), ...Object.values(gpMap).flat()]);
+      const byGroup = new Set<string>([
+        ...assignmentLevel.map((p) => p.id),
+        ...Object.values(gpMap).flat(),
+      ]);
       return assignmentProblems.filter((p) => byGroup.has(p.id));
     }
 
@@ -530,7 +550,9 @@ export default function AssignmentSubmissions({
         );
         const results = await Promise.all(ops);
         if (cancelled) return;
-        const found = results.find((r) => r.members.some((m: any) => m.userId === selectedStudent.id));
+        const found = results.find((r) =>
+          r.members.some((m: any) => m.userId === selectedStudent.id),
+        );
         const gid = found ? found.id : null;
         studentGroupCache.current[selectedStudent.id] = gid;
         setSelectedStudentGroupId(gid);
@@ -693,24 +715,25 @@ export default function AssignmentSubmissions({
         return;
       }
       try {
-        const validProblems = problems.filter((p): p is Problem => Boolean(p?.id));
+        const validProblems = visibleProblems.filter((p): p is Problem => Boolean(p?.id));
         const entries = await Promise.all(
-          visibleProblems.map(async (p) => {
+          validProblems.map(async (p) => {
+            const problemId = p.id;
             try {
               const res = await fetch(
-                `/api/comments?assignmentId=${assignmentId}&problemId=${p.id}&studentId=${selectedStudent.id}`,
+                `/api/comments?assignmentId=${assignmentId}&problemId=${problemId}&studentId=${selectedStudent.id}`,
               );
               if (!res.ok) {
                 if ([204, 401, 403, 404].includes(res.status)) {
-                  return [p.id, []] as const;
+                  return [problemId, []] as const;
                 }
                 throw new Error('Failed to load comments');
               }
               const list = res.status === 204 ? [] : await res.json();
-              return [p.id, list as DiscussionComment[]] as const;
+              return [problemId, list as DiscussionComment[]] as const;
             } catch (err) {
-              console.error(`Fetch comments error for problem ${p.id}:`, err);
-              return [p.id, []] as const;
+              console.error(`Fetch comments error for problem ${problemId}:`, err);
+              return [problemId, []] as const;
             }
           }),
         );
