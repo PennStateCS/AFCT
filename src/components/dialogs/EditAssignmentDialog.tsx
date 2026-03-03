@@ -316,7 +316,12 @@ export function EditAssignmentDialog({
             control={control}
             render={({ field }) => (
               <div className="flex items-center justify-between">
-                <Label htmlFor="isGroup">Group Assignment</Label>
+                <div>
+                  <Label htmlFor="isGroup">Group Assignment</Label>
+                  <p className="text-muted-foreground text-sm">
+                    Students submit and are graded as groups for this assignment.
+                  </p>
+                </div>
                 <Switch
                   id="isGroup"
                   checked={!!field.value}
