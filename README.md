@@ -70,5 +70,5 @@ npm run test:watch
 | Jesse Burdick-Pless | RIT         | -                | [jb4411](https://github.com/jb4411)           |
 | Jeffrey Chiampi     | PSU         | jdc308@psu.edu   | [jdc308](https://github.com/jdc308)           |
 | Edwin Kismal        | PSU         | etk5176@psu.edu  | [EdwinKimsal](https://github.com/EdwinKimsal) |
-| Adam Manowski       | PSU         | ajm9738@psu.edu  | [astemaxed](https://github.com/astemaxed)     |
+| Adam Manowski       | PSU         | ajm9738@psu.edu  | [astermaxed](https://github.com/astermaxed)     |
 | Andrew Sutton       | PSU         | ams12165@psu.edu | [asutton24](https://github.com/asutton24)     |

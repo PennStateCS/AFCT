@@ -17,12 +17,14 @@ interface Problem {
 }
 
 interface ProblemWithSolved extends Problem {
-  solved: boolean;
+  submissionCount: number;
+  grade: number | null; // grade from AssignmentProblemGrade
 }
 
 interface AssignmentProblemResult {
   problem: Problem;
   submissions: { id: string }[];
+  AssignmentProblemGrade?: { grade: number | null } | null;
 }
 
 export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -79,6 +81,8 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
             title: true,
             description: true,
             type: true,
+            maxPoints: true,
+            maxSubmissions: true,
             maxStates: true,
             isDeterministic: true,
           },
@@ -99,7 +103,8 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     const problems: ProblemWithSolved[] = assignmentProblems.map(
       (ap: (typeof assignmentProblems)[number]) => ({
         ...ap.problem,
-        solved: ap.submissions.length > 0,
+        submissionCount: ap.submissions.length,
+        grade: ap.AssignmentProblemGrade?.grade ?? null,
       }),
     );
 
