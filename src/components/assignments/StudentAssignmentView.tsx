@@ -88,12 +88,10 @@ export default function StudentAssignmentPage() {
   const [newComment, setNewComment] = useState<Record<string, string>>({});
   const [submittingComment, setSubmittingComment] = useState<Record<string, boolean>>({});
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
-  const [openDialog, setOpenDialog] = useState<{ open: boolean; submission: Submission | null }>(
-    {
-      open: false,
-      submission: null,
-    },
-  );
+  const [openDialog, setOpenDialog] = useState<{ open: boolean; submission: Submission | null }>({
+    open: false,
+    submission: null,
+  });
 
   const loadCommentsForProblems = useCallback(async () => {
     if (!assignment || !userId) return;
@@ -361,7 +359,9 @@ export default function StudentAssignmentPage() {
               </div>
               <div className="flex-1">
                 <p className="text-muted-foreground mb-1 text-sm font-medium">Due Date</p>
-                <p className={`text-lg font-bold ${isOverdue ? 'text-red-600' : 'text-foreground'}`}>
+                <p
+                  className={`text-lg font-bold ${isOverdue ? 'text-red-600' : 'text-foreground'}`}
+                >
                   {formatDateInTimeZone(dueDate, timezone)}
                 </p>
                 <p className="text-muted-foreground text-sm">
@@ -452,7 +452,7 @@ export default function StudentAssignmentPage() {
       {assignment.problems.length > 0 ? (
         <Card>
           <CardContent>
-            <div className="grid gap-4 grid-cols-[minmax(240px,280px)_1fr]">
+            <div className="grid grid-cols-[minmax(240px,280px)_1fr] gap-4">
               <ProblemListCard
                 problems={problemListItems}
                 selectedProblemId={selectedProblemId}
@@ -557,7 +557,9 @@ export default function StudentAssignmentPage() {
                                           View
                                         </Button>
                                       ) : (
-                                        <span className="text-muted-foreground text-sm">No file</span>
+                                        <span className="text-muted-foreground text-sm">
+                                          No file
+                                        </span>
                                       )}
                                     </div>
                                   </TableCell>
@@ -601,7 +603,9 @@ export default function StudentAssignmentPage() {
                       <div className="mt-auto space-y-2">
                         <Textarea
                           placeholder="Add a comment or question about this problem..."
-                          value={selectedProblem ? newComment[selectedProblem.problem.id] || '' : ''}
+                          value={
+                            selectedProblem ? newComment[selectedProblem.problem.id] || '' : ''
+                          }
                           onChange={(e) =>
                             selectedProblem &&
                             setNewComment((prev) => ({
@@ -640,7 +644,7 @@ export default function StudentAssignmentPage() {
                   </div>
                 </div>
               ) : (
-                <div className="flex h-full items-center justify-center rounded-md border border-dashed p-10 text-sm text-muted-foreground">
+                <div className="text-muted-foreground flex h-full items-center justify-center rounded-md border border-dashed p-10 text-sm">
                   Select a problem to see its details.
                 </div>
               )}
