@@ -17,6 +17,9 @@ import { showToast } from '@/lib/toast';
 import { Loader2 } from 'lucide-react';
 
 type Row = {
+  // the DataTable needs a stable `id` field (or `_id`) for its row
+  // key; we mirror the problemId here so tables render without errors.
+  id: string;
   problemId: string;
   title: string;
   maxPoints: number;
@@ -70,6 +73,7 @@ export function GradeBreakdownDialog({
       }> = assignment.problems || [];
 
       const newRows: Row[] = problemLinks.map((link) => ({
+        id: link.problem.id,
         problemId: link.problem.id,
         title: link.problem.title ?? 'Untitled',
         maxPoints: link.maxPoints,
