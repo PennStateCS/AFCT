@@ -64,9 +64,9 @@ export function AdminCourseView({
 
   return (
     <Tabs defaultValue="assignments" value={tab} onValueChange={onTabChange}>
-      <TabsList className="bg-card border-border h-12 rounded-md border p-1 shadow-sm">
+      <TabsList className="bg-card border-border h-12 w-full justify-start overflow-x-auto rounded-md border p-1 shadow-sm">
         <TabsTrigger
-          className="data-[state=active]:bg-secondary w-50 hover:bg-gray-200 data-[state=active]:text-white"
+          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-gray-200 data-[state=active]:text-white"
           value="assignments"
         >
           <div className="flex items-center gap-2">
@@ -76,7 +76,7 @@ export function AdminCourseView({
         </TabsTrigger>
 
         <TabsTrigger
-          className="data-[state=active]:bg-secondary w-50 hover:bg-gray-200 data-[state=active]:text-white"
+          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-gray-200 data-[state=active]:text-white"
           value="problems"
         >
           <div className="flex items-center gap-2">
@@ -86,7 +86,7 @@ export function AdminCourseView({
         </TabsTrigger>
 
         <TabsTrigger
-          className="data-[state=active]:bg-secondary w-50 hover:bg-gray-200 data-[state=active]:text-white"
+          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-gray-200 data-[state=active]:text-white"
           value="roster"
         >
           <div className="flex items-center gap-2">
@@ -96,7 +96,7 @@ export function AdminCourseView({
         </TabsTrigger>
 
         <TabsTrigger
-          className="data-[state=active]:bg-secondary w-50 hover:bg-gray-200 data-[state=active]:text-white"
+          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-gray-200 data-[state=active]:text-white"
           value="grades"
         >
           <div className="flex items-center gap-2">
@@ -106,7 +106,7 @@ export function AdminCourseView({
         </TabsTrigger>
 
         <TabsTrigger
-          className="data-[state=active]:bg-secondary w-50 hover:bg-gray-200 data-[state=active]:text-white"
+          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-gray-200 data-[state=active]:text-white"
           value="groups"
         >
           <div className="flex items-center gap-2">
@@ -116,7 +116,7 @@ export function AdminCourseView({
         </TabsTrigger>
 
         <TabsTrigger
-          className="data-[state=active]:bg-secondary w-50 hover:bg-gray-200 data-[state=active]:text-white"
+          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-gray-200 data-[state=active]:text-white"
           value="activity"
         >
           <div className="flex items-center gap-2">

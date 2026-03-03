@@ -94,6 +94,8 @@ export default function StudentAssignmentPage() {
     open: false,
     submission: null,
   });
+  const limitText = (value: string, max = 120) =>
+    value.length > max ? `${value.slice(0, max - 1)}…` : value;
 
   const loadCommentsForProblems = useCallback(async () => {
     if (!assignment || !userId) return;
@@ -252,7 +254,7 @@ export default function StudentAssignmentPage() {
     return assignment.problems.map((assignmentProblem, index) => ({
       id: assignmentProblem.problem.id,
       title: assignmentProblem.problem.title
-        ? `Problem ${index + 1}: ${assignmentProblem.problem.title}`
+        ? `Problem ${index + 1}: ${limitText(assignmentProblem.problem.title, 80)}`
         : `Problem ${index + 1}`,
     }));
   }, [assignment]);
@@ -333,16 +335,20 @@ export default function StudentAssignmentPage() {
     <div className="space-y-6 p-6">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-2xl">
+          <CardTitle className="flex items-start gap-2 text-2xl break-words">
             <BookOpen className="h-5 w-5" />
-            {assignment.title}
+            <span className="line-clamp-2 break-words" title={assignment.title}>
+              {assignment.title}
+            </span>
           </CardTitle>
         </CardHeader>
         <CardContent>
           {assignment.description && (
             <div>
               <h3 className="mb-2 font-semibold">Description</h3>
-              <p className="text-muted-foreground">{assignment.description}</p>
+              <p className="text-muted-foreground max-h-32 overflow-y-auto rounded-md border p-3 break-words whitespace-pre-wrap">
+                {assignment.description}
+              </p>
             </div>
           )}
         </CardContent>
