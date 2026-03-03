@@ -99,6 +99,8 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
           title: assignment.title,
           description: assignment.description,
           dueDate: assignment.dueDate,
+          allowLateSubmissions: assignment.allowLateSubmissions,
+          lateCutoff: assignment.lateCutoff,
           maxPoints: totalProblemPoints,
           isPublished: assignment.isPublished,
           createdAt: assignment.createdAt,

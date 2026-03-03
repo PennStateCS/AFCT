@@ -155,8 +155,11 @@ describe('EditAssignmentDialog', () => {
 
     const { setOpen, onSave } = renderDialog();
 
+    const cutoffInput = screen.getByLabelText('Late Submission Cutoff');
+    const expectedCutoffValue = (cutoffInput as HTMLInputElement).value;
+
     await makeDirty(user);
-    await user.click(screen.getByLabelText('Published'));
+    await user.click(screen.getByLabelText('Publish Now'));
 
     const submitButton = screen.getByRole('button', { name: /save changes/i });
     await waitFor(() => expect(submitButton).toBeEnabled());
@@ -173,10 +176,50 @@ describe('EditAssignmentDialog', () => {
       description: baseAssignment.description,
       courseId: baseAssignment.courseId,
       isPublished: true,
+      allowLateSubmissions: true,
     });
+    expect(payload.lateCutoff).toBe(expectedCutoffValue);
 
     expect(onSave).toHaveBeenCalledWith(updatedAssignment);
     expect(setOpen).toHaveBeenCalledWith(false);
+  });
+
+  it('sends null cutoff when late submissions are disabled', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(createJsonResponse(baseAssignment));
+
+    renderDialog();
+
+    await makeDirty(user);
+    await user.click(screen.getByLabelText('Allow Late Submissions'));
+
+    await waitFor(() => expect(screen.queryByLabelText('Late Submission Cutoff')).toBeNull());
+
+    const submitButton = screen.getByRole('button', { name: /save changes/i });
+    await waitFor(() => expect(submitButton).toBeEnabled());
+    await user.click(submitButton);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [, requestInit] = fetchMock.mock.calls[0];
+    const payload = JSON.parse((requestInit as RequestInit).body as string);
+    expect(payload).toMatchObject({ allowLateSubmissions: false });
+    expect(payload.lateCutoff).toBeNull();
+  });
+
+  it('auto-populates cutoff when enabling late submissions', async () => {
+    const user = userEvent.setup();
+
+    renderDialog({ assignment: { ...baseAssignment, allowLateSubmissions: false } });
+
+    const dueDateInput = screen.getByLabelText('Due Date & Time') as HTMLInputElement;
+    const expectedCutoff = dueDateInput.value;
+    expect(expectedCutoff).not.toBe('');
+    expect(screen.queryByLabelText('Late Submission Cutoff')).toBeNull();
+
+    await user.click(screen.getByLabelText('Allow Late Submissions'));
+
+    const cutoffInput = await screen.findByLabelText('Late Submission Cutoff');
+    expect((cutoffInput as HTMLInputElement).value).toBe(expectedCutoff);
   });
 
   it('shows a toast when the API errors', async () => {

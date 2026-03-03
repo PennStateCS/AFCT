@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { toEndOfDayInTimezone } from '@/lib/date-utils';
+import { toDateTimeInTimezone, toEndOfDayInTimezone } from '@/lib/date-utils';
 
 async function resolveUserTimezone(userId?: string | null) {
   const tz = 'America/New_York';
@@ -37,13 +37,44 @@ export async function POST(req: NextRequest) {
     }
 
     const userTimezone = await resolveUserTimezone(session.user.id);
+    const allowLateSubmissions =
+      typeof data.allowLateSubmissions === 'boolean' ? data.allowLateSubmissions : true;
+
+    if (!allowLateSubmissions && data.lateCutoff) {
+      return NextResponse.json(
+        { error: 'Late cutoff provided but late submissions are disabled.' },
+        { status: 400 },
+      );
+    }
+
+    if (allowLateSubmissions && !data.lateCutoff) {
+      return NextResponse.json(
+        { error: 'Late submission cutoff is required when late submissions are enabled.' },
+        { status: 400 },
+      );
+    }
+
+    const dueDate = toEndOfDayInTimezone(data.dueDate, userTimezone);
+    const lateCutoffDate =
+      allowLateSubmissions && data.lateCutoff
+        ? toDateTimeInTimezone(data.lateCutoff, userTimezone)
+        : null;
+
+    if (lateCutoffDate && lateCutoffDate < dueDate) {
+      return NextResponse.json(
+        { error: 'Late cutoff must be on or after the due date.' },
+        { status: 400 },
+      );
+    }
 
     // Create a new assignment in the database
     const created = await prisma.assignment.create({
       data: {
         title: data.title,
         description: data.description,
-        dueDate: toEndOfDayInTimezone(data.dueDate, userTimezone),
+        dueDate,
+        allowLateSubmissions,
+        lateCutoff: lateCutoffDate,
         isPublished: data.isPublished || false,
         courseId: data.courseId,
       },
@@ -64,6 +95,8 @@ export async function POST(req: NextRequest) {
         description: created.description ? created.description : '',
         isPublished: created.isPublished,
         dueDate: created.dueDate.toISOString(),
+        allowLateSubmissions: created.allowLateSubmissions,
+        lateCutoff: created.lateCutoff ? created.lateCutoff.toISOString() : null,
       },
     });
 
