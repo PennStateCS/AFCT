@@ -27,6 +27,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { AssociateProblemsDialog } from '@/components/dialogs/AssociateProblemsDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
+import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
+import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
 import { CreateProblemDialog } from '@/components/dialogs/CreateProblemDialog';
 import {
   Dialog,
@@ -69,8 +71,7 @@ type AssignmentWithDetails = {
   dueDate: string | Date;
   maxPoints: number;
   isPublished: boolean;
-  allowLateSubmissions?: boolean;
-  lateCutoff?: string | Date | null;
+  isGroup?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
   problems: AssignmentProblemLink[];
@@ -108,6 +109,11 @@ export default function AssignmentDashboardPage() {
   const [problemToEdit, setProblemToEdit] = useState<Problem | null>(null);
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState(searchParams.get('tab') || 'problems');
+
+  // Group mapping support (for group assignments)
+  const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
+  const [groupsLoading, setGroupsLoading] = useState(false);
+  const [groupProblemsMap, setGroupProblemsMap] = useState<Record<string, string[]>>({});
   const [descOpen, setDescOpen] = useState(false);
   const [descText, setDescText] = useState<string | null>(null);
   const courseIsArchived = assignment?.course?.isArchived ?? false;
@@ -117,6 +123,7 @@ export default function AssignmentDashboardPage() {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerSrc, setViewerSrc] = useState<string | null>(null);
   const [viewerTitle, setViewerTitle] = useState<string | undefined>(undefined);
+  const [jffType, setJffType] = useState<string | null>(null);
 
   // Allow optional file fields even if not in generated Prisma type
   type ProblemFileFields = Problem & { fileName?: string | null; originalFileName?: string | null };
@@ -133,6 +140,7 @@ export default function AssignmentDashboardPage() {
     setViewerSrc(src);
     setViewerTitle(`${original || fileName} - ${problem.title}`);
     setViewerOpen(true);
+    setJffType(problem.type);
   };
 
   const openDescription = (text: string | null) => {
@@ -174,33 +182,78 @@ export default function AssignmentDashboardPage() {
       .finally(() => setLoading(false));
   }, [id, aid]);
 
-  const isProblemSettingsArray = (
-    payload: string[] | ProblemLinkSettings[],
-  ): payload is ProblemLinkSettings[] =>
-    Array.isArray(payload) && payload.length > 0 && typeof payload[0] === 'object';
+  // When this is a group assignment, fetch groups and the mapping of problems -> groups
+  useEffect(() => {
+    if (!id || !aid || !assignment?.isGroup) {
+      setGroups([]);
+      setGroupProblemsMap({});
+      return;
+    }
 
-  async function handleAddProblems(problemPayload: string[] | ProblemLinkSettings[]) {
+    let aborted = false;
+    const ac = new AbortController();
+    async function fetchGroupsAndMappings() {
+      setGroupsLoading(true);
+      try {
+        const [grRes, gpRes] = await Promise.all([
+          fetch(`/api/courses/${id}/groups`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'list' }),
+          }),
+          fetch(`/api/courses/${id}/${aid}/group-problems`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'list' }),
+          }),
+        ]);
+
+        if (!aborted) {
+          if (grRes.ok) {
+            const gr = await grRes.json();
+            setGroups(Array.isArray(gr) ? gr : (gr.groups ?? []));
+          } else {
+            setGroups([]);
+          }
+
+          if (gpRes.ok) {
+            const gp = await gpRes.json();
+            const map: Record<string, string[]> = {};
+            for (const g of gp.groups ?? []) map[g.id] = g.problemIds || [];
+            setGroupProblemsMap(map);
+          } else {
+            setGroupProblemsMap({});
+          }
+        }
+      } catch (err: any) {
+        if (err?.name === 'AbortError') return;
+        console.error('Failed to fetch groups/mappings:', err);
+        setGroups([]);
+        setGroupProblemsMap({});
+      } finally {
+        if (!aborted) setGroupsLoading(false);
+      }
+    }
+
+    fetchGroupsAndMappings();
+    return () => {
+      aborted = true;
+      ac.abort();
+      setGroupsLoading(false);
+    };
+  }, [id, aid, assignment?.isGroup]);
+
+  async function handleAddProblems(problemIds: string[], groupId?: string) {
     if (!id || !aid) return;
     if (!canManageProblems) return;
-    let problemIds: string[] = [];
-    let problemSettings: ProblemLinkSettings[] | undefined;
-
-    if (isProblemSettingsArray(problemPayload)) {
-      problemSettings = problemPayload;
-      problemIds = problemPayload.map((cfg) => cfg.problemId);
-    } else {
-      problemIds = problemPayload;
-    }
-
-    const requestBody: Record<string, unknown> = { problemIds };
-    if (problemSettings?.length) {
-      requestBody.problemSettings = problemSettings;
-    }
     try {
+      const payload: any = { problemIds };
+      if (groupId) payload.groupId = groupId;
+
       const res = await fetch(`/api/courses/${id}/${aid}/add-problems`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error();
       showToast.success('Problems added');
@@ -329,9 +382,21 @@ export default function AssignmentDashboardPage() {
                   : ''}
             </Link>
           </div>
-          <div className="text-muted-foreground mt-1 text-sm">
-            <span className="font-semibold">Due:</span>{' '}
-            {formatDateTimeInTimeZone(assignment.dueDate, timezone)}
+          <div className="text-muted-foreground mt-1 flex flex-wrap gap-4 text-sm">
+            <span>
+              <span className="font-semibold">Due:</span>{' '}
+              {formatDateTimeInTimeZone(assignment.dueDate, timezone)}
+            </span>
+            <span>
+              <span className="font-semibold">Allow Late:</span>{' '}
+              {assignment.allowLateSubmissions ? 'Yes' : 'No'}
+            </span>
+            <span>
+              <span className="font-semibold">Late Cutoff:</span>{' '}
+              {assignment.allowLateSubmissions && assignment.lateCutoff
+                ? formatDateTimeInTimeZone(assignment.lateCutoff, timezone)
+                : '—'}
+            </span>
           </div>
         </div>
         <div>
@@ -429,7 +494,7 @@ export default function AssignmentDashboardPage() {
                           className="text-blue-600 underline hover:text-blue-800"
                           title="View description"
                         >
-                          View
+                          View Description
                         </button>
                       ) : (
                         <span className="text-muted-foreground text-xs">—</span>
@@ -438,6 +503,41 @@ export default function AssignmentDashboardPage() {
                     meta: { priority: 2 },
                     enableSorting: false,
                   },
+                  // Group column: only present for group assignments
+                  ...(assignment.isGroup
+                    ? [
+                        {
+                          id: 'group',
+                          header: 'Group',
+                          cell: ({ row }: { row: { original: Problem } }) => {
+                            const pid = row.original.id;
+                            const groupIds = Object.keys(groupProblemsMap).filter((gid) =>
+                              (groupProblemsMap[gid] || []).includes(pid),
+                            );
+
+                            if (groupIds.length === 0)
+                              return <span title="All students">All students</span>;
+
+                            const names = groupIds.map(
+                              (gid) => groups.find((g) => g.id === gid)?.name || gid,
+                            );
+                            if (names.length === 1)
+                              return (
+                                <span className="truncate" title={names[0]}>
+                                  {names[0]}
+                                </span>
+                              );
+                            return (
+                              <span className="truncate" title={names.join(', ')}>
+                                {names[0]} (+{names.length - 1})
+                              </span>
+                            );
+                          },
+                          meta: { priority: 2 },
+                          enableSorting: false,
+                        },
+                      ]
+                    : []),
                   {
                     accessorKey: 'type',
                     header: 'Type',
@@ -542,7 +642,6 @@ export default function AssignmentDashboardPage() {
                             aria-label="Render file"
                           >
                             <Eye className="h-4 w-4" />
-                            <span>View</span>
                           </Button>
                           <Button asChild variant="secondary" size="sm">
                             <a
@@ -552,7 +651,6 @@ export default function AssignmentDashboardPage() {
                               aria-label={`Download ${fileName}`}
                             >
                               <Download className="h-4 w-4" aria-hidden="true" />
-                              <span>Download</span>
                             </a>
                           </Button>
                         </div>
@@ -648,11 +746,17 @@ export default function AssignmentDashboardPage() {
               maxSubmissions: ap.maxSubmissions,
               autograderEnabled: ap.autograderEnabled,
             }))}
+            // Group-assignment support: pass group list and mapping so the submissions
+            // view can filter problems to the student's group (assignment-level problems
+            // still apply to all students).
+            assignmentIsGroup={assignment.isGroup ?? false}
+            groups={groups}
+            groupProblemsMap={groupProblemsMap}
           />
         </TabsContent>
       </Tabs>
       {/* JFLAP Viewer Dialog */}
-      {viewerOpen && viewerSrc && (
+      {viewerOpen && viewerSrc && ['FA', 'PDA'].includes(jffType ?? '') && (
         <JffViewerDialog
           open={viewerOpen}
           onOpenChange={setViewerOpen}
@@ -661,6 +765,22 @@ export default function AssignmentDashboardPage() {
           width="80vw"
           height="80vh"
           showGridDefault={true}
+        />
+      )}
+      {viewerOpen && viewerSrc && 'RE' === jffType && (
+        <RegexViewerDialog
+          src={viewerSrc}
+          open={viewerOpen}
+          onOpenChange={setViewerOpen}
+          title={viewerTitle}
+        />
+      )}
+      {viewerOpen && viewerSrc && 'CFG' === jffType && (
+        <CfgViewerDialog
+          src={viewerSrc}
+          open={viewerOpen}
+          onOpenChange={setViewerOpen}
+          title={viewerTitle}
         />
       )}
       {/* Description dialog */}
@@ -678,6 +798,8 @@ export default function AssignmentDashboardPage() {
       <AssociateProblemsDialog
         open={addProblemDialogOpen}
         onClose={() => setAddProblemDialogOpen(false)}
+        courseId={id}
+        assignmentId={aid}
         courseIsArchived={courseIsArchived}
         allProblems={allProblems.map((p: Problem) => ({
           ...p,
@@ -689,12 +811,10 @@ export default function AssignmentDashboardPage() {
           description: ap.problem.description ?? undefined,
           type: typeof ap.problem.type === 'string' ? ap.problem.type : undefined,
         }))}
-        defaultMaxPoints={0}
-        defaultMaxSubmissions={-1}
-        defaultAutograderEnabled={true}
-        onAddProblems={(problemSettings) => {
-          if (problemSettings.length === 0) return;
-          handleAddProblems(problemSettings);
+        onAddProblems={(selectedProblemIds, groupId) => {
+          const existingIds = assignment.problems.map((ap: { problem: Problem }) => ap.problem.id);
+          const merged = Array.from(new Set([...existingIds, ...selectedProblemIds]));
+          return handleAddProblems(merged, groupId);
         }}
       />
       <CreateProblemDialog
@@ -702,9 +822,10 @@ export default function AssignmentDashboardPage() {
         setOpen={setCreateProblemOpen}
         courseId={id}
         courseIsArchived={courseIsArchived}
+        assignmentId={aid}
         onCreated={async (created) => {
           await fetchProblems();
-          if (created?.id) {
+          if (created?.id && !aid) {
             await handleAddProblems([created.id]);
           }
         }}
@@ -737,15 +858,7 @@ export default function AssignmentDashboardPage() {
               typeof assignment.dueDate === 'string'
                 ? new Date(assignment.dueDate)
                 : assignment.dueDate,
-            allowLateSubmissions:
-              typeof assignment.allowLateSubmissions === 'boolean'
-                ? assignment.allowLateSubmissions
-                : true,
-            lateCutoff: assignment.lateCutoff
-              ? typeof assignment.lateCutoff === 'string'
-                ? new Date(assignment.lateCutoff)
-                : assignment.lateCutoff
-              : null,
+            isGroup: assignment.isGroup ?? false,
           }}
           onSave={() => {
             setLoading(true);
