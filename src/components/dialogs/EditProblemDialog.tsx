@@ -58,13 +58,17 @@ export function EditProblemDialog({
     () => ({
       title: problem.title ?? '',
       description: problem.description ?? '',
+      maxSubmissions: problem.maxSubmissions,
+      isUnlimitedSubmissions: problem.maxSubmissions == null || problem.maxSubmissions < 0,
+      maxPoints: problem.maxPoints,
       type: problem.type as z.infer<typeof ProblemTypeEnum>,
-      isUnlimited: problem.maxStates == null || problem.maxStates < 0,
+      isUnlimitedStates: problem.maxStates == null || problem.maxStates < 0,
       maxStates: problem.maxStates ?? undefined,
       isDeterministic:
         problem.type === 'FA'
           ? !!(problem as Problem & { isDeterministic?: boolean }).isDeterministic
           : false,
+      autograderEnabled: !!(problem as Problem & { autograderEnabled?: boolean }).autograderEnabled,
       file: undefined as File | undefined, // optional in edit; user can choose a new file
       courseId: problem.courseId,
     }),
@@ -117,7 +121,8 @@ export function EditProblemDialog({
 
   // Drive conditional UI
   const type = watch('type');
-  const isUnlimited = watch('isUnlimited');
+  const isUnlimitedStates = watch('isUnlimitedStates');
+  const isUnlimitedSubmissions = watch('isUnlimitedSubmissions');
 
   const fileErrorMessage = (() => {
     const e = errors.file;
@@ -206,10 +211,13 @@ export function EditProblemDialog({
       formData.append('title', payload.title ?? '');
       formData.append('description', payload.description ?? '');
       formData.append('type', payload.type ?? '');
+      formData.append('maxSubmissions', String(payload.isUnlimitedSubmissions ? -1 : payload.maxSubmissions ?? 0));
+      formData.append('maxPoints', String(payload.maxPoints ?? 0));
+      formData.append('autograderEnabled', String(payload.autograderEnabled));
       formData.append('courseId', payload.courseId ?? '');
 
       if (payload.type === 'FA' || payload.type === 'PDA') {
-        const normalizedMax = payload.isUnlimited ? -1 : Number(payload.maxStates ?? 0);
+        const normalizedMax = payload.isUnlimitedStates ? -1 : Number(payload.maxStates ?? 0);
         formData.append('maxStates', String(normalizedMax));
       }
 
@@ -361,6 +369,83 @@ export function EditProblemDialog({
             )}
           />
 
+          {/* Max Submissions */}
+          <Controller
+            control={control}
+            name="maxSubmissions"
+            render={({ field }) => (
+              <div>
+                <InputGroup
+                  label="Max Submissions"
+                  name="maxSubmissions"
+                  type="number"
+                  fieldProps={{
+                    ...field,
+                    value: isUnlimitedSubmissions ? '' : String(field.value || ''),
+                  }}
+                  min={1}
+                  max={1_000}
+                  disabled={isUnlimitedSubmissions}
+                  error={errors.maxSubmissions?.message}
+                />
+                <div className="mt-1 flex items-center gap-2">
+                  <Controller
+                    control={control}
+                    name="isUnlimitedSubmissions"
+                    render={({ field: uf }) => (
+                      <>
+                        <input
+                          type="checkbox"
+                          checked={!!uf.value}
+                          onChange={(e) => uf.onChange(e.target.checked)}
+                        />
+                        <span className="text-muted-foreground text-sm">Unlimited</span>
+                      </>
+                    )}
+                  />
+                </div>
+              </div>
+            )}
+          />
+
+          {/* Max Grade */}
+          <Controller
+            control={control}
+            name="maxPoints"
+            render={({ field }) => (
+              <div>
+                <InputGroup
+                  label="Max Points"
+                  name="maxPoints"
+                  type="number"
+                  fieldProps={{
+                    ...field,
+                    value: String(field.value),
+                  }}
+                  min={1}
+                  max={10_000}
+                  error={errors.maxPoints?.message}
+                />
+              </div>
+            )}
+          />
+
+          {/* Automatic Grading */ }
+          <div className="flex items-center justify-between">
+            <Label htmlFor="autograderEnabled">Automatic Grading</Label>
+            <Controller
+              control={control}
+              name="autograderEnabled"
+              render={({ field }) => (
+                <Switch
+                  id="autograderEnabled"
+                  checked={!!field.value}
+                  onCheckedChange={(checked) => field.onChange(!!checked)}
+                />
+              )}
+            />
+          </div>
+
           {/* Max States (FA/PDA only) */}
           {(type === 'FA' || type === 'PDA') && (
             <Controller
@@ -374,19 +459,19 @@ export function EditProblemDialog({
                     type="number"
                     fieldProps={{
                       ...field,
-                      value: isUnlimited ? '' : String(Math.abs(field.value ?? 0) || ''),
+                      value: isUnlimitedStates ? '' : String(Math.abs(field.value ?? 0) || ''),
                       onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
                         field.onChange(e.target.value),
                     }}
                     min={1}
-                    max={1000}
-                    disabled={isUnlimited}
+                    max={1_000}
+                    disabled={isUnlimitedStates}
                     error={errors.maxStates?.message}
                   />
                   <div className="mt-1 flex items-center gap-2">
                     <Controller
                       control={control}
-                      name="isUnlimited"
+                      name="isUnlimitedStates"
                       render={({ field: uf }) => (
                         <>
                           <input
@@ -529,13 +614,13 @@ export function EditProblemDialog({
                 </div>
                 <div className="flex items-center justify-between rounded-md border px-3 py-2">
                   <div>
-                    <p className="text-sm font-semibold">Autograder</p>
+                    <p className="text-sm font-semibold">Automatic Grading</p>
                     <p className="text-muted-foreground text-xs">
-                      Controls autograder behavior for this assignment only.
+                      Controls automatic grading for this assignment only.
                     </p>
                   </div>
                   <Switch
-                    id="assignment-autograder"
+                    id="assignment-automatic-grading"
                     checked={assignmentConfig.autograderEnabled}
                     onCheckedChange={(checked) =>
                       setAssignmentConfig((prev) => ({

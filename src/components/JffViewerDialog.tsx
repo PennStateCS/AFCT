@@ -943,7 +943,7 @@ export default function JffViewerDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-none overflow-hidden p-0" style={{ width }}>
+      <DialogContent className="!max-w-none max-h-[calc(100vh-2rem)] overflow-auto p-0" style={{ width }}>
         <DialogHeader className="px-4 pt-4">
           <DialogTitle className="truncate">{title ?? 'JFLAP Viewer'}</DialogTitle>
         </DialogHeader>

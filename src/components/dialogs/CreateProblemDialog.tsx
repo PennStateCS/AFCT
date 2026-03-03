@@ -59,7 +59,11 @@ export function CreateProblemDialog({
       title: '',
       description: '',
       type: 'FA',
-      isUnlimited: true,
+      isUnlimitedSubmissions: true,
+      maxSubmissions: 100,
+      maxPoints: 100,
+      autograderEnabled: true,
+      isUnlimitedStates: true,
       maxStates: 100,
       isDeterministic: false,
       file: undefined,
@@ -82,7 +86,8 @@ export function CreateProblemDialog({
   });
 
   const type = watch('type');
-  const isUnlimited = watch('isUnlimited');
+  const isUnlimitedSubmissions = watch('isUnlimitedSubmissions');
+  const isUnlimitedStates = watch('isUnlimitedStates');
   const file = watch('file');
 
   const fileErrorMessage = (() => {
@@ -137,10 +142,13 @@ export function CreateProblemDialog({
       formData.append('title', values.title);
       formData.append('description', values.description ?? '');
       formData.append('type', values.type);
+      formData.append('maxSubmissions', values.isUnlimitedSubmissions ? '-1' : String(values.maxSubmissions ?? 0));
+      formData.append('maxPoints', String(values.maxPoints));
+      formData.append('autograderEnabled', String(!!values.autograderEnabled));
       formData.append('courseId', values.courseId);
 
       if (values.type === 'FA' || values.type === 'PDA') {
-        formData.append('maxStates', values.isUnlimited ? '-1' : String(values.maxStates ?? 0));
+        formData.append('maxStates', values.isUnlimitedStates ? '-1' : String(values.maxStates ?? 0));
       }
       if (values.type === 'FA') {
         formData.append('isDeterministic', String(!!values.isDeterministic));
@@ -249,6 +257,83 @@ export function CreateProblemDialog({
             )}
           />
 
+          {/* Max Submissions */}
+          <Controller
+            control={control}
+            name="maxSubmissions"
+            render={({ field }) => (
+              <div>
+                <InputGroup
+                  label="Max Submissions"
+                  name="maxSubmissions"
+                  type="number"
+                  fieldProps={{
+                    ...field,
+                    value: isUnlimitedSubmissions ? '' : String(field.value || ''),
+                  }}
+                  min={1}
+                  max={1_000}
+                  disabled={isUnlimitedSubmissions}
+                  error={errors.maxSubmissions?.message}
+                />
+                <div className="mt-1 flex items-center gap-2">
+                  <Controller
+                    control={control}
+                    name="isUnlimitedSubmissions"
+                    render={({ field: uf }) => (
+                      <>
+                        <input
+                          type="checkbox"
+                          checked={!!uf.value}
+                          onChange={(e) => uf.onChange(e.target.checked)}
+                        />
+                        <span className="text-muted-foreground text-sm">Unlimited</span>
+                      </>
+                    )}
+                  />
+                </div>
+              </div>
+            )}
+          />
+
+          {/* Max Grade */}
+          <Controller
+            control={control}
+            name="maxPoints"
+            render={({ field }) => (
+              <div>
+                <InputGroup
+                  label="Max Points"
+                  name="maxPoints"
+                  type="number"
+                  fieldProps={{
+                    ...field,
+                    value: String(field.value),
+                  }}
+                  min={1}
+                  max={10_000}
+                  error={errors.maxPoints?.message}
+                />
+              </div>
+            )}
+          />
+
+          {/* Automatic Grading */ }
+          <div className="flex items-center justify-between">
+            <Label htmlFor="autograderEnabled">Automatic Grading</Label>
+            <Controller
+              control={control}
+              name="autograderEnabled"
+              render={({ field }) => (
+                <Switch
+                  id="autograderEnabled"
+                  checked={!!field.value}
+                  onCheckedChange={(checked) => field.onChange(!!checked)}
+                />
+              )}
+            />
+          </div>
+
           {/* Max States (FA/PDA only) */}
           {(type === 'FA' || type === 'PDA') && (
             <Controller
@@ -262,17 +347,17 @@ export function CreateProblemDialog({
                     type="number"
                     fieldProps={{
                       ...field,
-                      value: isUnlimited ? '' : String(field.value || ''),
+                      value: isUnlimitedStates ? '' : String(field.value || ''),
                     }}
                     min={1}
-                    max={1000}
-                    disabled={isUnlimited}
+                    max={1_000}
+                    disabled={isUnlimitedStates}
                     error={errors.maxStates?.message}
                   />
                   <div className="mt-1 flex items-center gap-2">
                     <Controller
                       control={control}
-                      name="isUnlimited"
+                      name="isUnlimitedStates"
                       render={({ field: uf }) => (
                         <>
                           <input
@@ -298,11 +383,13 @@ export function CreateProblemDialog({
                 control={control}
                 name="isDeterministic"
                 render={({ field }) => (
-                  <Switch
-                    id="isDeterministic"
-                    checked={!!field.value}
-                    onCheckedChange={(checked) => field.onChange(!!checked)}
-                  />
+                  <div>
+                    <Switch
+                      id="isDeterministic"
+                      checked={!!field.value}
+                      onCheckedChange={(checked) => field.onChange(!!checked)}
+                    />
+                  </div>
                 )}
               />
             </div>
