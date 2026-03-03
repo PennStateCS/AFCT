@@ -9,7 +9,10 @@ export async function OPTIONS() {
 }
 
 // PATCH: update a group's name
-export async function PATCH(req: NextRequest, { params }: { params: { id: string; groupId: string } }) {
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string; groupId: string }> },
+) {
   const { id, groupId } = await params;
 
   if (!id || !groupId) return NextResponse.json({ error: 'Missing params' }, { status: 400 });
@@ -28,11 +31,18 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     // Ensure group exists and belongs to course
     const group = await prisma.group.findUnique({ where: { id: groupId } });
-    if (!group || group.courseId !== id) return NextResponse.json({ error: 'Group not found for course' }, { status: 404 });
+    if (!group || group.courseId !== id)
+      return NextResponse.json({ error: 'Group not found for course' }, { status: 404 });
 
     // Prevent duplicate names for the same course
-    const exists = await prisma.group.findUnique({ where: { courseId_name: { courseId: id, name } } });
-    if (exists && exists.id !== groupId) return NextResponse.json({ error: 'Group name already exists for this course' }, { status: 409 });
+    const exists = await prisma.group.findUnique({
+      where: { courseId_name: { courseId: id, name } },
+    });
+    if (exists && exists.id !== groupId)
+      return NextResponse.json(
+        { error: 'Group name already exists for this course' },
+        { status: 409 },
+      );
 
     const updated = await prisma.group.update({ where: { id: groupId }, data: { name } });
 
@@ -51,7 +61,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 }
 
 // DELETE: delete a group (and cascade group members)
-export async function DELETE(req: NextRequest, { params }: { params: { id: string; groupId: string } }) {
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string; groupId: string }> },
+) {
   const { id, groupId } = await params;
 
   if (!id || !groupId) return NextResponse.json({ error: 'Missing params' }, { status: 400 });
@@ -66,7 +79,8 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   try {
     // Ensure group exists and belongs to course
     const group = await prisma.group.findUnique({ where: { id: groupId } });
-    if (!group || group.courseId !== id) return NextResponse.json({ error: 'Group not found for course' }, { status: 404 });
+    if (!group || group.courseId !== id)
+      return NextResponse.json({ error: 'Group not found for course' }, { status: 404 });
 
     await prisma.group.delete({ where: { id: groupId } });
 
