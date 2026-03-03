@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
           data: {
             courseId: assignment.courseId,
             userId: user.id,
-            role: 'ADMIN',
+            role: 'INSTRUCTOR',
           },
         });
       } else {
@@ -207,12 +207,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 
-    // Verify caller is in this course
-    const rosterEntry = await prisma.roster.findUnique({
-      where: { courseId_userId: { courseId: assignment.courseId, userId: user.id } },
-    });
-    if (!rosterEntry) {
-      return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
+    // Verify caller access: enrolled users can read; global admins can always read.
+    if (user.role !== 'ADMIN') {
+      const rosterEntry = await prisma.roster.findUnique({
+        where: { courseId_userId: { courseId: assignment.courseId, userId: user.id } },
+      });
+      if (!rosterEntry) {
+        return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
+      }
     }
 
     // If studentId present, restrict to comments about that student OR authored by that student

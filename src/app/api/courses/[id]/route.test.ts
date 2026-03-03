@@ -99,12 +99,14 @@ describe('GET /api/courses/[id]', () => {
           title: 'A1',
           description: null,
           dueDate: new Date('2026-09-01T00:00:00.000Z'),
-          maxPoints: 100,
           isPublished: true,
+          allowLateSubmissions: true,
+          lateCutoff: new Date('2026-09-05T00:00:00.000Z'),
           createdAt: new Date('2026-01-01T00:00:00.000Z'),
           updatedAt: new Date('2026-01-02T00:00:00.000Z'),
           courseId: 'course-1',
-          _count: { problems: 1 },
+          problems: [{ maxPoints: 60 }, { maxPoints: 40 }],
+          _count: { problems: 2 },
         },
       ],
     });
@@ -130,9 +132,12 @@ describe('GET /api/courses/[id]', () => {
     );
     expect(body.assignments[0]).toEqual(
       expect.objectContaining({
+        maxPoints: 100,
         submissionCount: 2,
         commentCount: 1,
         hasSubmissionsOrComments: true,
+        allowLateSubmissions: true,
+        lateCutoff: '2026-09-05T00:00:00.000Z',
       }),
     );
     expect(body.viewerRole).toBe('FACULTY');
@@ -191,12 +196,12 @@ describe('PUT /api/courses/[id]', () => {
               title: 'A1',
               description: null,
               dueDate: new Date('2026-09-01T00:00:00.000Z'),
-              maxPoints: 100,
               isPublished: true,
               createdAt: new Date('2026-01-01T00:00:00.000Z'),
               updatedAt: new Date('2026-01-02T00:00:00.000Z'),
               courseId: 'course-1',
-              _count: { problems: 1 },
+              problems: [{ maxPoints: 25 }, { maxPoints: 25 }, { maxPoints: 50 }],
+              _count: { problems: 3 },
             },
           ],
           roster: [

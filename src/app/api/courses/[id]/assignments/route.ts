@@ -6,7 +6,7 @@ import { verifyToken, JwtPayload } from '@/app/utils/jwt';
 export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   // Await params
   const params = await context.params;
-  const courseId = params.id;
+  const courseId = await params.id;
 
   // 1. Validate courseId
   if (!courseId) {
@@ -33,7 +33,10 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
-    // 4. Fetch all published assignments
+    // 4. Fetch all published assignments along with problem info needed to
+    //    compute a student’s total and max grade.  We select the nested
+    //    `problems` relation in order to sum `maxPoints` and any existing
+    //    `AssignmentProblemGrade` for the current user.
     const assignments = await prisma.assignment.findMany({
       where: {
         courseId: courseId,
@@ -43,19 +46,45 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
         id: true,
         title: true,
         dueDate: true,
-        grades: {
+        description: true,
+        problems: {
           select: {
-            grade: true
+            maxPoints: true,
+            grades: {
+              where: { studentId: decoded.userId },
+              select: { grade: true },
+            },
           },
         },
-        description: true,
       },
       orderBy: {
         dueDate: 'asc',
       },
     });
 
-    return NextResponse.json(assignments);
+    // 5. Compute grade totals per assignment for this student
+    const assignmentsWithGrades = assignments.map((a) => {
+      const maxGrade = a.problems.reduce(
+        (sum, p) => sum + (p.maxPoints ?? 0),
+        0,
+      );
+      const totalGrade = a.problems.reduce(
+        (sum, p) =>
+          sum + (p.grades?.[0]?.grade ?? 0),
+        0,
+      );
+
+      return {
+        id: a.id,
+        title: a.title,
+        dueDate: a.dueDate,
+        description: a.description,
+        totalGrade,
+        maxGrade,
+      };
+    });
+
+    return NextResponse.json(assignmentsWithGrades);
   } catch (error) {
     console.error('API GET ASSIGNMENTS error:', error);
     return NextResponse.json({ error: 'Failed to fetch assignments.' }, { status: 500 });

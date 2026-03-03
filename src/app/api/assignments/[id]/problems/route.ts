@@ -14,15 +14,18 @@ interface Problem {
   type: z.infer<typeof ProblemTypeEnum> | null;
   maxStates: number | null;
   isDeterministic: boolean | null;
+  groupAssignmentProblems?: { groupId: string }[];
 }
 
 interface ProblemWithSolved extends Problem {
   solved: boolean;
+  grade: number | null; // grade from AssignmentProblemGrade
 }
 
 interface AssignmentProblemResult {
   problem: Problem;
   submissions: { id: string }[];
+  AssignmentProblemGrade?: { grade: number | null } | null;
 }
 
 export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -48,7 +51,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     // ---- Assignment lookup ----
     const assignment = await prisma.assignment.findUnique({
       where: { id: assignmentId },
-      select: { courseId: true },
+      select: { courseId: true, isGroup: true },
     });
 
     if (!assignment) {
@@ -70,6 +73,19 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     }
 
     // ---- Load problems ----
+    // If this is a group assignment, determine the user's group for the course
+    const userGroupEntry = assignment.isGroup
+      ? await prisma.groupRoster.findFirst({
+          where: { courseId, userId },
+          select: { groupId: true },
+        })
+      : null;
+    const userGroupId = userGroupEntry?.groupId ?? null;
+
+    const submissionsWhere = userGroupId
+      ? { correct: true, OR: [{ studentId: userId }, { groupId: userGroupId }] }
+      : { studentId: userId, correct: true };
+
     const assignmentProblems = (await prisma.assignmentProblem.findMany({
       where: { assignmentId: assignmentId },
       include: {
@@ -79,15 +95,16 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
             title: true,
             description: true,
             type: true,
+            maxPoints: true,
+            maxSubmissions: true,
             maxStates: true,
             isDeterministic: true,
+            // Pull any group->problem mappings so we can determine visibility
+            groupAssignmentProblems: { select: { groupId: true } },
           },
         },
         submissions: {
-          where: {
-            studentId: userId,
-            correct: true,
-          },
+          where: submissionsWhere,
           select: { id: true },
         },
       },
@@ -96,12 +113,21 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       },
     })) as AssignmentProblemResult[];
 
-    const problems: ProblemWithSolved[] = assignmentProblems.map(
-      (ap: (typeof assignmentProblems)[number]) => ({
-        ...ap.problem,
-        solved: ap.submissions.length > 0,
-      }),
-    );
+    // For group assignments: include problems that are unassigned (apply to everyone)
+    // or explicitly mapped to the user's group. For non-group assignments return all.
+    const visible = assignmentProblems.filter((ap) => {
+      const mapped = (ap.problem as any).groupAssignmentProblems ?? [];
+      if (!assignment.isGroup) return true; // assignment-level problems when not group-mode
+      if (mapped.length === 0) return true; // unassigned -> visible to everyone
+      if (!userGroupId) return false; // user has no group -> can't see group-only problems
+      return mapped.some((m: { groupId: string }) => m.groupId === userGroupId);
+    });
+
+    const problems: ProblemWithSolved[] = visible.map((ap) => ({
+      ...ap.problem,
+      solved: ap.submissions.length > 0,
+      grade: (ap as any).AssignmentProblemGrade?.grade ?? (ap as any).grades?.[0]?.grade ?? null,
+    }));
 
     // ---- Activity log ----
     try {

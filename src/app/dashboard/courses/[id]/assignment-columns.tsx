@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
 import { Assignment } from '@prisma/client';
+import type { AssignmentWithProblemCount } from '@/types/course';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { NotebookText, Pencil, Trash2, ChevronDown, BookOpen } from 'lucide-react';
@@ -18,23 +19,15 @@ import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 
-// Extended assignment type with problem count
-type AssignmentWithProblemCount = Assignment & {
-  problemCount: number;
-  hasSubmissionsOrComments?: boolean;
-  submissionCount?: number;
-  commentCount?: number;
-};
-
 // Component for the publish switch with confirmation dialog
-function PublishSwitchCell({ 
-  assignment, 
-  onPublishToggle, 
+function PublishSwitchCell({
+  assignment,
+  onPublishToggle,
   disabled,
-}: { 
-  assignment: AssignmentWithProblemCount; 
+}: {
+  assignment: AssignmentWithProblemCount;
   onPublishToggle: (assignmentId: string, newValue: boolean) => void;
-  disabled: boolean
+  disabled: boolean;
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingValue, setPendingValue] = useState(false);
@@ -105,24 +98,37 @@ export function useAssignmentColumns(
       cell: ({ row }) => <div>{formatDateTimeInTimeZone(row.original.dueDate, timeZone)}</div>,
     },
     {
-      accessorKey: 'createdAt',
-      header: 'Created At',
-      cell: ({ row }) => <div>{formatDateTimeInTimeZone(row.original.createdAt, timeZone)}</div>,
-    },
-    {
       accessorKey: 'maxPoints',
       header: () => 'Points',
-      cell: ({ row }) => <div>{row.original.maxPoints}</div>,
+      cell: ({ row }) => <div>{row.original.maxPoints ?? 0}</div>,
     },
     {
       id: 'problemCount',
       header: 'Problems',
-      accessorKey: 'problemCount', // match the field returned by API
+      accessorKey: 'problemCount',
       cell: ({ row }) => {
         const count = row.original.problemCount ?? 0;
         return <div>{count}</div>;
       },
       enableSorting: true,
+    },
+    {
+      id: 'allowLateSubmissions',
+      header: 'Allow Late',
+      accessorFn: (row) => (row.allowLateSubmissions ? 'Yes' : 'No'),
+      cell: ({ row }) => <div>{row.original.allowLateSubmissions ? 'Yes' : 'No'}</div>,
+      enableSorting: true,
+    },
+    {
+      accessorKey: 'lateCutoff',
+      header: 'Late Cutoff',
+      cell: ({ row }) => (
+        <div>
+          {row.original.lateCutoff
+            ? formatDateTimeInTimeZone(row.original.lateCutoff, timeZone)
+            : '—'}
+        </div>
+      ),
     },
     {
       id: 'submissionCount',
@@ -153,7 +159,7 @@ export function useAssignmentColumns(
       id: 'actions',
       header: '',
       cell: ({ row }) => {
-  const disabled = !!(row.original.hasSubmissionsOrComments) || courseIsArchived;
+        const disabled = !!row.original.hasSubmissionsOrComments || courseIsArchived;
         const title = disabled ? 'Cannot delete' : undefined;
 
         return (
@@ -194,7 +200,7 @@ export function useAssignmentColumns(
                   }}
                   hidden={courseIsArchived}
                   title={title}
-                  className={`flex items-center gap-2 ${disabled ? 'opacity-50 cursor-not-allowed text-gray-500' : 'focus:text-red-600 text-red-600'}`}
+                  className={`flex items-center gap-2 ${disabled ? 'cursor-not-allowed text-gray-500 opacity-50' : 'text-red-600 focus:text-red-600'}`}
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
                   Delete Assignment

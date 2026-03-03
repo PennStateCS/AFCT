@@ -220,7 +220,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
               title: a.title,
               description: a.description ?? undefined,
               dueDate: a.dueDate,
-              maxPoints: a.maxPoints,
               isPublished: false,
               courseId: newCourse.id,
             },

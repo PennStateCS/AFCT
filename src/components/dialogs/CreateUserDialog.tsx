@@ -11,15 +11,9 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { toast } from 'sonner';
 import InputGroup from '@/components/ui/InputGroup';
+import SelectField from '@/components/ui/SelectField';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
 import { useForm, Controller } from 'react-hook-form';
@@ -220,22 +214,15 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
             control={control}
             name="role"
             render={({ field }) => (
-              <div>
-                <label className="mb-2 block text-sm font-medium">Default Role</label>
-                <Select onValueChange={(v) => field.onChange(v)} value={field.value ?? ''}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select a role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {roleOptions.map((r) => (
-                      <SelectItem key={r} value={r}>
-                        {formatRole(r)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.role && <p className="mt-1 text-xs text-red-600">{errors.role.message}</p>}
-              </div>
+              <SelectField
+                label="Default Role"
+                name="role"
+                value={field.value ?? ''}
+                onValueChange={(v) => field.onChange(v)}
+                placeholder="Select a role"
+                options={roleOptions.map((r) => ({ value: r, label: formatRole(r) }))}
+                error={errors.role?.message}
+              />
             )}
           />
 
