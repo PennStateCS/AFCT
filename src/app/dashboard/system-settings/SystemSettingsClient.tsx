@@ -95,7 +95,7 @@ export default function SystemSettingsClient() {
           <CardTitle className="text-lg">General</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={onSubmit} className="grid max-w-xl gap-4">
+          <form onSubmit={onSubmit} className="grid max-w-xl gap-4 rounded-md border p-4">
             <SelectField
               label="Timezone"
               name="timezone"

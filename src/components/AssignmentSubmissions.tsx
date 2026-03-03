@@ -167,10 +167,14 @@ type ProblemListProps = {
 
 function ProblemList({ problems, submissions, selectedProblemId, onSelect }: ProblemListProps) {
   if (!problems.length) return null;
+  const limitText = (value: string, max = 80) =>
+    value.length > max ? `${value.slice(0, max - 1)}…` : value;
 
   const items = problems.map((problem, index) => ({
     id: problem.id,
-    title: problem.title ? `Problem ${index + 1}: ${problem.title}` : `Problem ${index + 1}`,
+    title: problem.title
+      ? `Problem ${index + 1}: ${limitText(problem.title)}`
+      : `Problem ${index + 1}`,
   }));
 
   const getBadgeContent = (problemId: string) => {

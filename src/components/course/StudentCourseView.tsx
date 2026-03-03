@@ -13,6 +13,8 @@ interface StudentCourseViewProps {
 export function StudentCourseView({ course }: StudentCourseViewProps) {
   const router = useRouter();
   const { timezone } = useEffectiveTimezone();
+  const limitText = (value: string, max = 140) =>
+    value.length > max ? `${value.slice(0, max - 1)}…` : value;
 
   return (
     <Card>
@@ -47,11 +49,16 @@ export function StudentCourseView({ course }: StudentCourseViewProps) {
                       {/* Content area */}
                       <div className="flex w-full flex-col px-4 py-4 sm:p-5">
                         {/* Title */}
-                        <div className="mb-2">
-                          <div className="text-md font-semibold">{assignment.title}</div>
+                        <div className="mb-2 min-w-0">
+                          <div className="text-md truncate font-semibold" title={assignment.title}>
+                            {assignment.title}
+                          </div>
                           {assignment.description && (
-                            <div className="text-muted-foreground mt-1 text-sm">
-                              {assignment.description}
+                            <div
+                              className="text-muted-foreground mt-1 line-clamp-2 text-sm break-words"
+                              title={assignment.description}
+                            >
+                              {limitText(assignment.description)}
                             </div>
                           )}
                         </div>

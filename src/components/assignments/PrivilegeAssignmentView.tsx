@@ -340,9 +340,12 @@ export default function AssignmentDashboardPage() {
           Edit Assignment
         </Button>
         <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl">
-              <span className="font-semibold">Assignment:</span> {assignment.title}
+          <div className="flex flex-wrap items-start gap-2">
+            <h1 className="text-2xl break-words">
+              <span className="font-semibold">Assignment:</span>{' '}
+              <span className="inline-block max-w-full align-bottom" title={assignment.title}>
+                {assignment.title}
+              </span>
             </h1>
             {(() => {
               let status = '';
@@ -374,7 +377,7 @@ export default function AssignmentDashboardPage() {
             {/* Show course name/code as a link to the course page (fallback to courseId) */}
             <Link
               href={`/dashboard/courses/${assignment.course?.id || assignment.courseId}`}
-              className="text-blue-700 hover:underline"
+              className="max-w-full break-all text-blue-700 hover:underline"
             >
               {assignment.course?.name || assignment.courseName || assignment.courseId}
               {assignment.course?.code
@@ -401,9 +404,11 @@ export default function AssignmentDashboardPage() {
             </span>
           </div>
         </div>
-        <div>
+        <div className="min-w-0">
           <span className="font-semibold">Description:</span>
-          <br /> {assignment.description ?? 'No description.'}
+          <p className="text-muted-foreground mt-2 max-h-40 overflow-y-auto rounded-md border p-3 break-words whitespace-pre-wrap">
+            {assignment.description ?? 'No description.'}
+          </p>
         </div>
       </div>
       <Tabs value={tab} onValueChange={handleTabChange}>
