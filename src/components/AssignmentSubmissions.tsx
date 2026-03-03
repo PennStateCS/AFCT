@@ -495,20 +495,20 @@ export default function AssignmentSubmissions({
   const assignmentTotals = useMemo(() => {
     if (!selectedStudent) return null;
 
-    const totalEarned = problems.reduce((sum, problem) => {
+    const totalEarned = assignmentProblems.reduce((sum, problem) => {
       const gradeValue = problemGrades[problem.id];
       const safeGrade =
         typeof gradeValue === 'number' && Number.isFinite(gradeValue) ? Math.max(0, gradeValue) : 0;
       return sum + safeGrade;
     }, 0);
 
-    const hasUnlimited = problems.some(
+    const hasUnlimited = assignmentProblems.some(
       (problem) => typeof problem.maxPoints === 'number' && problem.maxPoints < 0,
     );
 
     const totalAvailable = hasUnlimited
       ? Number.POSITIVE_INFINITY
-      : problems.reduce((sum, problem) => {
+      : assignmentProblems.reduce((sum, problem) => {
           const max =
             typeof problem.maxPoints === 'number' && Number.isFinite(problem.maxPoints)
               ? Math.max(0, problem.maxPoints)
@@ -517,7 +517,7 @@ export default function AssignmentSubmissions({
         }, 0);
 
     return { earned: totalEarned, available: totalAvailable };
-  }, [problemGrades, problems, selectedStudent]);
+  }, [assignmentProblems, problemGrades, selectedStudent]);
 
   // Determine which group the selected student belongs to (for group assignments).
   useEffect(() => {
@@ -793,7 +793,7 @@ export default function AssignmentSubmissions({
 
         const normalizedGrades: Record<string, number | null> = {};
         const normalizedInputs: Record<string, string> = {};
-        problems.forEach((problem) => {
+        assignmentProblems.forEach((problem) => {
           const entry = data?.[problem.id];
           const value = typeof entry?.grade === 'number' ? entry.grade : null;
           normalizedGrades[problem.id] = value;
@@ -805,9 +805,9 @@ export default function AssignmentSubmissions({
         setProblemGradeErrors({});
         if (selectedStudent) {
           const hasAllGrades =
-            problems.length === 0
+            assignmentProblems.length === 0
               ? true
-              : problems.every((problem) => {
+              : assignmentProblems.every((problem) => {
                   const value = normalizedGrades[problem.id];
                   return value !== null && value !== undefined;
                 });
@@ -827,7 +827,7 @@ export default function AssignmentSubmissions({
     };
 
     fetchGrades();
-  }, [courseId, assignmentId, selectedStudent, problems]);
+  }, [courseId, assignmentId, selectedStudent, assignmentProblems]);
 
   const saveComment = useCallback(
     async (problemId: string) => {
@@ -903,7 +903,7 @@ export default function AssignmentSubmissions({
         return;
       }
 
-      const problem = problems.find((p) => p.id === problemId);
+      const problem = assignmentProblems.find((p) => p.id === problemId);
       if (!problem) return;
       const rawMaxPoints = typeof problem.maxPoints === 'number' ? problem.maxPoints : null;
       const hasUpperBound = typeof rawMaxPoints === 'number' && rawMaxPoints >= 0;
@@ -952,9 +952,9 @@ export default function AssignmentSubmissions({
           const updated = { ...prev, [problemId]: numericValue };
           if (selectedStudent) {
             const hasAllGrades =
-              problems.length === 0
+              assignmentProblems.length === 0
                 ? true
-                : problems.every((problem) => {
+                : assignmentProblems.every((problem) => {
                     const value =
                       problem.id === problemId ? numericValue : (prev[problem.id] ?? null);
                     return value !== null && value !== undefined;
@@ -988,7 +988,7 @@ export default function AssignmentSubmissions({
       courseId,
       courseIsArchived,
       gradeInputs,
-      problems,
+      assignmentProblems,
       selectedStudent,
       setProblemGrades,
     ],
@@ -1107,7 +1107,9 @@ export default function AssignmentSubmissions({
       )}
 
       {openDialog.submission &&
-        ['FA', 'PDA'].includes(problems.find((p) => p.id === selectedProblemId)?.type ?? '') && (
+        ['FA', 'PDA'].includes(
+          visibleProblems.find((p) => p.id === selectedProblemId)?.type ?? '',
+        ) && (
           <JffViewerDialog
             open={openDialog.open}
             onOpenChange={(open) => setOpenDialog({ open, submission: null })}
@@ -1120,7 +1122,7 @@ export default function AssignmentSubmissions({
           />
         )}
       {openDialog.submission &&
-        (problems.find((p) => p.id === selectedProblemId)?.type ?? '') === 'RE' && (
+        (visibleProblems.find((p) => p.id === selectedProblemId)?.type ?? '') === 'RE' && (
           <RegexViewerDialog
             open={openDialog.open}
             onOpenChange={(open) => setOpenDialog({ open, submission: null })}
@@ -1131,7 +1133,7 @@ export default function AssignmentSubmissions({
           />
         )}
       {openDialog.submission &&
-        (problems.find((p) => p.id === selectedProblemId)?.type ?? '') === 'CFG' && (
+        (visibleProblems.find((p) => p.id === selectedProblemId)?.type ?? '') === 'CFG' && (
           <CfgViewerDialog
             open={openDialog.open}
             onOpenChange={(open) => setOpenDialog({ open, submission: null })}

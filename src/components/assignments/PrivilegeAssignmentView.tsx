@@ -70,6 +70,8 @@ type AssignmentWithDetails = {
   courseIsArchived?: boolean;
   dueDate: string | Date;
   maxPoints: number;
+  allowLateSubmissions?: boolean;
+  lateCutoff?: string | Date | null;
   isPublished: boolean;
   isGroup?: boolean;
   createdAt?: Date;
@@ -733,6 +735,7 @@ export default function AssignmentDashboardPage() {
             courseIsArchived={courseIsArchived}
             courseId={id}
             assignmentId={aid}
+            maxAssignmentGrade={assignment.maxPoints}
             problems={assignment.problems.map((ap) => ({
               id: ap.problem.id,
               title: ap.problem.title,
@@ -859,6 +862,12 @@ export default function AssignmentDashboardPage() {
                 ? new Date(assignment.dueDate)
                 : assignment.dueDate,
             isGroup: assignment.isGroup ?? false,
+            allowLateSubmissions: assignment.allowLateSubmissions ?? false,
+            lateCutoff: assignment.lateCutoff
+              ? typeof assignment.lateCutoff === 'string'
+                ? new Date(assignment.lateCutoff)
+                : assignment.lateCutoff
+              : null,
           }}
           onSave={() => {
             setLoading(true);
@@ -891,6 +900,9 @@ export default function AssignmentDashboardPage() {
                   id: '',
                   title: '',
                   description: null,
+                  maxSubmissions: -1,
+                  maxPoints: 100,
+                  autograderEnabled: true,
                   fileName: null,
                   originalFileName: null,
                   type: null,
