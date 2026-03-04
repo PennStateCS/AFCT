@@ -104,7 +104,7 @@ export default function DashboardSidebarMenu() {
       return res.json();
     });
   const { data: courses = [] } = useSWR<Course[]>('/api/courses', fetcher, {
-    refreshInterval: 6000, // revalidate every 6s
+    refreshInterval: 0,
     revalidateOnFocus: true, // revalidate when window/tab is focused
   });
 
