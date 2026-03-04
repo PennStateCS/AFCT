@@ -349,6 +349,7 @@ export default function AssignmentSubmissions({
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const selectedStudentIdParam = searchParams.get('studentId');
   const [students, setStudents] = useState<Person[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [submissions, setSubmissions] = useState<Record<string, SubmissionData>>({});
@@ -604,13 +605,13 @@ export default function AssignmentSubmissions({
         });
         setStudents(data);
         if (data.length > 0) {
-          const paramStudentId = searchParams.get('studentId');
-          const initialIndex = paramStudentId ? data.findIndex((s) => s.id === paramStudentId) : -1;
+          const initialIndex = selectedStudentIdParam
+            ? data.findIndex((s) => s.id === selectedStudentIdParam)
+            : -1;
           if (initialIndex !== -1) {
             setSelectedIndex(initialIndex);
           } else {
             setSelectedIndex(0);
-            updateStudentQuery(data[0].id);
           }
         }
       } catch (err) {
@@ -620,15 +621,14 @@ export default function AssignmentSubmissions({
       }
     };
     fetchStudents();
-  }, [courseId, searchParams, updateStudentQuery]);
+  }, [courseId, selectedStudentIdParam]);
 
   useEffect(() => {
     if (!selectedStudent) return;
-    const paramStudentId = searchParams.get('studentId');
-    if (paramStudentId !== selectedStudent.id) {
+    if (selectedStudentIdParam !== selectedStudent.id) {
       updateStudentQuery(selectedStudent.id);
     }
-  }, [searchParams, selectedStudent, updateStudentQuery]);
+  }, [selectedStudentIdParam, selectedStudent, updateStudentQuery]);
 
   useEffect(() => {
     const fetchGradeSummary = async () => {
@@ -716,7 +716,7 @@ export default function AssignmentSubmissions({
   // Fetch comments only for visible problems (honors group filtering)
   useEffect(() => {
     const loadComments = async () => {
-      if (!selectedStudent) {
+      if (!selectedStudentId) {
         setComments({});
         return;
       }
@@ -727,7 +727,7 @@ export default function AssignmentSubmissions({
             const problemId = p.id;
             try {
               const res = await fetch(
-                `/api/comments?assignmentId=${assignmentId}&problemId=${problemId}&studentId=${selectedStudent.id}`,
+                `/api/comments?assignmentId=${assignmentId}&problemId=${problemId}&studentId=${selectedStudentId}`,
               );
               if (!res.ok) {
                 if ([204, 401, 403, 404].includes(res.status)) {
@@ -752,10 +752,10 @@ export default function AssignmentSubmissions({
     };
     if (visibleProblems.length > 0) loadComments();
     else setComments({});
-  }, [assignmentId, visibleProblems, selectedStudent]);
+  }, [assignmentId, visibleProblems, selectedStudentId]);
 
   useEffect(() => {
-    if (!selectedStudent) {
+    if (!selectedStudentId) {
       setProblemGrades({});
       setGradeInputs({});
       setProblemGradeErrors({});
@@ -767,7 +767,7 @@ export default function AssignmentSubmissions({
       setLoadingProblemGrades(true);
       try {
         const res = await fetch(
-          `/api/courses/${courseId}/${assignmentId}/problem-grades/${selectedStudent.id}`,
+          `/api/courses/${courseId}/${assignmentId}/problem-grades/${selectedStudentId}`,
         );
         let data: Record<string, { grade: number | null; feedback: string | null }> = {};
         if (res.status === 204) {
@@ -807,7 +807,7 @@ export default function AssignmentSubmissions({
         setProblemGrades(normalizedGrades);
         setGradeInputs(normalizedInputs);
         setProblemGradeErrors({});
-        if (selectedStudent) {
+        if (selectedStudentId) {
           const hasAllGrades =
             assignmentProblems.length === 0
               ? true
@@ -817,7 +817,7 @@ export default function AssignmentSubmissions({
                 });
           setStudentGradeStatuses((prev) => ({
             ...prev,
-            [selectedStudent.id]: hasAllGrades,
+            [selectedStudentId]: hasAllGrades,
           }));
         }
       } catch (error) {
@@ -831,7 +831,7 @@ export default function AssignmentSubmissions({
     };
 
     fetchGrades();
-  }, [courseId, assignmentId, selectedStudent, assignmentProblems]);
+  }, [courseId, assignmentId, selectedStudentId, assignmentProblems]);
 
   const saveComment = useCallback(
     async (problemId: string) => {
