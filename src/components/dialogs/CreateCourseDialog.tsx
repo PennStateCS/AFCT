@@ -9,8 +9,7 @@ import {
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
+import SwitchField from '@/components/ui/SwitchField';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { User } from '@prisma/client';
@@ -313,20 +312,20 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
           />
 
           {/* PUBLISH SWITCH */}
-          <div className="flex items-center justify-between">
-            <Label htmlFor="isPublished">Publish Now</Label>
-            <Controller
-              control={control}
-              name="isPublished"
-              render={({ field }) => (
-                <Switch
-                  id="isPublished"
-                  checked={!!field.value}
-                  onCheckedChange={(checked) => field.onChange(!!checked)}
-                />
-              )}
-            />
-          </div>
+          <Controller
+            control={control}
+            name="isPublished"
+            render={({ field }) => (
+              <SwitchField
+                label="Publish Now"
+                name="isPublished"
+                checked={!!field.value}
+                onCheckedChange={(checked) => field.onChange(!!checked)}
+                description="Makes the course visible to enrolled students."
+                descriptionPlacement="inline"
+              />
+            )}
+          />
 
           <DialogFooter>
             <DialogClose asChild>

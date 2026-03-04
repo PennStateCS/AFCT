@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
+import SwitchField from '@/components/ui/SwitchField';
 import { Textarea } from '@/components/ui/textarea';
 import InputGroup from '@/components/ui/InputGroup';
 
@@ -272,63 +272,48 @@ export function CreateAssignmentDialog({
             control={control}
             name="isGroup"
             render={({ field }) => (
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label htmlFor="isGroup">Group Assignment</Label>
-                  <p className="text-muted-foreground text-sm">
-                    Students submit and are graded as groups for this assignment.
-                  </p>
-                </div>
-                <Switch
-                  id="isGroup"
-                  checked={!!field.value}
-                  onCheckedChange={(checked) => field.onChange(!!checked)}
-                />
-              </div>
+              <SwitchField
+                label="Group Assignment"
+                name="isGroup"
+                checked={!!field.value}
+                onCheckedChange={(checked) => field.onChange(!!checked)}
+                description="Students submit and are graded as groups for this assignment."
+                descriptionPlacement="inline"
+              />
             )}
           />
 
           {/* Publish switch */}
-          <div className="flex items-center justify-between">
-            <div>
-              <Label htmlFor="isPublished">Publish Now</Label>
-              <p className="text-muted-foreground text-sm">
-                Makes the assignment visible to enrolled students.
-              </p>
-            </div>
-            <Controller
-              control={control}
-              name="isPublished"
-              render={({ field }) => (
-                <Switch
-                  id="isPublished"
-                  checked={!!field.value}
-                  onCheckedChange={(checked) => field.onChange(!!checked)}
-                />
-              )}
-            />
-          </div>
+          <Controller
+            control={control}
+            name="isPublished"
+            render={({ field }) => (
+              <SwitchField
+                label="Publish Now"
+                name="isPublished"
+                checked={!!field.value}
+                onCheckedChange={(checked) => field.onChange(!!checked)}
+                description="Makes the assignment visible to enrolled students."
+                descriptionPlacement="inline"
+              />
+            )}
+          />
 
           {/* Late submissions toggle */}
-          <div className="flex items-center justify-between">
-            <div>
-              <Label htmlFor="allowLateSubmissions">Allow Late Submissions</Label>
-              <p className="text-muted-foreground text-sm">
-                Students can submit after the deadline until a cutoff date.
-              </p>
-            </div>
-            <Controller
-              control={control}
-              name="allowLateSubmissions"
-              render={({ field }) => (
-                <Switch
-                  id="allowLateSubmissions"
-                  checked={!!field.value}
-                  onCheckedChange={(checked) => field.onChange(!!checked)}
-                />
-              )}
-            />
-          </div>
+          <Controller
+            control={control}
+            name="allowLateSubmissions"
+            render={({ field }) => (
+              <SwitchField
+                label="Allow Late Submissions"
+                name="allowLateSubmissions"
+                checked={!!field.value}
+                onCheckedChange={(checked) => field.onChange(!!checked)}
+                description="Students can submit after the deadline until a cutoff date."
+                descriptionPlacement="inline"
+              />
+            )}
+          />
 
           {allowLateSubmissions && (
             <Controller

@@ -10,12 +10,12 @@ export async function DELETE(
 ) {
   const { id: providedCourseId, gid: groupId, uid: userId } = await params;
 
-  if (!groupId || !userId)
-    return NextResponse.json({ error: 'Missing IDs' }, { status: 400 });
+  if (!groupId || !userId) return NextResponse.json({ error: 'Missing IDs' }, { status: 400 });
 
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role))
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   try {
     const group = await prisma.group.findUnique({ where: { id: groupId } });
@@ -24,7 +24,9 @@ export async function DELETE(
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
     const courseId = group.courseId;
 
-    const entry = await prisma.groupRoster.findUnique({ where: { groupId_userId: { groupId, userId } } });
+    const entry = await prisma.groupRoster.findUnique({
+      where: { groupId_userId: { groupId, userId } },
+    });
     if (!entry) return NextResponse.json({ error: 'Membership not found' }, { status: 404 });
 
     await prisma.groupRoster.delete({ where: { id: entry.id } });
