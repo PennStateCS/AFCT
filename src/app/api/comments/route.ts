@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
@@ -33,6 +34,7 @@ interface CommentResponse {
   id: string;
   content: string;
   createdAt: string | Date;
+  problemId?: string;
   author: {
     id: string;
     firstName: string | null;
@@ -191,8 +193,10 @@ export async function GET(request: NextRequest) {
     const assignmentId = searchParams.get('assignmentId');
     const problemId = searchParams.get('problemId');
     const studentId = searchParams.get('studentId');
+    const scope = searchParams.get('scope');
+    const isAssignmentScope = scope === 'assignment';
 
-    if (!assignmentId || !problemId) {
+    if (!assignmentId || (!problemId && !isAssignmentScope)) {
       return NextResponse.json(
         { error: 'assignmentId and problemId are required' },
         { status: 400 },
@@ -218,15 +222,26 @@ export async function GET(request: NextRequest) {
     }
 
     // If studentId present, restrict to comments about that student OR authored by that student
-    const whereClause = studentId
-      ? {
-          assignmentId,
-          problemId,
-          OR: [{ aboutStudentId: studentId }, { roster: { userId: studentId } }],
-        }
-      : { assignmentId, problemId };
+    let whereClause: Prisma.CommentWhereInput;
+    if (isAssignmentScope) {
+      whereClause = studentId
+        ? {
+            assignmentId,
+            OR: [{ aboutStudentId: studentId }, { roster: { userId: studentId } }],
+          }
+        : { assignmentId };
+    } else {
+      const requiredProblemId = problemId as string;
+      whereClause = studentId
+        ? {
+            assignmentId,
+            problemId: requiredProblemId,
+            OR: [{ aboutStudentId: studentId }, { roster: { userId: studentId } }],
+          }
+        : { assignmentId, problemId: requiredProblemId };
+    }
 
-    const comments: CommentDB[] = (await prisma.comment.findMany({
+    const comments = (await prisma.comment.findMany({
       where: whereClause,
       include: {
         roster: {
@@ -245,12 +260,13 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: { createdAt: 'asc' },
-    })) as CommentDB[];
+    })) as unknown as CommentDB[];
 
     const formatted: CommentResponse[] = comments.map((c) => ({
       id: c.id,
       content: c.content,
       createdAt: c.createdAt,
+      problemId: c.problemId,
       author: {
         id: c.roster.user.id,
         firstName: c.roster.user.firstName,

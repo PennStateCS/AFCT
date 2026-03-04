@@ -722,28 +722,35 @@ export default function AssignmentSubmissions({
       }
       try {
         const validProblems = visibleProblems.filter((p): p is Problem => Boolean(p?.id));
-        const entries = await Promise.all(
-          validProblems.map(async (p) => {
-            const problemId = p.id;
-            try {
-              const res = await fetch(
-                `/api/comments?assignmentId=${assignmentId}&problemId=${problemId}&studentId=${selectedStudentId}`,
-              );
-              if (!res.ok) {
-                if ([204, 401, 403, 404].includes(res.status)) {
-                  return [problemId, []] as const;
-                }
-                throw new Error('Failed to load comments');
-              }
-              const list = res.status === 204 ? [] : await res.json();
-              return [problemId, list as DiscussionComment[]] as const;
-            } catch (err) {
-              console.error(`Fetch comments error for problem ${problemId}:`, err);
-              return [problemId, []] as const;
-            }
-          }),
-        );
-        setComments(Object.fromEntries(entries));
+        const params = new URLSearchParams({
+          assignmentId,
+          studentId: selectedStudentId,
+          scope: 'assignment',
+        });
+
+        const res = await fetch(`/api/comments?${params.toString()}`);
+        if (!res.ok) {
+          if ([204, 401, 403, 404].includes(res.status)) {
+            setComments(Object.fromEntries(validProblems.map((problem) => [problem.id, []])));
+            return;
+          }
+          throw new Error('Failed to load comments');
+        }
+
+        type AssignmentComment = DiscussionComment & { problemId?: string | null };
+        const list = (res.status === 204 ? [] : ((await res.json()) as AssignmentComment[])) ?? [];
+        const grouped = Object.fromEntries(
+          validProblems.map((problem) => [problem.id, [] as DiscussionComment[]]),
+        ) as Record<string, DiscussionComment[]>;
+
+        for (const comment of list) {
+          const problemId = comment.problemId;
+          if (problemId && grouped[problemId]) {
+            grouped[problemId].push(comment);
+          }
+        }
+
+        setComments(grouped);
       } catch (err) {
         console.error('Load comments error:', err);
         showToast.error('Failed to load comments');
