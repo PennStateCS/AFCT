@@ -3,7 +3,7 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, it, expect, vi } from 'vitest';
+import { beforeAll, describe, it, expect, vi } from 'vitest';
 
 import { AssociateProblemsDialog } from './AssociateProblemsDialog';
 
@@ -15,6 +15,36 @@ vi.mock('@/components/ui/switch', () => import('@/test/mocks/ui').then((mod) => 
 
 const globalWithReact = globalThis as typeof globalThis & { React?: typeof React };
 globalWithReact.React = React;
+
+beforeAll(() => {
+  class ResizeObserverMock {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+
+  const globalAny = globalThis as Record<string, unknown>;
+
+  if (!globalAny.ResizeObserver) {
+    globalAny.ResizeObserver = ResizeObserverMock;
+  }
+
+  if (!HTMLElement.prototype.scrollIntoView) {
+    HTMLElement.prototype.scrollIntoView = () => {};
+  }
+
+  if (!HTMLElement.prototype.setPointerCapture) {
+    HTMLElement.prototype.setPointerCapture = () => {};
+  }
+
+  if (!HTMLElement.prototype.releasePointerCapture) {
+    HTMLElement.prototype.releasePointerCapture = () => {};
+  }
+
+  if (!HTMLElement.prototype.hasPointerCapture) {
+    HTMLElement.prototype.hasPointerCapture = () => false;
+  }
+});
 
 describe('AssociateProblemsDialog', () => {
   const baseProblem = { id: 'p1', title: 'Deterministic FA', type: 'FA' };
@@ -36,16 +66,27 @@ describe('AssociateProblemsDialog', () => {
       />,
     );
 
-    await user.click(await screen.findByText('Deterministic FA'));
-    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+    await user.click(await screen.findByRole('combobox', { name: 'Problem' }));
+    await user.click(await screen.findByRole('option', { name: 'Deterministic FA' }));
+    await user.clear(screen.getByLabelText(/max points/i));
+    await user.type(screen.getByLabelText(/max points/i), '12');
+    await user.click(screen.getByRole('switch', { name: 'Unlimited Submissions' }));
+    await user.clear(screen.getByLabelText(/max submissions/i));
+    await user.type(screen.getByLabelText(/max submissions/i), '4');
+    await user.click(screen.getByRole('button', { name: 'Add Problem' }));
 
-    expect(onAddProblems).toHaveBeenCalledWith(['p1'], undefined);
+    expect(onAddProblems).toHaveBeenCalledWith(['p1'], undefined, [
+      {
+        problemId: 'p1',
+        maxPoints: 12,
+        maxSubmissions: 4,
+        autograderEnabled: true,
+      },
+    ]);
     expect(onClose).toHaveBeenCalled();
   });
 
   it('disables saving when the course is archived', async () => {
-    const user = userEvent.setup();
-
     render(
       <AssociateProblemsDialog
         open
@@ -58,8 +99,6 @@ describe('AssociateProblemsDialog', () => {
       />,
     );
 
-    await user.click(await screen.findByText('Deterministic FA'));
-
-    expect(screen.getByRole('button', { name: 'Save Changes' })).toBeDisabled();
+    expect(await screen.findByRole('button', { name: 'Add Problem' })).toBeDisabled();
   });
 });

@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Assignment } from '@prisma/client';
-import { Switch } from '@/components/ui/switch';
+import SwitchField from '@/components/ui/SwitchField';
 import { Textarea } from '@/components/ui/textarea';
 import InputGroup from '@/components/ui/InputGroup';
 
@@ -315,20 +315,14 @@ export function EditAssignmentDialog({
             name="isGroup"
             control={control}
             render={({ field }) => (
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label htmlFor="isGroup">Group Assignment</Label>
-                  <p className="text-muted-foreground text-sm">
-                    Students submit and are graded as groups for this assignment.
-                  </p>
-                </div>
-                <Switch
-                  id="isGroup"
-                  checked={!!field.value}
-                  onCheckedChange={field.onChange}
-                  onBlur={field.onBlur}
-                />
-              </div>
+              <SwitchField
+                label="Group Assignment"
+                name="isGroup"
+                checked={!!field.value}
+                onCheckedChange={(checked) => field.onChange(!!checked)}
+                description="Students submit and are graded as groups for this assignment."
+                descriptionPlacement="inline"
+              />
             )}
           />
 
@@ -338,20 +332,14 @@ export function EditAssignmentDialog({
             name="isPublished"
             control={control}
             render={({ field }) => (
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label htmlFor="isPublished">Publish Now</Label>
-                  <p className="text-muted-foreground text-sm">
-                    Makes the assignment visible to enrolled students.
-                  </p>
-                </div>
-                <Switch
-                  id="isPublished"
-                  checked={!!field.value}
-                  onCheckedChange={field.onChange}
-                  onBlur={field.onBlur}
-                />
-              </div>
+              <SwitchField
+                label="Publish Now"
+                name="isPublished"
+                checked={!!field.value}
+                onCheckedChange={(checked) => field.onChange(!!checked)}
+                description="Makes the assignment visible to enrolled students."
+                descriptionPlacement="inline"
+              />
             )}
           />
 
@@ -360,19 +348,14 @@ export function EditAssignmentDialog({
             name="allowLateSubmissions"
             control={control}
             render={({ field }) => (
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label htmlFor="allowLateSubmissions">Allow Late Submissions</Label>
-                  <p className="text-muted-foreground text-sm">
-                    Students can submit after the deadline until a cutoff date.
-                  </p>
-                </div>
-                <Switch
-                  id="allowLateSubmissions"
-                  checked={!!field.value}
-                  onCheckedChange={(checked) => field.onChange(!!checked)}
-                />
-              </div>
+              <SwitchField
+                label="Allow Late Submissions"
+                name="allowLateSubmissions"
+                checked={!!field.value}
+                onCheckedChange={(checked) => field.onChange(!!checked)}
+                description="Students can submit after the deadline until a cutoff date."
+                descriptionPlacement="inline"
+              />
             )}
           />
 
