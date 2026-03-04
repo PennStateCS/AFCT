@@ -269,10 +269,10 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative flex min-h-screen w-full items-start justify-center pt-24 md:pt-[14vh]">
+    <div className="relative flex min-h-dvh w-full items-start justify-center overflow-x-hidden pt-24 md:pt-[14vh]">
       {/* Background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-[#5F9EA0] via-[#6FAFB2] to-[#2F4A8A]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.15),transparent_70%)]" />
+      <div className="fixed inset-0 z-0 bg-gradient-to-br from-[#5F9EA0] via-[#6FAFB2] to-[#2F4A8A]" />
+      <div className="fixed inset-0 z-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.15),transparent_70%)]" />
 
       {/* DEV BADGE */}
       {isDev && (
