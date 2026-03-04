@@ -13,9 +13,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import InputGroup from '@/components/ui/InputGroup';
+import SwitchField from '@/components/ui/SwitchField';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -526,38 +526,34 @@ export function CreateProblemDialog({
 
           {/* Deterministic (FA only) */}
           {type === 'FA' && (
-            <div className="flex items-center justify-between">
-              <Label htmlFor="isDeterministic">Deterministic</Label>
-              <Controller
-                control={control}
-                name="isDeterministic"
-                render={({ field }) => (
-                  <div>
-                    <Switch
-                      id="isDeterministic"
-                      checked={!!field.value}
-                      onCheckedChange={(checked) => field.onChange(!!checked)}
-                    />
-                  </div>
-                )}
-              />
-            </div>
-          )}
-
-          <div className="flex items-center justify-between">
-            <Label htmlFor="autograderEnabled">Automatically Graded</Label>
             <Controller
               control={control}
-              name="autograderEnabled"
+              name="isDeterministic"
               render={({ field }) => (
-                <Switch
-                  id="autograderEnabled"
+                <SwitchField
+                  label="Deterministic"
+                  name="isDeterministic"
+                  id="isDeterministic"
                   checked={!!field.value}
                   onCheckedChange={(checked) => field.onChange(!!checked)}
                 />
               )}
             />
-          </div>
+          )}
+
+          <Controller
+            control={control}
+            name="autograderEnabled"
+            render={({ field }) => (
+              <SwitchField
+                label="Automatically Graded"
+                name="autograderEnabled"
+                id="autograderEnabled"
+                checked={!!field.value}
+                onCheckedChange={(checked) => field.onChange(!!checked)}
+              />
+            )}
+          />
 
           {/* File (avoid InputGroup; file inputs must be uncontrolled) */}
           <Controller

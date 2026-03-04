@@ -245,12 +245,22 @@ export default function AssignmentDashboardPage() {
     };
   }, [id, aid, assignment?.isGroup]);
 
-  async function handleAddProblems(problemIds: string[], groupId?: string) {
+  async function handleAddProblems(
+    problemIds: string[],
+    groupId?: string,
+    problemSettings?: {
+      problemId: string;
+      maxPoints: number;
+      maxSubmissions: number;
+      autograderEnabled: boolean;
+    }[],
+  ) {
     if (!id || !aid) return;
     if (!canManageProblems) return;
     try {
       const payload: any = { problemIds };
       if (groupId) payload.groupId = groupId;
+      if (problemSettings && problemSettings.length > 0) payload.problemSettings = problemSettings;
 
       const res = await fetch(`/api/courses/${id}/${aid}/add-problems`, {
         method: 'POST',
@@ -258,7 +268,7 @@ export default function AssignmentDashboardPage() {
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error();
-      showToast.success('Problems added');
+      showToast.success('Problem Added');
     } catch {
       showToast.error('Failed to add problems');
     }
@@ -819,10 +829,8 @@ export default function AssignmentDashboardPage() {
           description: ap.problem.description ?? undefined,
           type: typeof ap.problem.type === 'string' ? ap.problem.type : undefined,
         }))}
-        onAddProblems={(selectedProblemIds, groupId) => {
-          const existingIds = assignment.problems.map((ap: { problem: Problem }) => ap.problem.id);
-          const merged = Array.from(new Set([...existingIds, ...selectedProblemIds]));
-          return handleAddProblems(merged, groupId);
+        onAddProblems={(selectedProblemIds, groupId, problemSettings) => {
+          return handleAddProblems(selectedProblemIds, groupId, problemSettings);
         }}
       />
       <CreateProblemDialog
