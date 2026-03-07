@@ -1,3 +1,4 @@
+import React from 'react';
 import { CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
