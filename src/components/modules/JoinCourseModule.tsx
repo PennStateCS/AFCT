@@ -57,6 +57,9 @@ export function JoinCourseModule() {
           <Label htmlFor="course-code" className="mb-2 text-sm">
             Enter a registration code below:
           </Label>
+          <p className="text-muted-foreground mb-3 text-xs">
+            You can only join while the course registration window is open.
+          </p>
 
           <InputOTP
             maxLength={6}
