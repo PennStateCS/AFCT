@@ -163,6 +163,8 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
           credits: courseSeed.credits,
           startDate: courseDates[index].startDate,
           endDate: courseDates[index].endDate,
+          registrationOpenAt: courseDates[index].startDate,
+          registrationCloseAt: courseDates[index].endDate,
           isPublished: courseSeed.isPublished,
           isArchived: courseSeed.isArchived,
         },
@@ -174,6 +176,8 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
           credits: courseSeed.credits,
           startDate: courseDates[index].startDate,
           endDate: courseDates[index].endDate,
+          registrationOpenAt: courseDates[index].startDate,
+          registrationCloseAt: courseDates[index].endDate,
           isPublished: courseSeed.isPublished,
           isArchived: courseSeed.isArchived,
         },
@@ -260,12 +264,19 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
         const courseStart = new Date(course.startDate);
         const courseDuration = new Date(course.endDate).getTime() - courseStart.getTime();
         const dueDateMs = courseStart.getTime() + courseDuration * assignmentSeed.dueFraction;
+        const dueDate = new Date(dueDateMs);
+        const allowLateSubmissions = Math.random() < 0.5;
+        const lateCutoff =
+          allowLateSubmissions && Math.random() < 0.5
+            ? new Date(dueDate.getTime() + 4 * 24 * 60 * 60 * 1000)
+            : null;
 
         return {
           title: assignmentSeed.title,
           description: assignmentSeed.description,
-          dueDate: new Date(dueDateMs),
-          maxPoints: 100,
+          dueDate,
+          allowLateSubmissions,
+          lateCutoff,
           isPublished: assignmentSeed.isPublished,
           courseId: course.id,
         };
@@ -299,6 +310,9 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
     const assignmentProblemsToCreate: Array<{
       assignmentId: string;
       problemId: string;
+      maxPoints: number;
+      maxSubmissions: number;
+      autograderEnabled: boolean;
     }> = [];
 
     for (const course of courses) {
@@ -318,9 +332,15 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
           .slice(0, Math.min(numProblemsToAssign, courseProblems.length));
 
         for (const problem of selectedProblems) {
+          const randomPoints = (Math.floor(Math.random() * 10) + 1) * 10;
+          const randomSubmissions = Math.random() < 0.5 ? -1 : Math.floor(Math.random() * 5) + 1;
+          const randomAutograderEnabled = Math.random() < 0.5;
           assignmentProblemsToCreate.push({
             assignmentId: assignment.id,
             problemId: problem.id,
+            maxPoints: randomPoints,
+            maxSubmissions: randomSubmissions,
+            autograderEnabled: randomAutograderEnabled,
           });
         }
       }

@@ -42,7 +42,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <DashboardSidebarShell />
           <div className="flex flex-1 flex-col p-4">
             <Navbar />
-            <main>{children}</main>
+            <main lang="en">{children}</main>
           </div>
         </div>
       </AuthGate>

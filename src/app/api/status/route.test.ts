@@ -28,10 +28,12 @@ const prismaMock = vi.hoisted(() => ({
 }));
 
 const execSyncMock = vi.hoisted(() => vi.fn());
+const tlsConnectMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('dns', () => ({ promises: { lookup: vi.fn().mockResolvedValue([]) } }));
 vi.mock('child_process', () => ({ execSync: execSyncMock }));
+vi.mock('tls', () => ({ connect: tlsConnectMock }));
 vi.mock('fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('fs')>();
   const readdir = vi.fn().mockResolvedValue([]);
@@ -69,6 +71,7 @@ vi.mock('fs', async (importOriginal) => {
 });
 
 import { GET } from './route';
+import fs from 'fs';
 
 const envBackup = { ...process.env };
 
@@ -98,6 +101,17 @@ beforeEach(() => {
       return JSON.stringify({ version: '1.3.2' });
     }
     return '';
+  });
+
+  tlsConnectMock.mockImplementation((_options: unknown, onSecure: () => void) => {
+    const socket = {
+      getPeerCertificate: () => ({ valid_to: 'Jan 01 2030 00:00:00 GMT' }),
+      end: vi.fn(),
+      destroy: vi.fn(),
+      on: vi.fn(() => socket),
+    };
+    queueMicrotask(() => onSecure());
+    return socket;
   });
 
   (globalThis as { fetch?: typeof fetch }).fetch = vi
@@ -205,6 +219,32 @@ describe('GET /api/status', () => {
     expect(database?.message).toContain('failed');
   });
 
+  it('stringifies non-Error database failures safely', async () => {
+    prismaMock.$queryRaw.mockRejectedValue({ code: 'E_DB' });
+
+    const req = new Request('http://localhost/api/status');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    const database = body.database as { ok?: boolean; message?: string };
+    expect(database?.ok).toBe(false);
+    expect(database?.message).toBe('[object Object]');
+  });
+
+  it('uses string database errors as message directly', async () => {
+    prismaMock.$queryRaw.mockRejectedValue('plain db failure');
+
+    const req = new Request('http://localhost/api/status');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    const database = body.database as { ok?: boolean; message?: string };
+    expect(database?.ok).toBe(false);
+    expect(database?.message).toBe('plain db failure');
+  });
+
   it('includes environment variables in env section', async () => {
     process.env.NEXTAUTH_URL = 'https://example.com';
     process.env.NODE_ENV = 'production';
@@ -217,6 +257,20 @@ describe('GET /api/status', () => {
     const env = body.env as Record<string, unknown>;
     expect(env.public).toBeTruthy();
     expect(env.masked).toBeTruthy();
+  });
+
+  it('includes both NEXT_PUBLIC_ and PUBLIC_ variables in env.public', async () => {
+    process.env.NEXT_PUBLIC_APP_NAME = 'afct';
+    process.env.PUBLIC_DOCS_URL = 'https://docs.example.com';
+
+    const req = new Request('http://localhost/api/status');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    const env = body.env as { public?: Record<string, string> } | undefined;
+    expect(env?.public?.NEXT_PUBLIC_APP_NAME).toBe('afct');
+    expect(env?.public?.PUBLIC_DOCS_URL).toBe('https://docs.example.com');
   });
 
   it('handles activity log queries', async () => {
@@ -259,5 +313,221 @@ describe('GET /api/status', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body).toBeTruthy();
+  });
+
+  it('includes abandoned files summary and caps samples at 50', async () => {
+    const readdirMock = vi.mocked(fs.promises.readdir);
+    const files60 = Array.from({ length: 60 }, (_, i) => ({
+      isFile: () => true,
+      name: `f${i}.txt`,
+    })) as Array<{ isFile: () => boolean; name: string }>;
+
+    readdirMock.mockResolvedValue(files60 as any);
+    prismaMock.problem.findMany.mockResolvedValue([]);
+    prismaMock.submission.findMany.mockResolvedValue([]);
+    prismaMock.user.findMany.mockResolvedValue([]);
+
+    const req = new Request('http://localhost/api/status');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    const abandoned = body.abandonedFiles as
+      | {
+          total: number;
+          byCategory: Record<string, number>;
+          samples: Array<{ category: string }>;
+        }
+      | undefined;
+
+    expect(abandoned?.total).toBe(240);
+    expect(abandoned?.byCategory.solutions).toBe(60);
+    expect(abandoned?.byCategory.submissions).toBe(60);
+    expect(abandoned?.byCategory.pfps).toBe(60);
+    expect(abandoned?.byCategory.problems).toBe(60);
+    expect(abandoned?.samples.length).toBe(50);
+  });
+
+  it('reports unknown provider for malformed DATABASE_URL', async () => {
+    process.env.DATABASE_URL = 'not-a-valid-db-url';
+
+    const req = new Request('http://localhost/api/status');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    const metrics = body.metrics as { provider?: string } | undefined;
+    expect(metrics?.provider).toBe('unknown');
+  });
+
+  it('reports unknown provider when DATABASE_URL is empty', async () => {
+    process.env.DATABASE_URL = '';
+
+    const req = new Request('http://localhost/api/status');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    const metrics = body.metrics as { provider?: string } | undefined;
+    expect(metrics?.provider).toBe('unknown');
+  });
+
+  it('omits network section when activity log aggregation fails', async () => {
+    prismaMock.activityLog.count.mockRejectedValue(new Error('network aggregation failed'));
+
+    const req = new Request('http://localhost/api/status');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.network).toBeUndefined();
+  });
+
+  it('omits software section when software env metadata is absent', async () => {
+    delete process.env.VERCEL_ENV;
+    delete process.env.APP_ENV;
+    delete process.env.ENVIRONMENT;
+    delete process.env.NODE_ENV;
+    delete process.env.VERCEL_GIT_COMMIT_SHA;
+    delete process.env.GIT_COMMIT;
+    delete process.env.COMMIT_SHA;
+    delete process.env.SOURCE_VERSION;
+    delete process.env.GITHUB_SHA;
+    delete process.env.RENDER_GIT_COMMIT;
+    delete process.env.IMAGE_TAG;
+    delete process.env.DOCKER_IMAGE_TAG;
+    delete process.env.CONTAINER_IMAGE_TAG;
+    delete process.env.IMAGE_VERSION;
+    delete process.env.GIT_TAG;
+    delete process.env.VERCEL_GIT_COMMIT_REF;
+
+    const req = new Request('http://localhost/api/status');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.software).toBeUndefined();
+  });
+
+  it('falls back to sqlite table count when database list introspection fails', async () => {
+    prismaMock.$queryRawUnsafe.mockImplementation(async (query: unknown) => {
+      const sql = String(query ?? '');
+      if (sql.includes('PRAGMA database_list')) throw new Error('database_list unavailable');
+      if (sql.includes('count(*) as count FROM sqlite_schema')) return [{ count: 7 }];
+      return [];
+    });
+
+    const req = new Request('http://localhost/api/status');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    const database = body.database as
+      | { details?: { table_count?: number; table_names?: string[] } }
+      | undefined;
+    expect(database?.details?.table_count).toBe(7);
+    expect(database?.details?.table_names).toEqual([]);
+  });
+
+  it('caps active sessions at 200 records', async () => {
+    const nowIso = new Date().toISOString();
+    prismaMock.activityLog.findMany.mockResolvedValue(
+      Array.from({ length: 205 }, (_, i) => ({
+        userId: `user-${i}`,
+        metadata: { email: `user-${i}@example.com` },
+        ipAddress: `10.0.0.${i}`,
+        userAgent: `ua-${i}`,
+        timestamp: nowIso,
+      })),
+    );
+
+    const req = new Request('http://localhost/api/status');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    const activeSessions = body.activeSessions as Array<Record<string, unknown>> | undefined;
+    const sessionSummary = body.sessionSummary as
+      | { total24h?: number; uniqUsers24h?: number; last5m?: number }
+      | undefined;
+
+    expect(activeSessions).toHaveLength(200);
+    expect(sessionSummary?.total24h).toBe(205);
+    expect(sessionSummary?.uniqUsers24h).toBe(200);
+    expect(sessionSummary?.last5m).toBe(200);
+  });
+
+  it('handles auth URL parse failure and still returns network diagnostics', async () => {
+    delete process.env.NEXTAUTH_URL;
+    const OriginalURL = URL;
+
+    class ThrowingAuthUrl extends OriginalURL {
+      constructor(input: string | URL, base?: string | URL) {
+        if (typeof input === 'string' && input === 'http://localhost' && base === undefined) {
+          throw new TypeError('invalid auth URL');
+        }
+        super(input, base);
+      }
+    }
+
+    globalThis.URL = ThrowingAuthUrl as unknown as typeof URL;
+    try {
+      const req = new Request('http://localhost/api/status');
+      const res = await GET(req);
+
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as Record<string, unknown>;
+      const network = body.network as
+        | { auth?: { host?: string | null; port?: number | null; resolved?: string[] | null } }
+        | undefined;
+
+      expect(network).toBeTruthy();
+      expect(network?.auth?.host).toBeNull();
+      expect(network?.auth?.port).toBeNull();
+      expect(network?.auth?.resolved).toBeNull();
+    } finally {
+      globalThis.URL = OriginalURL;
+    }
+  });
+
+  it('uses https default auth port and includes TLS expiry when available', async () => {
+    process.env.NEXTAUTH_URL = 'https://auth.example.com';
+
+    const req = new Request('http://localhost/api/status');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    const network = body.network as
+      | { auth?: { host?: string | null; port?: number | null; sslExpiry?: string | null } }
+      | undefined;
+
+    expect(network?.auth?.host).toBe('auth.example.com');
+    expect(network?.auth?.port).toBe(443);
+    expect(typeof network?.auth?.sslExpiry).toBe('string');
+  });
+
+  it('uses explicit https port from NEXTAUTH_URL when provided', async () => {
+    process.env.NEXTAUTH_URL = 'https://auth.example.com:9443';
+
+    const req = new Request('http://localhost/api/status');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    const network = body.network as { auth?: { port?: number | null } } | undefined;
+    expect(network?.auth?.port).toBe(9443);
+  });
+
+  it('uses default http auth port when NEXTAUTH_URL has no explicit port', async () => {
+    process.env.NEXTAUTH_URL = 'http://auth.example.com';
+
+    const req = new Request('http://localhost/api/status');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    const network = body.network as { auth?: { port?: number | null } } | undefined;
+    expect(network?.auth?.port).toBe(80);
   });
 });

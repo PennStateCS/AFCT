@@ -37,6 +37,33 @@ describe('GET /api/courses/[id]/activity', () => {
     expect(res.status).toBe(404);
   });
 
+  it('returns 403 for non-privileged user not in roster', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.course.findFirst.mockResolvedValue({ id: 'c1' });
+    prismaMock.activityLog.findMany.mockResolvedValue([]);
+    prismaMock.activityLog.count.mockResolvedValue(0);
+    (prismaMock as any).roster = { findFirst: vi.fn().mockResolvedValue(null) };
+
+    const req = new NextRequest('http://localhost/api/courses/c1/activity');
+    const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('allows user when role is undefined and returns default pagination payload', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1' } });
+    prismaMock.course.findFirst.mockResolvedValue({ id: 'c1' });
+    prismaMock.activityLog.findMany.mockResolvedValue([{ id: 'log1' }]);
+    prismaMock.activityLog.count.mockResolvedValue(80);
+
+    const req = new NextRequest('http://localhost/api/courses/c1/activity');
+    const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.hasMore).toBe(true);
+  });
+
   it('returns activity logs', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1' } });
     prismaMock.course.findFirst.mockResolvedValue({ id: 'c1' });
@@ -50,5 +77,16 @@ describe('GET /api/courses/[id]/activity', () => {
     const body = await res.json();
     expect(body.activities).toHaveLength(1);
     expect(body.totalCount).toBe(1);
+  });
+
+  it('returns 500 when activity query fails', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.course.findFirst.mockResolvedValue({ id: 'c1' });
+    prismaMock.activityLog.findMany.mockRejectedValue(new Error('boom'));
+
+    const req = new NextRequest('http://localhost/api/courses/c1/activity?limit=10&offset=0');
+    const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(500);
   });
 });

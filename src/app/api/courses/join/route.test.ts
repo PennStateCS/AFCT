@@ -17,6 +17,17 @@ vi.mock('@/lib/auth', () => ({ auth: authMock }));
 
 import { POST } from './route';
 
+const buildCourse = (overrides: Record<string, unknown> = {}) => ({
+  id: 'course-1',
+  name: 'Course 1',
+  regCode: 'ABC123',
+  isPublished: true,
+  isArchived: false,
+  registrationOpenAt: new Date('2000-01-01T00:00:00.000Z'),
+  registrationCloseAt: new Date('2999-01-01T00:00:00.000Z'),
+  ...overrides,
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -64,13 +75,7 @@ describe('POST /api/courses/join', () => {
 
   it('returns 403 for faculty/admin when course is unpublished', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', role: 'FACULTY' } });
-    prismaMock.course.findUnique.mockResolvedValue({
-      id: 'course-1',
-      name: 'Course 1',
-      regCode: 'ABC123',
-      isPublished: false,
-      isArchived: false,
-    });
+    prismaMock.course.findUnique.mockResolvedValue(buildCourse({ isPublished: false }));
 
     const req = new Request('http://localhost/api/courses/join', {
       method: 'POST',
@@ -84,13 +89,7 @@ describe('POST /api/courses/join', () => {
 
   it('returns 404 for students when course is unpublished', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', role: 'STUDENT' } });
-    prismaMock.course.findUnique.mockResolvedValue({
-      id: 'course-1',
-      name: 'Course 1',
-      regCode: 'ABC123',
-      isPublished: false,
-      isArchived: false,
-    });
+    prismaMock.course.findUnique.mockResolvedValue(buildCourse({ isPublished: false }));
 
     const req = new Request('http://localhost/api/courses/join', {
       method: 'POST',
@@ -104,13 +103,7 @@ describe('POST /api/courses/join', () => {
 
   it('returns 400 when admin tries to join', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN' } });
-    prismaMock.course.findUnique.mockResolvedValue({
-      id: 'course-1',
-      name: 'Course 1',
-      regCode: 'ABC123',
-      isPublished: true,
-      isArchived: false,
-    });
+    prismaMock.course.findUnique.mockResolvedValue(buildCourse());
     prismaMock.roster.findUnique.mockResolvedValue(null);
 
     const req = new Request('http://localhost/api/courses/join', {
@@ -125,13 +118,7 @@ describe('POST /api/courses/join', () => {
 
   it('returns 400 when already enrolled', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', role: 'STUDENT' } });
-    prismaMock.course.findUnique.mockResolvedValue({
-      id: 'course-1',
-      name: 'Course 1',
-      regCode: 'ABC123',
-      isPublished: true,
-      isArchived: false,
-    });
+    prismaMock.course.findUnique.mockResolvedValue(buildCourse());
     prismaMock.roster.findUnique.mockResolvedValue({ role: 'STUDENT' });
 
     const req = new Request('http://localhost/api/courses/join', {
@@ -146,13 +133,7 @@ describe('POST /api/courses/join', () => {
 
   it('creates roster entry for student', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', role: 'STUDENT' } });
-    prismaMock.course.findUnique.mockResolvedValue({
-      id: 'course-1',
-      name: 'Course 1',
-      regCode: 'ABC123',
-      isPublished: true,
-      isArchived: false,
-    });
+    prismaMock.course.findUnique.mockResolvedValue(buildCourse());
     prismaMock.roster.findUnique.mockResolvedValue(null);
     prismaMock.roster.create.mockResolvedValue({ id: 'roster-1' });
 
@@ -169,5 +150,49 @@ describe('POST /api/courses/join', () => {
     expect(prismaMock.roster.create).toHaveBeenCalledWith({
       data: { courseId: 'course-1', userId: 'user-1', role: 'STUDENT' },
     });
+  });
+
+  it('returns 400 when registration has not opened yet', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'STUDENT' } });
+    prismaMock.course.findUnique.mockResolvedValue(
+      buildCourse({
+        registrationOpenAt: new Date('2999-01-01T00:00:00.000Z'),
+        registrationCloseAt: new Date('2999-12-31T23:59:59.000Z'),
+      }),
+    );
+    prismaMock.roster.findUnique.mockResolvedValue(null);
+
+    const req = new Request('http://localhost/api/courses/join', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: 'ABC123' }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('Registration is not open yet for this course.');
+  });
+
+  it('returns 400 when registration window has closed', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'STUDENT' } });
+    prismaMock.course.findUnique.mockResolvedValue(
+      buildCourse({
+        registrationOpenAt: new Date('2000-01-01T00:00:00.000Z'),
+        registrationCloseAt: new Date('2000-12-31T23:59:59.000Z'),
+      }),
+    );
+    prismaMock.roster.findUnique.mockResolvedValue(null);
+
+    const req = new Request('http://localhost/api/courses/join', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: 'ABC123' }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('Registration is closed for this course.');
   });
 });
