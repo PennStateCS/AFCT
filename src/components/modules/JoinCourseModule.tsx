@@ -62,6 +62,8 @@ export function JoinCourseModule() {
           </p>
 
           <InputOTP
+            id="course-code"
+            name="courseCode"
             maxLength={6}
             value={code.toUpperCase()}
             onPaste={(e) => {
