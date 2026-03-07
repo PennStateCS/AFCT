@@ -5,7 +5,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 // Respond to preflight requests
 export async function OPTIONS() {
-  return NextResponse.json(null, { status: 204 });
+  return new NextResponse(null, { status: 204 });
 }
 
 // PATCH: update a group's name
