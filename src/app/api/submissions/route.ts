@@ -42,6 +42,21 @@ export async function POST(req: NextRequest) {
   const { maxBytes, maxMb } = await getSystemUploadLimit();
 
   if (!assignmentId || !problemId) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: decoded.userId,
+      action: 'SUBMISSION_INVALID_REQUEST',
+      category: 'SUBMISSION',
+      courseId,
+      assignmentId,
+      problemId,
+      metadata: {
+        userId: decoded.userId,
+        courseId,
+        assignmentId,
+        problemId,
+        error: 'Missing required fields',
+      },
+    });
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
@@ -67,10 +82,111 @@ export async function POST(req: NextRequest) {
   });
 
   if (!link) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: decoded.userId,
+      action: 'SUBMISSION_INVALID_REQUEST',
+      category: 'SUBMISSION',
+      courseId,
+      assignmentId,
+      problemId,
+      metadata: {
+        userId: decoded.userId,
+        courseId,
+        assignmentId,
+        problemId,
+        error: 'Problem is not linked to this assignment.',
+      },
+    });
     return NextResponse.json(
       { error: 'Problem is not linked to this assignment.' },
       { status: 400 },
     );
+  }
+
+  const assignment = await prisma.assignment.findUnique({
+    where: { id: assignmentId },
+    select: {
+      id: true,
+      dueDate: true,
+      allowLateSubmissions: true,
+      lateCutoff: true,
+    },
+  });
+
+  if (!assignment) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: decoded.userId,
+      action: 'SUBMISSION_INVALID_REQUEST',
+      category: 'SUBMISSION',
+      courseId,
+      assignmentId,
+      problemId,
+      metadata: {
+        userId: decoded.userId,
+        courseId,
+        assignmentId,
+        problemId,
+        error: 'Assignment not found.',
+      },
+    });
+    return NextResponse.json({ error: 'Assignment not found.' }, { status: 404 });
+  }
+
+  const now = new Date();
+  const isLate = now > assignment.dueDate;
+
+  if (isLate) {
+    if (!assignment.allowLateSubmissions) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: decoded.userId,
+        action: 'SUBMISSION_REJECTED_LATE',
+        category: 'SUBMISSION',
+        courseId,
+        assignmentId,
+        problemId,
+        metadata: {
+          userId: decoded.userId,
+          courseId,
+          assignmentId,
+          problemId,
+          dueDate: assignment.dueDate.toISOString(),
+          allowLateSubmissions: assignment.allowLateSubmissions,
+          lateCutoff: assignment.lateCutoff ? assignment.lateCutoff.toISOString() : null,
+          submittedAt: now.toISOString(),
+          reason: 'Late submissions are not allowed for this assignment.',
+        },
+      });
+      return NextResponse.json(
+        { error: 'Late submissions are not allowed for this assignment.' },
+        { status: 403 },
+      );
+    }
+
+    if (assignment.lateCutoff && now > assignment.lateCutoff) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: decoded.userId,
+        action: 'SUBMISSION_REJECTED_LATE_CUTOFF',
+        category: 'SUBMISSION',
+        courseId,
+        assignmentId,
+        problemId,
+        metadata: {
+          userId: decoded.userId,
+          courseId,
+          assignmentId,
+          problemId,
+          dueDate: assignment.dueDate.toISOString(),
+          allowLateSubmissions: assignment.allowLateSubmissions,
+          lateCutoff: assignment.lateCutoff.toISOString(),
+          submittedAt: now.toISOString(),
+          reason: 'Late submission cutoff has passed for this assignment.',
+        },
+      });
+      return NextResponse.json(
+        { error: 'Late submission cutoff has passed for this assignment.' },
+        { status: 403 },
+      );
+    }
   }
 
   let fileName: string | null = null;
@@ -415,18 +531,8 @@ export async function POST(req: NextRequest) {
     }
 
     // 7. Autograde submission
-    if (link.autograderEnabled == true) {
-      const ap = await prisma.assignmentProblem.findUnique({
-        where: {
-          assignmentId_problemId: {
-            assignmentId,
-            problemId,
-          },
-        },
-        select: { maxPoints: true },
-      });
-
-      const earnedPoints = correct === true ? (ap?.maxPoints ?? 0) : 0;
+    if (link.autograderEnabled === true && typeof correct === 'boolean') {
+      const earnedPoints = correct ? (link.maxPoints ?? 0) : 0;
 
       await prisma.assignmentProblemGrade.upsert({
         where: {
