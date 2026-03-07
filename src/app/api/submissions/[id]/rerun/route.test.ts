@@ -262,6 +262,81 @@ describe('POST /api/submissions/[id]/rerun', () => {
     );
   });
 
+  it('handles PDA type with maxStates without deterministic flag', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.submission.findUnique.mockResolvedValue({
+      id: 's1',
+      assignmentId: 'a1',
+      problemId: 'p1',
+      studentId: 'u2',
+      fileName: 'sub.txt',
+      originalFileName: 'sub.txt',
+    });
+    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
+    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
+      problem: { fileName: 'answer.jff', maxStates: 7, isDeterministic: null, type: 'PDA' },
+    });
+    existsSyncMock.mockReturnValue(true);
+    executeMock.mockResolvedValue({ stdout: '{"correct":true,"feedback":"ok"}', stderr: '' });
+    prismaMock.submission.update.mockResolvedValue({
+      id: 's1',
+      feedback: 'ok',
+      correct: true,
+      evaluationRaw: { correct: true, feedback: 'ok' },
+      updatedAt: new Date().toISOString(),
+    });
+
+    const req = new NextRequest('http://localhost/api/submissions/s1/rerun', { method: 'POST' });
+    const res = await POST(req, { params: Promise.resolve({ id: 's1' }) });
+
+    expect(res.status).toBe(200);
+    const args = executeMock.mock.calls[0]?.[0] as string[];
+    expect(args).toContain('7');
+    expect(args).not.toContain('true');
+    expect(args).not.toContain('false');
+  });
+
+  it('normalizes java stream feedback strings', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.submission.findUnique.mockResolvedValue({
+      id: 's1',
+      assignmentId: 'a1',
+      problemId: 'p1',
+      studentId: 'u2',
+      fileName: 'sub.txt',
+      originalFileName: 'sub.txt',
+    });
+    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
+    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
+      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
+    });
+    existsSyncMock.mockReturnValue(true);
+    executeMock.mockResolvedValue({
+      stdout: '{"correct":false,"feedback":"java.lang.ProcessBuilder$NullOutputStream@123"}',
+      stderr: '',
+    });
+    prismaMock.submission.update.mockResolvedValue({
+      id: 's1',
+      feedback: 'Evaluation completed - correct: false',
+      correct: false,
+      evaluationRaw: {
+        correct: false,
+        feedback: 'java.lang.ProcessBuilder$NullOutputStream@123',
+      },
+      updatedAt: new Date().toISOString(),
+    });
+
+    const req = new NextRequest('http://localhost/api/submissions/s1/rerun', { method: 'POST' });
+    const res = await POST(req, { params: Promise.resolve({ id: 's1' }) });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.submission.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ feedback: 'Evaluation completed - correct: false' }),
+      }),
+    );
+  });
+
   it('handles stderr output during evaluation', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
     prismaMock.submission.findUnique.mockResolvedValue({
@@ -365,5 +440,29 @@ describe('POST /api/submissions/[id]/rerun', () => {
       (call) => call[2]?.action === 'SUBMISSION_RERUN_ERROR',
     );
     expect(errorCall).toBeDefined();
+  });
+
+  it('returns 500 when updating submission record fails', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.submission.findUnique.mockResolvedValue({
+      id: 's1',
+      assignmentId: 'a1',
+      problemId: 'p1',
+      studentId: 'u2',
+      fileName: 'sub.txt',
+      originalFileName: 'sub.txt',
+    });
+    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
+    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
+      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
+    });
+    existsSyncMock.mockReturnValue(true);
+    executeMock.mockResolvedValue({ stdout: '{"correct":true,"feedback":"ok"}', stderr: '' });
+    prismaMock.submission.update.mockRejectedValue(new Error('update failed'));
+
+    const req = new NextRequest('http://localhost/api/submissions/s1/rerun', { method: 'POST' });
+    const res = await POST(req, { params: Promise.resolve({ id: 's1' }) });
+
+    expect(res.status).toBe(500);
   });
 });

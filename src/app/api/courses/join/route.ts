@@ -27,7 +27,7 @@ type Role = 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT';
  *
  * Responses:
  * - 200: { success: true, message, course }
- * - 400: invalid code or admin join attempt
+ * - 400: invalid code, admin join attempt, or registration not currently open
  * - 401: not authenticated
  * - 403: course unpublished/archived (faculty/admin only)
  * - 404: course not found (or hidden from students)
@@ -90,6 +90,31 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
+
+  const registrationOpenAt = course.registrationOpenAt ? new Date(course.registrationOpenAt) : null;
+  const registrationCloseAt = course.registrationCloseAt
+    ? new Date(course.registrationCloseAt)
+    : null;
+
+  if (!registrationOpenAt || !registrationCloseAt) {
+    return NextResponse.json(
+      { error: 'Registration is currently closed for this course.' },
+      { status: 400 },
+    );
+  }
+
+  const now = Date.now();
+  if (now < registrationOpenAt.getTime()) {
+    return NextResponse.json(
+      { error: 'Registration is not open yet for this course.' },
+      { status: 400 },
+    );
+  }
+
+  if (now > registrationCloseAt.getTime()) {
+    return NextResponse.json({ error: 'Registration is closed for this course.' }, { status: 400 });
+  }
+
   // Create roster entry
   await prisma.roster.create({
     data: {

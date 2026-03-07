@@ -58,4 +58,52 @@ describe('GET /api/courses/[id]/[aid]', () => {
     expect(body.course.code).toBe('C1');
     expect(body.problems).toHaveLength(1);
   });
+
+  it('treats non-finite problem points as zero', async () => {
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      title: 'Assignment',
+      problems: [
+        {
+          maxPoints: NaN,
+          maxSubmissions: 1,
+          autograderEnabled: false,
+          problem: {
+            id: 'p1',
+            title: 'P1',
+            description: null,
+            type: null,
+            maxStates: null,
+            isDeterministic: null,
+            fileName: null,
+            originalFileName: null,
+          },
+        },
+      ],
+      course: {
+        name: 'Course',
+        code: 'C1',
+        isArchived: false,
+        roster: [],
+      },
+    });
+
+    const res = await GET(new Request('http://localhost/api/courses/c1/a1'), {
+      params: Promise.resolve({ id: 'c1', aid: 'a1' }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.maxPoints).toBe(0);
+  });
+
+  it('returns 500 when assignment query throws', async () => {
+    prismaMock.assignment.findFirst.mockRejectedValue(new Error('db down'));
+
+    const res = await GET(new Request('http://localhost/api/courses/c1/a1'), {
+      params: Promise.resolve({ id: 'c1', aid: 'a1' }),
+    });
+
+    expect(res.status).toBe(500);
+  });
 });
