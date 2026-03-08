@@ -106,7 +106,7 @@ export const useProblemColumns = ({
     },
     {
       id: 'actions',
-      header: '',
+      header: () => <span className="sr-only">Actions</span>,
       cell: ({ row }) => {
         const problemWithMeta = row.original as Problem & { usedByAssignment?: boolean };
         const disabled = Boolean(problemWithMeta.usedByAssignment);
@@ -169,35 +169,47 @@ export const useProblemColumns = ({
   ];
 
   const viewDialog = (() => {
-	if (!openDialog.problem) return null;
-    switch (openDialog.problem.type){
-      case "FA":
-	  case "PDA":
-        return <JffViewerDialog
-          open={openDialog.open}
-          onOpenChange={(open) => setOpenDialog({ open, problem: open ? openDialog.problem : null })}
-          src={`/api/solutions/${encodeURIComponent(openDialog.problem.fileName ?? '')}`}
-          title={`${openDialog.problem.originalFileName || openDialog.problem.fileName} - Problem`}
-          width="70vw"
-          height="70vh"
-        />;
-	  case "RE":
-        return <RegexViewerDialog
-          open={openDialog.open}
-          onOpenChange={(open) => setOpenDialog({ open, problem: open ? openDialog.problem : null })}
-          src={`/api/solutions/${encodeURIComponent(openDialog.problem.fileName ?? '')}`}
-          title={`${openDialog.problem.originalFileName || openDialog.problem.fileName} - Problem`}
-        />;
-	  case "CFG":
-        return <CfgViewerDialog
-          open={openDialog.open}
-          onOpenChange={(open) => setOpenDialog({ open, problem: open ? openDialog.problem : null })}
-          src={`/api/solutions/${encodeURIComponent(openDialog.problem.fileName ?? '')}`}
-          title={`${openDialog.problem.originalFileName || openDialog.problem.fileName} - Problem`}
-        />;
+    if (!openDialog.problem) return null;
+    switch (openDialog.problem.type) {
+      case 'FA':
+      case 'PDA':
+        return (
+          <JffViewerDialog
+            open={openDialog.open}
+            onOpenChange={(open) =>
+              setOpenDialog({ open, problem: open ? openDialog.problem : null })
+            }
+            src={`/api/solutions/${encodeURIComponent(openDialog.problem.fileName ?? '')}`}
+            title={`${openDialog.problem.originalFileName || openDialog.problem.fileName} - Problem`}
+            width="70vw"
+            height="70vh"
+          />
+        );
+      case 'RE':
+        return (
+          <RegexViewerDialog
+            open={openDialog.open}
+            onOpenChange={(open) =>
+              setOpenDialog({ open, problem: open ? openDialog.problem : null })
+            }
+            src={`/api/solutions/${encodeURIComponent(openDialog.problem.fileName ?? '')}`}
+            title={`${openDialog.problem.originalFileName || openDialog.problem.fileName} - Problem`}
+          />
+        );
+      case 'CFG':
+        return (
+          <CfgViewerDialog
+            open={openDialog.open}
+            onOpenChange={(open) =>
+              setOpenDialog({ open, problem: open ? openDialog.problem : null })
+            }
+            src={`/api/solutions/${encodeURIComponent(openDialog.problem.fileName ?? '')}`}
+            title={`${openDialog.problem.originalFileName || openDialog.problem.fileName} - Problem`}
+          />
+        );
       default:
-	    return null;
-	}
+        return null;
+    }
   })();
   return { columns, viewDialog };
 };

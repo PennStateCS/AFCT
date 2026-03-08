@@ -200,7 +200,7 @@ export const columns = (
   },
   {
     id: 'actions',
-    header: '',
+    header: () => <span className="sr-only">Actions</span>,
     enableSorting: false,
     meta: { priority: 1 },
     cell: ({ row }) => {
