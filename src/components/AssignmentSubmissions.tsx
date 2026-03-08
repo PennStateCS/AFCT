@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FileText, MessageSquare, Check, X, Minus } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -122,7 +122,10 @@ function SubmissionTable({
                       {submittedAt.toLocaleTimeString()}
                     </span>
                     {isLate ? (
-                      <Badge variant="secondary" className="mt-1 w-fit bg-amber-100 text-amber-800">
+                      <Badge
+                        variant="secondary"
+                        className="mt-1 w-fit bg-amber-100 text-amber-800 shadow-sm"
+                      >
                         Late
                       </Badge>
                     ) : null}
@@ -371,6 +374,7 @@ export default function AssignmentSubmissions({
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const searchParamsString = searchParams.toString();
   const selectedStudentIdParam = searchParams.get('studentId');
   const [students, setStudents] = useState<Person[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
@@ -389,7 +393,10 @@ export default function AssignmentSubmissions({
   const [selectedStudentGroupId, setSelectedStudentGroupId] = useState<string | null | undefined>(
     undefined,
   );
-  const studentGroupCache = useRef<Record<string, string | null | undefined>>({});
+  const [groupMembershipByStudent, setGroupMembershipByStudent] = useState<Record<string, string>>(
+    {},
+  );
+  const [loadingGroupMemberships, setLoadingGroupMemberships] = useState(false);
 
   // Load all course problems and prefer client-side filtering for the submissions tab.
   // Fall back to `problems` prop if the fetch fails or isn't provided.
@@ -440,20 +447,20 @@ export default function AssignmentSubmissions({
 
   const updateQuery = useCallback(
     (problemId: string) => {
-      const params = new URLSearchParams(searchParams.toString());
+      const params = new URLSearchParams(searchParamsString);
       params.set('problemId', problemId);
       router.replace(`?${params.toString()}`, { scroll: false });
     },
-    [router, searchParams],
+    [router, searchParamsString],
   );
 
   const updateStudentQuery = useCallback(
     (studentId: string) => {
-      const params = new URLSearchParams(searchParams.toString());
+      const params = new URLSearchParams(searchParamsString);
       params.set('studentId', studentId);
       router.replace(`?${params.toString()}`, { scroll: false });
     },
-    [router, searchParams],
+    [router, searchParamsString],
   );
 
   // Build the assignment-specific problem list using the fetched `allProblems` (prefer enriched objects).
@@ -516,7 +523,8 @@ export default function AssignmentSubmissions({
   // currently visible problems (handles group assignment filtering).
   useEffect(() => {
     if (visibleProblems.length === 0) return;
-    const paramProblemId = searchParams.get('problemId');
+    const params = new URLSearchParams(searchParamsString);
+    const paramProblemId = params.get('problemId');
     const validProblemId = visibleProblems.some((p) => p.id === paramProblemId)
       ? (paramProblemId as string)
       : visibleProblems[0].id;
@@ -525,7 +533,7 @@ export default function AssignmentSubmissions({
     if (paramProblemId !== validProblemId) {
       updateQuery(validProblemId);
     }
-  }, [visibleProblems, searchParams, updateQuery]);
+  }, [visibleProblems, searchParamsString, updateQuery]);
 
   const selectedStudent = students[selectedIndex] ?? null;
   const selectedStudentId = selectedStudent?.id ?? null;
@@ -557,31 +565,20 @@ export default function AssignmentSubmissions({
     return { earned: totalEarned, available: totalAvailable };
   }, [assignmentProblems, problemGrades, selectedStudent]);
 
-  // Determine which group the selected student belongs to (for group assignments).
+  // Preload group membership once per course/group set to avoid repeated network calls
+  // when navigating between students.
   useEffect(() => {
     let cancelled = false;
-    async function resolveStudentGroup() {
-      if (!assignmentIsGroup || !selectedStudent) {
-        setSelectedStudentGroupId(null);
+    async function loadGroupMemberships() {
+      if (!assignmentIsGroup || !groups || groups.length === 0) {
+        setGroupMembershipByStudent({});
+        setLoadingGroupMemberships(false);
         return;
       }
 
-      // Use cache if present
-      const cached = studentGroupCache.current[selectedStudent.id];
-      if (cached !== undefined) {
-        setSelectedStudentGroupId(cached);
-        return;
-      }
-
-      // If no groups available, treat as not in any group
-      if (!groups || groups.length === 0) {
-        studentGroupCache.current[selectedStudent.id] = null;
-        setSelectedStudentGroupId(null);
-        return;
-      }
+      setLoadingGroupMemberships(true);
 
       try {
-        // Fetch members for all groups in parallel and find which contains the student
         const ops = groups.map((g) =>
           fetch(`/api/courses/${courseId}/groups/${g.id}/members`)
             .then((res) => (res.ok ? res.json() : Promise.resolve({ members: [] })))
@@ -590,24 +587,46 @@ export default function AssignmentSubmissions({
         );
         const results = await Promise.all(ops);
         if (cancelled) return;
-        const found = results.find((r) =>
-          r.members.some((m: any) => m.userId === selectedStudent.id),
-        );
-        const gid = found ? found.id : null;
-        studentGroupCache.current[selectedStudent.id] = gid;
-        setSelectedStudentGroupId(gid);
+
+        const membershipMap: Record<string, string> = {};
+        for (const result of results) {
+          for (const member of result.members as Array<{ userId: string }>) {
+            if (!membershipMap[member.userId]) {
+              membershipMap[member.userId] = result.id;
+            }
+          }
+        }
+
+        setGroupMembershipByStudent(membershipMap);
       } catch (err) {
-        console.error('Failed to resolve student group:', err);
-        studentGroupCache.current[selectedStudent.id] = null;
-        if (!cancelled) setSelectedStudentGroupId(null);
+        console.error('Failed to preload group memberships:', err);
+        if (!cancelled) setGroupMembershipByStudent({});
+      } finally {
+        if (!cancelled) setLoadingGroupMemberships(false);
       }
     }
 
-    resolveStudentGroup();
+    loadGroupMemberships();
     return () => {
       cancelled = true;
     };
-  }, [assignmentIsGroup, selectedStudent, groups, courseId]);
+  }, [assignmentIsGroup, groups, courseId]);
+
+  // Determine selected student's group from preloaded membership data.
+  useEffect(() => {
+    if (!assignmentIsGroup || !selectedStudent) {
+      setSelectedStudentGroupId(null);
+      return;
+    }
+
+    if (loadingGroupMemberships) {
+      setSelectedStudentGroupId(undefined);
+      return;
+    }
+
+    const groupId = groupMembershipByStudent[selectedStudent.id] ?? null;
+    setSelectedStudentGroupId(groupId);
+  }, [assignmentIsGroup, selectedStudent, loadingGroupMemberships, groupMembershipByStudent]);
 
   const handleSelectProblem = useCallback(
     (problemId: string) => {
@@ -692,39 +711,108 @@ export default function AssignmentSubmissions({
     fetchGradeSummary();
   }, [assignmentId, courseId, students]);
 
-  const fetchSubmissions = useCallback(async () => {
+  const fetchReviewData = useCallback(async () => {
     if (!selectedStudentId) {
       setSubmissions({});
+      setComments({});
+      setProblemGrades({});
+      setGradeInputs({});
+      setProblemGradeErrors({});
       setLoadingSubmissions(false);
+      setLoadingComments(false);
+      setLoadingProblemGrades(false);
       return;
     }
+
     setLoadingSubmissions(true);
+    setLoadingComments(true);
+    setLoadingProblemGrades(true);
+
     try {
       const res = await fetch(
-        `/api/courses/${courseId}/${assignmentId}/submissions/${selectedStudentId}`,
+        `/api/courses/${courseId}/${assignmentId}/review-data/${selectedStudentId}`,
       );
+
       if (!res.ok) {
         if ([401, 403, 404].includes(res.status)) {
           setSubmissions({});
+          setComments(
+            Object.fromEntries(
+              assignmentProblems.map((problem) => [problem.id, [] as DiscussionComment[]]),
+            ),
+          );
+          setProblemGrades({});
+          setGradeInputs({});
+          setProblemGradeErrors({});
           return;
         }
-        throw new Error((await res.json())?.error || 'Failed to load submissions');
+        throw new Error((await res.json())?.error || 'Failed to load review data');
       }
-      const data = await res.json();
-      setSubmissions(data || {});
+
+      type ReviewDataResponse = {
+        submissions?: Record<string, SubmissionData>;
+        comments?: Array<DiscussionComment & { problemId?: string | null }>;
+        problemGrades?: Record<string, { grade: number | null; feedback: string | null }>;
+      };
+
+      const data = ((await res.json()) ?? {}) as ReviewDataResponse;
+      setSubmissions(data.submissions || {});
+
+      const groupedComments = Object.fromEntries(
+        assignmentProblems.map((problem) => [problem.id, [] as DiscussionComment[]]),
+      ) as Record<string, DiscussionComment[]>;
+
+      for (const comment of data.comments ?? []) {
+        const problemId = comment.problemId;
+        if (problemId && groupedComments[problemId]) {
+          groupedComments[problemId].push(comment);
+        }
+      }
+      setComments(groupedComments);
+
+      const gradeData = data.problemGrades ?? {};
+      const normalizedGrades: Record<string, number | null> = {};
+      const normalizedInputs: Record<string, string> = {};
+      assignmentProblems.forEach((problem) => {
+        const entry = gradeData?.[problem.id];
+        const value = typeof entry?.grade === 'number' ? entry.grade : null;
+        normalizedGrades[problem.id] = value;
+        normalizedInputs[problem.id] = value === null || value === undefined ? '' : String(value);
+      });
+
+      setProblemGrades(normalizedGrades);
+      setGradeInputs(normalizedInputs);
+      setProblemGradeErrors({});
+
+      const hasAllGrades =
+        assignmentProblems.length === 0
+          ? true
+          : assignmentProblems.every((problem) => {
+              const value = normalizedGrades[problem.id];
+              return value !== null && value !== undefined;
+            });
+      setStudentGradeStatuses((prev) => ({
+        ...prev,
+        [selectedStudentId]: hasAllGrades,
+      }));
     } catch (err) {
-      console.error('Fetch submissions error:', err);
-      showToast.error('Failed to load submissions');
+      console.error('Fetch review data error:', err);
+      showToast.error('Failed to load review data');
       setSubmissions({});
+      setComments({});
+      setProblemGrades({});
+      setGradeInputs({});
     } finally {
       setLoadingSubmissions(false);
+      setLoadingComments(false);
+      setLoadingProblemGrades(false);
     }
-  }, [courseId, assignmentId, selectedStudentId]);
+  }, [courseId, assignmentId, selectedStudentId, assignmentProblems]);
 
-  // Fetch submissions for selected student
+  // Fetch review data for selected student
   useEffect(() => {
-    fetchSubmissions();
-  }, [fetchSubmissions]);
+    fetchReviewData();
+  }, [fetchReviewData]);
 
   const handleRerunSubmission = useCallback(
     async (submission: Submission) => {
@@ -739,7 +827,7 @@ export default function AssignmentSubmissions({
           throw new Error(error?.error || 'Failed to rerun submission');
         }
         showToast.success('Submission re-evaluated');
-        await fetchSubmissions();
+        await fetchReviewData();
       } catch (err) {
         console.error('Rerun submission error:', err);
         showToast.error(err instanceof Error ? err.message : 'Failed to rerun submission');
@@ -747,142 +835,8 @@ export default function AssignmentSubmissions({
         setRerunning((prev) => ({ ...prev, [submission.id]: false }));
       }
     },
-    [fetchSubmissions],
+    [fetchReviewData],
   );
-
-  // Fetch comments only for visible problems (honors group filtering)
-  useEffect(() => {
-    const loadComments = async () => {
-      if (!selectedStudentId) {
-        setComments({});
-        setLoadingComments(false);
-        return;
-      }
-      setLoadingComments(true);
-      try {
-        const validProblems = visibleProblems.filter((p): p is Problem => Boolean(p?.id));
-        const params = new URLSearchParams({
-          assignmentId,
-          studentId: selectedStudentId,
-          scope: 'assignment',
-        });
-
-        const res = await fetch(`/api/comments?${params.toString()}`);
-        if (!res.ok) {
-          if ([204, 401, 403, 404].includes(res.status)) {
-            setComments(Object.fromEntries(validProblems.map((problem) => [problem.id, []])));
-            return;
-          }
-          throw new Error('Failed to load comments');
-        }
-
-        type AssignmentComment = DiscussionComment & { problemId?: string | null };
-        const list = (res.status === 204 ? [] : ((await res.json()) as AssignmentComment[])) ?? [];
-        const grouped = Object.fromEntries(
-          validProblems.map((problem) => [problem.id, [] as DiscussionComment[]]),
-        ) as Record<string, DiscussionComment[]>;
-
-        for (const comment of list) {
-          const problemId = comment.problemId;
-          if (problemId && grouped[problemId]) {
-            grouped[problemId].push(comment);
-          }
-        }
-
-        setComments(grouped);
-      } catch (err) {
-        console.error('Load comments error:', err);
-        showToast.error('Failed to load comments');
-        setComments({});
-      } finally {
-        setLoadingComments(false);
-      }
-    };
-    if (visibleProblems.length > 0) loadComments();
-    else {
-      setComments({});
-      setLoadingComments(false);
-    }
-  }, [assignmentId, visibleProblems, selectedStudentId]);
-
-  useEffect(() => {
-    if (!selectedStudentId) {
-      setProblemGrades({});
-      setGradeInputs({});
-      setProblemGradeErrors({});
-      setLoadingProblemGrades(false);
-      return;
-    }
-
-    const fetchGrades = async () => {
-      setLoadingProblemGrades(true);
-      try {
-        const res = await fetch(
-          `/api/courses/${courseId}/${assignmentId}/problem-grades/${selectedStudentId}`,
-        );
-        let data: Record<string, { grade: number | null; feedback: string | null }> = {};
-        if (res.status === 204) {
-          data = {};
-        } else if (!res.ok) {
-          if ([401, 403, 404].includes(res.status)) {
-            data = {};
-          } else {
-            throw new Error('Failed to fetch grades');
-          }
-        } else {
-          const raw = await res.text();
-          if (raw) {
-            try {
-              data = JSON.parse(raw) as Record<
-                string,
-                { grade: number | null; feedback: string | null }
-              >;
-            } catch (parseError) {
-              console.error('Failed to parse grades payload:', parseError);
-              data = {};
-            }
-          } else {
-            data = {};
-          }
-        }
-
-        const normalizedGrades: Record<string, number | null> = {};
-        const normalizedInputs: Record<string, string> = {};
-        assignmentProblems.forEach((problem) => {
-          const entry = data?.[problem.id];
-          const value = typeof entry?.grade === 'number' ? entry.grade : null;
-          normalizedGrades[problem.id] = value;
-          normalizedInputs[problem.id] = value === null || value === undefined ? '' : String(value);
-        });
-
-        setProblemGrades(normalizedGrades);
-        setGradeInputs(normalizedInputs);
-        setProblemGradeErrors({});
-        if (selectedStudentId) {
-          const hasAllGrades =
-            assignmentProblems.length === 0
-              ? true
-              : assignmentProblems.every((problem) => {
-                  const value = normalizedGrades[problem.id];
-                  return value !== null && value !== undefined;
-                });
-          setStudentGradeStatuses((prev) => ({
-            ...prev,
-            [selectedStudentId]: hasAllGrades,
-          }));
-        }
-      } catch (error) {
-        console.error('Failed to load problem grades:', error);
-        setProblemGrades({});
-        setGradeInputs({});
-        showToast.error('Failed to load problem grades');
-      } finally {
-        setLoadingProblemGrades(false);
-      }
-    };
-
-    fetchGrades();
-  }, [courseId, assignmentId, selectedStudentId, assignmentProblems]);
 
   const saveComment = useCallback(
     async (problemId: string) => {
@@ -1071,7 +1025,8 @@ export default function AssignmentSubmissions({
     loadingSubmissions ||
     loadingComments ||
     loadingProblemGrades ||
-    (assignmentIsGroup && Boolean(selectedStudent) && selectedStudentGroupId === undefined);
+    (assignmentIsGroup && Boolean(selectedStudent) && selectedStudentGroupId === undefined) ||
+    (assignmentIsGroup && loadingGroupMemberships);
 
   useEffect(() => {
     if (isStudentDataLoading) {

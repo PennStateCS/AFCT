@@ -1,3 +1,5 @@
+import React from 'react';
+
 type Props = {
   label?: string;
   fullScreen?: boolean;
