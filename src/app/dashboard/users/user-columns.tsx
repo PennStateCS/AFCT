@@ -99,7 +99,7 @@ export function getUserColumns(onUserUpdate: () => void, timeZone: string): Colu
     },
     {
       id: 'actions',
-      header: '',
+      header: () => <span className="sr-only">Actions</span>,
       meta: { priority: 1 },
       cell: ({ row }) => {
         const user = row.original;

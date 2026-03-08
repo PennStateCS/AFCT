@@ -56,6 +56,7 @@ function PublishSwitchCell({
         checked={assignment.isPublished}
         onCheckedChange={handleSwitchChange}
         disabled={disabled}
+        aria-label={`Toggle publish for ${assignment.title}`}
       />
       <ConfirmDialog
         open={confirmOpen}
@@ -157,7 +158,7 @@ export function useAssignmentColumns(
     },
     {
       id: 'actions',
-      header: '',
+      header: () => <span className="sr-only">Actions</span>,
       cell: ({ row }) => {
         const disabled = !!row.original.hasSubmissionsOrComments || courseIsArchived;
         const title = disabled ? 'Cannot delete' : undefined;
