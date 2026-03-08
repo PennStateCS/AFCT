@@ -26,6 +26,9 @@ import {
   withRole,
 } from './seed-utils';
 import bcrypt from 'bcrypt';
+import { randomUUID } from 'crypto';
+import fs from 'fs/promises';
+import path from 'path';
 
 /**
  * Seed development data.
@@ -217,12 +220,52 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
   const createdProblems: { [courseId: string]: Array<{ id: string; title: string }> } = {};
 
   try {
+    const solutionSourceDir = path.join(process.cwd(), 'prisma', 'solution_files');
+    const containerSolutionDestinationDir = path.join(path.sep, 'private', 'uploads', 'solutions');
+    const localSolutionDestinationDir = path.join(
+      process.cwd(),
+      'private',
+      'uploads',
+      'solutions',
+    );
+
+    let solutionDestinationDir = containerSolutionDestinationDir;
+    try {
+      await fs.mkdir(solutionDestinationDir, { recursive: true });
+    } catch {
+      solutionDestinationDir = localSolutionDestinationDir;
+      await fs.mkdir(solutionDestinationDir, { recursive: true });
+    }
+
+    const originalToStoredFileName = new Map<string, string>();
+
+    for (const problemSeed of problemData) {
+      if (!problemSeed.originalFileName) {
+        continue;
+      }
+
+      if (originalToStoredFileName.has(problemSeed.originalFileName)) {
+        continue;
+      }
+
+      const sourcePath = path.join(solutionSourceDir, problemSeed.originalFileName);
+      const extension = path.extname(problemSeed.originalFileName);
+      const storedFileName = `${randomUUID()}${extension}`;
+      const destinationPath = path.join(solutionDestinationDir, storedFileName);
+
+      await fs.copyFile(sourcePath, destinationPath);
+      originalToStoredFileName.set(problemSeed.originalFileName, storedFileName);
+    }
+
     // Prepare all problem data for batch insertion
     const problemsToCreate = courses.flatMap((course) =>
       problemData.map((problemSeed) => ({
         title: problemSeed.title,
         description: problemSeed.description,
-        fileName: problemSeed.fileName,
+        fileName:
+          (problemSeed.originalFileName
+            ? originalToStoredFileName.get(problemSeed.originalFileName)
+            : undefined) ?? problemSeed.fileName,
         originalFileName: problemSeed.originalFileName,
         type: problemSeed.type,
         maxStates: problemSeed.maxStates,
