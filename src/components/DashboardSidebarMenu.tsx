@@ -180,7 +180,11 @@ export default function DashboardSidebarMenu() {
                               'data-[active=true]:bg-secondary',
                             )}
                           >
-                            <Link href={url} className="flex min-w-0 items-center gap-2">
+                            <Link
+                              href={url}
+                              aria-label={title}
+                              className="flex min-w-0 items-center gap-2"
+                            >
                               <Icon className="h-4 w-4 shrink-0" />
                               <span
                                 aria-hidden={collapsed}
@@ -258,6 +262,7 @@ export default function DashboardSidebarMenu() {
                             >
                               <Link
                                 href={`/dashboard/courses/${course.id}`}
+                                aria-label={`${course.code}: ${course.name}`}
                                 className="flex min-w-0 items-center gap-2"
                               >
                                 <Book className="h-4 w-4 shrink-0" />
@@ -315,6 +320,7 @@ export default function DashboardSidebarMenu() {
                       >
                         <Link
                           href="/dashboard/calendar"
+                          aria-label="Calendar"
                           className="flex min-w-0 items-center gap-2"
                         >
                           <Calendar className="h-4 w-4 shrink-0" />
@@ -367,7 +373,11 @@ export default function DashboardSidebarMenu() {
                         'data-[active=true]:bg-secondary',
                       )}
                     >
-                      <Link href="/dashboard/archive" className="flex min-w-0 items-center gap-2">
+                      <Link
+                        href="/dashboard/archive"
+                        aria-label="Archived Courses"
+                        className="flex min-w-0 items-center gap-2"
+                      >
                         <Archive className="h-4 w-4 shrink-0" />
                         <span
                           aria-hidden={collapsed}
@@ -406,6 +416,7 @@ export default function DashboardSidebarMenu() {
                     >
                       <Link
                         href="/dashboard/all-courses"
+                        aria-label="All Courses"
                         className="flex min-w-0 items-center gap-2"
                       >
                         <Library className="h-4 w-4 shrink-0" />

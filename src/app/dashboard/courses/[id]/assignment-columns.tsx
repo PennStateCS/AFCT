@@ -56,6 +56,7 @@ function PublishSwitchCell({
         checked={assignment.isPublished}
         onCheckedChange={handleSwitchChange}
         disabled={disabled}
+        aria-label={`Toggle publish for ${assignment.title}`}
       />
       <ConfirmDialog
         open={confirmOpen}
@@ -157,7 +158,7 @@ export function useAssignmentColumns(
     },
     {
       id: 'actions',
-      header: '',
+      header: () => <span className="sr-only">Actions</span>,
       cell: ({ row }) => {
         const disabled = !!row.original.hasSubmissionsOrComments || courseIsArchived;
         const title = disabled ? 'Cannot delete' : undefined;
@@ -166,7 +167,7 @@ export function useAssignmentColumns(
           <>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="secondary">
+                <Button variant="secondary" aria-label={`Manage assignment ${row.original.title}`}>
                   <ChevronDown />
                   Manage
                 </Button>
@@ -177,12 +178,12 @@ export function useAssignmentColumns(
                   {row.original.title}
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <Link href={`/dashboard/courses/${row.original.courseId}/${row.original.id}`}>
-                  <DropdownMenuItem className="flex items-center gap-2">
+                <DropdownMenuItem asChild className="flex items-center gap-2">
+                  <Link href={`/dashboard/courses/${row.original.courseId}/${row.original.id}`}>
                     <BookOpen className="mr-2 h-4 w-4" />
                     View Assignment
-                  </DropdownMenuItem>
-                </Link>
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => handleAssignmentEditClick(row.original)}
                   className="flex items-center gap-2"

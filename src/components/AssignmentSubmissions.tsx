@@ -13,9 +13,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Submission, User } from '@prisma/client';
+import type { Submission, User } from '@prisma/client';
 import { showToast } from '@/lib/toast';
-import { Comment as DiscussionComment } from './DiscussionPanel';
+import type { Comment as DiscussionComment } from './DiscussionPanel';
 import { ProblemListCard } from '@/components/assignments/ProblemListCard';
 import ProblemDiscussionPanel from './ProblemDiscussionPanel';
 import StudentNavigator from './StudentNavigator';
@@ -529,7 +529,9 @@ export default function AssignmentSubmissions({
       ? (paramProblemId as string)
       : visibleProblems[0].id;
 
-    setSelectedProblemId(validProblemId);
+    setSelectedProblemId((currentProblemId) =>
+      currentProblemId === validProblemId ? currentProblemId : validProblemId,
+    );
     if (paramProblemId !== validProblemId) {
       updateQuery(validProblemId);
     }
@@ -656,16 +658,6 @@ export default function AssignmentSubmissions({
           return 0;
         });
         setStudents(data);
-        if (data.length > 0) {
-          const initialIndex = selectedStudentIdParam
-            ? data.findIndex((s) => s.id === selectedStudentIdParam)
-            : -1;
-          if (initialIndex !== -1) {
-            setSelectedIndex(initialIndex);
-          } else {
-            setSelectedIndex(0);
-          }
-        }
       } catch (err) {
         console.error('Fetch students error:', err);
         showToast.error('Failed to load students');
@@ -673,7 +665,23 @@ export default function AssignmentSubmissions({
       }
     };
     fetchStudents();
-  }, [courseId, selectedStudentIdParam]);
+  }, [courseId]);
+
+  useEffect(() => {
+    if (students.length === 0) {
+      setSelectedIndex(-1);
+      return;
+    }
+
+    const nextIndex = selectedStudentIdParam
+      ? students.findIndex((student) => student.id === selectedStudentIdParam)
+      : -1;
+
+    const resolvedIndex = nextIndex !== -1 ? nextIndex : 0;
+    setSelectedIndex((currentIndex) =>
+      currentIndex === resolvedIndex ? currentIndex : resolvedIndex,
+    );
+  }, [students, selectedStudentIdParam]);
 
   useEffect(() => {
     if (!selectedStudent) return;
