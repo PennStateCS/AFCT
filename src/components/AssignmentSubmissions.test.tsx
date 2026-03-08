@@ -354,7 +354,14 @@ describe('AssignmentSubmissions', () => {
 
   it('shows no submissions message when selected problem has none', async () => {
     installFetchMock({
-      problems: [{ id: 'problem-1', title: 'Deterministic FA', type: 'FA', maxPoints: 100 }],
+      problems: [
+        {
+          id: 'problem-1',
+          title: 'Deterministic FA',
+          type: 'FA',
+          maxPoints: 100,
+        },
+      ],
       submissionsByStudent: { 'student-1': { 'problem-1': [] } },
     });
 
@@ -364,15 +371,47 @@ describe('AssignmentSubmissions', () => {
         courseId="course-1"
         assignmentId="assignment-1"
         maxAssignmentGrade={100}
-        problems={[{ id: 'problem-1', title: 'Deterministic FA', type: 'FA', maxPoints: 100 }]}
+        problems={[
+          {
+            id: 'problem-1',
+            title: 'Deterministic FA',
+            type: 'FA',
+            maxPoints: 100,
+            maxSubmissions: 5,
+          },
+        ]}
       />,
     );
 
     expect(await screen.findByText('No submissions yet.')).toBeInTheDocument();
+    expect(screen.getByText('0/5')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('0/5')).toBeInTheDocument();
+    });
     expect(screen.getByTestId('student-navigator')).toBeInTheDocument();
     expect(screen.getByTestId('problem-list-card')).toBeInTheDocument();
     expect(screen.getByTestId('problem-discussion-panel')).toBeInTheDocument();
     expect(screen.getByTestId('problem-header')).toHaveTextContent('Deterministic FA');
+  });
+
+  it('shows 0/∞ when max submissions is unlimited', async () => {
+    installFetchMock({
+      problems: [{ id: 'problem-1', title: 'Unlimited Problem', type: 'FA', maxPoints: 100 }],
+      submissionsByStudent: { 'student-1': { 'problem-1': [] } },
+    });
+
+    render(
+      <AssignmentSubmissions
+        courseIsArchived={false}
+        courseId="course-1"
+        assignmentId="assignment-1"
+        maxAssignmentGrade={100}
+        problems={[{ id: 'problem-1', title: 'Unlimited Problem', type: 'FA', maxPoints: 100 }]}
+      />,
+    );
+
+    expect(await screen.findByText('No submissions yet.')).toBeInTheDocument();
+    expect(screen.getByText('0/∞')).toBeInTheDocument();
   });
 
   it('marks submissions as late when submitted after the assignment due date', async () => {
@@ -645,16 +684,10 @@ describe('AssignmentSubmissions', () => {
     );
 
     await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: 'Problem 1: General Problem' }),
-      ).toBeInTheDocument();
-      expect(
-        screen.getByRole('button', { name: 'Problem 2: Group 1 Problem' }),
-      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '1. General Problem' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '2. Group 1 Problem' })).toBeInTheDocument();
     });
 
-    expect(
-      screen.queryByRole('button', { name: 'Problem 3: Group 2 Problem' }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '3. Group 2 Problem' })).not.toBeInTheDocument();
   });
 });

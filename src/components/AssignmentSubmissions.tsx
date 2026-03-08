@@ -184,20 +184,26 @@ function ProblemList({ problems, submissions, selectedProblemId, onSelect }: Pro
 
   const items = problems.map((problem, index) => ({
     id: problem.id,
-    title: problem.title
-      ? `Problem ${index + 1}: ${limitText(problem.title)}`
-      : `Problem ${index + 1}`,
+    title: problem.title ? `${index + 1}. ${limitText(problem.title)}` : `${index + 1}.`,
   }));
 
   const getBadgeContent = (problemId: string) => {
     const subs = extractSubs(submissions[problemId]);
+    const problem = problems.find((item) => item.id === problemId);
+    const maxSubmissions = problem?.maxSubmissions;
+    const hasFiniteSubmissionLimit =
+      typeof maxSubmissions === 'number' && Number.isFinite(maxSubmissions) && maxSubmissions > 0;
+    const countLabel = hasFiniteSubmissionLimit
+      ? `${subs.length}/${maxSubmissions}`
+      : `${subs.length}/∞`;
+
     if (!subs.length) {
       return (
         <Badge
           variant="secondary"
-          className="border-transparent bg-slate-100 text-[10px] font-medium text-slate-700"
+          className="min-w-[50px] border border-slate-300 bg-white text-[11px] font-medium text-slate-700"
         >
-          0
+          {countLabel}
         </Badge>
       );
     }
@@ -206,14 +212,14 @@ function ProblemList({ problems, submissions, selectedProblemId, onSelect }: Pro
       (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
     )[0];
 
-    let label = `${subs.length} ${subs.length === 1 ? 'submission' : 'submissions'}`;
+    let label = countLabel;
     let badgeClass = 'bg-slate-100 text-slate-700';
 
     if (latest?.correct === true) {
-      label = `Correct · ${subs.length}`;
+      label = `Correct · ${countLabel}`;
       badgeClass = 'bg-emerald-100 text-emerald-800';
     } else if (latest?.correct === false) {
-      label = `Needs review · ${subs.length}`;
+      label = `Needs review · ${countLabel}`;
       badgeClass = 'bg-amber-100 text-amber-800';
     }
 
@@ -369,7 +375,9 @@ export default function AssignmentSubmissions({
   const [students, setStudents] = useState<Person[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [submissions, setSubmissions] = useState<Record<string, SubmissionData>>({});
+  const [loadingSubmissions, setLoadingSubmissions] = useState(false);
   const [comments, setComments] = useState<Record<string, DiscussionComment[]>>({});
+  const [loadingComments, setLoadingComments] = useState(false);
   const [commentTexts, setCommentTexts] = useState<Record<string, string>>({});
   const [savingComments, setSavingComments] = useState<Record<string, boolean>>({});
   const [deletingComments, setDeletingComments] = useState<Record<string, boolean>>({});
@@ -423,6 +431,7 @@ export default function AssignmentSubmissions({
   const [problemGradeErrors, setProblemGradeErrors] = useState<Record<string, string | null>>({});
   const [savingProblemGrades, setSavingProblemGrades] = useState<Record<string, boolean>>({});
   const [loadingProblemGrades, setLoadingProblemGrades] = useState(false);
+  const [showStudentDataLoading, setShowStudentDataLoading] = useState(false);
   const [studentGradeStatuses, setStudentGradeStatuses] = useState<Record<string, boolean>>({});
   const [openDialog, setOpenDialog] = useState<{
     open: boolean;
@@ -453,8 +462,16 @@ export default function AssignmentSubmissions({
       // parent didn't pass assignment problems — fall back to `allProblems`
       return allProblems;
     }
-    // Prefer enriched problem objects from `allProblems` when available.
-    return problems.map((ap) => allProblems.find((p) => p.id === ap.id) ?? ap);
+    // Merge course-level problem details with assignment-level settings.
+    // Assignment-level fields (maxSubmissions/maxPoints/autograderEnabled) must win.
+    return problems.map((assignmentProblem) => {
+      const courseProblem = allProblems.find((problem) => problem.id === assignmentProblem.id);
+      if (!courseProblem) return assignmentProblem;
+      return {
+        ...courseProblem,
+        ...assignmentProblem,
+      };
+    });
   }, [problems, allProblems]);
 
   // Compute which problems should be visible for the selected student when
@@ -678,8 +695,10 @@ export default function AssignmentSubmissions({
   const fetchSubmissions = useCallback(async () => {
     if (!selectedStudentId) {
       setSubmissions({});
+      setLoadingSubmissions(false);
       return;
     }
+    setLoadingSubmissions(true);
     try {
       const res = await fetch(
         `/api/courses/${courseId}/${assignmentId}/submissions/${selectedStudentId}`,
@@ -697,6 +716,8 @@ export default function AssignmentSubmissions({
       console.error('Fetch submissions error:', err);
       showToast.error('Failed to load submissions');
       setSubmissions({});
+    } finally {
+      setLoadingSubmissions(false);
     }
   }, [courseId, assignmentId, selectedStudentId]);
 
@@ -734,8 +755,10 @@ export default function AssignmentSubmissions({
     const loadComments = async () => {
       if (!selectedStudentId) {
         setComments({});
+        setLoadingComments(false);
         return;
       }
+      setLoadingComments(true);
       try {
         const validProblems = visibleProblems.filter((p): p is Problem => Boolean(p?.id));
         const params = new URLSearchParams({
@@ -771,10 +794,15 @@ export default function AssignmentSubmissions({
         console.error('Load comments error:', err);
         showToast.error('Failed to load comments');
         setComments({});
+      } finally {
+        setLoadingComments(false);
       }
     };
     if (visibleProblems.length > 0) loadComments();
-    else setComments({});
+    else {
+      setComments({});
+      setLoadingComments(false);
+    }
   }, [assignmentId, visibleProblems, selectedStudentId]);
 
   useEffect(() => {
@@ -1039,6 +1067,25 @@ export default function AssignmentSubmissions({
       return nextIndex;
     });
 
+  const isStudentDataLoading =
+    loadingSubmissions ||
+    loadingComments ||
+    loadingProblemGrades ||
+    (assignmentIsGroup && Boolean(selectedStudent) && selectedStudentGroupId === undefined);
+
+  useEffect(() => {
+    if (isStudentDataLoading) {
+      const timeoutId = setTimeout(() => {
+        setShowStudentDataLoading(true);
+      }, 150);
+
+      return () => clearTimeout(timeoutId);
+    }
+
+    setShowStudentDataLoading(false);
+    return undefined;
+  }, [isStudentDataLoading]);
+
   return (
     <div>
       {selectedStudent && (
@@ -1065,6 +1112,11 @@ export default function AssignmentSubmissions({
             {assignmentProblems.length === 0 ? (
               <div className="text-muted-foreground rounded-md border border-dashed p-6 text-center text-sm">
                 No problems have been added to this assignment yet.
+              </div>
+            ) : showStudentDataLoading ? (
+              <div className="flex min-h-[320px] flex-col items-center justify-center gap-3">
+                <div className="border-muted-foreground/30 border-t-primary h-8 w-8 animate-spin rounded-full border-4" />
+                <p className="text-muted-foreground text-sm">Loading submissions...</p>
               </div>
             ) : (
               (() => {
