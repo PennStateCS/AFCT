@@ -267,6 +267,18 @@ const installFetchMock = (options: InstallOptions = {}) => {
       return makeResponse(gradeSummary);
     }
 
+    const reviewDataMatch = path.match(
+      /\/api\/courses\/course-1\/assignment-1\/review-data\/(.+)$/,
+    );
+    if (reviewDataMatch) {
+      const studentId = decodeURIComponent(reviewDataMatch[1]);
+      return makeResponse({
+        submissions: submissionsByStudent[studentId] ?? {},
+        comments: commentList,
+        problemGrades: gradesByStudent[studentId] ?? {},
+      });
+    }
+
     const submissionsMatch = path.match(
       /\/api\/courses\/course-1\/assignment-1\/submissions\/(.+)$/,
     );
@@ -353,7 +365,7 @@ describe('AssignmentSubmissions', () => {
   });
 
   it('shows no submissions message when selected problem has none', async () => {
-    installFetchMock({
+    const fetchMock = installFetchMock({
       problems: [
         {
           id: 'problem-1',
@@ -385,6 +397,12 @@ describe('AssignmentSubmissions', () => {
 
     expect(await screen.findByText('No submissions yet.')).toBeInTheDocument();
     expect(screen.getByText('0/5')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/courses/course-1/assignment-1/review-data/student-1'),
+    );
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      expect.stringContaining('/api/courses/course-1/assignment-1/submissions/student-1'),
+    );
     await waitFor(() => {
       expect(screen.getByText('0/5')).toBeInTheDocument();
     });
