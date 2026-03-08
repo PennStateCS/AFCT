@@ -383,7 +383,7 @@ export function DataTable<TData, TValue>({
                       value={String(table.getState().pagination.pageSize)}
                       onValueChange={(value) => table.setPageSize(Number(value))}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger aria-label="Rows per page">
                         <SelectValue placeholder="Select rows per page" />
                       </SelectTrigger>
                       <SelectContent>
