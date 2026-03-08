@@ -422,7 +422,10 @@ export default function AssignmentDashboardPage() {
         </div>
       </div>
       <Tabs value={tab} onValueChange={handleTabChange}>
-        <TabsList className="bg-card border-border h-12 rounded-md border p-1 shadow-sm">
+        <TabsList
+          aria-label="Assignment sections"
+          className="bg-card border-border h-12 rounded-md border p-1 shadow-sm"
+        >
           <TabsTrigger
             className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white"
             value="problems"
@@ -656,7 +659,7 @@ export default function AssignmentDashboardPage() {
                             size="sm"
                             onClick={() => openRenderViewer(row.original)}
                             title="Render file"
-                            aria-label="Render file"
+                            aria-label={`Render file for ${row.original.title}`}
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
@@ -665,7 +668,7 @@ export default function AssignmentDashboardPage() {
                               href={fileUrl}
                               download={fileName}
                               title={`Download ${fileName}`}
-                              aria-label={`Download ${fileName}`}
+                              aria-label={`Download ${fileName} for ${row.original.title}`}
                             >
                               <Download className="h-4 w-4" aria-hidden="true" />
                             </a>
@@ -684,7 +687,11 @@ export default function AssignmentDashboardPage() {
                     cell: ({ row }: { row: { original: Problem } }) => (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="secondary" size="sm">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            aria-label={`Manage problem ${row.original.title}`}
+                          >
                             <ChevronDown className="mr-1 h-4 w-4" /> Manage
                           </Button>
                         </DropdownMenuTrigger>
@@ -741,6 +748,7 @@ export default function AssignmentDashboardPage() {
                   assignmentMaxSubmissions: ap.maxSubmissions,
                   assignmentAutograderEnabled: ap.autograderEnabled,
                 }))}
+                tableLabel="Assignment problems table"
               />
             </CardContent>
           </Card>

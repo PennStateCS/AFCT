@@ -304,10 +304,18 @@ function useTrends(sample: HistoryPoint | null, keepHours: number) {
 const Skel = ({ w = 'w-24' }: { w?: string }) => (
   <div className={`h-4 ${w} bg-muted animate-pulse rounded`} />
 );
-const Meter = ({ pct }: { pct?: number }) => {
+const Meter = ({ pct, label }: { pct?: number; label: string }) => {
   const v = Math.max(0, Math.min(100, Math.round(pct ?? 0)));
   return (
-    <div className="bg-muted h-2 w-full overflow-hidden rounded" aria-label="meter">
+    <div
+      className="bg-muted h-2 w-full overflow-hidden rounded"
+      role="progressbar"
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={v}
+      aria-valuetext={`${v}%`}
+    >
       <div className="h-full bg-emerald-500" style={{ width: `${v}%` }} />
     </div>
   );
@@ -316,10 +324,12 @@ const Stat = ({
   label,
   value,
   onCopy,
+  copyAriaLabel,
 }: {
   label: string;
   value: React.ReactNode;
   onCopy?: () => void;
+  copyAriaLabel?: string;
 }) => (
   <div className="flex items-start justify-between gap-4">
     <div className="text-muted-foreground text-sm">{label}</div>
@@ -327,8 +337,10 @@ const Stat = ({
       {value}
       {onCopy ? (
         <button
+          type="button"
           className="text-muted-foreground ml-2 text-xs underline hover:opacity-80"
           onClick={onCopy}
+          aria-label={copyAriaLabel ?? `Copy ${label}`}
         >
           Copy
         </button>
@@ -603,15 +615,24 @@ export default function SystemStatusClient() {
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
               <span className="text-sm">Deep</span>
-              <Switch checked={deep} onCheckedChange={setDeep} />
+              <Switch
+                checked={deep}
+                onCheckedChange={setDeep}
+                aria-label="Enable deep health checks"
+              />
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm">Auto-refresh</span>
-              <Switch checked={autoRefresh} onCheckedChange={setAutoRefresh} />
+              <Switch
+                checked={autoRefresh}
+                onCheckedChange={setAutoRefresh}
+                aria-label="Enable automatic refresh every 15 seconds"
+              />
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm">Trend window</span>
               <select
+                aria-label="Select trend window"
                 className="bg-background rounded border px-2 py-1 text-sm"
                 value={windowHours}
                 onChange={(e) => setHours(Number(e.target.value))}
@@ -621,7 +642,7 @@ export default function SystemStatusClient() {
                 <option value={24}>24h</option>
               </select>
             </div>
-            <div className="text-muted-foreground text-xs">
+            <div className="text-muted-foreground text-xs" aria-live="polite">
               {lastUpdated ? `Updated ${formatTimeInTimeZone(lastUpdated, timezone)}` : ''}
             </div>
             <Button size="sm" onClick={fetchStatus} disabled={loading}>
@@ -713,14 +734,14 @@ export default function SystemStatusClient() {
                     <span className="text-muted-foreground">CPU (process)</span>
                     <span>{Math.round(sStats?.cpuProcessPct ?? 0)}%</span>
                   </div>
-                  <Meter pct={sStats?.cpuProcessPct} />
+                  <Meter pct={sStats?.cpuProcessPct} label="CPU process usage" />
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Memory (process / system)</span>
                     <span>{(sStats?.memProcessPctOfSystem ?? 0).toFixed(1)}%</span>
                   </div>
-                  <Meter pct={sStats?.memProcessPctOfSystem} />
+                  <Meter pct={sStats?.memProcessPctOfSystem} label="Process memory usage" />
                 </div>
               </div>
 
@@ -1012,7 +1033,12 @@ export default function SystemStatusClient() {
                             {ip.family ? `(${ip.family})` : ''}
                           </span>
                         </div>
-                        <Button variant="secondary" size="sm" onClick={() => copy(ip.address)}>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => copy(ip.address)}
+                          aria-label={`Copy IP address ${ip.address ?? ''}`}
+                        >
                           Copy
                         </Button>
                       </li>
@@ -1069,6 +1095,7 @@ export default function SystemStatusClient() {
                             variant="outline"
                             disabled={isDeleting}
                             onClick={() => handleDeleteAbandonedFile(f.category, f.fileName)}
+                            aria-label={`Delete abandoned file ${f.fileName}`}
                           >
                             {isDeleting ? 'Deleting…' : 'Delete'}
                           </Button>
@@ -1182,7 +1209,8 @@ export default function SystemStatusClient() {
               <div>
                 <div className="text-muted-foreground mb-2 text-sm">Active sessions (last 24h)</div>
                 <div className="overflow-auto rounded border">
-                  <table className="w-full text-sm">
+                  <table className="w-full text-sm" aria-label="Active sessions table">
+                    <caption className="sr-only">Active sessions seen in the last 24 hours</caption>
                     <thead className="text-muted-foreground text-left text-xs">
                       <tr className="border-b">
                         <th className="py-2 pr-3">User</th>
@@ -1202,8 +1230,10 @@ export default function SystemStatusClient() {
                               <span>{s.ipAddress ?? '—'}</span>
                               {s.ipAddress ? (
                                 <button
+                                  type="button"
                                   className="text-muted-foreground text-xs underline hover:opacity-80"
                                   onClick={() => copy(s.ipAddress)}
+                                  aria-label={`Copy IP address ${s.ipAddress}`}
                                 >
                                   Copy
                                 </button>
