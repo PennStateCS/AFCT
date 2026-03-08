@@ -33,30 +33,34 @@ export function DueDateModule({ assignments }: Props) {
     });
 
   return (
-    <Card className="w-full">
+    <Card className="w-full" aria-labelledby="upcoming-assignments-title">
       <CardHeader>
-        <CardTitle className="text-lg font-semibold">Upcoming Assignments</CardTitle>
+        <CardTitle id="upcoming-assignments-title" className="text-lg font-semibold">
+          Upcoming Assignments
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         {upcoming.length === 0 ? (
           <p className="text-muted-foreground">None</p>
         ) : (
-          upcoming.map((assignment) => (
-            <div key={assignment.id} className="flex flex-col">
-              <div>
-                📄
-                <Link
-                  href={`/dashboard/courses/${assignment.courseId}/${assignment.id}`}
-                  className="text-foreground font-medium hover:underline"
-                >
-                  {assignment.title}
-                </Link>
-              </div>
-              <span className="text-muted-foreground text-sm">
-                {formatDateTimeInTimeZone(assignment.dueDate, timezone)}
-              </span>
-            </div>
-          ))
+          <ul className="space-y-3" aria-label="Upcoming assignments list">
+            {upcoming.map((assignment) => (
+              <li key={assignment.id} className="flex flex-col">
+                <div>
+                  <span aria-hidden="true">📄</span>{' '}
+                  <Link
+                    href={`/dashboard/courses/${assignment.courseId}/${assignment.id}`}
+                    className="text-foreground font-medium hover:underline"
+                  >
+                    {assignment.title}
+                  </Link>
+                </div>
+                <span className="text-muted-foreground text-sm">
+                  {formatDateTimeInTimeZone(assignment.dueDate, timezone)}
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
       </CardContent>
     </Card>
