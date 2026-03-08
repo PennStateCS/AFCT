@@ -50,6 +50,7 @@ type Props = {
   courseId: string;
   assignmentId: string;
   maxAssignmentGrade: number;
+  assignmentDueDate?: string | Date | null;
   problems?: Problem[];
   // When assignmentIsGroup is true the parent will pass `groups` and
   // `groupProblemsMap` so this component can show only the problems
@@ -70,12 +71,14 @@ const extractSubs = (raw?: SubmissionData): Submission[] => {
 
 function SubmissionTable({
   submissions,
+  assignmentDueDate,
   onView,
   onRerun,
   rerunning,
   className = '',
 }: {
   submissions: Submission[];
+  assignmentDueDate?: string | Date | null;
   onView: (submission: Submission) => void;
   onRerun: (submission: Submission) => void;
   rerunning: Record<string, boolean>;
@@ -92,6 +95,8 @@ function SubmissionTable({
   const sorted = [...submissions].sort(
     (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
   );
+  const dueDate = assignmentDueDate ? new Date(assignmentDueDate) : null;
+  const hasValidDueDate = !!dueDate && !Number.isNaN(dueDate.getTime());
 
   return (
     <div className={`overflow-hidden rounded-md border ${className}`}>
@@ -106,14 +111,21 @@ function SubmissionTable({
         </TableHeader>
         <TableBody>
           {sorted.map((s) => {
+            const submittedAt = new Date(s.submittedAt);
+            const isLate = hasValidDueDate && submittedAt.getTime() > dueDate!.getTime();
             return (
               <TableRow key={s.id} className="hover:bg-transparent">
                 <TableCell>
                   <div className="flex flex-col">
-                    <span>{new Date(s.submittedAt).toLocaleDateString()}</span>
+                    <span>{submittedAt.toLocaleDateString()}</span>
                     <span className="text-muted-foreground text-xs">
-                      {new Date(s.submittedAt).toLocaleTimeString()}
+                      {submittedAt.toLocaleTimeString()}
                     </span>
+                    {isLate ? (
+                      <Badge variant="secondary" className="mt-1 w-fit bg-amber-100 text-amber-800">
+                        Late
+                      </Badge>
+                    ) : null}
                   </div>
                 </TableCell>
                 <TableCell>
@@ -232,6 +244,7 @@ function ProblemList({ problems, submissions, selectedProblemId, onSelect }: Pro
 function ProblemWorkspace({
   problem,
   submissions,
+  assignmentDueDate,
   comments,
   commentText,
   onCommentTextChange,
@@ -253,6 +266,7 @@ function ProblemWorkspace({
 }: {
   problem: Problem | null;
   submissions: Submission[];
+  assignmentDueDate?: string | Date | null;
   comments: DiscussionComment[];
   commentText: string;
   onCommentTextChange: (text: string) => void;
@@ -314,6 +328,7 @@ function ProblemWorkspace({
           <WorkspacePanel title="Submissions" icon={<FileText className="h-4 w-4" />}>
             <SubmissionTable
               submissions={submissions}
+              assignmentDueDate={assignmentDueDate}
               onView={onViewSubmission}
               onRerun={onRerunSubmission}
               rerunning={rerunning}
@@ -342,6 +357,7 @@ export default function AssignmentSubmissions({
   courseIsArchived,
   courseId,
   assignmentId,
+  assignmentDueDate,
   problems,
   assignmentIsGroup = false,
   groups = [],
@@ -1073,6 +1089,7 @@ export default function AssignmentSubmissions({
                       <ProblemWorkspace
                         problem={selectedProblem}
                         submissions={selectedSubs}
+                        assignmentDueDate={assignmentDueDate}
                         comments={selectedComments}
                         commentText={selectedProblem ? commentTexts[selectedProblem.id] || '' : ''}
                         onCommentTextChange={(text) =>

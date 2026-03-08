@@ -375,6 +375,39 @@ describe('AssignmentSubmissions', () => {
     expect(screen.getByTestId('problem-header')).toHaveTextContent('Deterministic FA');
   });
 
+  it('marks submissions as late when submitted after the assignment due date', async () => {
+    installFetchMock({
+      problems: [{ id: 'problem-1', title: 'Deterministic FA', type: 'FA', maxPoints: 100 }],
+      submissionsByStudent: {
+        'student-1': {
+          'problem-1': [
+            {
+              id: 'sub-late-1',
+              submittedAt: '2026-03-02T10:00:00.000Z',
+              correct: null,
+              feedback: null,
+              fileName: 'sub-late-1.jff',
+              originalFileName: 'sub-late-1.jff',
+            },
+          ],
+        },
+      },
+    });
+
+    render(
+      <AssignmentSubmissions
+        courseIsArchived={false}
+        courseId="course-1"
+        assignmentId="assignment-1"
+        maxAssignmentGrade={100}
+        assignmentDueDate="2026-03-01T00:00:00.000Z"
+        problems={[{ id: 'problem-1', title: 'Deterministic FA', type: 'FA', maxPoints: 100 }]}
+      />,
+    );
+
+    expect(await screen.findByText('Late')).toBeInTheDocument();
+  });
+
   it('handles student fetch failure by showing toast and rendering no student view', async () => {
     installFetchMock({
       problems: [{ id: 'problem-1', title: 'P1' }],
