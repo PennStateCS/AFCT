@@ -41,7 +41,11 @@ export function AssignmentsCard({
       </CardHeader>
       <CardContent className="overflow-x-auto">
         {assignments.length ? (
-          <DataTable columns={assignmentColumns} data={assignments} />
+          <DataTable
+            columns={assignmentColumns}
+            data={assignments}
+            tableLabel="Assignments table"
+          />
         ) : (
           <p className="text-muted-foreground italic">No assignments found.</p>
         )}

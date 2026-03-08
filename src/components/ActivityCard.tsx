@@ -70,7 +70,11 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
   useEffect(() => {
     fetchActivities();
   }, [fetchActivities]);
-  <DataTable columns={getActivityColumns(timezone)} data={activities} />;
+  <DataTable
+    columns={getActivityColumns(timezone)}
+    data={activities}
+    tableLabel="Activity log table"
+  />;
   const loadMore = () => {
     if (!loadingMore && hasMore) {
       fetchActivities(activities.length, true);
@@ -130,7 +134,11 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
           </div>
         ) : (
           <>
-            <DataTable columns={getActivityColumns(timezone)} data={activities} />
+            <DataTable
+              columns={getActivityColumns(timezone)}
+              data={activities}
+              tableLabel="Activity log table"
+            />
 
             {hasMore && (
               <div className="flex justify-center pt-4">
