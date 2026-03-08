@@ -8,6 +8,46 @@ import os from 'os';
 import { execSync } from 'child_process';
 import JavaRunner from '../../../../../../lib/java-runner';
 
+function getJavaRunnerCtor() {
+  const maybeCtor =
+    typeof JavaRunner === 'function'
+      ? JavaRunner
+      : (JavaRunner as unknown as { default?: unknown })?.default;
+
+  if (typeof maybeCtor !== 'function') {
+    throw new Error('Java runner constructor is unavailable');
+  }
+
+  return maybeCtor as new (jarPath: string) => {
+    execute: (
+      args: string[],
+      options?: { timeout?: number },
+    ) => Promise<{
+      stdout?: string;
+      stderr?: string;
+      exitCode?: number;
+    }>;
+  };
+}
+
+function createJavaRunner(jarPath: string) {
+  const JavaRunnerCtor = getJavaRunnerCtor();
+  try {
+    return new JavaRunnerCtor(jarPath);
+  } catch {
+    return (JavaRunnerCtor as unknown as (path: string) => { execute: Function })(jarPath) as {
+      execute: (
+        args: string[],
+        options?: { timeout?: number },
+      ) => Promise<{
+        stdout?: string;
+        stderr?: string;
+        exitCode?: number;
+      }>;
+    };
+  }
+}
+
 export async function POST(req: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
 
@@ -105,7 +145,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
         });
         feedback = `File has ${result.trim()} lines (Windows).`;
       } else {
-        const evaluator = new JavaRunner('./jars/afct-evaluator.jar');
+        const evaluator = createJavaRunner('./jars/afct-evaluator.jar');
         const args = ['--json', answerFilePath, submissionPath];
 
         if (link.problem.type === 'FA' || link.problem.type === 'PDA') {

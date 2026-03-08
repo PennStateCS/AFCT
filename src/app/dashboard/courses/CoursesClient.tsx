@@ -79,16 +79,23 @@ export default function CoursesClient() {
   );
 
   return (
-    <Card className="p-4">
+    <Card className="p-4" aria-labelledby="courses-title">
       <CardHeader className="flex flex-row items-center justify-between pb-4">
-        <CardTitle className="text-2xl">Courses</CardTitle>
-        <Button onClick={() => setOpen(true)}>
+        <CardTitle id="courses-title" className="text-2xl">
+          Courses
+        </CardTitle>
+        <Button onClick={() => setOpen(true)} aria-haspopup="dialog" aria-expanded={open}>
           <BookPlus /> Create Course
         </Button>
       </CardHeader>
 
       <CardContent>
-        <DataTable columns={columnsMemo} data={courses} loading={loading} />
+        <DataTable
+          columns={columnsMemo}
+          data={courses}
+          loading={loading}
+          tableLabel="Courses table"
+        />
       </CardContent>
 
       <CreateCourseDialog open={open} setOpen={setOpen} onSuccess={fetchCourses} />

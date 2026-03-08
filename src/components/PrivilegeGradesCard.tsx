@@ -202,9 +202,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
   }, [assignments, students]);
 
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [selectedStudent, setSelectedStudent] = useState<{ id: string; name: string } | null>(
-    null,
-  );
+  const [selectedStudent, setSelectedStudent] = useState<{ id: string; name: string } | null>(null);
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
 
   const columns = useMemo<ColumnDef<StudentRow, unknown>[]>(() => {
@@ -271,9 +269,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
               title="View grade breakdown"
               onClick={handleClick}
             >
-              <span className={
-                val === null || val === undefined ? 'text-muted-foreground' : ''
-              }>
+              <span className={val === null || val === undefined ? 'text-muted-foreground' : ''}>
                 {val === null || val === undefined ? '-' : String(val)}
               </span>
             </div>
@@ -392,7 +388,12 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
           </div>
         </div>
 
-        <DataTable columns={columns} data={students} loading={loading} />
+        <DataTable
+          columns={columns}
+          data={students}
+          loading={loading}
+          tableLabel="Course grades table"
+        />
       </CardContent>
 
       {/* breakdown dialog */}

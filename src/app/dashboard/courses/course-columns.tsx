@@ -200,7 +200,7 @@ export const columns = (
   },
   {
     id: 'actions',
-    header: '',
+    header: () => <span className="sr-only">Actions</span>,
     enableSorting: false,
     meta: { priority: 1 },
     cell: ({ row }) => {
@@ -287,7 +287,7 @@ function CourseActionsCell({
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="secondary">
+          <Button variant="secondary" aria-label={`Manage course ${course.name}`}>
             <ChevronDown /> Manage
           </Button>
         </DropdownMenuTrigger>
@@ -297,12 +297,12 @@ function CourseActionsCell({
             {course.name}
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <Link href={`/dashboard/courses/${course.id}`} passHref>
-            <DropdownMenuItem className="hover:bg-secondary flex items-center gap-2">
+          <DropdownMenuItem asChild className="hover:bg-secondary flex items-center gap-2">
+            <Link href={`/dashboard/courses/${course.id}`}>
               <BookOpen className="mr-2 h-4 w-4" />
               View Course
-            </DropdownMenuItem>
-          </Link>
+            </Link>
+          </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => setEditOpen(true)}
             className="hover:bg-secondary flex items-center gap-2"

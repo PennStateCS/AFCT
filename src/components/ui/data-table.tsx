@@ -74,6 +74,7 @@ interface DataTableProps<TData, TValue> {
   loading?: boolean;
   storageKey?: string;
   onRowClick?: (row: { original: TData }) => void;
+  tableLabel?: string;
 }
 
 export function DataTable<TData, TValue>({
@@ -82,6 +83,7 @@ export function DataTable<TData, TValue>({
   loading = false,
   storageKey = 'datatable-columns',
   onRowClick,
+  tableLabel = 'Data table',
 }: DataTableProps<TData, TValue>) {
   const [globalFilter, setGlobalFilter] = useState('');
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
@@ -172,6 +174,13 @@ export function DataTable<TData, TValue>({
     return '';
   };
 
+  const toAccessibleColumnName = (id: string) =>
+    id
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .replace(/_/g, ' ')
+      .trim()
+      .toLowerCase();
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -236,7 +245,7 @@ export function DataTable<TData, TValue>({
       </div>
 
       <div className="overflow-x-auto rounded-md border">
-        <Table className="w-full" role="table">
+        <Table className="w-full" role="table" aria-label={tableLabel}>
           <TableHeader role="rowgroup">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow
@@ -268,23 +277,34 @@ export function DataTable<TData, TValue>({
                   return (
                     <TableHead
                       key={header.id}
-                      onClick={handleSortClick}
-                      className={`${getResponsiveClass(priority)} ${
+                      aria-sort={
                         canSort
-                          ? 'cursor-pointer whitespace-nowrap select-none'
-                          : 'whitespace-nowrap'
+                          ? sorted === 'asc'
+                            ? 'ascending'
+                            : sorted === 'desc'
+                              ? 'descending'
+                              : 'none'
+                          : undefined
+                      }
+                      className={`${getResponsiveClass(priority)} ${
+                        canSort ? 'whitespace-nowrap' : 'whitespace-nowrap'
                       } h-12 font-semibold`}
                     >
-                      {header.isPlaceholder ? null : (
+                      {header.isPlaceholder ? null : canSort ? (
+                        <button
+                          type="button"
+                          onClick={handleSortClick}
+                          className="flex w-full cursor-pointer items-center text-left select-none"
+                          aria-label={`Sort by ${toAccessibleColumnName(header.column.id)}`}
+                        >
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          {sorted === 'asc' && <ArrowUp className="ml-1 h-3 w-3" />}
+                          {sorted === 'desc' && <ArrowDown className="ml-1 h-3 w-3" />}
+                          {!sorted && <ArrowUpDown className="ml-1 h-3 w-3 opacity-40" />}
+                        </button>
+                      ) : (
                         <div className="flex items-center">
                           {flexRender(header.column.columnDef.header, header.getContext())}
-                          {canSort && (
-                            <>
-                              {sorted === 'asc' && <ArrowUp className="ml-1 h-3 w-3" />}
-                              {sorted === 'desc' && <ArrowDown className="ml-1 h-3 w-3" />}
-                              {!sorted && <ArrowUpDown className="ml-1 h-3 w-3 opacity-40" />}
-                            </>
-                          )}
                         </div>
                       )}
                     </TableHead>
