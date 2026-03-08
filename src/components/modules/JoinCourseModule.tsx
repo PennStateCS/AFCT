@@ -47,23 +47,32 @@ export function JoinCourseModule() {
     setCode('');
   };
 
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void handleJoin();
+  };
+
   return (
-    <Card className="w-full">
+    <Card className="w-full" aria-labelledby="join-course-title">
       <CardHeader>
-        <CardTitle className="text-lg font-semibold">Join a Course</CardTitle>
+        <CardTitle id="join-course-title" className="text-lg font-semibold">
+          Join a Course
+        </CardTitle>
       </CardHeader>
       <CardContent>
-        <div>
+        <form onSubmit={handleSubmit}>
+          <div>
           <Label htmlFor="course-code" className="mb-2 text-sm">
             Enter a registration code below:
           </Label>
-          <p className="text-muted-foreground mb-3 text-xs">
+          <p id="course-code-help" className="text-muted-foreground mb-3 text-xs">
             You can only join while the course registration window is open.
           </p>
 
           <InputOTP
             id="course-code"
             name="courseCode"
+            aria-describedby="course-code-help"
             maxLength={6}
             value={code.toUpperCase()}
             onPaste={(e) => {
@@ -89,15 +98,21 @@ export function JoinCourseModule() {
               <InputOTPSlot index={5} />
             </InputOTPGroup>
           </InputOTP>
-        </div>
-        <div className="mt-4 flex gap-2">
-          <Button onClick={handleJoin} disabled={loading || code.length !== 6}>
+          </div>
+          <div className="mt-4 flex gap-2">
+          <Button type="submit" disabled={loading || code.length !== 6}>
             {loading ? 'Joining...' : 'Join'}
           </Button>
-          <Button variant="secondary" onClick={handleClear} disabled={code.length === 0}>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={handleClear}
+            disabled={code.length === 0}
+          >
             Clear
           </Button>
-        </div>
+          </div>
+        </form>
       </CardContent>
     </Card>
   );

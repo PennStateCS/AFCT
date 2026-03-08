@@ -30,9 +30,11 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
     role === 'STUDENT' ? courses.filter((course) => course.isPublished) : courses;
 
   return (
-    <Card className="flex h-full">
+    <Card className="flex h-full" aria-labelledby="current-courses-title">
       <CardHeader>
-        <CardTitle className="text-2xl font-semibold tracking-tight">{title}</CardTitle>
+        <CardTitle id="current-courses-title" className="text-2xl font-semibold tracking-tight">
+          {title}
+        </CardTitle>
       </CardHeader>
 
       <CardContent>
@@ -51,7 +53,6 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
                   aria-label={`View course ${course.name}`}
                 >
                   <div
-                    role="link"
                     className="group border-border bg-card hover:bg-accent flex h-full cursor-pointer overflow-hidden rounded-lg border shadow transition-all hover:shadow-md"
                   >
                     {/* Vertical colored bar */}
