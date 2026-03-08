@@ -15,6 +15,57 @@ import { getSystemUploadLimit } from '@/lib/upload-limits';
 // Import JavaRunner for JAR execution
 import JavaRunner from '../../../../lib/java-runner';
 
+function getJavaRunnerCtor() {
+  const maybeCtor =
+    typeof JavaRunner === 'function'
+      ? JavaRunner
+      : (JavaRunner as unknown as { default?: unknown })?.default;
+
+  if (typeof maybeCtor !== 'function') {
+    throw new Error('Java runner constructor is unavailable');
+  }
+
+  return maybeCtor as new (jarPath: string) => {
+    execute: (
+      args: string[],
+      options?: { timeout?: number },
+    ) => Promise<{
+      stdout?: string;
+      stderr?: string;
+      exitCode?: number;
+    }>;
+  };
+}
+
+function createJavaRunner(jarPath: string) {
+  const JavaRunnerCtor = getJavaRunnerCtor();
+  try {
+    return new JavaRunnerCtor(jarPath);
+  } catch {
+    return (
+      JavaRunnerCtor as unknown as (path: string) => {
+        execute: (
+          args: string[],
+          options?: { timeout?: number },
+        ) => Promise<{
+          stdout?: string;
+          stderr?: string;
+          exitCode?: number;
+        }>;
+      }
+    )(jarPath) as {
+      execute: (
+        args: string[],
+        options?: { timeout?: number },
+      ) => Promise<{
+        stdout?: string;
+        stderr?: string;
+        exitCode?: number;
+      }>;
+    };
+  }
+}
+
 export async function POST(req: NextRequest) {
   // 1. Verify token
   const authHeader = req.headers.get('authorization');
@@ -72,6 +123,7 @@ export async function POST(req: NextRequest) {
       problem: {
         select: {
           fileName: true,
+          maxPoints: true,
           maxStates: true,
           autograderEnabled: true,
           isDeterministic: true,
@@ -317,7 +369,7 @@ export async function POST(req: NextRequest) {
             if (fs.existsSync(answerFilePath)) {
               try {
                 // Create JavaRunner instance for afct-evaluator.jar
-                const evaluator = new JavaRunner('./jars/afct-evaluator.jar');
+                const evaluator = createJavaRunner('./jars/afct-evaluator.jar');
 
                 // Build command arguments
                 const args = ['--json', answerFilePath, uploadedFilePath];
@@ -362,7 +414,7 @@ export async function POST(req: NextRequest) {
 
                 // Parse the JSON response
                 try {
-                  const evaluation = JSON.parse(result.stdout.trim());
+                  const evaluation = JSON.parse(stdoutTrimmed);
                   evaluationRaw = evaluation;
                   if (evaluation && typeof evaluation === 'object') {
                     // Extract correct field if present
@@ -531,8 +583,16 @@ export async function POST(req: NextRequest) {
     }
 
     // 7. Autograde submission
-    if (link.autograderEnabled === true && typeof correct === 'boolean') {
-      const earnedPoints = correct ? (link.maxPoints ?? 0) : 0;
+    const assignmentProblemWithOverrides = link as typeof link & {
+      autograderEnabled?: boolean | null;
+      maxPoints?: number | null;
+    };
+    const autograderEnabled =
+      assignmentProblemWithOverrides.autograderEnabled ?? link.problem.autograderEnabled;
+    const maxPoints = assignmentProblemWithOverrides.maxPoints ?? link.problem.maxPoints;
+
+    if (autograderEnabled === true && typeof correct === 'boolean') {
+      const earnedPoints = correct ? (maxPoints ?? 0) : 0;
 
       await prisma.assignmentProblemGrade.upsert({
         where: {
