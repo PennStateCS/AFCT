@@ -308,7 +308,9 @@ export default function LoginPage() {
                 className="space-y-5"
               >
                 <p className="sr-only" aria-live="assertive">
-                  {Object.values(loginErrors)[0] ?? ''}
+                  {Object.values(loginErrors)[0]
+                    ? `Form error: ${Object.values(loginErrors)[0]}`
+                    : ''}
                 </p>
                 <InputGroup
                   id="login-email"
@@ -373,7 +375,9 @@ export default function LoginPage() {
                 className="space-y-5"
               >
                 <p className="sr-only" aria-live="assertive">
-                  {Object.values(signupErrors)[0] ?? ''}
+                  {Object.values(signupErrors)[0]
+                    ? `Form error: ${Object.values(signupErrors)[0]}`
+                    : ''}
                 </p>
                 <InputGroup
                   id="signup-first"
@@ -479,7 +483,6 @@ export default function LoginPage() {
                 <button
                   key={role}
                   type="button"
-                  aria-label={`Use ${label} test login`}
                   className={`w-full rounded-lg px-4 py-2 transition focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:outline-none ${classes}`}
                   onClick={() => applyTestLogin(role)}
                 >
