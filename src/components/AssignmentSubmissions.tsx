@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FileText, MessageSquare, Check, X, Minus } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -50,6 +50,7 @@ type Props = {
   courseId: string;
   assignmentId: string;
   maxAssignmentGrade: number;
+  assignmentDueDate?: string | Date | null;
   problems?: Problem[];
   // When assignmentIsGroup is true the parent will pass `groups` and
   // `groupProblemsMap` so this component can show only the problems
@@ -70,12 +71,14 @@ const extractSubs = (raw?: SubmissionData): Submission[] => {
 
 function SubmissionTable({
   submissions,
+  assignmentDueDate,
   onView,
   onRerun,
   rerunning,
   className = '',
 }: {
   submissions: Submission[];
+  assignmentDueDate?: string | Date | null;
   onView: (submission: Submission) => void;
   onRerun: (submission: Submission) => void;
   rerunning: Record<string, boolean>;
@@ -92,6 +95,8 @@ function SubmissionTable({
   const sorted = [...submissions].sort(
     (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
   );
+  const dueDate = assignmentDueDate ? new Date(assignmentDueDate) : null;
+  const hasValidDueDate = !!dueDate && !Number.isNaN(dueDate.getTime());
 
   return (
     <div className={`overflow-hidden rounded-md border ${className}`}>
@@ -106,14 +111,24 @@ function SubmissionTable({
         </TableHeader>
         <TableBody>
           {sorted.map((s) => {
+            const submittedAt = new Date(s.submittedAt);
+            const isLate = hasValidDueDate && submittedAt.getTime() > dueDate!.getTime();
             return (
               <TableRow key={s.id} className="hover:bg-transparent">
                 <TableCell>
                   <div className="flex flex-col">
-                    <span>{new Date(s.submittedAt).toLocaleDateString()}</span>
+                    <span>{submittedAt.toLocaleDateString()}</span>
                     <span className="text-muted-foreground text-xs">
-                      {new Date(s.submittedAt).toLocaleTimeString()}
+                      {submittedAt.toLocaleTimeString()}
                     </span>
+                    {isLate ? (
+                      <Badge
+                        variant="secondary"
+                        className="mt-1 w-fit bg-amber-100 text-amber-800 shadow-sm"
+                      >
+                        Late
+                      </Badge>
+                    ) : null}
                   </div>
                 </TableCell>
                 <TableCell>
@@ -172,20 +187,26 @@ function ProblemList({ problems, submissions, selectedProblemId, onSelect }: Pro
 
   const items = problems.map((problem, index) => ({
     id: problem.id,
-    title: problem.title
-      ? `Problem ${index + 1}: ${limitText(problem.title)}`
-      : `Problem ${index + 1}`,
+    title: problem.title ? `${index + 1}. ${limitText(problem.title)}` : `${index + 1}.`,
   }));
 
   const getBadgeContent = (problemId: string) => {
     const subs = extractSubs(submissions[problemId]);
+    const problem = problems.find((item) => item.id === problemId);
+    const maxSubmissions = problem?.maxSubmissions;
+    const hasFiniteSubmissionLimit =
+      typeof maxSubmissions === 'number' && Number.isFinite(maxSubmissions) && maxSubmissions > 0;
+    const countLabel = hasFiniteSubmissionLimit
+      ? `${subs.length}/${maxSubmissions}`
+      : `${subs.length}/∞`;
+
     if (!subs.length) {
       return (
         <Badge
           variant="secondary"
-          className="border-transparent bg-slate-100 text-[10px] font-medium text-slate-700"
+          className="min-w-[50px] border border-slate-300 bg-white text-[11px] font-medium text-slate-700"
         >
-          0
+          {countLabel}
         </Badge>
       );
     }
@@ -194,14 +215,14 @@ function ProblemList({ problems, submissions, selectedProblemId, onSelect }: Pro
       (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
     )[0];
 
-    let label = `${subs.length} ${subs.length === 1 ? 'submission' : 'submissions'}`;
+    let label = countLabel;
     let badgeClass = 'bg-slate-100 text-slate-700';
 
     if (latest?.correct === true) {
-      label = `Correct · ${subs.length}`;
+      label = `Correct · ${countLabel}`;
       badgeClass = 'bg-emerald-100 text-emerald-800';
     } else if (latest?.correct === false) {
-      label = `Needs review · ${subs.length}`;
+      label = `Needs review · ${countLabel}`;
       badgeClass = 'bg-amber-100 text-amber-800';
     }
 
@@ -232,6 +253,7 @@ function ProblemList({ problems, submissions, selectedProblemId, onSelect }: Pro
 function ProblemWorkspace({
   problem,
   submissions,
+  assignmentDueDate,
   comments,
   commentText,
   onCommentTextChange,
@@ -253,6 +275,7 @@ function ProblemWorkspace({
 }: {
   problem: Problem | null;
   submissions: Submission[];
+  assignmentDueDate?: string | Date | null;
   comments: DiscussionComment[];
   commentText: string;
   onCommentTextChange: (text: string) => void;
@@ -314,6 +337,7 @@ function ProblemWorkspace({
           <WorkspacePanel title="Submissions" icon={<FileText className="h-4 w-4" />}>
             <SubmissionTable
               submissions={submissions}
+              assignmentDueDate={assignmentDueDate}
               onView={onViewSubmission}
               onRerun={onRerunSubmission}
               rerunning={rerunning}
@@ -342,6 +366,7 @@ export default function AssignmentSubmissions({
   courseIsArchived,
   courseId,
   assignmentId,
+  assignmentDueDate,
   problems,
   assignmentIsGroup = false,
   groups = [],
@@ -349,11 +374,14 @@ export default function AssignmentSubmissions({
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const searchParamsString = searchParams.toString();
   const selectedStudentIdParam = searchParams.get('studentId');
   const [students, setStudents] = useState<Person[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [submissions, setSubmissions] = useState<Record<string, SubmissionData>>({});
+  const [loadingSubmissions, setLoadingSubmissions] = useState(false);
   const [comments, setComments] = useState<Record<string, DiscussionComment[]>>({});
+  const [loadingComments, setLoadingComments] = useState(false);
   const [commentTexts, setCommentTexts] = useState<Record<string, string>>({});
   const [savingComments, setSavingComments] = useState<Record<string, boolean>>({});
   const [deletingComments, setDeletingComments] = useState<Record<string, boolean>>({});
@@ -365,7 +393,10 @@ export default function AssignmentSubmissions({
   const [selectedStudentGroupId, setSelectedStudentGroupId] = useState<string | null | undefined>(
     undefined,
   );
-  const studentGroupCache = useRef<Record<string, string | null | undefined>>({});
+  const [groupMembershipByStudent, setGroupMembershipByStudent] = useState<Record<string, string>>(
+    {},
+  );
+  const [loadingGroupMemberships, setLoadingGroupMemberships] = useState(false);
 
   // Load all course problems and prefer client-side filtering for the submissions tab.
   // Fall back to `problems` prop if the fetch fails or isn't provided.
@@ -407,6 +438,7 @@ export default function AssignmentSubmissions({
   const [problemGradeErrors, setProblemGradeErrors] = useState<Record<string, string | null>>({});
   const [savingProblemGrades, setSavingProblemGrades] = useState<Record<string, boolean>>({});
   const [loadingProblemGrades, setLoadingProblemGrades] = useState(false);
+  const [showStudentDataLoading, setShowStudentDataLoading] = useState(false);
   const [studentGradeStatuses, setStudentGradeStatuses] = useState<Record<string, boolean>>({});
   const [openDialog, setOpenDialog] = useState<{
     open: boolean;
@@ -415,20 +447,20 @@ export default function AssignmentSubmissions({
 
   const updateQuery = useCallback(
     (problemId: string) => {
-      const params = new URLSearchParams(searchParams.toString());
+      const params = new URLSearchParams(searchParamsString);
       params.set('problemId', problemId);
       router.replace(`?${params.toString()}`, { scroll: false });
     },
-    [router, searchParams],
+    [router, searchParamsString],
   );
 
   const updateStudentQuery = useCallback(
     (studentId: string) => {
-      const params = new URLSearchParams(searchParams.toString());
+      const params = new URLSearchParams(searchParamsString);
       params.set('studentId', studentId);
       router.replace(`?${params.toString()}`, { scroll: false });
     },
-    [router, searchParams],
+    [router, searchParamsString],
   );
 
   // Build the assignment-specific problem list using the fetched `allProblems` (prefer enriched objects).
@@ -437,8 +469,16 @@ export default function AssignmentSubmissions({
       // parent didn't pass assignment problems — fall back to `allProblems`
       return allProblems;
     }
-    // Prefer enriched problem objects from `allProblems` when available.
-    return problems.map((ap) => allProblems.find((p) => p.id === ap.id) ?? ap);
+    // Merge course-level problem details with assignment-level settings.
+    // Assignment-level fields (maxSubmissions/maxPoints/autograderEnabled) must win.
+    return problems.map((assignmentProblem) => {
+      const courseProblem = allProblems.find((problem) => problem.id === assignmentProblem.id);
+      if (!courseProblem) return assignmentProblem;
+      return {
+        ...courseProblem,
+        ...assignmentProblem,
+      };
+    });
   }, [problems, allProblems]);
 
   // Compute which problems should be visible for the selected student when
@@ -483,7 +523,8 @@ export default function AssignmentSubmissions({
   // currently visible problems (handles group assignment filtering).
   useEffect(() => {
     if (visibleProblems.length === 0) return;
-    const paramProblemId = searchParams.get('problemId');
+    const params = new URLSearchParams(searchParamsString);
+    const paramProblemId = params.get('problemId');
     const validProblemId = visibleProblems.some((p) => p.id === paramProblemId)
       ? (paramProblemId as string)
       : visibleProblems[0].id;
@@ -492,7 +533,7 @@ export default function AssignmentSubmissions({
     if (paramProblemId !== validProblemId) {
       updateQuery(validProblemId);
     }
-  }, [visibleProblems, searchParams, updateQuery]);
+  }, [visibleProblems, searchParamsString, updateQuery]);
 
   const selectedStudent = students[selectedIndex] ?? null;
   const selectedStudentId = selectedStudent?.id ?? null;
@@ -524,31 +565,20 @@ export default function AssignmentSubmissions({
     return { earned: totalEarned, available: totalAvailable };
   }, [assignmentProblems, problemGrades, selectedStudent]);
 
-  // Determine which group the selected student belongs to (for group assignments).
+  // Preload group membership once per course/group set to avoid repeated network calls
+  // when navigating between students.
   useEffect(() => {
     let cancelled = false;
-    async function resolveStudentGroup() {
-      if (!assignmentIsGroup || !selectedStudent) {
-        setSelectedStudentGroupId(null);
+    async function loadGroupMemberships() {
+      if (!assignmentIsGroup || !groups || groups.length === 0) {
+        setGroupMembershipByStudent({});
+        setLoadingGroupMemberships(false);
         return;
       }
 
-      // Use cache if present
-      const cached = studentGroupCache.current[selectedStudent.id];
-      if (cached !== undefined) {
-        setSelectedStudentGroupId(cached);
-        return;
-      }
-
-      // If no groups available, treat as not in any group
-      if (!groups || groups.length === 0) {
-        studentGroupCache.current[selectedStudent.id] = null;
-        setSelectedStudentGroupId(null);
-        return;
-      }
+      setLoadingGroupMemberships(true);
 
       try {
-        // Fetch members for all groups in parallel and find which contains the student
         const ops = groups.map((g) =>
           fetch(`/api/courses/${courseId}/groups/${g.id}/members`)
             .then((res) => (res.ok ? res.json() : Promise.resolve({ members: [] })))
@@ -557,24 +587,46 @@ export default function AssignmentSubmissions({
         );
         const results = await Promise.all(ops);
         if (cancelled) return;
-        const found = results.find((r) =>
-          r.members.some((m: any) => m.userId === selectedStudent.id),
-        );
-        const gid = found ? found.id : null;
-        studentGroupCache.current[selectedStudent.id] = gid;
-        setSelectedStudentGroupId(gid);
+
+        const membershipMap: Record<string, string> = {};
+        for (const result of results) {
+          for (const member of result.members as Array<{ userId: string }>) {
+            if (!membershipMap[member.userId]) {
+              membershipMap[member.userId] = result.id;
+            }
+          }
+        }
+
+        setGroupMembershipByStudent(membershipMap);
       } catch (err) {
-        console.error('Failed to resolve student group:', err);
-        studentGroupCache.current[selectedStudent.id] = null;
-        if (!cancelled) setSelectedStudentGroupId(null);
+        console.error('Failed to preload group memberships:', err);
+        if (!cancelled) setGroupMembershipByStudent({});
+      } finally {
+        if (!cancelled) setLoadingGroupMemberships(false);
       }
     }
 
-    resolveStudentGroup();
+    loadGroupMemberships();
     return () => {
       cancelled = true;
     };
-  }, [assignmentIsGroup, selectedStudent, groups, courseId]);
+  }, [assignmentIsGroup, groups, courseId]);
+
+  // Determine selected student's group from preloaded membership data.
+  useEffect(() => {
+    if (!assignmentIsGroup || !selectedStudent) {
+      setSelectedStudentGroupId(null);
+      return;
+    }
+
+    if (loadingGroupMemberships) {
+      setSelectedStudentGroupId(undefined);
+      return;
+    }
+
+    const groupId = groupMembershipByStudent[selectedStudent.id] ?? null;
+    setSelectedStudentGroupId(groupId);
+  }, [assignmentIsGroup, selectedStudent, loadingGroupMemberships, groupMembershipByStudent]);
 
   const handleSelectProblem = useCallback(
     (problemId: string) => {
@@ -659,35 +711,108 @@ export default function AssignmentSubmissions({
     fetchGradeSummary();
   }, [assignmentId, courseId, students]);
 
-  const fetchSubmissions = useCallback(async () => {
+  const fetchReviewData = useCallback(async () => {
     if (!selectedStudentId) {
       setSubmissions({});
+      setComments({});
+      setProblemGrades({});
+      setGradeInputs({});
+      setProblemGradeErrors({});
+      setLoadingSubmissions(false);
+      setLoadingComments(false);
+      setLoadingProblemGrades(false);
       return;
     }
+
+    setLoadingSubmissions(true);
+    setLoadingComments(true);
+    setLoadingProblemGrades(true);
+
     try {
       const res = await fetch(
-        `/api/courses/${courseId}/${assignmentId}/submissions/${selectedStudentId}`,
+        `/api/courses/${courseId}/${assignmentId}/review-data/${selectedStudentId}`,
       );
+
       if (!res.ok) {
         if ([401, 403, 404].includes(res.status)) {
           setSubmissions({});
+          setComments(
+            Object.fromEntries(
+              assignmentProblems.map((problem) => [problem.id, [] as DiscussionComment[]]),
+            ),
+          );
+          setProblemGrades({});
+          setGradeInputs({});
+          setProblemGradeErrors({});
           return;
         }
-        throw new Error((await res.json())?.error || 'Failed to load submissions');
+        throw new Error((await res.json())?.error || 'Failed to load review data');
       }
-      const data = await res.json();
-      setSubmissions(data || {});
-    } catch (err) {
-      console.error('Fetch submissions error:', err);
-      showToast.error('Failed to load submissions');
-      setSubmissions({});
-    }
-  }, [courseId, assignmentId, selectedStudentId]);
 
-  // Fetch submissions for selected student
+      type ReviewDataResponse = {
+        submissions?: Record<string, SubmissionData>;
+        comments?: Array<DiscussionComment & { problemId?: string | null }>;
+        problemGrades?: Record<string, { grade: number | null; feedback: string | null }>;
+      };
+
+      const data = ((await res.json()) ?? {}) as ReviewDataResponse;
+      setSubmissions(data.submissions || {});
+
+      const groupedComments = Object.fromEntries(
+        assignmentProblems.map((problem) => [problem.id, [] as DiscussionComment[]]),
+      ) as Record<string, DiscussionComment[]>;
+
+      for (const comment of data.comments ?? []) {
+        const problemId = comment.problemId;
+        if (problemId && groupedComments[problemId]) {
+          groupedComments[problemId].push(comment);
+        }
+      }
+      setComments(groupedComments);
+
+      const gradeData = data.problemGrades ?? {};
+      const normalizedGrades: Record<string, number | null> = {};
+      const normalizedInputs: Record<string, string> = {};
+      assignmentProblems.forEach((problem) => {
+        const entry = gradeData?.[problem.id];
+        const value = typeof entry?.grade === 'number' ? entry.grade : null;
+        normalizedGrades[problem.id] = value;
+        normalizedInputs[problem.id] = value === null || value === undefined ? '' : String(value);
+      });
+
+      setProblemGrades(normalizedGrades);
+      setGradeInputs(normalizedInputs);
+      setProblemGradeErrors({});
+
+      const hasAllGrades =
+        assignmentProblems.length === 0
+          ? true
+          : assignmentProblems.every((problem) => {
+              const value = normalizedGrades[problem.id];
+              return value !== null && value !== undefined;
+            });
+      setStudentGradeStatuses((prev) => ({
+        ...prev,
+        [selectedStudentId]: hasAllGrades,
+      }));
+    } catch (err) {
+      console.error('Fetch review data error:', err);
+      showToast.error('Failed to load review data');
+      setSubmissions({});
+      setComments({});
+      setProblemGrades({});
+      setGradeInputs({});
+    } finally {
+      setLoadingSubmissions(false);
+      setLoadingComments(false);
+      setLoadingProblemGrades(false);
+    }
+  }, [courseId, assignmentId, selectedStudentId, assignmentProblems]);
+
+  // Fetch review data for selected student
   useEffect(() => {
-    fetchSubmissions();
-  }, [fetchSubmissions]);
+    fetchReviewData();
+  }, [fetchReviewData]);
 
   const handleRerunSubmission = useCallback(
     async (submission: Submission) => {
@@ -702,7 +827,7 @@ export default function AssignmentSubmissions({
           throw new Error(error?.error || 'Failed to rerun submission');
         }
         showToast.success('Submission re-evaluated');
-        await fetchSubmissions();
+        await fetchReviewData();
       } catch (err) {
         console.error('Rerun submission error:', err);
         showToast.error(err instanceof Error ? err.message : 'Failed to rerun submission');
@@ -710,135 +835,8 @@ export default function AssignmentSubmissions({
         setRerunning((prev) => ({ ...prev, [submission.id]: false }));
       }
     },
-    [fetchSubmissions],
+    [fetchReviewData],
   );
-
-  // Fetch comments only for visible problems (honors group filtering)
-  useEffect(() => {
-    const loadComments = async () => {
-      if (!selectedStudentId) {
-        setComments({});
-        return;
-      }
-      try {
-        const validProblems = visibleProblems.filter((p): p is Problem => Boolean(p?.id));
-        const params = new URLSearchParams({
-          assignmentId,
-          studentId: selectedStudentId,
-          scope: 'assignment',
-        });
-
-        const res = await fetch(`/api/comments?${params.toString()}`);
-        if (!res.ok) {
-          if ([204, 401, 403, 404].includes(res.status)) {
-            setComments(Object.fromEntries(validProblems.map((problem) => [problem.id, []])));
-            return;
-          }
-          throw new Error('Failed to load comments');
-        }
-
-        type AssignmentComment = DiscussionComment & { problemId?: string | null };
-        const list = (res.status === 204 ? [] : ((await res.json()) as AssignmentComment[])) ?? [];
-        const grouped = Object.fromEntries(
-          validProblems.map((problem) => [problem.id, [] as DiscussionComment[]]),
-        ) as Record<string, DiscussionComment[]>;
-
-        for (const comment of list) {
-          const problemId = comment.problemId;
-          if (problemId && grouped[problemId]) {
-            grouped[problemId].push(comment);
-          }
-        }
-
-        setComments(grouped);
-      } catch (err) {
-        console.error('Load comments error:', err);
-        showToast.error('Failed to load comments');
-        setComments({});
-      }
-    };
-    if (visibleProblems.length > 0) loadComments();
-    else setComments({});
-  }, [assignmentId, visibleProblems, selectedStudentId]);
-
-  useEffect(() => {
-    if (!selectedStudentId) {
-      setProblemGrades({});
-      setGradeInputs({});
-      setProblemGradeErrors({});
-      setLoadingProblemGrades(false);
-      return;
-    }
-
-    const fetchGrades = async () => {
-      setLoadingProblemGrades(true);
-      try {
-        const res = await fetch(
-          `/api/courses/${courseId}/${assignmentId}/problem-grades/${selectedStudentId}`,
-        );
-        let data: Record<string, { grade: number | null; feedback: string | null }> = {};
-        if (res.status === 204) {
-          data = {};
-        } else if (!res.ok) {
-          if ([401, 403, 404].includes(res.status)) {
-            data = {};
-          } else {
-            throw new Error('Failed to fetch grades');
-          }
-        } else {
-          const raw = await res.text();
-          if (raw) {
-            try {
-              data = JSON.parse(raw) as Record<
-                string,
-                { grade: number | null; feedback: string | null }
-              >;
-            } catch (parseError) {
-              console.error('Failed to parse grades payload:', parseError);
-              data = {};
-            }
-          } else {
-            data = {};
-          }
-        }
-
-        const normalizedGrades: Record<string, number | null> = {};
-        const normalizedInputs: Record<string, string> = {};
-        assignmentProblems.forEach((problem) => {
-          const entry = data?.[problem.id];
-          const value = typeof entry?.grade === 'number' ? entry.grade : null;
-          normalizedGrades[problem.id] = value;
-          normalizedInputs[problem.id] = value === null || value === undefined ? '' : String(value);
-        });
-
-        setProblemGrades(normalizedGrades);
-        setGradeInputs(normalizedInputs);
-        setProblemGradeErrors({});
-        if (selectedStudentId) {
-          const hasAllGrades =
-            assignmentProblems.length === 0
-              ? true
-              : assignmentProblems.every((problem) => {
-                  const value = normalizedGrades[problem.id];
-                  return value !== null && value !== undefined;
-                });
-          setStudentGradeStatuses((prev) => ({
-            ...prev,
-            [selectedStudentId]: hasAllGrades,
-          }));
-        }
-      } catch (error) {
-        console.error('Failed to load problem grades:', error);
-        setProblemGrades({});
-        setGradeInputs({});
-        showToast.error('Failed to load problem grades');
-      } finally {
-        setLoadingProblemGrades(false);
-      }
-    };
-
-    fetchGrades();
-  }, [courseId, assignmentId, selectedStudentId, assignmentProblems]);
 
   const saveComment = useCallback(
     async (problemId: string) => {
@@ -1023,6 +1021,26 @@ export default function AssignmentSubmissions({
       return nextIndex;
     });
 
+  const isStudentDataLoading =
+    loadingSubmissions ||
+    loadingComments ||
+    loadingProblemGrades ||
+    (assignmentIsGroup && Boolean(selectedStudent) && selectedStudentGroupId === undefined) ||
+    (assignmentIsGroup && loadingGroupMemberships);
+
+  useEffect(() => {
+    if (isStudentDataLoading) {
+      const timeoutId = setTimeout(() => {
+        setShowStudentDataLoading(true);
+      }, 150);
+
+      return () => clearTimeout(timeoutId);
+    }
+
+    setShowStudentDataLoading(false);
+    return undefined;
+  }, [isStudentDataLoading]);
+
   return (
     <div>
       {selectedStudent && (
@@ -1050,6 +1068,11 @@ export default function AssignmentSubmissions({
               <div className="text-muted-foreground rounded-md border border-dashed p-6 text-center text-sm">
                 No problems have been added to this assignment yet.
               </div>
+            ) : showStudentDataLoading ? (
+              <div className="flex min-h-[320px] flex-col items-center justify-center gap-3">
+                <div className="border-muted-foreground/30 border-t-primary h-8 w-8 animate-spin rounded-full border-4" />
+                <p className="text-muted-foreground text-sm">Loading submissions...</p>
+              </div>
             ) : (
               (() => {
                 const selectedProblem = selectedProblemId
@@ -1073,6 +1096,7 @@ export default function AssignmentSubmissions({
                       <ProblemWorkspace
                         problem={selectedProblem}
                         submissions={selectedSubs}
+                        assignmentDueDate={assignmentDueDate}
                         comments={selectedComments}
                         commentText={selectedProblem ? commentTexts[selectedProblem.id] || '' : ''}
                         onCommentTextChange={(text) =>

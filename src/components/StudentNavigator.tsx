@@ -77,7 +77,11 @@ export default function StudentNavigator({
 
   return (
     <div className="flex items-center gap-2">
-      <Button variant="secondary" onClick={onPrev} className="flex items-center gap-x-1">
+      <Button
+        variant="secondary"
+        onClick={onPrev}
+        className="flex w-28 items-center justify-center gap-x-1"
+      >
         <ChevronLeft className="h-4 w-4" /> Previous
       </Button>
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
@@ -150,7 +154,11 @@ export default function StudentNavigator({
           </div>
         </DropdownMenuContent>
       </DropdownMenu>
-      <Button variant="secondary" onClick={onNext} className="flex items-center gap-x-1">
+      <Button
+        variant="secondary"
+        onClick={onNext}
+        className="flex w-28 items-center justify-center gap-x-1"
+      >
         Next <ChevronRight className="h-4 w-4" />
       </Button>
       <span className="text-muted-foreground ml-2 text-sm">
