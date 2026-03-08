@@ -307,10 +307,15 @@ export default function LoginPage() {
                 onSubmit={handleLogin}
                 className="space-y-5"
               >
+                <p className="sr-only" aria-live="assertive">
+                  {Object.values(loginErrors)[0] ?? ''}
+                </p>
                 <InputGroup
                   id="login-email"
                   label="Email"
                   name="login-email"
+                  required
+                  requiredMark
                   autoComplete="username"
                   value={loginEmail}
                   setValue={setLoginEmail}
@@ -321,6 +326,8 @@ export default function LoginPage() {
                 <InputGroup
                   label="Password"
                   name="login-password"
+                  required
+                  requiredMark
                   autoComplete="current-password"
                   value={loginPassword}
                   setValue={setLoginPassword}
@@ -365,10 +372,15 @@ export default function LoginPage() {
                 onSubmit={handleSignup}
                 className="space-y-5"
               >
+                <p className="sr-only" aria-live="assertive">
+                  {Object.values(signupErrors)[0] ?? ''}
+                </p>
                 <InputGroup
                   id="signup-first"
                   label="First Name"
                   name="signup-first"
+                  required
+                  requiredMark
                   autoComplete="off"
                   value={signupFirst}
                   setValue={setSignupFirst}
@@ -378,6 +390,8 @@ export default function LoginPage() {
                 <InputGroup
                   label="Last Name"
                   name="signup-last"
+                  required
+                  requiredMark
                   autoComplete="off"
                   value={signupLast}
                   setValue={setSignupLast}
@@ -387,6 +401,8 @@ export default function LoginPage() {
                 <InputGroup
                   label="Email"
                   name="signup-email"
+                  required
+                  requiredMark
                   autoComplete="username"
                   value={signupEmail}
                   setValue={setSignupEmail}
@@ -397,6 +413,8 @@ export default function LoginPage() {
                 <InputGroup
                   label="Password"
                   name="signup-password"
+                  required
+                  requiredMark
                   autoComplete="new-password"
                   value={signupPassword}
                   setValue={setSignupPassword}
@@ -411,6 +429,8 @@ export default function LoginPage() {
                 <InputGroup
                   label="Confirm Password"
                   name="signup-confirm"
+                  required
+                  requiredMark
                   autoComplete="new-password"
                   value={signupConfirm}
                   setValue={setSignupConfirm}
@@ -458,6 +478,8 @@ export default function LoginPage() {
               {testLoginButtons.map(({ role, label, classes }) => (
                 <button
                   key={role}
+                  type="button"
+                  aria-label={`Use ${label} test login`}
                   className={`w-full rounded-lg px-4 py-2 transition focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:outline-none ${classes}`}
                   onClick={() => applyTestLogin(role)}
                 >
