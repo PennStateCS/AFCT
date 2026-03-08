@@ -113,7 +113,7 @@ export const useProblemColumns = ({
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="secondary">
+              <Button variant="secondary" aria-label={`Manage problem ${row.original.title}`}>
                 <ChevronDown />
                 Manage
               </Button>

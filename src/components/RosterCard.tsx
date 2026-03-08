@@ -55,6 +55,7 @@ export function RosterCard({
           columns={userColumns as ColumnDef<User>[]}
           data={rosterData as unknown as User[]}
           loading={loading}
+          tableLabel="Course roster table"
         />
       </CardContent>
     </Card>

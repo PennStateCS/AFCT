@@ -174,6 +174,13 @@ export function DataTable<TData, TValue>({
     return '';
   };
 
+  const toAccessibleColumnName = (id: string) =>
+    id
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .replace(/_/g, ' ')
+      .trim()
+      .toLowerCase();
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -288,7 +295,7 @@ export function DataTable<TData, TValue>({
                           type="button"
                           onClick={handleSortClick}
                           className="flex w-full cursor-pointer items-center text-left select-none"
-                          aria-label={`Sort by ${header.column.id.replace(/_/g, ' ')}`}
+                          aria-label={`Sort by ${toAccessibleColumnName(header.column.id)}`}
                         >
                           {flexRender(header.column.columnDef.header, header.getContext())}
                           {sorted === 'asc' && <ArrowUp className="ml-1 h-3 w-3" />}
