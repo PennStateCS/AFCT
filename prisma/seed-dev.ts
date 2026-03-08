@@ -222,12 +222,7 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
   try {
     const solutionSourceDir = path.join(process.cwd(), 'prisma', 'solution_files');
     const containerSolutionDestinationDir = path.join(path.sep, 'private', 'uploads', 'solutions');
-    const localSolutionDestinationDir = path.join(
-      process.cwd(),
-      'private',
-      'uploads',
-      'solutions',
-    );
+    const localSolutionDestinationDir = path.join(process.cwd(), 'private', 'uploads', 'solutions');
 
     let solutionDestinationDir = containerSolutionDestinationDir;
     try {
@@ -296,13 +291,23 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
   }
 
   console.log('[seed] development: creating assignments for courses');
-  // Create assignments for each course. All courses get the same assignments.
+  // Create assignments for each course without duplicates.
   const createdAssignments: { [courseId: string]: Array<{ id: string; title: string }> } = {};
 
   try {
     // Prepare all assignment data for batch insertion
-    const assignmentsToCreate = courses.flatMap((course) =>
-      assignmentData.map((assignmentSeed) => {
+    const assignmentsToCreate = courses.flatMap((course, courseIndex) => {
+      const seenTitles = new Set<string>();
+      const courseAssignments = assignmentData.filter(
+        (assignmentSeed) => assignmentSeed.courseIndex === courseIndex,
+      );
+
+      return courseAssignments.flatMap((assignmentSeed) => {
+        if (seenTitles.has(assignmentSeed.title)) {
+          return [];
+        }
+        seenTitles.add(assignmentSeed.title);
+
         // Calculate due date based on dueFraction and course endDate
         const courseStart = new Date(course.startDate);
         const courseDuration = new Date(course.endDate).getTime() - courseStart.getTime();
@@ -314,17 +319,19 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
             ? new Date(dueDate.getTime() + 4 * 24 * 60 * 60 * 1000)
             : null;
 
-        return {
-          title: assignmentSeed.title,
-          description: assignmentSeed.description,
-          dueDate,
-          allowLateSubmissions,
-          lateCutoff,
-          isPublished: assignmentSeed.isPublished,
-          courseId: course.id,
-        };
-      }),
-    );
+        return [
+          {
+            title: assignmentSeed.title,
+            description: assignmentSeed.description,
+            dueDate,
+            allowLateSubmissions,
+            lateCutoff,
+            isPublished: assignmentSeed.isPublished,
+            courseId: course.id,
+          },
+        ];
+      });
+    });
 
     const createdAssignmentRecords = await prisma.assignment.createMany({
       data: assignmentsToCreate,
