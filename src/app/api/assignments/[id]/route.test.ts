@@ -325,6 +325,22 @@ describe('PUT /api/assignments/[id]', () => {
     const json = await res.json();
     expect(json.error).toContain('after the due date');
   });
+
+  it('prevents changing group mode via PUT when submissions already exist', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
+    prismaMock.submission.count.mockResolvedValue(2);
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', {
+      method: 'PUT',
+      body: JSON.stringify({ title: 'A', isGroup: true }),
+    });
+    const res = await PUT(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(403);
+    const json = await res.json();
+    expect(json.error).toContain('group mode');
+  });
 });
 
 describe('PATCH /api/assignments/[id]', () => {
@@ -340,8 +356,37 @@ describe('PATCH /api/assignments/[id]', () => {
     expect(res.status).toBe(403);
   });
 
+  it('returns 403 when student attempts to patch', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', {
+      method: 'PATCH',
+      body: JSON.stringify({ title: 'A' }),
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 403 when unpublishing assignment with submissions', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
+    prismaMock.assignmentProblem.findFirst.mockResolvedValue({ assignmentId: 'a1' });
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', {
+      method: 'PATCH',
+      body: JSON.stringify({ isPublished: false }),
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(403);
+    const json = await res.json();
+    expect(json.error).toContain('submissions');
+  });
+
   it('prevents changing group mode if submissions exist', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.submission.count.mockResolvedValue(1);
 
     const req = new NextRequest('http://localhost/api/assignments/a1', {
@@ -351,6 +396,99 @@ describe('PATCH /api/assignments/[id]', () => {
     const res = await PATCH(req, { params: Promise.resolve({ id: 'a1' }) });
 
     expect(res.status).toBe(403);
+  });
+
+  it('returns 404 when assignment is missing during PATCH', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
+    prismaMock.assignment.findUnique.mockResolvedValue(null);
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', {
+      method: 'PATCH',
+      body: JSON.stringify({ title: 'Updated title' }),
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 400 when late cutoff is provided while late submissions are disabled (PATCH)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
+    prismaMock.assignment.findUnique.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      dueDate: new Date('2025-01-01T00:00:00.000Z'),
+      allowLateSubmissions: true,
+      lateCutoff: new Date('2025-01-02T00:00:00.000Z'),
+    });
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', {
+      method: 'PATCH',
+      body: JSON.stringify({ allowLateSubmissions: false, lateCutoff: '2025-01-03T00:00' }),
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error).toContain('disabled');
+  });
+
+  it('updates assignment via PATCH and logs activity', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
+    prismaMock.assignment.findUnique.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      title: 'Old title',
+      dueDate: new Date('2025-01-01T00:00:00.000Z'),
+      allowLateSubmissions: true,
+      lateCutoff: new Date('2025-01-02T00:00:00.000Z'),
+    });
+    prismaMock.assignment.update.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      title: 'New title',
+    });
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', {
+      method: 'PATCH',
+      body: JSON.stringify({ title: 'New title', description: 'New description' }),
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.assignment.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'a1' },
+        data: expect.objectContaining({
+          title: 'New title',
+          description: 'New description',
+        }),
+      }),
+    );
+    expect(activityLogMock).toHaveBeenCalled();
+  });
+
+  it('returns 500 when PATCH update fails', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
+    prismaMock.assignment.findUnique.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      dueDate: new Date('2025-01-01T00:00:00.000Z'),
+      allowLateSubmissions: true,
+      lateCutoff: new Date('2025-01-02T00:00:00.000Z'),
+    });
+    prismaMock.assignment.update.mockRejectedValue(new Error('db failed'));
+
+    const req = new NextRequest('http://localhost/api/assignments/a1', {
+      method: 'PATCH',
+      body: JSON.stringify({ title: 'New title' }),
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(500);
   });
 });
 
