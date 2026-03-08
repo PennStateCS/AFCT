@@ -76,10 +76,16 @@ export default function SystemSettingsClient() {
 
   return (
     <div className="space-y-4 pb-8">
-      <Card>
+      <p className="sr-only" aria-live="polite">
+        {loading ? 'Loading system settings' : saving ? 'Saving system settings' : ''}
+      </p>
+
+      <Card aria-labelledby="system-settings-title">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <CardTitle className="text-2xl">System Settings</CardTitle>
+            <CardTitle id="system-settings-title" className="text-2xl">
+              System Settings
+            </CardTitle>
             <Badge variant="outline" className="bg-blue-50 text-blue-700">
               Beta Feature
             </Badge>
@@ -90,16 +96,23 @@ export default function SystemSettingsClient() {
         </CardHeader>
       </Card>
 
-      <Card>
+      <Card aria-labelledby="system-settings-general-title">
         <CardHeader>
-          <CardTitle className="text-lg">General</CardTitle>
+          <CardTitle id="system-settings-general-title" className="text-lg">
+            General
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={onSubmit} className="grid max-w-xl gap-4 rounded-md border p-4">
+          <form
+            onSubmit={onSubmit}
+            aria-busy={loading || saving}
+            className="grid max-w-xl gap-4 rounded-md border p-4"
+          >
             <SelectField
               label="Timezone"
               name="timezone"
               id="timezone"
+              requiredMark
               placeholder={loading ? 'Loading timezone...' : 'Select timezone'}
               value={loading ? '' : timezone}
               onValueChange={(val) => setTimezone(val)}
@@ -111,6 +124,8 @@ export default function SystemSettingsClient() {
               label="Max upload size (MB)"
               name="maxUploadSizeMb"
               type="number"
+              required
+              requiredMark
               min={1}
               max={1024}
               value={maxUploadSizeMb === '' ? '' : String(maxUploadSizeMb)}
@@ -119,7 +134,7 @@ export default function SystemSettingsClient() {
               description="Applies to all uploads. Range: 1–1024 MB."
             />
             <div>
-              <Button type="submit" disabled={loading || saving}>
+              <Button type="submit" aria-label="Save system settings" disabled={loading || saving}>
                 {saving ? 'Saving...' : 'Save changes'}
               </Button>
             </div>
