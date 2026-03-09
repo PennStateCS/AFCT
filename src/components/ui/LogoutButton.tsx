@@ -1,11 +1,11 @@
 'use client';
 
-import { signOut } from "next-auth/react";
+import { safeSignOut } from '@/lib/safe-signout';
 
 export function LogoutButton() {
   return (
     <button
-      onClick={() => signOut({ callbackUrl: "/" })}
+      onClick={() => void safeSignOut({ callbackUrl: '/' })}
       className="mt-4 px-4 py-2 bg-red-600 text-white rounded"
     >
       Sign Out

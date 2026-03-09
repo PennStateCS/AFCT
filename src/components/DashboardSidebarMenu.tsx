@@ -3,13 +3,14 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useSession, signOut } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
 import { useState } from 'react';
 import useSWR from 'swr';
 import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils';
 import { isEnrolled } from '@/lib/course-utils';
+import { safeSignOut } from '@/lib/safe-signout';
 
 import { ChangePasswordDialog } from './dialogs/ChangePasswordDialog';
 import { EditProfileDialog } from './dialogs/EditProfileDialog';
@@ -489,7 +490,7 @@ export default function DashboardSidebarMenu() {
                   <button
                     type="button"
                     className="flex w-full items-center gap-2 text-left"
-                    onClick={() => signOut({ callbackUrl: '/' })}
+                    onClick={() => void safeSignOut({ callbackUrl: '/' })}
                   >
                     <LogOut className="h-4 w-4" />
                     Sign out
