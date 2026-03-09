@@ -25,12 +25,13 @@ beforeEach(() => {
 describe('POST /api/courses/[id]/duplicate', () => {
   const basePayload = {
     title: 'New',
-    code: 'C1',
+    code: 'CS 101',
     semester: 'Fall',
     startDate: '2025-01-01T09:00',
     endDate: '2025-05-01T09:00',
     registrationOpenAt: '2024-12-01T09:00',
     registrationCloseAt: '2025-01-15T09:00',
+    credits: 3,
   } as const;
   const makePayload = (overrides: Record<string, unknown> = {}) => ({
     ...basePayload,
@@ -74,6 +75,80 @@ describe('POST /api/courses/[id]/duplicate', () => {
     const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
 
     expect(res.status).toBe(400);
+  });
+
+  it('returns 400 for invalid credits', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+
+    const req = new NextRequest('http://localhost/api/courses/c1/duplicate', {
+      method: 'POST',
+      body: JSON.stringify(makePayload({ credits: 0 })),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      error: 'Credits must be an integer between 1 and 6.',
+    });
+  });
+
+  it('returns 400 for invalid course code format', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+
+    const req = new NextRequest('http://localhost/api/courses/c1/duplicate', {
+      method: 'POST',
+      body: JSON.stringify(makePayload({ code: 'C1' })),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      error: 'Use a code like "CMPSC 221" or "MATH220".',
+    });
+  });
+
+  it('returns 400 when start date is after end date', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+
+    const req = new NextRequest('http://localhost/api/courses/c1/duplicate', {
+      method: 'POST',
+      body: JSON.stringify(
+        makePayload({
+          startDate: '2025-06-01T09:00',
+          endDate: '2025-05-01T09:00',
+        }),
+      ),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      error: 'Start date/time must be on or before the end date/time.',
+    });
+  });
+
+  it('returns 400 when self-registration open is after close', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+
+    const req = new NextRequest('http://localhost/api/courses/c1/duplicate', {
+      method: 'POST',
+      body: JSON.stringify(
+        makePayload({
+          registrationOpenAt: '2025-01-16T09:00',
+          registrationCloseAt: '2025-01-15T09:00',
+        }),
+      ),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      error: 'Self registration open must be on or before the close date.',
+    });
   });
 
   it('duplicates a course', async () => {

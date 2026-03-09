@@ -64,29 +64,19 @@ export const showToast = {
 
   // Convenience methods for common use cases
   created: (itemName: string) => {
-    return sonnerToast.success(`${itemName} created successfully`, {
-      ...getA11yOptions('success'),
-      duration: 4000,
-    });
+    return showToast.success(`${itemName} created successfully`);
   },
 
   updated: (itemName: string) => {
-    return sonnerToast.success(`${itemName} updated successfully`, {
-      ...getA11yOptions('success'),
-      duration: 4000,
-    });
+    return showToast.success(`${itemName} updated successfully`);
   },
 
   deleted: (itemName: string) => {
-    return sonnerToast.success(`${itemName} deleted successfully`, {
-      ...getA11yOptions('success'),
-      duration: 4000,
-    });
+    return showToast.success(`${itemName} deleted successfully`);
   },
 
   saved: (itemName?: string) => {
-    return sonnerToast.success(itemName ? `${itemName} saved` : 'Changes saved', {
-      ...getA11yOptions('success'),
+    return showToast.success(itemName ? `${itemName} saved` : 'Changes saved', {
       duration: 3000,
     });
   },

@@ -3,13 +3,14 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useSession, signOut } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
 import { useState } from 'react';
 import useSWR from 'swr';
 import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils';
 import { isEnrolled } from '@/lib/course-utils';
+import { safeSignOut } from '@/lib/safe-signout';
 
 import { ChangePasswordDialog } from './dialogs/ChangePasswordDialog';
 import { EditProfileDialog } from './dialogs/EditProfileDialog';
@@ -49,7 +50,11 @@ import {
   ChevronUp,
   BookPlus,
   Settings,
+  Wrench,
 } from 'lucide-react';
+
+const menuButtonStyles =
+  'text-sidebar-foreground hover:bg-secondary/85 focus-visible:bg-secondary/85 active:bg-secondary data-[active=true]:bg-secondary data-[active=true]:text-secondary-foreground';
 
 type Course = {
   id: string;
@@ -151,6 +156,13 @@ export default function DashboardSidebarMenu() {
 
   const filteredCourses = getCoursesForUser(user, courses);
   const visibleCourses = filteredCourses.filter((c) => !c.isArchived);
+  const isDev = process.env.NODE_ENV !== 'production';
+  const resolvedAdminMenu = isDev
+    ? [
+        ...adminMenu,
+        { title: 'Development Tests', url: '/dashboard/development-tests', icon: Wrench },
+      ]
+    : adminMenu;
 
   return (
     <>
@@ -161,24 +173,25 @@ export default function DashboardSidebarMenu() {
           <SidebarGroup>
             <SidebarGroupLabel
               aria-hidden={collapsed}
-              className={collapsed ? 'hidden' : 'text-sidebar-foreground text-sm'}
+              className={
+                collapsed
+                  ? 'hidden'
+                  : 'text-sidebar-foreground overflow-hidden text-sm whitespace-nowrap'
+              }
             >
               Admin Menu
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {adminMenu.map(({ title, url, icon: Icon }) => (
+                {resolvedAdminMenu.map(({ title, url, icon: Icon }) => (
                   <SidebarMenuItem key={url}>
                     <TooltipProvider delayDuration={100}>
-                      <Tooltip open={collapsed ? undefined : false}>
+                      <Tooltip>
                         <TooltipTrigger asChild>
                           <SidebarMenuButton
                             asChild
                             isActive={pathname === url}
-                            className={cn(
-                              'hover:bg-secondary focus:bg-secondary text-sidebar-foreground',
-                              'data-[active=true]:bg-secondary',
-                            )}
+                            className={cn(menuButtonStyles)}
                           >
                             <Link
                               href={url}
@@ -201,6 +214,7 @@ export default function DashboardSidebarMenu() {
                         </TooltipTrigger>
                         <TooltipContent
                           side="right"
+                          hidden={!collapsed}
                           className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
                           sideOffset={10}
                         >
@@ -220,7 +234,11 @@ export default function DashboardSidebarMenu() {
           <SidebarGroup>
             <SidebarGroupLabel
               aria-hidden={collapsed}
-              className={collapsed ? 'hidden' : 'text-sidebar-foreground text-sm'}
+              className={
+                collapsed
+                  ? 'hidden'
+                  : 'text-sidebar-foreground overflow-hidden text-sm whitespace-nowrap'
+              }
             >
               Current Courses
             </SidebarGroupLabel>
@@ -250,15 +268,12 @@ export default function DashboardSidebarMenu() {
                   visibleCourses.map((course) => (
                     <SidebarMenuItem key={course.id}>
                       <TooltipProvider delayDuration={100}>
-                        <Tooltip open={collapsed ? undefined : false}>
+                        <Tooltip>
                           <TooltipTrigger asChild>
                             <SidebarMenuButton
                               asChild
                               isActive={pathname.startsWith(`/dashboard/courses/${course.id}`)}
-                              className={cn(
-                                'hover:bg-secondary focus:bg-secondary text-sidebar-foreground',
-                                'data-[active=true]:bg-secondary',
-                              )}
+                              className={cn(menuButtonStyles)}
                             >
                               <Link
                                 href={`/dashboard/courses/${course.id}`}
@@ -281,6 +296,7 @@ export default function DashboardSidebarMenu() {
                           </TooltipTrigger>
                           <TooltipContent
                             side="right"
+                            hidden={!collapsed}
                             className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
                             sideOffset={10}
                           >
@@ -300,7 +316,11 @@ export default function DashboardSidebarMenu() {
         <SidebarGroup>
           <SidebarGroupLabel
             aria-hidden={collapsed}
-            className={collapsed ? 'hidden' : 'text-sidebar-foreground text-sm'}
+            className={
+              collapsed
+                ? 'hidden'
+                : 'text-sidebar-foreground overflow-hidden text-sm whitespace-nowrap'
+            }
           >
             Features
           </SidebarGroupLabel>
@@ -308,15 +328,12 @@ export default function DashboardSidebarMenu() {
             <SidebarMenu>
               <SidebarMenuItem key="features-calendar">
                 <TooltipProvider delayDuration={100}>
-                  <Tooltip open={collapsed ? undefined : false}>
+                  <Tooltip>
                     <TooltipTrigger asChild>
                       <SidebarMenuButton
                         asChild
                         isActive={pathname === '/dashboard/calendar'}
-                        className={cn(
-                          'hover:bg-secondary focus:bg-secondary text-sidebar-foreground',
-                          'data-[active=true]:bg-secondary',
-                        )}
+                        className={cn(menuButtonStyles)}
                       >
                         <Link
                           href="/dashboard/calendar"
@@ -339,6 +356,7 @@ export default function DashboardSidebarMenu() {
                     </TooltipTrigger>
                     <TooltipContent
                       side="right"
+                      hidden={!collapsed}
                       className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
                       sideOffset={10}
                     >
@@ -355,7 +373,11 @@ export default function DashboardSidebarMenu() {
         <SidebarGroup>
           <SidebarGroupLabel
             aria-hidden={collapsed}
-            className={collapsed ? 'hidden' : 'text-sidebar-foreground text-sm'}
+            className={
+              collapsed
+                ? 'hidden'
+                : 'text-sidebar-foreground overflow-hidden text-sm whitespace-nowrap'
+            }
           >
             Course Displays
           </SidebarGroupLabel>
@@ -363,15 +385,12 @@ export default function DashboardSidebarMenu() {
             {/* The Archive */}
             <SidebarMenuItem>
               <TooltipProvider delayDuration={100}>
-                <Tooltip open={collapsed ? undefined : false}>
+                <Tooltip>
                   <TooltipTrigger asChild>
                     <SidebarMenuButton
                       asChild
                       isActive={pathname === '/dashboard/archive'}
-                      className={cn(
-                        'hover:bg-secondary focus:bg-secondary text-sidebar-foreground',
-                        'data-[active=true]:bg-secondary',
-                      )}
+                      className={cn(menuButtonStyles)}
                     >
                       <Link
                         href="/dashboard/archive"
@@ -392,6 +411,7 @@ export default function DashboardSidebarMenu() {
                   </TooltipTrigger>
                   <TooltipContent
                     side="right"
+                    hidden={!collapsed}
                     className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
                     sideOffset={10}
                   >
@@ -404,15 +424,12 @@ export default function DashboardSidebarMenu() {
             {/* All Courses */}
             <SidebarMenuItem>
               <TooltipProvider delayDuration={100}>
-                <Tooltip open={collapsed ? undefined : false}>
+                <Tooltip>
                   <TooltipTrigger asChild>
                     <SidebarMenuButton
                       asChild
                       isActive={pathname === '/dashboard/all-courses'}
-                      className={cn(
-                        'hover:bg-secondary focus:bg-secondary text-sidebar-foreground',
-                        'data-[active=true]:bg-secondary',
-                      )}
+                      className={cn(menuButtonStyles)}
                     >
                       <Link
                         href="/dashboard/all-courses"
@@ -433,6 +450,7 @@ export default function DashboardSidebarMenu() {
                   </TooltipTrigger>
                   <TooltipContent
                     side="right"
+                    hidden={!collapsed}
                     className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
                     sideOffset={10}
                   >
@@ -489,7 +507,7 @@ export default function DashboardSidebarMenu() {
                   <button
                     type="button"
                     className="flex w-full items-center gap-2 text-left"
-                    onClick={() => signOut({ callbackUrl: '/' })}
+                    onClick={() => void safeSignOut({ callbackUrl: '/' })}
                   >
                     <LogOut className="h-4 w-4" />
                     Sign out

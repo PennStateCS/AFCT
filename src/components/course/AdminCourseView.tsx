@@ -46,6 +46,9 @@ export function AdminCourseView({
   onBulkEnroll,
 }: AdminCourseViewProps) {
   const { timezone } = useEffectiveTimezone();
+  const assignmentCount = course.assignments.length;
+  const problemCount = course.problems.length;
+  const rosterCount = course.enrolled.length;
 
   const assignmentColumns = useAssignmentColumns(
     course.isArchived,
@@ -64,38 +67,52 @@ export function AdminCourseView({
 
   return (
     <Tabs defaultValue="assignments" value={tab} onValueChange={onTabChange}>
-      <TabsList className="bg-card border-border h-12 w-full justify-start overflow-x-auto rounded-md border p-1 shadow-sm">
+      <TabsList
+        aria-label="Course content sections"
+        className="bg-card border-border h-12 w-full justify-start overflow-x-auto rounded-md border p-1 shadow-sm"
+      >
         <TabsTrigger
+          id="tab-assignments"
+          aria-controls="panel-assignments"
+          aria-label={`Assignments (${assignmentCount})`}
           className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-gray-200 data-[state=active]:text-white"
           value="assignments"
         >
           <div className="flex items-center gap-2">
             <NotebookText className="h-4 w-4" />
-            Assignments
+            Assignments ({assignmentCount})
           </div>
         </TabsTrigger>
 
         <TabsTrigger
+          id="tab-problems"
+          aria-controls="panel-problems"
+          aria-label={`Problems (${problemCount})`}
           className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-gray-200 data-[state=active]:text-white"
           value="problems"
         >
           <div className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
-            Problems
+            Problems ({problemCount})
           </div>
         </TabsTrigger>
 
         <TabsTrigger
+          id="tab-roster"
+          aria-controls="panel-roster"
+          aria-label={`Roster (${rosterCount})`}
           className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-gray-200 data-[state=active]:text-white"
           value="roster"
         >
           <div className="flex items-center gap-2">
             <GraduationCap className="h-4 w-4" />
-            Roster
+            Roster ({rosterCount})
           </div>
         </TabsTrigger>
 
         <TabsTrigger
+          id="tab-grades"
+          aria-controls="panel-grades"
           className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-gray-200 data-[state=active]:text-white"
           value="grades"
         >
@@ -106,6 +123,8 @@ export function AdminCourseView({
         </TabsTrigger>
 
         <TabsTrigger
+          id="tab-groups"
+          aria-controls="panel-groups"
           className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-gray-200 data-[state=active]:text-white"
           value="groups"
         >
@@ -116,6 +135,8 @@ export function AdminCourseView({
         </TabsTrigger>
 
         <TabsTrigger
+          id="tab-activity"
+          aria-controls="panel-activity"
           className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-gray-200 data-[state=active]:text-white"
           value="activity"
         >
@@ -127,6 +148,8 @@ export function AdminCourseView({
       </TabsList>
 
       <TabsContent
+        id="panel-assignments"
+        aria-labelledby="tab-assignments"
         value="assignments"
         className="animate-fade-in-up transition-opacity duration-300"
       >
@@ -141,7 +164,12 @@ export function AdminCourseView({
         </div>
       </TabsContent>
 
-      <TabsContent value="problems" className="animate-fade-in-up transition-opacity duration-300">
+      <TabsContent
+        id="panel-problems"
+        aria-labelledby="tab-problems"
+        value="problems"
+        className="animate-fade-in-up transition-opacity duration-300"
+      >
         <div className="mb-8 space-y-6">
           <ProblemsCard
             courseId={course.id}
@@ -155,7 +183,12 @@ export function AdminCourseView({
         </div>
       </TabsContent>
 
-      <TabsContent value="roster" className="animate-fade-in-up transition-opacity duration-300">
+      <TabsContent
+        id="panel-roster"
+        aria-labelledby="tab-roster"
+        value="roster"
+        className="animate-fade-in-up transition-opacity duration-300"
+      >
         <div className="mb-8 space-y-6">
           <RosterCard
             courseIsArchived={course.isArchived}
@@ -175,19 +208,34 @@ export function AdminCourseView({
         </div>
       </TabsContent>
 
-      <TabsContent value="grades" className="animate-fade-in-up transition-opacity duration-300">
+      <TabsContent
+        id="panel-grades"
+        aria-labelledby="tab-grades"
+        value="grades"
+        className="animate-fade-in-up transition-opacity duration-300"
+      >
         <div className="mb-8 space-y-6">
           <PrivilegeGradesCard courseId={course.id} />
         </div>
       </TabsContent>
 
-      <TabsContent value="groups" className="animate-fade-in-up transition-opacity duration-300">
+      <TabsContent
+        id="panel-groups"
+        aria-labelledby="tab-groups"
+        value="groups"
+        className="animate-fade-in-up transition-opacity duration-300"
+      >
         <div className="mb-8 space-y-6">
           <GroupsCard courseId={course.id} />
         </div>
       </TabsContent>
 
-      <TabsContent value="activity" className="animate-fade-in-up transition-opacity duration-300">
+      <TabsContent
+        id="panel-activity"
+        aria-labelledby="tab-activity"
+        value="activity"
+        className="animate-fade-in-up transition-opacity duration-300"
+      >
         <div className="mb-8 space-y-6">
           <ActivityCard courseId={course.id} />
         </div>
