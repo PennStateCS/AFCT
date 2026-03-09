@@ -3,12 +3,13 @@ import React from 'react';
 
 export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   variant?: 'default' | 'destructive' | 'outline';
-  role?: 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT';
+  role?: 'ADMIN' | 'FACULTY' | 'INSTRUCTOR' | 'TA' | 'STUDENT';
 }
 
 const roleStyles: Record<string, string> = {
   ADMIN: 'bg-red-800 text-white',
   FACULTY: 'bg-blue-800 text-white',
+  INSTRUCTOR: 'bg-blue-800 text-white',
   TA: 'bg-slate-800 text-white',
   STUDENT: 'bg-green-800 text-white',
 };
@@ -30,6 +31,14 @@ export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
   ({ className, variant = 'default', role, children, ...props }, ref) => {
     const normalizedRole = normalizeRole(role);
     const variantClass = normalizedRole ? roleStyles[normalizedRole] : badgeVariants[variant];
+    const defaultLabel =
+      normalizedRole === 'TA'
+        ? 'TA'
+        : normalizedRole === 'INSTRUCTOR'
+          ? 'Faculty'
+          : normalizedRole
+            ? normalizedRole.charAt(0) + normalizedRole.slice(1).toLowerCase()
+            : '';
 
     return (
       <span
@@ -41,12 +50,7 @@ export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
         )}
         {...props}
       >
-        {children ??
-          (normalizedRole === 'TA'
-            ? 'TA'
-            : normalizedRole
-              ? normalizedRole.charAt(0) + normalizedRole.slice(1).toLowerCase()
-              : '')}{' '}
+        {children ?? defaultLabel}
       </span>
     );
   },
