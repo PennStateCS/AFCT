@@ -24,21 +24,37 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               theme="light"
               closeButton={false}
               expand={true}
+              gap={8}
+              visibleToasts={6}
               offset={20}
               icons={{
                 success: (
                   <span aria-hidden="true" className="toast-icon-symbol">
-                    ✓
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="24"
+                      height="24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M5 12.5L10 17L19 7.5"
+                        stroke="currentColor"
+                        strokeWidth="2.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
                   </span>
                 ),
                 error: (
                   <span aria-hidden="true" className="toast-icon-symbol">
-                    !
+                    ✕
                   </span>
                 ),
                 warning: (
                   <span aria-hidden="true" className="toast-icon-symbol">
-                    !
+                    ⚠
                   </span>
                 ),
                 info: (

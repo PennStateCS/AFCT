@@ -25,7 +25,6 @@ vi.mock('./ui/EnhancedSidebarTrigger', () => ({
 }));
 
 vi.mock('@/components/ui/dropdown-menu', () => {
-  const React = require('react');
   return {
     DropdownMenu: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -69,6 +68,7 @@ describe('Navbar', () => {
     const nav = container.querySelector('nav');
     expect(nav).not.toBeNull();
     expect(nav?.textContent).toBe('');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('returns null when no user data is available', () => {
@@ -119,5 +119,91 @@ describe('Navbar', () => {
 
     fireEvent.click(screen.getByText('Dark'));
     expect(setThemeMock).toHaveBeenCalledWith('dark');
+  });
+
+  it('handles failed breadcrumb fetches without crashing', async () => {
+    useSessionMock.mockReturnValue({
+      status: 'authenticated',
+      data: {
+        user: {
+          firstName: 'Ada',
+          lastName: 'Lovelace',
+          name: 'Ada Lovelace',
+          role: 'ADMIN',
+          avatar: 'ada.png',
+        },
+      },
+    });
+    usePathnameMock.mockReturnValue('/app/courses/course-123/assignment-456');
+
+    fetchMock.mockResolvedValue({ ok: false } as unknown as Response);
+
+    render(<Navbar />);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
+    expect(screen.getByText('Admin')).toBeInTheDocument();
+  });
+
+  it('maps student assignment breadcrumbs to the resolved course route', async () => {
+    useSessionMock.mockReturnValue({
+      status: 'authenticated',
+      data: {
+        user: {
+          firstName: 'Peter',
+          lastName: 'Parker',
+          name: 'Peter Parker',
+          role: 'STUDENT',
+          avatar: 'peter.png',
+        },
+      },
+    });
+    usePathnameMock.mockReturnValue('/app/assignments/assignment-42');
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ title: 'Homework 1', courseId: 'course-99' }),
+    } as unknown as Response);
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ name: 'Web Systems' }),
+    } as unknown as Response);
+
+    render(<Navbar />);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/assignments/assignment-42');
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/courses/course-99');
+
+    const courseCrumb = await screen.findByRole('link', { name: 'Web Systems' });
+    expect(courseCrumb).toHaveAttribute('href', '/app/courses/course-99');
+    expect(screen.getByText('Homework 1')).toBeInTheDocument();
+  });
+
+  it('uses first/last fallback name and supports all theme actions', () => {
+    useSessionMock.mockReturnValue({
+      status: 'authenticated',
+      data: {
+        user: {
+          firstName: 'Bruce',
+          lastName: 'Wayne',
+          role: 'FACULTY',
+          avatar: 'bruce.png',
+        },
+      },
+    });
+    usePathnameMock.mockReturnValue('/app/users');
+
+    render(<Navbar />);
+
+    expect(screen.getByText('Bruce Wayne')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Light'));
+    fireEvent.click(screen.getByText('Dark'));
+    fireEvent.click(screen.getByText('System'));
+
+    expect(setThemeMock).toHaveBeenCalledWith('light');
+    expect(setThemeMock).toHaveBeenCalledWith('dark');
+    expect(setThemeMock).toHaveBeenCalledWith('system');
   });
 });
