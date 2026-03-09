@@ -46,9 +46,10 @@ export function AdminCourseView({
   onBulkEnroll,
 }: AdminCourseViewProps) {
   const { timezone } = useEffectiveTimezone();
+  const enrolled = course.enrolled ?? [];
   const assignmentCount = course.assignments.length;
   const problemCount = course.problems.length;
-  const rosterCount = course.enrolled.length;
+  const rosterCount = enrolled.length;
 
   const assignmentColumns = useAssignmentColumns(
     course.isArchived,
@@ -192,13 +193,12 @@ export function AdminCourseView({
         <div className="mb-8 space-y-6">
           <RosterCard
             courseIsArchived={course.isArchived}
-            enrolled={course.enrolled}
+            enrolled={enrolled}
             userColumns={userColumns(
               onRefreshCourse,
               course.id,
               course.isArchived,
-              // compute faculty count from enrolled
-              getInstructors(course.enrolled as any[]).length,
+              getInstructors(enrolled).length,
               course.viewerRole,
               course.viewerDefaultRole,
             )}
