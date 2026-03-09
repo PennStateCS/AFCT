@@ -50,6 +50,7 @@ import {
   ChevronUp,
   BookPlus,
   Settings,
+  Wrench,
 } from 'lucide-react';
 
 const menuButtonStyles =
@@ -155,6 +156,13 @@ export default function DashboardSidebarMenu() {
 
   const filteredCourses = getCoursesForUser(user, courses);
   const visibleCourses = filteredCourses.filter((c) => !c.isArchived);
+  const isDev = process.env.NODE_ENV !== 'production';
+  const resolvedAdminMenu = isDev
+    ? [
+        ...adminMenu,
+        { title: 'Development Tests', url: '/dashboard/development-tests', icon: Wrench },
+      ]
+    : adminMenu;
 
   return (
     <>
@@ -175,7 +183,7 @@ export default function DashboardSidebarMenu() {
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {adminMenu.map(({ title, url, icon: Icon }) => (
+                {resolvedAdminMenu.map(({ title, url, icon: Icon }) => (
                   <SidebarMenuItem key={url}>
                     <TooltipProvider delayDuration={100}>
                       <Tooltip>

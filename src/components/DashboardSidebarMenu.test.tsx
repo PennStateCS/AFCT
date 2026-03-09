@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, beforeEach, expect, vi } from 'vitest';
+import { describe, it, beforeEach, afterEach, expect, vi } from 'vitest';
 
 const useSessionMock = vi.fn();
 const safeSignOutMock = vi.fn();
@@ -130,6 +130,16 @@ beforeEach(() => {
 });
 
 describe('DashboardSidebarMenu', () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+
+  beforeEach(() => {
+    process.env.NODE_ENV = 'test';
+  });
+
+  afterEach(() => {
+    process.env.NODE_ENV = originalNodeEnv;
+  });
+
   it('renders admin navigation links for privileged users', () => {
     render(<DashboardSidebarMenu />);
 
@@ -146,6 +156,18 @@ describe('DashboardSidebarMenu', () => {
       'href',
       '/dashboard/system-settings',
     );
+    expect(screen.getByRole('link', { name: 'Development Tests' })).toHaveAttribute(
+      'href',
+      '/dashboard/development-tests',
+    );
+  });
+
+  it('hides Development Tests link in production mode', () => {
+    process.env.NODE_ENV = 'production';
+
+    render(<DashboardSidebarMenu />);
+
+    expect(screen.queryByRole('link', { name: 'Development Tests' })).toBeNull();
   });
 
   it('shows only published courses to students', () => {
