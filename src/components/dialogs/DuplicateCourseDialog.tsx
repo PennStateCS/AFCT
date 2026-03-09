@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -207,10 +208,10 @@ export default function DuplicateCourseDialog({
             <Copy className="text-muted-foreground size-4" />
             <DialogTitle>Duplicate Course</DialogTitle>
           </div>
-          <p className="text-muted-foreground mt-1 text-sm">
+          <DialogDescription className="text-muted-foreground mt-1 text-sm">
             Step {step} of 3 -{' '}
             {step === 1 ? 'Course details' : step === 2 ? 'What to copy' : 'Roster copy options'}
-          </p>
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

@@ -25,6 +25,15 @@ describe('RoleBadge', () => {
     expect(badge.textContent?.trim()).toBe('TA');
   });
 
+  it('renders INSTRUCTOR with faculty styling and label', () => {
+    render(<Badge role="instructor" data-testid="badge" />);
+
+    const badge = screen.getByTestId('badge');
+
+    expect(badge).toHaveClass('bg-blue-800', 'text-white');
+    expect(badge.textContent?.trim()).toBe('Faculty');
+  });
+
   it('falls back to the provided variant styles when the role is unknown', () => {
     render(<Badge role="guest" variant="outline" data-testid="badge" />);
 
