@@ -166,7 +166,9 @@ export default function DashboardSidebarMenu() {
             <SidebarGroupLabel
               aria-hidden={collapsed}
               className={
-                collapsed ? 'hidden' : 'text-sidebar-foreground overflow-hidden text-sm whitespace-nowrap'
+                collapsed
+                  ? 'hidden'
+                  : 'text-sidebar-foreground overflow-hidden text-sm whitespace-nowrap'
               }
             >
               Admin Menu
@@ -225,7 +227,9 @@ export default function DashboardSidebarMenu() {
             <SidebarGroupLabel
               aria-hidden={collapsed}
               className={
-                collapsed ? 'hidden' : 'text-sidebar-foreground overflow-hidden text-sm whitespace-nowrap'
+                collapsed
+                  ? 'hidden'
+                  : 'text-sidebar-foreground overflow-hidden text-sm whitespace-nowrap'
               }
             >
               Current Courses
@@ -305,7 +309,9 @@ export default function DashboardSidebarMenu() {
           <SidebarGroupLabel
             aria-hidden={collapsed}
             className={
-              collapsed ? 'hidden' : 'text-sidebar-foreground overflow-hidden text-sm whitespace-nowrap'
+              collapsed
+                ? 'hidden'
+                : 'text-sidebar-foreground overflow-hidden text-sm whitespace-nowrap'
             }
           >
             Features
@@ -360,7 +366,9 @@ export default function DashboardSidebarMenu() {
           <SidebarGroupLabel
             aria-hidden={collapsed}
             className={
-              collapsed ? 'hidden' : 'text-sidebar-foreground overflow-hidden text-sm whitespace-nowrap'
+              collapsed
+                ? 'hidden'
+                : 'text-sidebar-foreground overflow-hidden text-sm whitespace-nowrap'
             }
           >
             Course Displays
@@ -369,12 +377,12 @@ export default function DashboardSidebarMenu() {
             {/* The Archive */}
             <SidebarMenuItem>
               <TooltipProvider delayDuration={100}>
-                  <Tooltip>
+                <Tooltip>
                   <TooltipTrigger asChild>
                     <SidebarMenuButton
                       asChild
                       isActive={pathname === '/dashboard/archive'}
-                        className={cn(menuButtonStyles)}
+                      className={cn(menuButtonStyles)}
                     >
                       <Link
                         href="/dashboard/archive"
@@ -408,12 +416,12 @@ export default function DashboardSidebarMenu() {
             {/* All Courses */}
             <SidebarMenuItem>
               <TooltipProvider delayDuration={100}>
-                  <Tooltip>
+                <Tooltip>
                   <TooltipTrigger asChild>
                     <SidebarMenuButton
                       asChild
                       isActive={pathname === '/dashboard/all-courses'}
-                        className={cn(menuButtonStyles)}
+                      className={cn(menuButtonStyles)}
                     >
                       <Link
                         href="/dashboard/all-courses"
