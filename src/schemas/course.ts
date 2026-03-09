@@ -255,6 +255,24 @@ export const DuplicateFormSchema = BaseCourseFormObject.extend({
     message: 'End date/time must be on or after the start date/time.',
   })
   .superRefine((d, ctx) => {
+    const normalizedCode = normalizeCode(d.code);
+    if (!courseCodeRegex.test(normalizedCode)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['code'],
+        message: 'Use a code like "CMPSC 221" or "MATH220".',
+      });
+    }
+
+    const credits = Number(d.credits);
+    if (!Number.isInteger(credits) || credits < 1 || credits > 6) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['credits'],
+        message: 'Credits must be an integer between 1 and 6.',
+      });
+    }
+
     const registrationOpenAt = new Date(d.registrationOpenAt);
     const registrationCloseAt = new Date(d.registrationCloseAt);
 
