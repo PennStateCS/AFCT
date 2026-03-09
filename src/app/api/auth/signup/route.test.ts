@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const prismaMock = vi.hoisted(() => ({
+  systemSettings: { findUnique: vi.fn() },
   user: { findUnique: vi.fn(), create: vi.fn() },
   activityLog: { create: vi.fn() },
 }));
@@ -45,9 +46,29 @@ beforeEach(() => {
   });
   rateLimiterMock.applyBotFriction.mockResolvedValue(undefined);
   captchaMock.verifyCaptchaToken.mockResolvedValue(true);
+  prismaMock.systemSettings.findUnique.mockResolvedValue({ id: 1, allowSignup: true });
 });
 
 describe('POST /api/auth/signup', () => {
+  it('returns 403 when signup is disabled in system settings', async () => {
+    prismaMock.systemSettings.findUnique.mockResolvedValue({ id: 1, allowSignup: false });
+
+    const req = new Request('http://localhost/api/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({
+        firstName: 'A',
+        lastName: 'B',
+        email: 'a@example.com',
+        password: 'Strong1!a',
+      }),
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(403);
+    expect(prismaMock.user.create).not.toHaveBeenCalled();
+  });
+
   it('returns 400 when required fields missing', async () => {
     const req = new Request('http://localhost/api/auth/signup', {
       method: 'POST',

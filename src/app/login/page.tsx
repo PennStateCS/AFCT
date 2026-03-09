@@ -43,6 +43,7 @@ type SignupErrors = Partial<Record<SignupField, string>>;
 
 export default function LoginPage() {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [allowSignup, setAllowSignup] = useState<boolean | null>(null);
 
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -92,6 +93,36 @@ export default function LoginPage() {
     document.getElementById(mode === 'login' ? 'login-email' : 'signup-first')?.focus();
     interactionStartRef.current = getMonotonicNow();
   }, [mode]);
+
+  // Read public settings so the login page can hide signup when it is disabled system-wide.
+  useEffect(() => {
+    let active = true;
+
+    const loadPublicSettings = async () => {
+      try {
+        const res = await fetch('/api/system-settings/public', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = (await res.json()) as { allowSignup?: boolean };
+        if (!active) return;
+        setAllowSignup(data.allowSignup ?? true);
+      } catch {
+        if (!active) return;
+        setAllowSignup(true);
+      }
+    };
+
+    void loadPublicSettings();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (allowSignup === false && mode === 'signup') {
+      setMode('login');
+    }
+  }, [allowSignup, mode]);
 
   // Surface NextAuth error query params as toast feedback.
   useEffect(() => {
@@ -163,6 +194,12 @@ export default function LoginPage() {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (allowSignup !== true) {
+      showToast.error('Signups are currently disabled.');
+      setMode('login');
+      return;
+    }
+
     const trimmed = {
       first: signupFirst.trim(),
       last: signupLast.trim(),
@@ -218,6 +255,12 @@ export default function LoginPage() {
 
     if (res.status === 429) {
       showToast.error('Too many signup attempts. Please try again later.');
+      return;
+    }
+
+    if (res.status === 403) {
+      showToast.error('Signups are currently disabled.');
+      setMode('login');
       return;
     }
 
@@ -351,16 +394,18 @@ export default function LoginPage() {
 
                 {renderCaptchaGate()}
 
-                <div className="text-center text-sm text-gray-600">
-                  <span className="font-semibold text-gray-500">Don&apos;t have an account?</span>{' '}
-                  <button
-                    type="button"
-                    className="font-semibold text-[#2F4A8A] underline-offset-2 hover:underline"
-                    onClick={() => setMode('signup')}
-                  >
-                    Sign up
-                  </button>
-                </div>
+                {allowSignup ? (
+                  <div className="text-center text-sm text-gray-600">
+                    <span className="font-semibold text-gray-500">Don&apos;t have an account?</span>{' '}
+                    <button
+                      type="button"
+                      className="font-semibold text-[#2F4A8A] underline-offset-2 hover:underline"
+                      onClick={() => setMode('signup')}
+                    >
+                      Sign up
+                    </button>
+                  </div>
+                ) : null}
               </motion.form>
             ) : (
               <motion.form

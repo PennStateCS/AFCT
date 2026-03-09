@@ -37,6 +37,14 @@ export async function POST(req: Request) {
     const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : email;
     const ipAddress = getClientIp(req);
 
+    const settings = await prisma.systemSettings.findUnique({
+      where: { id: 1 },
+      select: { allowSignup: true },
+    });
+    if (settings?.allowSignup === false) {
+      return NextResponse.json({ error: 'Signup is disabled.' }, { status: 403 });
+    }
+
     // Check for required fields
     if (!normalizedEmail || !password || !firstName || !lastName) {
       return NextResponse.json({ error: 'Missing required fields.' }, { status: 400 });

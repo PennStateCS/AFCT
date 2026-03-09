@@ -147,6 +147,16 @@ const createJsonResponse = <T,>(data: T, status = 200) =>
     json: async () => data,
   } as Response);
 
+const mockPublicSettings = (allowSignup = true) => {
+  fetchMock.mockImplementation((input: RequestInfo | URL) => {
+    if (String(input).includes('/api/system-settings/public')) {
+      return createJsonResponse({ timezone: 'UTC', allowSignup }, 200);
+    }
+
+    return createJsonResponse({}, 500);
+  });
+};
+
 const LOGIN_SUBMIT_LABEL = 'Sign In';
 const SIGNUP_SUBMIT_LABEL = 'Create Account';
 
@@ -160,6 +170,9 @@ const getButtonByType = (label: string | RegExp, type: 'submit' | 'button') => {
 };
 
 const switchMode = async (user: ReturnType<typeof userEvent.setup>, label: string | RegExp) => {
+  await waitFor(() => {
+    expect(screen.queryByRole('button', { name: label })).toBeInTheDocument();
+  });
   const toggle = getButtonByType(label, 'button');
   await user.click(toggle);
 };
@@ -192,11 +205,23 @@ beforeEach(() => {
   setSearchParams();
   fetchMock.mockReset();
   globalThis.fetch = fetchMock as unknown as typeof fetch;
+  mockPublicSettings(true);
   configureLocation();
   nowRef.value = 0;
 });
 
 describe('LoginPage', () => {
+  it('hides signup affordances when public settings disable signup', async () => {
+    mockPublicSettings(false);
+
+    render(<LoginPage />);
+
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /Sign up/i })).not.toBeInTheDocument();
+    });
+    expect(screen.queryByText(/Don't have an account\?/i)).not.toBeInTheDocument();
+  });
+
   it('submits login form and redirects on success', async () => {
     signInMock.mockResolvedValueOnce({ error: null });
     const user = userEvent.setup();
@@ -306,6 +331,8 @@ describe('LoginPage', () => {
       target: { value: 'WrongPass1!' },
     });
 
+    await waitFor(() => expect(getSubmitButton(LOGIN_SUBMIT_LABEL)).not.toBeDisabled());
+
     await user.click(getSubmitButton(LOGIN_SUBMIT_LABEL));
 
     await waitFor(() =>
@@ -327,6 +354,8 @@ describe('LoginPage', () => {
     fireEvent.change(screen.getByLabelText(/^password$/i), {
       target: { value: 'StrongPass1!' },
     });
+
+    await waitFor(() => expect(getSubmitButton(LOGIN_SUBMIT_LABEL)).not.toBeDisabled());
 
     await user.click(getSubmitButton(LOGIN_SUBMIT_LABEL));
 
@@ -350,6 +379,8 @@ describe('LoginPage', () => {
     fireEvent.change(screen.getByLabelText(/^password$/i), {
       target: { value: 'StrongPass1!' },
     });
+
+    await waitFor(() => expect(getSubmitButton(LOGIN_SUBMIT_LABEL)).not.toBeDisabled());
 
     await user.click(getSubmitButton(LOGIN_SUBMIT_LABEL));
 
@@ -383,7 +414,9 @@ describe('LoginPage', () => {
       expect(showToastErrorMock).toHaveBeenCalledWith('Please correct the highlighted fields.'),
     );
     expect(screen.getByText("Passwords don't match.")).toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/api/auth/signup'))).toBe(
+      false,
+    );
     expect(signInMock).not.toHaveBeenCalled();
   });
 
@@ -393,7 +426,16 @@ describe('LoginPage', () => {
 
     await switchMode(user, /Sign up/i);
 
-    fetchMock.mockImplementation(() => createJsonResponse({}, 200));
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/system-settings/public')) {
+        return createJsonResponse({ timezone: 'UTC', allowSignup: true }, 200);
+      }
+      if (url.includes('/api/auth/signup')) {
+        return createJsonResponse({}, 200);
+      }
+      return createJsonResponse({}, 500);
+    });
 
     fireEvent.change(screen.getByLabelText('First Name'), { target: { value: 'Grace' } });
     fireEvent.change(screen.getByLabelText('Last Name'), { target: { value: 'Hopper' } });
@@ -408,8 +450,16 @@ describe('LoginPage', () => {
 
     await user.click(getSubmitButton(SIGNUP_SUBMIT_LABEL));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    const [signupUrl, signupInit] = fetchMock.mock.calls[0];
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/api/auth/signup'))).toBe(
+        true,
+      ),
+    );
+    const signupCall = fetchMock.mock.calls.find(([url]) =>
+      String(url).includes('/api/auth/signup'),
+    );
+    expect(signupCall).toBeDefined();
+    const [signupUrl, signupInit] = signupCall as [RequestInfo | URL, RequestInit | undefined];
     expect(signupUrl).toBe('/api/auth/signup');
     expect(signupInit).toMatchObject({
       method: 'POST',
@@ -447,7 +497,16 @@ describe('LoginPage', () => {
 
     await switchMode(user, /Sign up/i);
 
-    fetchMock.mockImplementation(() => createJsonResponse({}, 500));
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/system-settings/public')) {
+        return createJsonResponse({ timezone: 'UTC', allowSignup: true }, 200);
+      }
+      if (url.includes('/api/auth/signup')) {
+        return createJsonResponse({}, 500);
+      }
+      return createJsonResponse({}, 500);
+    });
 
     fireEvent.change(screen.getByLabelText('First Name'), { target: { value: 'Linus' } });
     fireEvent.change(screen.getByLabelText('Last Name'), { target: { value: 'Torvalds' } });
@@ -459,7 +518,11 @@ describe('LoginPage', () => {
 
     await user.click(getSubmitButton(SIGNUP_SUBMIT_LABEL));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/api/auth/signup'))).toBe(
+        true,
+      ),
+    );
     await waitFor(() => expect(showToastErrorMock).toHaveBeenCalledWith('Signup failed.'));
     expect(signInMock).not.toHaveBeenCalled();
   });
@@ -469,7 +532,16 @@ describe('LoginPage', () => {
     render(<LoginPage />);
 
     await switchMode(user, /Sign up/i);
-    fetchMock.mockResolvedValue(createJsonResponse({}, 428));
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/system-settings/public')) {
+        return createJsonResponse({ timezone: 'UTC', allowSignup: true }, 200);
+      }
+      if (url.includes('/api/auth/signup')) {
+        return createJsonResponse({}, 428);
+      }
+      return createJsonResponse({}, 500);
+    });
 
     fireEvent.change(screen.getByLabelText('First Name'), { target: { value: 'Linus' } });
     fireEvent.change(screen.getByLabelText('Last Name'), { target: { value: 'Torvalds' } });
@@ -494,7 +566,16 @@ describe('LoginPage', () => {
     render(<LoginPage />);
 
     await switchMode(user, /Sign up/i);
-    fetchMock.mockResolvedValue(createJsonResponse({}, 429));
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/system-settings/public')) {
+        return createJsonResponse({ timezone: 'UTC', allowSignup: true }, 200);
+      }
+      if (url.includes('/api/auth/signup')) {
+        return createJsonResponse({}, 429);
+      }
+      return createJsonResponse({}, 500);
+    });
 
     fireEvent.change(screen.getByLabelText('First Name'), { target: { value: 'Linus' } });
     fireEvent.change(screen.getByLabelText('Last Name'), { target: { value: 'Torvalds' } });
@@ -510,6 +591,38 @@ describe('LoginPage', () => {
       expect(showToastErrorMock).toHaveBeenCalledWith(
         'Too many signup attempts. Please try again later.',
       ),
+    );
+    expect(signInMock).not.toHaveBeenCalled();
+  });
+
+  it('shows disabled message when signup route responds with 403', async () => {
+    const user = userEvent.setup();
+    render(<LoginPage />);
+
+    await switchMode(user, /Sign up/i);
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/system-settings/public')) {
+        return createJsonResponse({ timezone: 'UTC', allowSignup: true }, 200);
+      }
+      if (url.includes('/api/auth/signup')) {
+        return createJsonResponse({}, 403);
+      }
+      return createJsonResponse({}, 500);
+    });
+
+    fireEvent.change(screen.getByLabelText('First Name'), { target: { value: 'Linus' } });
+    fireEvent.change(screen.getByLabelText('Last Name'), { target: { value: 'Torvalds' } });
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'linus@example.com' } });
+    fireEvent.change(screen.getByLabelText(/^Password$/), { target: { value: 'StrongPass1!' } });
+    fireEvent.change(screen.getByLabelText('Confirm Password'), {
+      target: { value: 'StrongPass1!' },
+    });
+
+    await user.click(getSubmitButton(SIGNUP_SUBMIT_LABEL));
+
+    await waitFor(() =>
+      expect(showToastErrorMock).toHaveBeenCalledWith('Signups are currently disabled.'),
     );
     expect(signInMock).not.toHaveBeenCalled();
   });

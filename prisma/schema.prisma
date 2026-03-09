@@ -388,6 +388,7 @@ model SystemSettings {
   id              Int    @id @default(1)
   timezone        String @default("UTC")
   maxUploadSizeMb Int    @default(25)
+  allowSignup     Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
