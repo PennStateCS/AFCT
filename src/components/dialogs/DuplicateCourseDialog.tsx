@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -17,6 +18,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { DuplicateFormSchema } from '@/schemas/course';
 import { FullCourse } from '@/types/course';
+import { toast } from 'sonner';
 
 function toDateTimeLocalInTimeZone(date: Date | string, timeZone: string): string {
   const d = new Date(date);
@@ -81,7 +83,7 @@ export default function DuplicateCourseDialog({
     trigger,
     watch,
     getValues,
-    formState: { errors, isSubmitting, isValid },
+    formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(DuplicateFormSchema),
     defaultValues: defaults,
@@ -123,6 +125,12 @@ export default function DuplicateCourseDialog({
   }, [open, course, timeZone]);
 
   const onSubmit = async (raw: FormValues) => {
+    const courseId = course?.id;
+    if (!courseId) {
+      toast.error('Cannot duplicate course because the course ID is missing.');
+      return;
+    }
+
     // Build payload
     const mode = raw.copyMode ?? 'assignments_with_problems';
     const payload = {
@@ -141,7 +149,7 @@ export default function DuplicateCourseDialog({
     };
 
     try {
-      const res = await fetch(`/api/courses/${course?.id}/duplicate`, {
+      const res = await fetch(`/api/courses/${courseId}/duplicate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -152,13 +160,14 @@ export default function DuplicateCourseDialog({
       }
       const data = await res.json();
       setOpen(false);
-      onSuccess?.(data.id);
-      // navigate to new course page
-      window.location.href = `/dashboard/courses/${data.id}`;
+      if (onSuccess) {
+        onSuccess(data.id);
+      } else {
+        window.location.href = `/dashboard/courses/${data.id}`;
+      }
     } catch (e) {
-      // show inline error (could be improved)
       const errMsg = (e as Error)?.message ?? String(e);
-      alert(errMsg || 'Failed to duplicate course');
+      toast.error(errMsg || 'Failed to duplicate course');
     }
   };
 
@@ -207,10 +216,10 @@ export default function DuplicateCourseDialog({
             <Copy className="text-muted-foreground size-4" />
             <DialogTitle>Duplicate Course</DialogTitle>
           </div>
-          <p className="text-muted-foreground mt-1 text-sm">
+          <DialogDescription className="text-muted-foreground mt-1 text-sm">
             Step {step} of 3 -{' '}
             {step === 1 ? 'Course details' : step === 2 ? 'What to copy' : 'Roster copy options'}
-          </p>
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -244,98 +253,104 @@ export default function DuplicateCourseDialog({
                 )}
               />
 
-              <Controller
-                control={control}
-                name="semester"
-                render={({ field }) => (
-                  <InputGroup
-                    label="Semester"
-                    name="semester"
-                    isValid={!field.value}
-                    fieldProps={field}
-                    error={errors.semester?.message as string | undefined}
-                  />
-                )}
-              />
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Controller
+                  control={control}
+                  name="semester"
+                  render={({ field }) => (
+                    <InputGroup
+                      label="Semester"
+                      name="semester"
+                      isValid={!field.value}
+                      fieldProps={field}
+                      error={errors.semester?.message as string | undefined}
+                    />
+                  )}
+                />
 
-              <Controller
-                control={control}
-                name="credits"
-                render={({ field }) => (
-                  <InputGroup
-                    label="Credits"
-                    name="credits"
-                    type="number"
-                    isValid={!field.value}
-                    fieldProps={field}
-                    min={1}
-                    max={6}
-                    error={errors.credits?.message as string | undefined}
-                  />
-                )}
-              />
+                <Controller
+                  control={control}
+                  name="credits"
+                  render={({ field }) => (
+                    <InputGroup
+                      label="Credits"
+                      name="credits"
+                      type="number"
+                      isValid={!field.value}
+                      fieldProps={field}
+                      min={1}
+                      max={6}
+                      error={errors.credits?.message as string | undefined}
+                    />
+                  )}
+                />
+              </div>
 
-              <Controller
-                control={control}
-                name="startDate"
-                render={({ field }) => (
-                  <InputGroup
-                    label="Start Date & Time"
-                    name="startDate"
-                    type="datetime-local"
-                    isValid={!field.value}
-                    fieldProps={{ ...field, value: field.value ?? '' }}
-                    error={errors.startDate?.message as string | undefined}
-                  />
-                )}
-              />
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Controller
+                  control={control}
+                  name="startDate"
+                  render={({ field }) => (
+                    <InputGroup
+                      label="Start Date & Time"
+                      name="startDate"
+                      type="datetime-local"
+                      isValid={!field.value}
+                      fieldProps={{ ...field, value: field.value ?? '' }}
+                      error={errors.startDate?.message as string | undefined}
+                    />
+                  )}
+                />
 
-              <Controller
-                control={control}
-                name="endDate"
-                render={({ field }) => (
-                  <InputGroup
-                    label="End Date & Time"
-                    name="endDate"
-                    type="datetime-local"
-                    isValid={!field.value}
-                    fieldProps={{ ...field, value: field.value ?? '' }}
-                    error={errors.endDate?.message as string | undefined}
-                    min={startDateStr || undefined}
-                  />
-                )}
-              />
+                <Controller
+                  control={control}
+                  name="endDate"
+                  render={({ field }) => (
+                    <InputGroup
+                      label="End Date & Time"
+                      name="endDate"
+                      type="datetime-local"
+                      isValid={!field.value}
+                      fieldProps={{ ...field, value: field.value ?? '' }}
+                      error={errors.endDate?.message as string | undefined}
+                      min={startDateStr || undefined}
+                    />
+                  )}
+                />
+              </div>
 
-              <Controller
-                control={control}
-                name="registrationOpenAt"
-                render={({ field }) => (
-                  <InputGroup
-                    label="Self Registration Opens"
-                    name="registrationOpenAt"
-                    type="datetime-local"
-                    isValid={!field.value}
-                    fieldProps={{ ...field, value: field.value ?? '' }}
-                    error={errors.registrationOpenAt?.message as string | undefined}
-                  />
-                )}
-              />
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Controller
+                  control={control}
+                  name="registrationOpenAt"
+                  render={({ field }) => (
+                    <InputGroup
+                      label="Self Registration Opens"
+                      name="registrationOpenAt"
+                      type="datetime-local"
+                      isValid={!field.value}
+                      fieldProps={{ ...field, value: field.value ?? '' }}
+                      error={errors.registrationOpenAt?.message as string | undefined}
+                    />
+                  )}
+                />
 
-              <Controller
-                control={control}
-                name="registrationCloseAt"
-                render={({ field }) => (
-                  <InputGroup
-                    label="Self Registration Closes"
-                    name="registrationCloseAt"
-                    type="datetime-local"
-                    isValid={!field.value}
-                    fieldProps={{ ...field, value: field.value ?? '' }}
-                    error={errors.registrationCloseAt?.message as string | undefined}
-                    min={registrationOpenAtStr || undefined}
-                  />
-                )}
-              />
+                <Controller
+                  control={control}
+                  name="registrationCloseAt"
+                  render={({ field }) => (
+                    <InputGroup
+                      label="Self Registration Closes"
+                      name="registrationCloseAt"
+                      type="datetime-local"
+                      isValid={!field.value}
+                      fieldProps={{ ...field, value: field.value ?? '' }}
+                      error={errors.registrationCloseAt?.message as string | undefined}
+                      min={registrationOpenAtStr || undefined}
+                    />
+                  )}
+                />
+              </div>
             </>
           )}
 
@@ -534,7 +549,7 @@ export default function DuplicateCourseDialog({
             {step < 3 && (
               <Button
                 type="button"
-                disabled={!isValid}
+                disabled={isSubmitting}
                 onClick={async () => {
                   const fields = fieldsForStep(step);
                   const valid = await trigger(fields);

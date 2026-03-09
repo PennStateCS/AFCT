@@ -35,13 +35,22 @@ const Navbar: React.FC = () => {
   const segments = pathname.split('/').filter(Boolean);
 
   const [courseId, setCourseId] = useState<string | null>(null);
-  const [assignmentId, setAssignmentId] = useState<string | null>(null);
 
   const [courseName, setCourseName] = useState<string | null>(null);
   const [assignmentName, setAssignmentName] = useState<string | null>(null);
 
   // Fetch course and assignment names for breadcrumbs
   useEffect(() => {
+    if (status !== 'authenticated' || !data?.user) {
+      setCourseId(null);
+      setCourseName(null);
+      setAssignmentName(null);
+      return;
+    }
+
+    let cancelled = false;
+    const effectSegments = pathname.split('/').filter(Boolean);
+
     // Function to fetch data
     const fetchData = async (url: string) => {
       try {
@@ -51,16 +60,16 @@ const Navbar: React.FC = () => {
           return instData;
         }
       } catch (err) {
-        console.log('Error fetching navbar: ', err);
-        setCourseName(null);
-        setAssignmentName(null);
+        console.error('Error fetching navbar:', err);
       }
+
+      return null;
     };
 
     const loadNames = async () => {
       // Reset course and assignment
+      if (cancelled) return;
       setCourseId(null);
-      setAssignmentId(null);
       setCourseName(null);
       setAssignmentName(null);
 
@@ -68,48 +77,64 @@ const Navbar: React.FC = () => {
       const baseUrl = '/api';
 
       // If on a course page (or assignment page), fetch course name, and assignment name appropriately
-      if (segments[1] === 'courses' && segments[2]) {
-        const cid = segments[2];
+      if (effectSegments[1] === 'courses' && effectSegments[2]) {
+        const cid = effectSegments[2];
+        if (cancelled) return;
         setCourseId(cid);
 
         const courseJson = await fetchData(`${baseUrl}/courses/${cid}`); // Returns JSON data of course from API call
-        setCourseName(courseJson.name);
+        if (cancelled) return;
+        if (courseJson?.name) {
+          setCourseName(courseJson.name);
+        }
 
         // Assignment in a course
-        if (segments[3]) {
-          const aid = segments[3];
-          setAssignmentId(aid);
+        if (effectSegments[3]) {
+          const aid = effectSegments[3];
+          if (cancelled) return;
 
           const assignmentJson = await fetchData(`${baseUrl}/courses/${cid}/${aid}`); // Returns JSON data of assignment from API call
-          setAssignmentName(assignmentJson.title);
+          if (cancelled) return;
+          if (assignmentJson?.title) {
+            setAssignmentName(assignmentJson.title);
+          }
         }
       }
 
       // If a student is on an assignment page, fetch assignment name
-      else if (segments[1] === `assignments` && segments[2]) {
-        const aid = segments[2];
-        // Set assignment id
-        setAssignmentId(aid);
+      else if (effectSegments[1] === `assignments` && effectSegments[2]) {
+        const aid = effectSegments[2];
+        if (cancelled) return;
 
         // Get JSON of both assignment and course
         const assignmentJson = await fetchData(`${baseUrl}/assignments/${aid}`); // Returns JSON data of assignment from API call
+        if (!assignmentJson?.courseId) return;
         const courseJson = await fetchData(`${baseUrl}/courses/${assignmentJson.courseId}`); // Returns JSON data of course from API call
+        if (cancelled) return;
 
         // Set the course id
         setCourseId(assignmentJson.courseId);
 
         // Set both the assignment title and the course name
-        setAssignmentName(assignmentJson.title);
-        setCourseName(courseJson.name);
+        if (assignmentJson?.title) {
+          setAssignmentName(assignmentJson.title);
+        }
+        if (courseJson?.name) {
+          setCourseName(courseJson.name);
+        }
       }
     };
 
     loadNames();
-  }, [segments.join('/')]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname, status, data?.user]);
 
   if (status === 'loading') {
     return (
-      <nav className="bg-secondary mb-4 flex h-16 items-center justify-between rounded-lg border p-4 text-white shadow-sm" />
+      <nav className="bg-secondary mb-4 flex h-16 items-center justify-between rounded-lg p-4 text-white shadow-sm" />
     );
   }
 
@@ -135,7 +160,7 @@ const Navbar: React.FC = () => {
   });
 
   return (
-    <nav className="bg-secondary bordery mb-4 flex h-16 items-center justify-between rounded-lg p-4 text-white shadow-sm">
+    <nav className="bg-secondary mb-4 flex h-16 items-center justify-between rounded-lg p-4 text-white shadow-sm">
       <div className="flex items-center gap-4">
         <EnhancedSidebarTrigger />
         <Breadcrumb>
@@ -216,7 +241,7 @@ const Navbar: React.FC = () => {
           <DropdownMenuTrigger asChild>
             <Button
               variant="outline"
-              className="hover:text-red hover:bg-background bg-card text-foreground border"
+              className="hover:text-red hover:bg-background bg-card text-foreground border-secondary-foreground/40 border-2"
             >
               <Sun className="h-[1.2rem] w-[1.2rem] scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90" />
               <Moon className="absolute h-[1.2rem] w-[1.2rem] scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0" />

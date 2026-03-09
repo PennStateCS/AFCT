@@ -2,10 +2,10 @@
 
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, beforeEach, expect, vi } from 'vitest';
+import { describe, it, beforeEach, afterEach, expect, vi } from 'vitest';
 
 const useSessionMock = vi.fn();
-const signOutMock = vi.fn();
+const safeSignOutMock = vi.fn();
 const usePathnameMock = vi.fn();
 const useSidebarMock = vi.fn();
 const useSWRMock = vi.fn();
@@ -13,7 +13,10 @@ const isEnrolledMock = vi.fn();
 
 vi.mock('next-auth/react', () => ({
   useSession: () => useSessionMock(),
-  signOut: (options: unknown) => signOutMock(options),
+}));
+
+vi.mock('@/lib/safe-signout', () => ({
+  safeSignOut: (options: unknown) => safeSignOutMock(options),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -127,6 +130,16 @@ beforeEach(() => {
 });
 
 describe('DashboardSidebarMenu', () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+
+  beforeEach(() => {
+    process.env.NODE_ENV = 'test';
+  });
+
+  afterEach(() => {
+    process.env.NODE_ENV = originalNodeEnv;
+  });
+
   it('renders admin navigation links for privileged users', () => {
     render(<DashboardSidebarMenu />);
 
@@ -143,6 +156,18 @@ describe('DashboardSidebarMenu', () => {
       'href',
       '/dashboard/system-settings',
     );
+    expect(screen.getByRole('link', { name: 'Development Tests' })).toHaveAttribute(
+      'href',
+      '/dashboard/development-tests',
+    );
+  });
+
+  it('hides Development Tests link in production mode', () => {
+    process.env.NODE_ENV = 'production';
+
+    render(<DashboardSidebarMenu />);
+
+    expect(screen.queryByRole('link', { name: 'Development Tests' })).toBeNull();
   });
 
   it('shows only published courses to students', () => {
@@ -198,12 +223,12 @@ describe('DashboardSidebarMenu', () => {
     expect(screen.queryByRole('link', { name: 'CS101' })).toBeNull();
   });
 
-  it('calls signOut when the user selects Sign out', () => {
+  it('calls safeSignOut when the user selects Sign out', () => {
     render(<DashboardSidebarMenu />);
 
     fireEvent.click(screen.getByText('Sign out'));
 
-    expect(signOutMock).toHaveBeenCalledWith({ callbackUrl: '/' });
+    expect(safeSignOutMock).toHaveBeenCalledWith({ callbackUrl: '/' });
   });
 
   it('renders nothing when the session is missing user data', () => {

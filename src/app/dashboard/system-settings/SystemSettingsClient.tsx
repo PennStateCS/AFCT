@@ -8,10 +8,12 @@ import { showToast } from '@/lib/toast';
 import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
 import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
+import SwitchField from '@/components/ui/SwitchField';
 
 type SystemSettingsResponse = {
   timezone: string;
   maxUploadSizeMb: number;
+  allowSignup: boolean;
 };
 
 export default function SystemSettingsClient() {
@@ -19,6 +21,7 @@ export default function SystemSettingsClient() {
   const [saving, setSaving] = useState(false);
   const [timezone, setTimezone] = useState('');
   const [maxUploadSizeMb, setMaxUploadSizeMb] = useState<number | ''>('');
+  const [allowSignup, setAllowSignup] = useState(true);
 
   useEffect(() => {
     const load = async () => {
@@ -28,6 +31,7 @@ export default function SystemSettingsClient() {
         const data = (await res.json()) as SystemSettingsResponse;
         setTimezone(data.timezone || 'UTC');
         setMaxUploadSizeMb(Number(data.maxUploadSizeMb) || 25);
+        setAllowSignup(data.allowSignup ?? true);
       } catch {
         showToast.error('Failed to load system settings.');
       } finally {
@@ -59,7 +63,7 @@ export default function SystemSettingsClient() {
       const res = await fetch('/api/system-settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ timezone, maxUploadSizeMb: clampedSize }),
+        body: JSON.stringify({ timezone, maxUploadSizeMb: clampedSize, allowSignup }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
@@ -132,6 +136,16 @@ export default function SystemSettingsClient() {
               setValue={(val) => setMaxUploadSizeMb(val === '' ? '' : Number(val))}
               disabled={loading || saving}
               description="Applies to all uploads. Range: 1–1024 MB."
+            />
+            <SwitchField
+              id="allow-signup"
+              name="allow-signup"
+              label="Allow user signup"
+              checked={allowSignup}
+              onCheckedChange={setAllowSignup}
+              disabled={loading || saving}
+              descriptionPlacement="inline"
+              description="When enabled, the Sign up option appears on the login page."
             />
             <div>
               <Button type="submit" aria-label="Save system settings" disabled={loading || saving}>
