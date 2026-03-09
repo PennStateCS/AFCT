@@ -14,6 +14,7 @@ export async function GET() {
   return NextResponse.json({
     timezone: settings?.timezone ?? 'UTC',
     maxUploadSizeMb: settings?.maxUploadSizeMb ?? 25,
+    allowSignup: settings?.allowSignup ?? true,
   });
 }
 
@@ -24,9 +25,13 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
-  let body: { timezone?: string; maxUploadSizeMb?: number };
+  let body: { timezone?: string; maxUploadSizeMb?: number; allowSignup?: boolean };
   try {
-    body = (await req.json()) as { timezone?: string; maxUploadSizeMb?: number };
+    body = (await req.json()) as {
+      timezone?: string;
+      maxUploadSizeMb?: number;
+      allowSignup?: boolean;
+    };
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
@@ -37,19 +42,39 @@ export async function PUT(req: Request) {
     1,
     Math.min(1024, Number.isFinite(rawSize) ? Math.trunc(rawSize) : 0),
   );
+  const hasAllowSignup = typeof body.allowSignup === 'boolean';
 
   if (!COMMON_TIMEZONES.includes(timezone as (typeof COMMON_TIMEZONES)[number])) {
     return NextResponse.json({ error: 'Invalid timezone' }, { status: 400 });
   }
 
+  const updateData: { timezone: string; maxUploadSizeMb: number; allowSignup?: boolean } = {
+    timezone,
+    maxUploadSizeMb,
+  };
+  if (hasAllowSignup) updateData.allowSignup = body.allowSignup;
+
+  const createData: {
+    id: number;
+    timezone: string;
+    maxUploadSizeMb: number;
+    allowSignup?: boolean;
+  } = {
+    id: 1,
+    timezone,
+    maxUploadSizeMb,
+  };
+  if (hasAllowSignup) createData.allowSignup = body.allowSignup;
+
   const settings = await prisma.systemSettings.upsert({
     where: { id: 1 },
-    update: { timezone, maxUploadSizeMb },
-    create: { id: 1, timezone, maxUploadSizeMb },
+    update: updateData,
+    create: createData,
   });
 
   return NextResponse.json({
     timezone: settings.timezone,
     maxUploadSizeMb: settings.maxUploadSizeMb,
+    allowSignup: settings.allowSignup,
   });
 }
