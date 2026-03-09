@@ -35,7 +35,7 @@ describe('GET /api/system-settings', () => {
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toEqual({ timezone: 'UTC', maxUploadSizeMb: 25 });
+    expect(body).toEqual({ timezone: 'UTC', maxUploadSizeMb: 25, allowSignup: true });
   });
 
   it('returns stored settings', async () => {
@@ -44,13 +44,18 @@ describe('GET /api/system-settings', () => {
       id: 1,
       timezone: 'America/New_York',
       maxUploadSizeMb: 100,
+      allowSignup: false,
     });
 
     const res = await GET();
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toEqual({ timezone: 'America/New_York', maxUploadSizeMb: 100 });
+    expect(body).toEqual({
+      timezone: 'America/New_York',
+      maxUploadSizeMb: 100,
+      allowSignup: false,
+    });
   });
 });
 
@@ -101,6 +106,7 @@ describe('PUT /api/system-settings', () => {
       id: 1,
       timezone: 'UTC',
       maxUploadSizeMb: 1,
+      allowSignup: true,
     });
 
     const req = new Request('http://localhost/api/system-settings', {
@@ -116,5 +122,31 @@ describe('PUT /api/system-settings', () => {
       update: { timezone: 'UTC', maxUploadSizeMb: 1 },
       create: { id: 1, timezone: 'UTC', maxUploadSizeMb: 1 },
     });
+  });
+
+  it('persists allowSignup when provided', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.systemSettings.upsert.mockResolvedValue({
+      id: 1,
+      timezone: 'UTC',
+      maxUploadSizeMb: 20,
+      allowSignup: false,
+    });
+
+    const req = new Request('http://localhost/api/system-settings', {
+      method: 'PUT',
+      body: JSON.stringify({ timezone: 'UTC', maxUploadSizeMb: 20, allowSignup: false }),
+    });
+
+    const res = await PUT(req);
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.systemSettings.upsert).toHaveBeenCalledWith({
+      where: { id: 1 },
+      update: { timezone: 'UTC', maxUploadSizeMb: 20, allowSignup: false },
+      create: { id: 1, timezone: 'UTC', maxUploadSizeMb: 20, allowSignup: false },
+    });
+    const body = await res.json();
+    expect(body).toEqual({ timezone: 'UTC', maxUploadSizeMb: 20, allowSignup: false });
   });
 });
