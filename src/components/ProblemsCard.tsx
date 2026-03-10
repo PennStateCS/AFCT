@@ -35,12 +35,15 @@ export function ProblemsCard({
         </Button>
       </CardHeader>
       <CardContent className="overflow-x-auto">
-        {isLoading ? (
-          <p className="text-muted-foreground italic">Loading problems...</p>
-        ) : problems.length ? (
-          <DataTable columns={problemColumns} data={problems} tableLabel="Problems table" />
-        ) : (
+        {!isLoading && !problems.length ? (
           <p className="text-muted-foreground italic">No problems added.</p>
+        ) : (
+          <DataTable
+            columns={problemColumns}
+            data={problems}
+            loading={isLoading}
+            tableLabel="Problems table"
+          />
         )}
       </CardContent>
     </Card>
