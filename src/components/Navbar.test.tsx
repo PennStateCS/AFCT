@@ -150,6 +150,7 @@ describe('Navbar', () => {
     expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
     expect(screen.getByText('Admin')).toBeInTheDocument();
     expect(screen.getByText('System Settings')).toBeInTheDocument();
+    expect(screen.getByLabelText('Breadcrumb')).toBeInTheDocument();
   });
 
   it('builds stable course and assignment breadcrumbs from route patterns', () => {
