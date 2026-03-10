@@ -55,6 +55,7 @@ const SelectField = React.forwardRef<React.ElementRef<typeof SelectTrigger>, Sel
     ref,
   ) {
     const triggerId = id ?? name;
+    const labelId = `${triggerId}-label`;
 
     const describedByIds: Array<string | null> = [
       error ? `${triggerId}-error` : null,
@@ -76,7 +77,7 @@ const SelectField = React.forwardRef<React.ElementRef<typeof SelectTrigger>, Sel
 
     return (
       <div className={cn('flex flex-col', className)}>
-        <Label htmlFor={triggerId} className="mb-1.5 text-sm font-medium">
+        <Label id={labelId} htmlFor={triggerId} className="mb-1.5 text-sm font-medium">
           {label}
           {requiredMark ? <span className="text-red-600"> *</span> : null}
         </Label>
@@ -85,11 +86,13 @@ const SelectField = React.forwardRef<React.ElementRef<typeof SelectTrigger>, Sel
           <SelectTrigger
             ref={ref}
             id={triggerId}
+            aria-label={label}
+            aria-labelledby={labelId}
             aria-invalid={!!error || undefined}
             aria-describedby={describedByAttr || undefined}
             disabled={disabled}
             className={cn(
-              'flex !h-11 w-full min-w-0 items-center justify-between rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] placeholder:text-muted-foreground data-[placeholder]:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
+              'border-input focus-visible:border-ring focus-visible:ring-ring/50 placeholder:text-muted-foreground data-[placeholder]:text-muted-foreground flex !h-11 w-full min-w-0 items-center justify-between rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
               error && 'border-red-500 focus-visible:border-red-500',
               triggerClassName,
             )}
