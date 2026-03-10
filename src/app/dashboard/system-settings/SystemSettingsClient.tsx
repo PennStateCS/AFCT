@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
@@ -87,14 +87,9 @@ export default function SystemSettingsClient() {
       <Card aria-labelledby="system-settings-title">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <CardTitle
-              id="system-settings-title"
-              role="heading"
-              aria-level={1}
-              className="text-2xl"
-            >
+            <h1 id="system-settings-title" className="text-2xl leading-none font-semibold">
               System Settings
-            </CardTitle>
+            </h1>
             <Badge variant="outline" className="bg-blue-50 text-blue-700">
               Beta Feature
             </Badge>
@@ -107,14 +102,9 @@ export default function SystemSettingsClient() {
 
       <Card aria-labelledby="system-settings-general-title">
         <CardHeader>
-          <CardTitle
-            id="system-settings-general-title"
-            role="heading"
-            aria-level={2}
-            className="text-lg"
-          >
+          <h2 id="system-settings-general-title" className="text-lg leading-none font-semibold">
             General
-          </CardTitle>
+          </h2>
         </CardHeader>
         <CardContent>
           <form
