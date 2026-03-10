@@ -9,7 +9,6 @@ const safeSignOutMock = vi.fn();
 const usePathnameMock = vi.fn();
 const useSidebarMock = vi.fn();
 const useSWRMock = vi.fn();
-const isEnrolledMock = vi.fn();
 
 vi.mock('next-auth/react', () => ({
   useSession: () => useSessionMock(),
@@ -36,10 +35,6 @@ vi.mock('next/link', () => {
 vi.mock('swr', () => ({
   __esModule: true,
   default: (key: string, fetcher: unknown, options: unknown) => useSWRMock(key, fetcher, options),
-}));
-
-vi.mock('@/lib/course-utils', () => ({
-  isEnrolled: (...args: unknown[]) => isEnrolledMock(...(args as [unknown, unknown])),
 }));
 
 vi.mock('@/components/ui/sidebar', () => {
@@ -126,7 +121,6 @@ beforeEach(() => {
     data: { user: { id: 'user-1', email: 'user@example.com', role: 'ADMIN' } },
   });
   useSWRMock.mockReturnValue({ data: [] });
-  isEnrolledMock.mockReturnValue(true);
 });
 
 describe('DashboardSidebarMenu', () => {
@@ -180,8 +174,6 @@ describe('DashboardSidebarMenu', () => {
         { id: 'course-2', code: 'CS102', isPublished: false, isArchived: false },
       ],
     });
-    isEnrolledMock.mockReturnValue(true);
-
     render(<DashboardSidebarMenu />);
 
     expect(screen.getByRole('link', { name: 'CS101' })).toBeInTheDocument();
@@ -209,14 +201,13 @@ describe('DashboardSidebarMenu', () => {
     expect(screen.queryByText('Admin Menu')).toBeNull();
   });
 
-  it('does not list courses the user is not enrolled in', () => {
+  it('does not list archived courses', () => {
     useSessionMock.mockReturnValue({
       data: { user: { id: 'user-1', email: 'user@example.com', role: 'FACULTY' } },
     });
     useSWRMock.mockReturnValue({
-      data: [{ id: 'course-1', code: 'CS101', isPublished: true, isArchived: false }],
+      data: [{ id: 'course-1', code: 'CS101', isPublished: true, isArchived: true }],
     });
-    isEnrolledMock.mockReturnValue(false);
 
     render(<DashboardSidebarMenu />);
 
