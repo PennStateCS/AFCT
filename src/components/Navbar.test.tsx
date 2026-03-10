@@ -1,8 +1,11 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
+import { NavbarBreadcrumbProvider } from '@/components/navbar/NavbarBreadcrumbContext';
+import CourseBreadcrumbSource from '@/components/navbar/CourseBreadcrumbSource';
+import AssignmentBreadcrumbSource from '@/components/navbar/AssignmentBreadcrumbSource';
 
 const setThemeMock = vi.fn();
 const useSessionMock = vi.fn();
@@ -45,18 +48,36 @@ vi.mock('@/components/ui/dropdown-menu', () => {
 
 import Navbar from './Navbar';
 
-const fetchMock = vi.fn();
-const originalFetch = globalThis.fetch;
-
 beforeEach(() => {
   vi.clearAllMocks();
-  fetchMock.mockReset();
-  (globalThis as any).fetch = fetchMock;
 });
 
 afterAll(() => {
-  (globalThis as any).fetch = originalFetch;
+  vi.restoreAllMocks();
 });
+
+function renderNavbar(withLabels?: {
+  course?: { id: string; name: string };
+  assignment?: { id: string; title: string };
+}) {
+  return render(
+    <NavbarBreadcrumbProvider>
+      {withLabels?.course ? (
+        <CourseBreadcrumbSource
+          courseId={withLabels.course.id}
+          courseName={withLabels.course.name}
+        />
+      ) : null}
+      {withLabels?.assignment ? (
+        <AssignmentBreadcrumbSource
+          assignmentId={withLabels.assignment.id}
+          assignmentTitle={withLabels.assignment.title}
+        />
+      ) : null}
+      <Navbar />
+    </NavbarBreadcrumbProvider>,
+  );
+}
 
 describe('Navbar', () => {
   it('renders a placeholder nav while the session is loading', () => {
@@ -68,7 +89,6 @@ describe('Navbar', () => {
     const nav = container.querySelector('nav');
     expect(nav).not.toBeNull();
     expect(nav?.textContent).toBe('');
-    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('returns null when no user data is available', () => {
@@ -78,10 +98,9 @@ describe('Navbar', () => {
     const { container } = render(<Navbar />);
 
     expect(container.firstChild).toBeNull();
-    expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('shows user details and breadcrumb labels fetched from APIs', async () => {
+  it('shows user details and breadcrumb labels from provider sources', () => {
     useSessionMock.mockReturnValue({
       status: 'authenticated',
       data: {
@@ -94,24 +113,14 @@ describe('Navbar', () => {
         },
       },
     });
-    usePathnameMock.mockReturnValue('/app/courses/course-123/assignment-456');
+    usePathnameMock.mockReturnValue('/dashboard/courses/course-123/assignment-456');
 
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ name: 'Course Alpha' }),
-    } as unknown as Response);
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ title: 'Assignment Beta' }),
-    } as unknown as Response);
+    renderNavbar({
+      course: { id: 'course-123', name: 'Course Alpha' },
+      assignment: { id: 'assignment-456', title: 'Assignment Beta' },
+    });
 
-    render(<Navbar />);
-
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/courses/course-123');
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/courses/course-123/assignment-456');
-
-    await waitFor(() => expect(screen.getByText('Course Alpha')).toBeInTheDocument());
+    expect(screen.getByText('Course Alpha')).toBeInTheDocument();
     expect(screen.getByText('Assignment Beta')).toBeInTheDocument();
     expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
     expect(screen.getByText('Admin')).toBeInTheDocument();
@@ -121,7 +130,7 @@ describe('Navbar', () => {
     expect(setThemeMock).toHaveBeenCalledWith('dark');
   });
 
-  it('handles failed breadcrumb fetches without crashing', async () => {
+  it('falls back to title-cased route segments when labels are unavailable', () => {
     useSessionMock.mockReturnValue({
       status: 'authenticated',
       data: {
@@ -134,18 +143,16 @@ describe('Navbar', () => {
         },
       },
     });
-    usePathnameMock.mockReturnValue('/app/courses/course-123/assignment-456');
+    usePathnameMock.mockReturnValue('/dashboard/system-settings');
 
-    fetchMock.mockResolvedValue({ ok: false } as unknown as Response);
+    renderNavbar();
 
-    render(<Navbar />);
-
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
     expect(screen.getByText('Admin')).toBeInTheDocument();
+    expect(screen.getByText('System Settings')).toBeInTheDocument();
   });
 
-  it('maps student assignment breadcrumbs to the resolved course route', async () => {
+  it('builds stable course and assignment breadcrumbs from route patterns', () => {
     useSessionMock.mockReturnValue({
       status: 'authenticated',
       data: {
@@ -158,25 +165,15 @@ describe('Navbar', () => {
         },
       },
     });
-    usePathnameMock.mockReturnValue('/app/assignments/assignment-42');
+    usePathnameMock.mockReturnValue('/dashboard/courses/course-99/assignment-42');
 
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ title: 'Homework 1', courseId: 'course-99' }),
-    } as unknown as Response);
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ name: 'Web Systems' }),
-    } as unknown as Response);
+    renderNavbar({
+      course: { id: 'course-99', name: 'Web Systems' },
+      assignment: { id: 'assignment-42', title: 'Homework 1' },
+    });
 
-    render(<Navbar />);
-
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/assignments/assignment-42');
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/courses/course-99');
-
-    const courseCrumb = await screen.findByRole('link', { name: 'Web Systems' });
-    expect(courseCrumb).toHaveAttribute('href', '/app/courses/course-99');
+    const courseCrumb = screen.getByRole('link', { name: 'Web Systems' });
+    expect(courseCrumb).toHaveAttribute('href', '/dashboard/courses/course-99');
     expect(screen.getByText('Homework 1')).toBeInTheDocument();
   });
 
@@ -192,9 +189,9 @@ describe('Navbar', () => {
         },
       },
     });
-    usePathnameMock.mockReturnValue('/app/users');
+    usePathnameMock.mockReturnValue('/dashboard/users');
 
-    render(<Navbar />);
+    renderNavbar();
 
     expect(screen.getByText('Bruce Wayne')).toBeInTheDocument();
 
