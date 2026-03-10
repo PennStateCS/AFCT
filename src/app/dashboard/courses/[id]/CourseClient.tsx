@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useCallback, useEffect, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import type { Assignment, Problem } from '@prisma/client';
 
@@ -20,13 +20,22 @@ import { AdminCourseView } from '@/components/course/AdminCourseView';
 import LoadingSpinner from '@/components/ui/loading-spinner';
 import { CourseDialogs } from '@/components/course/CourseDialogs';
 import DuplicateCourseDialog from '@/components/dialogs/DuplicateCourseDialog';
+import { FullCourse } from '@/types/course';
+import { TabType } from '@/types/course';
 
-export default function CourseClient() {
+export default function CourseClient({ initialCourse }: { initialCourse?: FullCourse | null }) {
   const { id } = useParams();
+  const router = useRouter();
   const { data: session } = useSession();
   const courseId = Array.isArray(id) ? id[0] : id;
   const isStudent = session?.user?.role === 'STUDENT';
-  const { course, setCourse, refetchCourse } = useCourseData(courseId || '');
+  const { course, setCourse, refetchCourse, loadTabData, loadingSections } = useCourseData(
+    courseId || '',
+    {
+      initialCourse: initialCourse ?? null,
+      isStudent,
+    },
+  );
   const { tab, handleTabChange } = useTabNavigation();
   const dialogStates = useDialogStates();
   const { allUsers, fetchAvailableUsers, handleEnrollUser } = useEnrollment(course);
@@ -38,10 +47,10 @@ export default function CourseClient() {
   const openDuplicate = () => setDuplicateOpen(true);
 
   const openEnrollDialog = useCallback(async () => {
-    await fetchAvailableUsers();
-    dialogStates.setAllUsers(allUsers);
+    const users = await fetchAvailableUsers();
+    dialogStates.setAllUsers(users);
     dialogStates.setEnrollOpen(true);
-  }, [fetchAvailableUsers, allUsers, dialogStates]);
+  }, [fetchAvailableUsers, dialogStates]);
 
   const openBulkEnrollDialog = useCallback(() => {
     setBulkEnrollOpen(true);
@@ -151,6 +160,12 @@ export default function CourseClient() {
     [handlers, dialogStates],
   );
 
+  useEffect(() => {
+    if (!isStudent) {
+      void loadTabData(tab as TabType);
+    }
+  }, [isStudent, loadTabData, tab]);
+
   if (!course)
     return <LoadingSpinner label="Loading" fullScreen={false} className="min-h-[70vh]" />;
 
@@ -174,7 +189,13 @@ export default function CourseClient() {
         <AdminCourseView
           course={course}
           tab={tab}
-          onTabChange={handleTabChange}
+          isAssignmentsLoading={tab === 'assignments' && !isStudent && loadingSections.assignments}
+          isProblemsLoading={tab === 'problems' && !isStudent && loadingSections.problems}
+          isRosterLoading={tab === 'roster' && !isStudent && loadingSections.roster}
+          onTabChange={(value) => {
+            handleTabChange(value);
+            void loadTabData(value as TabType);
+          }}
           onCreateAssignment={() => dialogStates.setCreateAssignmentOpen(true)}
           onCreateProblem={() => dialogStates.setProblemOpen(true)}
           onEnrollUser={openEnrollDialog}
@@ -238,7 +259,7 @@ export default function CourseClient() {
           course={course}
           timeZone={timezone}
           onSuccess={(newId) => {
-            window.location.href = `/dashboard/courses/${newId}`;
+            router.push(`/dashboard/courses/${newId}`);
           }}
         />
       )}

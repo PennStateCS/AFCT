@@ -7,46 +7,66 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canArchiveCourse, canUnpublishCourse } from '@/lib/course-status-checks';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
 
-// GET: Fetch a course by ID with full metadata
-export async function GET(_: Request, context: { params: Promise<{ id: string }> }) {
+// GET: Fetch a course by ID with view-based metadata
+export async function GET(req: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
+  const view = new URL(req.url).searchParams.get('view') ?? 'full';
 
   if (!id) {
     return NextResponse.json({ error: 'Missing course ID' }, { status: 400 });
   }
 
   try {
+    const includeRoster = view === 'full' || view === 'summary' || view === 'roster';
+    const includeAssignments = view === 'full' || view === 'summary' || view === 'assignments';
+    const includeProblems = view === 'full' || view === 'problems';
+
     const course = await prisma.course.findUnique({
       where: { id },
       include: {
-        roster: {
+        _count: {
           select: {
-            role: true,
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                role: true,
-                email: true,
-                avatar: true,
-              },
-            },
+            assignments: true,
+            problems: true,
+            roster: true,
           },
         },
-        problems: true,
-        assignments: {
-          include: {
-            problems: {
-              select: {
-                maxPoints: true,
+        ...(includeRoster
+          ? {
+              roster: {
+                select: {
+                  role: true,
+                  user: {
+                    select: {
+                      id: true,
+                      firstName: true,
+                      lastName: true,
+                      role: true,
+                      email: true,
+                      avatar: true,
+                    },
+                  },
+                },
               },
-            },
-            _count: {
-              select: { problems: true },
-            },
-          },
-        },
+            }
+          : {}),
+        ...(includeProblems ? { problems: true } : {}),
+        ...(includeAssignments
+          ? {
+              assignments: {
+                include: {
+                  problems: {
+                    select: {
+                      maxPoints: true,
+                    },
+                  },
+                  _count: {
+                    select: { problems: true },
+                  },
+                },
+              },
+            }
+          : {}),
       },
     });
 
@@ -54,45 +74,129 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
-    // Build a single enrolled array (user objects plus courseRole), and compute student submission flags as needed.
-    const enrolled = await Promise.all(
-      course.roster.map(async (r: (typeof course.roster)[number]) => {
-        const user = r.user;
-        const courseRole = r.role;
+    const rosterRows = ((course as any).roster ?? []) as Array<{
+      role: string;
+      user: Record<string, unknown>;
+    }>;
+    const assignmentRows = ((course as any).assignments ?? []) as Array<any>;
+    const problemRows = ((course as any).problems ?? []) as Array<Record<string, unknown>>;
 
-        // For students only, compute hasSubmissions flag
-        let hasSubmissions = false;
-        if (courseRole === 'STUDENT') {
-          const assignmentIds = course.assignments.map(
-            (a: (typeof course.assignments)[number]) => a.id,
-          );
-          if (assignmentIds.length > 0) {
-            const found = await prisma.submission.findFirst({
-              where: { studentId: user.id, assignmentId: { in: assignmentIds } },
-              select: { id: true },
-            });
-            hasSubmissions = !!found;
-          }
-        }
+    const assignmentIds = includeAssignments ? assignmentRows.map((a) => String(a.id)) : [];
 
-        return { ...user, courseRole, hasSubmissions };
-      }),
-    );
+    let enrolled: Array<Record<string, unknown>> = [];
+    if (includeRoster) {
+      const studentIds = rosterRows
+        .filter((r) => r.role === 'STUDENT')
+        .map((r) => String(r.user.id));
 
-    // Attach problem counts and safety flags to assignments
-    const assignmentsWithProblemCount = await Promise.all(
-      course.assignments.map(async (assignment: (typeof course.assignments)[number]) => {
-        const totalProblemPoints = (assignment.problems ?? []).reduce((sum, ap) => {
+      const studentSubmissionRows =
+        assignmentIds.length > 0 && studentIds.length > 0
+          ? (prisma.submission as any).groupBy
+            ? await (prisma.submission as any).groupBy({
+                by: ['studentId'],
+                where: {
+                  studentId: { in: studentIds },
+                  assignmentId: { in: assignmentIds },
+                },
+              })
+            : (prisma.submission as any).findMany
+              ? await (prisma.submission as any).findMany({
+                  where: {
+                    studentId: { in: studentIds },
+                    assignmentId: { in: assignmentIds },
+                  },
+                  select: { studentId: true },
+                })
+              : await Promise.all(
+                  studentIds.map(async (studentId) => {
+                    const hasSubmission = await prisma.submission.findFirst({
+                      where: {
+                        studentId,
+                        assignmentId: { in: assignmentIds },
+                      },
+                      select: { studentId: true },
+                    });
+                    return hasSubmission ? { studentId } : null;
+                  }),
+                ).then((rows) => rows.filter((row): row is { studentId: string } => !!row))
+          : [];
+      const studentsWithSubmissions = new Set(
+        studentSubmissionRows.map((row: { studentId: string }) => row.studentId),
+      );
+
+      enrolled = rosterRows.map((r) => ({
+        ...r.user,
+        courseRole: r.role,
+        hasSubmissions:
+          r.role === 'STUDENT' ? studentsWithSubmissions.has(String(r.user.id)) : false,
+      }));
+    }
+
+    let assignmentsWithProblemCount: Array<Record<string, unknown>> = [];
+    if (includeAssignments) {
+      const submissionCounts =
+        assignmentIds.length > 0
+          ? (prisma.submission as any).groupBy
+            ? await (prisma.submission as any).groupBy({
+                by: ['assignmentId'],
+                where: { assignmentId: { in: assignmentIds } },
+                _count: { _all: true },
+              })
+            : (prisma.submission as any).findMany
+              ? await (prisma.submission as any).findMany({
+                  where: { assignmentId: { in: assignmentIds } },
+                  select: { assignmentId: true },
+                })
+              : await Promise.all(
+                  assignmentIds.map(async (assignmentId) => ({
+                    assignmentId,
+                    _count: { _all: await prisma.submission.count({ where: { assignmentId } }) },
+                  })),
+                )
+          : [];
+      const commentCounts =
+        assignmentIds.length > 0
+          ? (prisma.comment as any).groupBy
+            ? await (prisma.comment as any).groupBy({
+                by: ['assignmentId'],
+                where: { assignmentId: { in: assignmentIds } },
+                _count: { _all: true },
+              })
+            : (prisma.comment as any).findMany
+              ? await (prisma.comment as any).findMany({
+                  where: { assignmentId: { in: assignmentIds } },
+                  select: { assignmentId: true },
+                })
+              : await Promise.all(
+                  assignmentIds.map(async (assignmentId) => ({
+                    assignmentId,
+                    _count: { _all: await prisma.comment.count({ where: { assignmentId } }) },
+                  })),
+                )
+          : [];
+
+      const submissionCountMap = new Map<string, number>();
+      submissionCounts.forEach((row: any) => {
+        const key = String(row.assignmentId);
+        const increment = row?._count?._all ?? 1;
+        submissionCountMap.set(key, (submissionCountMap.get(key) ?? 0) + increment);
+      });
+
+      const commentCountMap = new Map<string, number>();
+      commentCounts.forEach((row: any) => {
+        const key = String(row.assignmentId);
+        const increment = row?._count?._all ?? 1;
+        commentCountMap.set(key, (commentCountMap.get(key) ?? 0) + increment);
+      });
+
+      assignmentsWithProblemCount = assignmentRows.map((assignment) => {
+        const totalProblemPoints = (assignment.problems ?? []).reduce((sum: number, ap: any) => {
           const value = typeof ap.maxPoints === 'number' ? ap.maxPoints : 0;
           return sum + (Number.isFinite(value) ? value : 0);
         }, 0);
 
-        // Check for submissions and comments
-        const submissionCount = await prisma.submission.count({
-          where: { assignmentId: assignment.id },
-        });
-        const commentCount = await prisma.comment.count({ where: { assignmentId: assignment.id } });
-        const hasSubmissionsOrComments = submissionCount > 0 || commentCount > 0;
+        const submissionCount = submissionCountMap.get(assignment.id) ?? 0;
+        const commentCount = commentCountMap.get(assignment.id) ?? 0;
 
         return {
           id: assignment.id,
@@ -106,26 +210,31 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
           createdAt: assignment.createdAt,
           updatedAt: assignment.updatedAt,
           courseId: assignment.courseId,
-          problemCount: assignment._count.problems,
+          problemCount: assignment._count?.problems ?? 0,
           submissionCount,
           commentCount,
-          hasSubmissionsOrComments,
+          hasSubmissionsOrComments: submissionCount > 0 || commentCount > 0,
         };
-      }),
-    );
+      });
+    }
 
-    // Determine whether each problem is linked to any assignment via assignmentProblem
-    const problemIds = course.problems.map((p: (typeof course.problems)[number]) => p.id);
-    const linked = await prisma.assignmentProblem.findMany({
-      where: { problemId: { in: problemIds } },
-      select: { problemId: true },
-    });
-    const linkedSet = new Set(linked.map((l: (typeof linked)[number]) => l.problemId));
+    let problemsWithLink: Array<Record<string, unknown>> = [];
+    if (includeProblems) {
+      const problemIds = problemRows.map((p) => String(p.id));
+      const linked =
+        problemIds.length > 0
+          ? await prisma.assignmentProblem.findMany({
+              where: { problemId: { in: problemIds } },
+              select: { problemId: true },
+            })
+          : [];
+      const linkedSet = new Set(linked.map((l: { problemId: string }) => l.problemId));
 
-    const problemsWithLink = course.problems.map((p: (typeof course.problems)[number]) => ({
-      ...p,
-      usedByAssignment: linkedSet.has(p.id),
-    }));
+      problemsWithLink = problemRows.map((p) => ({
+        ...p,
+        usedByAssignment: linkedSet.has(String(p.id)),
+      }));
+    }
 
     // Determine viewer's course role if authenticated
     const session = await auth();
@@ -140,7 +249,7 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
       viewerDefaultRole = session.user.role ?? null;
     }
 
-    return NextResponse.json({
+    const response = {
       id: course.id,
       name: course.name,
       code: course.code,
@@ -156,12 +265,26 @@ export async function GET(_: Request, context: { params: Promise<{ id: string }>
       createdAt: course.createdAt,
       updatedAt: course.updatedAt,
       // Only include a single enrolled array (user objects with courseRole)
-      enrolled,
-      problems: problemsWithLink,
-      assignments: assignmentsWithProblemCount,
+      enrolled: includeRoster ? enrolled : [],
+      problems: includeProblems ? problemsWithLink : [],
+      assignments: includeAssignments ? assignmentsWithProblemCount : [],
+      assignmentTotal:
+        typeof (course as any)._count?.assignments === 'number'
+          ? (course as any)._count.assignments
+          : assignmentRows.length,
+      problemTotal:
+        typeof (course as any)._count?.problems === 'number'
+          ? (course as any)._count.problems
+          : problemRows.length,
+      rosterTotal:
+        typeof (course as any)._count?.roster === 'number'
+          ? (course as any)._count.roster
+          : rosterRows.length,
       viewerRole,
       viewerDefaultRole,
-    });
+    };
+
+    return NextResponse.json(response);
   } catch (error) {
     console.error('GET /api/courses/[id] error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

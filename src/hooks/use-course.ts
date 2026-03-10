@@ -7,14 +7,46 @@ import { FullCourse, DeleteTarget, EnrollableUser, TabType } from '@/types/cours
 import { getEnrolledIds } from '@/lib/course-utils';
 import { Assignment, Problem, User } from '@prisma/client';
 
-export function useCourseData(courseId: string) {
-  const [course, setCourse] = useState<FullCourse | null>(null);
+type CourseSectionView = 'summary' | 'full' | 'assignments' | 'problems' | 'roster';
+
+export function useCourseData(
+  courseId: string,
+  options?: { initialCourse?: FullCourse | null; isStudent?: boolean },
+) {
+  const [course, setCourse] = useState<FullCourse | null>(options?.initialCourse ?? null);
+  const [loadedSections, setLoadedSections] = useState<{
+    assignments: boolean;
+    problems: boolean;
+    roster: boolean;
+  }>({
+    assignments: !!options?.isStudent,
+    problems: !!options?.isStudent,
+    roster: !!options?.isStudent,
+  });
+  const [loadingSections, setLoadingSections] = useState<{
+    assignments: boolean;
+    problems: boolean;
+    roster: boolean;
+  }>({
+    assignments: false,
+    problems: false,
+    roster: false,
+  });
+
+  const fetchCourseByView = useCallback(
+    async (view: CourseSectionView) => {
+      if (!courseId) return null;
+      const res = await fetch(`/api/courses/${courseId}?view=${view}`);
+      if (!res.ok) throw new Error('Failed to fetch course');
+      return res.json();
+    },
+    [courseId],
+  );
 
   const fetchCourse = useCallback(async () => {
     try {
-      const res = await fetch(`/api/courses/${courseId}`);
-      if (!res.ok) throw new Error('Failed to fetch course');
-      const data = await res.json();
+      const data = await fetchCourseByView(options?.isStudent ? 'full' : 'summary');
+      if (!data) return;
       setCourse({
         ...data,
         // normalize to `enrolled` representation (user objects with courseRole)
@@ -26,13 +58,102 @@ export function useCourseData(courseId: string) {
       showToast.error('Failed to load course');
       console.error('Error fetching course:', error);
     }
-  }, [courseId]);
+  }, [fetchCourseByView, options?.isStudent]);
+
+  const loadTabData = useCallback(
+    async (tab: TabType) => {
+      if (!courseId || options?.isStudent) return;
+      try {
+        if (tab === 'assignments' && !loadedSections.assignments) {
+          setLoadingSections((prev) => ({ ...prev, assignments: true }));
+          const data = await fetchCourseByView('assignments');
+          if (!data) return;
+          setCourse((prev) =>
+            prev
+              ? { ...prev, assignments: data.assignments ?? prev.assignments ?? [] }
+              : {
+                  ...data,
+                  assignments: data.assignments ?? [],
+                  problems: data.problems ?? [],
+                  enrolled: data.enrolled ?? [],
+                },
+          );
+          setLoadedSections((prev) => ({ ...prev, assignments: true }));
+          setLoadingSections((prev) => ({ ...prev, assignments: false }));
+        }
+
+        if (tab === 'problems' && !loadedSections.problems) {
+          setLoadingSections((prev) => ({ ...prev, problems: true }));
+          const data = await fetchCourseByView('problems');
+          if (!data) return;
+          setCourse((prev) =>
+            prev
+              ? { ...prev, problems: data.problems ?? prev.problems ?? [] }
+              : {
+                  ...data,
+                  assignments: data.assignments ?? [],
+                  problems: data.problems ?? [],
+                  enrolled: data.enrolled ?? [],
+                },
+          );
+          setLoadedSections((prev) => ({ ...prev, problems: true }));
+          setLoadingSections((prev) => ({ ...prev, problems: false }));
+        }
+
+        if (tab === 'roster' && !loadedSections.roster) {
+          setLoadingSections((prev) => ({ ...prev, roster: true }));
+          const data = await fetchCourseByView('roster');
+          if (!data) return;
+          setCourse((prev) =>
+            prev
+              ? { ...prev, enrolled: data.enrolled ?? prev.enrolled ?? [] }
+              : {
+                  ...data,
+                  assignments: data.assignments ?? [],
+                  problems: data.problems ?? [],
+                  enrolled: data.enrolled ?? [],
+                },
+          );
+          setLoadedSections((prev) => ({ ...prev, roster: true }));
+          setLoadingSections((prev) => ({ ...prev, roster: false }));
+        }
+      } catch (error) {
+        if (tab === 'assignments') {
+          setLoadingSections((prev) => ({ ...prev, assignments: false }));
+        }
+        if (tab === 'problems') {
+          setLoadingSections((prev) => ({ ...prev, problems: false }));
+        }
+        if (tab === 'roster') {
+          setLoadingSections((prev) => ({ ...prev, roster: false }));
+        }
+        showToast.error('Failed to load tab data');
+        console.error('Error loading tab data:', error);
+      }
+    },
+    [courseId, fetchCourseByView, loadedSections, options?.isStudent],
+  );
 
   useEffect(() => {
-    fetchCourse();
-  }, [fetchCourse]);
+    if (!course) {
+      fetchCourse();
+      return;
+    }
 
-  return { course, setCourse, refetchCourse: fetchCourse };
+    // Students need full assignment data for their default view.
+    if (options?.isStudent && course.assignments.length === 0) {
+      fetchCourse();
+    }
+  }, [fetchCourse, course, options?.isStudent]);
+
+  return {
+    course,
+    setCourse,
+    refetchCourse: fetchCourse,
+    loadTabData,
+    loadedSections,
+    loadingSections,
+  };
 }
 
 export function useTabNavigation() {
@@ -133,11 +254,16 @@ export function useEnrollment(course: FullCourse | null) {
 
       if (course) {
         const inCourseIds = new Set(getEnrolledIds(course.enrolled as any[]));
-        setAllUsers(users.filter((u) => !inCourseIds.has(u.id)));
+        const available = users.filter((u) => !inCourseIds.has(u.id));
+        setAllUsers(available);
+        return available;
       }
+      setAllUsers(users as unknown as EnrollableUser[]);
+      return users as unknown as EnrollableUser[];
     } catch (error) {
       showToast.error('Failed to load user list');
       console.error('Error fetching users:', error);
+      return [] as EnrollableUser[];
     }
   }, [course]);
 
