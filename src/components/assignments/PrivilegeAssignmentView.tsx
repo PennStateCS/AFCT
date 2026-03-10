@@ -448,7 +448,11 @@ export default function AssignmentDashboardPage() {
           <Card className="w-full">
             <CardHeader className="text-2xl">
               <div className="flex w-full items-center justify-between">
-                <CardTitle className="flex items-center gap-2 text-2xl">
+                <CardTitle
+                  role="heading"
+                  aria-level={2}
+                  className="flex items-center gap-2 text-2xl"
+                >
                   <FileText className="h-6 w-6" />
                   Problems
                 </CardTitle>

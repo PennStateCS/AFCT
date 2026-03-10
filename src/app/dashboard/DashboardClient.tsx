@@ -32,7 +32,12 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
   return (
     <Card className="flex h-full" aria-labelledby="current-courses-title">
       <CardHeader>
-        <CardTitle id="current-courses-title" className="text-2xl font-semibold tracking-tight">
+        <CardTitle
+          id="current-courses-title"
+          role="heading"
+          aria-level={2}
+          className="text-2xl font-semibold tracking-tight"
+        >
           {title}
         </CardTitle>
       </CardHeader>

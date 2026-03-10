@@ -209,7 +209,12 @@ export function CourseHeader({
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <CardTitle className="text-2xl leading-tight font-semibold tracking-tight">
+            <CardTitle
+              id="course-page-title"
+              role="heading"
+              aria-level={1}
+              className="text-2xl leading-tight font-semibold tracking-tight"
+            >
               <span className="text-muted-foreground">{course.code}</span>
               <span className="text-muted-foreground">: </span>
               {course.name}

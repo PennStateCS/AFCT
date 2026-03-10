@@ -55,7 +55,12 @@ export function JoinCourseModule() {
   return (
     <Card className="w-full" aria-labelledby="join-course-title">
       <CardHeader>
-        <CardTitle id="join-course-title" className="text-lg font-semibold">
+        <CardTitle
+          id="join-course-title"
+          role="heading"
+          aria-level={2}
+          className="text-lg font-semibold"
+        >
           Join a Course
         </CardTitle>
       </CardHeader>
