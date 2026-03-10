@@ -166,12 +166,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   events: {
     async signIn({ user, account }) {
       try {
+        const mustChangePassword = Boolean(
+          (user as { mustChangePassword?: boolean } | undefined)?.mustChangePassword,
+        );
+
         await prisma.activityLog.create({
           data: {
             userId: user?.id ?? undefined,
             action: 'LOGIN_SUCCESS',
             category: 'SYSTEM',
-            metadata: { email: user?.email ?? null, provider: account?.provider ?? null },
+            metadata: {
+              email: user?.email ?? null,
+              provider: account?.provider ?? null,
+              mustChangePassword,
+              temporaryPasswordLogin: mustChangePassword,
+            },
           },
         });
       } catch (e) {

@@ -154,6 +154,18 @@ describe('POST /api/users/change-password', () => {
         data: expect.objectContaining({ temporaryPassword: false }),
       }),
     );
-    expect(activityLogMock).toHaveBeenCalled();
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      req,
+      expect.objectContaining({
+        action: 'CHANGE_PASSWORD',
+        metadata: expect.objectContaining({
+          userId: 'u1',
+          role: 'STUDENT',
+          wasTemporaryPassword: true,
+          clearedTemporaryPassword: true,
+        }),
+      }),
+    );
   });
 });
