@@ -53,8 +53,8 @@ vi.mock('@/components/dialogs/CreateUserDialog', () => ({
   ),
 }));
 
-vi.mock('@/components/dialogs/BulkCreateUsersDialog', () => ({
-  BulkCreateUsersDialog: ({
+vi.mock('@/components/dialogs/ImportUsersDialog', () => ({
+  ImportUsersDialog: ({
     open,
     setOpen,
   }: {
@@ -208,12 +208,12 @@ describe('UsersClient', () => {
     expect(getUserColumnsMock).toHaveBeenCalledTimes(1);
   });
 
-  it('opens bulk add dialog from button click', async () => {
+  it('opens import users dialog from button click', async () => {
     render(<UsersClient initialUsers={[]} />);
 
     expect(screen.getByTestId('bulk-dialog-state')).toHaveTextContent('closed');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Bulk Add Users' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Import Users' }));
 
     await waitFor(() => {
       expect(screen.getByTestId('bulk-dialog-state')).toHaveTextContent('open');
