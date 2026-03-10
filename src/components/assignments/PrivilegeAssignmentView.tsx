@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { AssociateProblemsDialog } from '@/components/dialogs/AssociateProblemsDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
@@ -48,41 +48,10 @@ import { Problem } from '@prisma/client';
 import JffViewerDialog from '@/components/JffViewerDialog';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatDateTimeInTimeZone } from '@/lib/date';
+import { AssignmentWithDetails } from '@/lib/assignment-details';
 
 const problemTypeLabels: Record<string, string> = {
   // Add your problem type labels here
-};
-
-type AssignmentProblemLink = {
-  problem: Problem;
-  maxPoints: number;
-  maxSubmissions: number;
-  autograderEnabled: boolean;
-};
-
-type AssignmentWithDetails = {
-  id: string;
-  title: string;
-  description?: string | null;
-  courseId: string;
-  courseName?: string;
-  courseCode?: string;
-  courseIsArchived?: boolean;
-  dueDate: string | Date;
-  maxPoints: number;
-  allowLateSubmissions?: boolean;
-  lateCutoff?: string | Date | null;
-  isPublished: boolean;
-  isGroup?: boolean;
-  createdAt?: Date;
-  updatedAt?: Date;
-  problems: AssignmentProblemLink[];
-  course?: {
-    id: string;
-    name: string;
-    code?: string;
-    isArchived?: boolean;
-  };
 };
 
 type ProblemLinkSettings = {
@@ -92,7 +61,13 @@ type ProblemLinkSettings = {
   autograderEnabled: boolean;
 };
 
-export default function AssignmentDashboardPage() {
+type PrivilegeAssignmentViewProps = {
+  initialAssignment?: AssignmentWithDetails | null;
+};
+
+export default function AssignmentDashboardPage({
+  initialAssignment = null,
+}: PrivilegeAssignmentViewProps) {
   const { data: session } = useSession();
   const { timezone } = useEffectiveTimezone();
   const { id, aid } = useParams<{ id: string; aid: string }>();
@@ -100,7 +75,7 @@ export default function AssignmentDashboardPage() {
   const router = useRouter();
 
   // Use a more flexible type for assignment to allow course details if available
-  const [assignment, setAssignment] = useState<AssignmentWithDetails | null>(null);
+  const [assignment, setAssignment] = useState<AssignmentWithDetails | null>(initialAssignment);
   const [allProblems, setAllProblems] = useState<Problem[]>([]);
   const [problemsLoading, setProblemsLoading] = useState(false);
   const [problemToRemove, setProblemToRemove] = useState<Problem | null>(null);
@@ -109,7 +84,8 @@ export default function AssignmentDashboardPage() {
   const [createProblemOpen, setCreateProblemOpen] = useState(false);
   const [editProblemDialogOpen, setEditProblemDialogOpen] = useState(false);
   const [problemToEdit, setProblemToEdit] = useState<Problem | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(!initialAssignment);
+  const [problemsTabLoading, setProblemsTabLoading] = useState(false);
   const [tab, setTab] = useState(searchParams.get('tab') || 'problems');
 
   // Group mapping support (for group assignments)
@@ -171,18 +147,53 @@ export default function AssignmentDashboardPage() {
   }, [id]);
 
   useEffect(() => {
-    fetchProblems();
-  }, [fetchProblems]);
+    const shouldLoadProblems = tab === 'problems' || addProblemDialogOpen || createProblemOpen;
+    if (!shouldLoadProblems) return;
+    void fetchProblems();
+  }, [fetchProblems, tab, addProblemDialogOpen, createProblemOpen]);
+
+  const refreshAssignment = useCallback(
+    async (
+      view: 'full' | 'problems' | 'submissions' = 'full',
+      surface: 'page' | 'inline' = 'page',
+    ) => {
+      if (!aid) return;
+      const useInlineLoading = surface === 'inline' && view === 'problems';
+      if (useInlineLoading) {
+        setProblemsTabLoading(true);
+      } else {
+        setLoading(true);
+      }
+      try {
+        const res = await fetch(`/api/courses/${id}/${aid}?view=${view}`);
+        if (!res.ok) throw new Error('Failed to fetch assignment');
+        const data = (await res.json()) as AssignmentWithDetails;
+        setAssignment(data);
+      } catch {
+        setAssignment(null);
+      } finally {
+        if (useInlineLoading) {
+          setProblemsTabLoading(false);
+        } else {
+          setLoading(false);
+        }
+      }
+    },
+    [aid, id],
+  );
 
   useEffect(() => {
-    if (!aid) return;
-    setLoading(true);
-    fetch(`/api/courses/${id}/${aid}`)
-      .then((res) => res.json())
-      .then((data) => setAssignment(data))
-      .catch(() => setAssignment(null))
-      .finally(() => setLoading(false));
-  }, [id, aid]);
+    if (initialAssignment) {
+      setAssignment(initialAssignment);
+      setLoading(false);
+      return;
+    }
+    const initialView = tab === 'submissions' ? 'submissions' : 'problems';
+    void refreshAssignment(initialView);
+    // We intentionally avoid refetching assignment shell data on every tab switch.
+    // The submissions tab fetches its own review payloads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialAssignment, refreshAssignment]);
 
   // When this is a group assignment, fetch groups and the mapping of problems -> groups
   useEffect(() => {
@@ -227,8 +238,8 @@ export default function AssignmentDashboardPage() {
             setGroupProblemsMap({});
           }
         }
-      } catch (err: any) {
-        if (err?.name === 'AbortError') return;
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === 'AbortError') return;
         console.error('Failed to fetch groups/mappings:', err);
         setGroups([]);
         setGroupProblemsMap({});
@@ -258,7 +269,11 @@ export default function AssignmentDashboardPage() {
     if (!id || !aid) return;
     if (!canManageProblems) return;
     try {
-      const payload: any = { problemIds };
+      const payload: {
+        problemIds: string[];
+        groupId?: string;
+        problemSettings?: ProblemLinkSettings[];
+      } = { problemIds };
       if (groupId) payload.groupId = groupId;
       if (problemSettings && problemSettings.length > 0) payload.problemSettings = problemSettings;
 
@@ -272,11 +287,7 @@ export default function AssignmentDashboardPage() {
     } catch {
       showToast.error('Failed to add problems');
     }
-    setLoading(true);
-    fetch(`/api/courses/${id}/${aid}`)
-      .then((res) => res.json())
-      .then((data) => setAssignment(data))
-      .finally(() => setLoading(false));
+    await refreshAssignment('problems', 'inline');
   }
 
   async function handleConfirmRemoveProblem() {
@@ -292,14 +303,8 @@ export default function AssignmentDashboardPage() {
     } catch {
       showToast.error(`Failed to remove "${problemToRemove.title}"`);
     }
-    setLoading(true);
-    fetch(`/api/courses/${id}/${aid}`)
-      .then((res) => res.json())
-      .then((data) => setAssignment(data))
-      .finally(() => {
-        setProblemToRemove(null);
-        setLoading(false);
-      });
+    await refreshAssignment('problems', 'inline');
+    setProblemToRemove(null);
   }
 
   const handleEditAssignment = () => setEditAssignmentOpen(true);
@@ -316,6 +321,59 @@ export default function AssignmentDashboardPage() {
 
   if (loading) return <LoadingSpinner label="Loading" />;
   if (!assignment) return <div className="p-6 text-red-500">Assignment not found.</div>;
+
+  const groupNamesByProblemId = useMemo(() => {
+    const namesById = new Map(groups.map((group) => [group.id, group.name]));
+    const map: Record<string, string[]> = {};
+    for (const [groupId, problemIds] of Object.entries(groupProblemsMap)) {
+      const name = namesById.get(groupId) ?? groupId;
+      for (const problemId of problemIds ?? []) {
+        if (!map[problemId]) map[problemId] = [];
+        map[problemId].push(name);
+      }
+    }
+    return map;
+  }, [groupProblemsMap, groups]);
+
+  const problemTableData = useMemo(
+    () =>
+      assignment.problems.map((ap) => ({
+        ...ap.problem,
+        description: ap.problem.description ?? null,
+        assignmentMaxPoints: ap.maxPoints,
+        assignmentMaxSubmissions: ap.maxSubmissions,
+        assignmentAutograderEnabled: ap.autograderEnabled,
+      })),
+    [assignment.problems],
+  );
+
+  const submissionTabProblems = useMemo(
+    () =>
+      assignment.problems.map((ap) => ({
+        id: ap.problem.id,
+        title: ap.problem.title,
+        description: ap.problem.description ?? undefined,
+        type: ap.problem.type ? String(ap.problem.type) : undefined,
+        maxStates: ap.problem.maxStates ?? undefined,
+        isDeterministic: ap.problem.isDeterministic ?? undefined,
+        fileName: ap.problem.fileName ?? undefined,
+        originalFileName: ap.problem.originalFileName ?? undefined,
+        maxPoints: ap.maxPoints,
+        maxSubmissions: ap.maxSubmissions,
+        autograderEnabled: ap.autograderEnabled,
+      })),
+    [assignment.problems],
+  );
+
+  const usedProblems = useMemo(
+    () =>
+      assignment.problems.map((ap) => ({
+        ...ap.problem,
+        description: ap.problem.description ?? undefined,
+        type: typeof ap.problem.type === 'string' ? ap.problem.type : undefined,
+      })),
+    [assignment.problems],
+  );
 
   const estimatedProblemPoints = Math.max(
     1,
@@ -535,16 +593,11 @@ export default function AssignmentDashboardPage() {
                           header: 'Group',
                           cell: ({ row }: { row: { original: Problem } }) => {
                             const pid = row.original.id;
-                            const groupIds = Object.keys(groupProblemsMap).filter((gid) =>
-                              (groupProblemsMap[gid] || []).includes(pid),
-                            );
+                            const names = groupNamesByProblemId[pid] ?? [];
 
-                            if (groupIds.length === 0)
+                            if (names.length === 0)
                               return <span title="All students">All students</span>;
 
-                            const names = groupIds.map(
-                              (gid) => groups.find((g) => g.id === gid)?.name || gid,
-                            );
                             if (names.length === 1)
                               return (
                                 <span className="truncate" title={names[0]}>
@@ -745,13 +798,8 @@ export default function AssignmentDashboardPage() {
                     meta: { priority: 1 },
                   },
                 ]}
-                data={assignment.problems.map((ap) => ({
-                  ...ap.problem,
-                  description: ap.problem.description ?? null,
-                  assignmentMaxPoints: ap.maxPoints,
-                  assignmentMaxSubmissions: ap.maxSubmissions,
-                  assignmentAutograderEnabled: ap.autograderEnabled,
-                }))}
+                data={problemTableData}
+                loading={problemsTabLoading || groupsLoading}
                 tableLabel="Assignment problems table"
               />
             </CardContent>
@@ -764,19 +812,7 @@ export default function AssignmentDashboardPage() {
             assignmentId={aid}
             maxAssignmentGrade={assignment.maxPoints}
             assignmentDueDate={assignment.dueDate}
-            problems={assignment.problems.map((ap) => ({
-              id: ap.problem.id,
-              title: ap.problem.title,
-              description: ap.problem.description ?? undefined,
-              type: ap.problem.type ? String(ap.problem.type) : undefined,
-              maxStates: ap.problem.maxStates ?? undefined,
-              isDeterministic: ap.problem.isDeterministic ?? undefined,
-              fileName: ap.problem.fileName ?? undefined,
-              originalFileName: ap.problem.originalFileName ?? undefined,
-              maxPoints: ap.maxPoints,
-              maxSubmissions: ap.maxSubmissions,
-              autograderEnabled: ap.autograderEnabled,
-            }))}
+            problems={submissionTabProblems}
             // Group-assignment support: pass group list and mapping so the submissions
             // view can filter problems to the student's group (assignment-level problems
             // still apply to all students).
@@ -837,11 +873,7 @@ export default function AssignmentDashboardPage() {
           description: p.description ?? undefined,
           type: typeof p.type === 'string' ? p.type : undefined,
         }))}
-        usedProblems={assignment.problems.map((ap) => ({
-          ...ap.problem,
-          description: ap.problem.description ?? undefined,
-          type: typeof ap.problem.type === 'string' ? ap.problem.type : undefined,
-        }))}
+        usedProblems={usedProblems}
         onAddProblems={(selectedProblemIds, groupId, problemSettings) => {
           return handleAddProblems(selectedProblemIds, groupId, problemSettings);
         }}
@@ -896,11 +928,7 @@ export default function AssignmentDashboardPage() {
               : null,
           }}
           onSave={() => {
-            setLoading(true);
-            fetch(`/api/courses/${id}/${aid}`)
-              .then((res) => res.json())
-              .then((data) => setAssignment(data))
-              .finally(() => setLoading(false));
+            void refreshAssignment('problems', 'inline');
           }}
         />
       )}
@@ -940,11 +968,7 @@ export default function AssignmentDashboardPage() {
                 }
           }
           onSaved={() => {
-            setLoading(true);
-            fetch(`/api/courses/${id}/${aid}`)
-              .then((res) => res.json())
-              .then((data) => setAssignment(data))
-              .finally(() => setLoading(false));
+            void refreshAssignment('problems', 'inline');
           }}
         />
       )}

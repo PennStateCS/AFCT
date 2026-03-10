@@ -32,15 +32,33 @@ export default async function DashboardPage() {
         isArchived: false,
       },
     },
-    include: {
+    select: {
+      role: true,
+      courseId: true,
       course: {
-        include: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          semester: true,
+          credits: true,
+          startDate: true,
+          endDate: true,
+          isPublished: true,
+          isArchived: true,
           roster: {
-            include: {
-              user: true, // Load user info for each roster member
+            select: {
+              role: true,
+              user: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  role: true,
+                },
+              },
             },
           },
-          assignments: true,
         },
       },
     },
@@ -89,6 +107,8 @@ export default async function DashboardPage() {
         },
       },
       select: {
+        assignmentId: true,
+        problemId: true,
         studentId: true,
         assignmentProblem: {
           select: {
@@ -100,19 +120,35 @@ export default async function DashboardPage() {
                 dueDate: true,
               },
             },
-            grades: {
-              select: {
-                studentId: true,
-              },
-            },
           },
         },
       },
     });
 
+    const manualGrades = await prisma.assignmentProblemGrade.findMany({
+      where: {
+        assignmentProblem: {
+          assignment: {
+            courseId: { in: gradingCourseIds },
+            course: { isArchived: false },
+          },
+          autograderEnabled: false,
+        },
+      },
+      select: {
+        assignmentId: true,
+        problemId: true,
+        studentId: true,
+      },
+    });
+
+    const gradedSubmissionKeys = new Set(
+      manualGrades.map((grade) => `${grade.assignmentId}:${grade.problemId}:${grade.studentId}`),
+    );
+
     for (const submission of manualSubmissions) {
-      const isGraded = submission.assignmentProblem.grades.some(
-        (grade) => grade.studentId === submission.studentId,
+      const isGraded = gradedSubmissionKeys.has(
+        `${submission.assignmentId}:${submission.problemId}:${submission.studentId}`,
       );
       if (isGraded) continue;
 
@@ -139,20 +175,23 @@ export default async function DashboardPage() {
   );
 
   // Get upcoming assignments for all user's courses
-  const assignments = await prisma.assignment.findMany({
-    where: {
-      courseId: { in: courseIds },
-      isPublished: true,
-      dueDate: { gt: new Date() },
-    },
-    select: {
-      id: true,
-      title: true,
-      dueDate: true,
-      courseId: true,
-    },
-    orderBy: { dueDate: 'asc' },
-  });
+  const assignments =
+    courseIds.length === 0
+      ? []
+      : await prisma.assignment.findMany({
+          where: {
+            courseId: { in: courseIds },
+            isPublished: true,
+            dueDate: { gt: new Date() },
+          },
+          select: {
+            id: true,
+            title: true,
+            dueDate: true,
+            courseId: true,
+          },
+          orderBy: { dueDate: 'asc' },
+        });
 
   return (
     <div className="flex h-full w-full flex-col pb-4 lg:flex-row">

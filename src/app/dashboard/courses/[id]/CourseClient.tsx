@@ -194,7 +194,6 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
           isRosterLoading={tab === 'roster' && !isStudent && loadingSections.roster}
           onTabChange={(value) => {
             handleTabChange(value);
-            void loadTabData(value as TabType);
           }}
           onCreateAssignment={() => dialogStates.setCreateAssignmentOpen(true)}
           onCreateProblem={() => dialogStates.setProblemOpen(true)}
