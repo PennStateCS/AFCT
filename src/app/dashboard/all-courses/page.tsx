@@ -22,18 +22,37 @@ export default async function AllCoursesPage() {
 
   // Get all courses for the user via roster entries
   const rosterEntries = await prisma.roster.findMany({
-    where: { 
-        userId: id,
+    where: {
+      userId: id,
     },
-    include: {
+    select: {
+      role: true,
       course: {
-        include: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          semester: true,
+          credits: true,
+          startDate: true,
+          endDate: true,
+          isPublished: true,
+          isArchived: true,
           roster: {
-            include: {
-              user: true, // Load user info for each roster member
+            select: {
+              role: true,
+              user: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  role: true,
+                  email: true,
+                  avatar: true,
+                },
+              },
             },
           },
-          assignments: true,
         },
       },
     },
@@ -53,7 +72,7 @@ export default async function AllCoursesPage() {
 
   return (
     <div className="h-full w-full flex-col lg:flex-row">
-        <DashboardClient sessionUser={session.user} courses={courses} title={"All Courses"} />
+      <DashboardClient sessionUser={session.user} courses={courses} title={'All Courses'} />
     </div>
   );
 }
