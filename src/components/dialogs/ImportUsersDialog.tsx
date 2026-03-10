@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import SwitchField from '@/components/ui/SwitchField';
 
 type ImportUsersDialogProps = {
   open: boolean;
@@ -139,6 +140,7 @@ export function ImportUsersDialog({ open, setOpen, onSuccess }: ImportUsersDialo
   const [parseError, setParseError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<BulkCreateResult | null>(null);
+  const [temporaryPasswords, setTemporaryPasswords] = useState(false);
 
   useEffect(() => {
     if (!open) {
@@ -147,6 +149,7 @@ export function ImportUsersDialog({ open, setOpen, onSuccess }: ImportUsersDialo
       setParseError(null);
       setSubmitting(false);
       setResult(null);
+      setTemporaryPasswords(false);
     }
   }, [open]);
 
@@ -186,7 +189,7 @@ export function ImportUsersDialog({ open, setOpen, onSuccess }: ImportUsersDialo
       const res = await fetch('/api/users/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows }),
+        body: JSON.stringify({ rows, temporaryPasswords }),
       });
 
       const data = (await res.json()) as BulkCreateResult | { error?: string };
@@ -235,6 +238,15 @@ export function ImportUsersDialog({ open, setOpen, onSuccess }: ImportUsersDialo
               Required headers: first name, last name, email, password.
             </p>
           </div>
+
+          <SwitchField
+            label="Temporary passwords"
+            name="import-users-temporary-passwords"
+            checked={temporaryPasswords}
+            onCheckedChange={setTemporaryPasswords}
+            description="Require imported users to change their password at next login."
+            descriptionPlacement="inline"
+          />
 
           {parseError ? (
             <p

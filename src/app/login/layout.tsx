@@ -1,3 +1,4 @@
+import React from 'react';
 import type { Metadata, Viewport } from 'next';
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
@@ -29,7 +30,7 @@ export default async function LoginLayout({ children }: { children: React.ReactN
   const session = await auth();
 
   if (session) {
-    redirect('/dashboard');
+    redirect(session.user.mustChangePassword ? '/change-password' : '/dashboard');
   }
 
   return (

@@ -4,6 +4,7 @@ import { z } from 'zod';
 const hasUpper = /[A-Z]/;
 const hasLower = /[a-z]/;
 const hasDigit = /\d/;
+const hasSpecial = /[^A-Za-z0-9]/;
 
 export const ChangePasswordSchema = z
   .object({
@@ -13,7 +14,8 @@ export const ChangePasswordSchema = z
       .min(8, 'At least 8 characters.')
       .refine((v) => hasUpper.test(v), { message: 'Must contain an uppercase letter.' })
       .refine((v) => hasLower.test(v), { message: 'Must contain a lowercase letter.' })
-      .refine((v) => hasDigit.test(v), { message: 'Must contain a number.' }),
+      .refine((v) => hasDigit.test(v), { message: 'Must contain a number.' })
+      .refine((v) => hasSpecial.test(v), { message: 'Must contain a special character.' }),
     confirmNewPassword: z.string().min(1, 'Please confirm your new password.'),
   })
   .refine((d) => d.newPassword === d.confirmNewPassword, {

@@ -117,6 +117,7 @@ describe('POST /api/users/bulk', () => {
     const req = new Request('http://localhost/api/users/bulk', {
       method: 'POST',
       body: JSON.stringify({
+        temporaryPasswords: true,
         rows: [
           {
             firstName: 'Ada',
@@ -181,6 +182,11 @@ describe('POST /api/users/bulk', () => {
     ]);
 
     expect(prismaMock.user.create).toHaveBeenCalledTimes(2);
+    expect(prismaMock.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ temporaryPassword: true }),
+      }),
+    );
     expect(bcryptMock.hash).toHaveBeenCalledTimes(2);
     expect(activityLogMock).toHaveBeenCalled();
   });

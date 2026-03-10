@@ -11,6 +11,32 @@ vi.mock('@/components/ui/dialog', () => import('@/test/mocks/ui').then((mod) => 
 vi.mock('@/components/ui/InputGroup', () =>
   import('@/test/mocks/ui').then((mod) => mod.inputGroupMock),
 );
+vi.mock('@/components/ui/SwitchField', () => ({
+  __esModule: true,
+  default: ({
+    label,
+    name,
+    checked,
+    onCheckedChange,
+  }: {
+    label: string;
+    name: string;
+    checked: boolean;
+    onCheckedChange: (checked: boolean) => void;
+  }) => (
+    <label htmlFor={name}>
+      {label}
+      <input
+        id={name}
+        type="checkbox"
+        role="switch"
+        aria-label={label}
+        checked={checked}
+        onChange={(event) => onCheckedChange(event.target.checked)}
+      />
+    </label>
+  ),
+}));
 
 const { toastSuccess, toastError } = vi.hoisted(() => ({
   toastSuccess: vi.fn(),
@@ -46,12 +72,13 @@ describe('AdminResetPasswordDialog', () => {
       />,
     );
 
-    await user.type(screen.getByLabelText('New Password'), 'StrongPass1');
-    await user.type(screen.getByLabelText('Confirm New Password'), 'StrongPass1');
+    await user.type(screen.getByLabelText('New Password'), 'StrongPass1!');
+    await user.type(screen.getByLabelText('Confirm New Password'), 'StrongPass1!');
+    await user.click(screen.getByRole('switch', { name: /temporary password/i }));
 
     await user.click(screen.getByRole('button', { name: 'Reset Password' }));
 
-    await waitFor(() => expect(onResetPassword).toHaveBeenCalledWith('StrongPass1'));
+    await waitFor(() => expect(onResetPassword).toHaveBeenCalledWith('StrongPass1!', true));
     expect(setOpen).toHaveBeenCalledWith(false);
     expect(toastSuccess).toHaveBeenCalledWith('Password reset successfully!');
   });
@@ -63,7 +90,7 @@ describe('AdminResetPasswordDialog', () => {
 
     render(<AdminResetPasswordDialog open setOpen={setOpen} onResetPassword={onResetPassword} />);
 
-    await user.type(screen.getByLabelText('New Password'), 'StrongPass1');
+    await user.type(screen.getByLabelText('New Password'), 'StrongPass1!');
     await user.type(screen.getByLabelText('Confirm New Password'), 'Mismatch1');
 
     await user.click(screen.getByRole('button', { name: 'Reset Password' }));

@@ -9,21 +9,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Wrench } from 'lucide-react';
 import InputGroup from '@/components/ui/InputGroup';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
+import { PasswordRulesHelper } from '@/components/auth/PasswordRulesHelper';
+import { isStrongPassword, passwordRules } from '@/lib/password-policy';
 
 /* ---------------- Validators ---------------- */
 
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
-// Shared rules are referenced both for live validation and helper rendering.
-const passwordRules = [
-  { label: 'At least 8 characters', test: (pw: string) => pw.length >= 8 },
-  { label: 'At least one uppercase letter', test: (pw: string) => /[A-Z]/.test(pw) },
-  { label: 'At least one lowercase letter', test: (pw: string) => /[a-z]/.test(pw) },
-  { label: 'At least one number', test: (pw: string) => /\d/.test(pw) },
-  { label: 'At least one special character', test: (pw: string) => /[^A-Za-z0-9]/.test(pw) },
-];
-
-const isStrongPassword = (password: string) => passwordRules.every((rule) => rule.test(password));
 
 // Dev-only quick login shortcuts so QA can impersonate common roles fast.
 const testLoginButtons = [
@@ -538,30 +529,6 @@ export default function LoginPage() {
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-type PasswordRuleStatus = {
-  label: string;
-  passed: boolean;
-};
-function PasswordRulesHelper({ id, rules }: { id: string; rules: PasswordRuleStatus[] }) {
-  return (
-    <div
-      id={id}
-      aria-live="polite"
-      className="rounded-xl bg-gray-50 px-4 py-3 text-xs text-gray-700"
-    >
-      <p className="mb-2 font-semibold text-gray-800">Password must include:</p>
-      <ul className="space-y-1">
-        {rules.map((rule) => (
-          <li key={rule.label} className="flex items-center gap-2">
-            <span aria-hidden="true">{rule.passed ? '✅' : '⚠️'}</span>
-            <span className={rule.passed ? 'text-green-700' : 'text-gray-700'}>{rule.label}</span>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }
