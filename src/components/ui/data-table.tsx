@@ -247,15 +247,15 @@ export function DataTable<TData, TValue>({
       <div className="overflow-x-auto rounded-md border">
         <Table className="w-full" role="table" aria-label={tableLabel}>
           <TableHeader role="rowgroup">
-            {table.getHeaderGroups().map((headerGroup) => (
+            {table.getHeaderGroups().map((headerGroup, hgIndex) => (
               <TableRow
-                key={headerGroup.id}
+                key={`hg-${hgIndex}`}
                 style={{
                   backgroundColor: 'var(--table-header)',
                   color: 'var(--table-header-foreground)',
                 }}
               >
-                {headerGroup.headers.map((header) => {
+                {headerGroup.headers.map((header, hIndex) => {
                   const sorted = header.column.getIsSorted();
                   const canSort = header.column.getCanSort();
                   const priority = (header.column.columnDef.meta as ColumnMeta)?.priority;
@@ -276,7 +276,7 @@ export function DataTable<TData, TValue>({
 
                   return (
                     <TableHead
-                      key={header.id}
+                      key={`h-${hIndex}`}
                       aria-sort={
                         canSort
                           ? sorted === 'asc'
@@ -325,9 +325,9 @@ export function DataTable<TData, TValue>({
                 </TableCell>
               </TableRow>
             ) : table.getRowModel().rows.length ? (
-              table.getRowModel().rows.map((row) => (
+              table.getRowModel().rows.map((row, rIndex) => (
                 <TableRow
-                  key={row.id}
+                  key={`r-${rIndex}`}
                   tabIndex={onRowClick ? 0 : undefined}
                   onKeyDown={(e) => {
                     if (onRowClick && (e.key === 'Enter' || e.key === ' ')) {
@@ -341,9 +341,9 @@ export function DataTable<TData, TValue>({
                       : 'hover:bg-[var(--table-highlight)]'
                   }`}
                 >
-                  {row.getVisibleCells().map((cell) => (
+                  {row.getVisibleCells().map((cell, cIndex) => (
                     <TableCell
-                      key={cell.id}
+                      key={`c-${cIndex}`}
                       className={`whitespace-nowrap ${getResponsiveClass(cell.column.columnDef.meta?.priority)}`}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
