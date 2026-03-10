@@ -151,7 +151,8 @@ export default function CourseClient() {
     [handlers, dialogStates],
   );
 
-  if (!course) return <LoadingSpinner label="Loading" />;
+  if (!course)
+    return <LoadingSpinner label="Loading" fullScreen={false} className="min-h-[70vh]" />;
 
   return (
     <div className="space-y-6 p-0">
