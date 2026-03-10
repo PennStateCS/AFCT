@@ -209,16 +209,11 @@ export default function StudentAssignmentPage() {
     const fetchStudentData = async () => {
       if (!isStudent || !assignmentId || !userId) return;
       try {
-        const response = await fetch(`/api/assignments/${assignmentId}/grade?userId=${userId}`);
-        if (!response.ok) {
-          setAssignmentGrade(85);
-          return;
-        }
+        const response = await fetch(`/api/courses/${courseId}/${assignmentId}/problem-grades/${userId}`);
         const gradeData = await response.json();
         setAssignmentGrade(typeof gradeData.grade === 'number' ? gradeData.grade : null);
       } catch (error) {
         console.error('Error fetching student data:', error);
-        setAssignmentGrade(85);
       }
     };
 
