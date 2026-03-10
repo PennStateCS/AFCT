@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
 import { Assignment } from '@prisma/client';
 import type { AssignmentWithProblemCount } from '@/types/course';
@@ -101,7 +101,28 @@ export function useAssignmentColumns(
     {
       accessorKey: 'maxPoints',
       header: () => 'Points',
-      cell: ({ row }) => <div>{row.original.maxPoints ?? 0}</div>,
+      cell: ({ row }) => {
+        const [pts, setPts] = useState<number | null>(
+          row.original.maxPoints ?? null,
+        );
+
+        useEffect(() => {
+          if (pts === null) {
+            (async () => {
+              try {
+                const res = await fetch(`/api/assignments/${row.original.id}`);
+                if (!res.ok) return;
+                const json = await res.json();
+                setPts(json.maxPoints ?? 0);
+              } catch {
+                setPts(0);
+              }
+            })();
+          }
+        }, [row.original.id, pts]);
+
+        return <div>{pts !== null ? pts : '...'}</div>;
+      },
     },
     {
       id: 'problemCount',
