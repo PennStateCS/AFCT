@@ -4,6 +4,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { roleSortingFn } from '@/lib/roles';
 import { useState } from 'react';
 import { User } from '@prisma/client';
+import type { UserListItem } from '@/lib/users-list';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/RoleBadge';
@@ -24,7 +25,10 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 
-export function getUserColumns(onUserUpdate: () => void, timeZone: string): ColumnDef<User>[] {
+export function getUserColumns(
+  onUserUpdate: () => void,
+  timeZone: string,
+): ColumnDef<UserListItem>[] {
   return [
     {
       id: 'avatar',
@@ -110,7 +114,7 @@ export function getUserColumns(onUserUpdate: () => void, timeZone: string): Colu
 }
 
 // Extract the cell component to fix React hooks violation
-function UserActionsCell({ user, onUserUpdate }: { user: User; onUserUpdate: () => void }) {
+function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpdate: () => void }) {
   const [editOpen, setEditOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -154,7 +158,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: User; onUserUpdate: () 
   return (
     <>
       <EditUserDialog
-        user={user}
+        user={user as unknown as User}
         open={editOpen}
         setOpen={setEditOpen}
         onSave={async () => {
