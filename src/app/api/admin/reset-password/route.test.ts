@@ -87,6 +87,18 @@ describe('POST /api/admin/reset-password', () => {
         data: expect.objectContaining({ temporaryPassword: true }),
       }),
     );
-    expect(activityLogMock).toHaveBeenCalled();
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      req,
+      expect.objectContaining({
+        action: 'RESET_PASSWORD',
+        metadata: expect.objectContaining({
+          userId: 'admin',
+          initiatedByRole: 'ADMIN',
+          targetUserId: 'u1',
+          temporaryPassword: true,
+        }),
+      }),
+    );
   });
 });
