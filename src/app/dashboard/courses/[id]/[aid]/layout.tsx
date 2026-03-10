@@ -1,3 +1,4 @@
+import React from 'react';
 import { prisma } from '@/lib/prisma';
 import AssignmentBreadcrumbSource from '@/components/navbar/AssignmentBreadcrumbSource';
 
