@@ -22,10 +22,10 @@ type StudentRow = {
 };
 
 type Assignment = {
-  maxPoints: number;
   id: string;
   title: string;
   dueDate?: string;
+  maxPoints?: number;
 };
 
 type ApiStudent = {
@@ -60,6 +60,20 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         grades: Record<string, Record<string, number | null>>;
       };
 
+      // fetch maxPoints for each assignment via API helper
+      const assignmentsWithPoints: Assignment[] = await Promise.all(
+        a.map(async (asg) => {
+          try {
+            const res2 = await fetch(`/api/assignments/${asg.id}`);
+            if (!res2.ok) return { ...asg, maxPoints: 0 };
+            const json = await res2.json();
+            return { ...asg, maxPoints: json.maxPoints ?? 0 };
+          } catch {
+            return { ...asg, maxPoints: 0 };
+          }
+        }),
+      );
+
       // Build rows
       const rows: StudentRow[] = s.map((stu) => {
         const name =
@@ -80,7 +94,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
       });
 
       setStudents(rows);
-      setAssignments(a);
+      setAssignments(assignmentsWithPoints);
       setLastUpdated(new Date());
     } catch (err) {
       console.error('Fetch grades error:', err);
@@ -158,45 +172,50 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         };
       }
 
+      const maxPoints = assignment.maxPoints ?? 0;
       const average =
-        (100 * grades.reduce((sum, grade) => sum + grade, 0)) /
-        (grades.length * assignment.maxPoints);
+        maxPoints === 0
+          ? null
+          : (100 * grades.reduce((sum, grade) => sum + grade, 0)) /
+            (grades.length * maxPoints);
 
       return {
         assignmentId: assignment.id,
         title: assignment.title,
-        average: Math.round(average * 10) / 10,
+        average: average === null ? null : Math.round(average * 10) / 10,
         submitted: grades.length,
         total: students.length,
       };
     });
 
+    // compute per-student percentages then overall average
+    let overallAverage: number | null = null;
+
     const overallGrades = students
       .map((student) => {
-        // Pair each grade with its assignment's maxPoints
-        const gradePairs = assignments
-          .map((assignment) => {
-            const grade = student[assignment.id];
-            return typeof grade === 'number' ? { grade, maxPoints: assignment.maxPoints } : null;
-          })
-          .filter((pair): pair is { grade: number; maxPoints: number } => pair !== null);
+        let totalEarned = 0;
+        let totalPossible = 0;
 
-        if (gradePairs.length === 0) return null;
+        for (const assignment of assignments) {
+          const grade = student[assignment.id];
+          if (typeof grade !== 'number') continue;
+          const maxPoints = assignment.maxPoints ?? 0;
+          totalEarned += grade;
+          totalPossible += maxPoints;
+        }
 
-        // Calculate the student's average as a percentage of their possible points
-        const totalEarned = gradePairs.reduce((sum, pair) => sum + pair.grade, 0);
-        const totalPossible = gradePairs.reduce((sum, pair) => sum + pair.maxPoints, 0);
         if (totalPossible === 0) return null;
         return (totalEarned / totalPossible) * 100;
       })
       .filter((avg): avg is number => avg !== null);
 
-    const overallAverage =
-      overallGrades.length > 0
-        ? Math.round(
-            (overallGrades.reduce((sum, avg) => sum + avg, 0) / overallGrades.length) * 10,
-          ) / 10
-        : null;
+    if (overallGrades.length) {
+      let sum = 0;
+      for (const avg of overallGrades) {
+        sum += avg;
+      }
+      overallAverage = Math.round((sum / overallGrades.length) * 10) / 10;
+    }
 
     return { assignmentStats: stats, overallAverage };
   }, [assignments, students]);
