@@ -1,15 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { DataTable } from '@/components/ui/data-table';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { ColumnDef } from '@tanstack/react-table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { showToast } from '@/lib/toast';
-import { Stamp, Download, TrendingUp, Users, Target, RefreshCw } from 'lucide-react';
+import { Table, RefreshCw } from 'lucide-react';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatTimeInTimeZone } from '@/lib/date';
 
@@ -37,6 +36,7 @@ type ApiStudent = {
 };
 
 export default function GradesCard({ courseId }: { courseId: string }) {
+  const VISIBILITY_REFRESH_MS = 60_000;
   const { timezone } = useEffectiveTimezone();
   const [loading, setLoading] = useState(true);
   const [students, setStudents] = useState<StudentRow[]>([]);
@@ -48,8 +48,12 @@ export default function GradesCard({ courseId }: { courseId: string }) {
   const [editingValue, setEditingValue] = useState<string>('');
   const [savingGrades, setSavingGrades] = useState<Set<string>>(new Set());
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const inFlightRef = useRef(false);
+  const lastFetchAtRef = useRef(0);
 
   const fetchGrades = useCallback(async () => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     setLoading(true);
     try {
       const res = await fetch(`/api/courses/${courseId}/grades`);
@@ -88,11 +92,13 @@ export default function GradesCard({ courseId }: { courseId: string }) {
       setStudents(rows);
       setAssignments(a);
       setLastUpdated(new Date());
+      lastFetchAtRef.current = Date.now();
     } catch (err) {
       console.error('Fetch grades error:', err);
       showToast.error('Failed to load grades');
     } finally {
       setLoading(false);
+      inFlightRef.current = false;
     }
   }, [courseId]);
 
@@ -104,7 +110,11 @@ export default function GradesCard({ courseId }: { courseId: string }) {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        // Page became visible, refresh data
+        const now = Date.now();
+        if (now - lastFetchAtRef.current < VISIBILITY_REFRESH_MS) {
+          return;
+        }
+        // Page became visible and data is stale, refresh data.
         fetchGrades();
       }
     };
@@ -195,98 +205,6 @@ export default function GradesCard({ courseId }: { courseId: string }) {
     setEditingCell(null);
     setEditingValue('');
   }, []);
-
-  const exportGrades = useCallback(() => {
-    // Create CSV content
-    const headers = ['Student Name', 'Email', ...assignments.map((a) => a.title)];
-    const rows = students.map((student) => [
-      student.name,
-      student.email || '',
-      ...assignments.map((a) => {
-        const grade = student[a.id];
-        return grade === null || grade === undefined ? '' : String(grade);
-      }),
-    ]);
-
-    const csvContent = [headers, ...rows]
-      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-
-    // Download CSV
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `grades-${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    showToast.success('Grades exported successfully');
-  }, [students, assignments]);
-
-  // Calculate grade statistics
-  const gradeStats = useMemo(() => {
-    if (assignments.length === 0 || students.length === 0) return null;
-
-    const stats = assignments.map((assignment) => {
-      const grades = students
-        .map((student) => student[assignment.id])
-        .filter((grade): grade is number => typeof grade === 'number');
-
-      if (grades.length === 0) {
-        return {
-          assignmentId: assignment.id,
-          title: assignment.title,
-          average: null,
-          submitted: 0,
-          total: students.length,
-        };
-      }
-
-      const average =
-        (100 * grades.reduce((sum, grade) => sum + grade, 0)) /
-        (grades.length * assignment.maxPoints);
-
-      return {
-        assignmentId: assignment.id,
-        title: assignment.title,
-        average: Math.round(average * 10) / 10,
-        submitted: grades.length,
-        total: students.length,
-      };
-    });
-
-    const overallGrades = students
-      .map((student) => {
-        // Pair each grade with its assignment's maxPoints
-        const gradePairs = assignments
-          .map((assignment) => {
-            const grade = student[assignment.id];
-            return typeof grade === 'number' ? { grade, maxPoints: assignment.maxPoints } : null;
-          })
-          .filter((pair): pair is { grade: number; maxPoints: number } => pair !== null);
-
-        if (gradePairs.length === 0) return null;
-
-        // Calculate the student's average as a percentage of their possible points
-        const totalEarned = gradePairs.reduce((sum, pair) => sum + pair.grade, 0);
-        const totalPossible = gradePairs.reduce((sum, pair) => sum + pair.maxPoints, 0);
-        if (totalPossible === 0) return null;
-        return (totalEarned / totalPossible) * 100;
-      })
-      .filter((avg): avg is number => avg !== null);
-
-    const overallAverage =
-      overallGrades.length > 0
-        ? Math.round(
-            (overallGrades.reduce((sum, avg) => sum + avg, 0) / overallGrades.length) * 10,
-          ) / 10
-        : null;
-
-    return { assignmentStats: stats, overallAverage };
-  }, [assignments, students]);
 
   const columns = useMemo<ColumnDef<StudentRow, unknown>[]>(() => {
     const cols: ColumnDef<StudentRow, unknown>[] = [
@@ -407,99 +325,29 @@ export default function GradesCard({ courseId }: { courseId: string }) {
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-2xl">
-            <Stamp className="h-5 w-5" />
+            <Table className="h-5 w-5" />
             Grades
           </CardTitle>
           <div className="flex items-center gap-2">
+            {lastUpdated ? (
+              <div className="text-muted-foreground text-xs">
+                Last updated: {formatTimeInTimeZone(lastUpdated, timezone)}
+              </div>
+            ) : null}
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               onClick={fetchGrades}
               disabled={loading}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 bg-green-600 text-white hover:bg-green-700"
             >
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               Refresh
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={exportGrades}
-              disabled={loading || students.length === 0}
-              className="flex items-center gap-2"
-            >
-              <Download className="h-4 w-4" />
-              Export CSV
             </Button>
           </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Grade Statistics */}
-        {gradeStats && (
-          <div className="bg-card grid grid-cols-1 gap-4 rounded-lg border p-4 md:grid-cols-3">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-blue-600" />
-              <div>
-                <div className="text-sm font-medium">Overall Average</div>
-                <div className="text-lg font-bold">
-                  {gradeStats.overallAverage !== null
-                    ? `${gradeStats.overallAverage}%`
-                    : 'No grades'}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-green-600" />
-              <div>
-                <div className="text-sm font-medium">Total Students</div>
-                <div className="text-lg font-bold">{students.length}</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Target className="h-4 w-4 text-purple-600" />
-              <div>
-                <div className="text-sm font-medium">Assignments</div>
-                <div className="text-lg font-bold">{assignments.length}</div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Assignment Statistics */}
-        {gradeStats && gradeStats.assignmentStats.length > 0 && (
-          <div className="space-y-2">
-            <h4 className="text-muted-foreground text-sm font-medium">Assignment Statistics</h4>
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
-              {gradeStats.assignmentStats.map((stat) => (
-                <div key={stat.assignmentId} className="rounded-lg border p-3">
-                  <div className="mb-1 flex items-center justify-between">
-                    <div className="truncate text-sm font-medium">{stat.title}</div>
-                    <Badge variant="secondary" className="ml-2">
-                      {stat.submitted}/{stat.total}
-                    </Badge>
-                  </div>
-                  <div className="text-lg font-bold">
-                    {stat.average !== null ? `${stat.average}%` : 'No grades'}
-                  </div>
-                  <div className="text-muted-foreground text-xs">
-                    {stat.submitted > 0
-                      ? `${Math.round((stat.submitted / stat.total) * 100)}% submitted`
-                      : 'No submissions'}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Last Updated Info */}
-        {lastUpdated && (
-          <div className="text-muted-foreground text-center text-xs">
-            Last updated: {formatTimeInTimeZone(lastUpdated, timezone)}
-          </div>
-        )}
-
         {/* Instructions */}
         <div className="text-muted-foreground flex items-center gap-2 text-sm">
           <div className="flex items-center gap-1">
@@ -512,7 +360,7 @@ export default function GradesCard({ courseId }: { courseId: string }) {
           </div>
         </div>
 
-        <DataTable columns={columns} data={students} loading={loading} />
+        <DataTable columns={columns} data={students} loading={loading} showExportButton={false} />
       </CardContent>
     </Card>
   );

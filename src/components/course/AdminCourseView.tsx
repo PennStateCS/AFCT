@@ -10,7 +10,7 @@ import { useAssignmentColumns } from '@/app/dashboard/courses/[id]/assignment-co
 import { useProblemColumns } from '@/app/dashboard/courses/[id]/problem-columns';
 import { FullCourse, TabType } from '@/types/course';
 import { getInstructors } from '@/lib/course-utils';
-import { NotebookText, FileText, GraduationCap, Stamp, Users, Activity } from 'lucide-react';
+import { NotebookText, FileText, GraduationCap, Table, Users, Activity } from 'lucide-react';
 import { Assignment, Problem } from '@prisma/client';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
@@ -124,7 +124,7 @@ export function AdminCourseView({
           value="grades"
         >
           <div className="flex items-center gap-2">
-            <Stamp className="h-4 w-4" />
+            <Table className="h-4 w-4" />
             Grades
           </div>
         </TabsTrigger>
