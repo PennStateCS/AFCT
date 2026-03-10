@@ -13,7 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
-type BulkCreateUsersDialogProps = {
+type ImportUsersDialogProps = {
   open: boolean;
   setOpen: (open: boolean) => void;
   onSuccess?: () => void;
@@ -133,7 +133,7 @@ const parseCsvText = (text: string) => {
   return { rows, error: null };
 };
 
-export function BulkCreateUsersDialog({ open, setOpen, onSuccess }: BulkCreateUsersDialogProps) {
+export function ImportUsersDialog({ open, setOpen, onSuccess }: ImportUsersDialogProps) {
   const [fileName, setFileName] = useState<string>('');
   const [rows, setRows] = useState<ParsedCsvRow[]>([]);
   const [parseError, setParseError] = useState<string | null>(null);
@@ -211,7 +211,7 @@ export function BulkCreateUsersDialog({ open, setOpen, onSuccess }: BulkCreateUs
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="bg-card flex max-h-[85vh] max-w-3xl flex-col overflow-hidden">
         <DialogHeader>
-          <DialogTitle>Bulk Add Users</DialogTitle>
+          <DialogTitle>Import Users</DialogTitle>
           <DialogDescription>
             Upload a CSV with first name, last name, email, and password columns.
           </DialogDescription>
@@ -219,11 +219,11 @@ export function BulkCreateUsersDialog({ open, setOpen, onSuccess }: BulkCreateUs
 
         <div className="space-y-4 overflow-y-auto pr-1">
           <div className="space-y-2">
-            <label htmlFor="bulk-users-csv" className="text-sm font-medium">
+            <label htmlFor="import-users-csv" className="text-sm font-medium">
               CSV file
             </label>
             <Input
-              id="bulk-users-csv"
+              id="import-users-csv"
               type="file"
               accept=".csv,text/csv"
               onChange={handleFileChange}

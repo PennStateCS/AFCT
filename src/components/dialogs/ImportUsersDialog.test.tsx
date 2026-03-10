@@ -5,7 +5,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { BulkCreateUsersDialog } from './BulkCreateUsersDialog';
+import { ImportUsersDialog } from './ImportUsersDialog';
 
 vi.mock('@/components/ui/dialog', () => import('@/test/mocks/ui').then((mod) => mod.dialogMock));
 
@@ -15,7 +15,7 @@ globalWithReact.React = React;
 const originalFetch = global.fetch;
 const fetchMock = vi.fn();
 
-describe('BulkCreateUsersDialog', () => {
+describe('ImportUsersDialog', () => {
   beforeEach(() => {
     fetchMock.mockReset();
     global.fetch = fetchMock as unknown as typeof fetch;
@@ -38,7 +38,7 @@ describe('BulkCreateUsersDialog', () => {
       }),
     } as Response);
 
-    render(<BulkCreateUsersDialog open setOpen={vi.fn()} onSuccess={onSuccess} />);
+    render(<ImportUsersDialog open setOpen={vi.fn()} onSuccess={onSuccess} />);
 
     const fileInput = screen.getByLabelText('CSV file') as HTMLInputElement;
     const csvFile = {
@@ -73,7 +73,7 @@ describe('BulkCreateUsersDialog', () => {
   });
 
   it('shows a parse error when required headers are missing', async () => {
-    render(<BulkCreateUsersDialog open setOpen={vi.fn()} onSuccess={vi.fn()} />);
+    render(<ImportUsersDialog open setOpen={vi.fn()} onSuccess={vi.fn()} />);
 
     const fileInput = screen.getByLabelText('CSV file') as HTMLInputElement;
     const csvFile = {
