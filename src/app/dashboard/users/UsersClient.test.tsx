@@ -4,6 +4,7 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import UsersClient from './UsersClient';
+import type { UserListItem } from '@/lib/users-list';
 
 const replaceMock = vi.hoisted(() => vi.fn());
 const getUserColumnsMock = vi.hoisted(() => vi.fn(() => []));
@@ -26,7 +27,7 @@ vi.mock('./user-columns', () => ({
 }));
 
 vi.mock('@/components/ui/data-table', () => ({
-  DataTable: ({ data, loading }: { data: any[]; loading?: boolean }) => (
+  DataTable: ({ data, loading }: { data: UserListItem[]; loading?: boolean }) => (
     <div>
       <div data-testid="table-loading">{String(!!loading)}</div>
       <div data-testid="table-rows">{data.length}</div>
@@ -52,6 +53,24 @@ vi.mock('@/components/dialogs/CreateUserDialog', () => ({
   ),
 }));
 
+vi.mock('@/components/dialogs/ImportUsersDialog', () => ({
+  ImportUsersDialog: ({
+    open,
+    setOpen,
+  }: {
+    open: boolean;
+    setOpen: (open: boolean) => void;
+    onSuccess: () => void;
+  }) => (
+    <div>
+      <div data-testid="bulk-dialog-state">{open ? 'open' : 'closed'}</div>
+      <button type="button" onClick={() => setOpen(false)}>
+        Close Bulk Dialog
+      </button>
+    </div>
+  ),
+}));
+
 describe('UsersClient', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -60,7 +79,7 @@ describe('UsersClient', () => {
   });
 
   it('renders server-provided users without initial fetch', () => {
-    const users = [
+    const users: UserListItem[] = [
       {
         id: 'u1',
         email: 'a@example.com',
@@ -75,7 +94,7 @@ describe('UsersClient', () => {
       },
     ];
 
-    render(<UsersClient initialUsers={users as any} />);
+    render(<UsersClient initialUsers={users} />);
 
     expect(screen.getByTestId('table-loading').textContent).toBe('false');
     expect(screen.getByTestId('table-rows').textContent).toBe('1');
@@ -151,7 +170,7 @@ describe('UsersClient', () => {
   it('opens dialog from query string and clears query on close', () => {
     searchState.create = 'open';
 
-    render(<UsersClient initialUsers={[] as any} />);
+    render(<UsersClient initialUsers={[]} />);
 
     expect(screen.getByTestId('create-dialog-state')).toHaveTextContent('open');
 
@@ -161,7 +180,7 @@ describe('UsersClient', () => {
   });
 
   it('memoizes table columns across local state updates', async () => {
-    const users = [
+    const users: UserListItem[] = [
       {
         id: 'u1',
         email: 'a@example.com',
@@ -176,7 +195,7 @@ describe('UsersClient', () => {
       },
     ];
 
-    render(<UsersClient initialUsers={users as any} />);
+    render(<UsersClient initialUsers={users} />);
 
     expect(getUserColumnsMock).toHaveBeenCalledTimes(1);
 
@@ -187,5 +206,17 @@ describe('UsersClient', () => {
     });
 
     expect(getUserColumnsMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens import users dialog from button click', async () => {
+    render(<UsersClient initialUsers={[]} />);
+
+    expect(screen.getByTestId('bulk-dialog-state')).toHaveTextContent('closed');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Import Users' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('bulk-dialog-state')).toHaveTextContent('open');
+    });
   });
 });
