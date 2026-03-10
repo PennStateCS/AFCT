@@ -1,3 +1,4 @@
+import React from 'react';
 import { prisma } from '@/lib/prisma';
 import CourseBreadcrumbSource from '@/components/navbar/CourseBreadcrumbSource';
 
