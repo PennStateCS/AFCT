@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
-import type { Course } from '@prisma/client';
+import { useState, useMemo } from 'react';
 import { columns } from './course-columns';
 import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
@@ -9,41 +8,21 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { CreateCourseDialog } from '@/components/dialogs/CreateCourseDialog';
 import { BookPlus } from 'lucide-react';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import type { CourseListItem } from '@/lib/courses-list';
 
-type CourseWithRoster = Course & {
-  enrolled?: {
-    id: string;
-    firstName?: string | null;
-    lastName?: string | null;
-    email?: string | null;
-    avatar?: string | null;
-    courseRole?: string;
-    hasSubmissions?: boolean;
-  }[];
-};
+type CourseWithRoster = CourseListItem;
+type CourseWithFaculty = CourseListItem;
 
-type CourseWithFaculty = Course & {
-  enrolled?: {
-    id: string;
-    firstName?: string | null;
-    lastName?: string | null;
-    email?: string | null;
-    avatar?: string | null;
-    courseRole?: string;
-    hasSubmissions?: boolean;
-  }[];
-};
-
-export default function CoursesClient() {
-  const [courses, setCourses] = useState<CourseWithRoster[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function CoursesClient({ initialCourses }: { initialCourses: CourseWithRoster[] }) {
+  const [courses, setCourses] = useState<CourseWithRoster[]>(initialCourses);
+  const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const { timezone } = useEffectiveTimezone();
 
   const fetchCourses = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/courses');
+      const res = await fetch('/api/courses/list', { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed to fetch courses');
       const data: CourseWithRoster[] = await res.json();
       setCourses(data);
@@ -53,10 +32,6 @@ export default function CoursesClient() {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    fetchCourses();
-  }, []);
 
   const columnsMemo = useMemo(
     () =>
