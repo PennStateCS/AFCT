@@ -50,10 +50,7 @@ export default async function AdminCoursePage({ params }: Props) {
   }
 
   const viewerRoster = viewerId
-    ? await prisma.roster.findFirst({
-        where: { courseId: id, userId: viewerId },
-        select: { role: true },
-      })
+    ? (course.roster.find((rosterEntry) => rosterEntry.user.id === viewerId) ?? null)
     : null;
 
   const initialCourse = {
