@@ -46,7 +46,9 @@ export async function POST(req: Request) {
       category: 'USER',
       metadata: {
         userId: session.user.id,
+        initiatedByRole: session.user.role,
         targetUserId: userId,
+        temporaryPassword: Boolean(isTemporary),
       },
     });
 
