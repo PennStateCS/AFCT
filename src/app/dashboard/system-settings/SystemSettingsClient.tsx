@@ -87,7 +87,12 @@ export default function SystemSettingsClient() {
       <Card aria-labelledby="system-settings-title">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <CardTitle id="system-settings-title" className="text-2xl">
+            <CardTitle
+              id="system-settings-title"
+              role="heading"
+              aria-level={1}
+              className="text-2xl"
+            >
               System Settings
             </CardTitle>
             <Badge variant="outline" className="bg-blue-50 text-blue-700">
@@ -102,7 +107,12 @@ export default function SystemSettingsClient() {
 
       <Card aria-labelledby="system-settings-general-title">
         <CardHeader>
-          <CardTitle id="system-settings-general-title" className="text-lg">
+          <CardTitle
+            id="system-settings-general-title"
+            role="heading"
+            aria-level={2}
+            className="text-lg"
+          >
             General
           </CardTitle>
         </CardHeader>

@@ -81,7 +81,7 @@ export default function CoursesClient() {
   return (
     <Card className="p-4" aria-labelledby="courses-title">
       <CardHeader className="flex flex-row items-center justify-between pb-4">
-        <CardTitle id="courses-title" className="text-2xl">
+        <CardTitle id="courses-title" role="heading" aria-level={1} className="text-2xl">
           Courses
         </CardTitle>
         <Button onClick={() => setOpen(true)} aria-haspopup="dialog" aria-expanded={open}>

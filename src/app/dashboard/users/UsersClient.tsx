@@ -50,7 +50,9 @@ export default function UsersClient() {
   return (
     <Card className="p-4">
       <CardHeader className="flex flex-row items-center justify-between pb-4">
-        <CardTitle className="text-2xl">User Accounts</CardTitle>
+        <CardTitle role="heading" aria-level={1} className="text-2xl">
+          User Accounts
+        </CardTitle>
         <Button onClick={() => setOpen(true)}>
           <UserRoundPlus />
           Create User
