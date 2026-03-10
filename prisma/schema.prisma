@@ -35,6 +35,7 @@ model User {
   firstName String?
   lastName  String?
   password  String
+  temporaryPassword Boolean @default(false)
   role      Role    @default(STUDENT)
   avatar    String?
   timezone  String?

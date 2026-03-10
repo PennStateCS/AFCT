@@ -5,6 +5,7 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy';
 
 export async function POST(req: NextRequest) {
   try {
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest) {
     const userId = session.user.id;
     const userRole = session.user.role;
 
-  // Change password attempt
+    // Change password attempt
 
     // 2. Validate role is permitted
     const ALLOWED_ROLES = ['STUDENT', 'TA', 'FACULTY', 'ADMIN'];
@@ -36,12 +37,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
     }
 
-    if (newPassword.length < 8) {
-      console.warn('[CHANGE_PASSWORD] New password too short');
-      return NextResponse.json(
-        { error: 'Password must be at least 8 characters long' },
-        { status: 400 },
-      );
+    if (!isStrongPassword(newPassword)) {
+      console.warn('[CHANGE_PASSWORD] New password does not meet policy');
+      return NextResponse.json({ error: passwordRequirementText }, { status: 400 });
     }
 
     // 4. Fetch the user’s current password hash
@@ -74,10 +72,10 @@ export async function POST(req: NextRequest) {
 
     await prisma.user.update({
       where: { id: userId },
-      data: { password: hashedPassword },
+      data: { password: hashedPassword, temporaryPassword: false },
     });
 
-  // Password successfully updated
+    // Password successfully updated
 
     // 8. Log the password change
     await createEnhancedActivityLog(prisma, req, {

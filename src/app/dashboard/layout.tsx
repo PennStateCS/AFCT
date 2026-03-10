@@ -1,3 +1,4 @@
+import React from 'react';
 import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import { auth } from '@/lib/auth';
@@ -25,6 +26,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   if (!session || !session.user) {
     redirect('/login');
+  }
+
+  if (session.user.mustChangePassword) {
+    redirect('/change-password');
   }
 
   return (
