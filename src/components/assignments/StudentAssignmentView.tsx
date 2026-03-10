@@ -335,7 +335,11 @@ export default function StudentAssignmentPage() {
     <div className="space-y-6 p-6">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-start gap-2 text-2xl break-words">
+          <CardTitle
+            role="heading"
+            aria-level={1}
+            className="flex items-start gap-2 text-2xl break-words"
+          >
             <BookOpen className="h-5 w-5" />
             <span className="line-clamp-2 break-words" title={assignment.title}>
               {assignment.title}

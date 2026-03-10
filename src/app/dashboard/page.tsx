@@ -156,6 +156,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex h-full w-full flex-col pb-4 lg:flex-row">
+      <h1 className="sr-only">Dashboard</h1>
       {/* Left (Big Column) */}
       <div className="w-full lg:w-3/4">
         <DashboardClient sessionUser={session.user} courses={courses} title={'Current Courses'} />

@@ -147,7 +147,9 @@ export default function CalendarClient() {
     <div className="space-y-4 pb-8">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-2xl">Calendar</CardTitle>
+          <CardTitle role="heading" aria-level={1} className="text-2xl">
+            Calendar
+          </CardTitle>
           <div className="w-8" aria-hidden="true" />
         </CardHeader>
       </Card>

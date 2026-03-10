@@ -156,6 +156,9 @@ export default function CourseClient() {
 
   return (
     <div className="space-y-6 p-0">
+      <h1 className="sr-only">
+        {course.code}: {course.name}
+      </h1>
       <CourseHeader
         course={course}
         isStudent={isStudent}
