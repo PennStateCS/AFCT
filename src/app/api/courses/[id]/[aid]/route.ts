@@ -28,7 +28,7 @@ interface AssignmentWithProblemsAndCourse {
     name: string;
     code: string;
     isArchived: boolean;
-    roster: {
+    roster?: {
       role: z.infer<typeof RoleEnum> | null;
       user: {
         id: string;
@@ -40,9 +40,12 @@ interface AssignmentWithProblemsAndCourse {
 }
 
 // GET: Fetch a specific assignment and related data within a course
-export async function GET(_: Request, context: { params: Promise<{ id: string; aid: string }> }) {
+export async function GET(req: Request, context: { params: Promise<{ id: string; aid: string }> }) {
   // Destructure courseId and assignmentId from the dynamic route parameters
   const { id: courseId, aid: assignmentId } = await context.params;
+  const { searchParams } = new URL(req.url);
+  const view = searchParams.get('view') ?? 'full';
+  const includeRoster = view === 'full';
 
   try {
     // Query the assignment from the database
@@ -76,18 +79,22 @@ export async function GET(_: Request, context: { params: Promise<{ id: string; a
             name: true,
             code: true,
             isArchived: true,
-            roster: {
-              select: {
-                role: true,
-                user: {
-                  select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
+            ...(includeRoster
+              ? {
+                  roster: {
+                    select: {
+                      role: true,
+                      user: {
+                        select: {
+                          id: true,
+                          firstName: true,
+                          lastName: true,
+                        },
+                      },
+                    },
                   },
-                },
-              },
-            },
+                }
+              : {}),
           },
         },
       },
@@ -139,10 +146,14 @@ export async function GET(_: Request, context: { params: Promise<{ id: string; a
         name: course.name,
         code: course.code,
         isArchived: course.isArchived,
-        roster: roster.map((r: (typeof roster)[number]) => ({
-          user: r.user,
-          role: r.role,
-        })),
+        ...(includeRoster
+          ? {
+              roster: roster.map((r: (typeof roster)[number]) => ({
+                user: r.user,
+                role: r.role,
+              })),
+            }
+          : {}),
       },
     });
   } catch (error) {
