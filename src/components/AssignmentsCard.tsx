@@ -13,6 +13,7 @@ interface AssignmentsCardProps {
   assignments: AssignmentWithProblemCount[];
   assignmentColumns: ColumnDef<AssignmentWithProblemCount>[];
   onCreateAssignment: () => void;
+  isLoading?: boolean;
 }
 
 export function AssignmentsCard({
@@ -20,6 +21,7 @@ export function AssignmentsCard({
   assignments,
   assignmentColumns,
   onCreateAssignment,
+  isLoading = false,
 }: AssignmentsCardProps) {
   return (
     <Card>
@@ -40,7 +42,9 @@ export function AssignmentsCard({
         </Button>
       </CardHeader>
       <CardContent className="overflow-x-auto">
-        {assignments.length ? (
+        {isLoading ? (
+          <p className="text-muted-foreground italic">Loading assignments...</p>
+        ) : assignments.length ? (
           <DataTable
             columns={assignmentColumns}
             data={assignments}
