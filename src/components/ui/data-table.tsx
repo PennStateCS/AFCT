@@ -75,6 +75,8 @@ interface DataTableProps<TData, TValue> {
   storageKey?: string;
   onRowClick?: (row: { original: TData }) => void;
   tableLabel?: string;
+  showExportButton?: boolean;
+  actionButtons?: React.ReactNode;
 }
 
 export function DataTable<TData, TValue>({
@@ -84,6 +86,8 @@ export function DataTable<TData, TValue>({
   storageKey = 'datatable-columns',
   onRowClick,
   tableLabel = 'Data table',
+  showExportButton = true,
+  actionButtons,
 }: DataTableProps<TData, TValue>) {
   const [globalFilter, setGlobalFilter] = useState('');
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
@@ -181,6 +185,14 @@ export function DataTable<TData, TValue>({
       .trim()
       .toLowerCase();
 
+  const getColumnFilterLabel = (column: ReturnType<typeof table.getAllLeafColumns>[number]) => {
+    const header = column.columnDef.header;
+    if (typeof header === 'string' && header.trim().length > 0) {
+      return header;
+    }
+    return column.id;
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -209,10 +221,14 @@ export function DataTable<TData, TValue>({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={exportToCSV} aria-label="Export table data to CSV">
-            <FileDown className="h-4 w-4" aria-hidden="true" />
-            Export to CSV
-          </Button>
+          {actionButtons}
+
+          {showExportButton ? (
+            <Button variant="outline" onClick={exportToCSV} aria-label="Export table data to CSV">
+              <FileDown className="h-4 w-4" aria-hidden="true" />
+              Export to CSV
+            </Button>
+          ) : null}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -232,7 +248,7 @@ export function DataTable<TData, TValue>({
                     checked={col.getIsVisible()}
                     onCheckedChange={(value) => col.toggleVisibility(!!value)}
                   >
-                    {col.id}
+                    {getColumnFilterLabel(col)}
                   </DropdownMenuCheckboxItem>
                 ))}
               <DropdownMenuSeparator />
@@ -250,6 +266,7 @@ export function DataTable<TData, TValue>({
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow
                 key={headerGroup.id}
+                className={loading ? 'hover:bg-transparent' : undefined}
                 style={{
                   backgroundColor: 'var(--table-header)',
                   color: 'var(--table-header-foreground)',
@@ -316,7 +333,7 @@ export function DataTable<TData, TValue>({
 
           <TableBody>
             {loading ? (
-              <TableRow>
+              <TableRow className="pointer-events-none hover:bg-transparent">
                 <TableCell colSpan={columns.length} className="py-10 text-center">
                   <div className="flex flex-col items-center justify-center gap-2 text-gray-500">
                     <Loader2 className="h-6 w-6 animate-spin" />
@@ -366,6 +383,7 @@ export function DataTable<TData, TValue>({
 
           <TableFooter>
             <TableRow
+              className={loading ? 'hover:bg-transparent' : undefined}
               style={{
                 backgroundColor: 'var(--table-background)',
                 color: 'var(--table-header-foreground)',

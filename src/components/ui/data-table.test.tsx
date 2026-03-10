@@ -8,6 +8,7 @@ import userEvent from '@testing-library/user-event';
 import { ColumnDef } from '@tanstack/react-table';
 
 import { DataTable } from './data-table';
+import { Button } from './button';
 
 interface RowData {
   id: string;
@@ -69,9 +70,7 @@ describe('DataTable', () => {
   it('exports visible rows to CSV', () => {
     render(<DataTable columns={columns} data={data} storageKey="test-table" />);
 
-    fireEvent.click(
-      screen.getByRole('button', { name: /export table data to csv/i }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: /export table data to csv/i }));
 
     expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
     expect(clickMock).toHaveBeenCalledTimes(1);
@@ -81,5 +80,20 @@ describe('DataTable', () => {
     render(<DataTable columns={columns} data={[]} loading />);
 
     expect(screen.getByText(/Loading data, please wait/i)).toBeInTheDocument();
+    expect(screen.getByText(/Loading data, please wait/i).closest('tr')).toHaveClass(
+      'hover:bg-transparent',
+    );
+  });
+
+  it('renders custom action buttons in the toolbar', () => {
+    render(
+      <DataTable
+        columns={columns}
+        data={data}
+        actionButtons={<Button aria-label="custom refresh">Refresh</Button>}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /custom refresh/i })).toBeInTheDocument();
   });
 });
