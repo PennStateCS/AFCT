@@ -93,6 +93,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           name: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
           role: user.role,
           avatar: user.avatar || undefined,
+          mustChangePassword: user.temporaryPassword,
         };
       },
     }),
@@ -103,6 +104,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.role = user.role;
         token.id = user.id;
         token.avatar = user.avatar;
+        token.mustChangePassword = Boolean(user.mustChangePassword);
         // Store firstName and lastName separately for better component access
         if (user.email) {
           // Fetch the full user data to get firstName/lastName
@@ -126,7 +128,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         try {
           const freshUser = await prisma.user.findUnique({
             where: { id: token.id as string },
-            select: { firstName: true, lastName: true, role: true, avatar: true },
+            select: {
+              firstName: true,
+              lastName: true,
+              role: true,
+              avatar: true,
+              temporaryPassword: true,
+            },
           });
 
           if (freshUser) {
@@ -134,6 +142,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             session.user.lastName = freshUser.lastName || undefined;
             session.user.role = freshUser.role;
             session.user.avatar = freshUser.avatar || undefined;
+            session.user.mustChangePassword = freshUser.temporaryPassword;
             // Update the combined name as well
             session.user.name =
               `${freshUser.firstName || ''} ${freshUser.lastName || ''}`.trim() || undefined;
@@ -141,12 +150,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             // Fallback to token data if user not found
             session.user.firstName = token.firstName as string | undefined;
             session.user.lastName = token.lastName as string | undefined;
+            session.user.mustChangePassword = Boolean(token.mustChangePassword);
           }
         } catch (error) {
           console.error('Error fetching fresh user data:', error);
           // Fallback to token data on error
           session.user.firstName = token.firstName as string | undefined;
           session.user.lastName = token.lastName as string | undefined;
+          session.user.mustChangePassword = Boolean(token.mustChangePassword);
         }
       }
       return session;

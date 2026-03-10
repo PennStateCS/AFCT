@@ -3,15 +3,9 @@ import bcrypt from 'bcrypt';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy';
 
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
-const isStrongPassword = (pw: string) =>
-  pw.length >= 8 &&
-  /[A-Z]/.test(pw) &&
-  /[a-z]/.test(pw) &&
-  /\d/.test(pw) &&
-  /[^A-Za-z0-9]/.test(pw);
 
 type BulkUserRow = {
   rowNumber?: number;
@@ -42,6 +36,7 @@ export async function POST(req: Request) {
 
     const body = await req.json();
     const rows = (body?.rows ?? []) as BulkUserRow[];
+    const temporaryPasswords = body?.temporaryPasswords === true;
 
     if (!Array.isArray(rows) || rows.length === 0) {
       return NextResponse.json({ error: 'No rows provided' }, { status: 400 });
@@ -86,8 +81,7 @@ export async function POST(req: Request) {
         failed.push({
           row: rowNumber,
           email,
-          reason:
-            'Password must be at least 8 characters and include uppercase, lowercase, number, and special character.',
+          reason: passwordRequirementText,
         });
         continue;
       }
@@ -119,6 +113,7 @@ export async function POST(req: Request) {
             lastName,
             email,
             password: hashedPassword,
+            temporaryPassword: temporaryPasswords,
             role: 'STUDENT',
             timezone: defaultTimezone,
           },

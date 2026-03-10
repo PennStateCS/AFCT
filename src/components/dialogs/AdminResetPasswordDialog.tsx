@@ -10,20 +10,17 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import InputGroup from '@/components/ui/InputGroup';
+import SwitchField from '@/components/ui/SwitchField';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
+import { PasswordRulesHelper } from '@/components/auth/PasswordRulesHelper';
+import { isStrongPassword, passwordRules } from '@/lib/password-policy';
 
 type Props = {
   open: boolean;
   setOpen: (open: boolean) => void;
-  onResetPassword: (newPassword: string) => Promise<void>;
+  onResetPassword: (newPassword: string, isTemporary: boolean) => Promise<void>;
   targetUserName?: string;
-};
-
-const passwordValid = (password: string) => {
-  return (
-    password.length >= 8 && /[A-Z]/.test(password) && /[a-z]/.test(password) && /\d/.test(password)
-  );
 };
 
 export function AdminResetPasswordDialog({
@@ -37,6 +34,12 @@ export function AdminResetPasswordDialog({
   const [loading, setLoading] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [isTemporary, setIsTemporary] = useState(false);
+  const passwordHelperId = 'admin-reset-password-helper';
+  const passwordRuleStatuses = passwordRules.map((rule) => ({
+    label: rule.label,
+    passed: rule.test(newPassword),
+  }));
 
   useEffect(() => {
     if (!open) {
@@ -45,6 +48,7 @@ export function AdminResetPasswordDialog({
       setLoading(false);
       setShowNew(false);
       setShowConfirm(false);
+      setIsTemporary(false);
     }
   }, [open]);
 
@@ -54,7 +58,7 @@ export function AdminResetPasswordDialog({
       toast.error('Please fill in all fields');
       return;
     }
-    if (!passwordValid(newPassword)) {
+    if (!isStrongPassword(newPassword)) {
       toast.error('New password does not meet the requirements');
       return;
     }
@@ -65,7 +69,7 @@ export function AdminResetPasswordDialog({
 
     setLoading(true);
     try {
-      await onResetPassword(newPassword);
+      await onResetPassword(newPassword, isTemporary);
       toast.success('Password reset successfully!');
       setOpen(false);
     } catch (err: unknown) {
@@ -102,7 +106,8 @@ export function AdminResetPasswordDialog({
             isPasswordVisible={showNew}
             togglePasswordVisibility={() => setShowNew((v) => !v)}
             showStatus
-            isValid={passwordValid(newPassword)}
+            isValid={isStrongPassword(newPassword)}
+            additionalDescribedBy={passwordHelperId}
           />
           <InputGroup
             name="confirmNewPassword"
@@ -115,6 +120,15 @@ export function AdminResetPasswordDialog({
             togglePasswordVisibility={() => setShowConfirm((v) => !v)}
             showStatus
             isValid={confirmNewPassword.length > 0 && confirmNewPassword === newPassword}
+          />
+          <PasswordRulesHelper id={passwordHelperId} rules={passwordRuleStatuses} />
+          <SwitchField
+            label="Temporary password"
+            name="temporaryPassword"
+            checked={isTemporary}
+            onCheckedChange={setIsTemporary}
+            description="Require the user to change this password at their next login."
+            descriptionPlacement="inline"
           />
           <DialogFooter className="mt-2">
             <Button

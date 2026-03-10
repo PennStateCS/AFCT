@@ -6,6 +6,7 @@ export type UserListItem = {
   email: string;
   firstName: string | null;
   lastName: string | null;
+  temporaryPassword: boolean;
   role: Role;
   avatar: string | null;
   timezone: string | null;
@@ -23,6 +24,7 @@ export async function getUsersList(role?: string | null): Promise<UserListItem[]
       email: true,
       firstName: true,
       lastName: true,
+      temporaryPassword: true,
       role: true,
       avatar: true,
       timezone: true,
