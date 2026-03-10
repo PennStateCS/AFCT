@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { Assignment, Problem, Course } from '@prisma/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -38,41 +37,25 @@ import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
 import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatDateInTimeZone, formatTimeInTimeZone, formatDateTimeInTimeZone } from '@/lib/date';
+import {
+  AssignmentWithDetails,
+  StudentAssignmentContext,
+  StudentProblemComment,
+  StudentProblemSubmission,
+} from '@/lib/assignment-details';
 
 interface AssignmentProblem {
-  problem: Problem;
+  problem: AssignmentWithDetails['problems'][number]['problem'];
 }
 
-interface AssignmentWithDetails extends Assignment {
-  course: Course;
-  problems: AssignmentProblem[];
-  maxPoints: number;
-}
+type StudentAssignmentViewProps = {
+  initialAssignment?: AssignmentWithDetails | null;
+};
 
-interface Submission {
-  id: string;
-  submittedAt: string;
-  grade: number | null;
-  feedback: string | null;
-  problemId: string;
-  status: 'SUBMITTED' | 'GRADED' | 'LATE';
-  fileName?: string | null;
-  originalFileName?: string | null;
-  correct?: boolean | null;
-}
-
-interface Comment {
-  id: string;
-  content: string;
-  createdAt: string;
-  authorName: string;
-  authorRole: 'STUDENT' | 'FACULTY' | 'ADMIN' | 'TA';
-  problemId: string;
-}
-
-export default function StudentAssignmentPage() {
+export default function StudentAssignmentPage({
+  initialAssignment = null,
+}: StudentAssignmentViewProps) {
   const params = useParams<{ id: string; aid: string }>();
-  const courseId = params?.id;
   const assignmentId = params?.aid;
 
   const router = useRouter();
@@ -81,77 +64,51 @@ export default function StudentAssignmentPage() {
   const userId = session?.user?.id ?? null;
   const isStudent = session?.user?.role === 'STUDENT';
 
-  const [assignment, setAssignment] = useState<AssignmentWithDetails | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [assignment, setAssignment] = useState<AssignmentWithDetails | null>(initialAssignment);
+  const [loading, setLoading] = useState(!initialAssignment);
+  const [submissionsLoading, setSubmissionsLoading] = useState(false);
+  const [commentsLoading, setCommentsLoading] = useState(false);
   const [submissionCount, setSubmissionCount] = useState(0);
   const [assignmentGrade, setAssignmentGrade] = useState<number | null>(null);
-  const [submissions, setSubmissions] = useState<Record<string, Submission[]>>({});
-  const [comments, setComments] = useState<Record<string, Comment[]>>({});
+  const [submissions, setSubmissions] = useState<Record<string, StudentProblemSubmission[]>>({});
+  const [comments, setComments] = useState<Record<string, StudentProblemComment[]>>({});
   const [newComment, setNewComment] = useState<Record<string, string>>({});
   const [submittingComment, setSubmittingComment] = useState<Record<string, boolean>>({});
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
-  const [openDialog, setOpenDialog] = useState<{ open: boolean; submission: Submission | null }>({
-    open: false,
-    submission: null,
-  });
+  const [openDialog, setOpenDialog] = useState<{
+    open: boolean;
+    submission: StudentProblemSubmission | null;
+  }>({ open: false, submission: null });
   const limitText = (value: string, max = 120) =>
     value.length > max ? `${value.slice(0, max - 1)}…` : value;
 
-  const loadCommentsForProblems = useCallback(async () => {
-    if (!assignment || !userId) return;
+  const loadStudentContext = useCallback(async () => {
+    if (!assignmentId || !userId) return;
 
-    const entries = await Promise.all(
-      assignment.problems.map(async (assignmentProblem) => {
-        const problemId = assignmentProblem.problem.id;
-        try {
-          const response = await fetch(
-            `/api/problems/${problemId}/comments?problemId=${problemId}&studentId=${userId}`,
-          );
-          if (!response.ok) return [problemId, []] as const;
-          const problemComments = (await response.json()) as Comment[];
-          return [problemId, problemComments] as const;
-        } catch (error) {
-          console.error('Error fetching comments for problem:', problemId, error);
-          return [problemId, []] as const;
-        }
-      }),
-    );
+    setSubmissionsLoading(true);
+    setCommentsLoading(true);
 
-    setComments(Object.fromEntries(entries));
-  }, [assignment, userId]);
+    try {
+      const response = await fetch(`/api/assignments/${assignmentId}/student-context`);
+      if (!response.ok) throw new Error('Failed to fetch assignment context');
 
-  const fetchSubmissionsForProblem = useCallback(
-    async (problemId: string) => {
-      if (!userId) return [] as Submission[];
-      try {
-        const response = await fetch(`/api/problems/${problemId}/submissions?userId=${userId}`);
-        if (!response.ok) throw new Error('Failed to fetch submissions');
-        return (await response.json()) as Submission[];
-      } catch (error) {
-        console.error('Error fetching submissions for problem:', problemId, error);
-        return [] as Submission[];
-      }
-    },
-    [userId],
-  );
-
-  const loadSubmissionsForAllProblems = useCallback(async () => {
-    if (!assignment || !userId) return;
-
-    const submissionEntries = await Promise.all(
-      assignment.problems.map(async (assignmentProblem) => {
-        const problemId = assignmentProblem.problem.id;
-        const problemSubmissions = await fetchSubmissionsForProblem(problemId);
-        return [problemId, problemSubmissions] as const;
-      }),
-    );
-
-    const submissionMap = Object.fromEntries(submissionEntries);
-    setSubmissions(submissionMap);
-
-    const total = Object.values(submissionMap).reduce((sum, list) => sum + list.length, 0);
-    setSubmissionCount(total);
-  }, [assignment, userId, fetchSubmissionsForProblem]);
+      const context = (await response.json()) as StudentAssignmentContext;
+      setAssignmentGrade(context.assignmentGrade);
+      setSubmissionCount(context.submissionCount);
+      setSubmissions(context.submissionsByProblem);
+      setComments(context.commentsByProblem);
+    } catch (error) {
+      console.error('Error fetching assignment context:', error);
+      showToast.error('Failed to load assignment context');
+      setAssignmentGrade(null);
+      setSubmissionCount(0);
+      setSubmissions({});
+      setComments({});
+    } finally {
+      setSubmissionsLoading(false);
+      setCommentsLoading(false);
+    }
+  }, [assignmentId, userId]);
 
   const handleSubmitComment = useCallback(
     async (problemId: string) => {
@@ -172,7 +129,7 @@ export default function StudentAssignmentPage() {
         }
 
         setNewComment((prev) => ({ ...prev, [problemId]: '' }));
-        await loadCommentsForProblems();
+        await loadStudentContext();
         showToast.success('Comment added successfully!');
       } catch (error) {
         console.error('Error submitting comment:', error);
@@ -181,11 +138,17 @@ export default function StudentAssignmentPage() {
         setSubmittingComment((prev) => ({ ...prev, [problemId]: false }));
       }
     },
-    [loadCommentsForProblems, newComment],
+    [loadStudentContext, newComment],
   );
 
   useEffect(() => {
     const fetchAssignment = async () => {
+      if (initialAssignment) {
+        setAssignment(initialAssignment);
+        setLoading(false);
+        return;
+      }
+
       try {
         const res = await fetch(`/api/assignments/${assignmentId}`);
         if (!res.ok) {
@@ -206,34 +169,16 @@ export default function StudentAssignmentPage() {
       }
     };
 
-    const fetchStudentData = async () => {
-      if (!isStudent || !assignmentId || !userId) return;
-      try {
-        const response = await fetch(`/api/assignments/${assignmentId}/grade?userId=${userId}`);
-        if (!response.ok) {
-          setAssignmentGrade(85);
-          return;
-        }
-        const gradeData = await response.json();
-        setAssignmentGrade(typeof gradeData.grade === 'number' ? gradeData.grade : null);
-      } catch (error) {
-        console.error('Error fetching student data:', error);
-        setAssignmentGrade(85);
-      }
-    };
-
     if (assignmentId && session) {
-      fetchAssignment();
-      fetchStudentData();
+      void fetchAssignment();
     }
-  }, [assignmentId, isStudent, router, session, userId]);
+  }, [assignmentId, initialAssignment, router, session]);
 
   useEffect(() => {
     if (assignment) {
-      loadCommentsForProblems();
-      loadSubmissionsForAllProblems();
+      void loadStudentContext();
     }
-  }, [assignment, loadCommentsForProblems, loadSubmissionsForAllProblems]);
+  }, [assignment, loadStudentContext]);
 
   useEffect(() => {
     if (!assignment || assignment.problems.length === 0) {
@@ -493,7 +438,9 @@ export default function StudentAssignmentPage() {
                       icon={<FileText className="h-4 w-4" />}
                       className="min-h-[320px]"
                     >
-                      {selectedProblemSubmissions.length > 0 ? (
+                      {submissionsLoading ? (
+                        <p className="text-muted-foreground text-sm">Loading submissions...</p>
+                      ) : selectedProblemSubmissions.length > 0 ? (
                         <div className="overflow-x-auto rounded-lg border">
                           <Table>
                             <TableHeader>
@@ -591,7 +538,9 @@ export default function StudentAssignmentPage() {
                       className="min-h-[320px]"
                       contentClassName="flex h-full flex-col gap-4"
                     >
-                      {selectedProblemComments.length > 0 ? (
+                      {commentsLoading ? (
+                        <div className="text-muted-foreground text-sm">Loading discussion...</div>
+                      ) : selectedProblemComments.length > 0 ? (
                         <div className="space-y-3 overflow-y-auto pr-1">
                           {selectedProblemComments.map((comment) => (
                             <div key={comment.id} className="bg-card rounded-lg border p-3">

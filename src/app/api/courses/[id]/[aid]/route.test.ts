@@ -59,6 +59,28 @@ describe('GET /api/courses/[id]/[aid]', () => {
     expect(body.problems).toHaveLength(1);
   });
 
+  it('omits roster for non-full views', async () => {
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      title: 'Assignment',
+      problems: [],
+      course: {
+        name: 'Course',
+        code: 'C1',
+        isArchived: false,
+        roster: [{ role: 'FACULTY', user: { id: 'u1', firstName: 'A', lastName: 'B' } }],
+      },
+    });
+
+    const res = await GET(new Request('http://localhost/api/courses/c1/a1?view=problems'), {
+      params: Promise.resolve({ id: 'c1', aid: 'a1' }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.course.roster).toBeUndefined();
+  });
+
   it('treats non-finite problem points as zero', async () => {
     prismaMock.assignment.findFirst.mockResolvedValue({
       id: 'a1',

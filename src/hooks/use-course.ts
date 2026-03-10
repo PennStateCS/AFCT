@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { showToast } from '@/lib/toast';
 import { FullCourse, DeleteTarget, EnrollableUser, TabType } from '@/types/course';
@@ -13,6 +13,8 @@ export function useCourseData(
   courseId: string,
   options?: { initialCourse?: FullCourse | null; isStudent?: boolean },
 ) {
+  const courseRequestSeqRef = useRef(0);
+  const sectionRequestSeqRef = useRef({ assignments: 0, problems: 0, roster: 0 });
   const [course, setCourse] = useState<FullCourse | null>(options?.initialCourse ?? null);
   const [loadedSections, setLoadedSections] = useState<{
     assignments: boolean;
@@ -44,8 +46,10 @@ export function useCourseData(
   );
 
   const fetchCourse = useCallback(async () => {
+    const requestSeq = ++courseRequestSeqRef.current;
     try {
       const data = await fetchCourseByView(options?.isStudent ? 'full' : 'summary');
+      if (requestSeq !== courseRequestSeqRef.current) return;
       if (!data) return;
       setCourse({
         ...data,
@@ -55,6 +59,7 @@ export function useCourseData(
         problems: data.problems || [],
       });
     } catch (error) {
+      if (requestSeq !== courseRequestSeqRef.current) return;
       showToast.error('Failed to load course');
       console.error('Error fetching course:', error);
     }
@@ -64,9 +69,11 @@ export function useCourseData(
     async (tab: TabType) => {
       if (!courseId || options?.isStudent) return;
       try {
-        if (tab === 'assignments' && !loadedSections.assignments) {
+        if (tab === 'assignments' && !loadedSections.assignments && !loadingSections.assignments) {
+          const requestSeq = ++sectionRequestSeqRef.current.assignments;
           setLoadingSections((prev) => ({ ...prev, assignments: true }));
           const data = await fetchCourseByView('assignments');
+          if (requestSeq !== sectionRequestSeqRef.current.assignments) return;
           if (!data) return;
           setCourse((prev) =>
             prev
@@ -82,9 +89,11 @@ export function useCourseData(
           setLoadingSections((prev) => ({ ...prev, assignments: false }));
         }
 
-        if (tab === 'problems' && !loadedSections.problems) {
+        if (tab === 'problems' && !loadedSections.problems && !loadingSections.problems) {
+          const requestSeq = ++sectionRequestSeqRef.current.problems;
           setLoadingSections((prev) => ({ ...prev, problems: true }));
           const data = await fetchCourseByView('problems');
+          if (requestSeq !== sectionRequestSeqRef.current.problems) return;
           if (!data) return;
           setCourse((prev) =>
             prev
@@ -100,9 +109,11 @@ export function useCourseData(
           setLoadingSections((prev) => ({ ...prev, problems: false }));
         }
 
-        if (tab === 'roster' && !loadedSections.roster) {
+        if (tab === 'roster' && !loadedSections.roster && !loadingSections.roster) {
+          const requestSeq = ++sectionRequestSeqRef.current.roster;
           setLoadingSections((prev) => ({ ...prev, roster: true }));
           const data = await fetchCourseByView('roster');
+          if (requestSeq !== sectionRequestSeqRef.current.roster) return;
           if (!data) return;
           setCourse((prev) =>
             prev
@@ -131,7 +142,7 @@ export function useCourseData(
         console.error('Error loading tab data:', error);
       }
     },
-    [courseId, fetchCourseByView, loadedSections, options?.isStudent],
+    [courseId, fetchCourseByView, loadedSections, loadingSections, options?.isStudent],
   );
 
   useEffect(() => {

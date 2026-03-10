@@ -19,12 +19,13 @@ import {
   formatDateTimeInTimeZone,
   formatWeekdayInTimeZone,
 } from '@/lib/date';
+import type { CalendarAssignment } from '@/lib/calendar-shared';
 
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   date?: string | Date | null;
-  assignments: any[];
+  assignments: CalendarAssignment[];
   onClose?: () => void;
   onNavigate?: (date: Date) => void;
 };
@@ -89,7 +90,7 @@ export default function DayAssignmentsDialog({
             <p className="text-muted-foreground text-sm">No assignments for this day.</p>
           ) : (
             <ul className="space-y-2">
-              {assignments.map((a: any) => (
+              {assignments.map((a) => (
                 <li key={a.id}>
                   <Link
                     href={`/dashboard/courses/${a.courseId}/${a.id}`}
@@ -97,15 +98,15 @@ export default function DayAssignmentsDialog({
                       'block w-full cursor-pointer rounded-md bg-sky-700 p-3 text-white hover:bg-sky-800 dark:bg-sky-600 dark:hover:bg-sky-700',
                       a.crossedOut && 'line-through opacity-80',
                     )}
-                    title={`${a.course?.code ?? a.courseName ?? ''} - ${a.title}`}
+                    title={`${a.course.code} - ${a.title}`}
                     onClick={() => {
                       onClose?.();
                     }}
                   >
                     <div className="truncate text-sm font-medium">
-                      {a.course?.code ? `${a.course.code} - ${a.title}` : a.title}
+                      {`${a.course.code} - ${a.title}`}
                     </div>
-                    <div className="text-xs opacity-90">{a.course?.name ?? ''}</div>
+                    <div className="text-xs opacity-90">{a.course.name}</div>
                     <div className="mt-1 text-xs opacity-80">
                       {formatDateTimeInTimeZone(a.dueDate, timezone)}
                     </div>
