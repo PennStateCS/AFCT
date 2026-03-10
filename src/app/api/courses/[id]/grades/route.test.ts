@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 
 const prismaMock = vi.hoisted(() => ({
   roster: { findMany: vi.fn() },
+  user: { findMany: vi.fn() },
   assignment: { findMany: vi.fn() },
   assignmentProblemGrade: { groupBy: vi.fn() },
 }));
@@ -47,11 +48,12 @@ describe('GET /api/courses/[id]/grades', () => {
 
   it('returns grade matrix for staff', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
-    prismaMock.roster.findMany.mockResolvedValue([
-      { user: { id: 's1', firstName: 'A', lastName: 'B', email: 's1@example.com', avatar: null }, role: 'STUDENT' },
+    prismaMock.roster.findMany.mockResolvedValue([{ userId: 's1', role: 'STUDENT' }]);
+    prismaMock.user.findMany.mockResolvedValue([
+      { id: 's1', firstName: 'A', lastName: 'B', email: 's1@example.com', avatar: null },
     ]);
     prismaMock.assignment.findMany.mockResolvedValue([
-      { id: 'a1', title: 'A1', maxPoints: 10, dueDate: '2025-01-01' },
+      { id: 'a1', title: 'A1', dueDate: '2025-01-01', problems: [{ maxPoints: 10 }] },
     ]);
     prismaMock.assignmentProblemGrade.groupBy.mockResolvedValue([
       { studentId: 's1', assignmentId: 'a1', _sum: { grade: 95 } },
@@ -74,12 +76,16 @@ describe('GET /api/courses/[id]/grades', () => {
   it('fills nulls when no gradeRows exist', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.roster.findMany.mockResolvedValue([
-      { user: { id: 's1', firstName: 'A', lastName: 'B', email: 's1@example.com', avatar: null }, role: 'STUDENT' },
-      { user: { id: 's2', firstName: 'C', lastName: 'D', email: 's2@example.com', avatar: null }, role: 'STUDENT' },
+      { userId: 's1', role: 'STUDENT' },
+      { userId: 's2', role: 'STUDENT' },
+    ]);
+    prismaMock.user.findMany.mockResolvedValue([
+      { id: 's1', firstName: 'A', lastName: 'B', email: 's1@example.com', avatar: null },
+      { id: 's2', firstName: 'C', lastName: 'D', email: 's2@example.com', avatar: null },
     ]);
     prismaMock.assignment.findMany.mockResolvedValue([
-      { id: 'a1', title: 'A1', maxPoints: 10, dueDate: '2025-01-01' },
-      { id: 'a2', title: 'A2', maxPoints: 20, dueDate: '2025-02-01' },
+      { id: 'a1', title: 'A1', dueDate: '2025-01-01', problems: [{ maxPoints: 10 }] },
+      { id: 'a2', title: 'A2', dueDate: '2025-02-01', problems: [{ maxPoints: 20 }] },
     ]);
     prismaMock.assignmentProblemGrade.groupBy.mockResolvedValue([]);
 
@@ -92,5 +98,24 @@ describe('GET /api/courses/[id]/grades', () => {
       s1: { a1: null, a2: null },
       s2: { a1: null, a2: null },
     });
+  });
+
+  it('returns empty grade matrix without groupBy when no assignments exist', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findMany.mockResolvedValue([{ userId: 's1', role: 'STUDENT' }]);
+    prismaMock.user.findMany.mockResolvedValue([
+      { id: 's1', firstName: 'A', lastName: 'B', email: 's1@example.com', avatar: null },
+    ]);
+    prismaMock.assignment.findMany.mockResolvedValue([]);
+
+    const req = new NextRequest('http://localhost/api/courses/c1/grades');
+    const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.students).toHaveLength(1);
+    expect(body.assignments).toEqual([]);
+    expect(body.grades).toEqual({ s1: {} });
+    expect(prismaMock.assignmentProblemGrade.groupBy).not.toHaveBeenCalled();
   });
 });
