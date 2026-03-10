@@ -8,7 +8,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { CreateUserDialog } from '@/components/dialogs/CreateUserDialog';
-import { BulkCreateUsersDialog } from '@/components/dialogs/BulkCreateUsersDialog';
+import { ImportUsersDialog } from '@/components/dialogs/ImportUsersDialog';
 import { UserRoundPlus, Users } from 'lucide-react';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import type { UserListItem } from '@/lib/users-list';
@@ -22,7 +22,7 @@ export default function UsersClient({ initialUsers }: { initialUsers?: UserListI
   const [loading, setLoading] = useState(!hasInitialUsers);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [open, setOpen] = useState(searchParams.get('create') === 'open');
-  const [bulkOpen, setBulkOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const { timezone } = useEffectiveTimezone();
 
   const fetchUsers = useCallback(async () => {
@@ -65,9 +65,9 @@ export default function UsersClient({ initialUsers }: { initialUsers?: UserListI
           User Accounts
         </CardTitle>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setBulkOpen(true)}>
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
             <Users />
-            Bulk Add Users
+            Import Users
           </Button>
           <Button onClick={() => setOpen(true)}>
             <UserRoundPlus />
@@ -92,7 +92,7 @@ export default function UsersClient({ initialUsers }: { initialUsers?: UserListI
       </CardContent>
 
       <CreateUserDialog open={open} setOpen={handleDialogClose} onSuccess={fetchUsers} />
-      <BulkCreateUsersDialog open={bulkOpen} setOpen={setBulkOpen} onSuccess={fetchUsers} />
+      <ImportUsersDialog open={importOpen} setOpen={setImportOpen} onSuccess={fetchUsers} />
     </Card>
   );
 }
