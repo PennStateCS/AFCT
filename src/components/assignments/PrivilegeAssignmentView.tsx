@@ -85,13 +85,6 @@ type AssignmentWithDetails = {
   };
 };
 
-type ProblemLinkSettings = {
-  problemId: string;
-  maxPoints: number;
-  maxSubmissions: number;
-  autograderEnabled: boolean;
-};
-
 export default function AssignmentDashboardPage() {
   const { data: session } = useSession();
   const { timezone } = useEffectiveTimezone();
@@ -316,11 +309,6 @@ export default function AssignmentDashboardPage() {
 
   if (loading) return <LoadingSpinner label="Loading" />;
   if (!assignment) return <div className="p-6 text-red-500">Assignment not found.</div>;
-
-  const estimatedProblemPoints = Math.max(
-    1,
-    Math.round((assignment.maxPoints || 100) / Math.max(assignment.problems.length || 1, 1)),
-  );
 
   const assignmentProblemForDialog = problemToEdit
     ? (assignment.problems.find((ap) => ap.problem.id === problemToEdit.id) ?? null)

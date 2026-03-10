@@ -210,8 +210,21 @@ export default function StudentAssignmentPage() {
       if (!isStudent || !assignmentId || !userId) return;
       try {
         const response = await fetch(`/api/courses/${courseId}/${assignmentId}/problem-grades/${userId}`);
-        const gradeData = await response.json();
-        setAssignmentGrade(typeof gradeData.grade === 'number' ? gradeData.grade : null);
+        if (response.status === 204) {
+          // no grades yet
+          setAssignmentGrade(null);
+          return;
+        }
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const data = await response.json();
+        // data is a map of problemId -> { grade, feedback, updatedAt }
+        const total = Object.values(data).reduce((sum: number, entry: any) => {
+          const g = typeof entry?.grade === 'number' ? entry.grade : 0;
+          return sum + g;
+        }, 0);
+        setAssignmentGrade(total);
       } catch (error) {
         console.error('Error fetching student data:', error);
       }
