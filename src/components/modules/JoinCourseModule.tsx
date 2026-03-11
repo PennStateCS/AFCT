@@ -74,6 +74,7 @@ export function JoinCourseModule() {
               You can only join while the course registration window is open.
             </p>
 
+            <div className="overflow-x-auto pb-1">
             <InputOTP
               id="course-code"
               name="courseCode"
@@ -103,6 +104,7 @@ export function JoinCourseModule() {
                 <InputOTPSlot index={5} />
               </InputOTPGroup>
             </InputOTP>
+            </div>
           </div>
           <div className="mt-4 flex gap-2">
             <Button type="submit" disabled={loading || code.length !== 6}>
