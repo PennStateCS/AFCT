@@ -88,7 +88,13 @@ export default function UsersClient({ initialUsers }: { initialUsers?: UserListI
           </div>
         ) : null}
 
-        <DataTable columns={columns} data={users} loading={loading} tableLabel="Users table" />
+        <DataTable
+          columns={columns}
+          data={users}
+          loading={loading}
+          tableLabel="Users table"
+          defaultColumnVisibility={{ createdAt: false }}
+        />
       </CardContent>
 
       <CreateUserDialog open={open} setOpen={handleDialogClose} onSuccess={fetchUsers} />
