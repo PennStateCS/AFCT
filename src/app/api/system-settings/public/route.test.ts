@@ -20,7 +20,7 @@ describe('GET /api/system-settings/public', () => {
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toEqual({ timezone: 'UTC', allowSignup: true });
+    expect(body).toEqual({ timezone: 'UTC', allowSignup: true, sessionTimeoutMinutes: 20 });
   });
 
   it('returns stored timezone', async () => {
@@ -28,12 +28,17 @@ describe('GET /api/system-settings/public', () => {
       id: 1,
       timezone: 'America/New_York',
       allowSignup: false,
+      sessionTimeoutMinutes: 45,
     });
 
     const res = await GET();
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toEqual({ timezone: 'America/New_York', allowSignup: false });
+    expect(body).toEqual({
+      timezone: 'America/New_York',
+      allowSignup: false,
+      sessionTimeoutMinutes: 45,
+    });
   });
 });
