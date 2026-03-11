@@ -124,6 +124,7 @@ export default function DashboardSidebarMenu() {
     initials,
     role: (role?.toUpperCase?.() || 'STUDENT') as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT',
     password: '', // password is not exposed from session
+    temporaryPassword: Boolean(session.user.mustChangePassword),
     inactive: false, // inactive status is not exposed from session
     createdAt: new Date(), // createdAt is not exposed from session
     updatedAt: new Date(), // updatedAt is not exposed from session
