@@ -116,7 +116,7 @@ export function ChangePasswordDialog({ open, setOpen, onChangePassword }: Props)
                 isValid={!errors.newPassword && !!newPw}
                 fieldProps={field}
                 error={errors.newPassword?.message}
-                description="At least 8 characters and include upper, lower, and a number."
+                description="At least 8 characters and include upper, lower, a number, and a special character."
               />
             )}
           />

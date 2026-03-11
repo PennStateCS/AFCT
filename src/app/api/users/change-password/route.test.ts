@@ -31,7 +31,7 @@ describe('POST /api/users/change-password', () => {
 
     const req = new NextRequest('http://localhost/api/users/change-password', {
       method: 'POST',
-      body: JSON.stringify({ oldPassword: 'old', newPassword: 'newpassword' }),
+      body: JSON.stringify({ oldPassword: 'old', newPassword: 'Newpassword1!' }),
     });
 
     const res = await POST(req);
@@ -44,7 +44,7 @@ describe('POST /api/users/change-password', () => {
 
     const req = new NextRequest('http://localhost/api/users/change-password', {
       method: 'POST',
-      body: JSON.stringify({ oldPassword: 'old', newPassword: 'newpassword' }),
+      body: JSON.stringify({ oldPassword: 'old', newPassword: 'Newpassword1!' }),
     });
 
     const res = await POST(req);
@@ -78,13 +78,26 @@ describe('POST /api/users/change-password', () => {
     expect(res.status).toBe(400);
   });
 
+  it('returns 400 when new password lacks a special character', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+
+    const req = new NextRequest('http://localhost/api/users/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ oldPassword: 'Oldpass1!', newPassword: 'Newpassword1' }),
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(400);
+  });
+
   it('returns 404 when user missing', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
     prismaMock.user.findUnique.mockResolvedValue(null);
 
     const req = new NextRequest('http://localhost/api/users/change-password', {
       method: 'POST',
-      body: JSON.stringify({ oldPassword: 'oldpass', newPassword: 'newpassword' }),
+      body: JSON.stringify({ oldPassword: 'oldpass', newPassword: 'Newpassword1!' }),
     });
 
     const res = await POST(req);
@@ -99,7 +112,7 @@ describe('POST /api/users/change-password', () => {
 
     const req = new NextRequest('http://localhost/api/users/change-password', {
       method: 'POST',
-      body: JSON.stringify({ oldPassword: 'oldpass', newPassword: 'newpassword' }),
+      body: JSON.stringify({ oldPassword: 'oldpass', newPassword: 'Newpassword1!' }),
     });
 
     const res = await POST(req);
@@ -124,19 +137,35 @@ describe('POST /api/users/change-password', () => {
 
   it('updates password and logs activity', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    prismaMock.user.findUnique.mockResolvedValue({ password: 'hash' });
+    prismaMock.user.findUnique.mockResolvedValue({ password: 'hash', temporaryPassword: true });
     bcryptMock.compare.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
     bcryptMock.hash.mockResolvedValue('newhash');
 
     const req = new NextRequest('http://localhost/api/users/change-password', {
       method: 'POST',
-      body: JSON.stringify({ oldPassword: 'oldpass', newPassword: 'newpassword' }),
+      body: JSON.stringify({ oldPassword: 'oldpass', newPassword: 'Newpassword1!' }),
     });
 
     const res = await POST(req);
 
     expect(res.status).toBe(200);
-    expect(prismaMock.user.update).toHaveBeenCalled();
-    expect(activityLogMock).toHaveBeenCalled();
+    expect(prismaMock.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ temporaryPassword: false }),
+      }),
+    );
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      req,
+      expect.objectContaining({
+        action: 'CHANGE_PASSWORD',
+        metadata: expect.objectContaining({
+          userId: 'u1',
+          role: 'STUDENT',
+          wasTemporaryPassword: true,
+          clearedTemporaryPassword: true,
+        }),
+      }),
+    );
   });
 });

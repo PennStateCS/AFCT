@@ -11,6 +11,7 @@ declare module 'next-auth' {
       lastName?: string;
       avatar?: string;
       timezone?: string;
+      mustChangePassword?: boolean;
       name?: string;
       image?: string;
       ipAddress?: string;
@@ -29,6 +30,7 @@ declare module 'next-auth' {
     lastName?: string;
     avatar?: string;
     timezone?: string;
+    mustChangePassword?: boolean;
     name?: string;
     image?: string;
   }
@@ -43,6 +45,7 @@ declare module 'next-auth/jwt' {
     lastName?: string;
     avatar?: string;
     timezone?: string;
+    mustChangePassword?: boolean;
     name?: string;
     image?: string;
     ipAddress?: string;

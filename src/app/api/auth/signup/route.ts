@@ -12,15 +12,9 @@ import {
   recordSignupSuccess,
 } from '@/lib/security/rate-limiter';
 import { verifyCaptchaToken } from '@/lib/security/captcha';
+import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy';
 
-// Regex utilities for validating email and password
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-const isStrongPassword = (pw: string) =>
-  pw.length >= 8 &&
-  /[A-Z]/.test(pw) &&
-  /[a-z]/.test(pw) &&
-  /\d/.test(pw) &&
-  /[^A-Za-z0-9]/.test(pw); // Must contain a special character
 
 export async function POST(req: Request) {
   try {
@@ -57,13 +51,7 @@ export async function POST(req: Request) {
 
     // Validate password strength
     if (!isStrongPassword(password)) {
-      return NextResponse.json(
-        {
-          error:
-            'Password must be at least 8 characters and include uppercase, lowercase, number, and special character.',
-        },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: passwordRequirementText }, { status: 400 });
     }
 
     const rateDecision = evaluateSignupRateLimit({

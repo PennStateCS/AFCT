@@ -76,13 +76,29 @@ describe('POST /api/admin/reset-password', () => {
 
     const req = new Request('http://localhost/api/admin/reset-password', {
       method: 'POST',
-      body: JSON.stringify({ userId: 'u1', newPassword: 'Strong1!a' }),
+      body: JSON.stringify({ userId: 'u1', newPassword: 'Strong1!a', isTemporary: true }),
     });
 
     const res = await POST(req);
 
     expect(res.status).toBe(200);
-    expect(prismaMock.user.update).toHaveBeenCalled();
-    expect(activityLogMock).toHaveBeenCalled();
+    expect(prismaMock.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ temporaryPassword: true }),
+      }),
+    );
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      req,
+      expect.objectContaining({
+        action: 'RESET_PASSWORD',
+        metadata: expect.objectContaining({
+          userId: 'admin',
+          initiatedByRole: 'ADMIN',
+          targetUserId: 'u1',
+          temporaryPassword: true,
+        }),
+      }),
+    );
   });
 });

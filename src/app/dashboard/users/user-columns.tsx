@@ -85,6 +85,15 @@ export function getUserColumns(
       sortingFn: roleSortingFn,
     },
     {
+      accessorKey: 'temporaryPassword',
+      header: 'Temp Password',
+      meta: { priority: 3 },
+      cell: ({ row }) => {
+        const temporaryPassword = row.getValue<boolean>('temporaryPassword');
+        return temporaryPassword ? 'Yes' : 'No';
+      },
+    },
+    {
       accessorKey: 'inactive',
       header: 'Active',
       meta: { priority: 4 },
@@ -119,17 +128,23 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
   const [resetOpen, setResetOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  async function handlePasswordReset(newPassword: string) {
+  async function handlePasswordReset(newPassword: string, isTemporary: boolean) {
     try {
-      await fetch('/api/admin/reset-password', {
+      const res = await fetch('/api/admin/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id, newPassword }),
+        body: JSON.stringify({ userId: user.id, newPassword, isTemporary }),
       });
-      showToast.success('Password reset successfully.');
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || 'Failed to reset password.');
+      }
+
       setResetOpen(false);
-    } catch {
-      showToast.error('Failed to reset password.');
+      onUserUpdate();
+    } catch (error) {
+      showToast.error(error instanceof Error ? error.message : 'Failed to reset password.');
     }
   }
 
