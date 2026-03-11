@@ -5,6 +5,7 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy';
 
 export async function POST(req: Request) {
   // Retrieve the current authenticated session
@@ -16,7 +17,7 @@ export async function POST(req: Request) {
   }
 
   // Parse the request body for userId and newPassword
-  const { userId, newPassword } = await req.json();
+  const { userId, newPassword, isTemporary = false } = await req.json();
 
   // Validate presence of required fields
   if (!userId || !newPassword) {
@@ -24,13 +25,8 @@ export async function POST(req: Request) {
   }
 
   // Enforce strong password policy
-  if (
-    newPassword.length < 8 || // At least 8 characters
-    !/[A-Z]/.test(newPassword) || // At least one uppercase letter
-    !/[a-z]/.test(newPassword) || // At least one lowercase letter
-    !/\d/.test(newPassword) // At least one digit
-  ) {
-    return NextResponse.json({ error: 'Password does not meet requirements' }, { status: 400 });
+  if (!isStrongPassword(newPassword)) {
+    return NextResponse.json({ error: passwordRequirementText }, { status: 400 });
   }
 
   try {
@@ -40,7 +36,7 @@ export async function POST(req: Request) {
     // Update the user's password in the database
     await prisma.user.update({
       where: { id: userId },
-      data: { password: hashedPassword },
+      data: { password: hashedPassword, temporaryPassword: Boolean(isTemporary) },
     });
 
     // Log the password reset action to ActivityLog
@@ -50,7 +46,9 @@ export async function POST(req: Request) {
       category: 'USER',
       metadata: {
         userId: session.user.id,
+        initiatedByRole: session.user.role,
         targetUserId: userId,
+        temporaryPassword: Boolean(isTemporary),
       },
     });
 

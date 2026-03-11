@@ -8,6 +8,32 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ImportUsersDialog } from './ImportUsersDialog';
 
 vi.mock('@/components/ui/dialog', () => import('@/test/mocks/ui').then((mod) => mod.dialogMock));
+vi.mock('@/components/ui/SwitchField', () => ({
+  __esModule: true,
+  default: ({
+    label,
+    name,
+    checked,
+    onCheckedChange,
+  }: {
+    label: string;
+    name: string;
+    checked: boolean;
+    onCheckedChange: (checked: boolean) => void;
+  }) => (
+    <label htmlFor={name}>
+      {label}
+      <input
+        id={name}
+        type="checkbox"
+        role="switch"
+        aria-label={label}
+        checked={checked}
+        onChange={(event) => onCheckedChange(event.target.checked)}
+      />
+    </label>
+  ),
+}));
 
 const globalWithReact = globalThis as typeof globalThis & { React?: typeof React };
 globalWithReact.React = React;
@@ -53,6 +79,8 @@ describe('ImportUsersDialog', () => {
 
     fireEvent.change(fileInput, { target: { files: [csvFile] } });
 
+    await user.click(screen.getByRole('switch', { name: 'Temporary passwords' }));
+
     await waitFor(() => {
       expect(
         screen.getByText('Parsed 2 row(s). Import will skip invalid rows.'),
@@ -66,6 +94,7 @@ describe('ImportUsersDialog', () => {
     const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/users/bulk');
     expect(requestInit).toMatchObject({ method: 'POST' });
+    expect(requestInit.body).toContain('"temporaryPasswords":true');
 
     expect(onSuccess).toHaveBeenCalled();
     expect(screen.getByText('Added (1)')).toBeInTheDocument();
