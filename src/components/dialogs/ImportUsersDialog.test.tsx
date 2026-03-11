@@ -35,6 +35,27 @@ vi.mock('@/components/ui/SwitchField', () => ({
   ),
 }));
 
+vi.mock('@/components/FileUploadInput', () => ({
+  default: ({ id, label, onChange, value }: any) => (
+    <div>
+      <label htmlFor={id}>{label}</label>
+      <input
+        id={id}
+        type="file"
+        accept=".csv,text/csv"
+        onChange={(e) => onChange(e.target.files?.[0])}
+        aria-label={label}
+      />
+    </div>
+  ),
+}));
+
+vi.mock('@/hooks/useMaxUploadSize', () => ({
+  useMaxUploadSize: () => {
+    return { maxMb: 25, loading: false, error: null };
+  },
+}));
+
 const globalWithReact = globalThis as typeof globalThis & { React?: typeof React };
 globalWithReact.React = React;
 
