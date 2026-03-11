@@ -75,35 +75,35 @@ export function JoinCourseModule() {
             </p>
 
             <div className="overflow-x-auto pb-1">
-            <InputOTP
-              id="course-code"
-              name="courseCode"
-              aria-describedby="course-code-help"
-              maxLength={6}
-              value={code.toUpperCase()}
-              onPaste={(e) => {
-                e.preventDefault(); // Prevent the typical pasteing-in of data
-                const pastedData = e.clipboardData.getData('text/plain'); // Get what the user is trying to paste
-                const processedData = pastedData.replace(/[^A-Z0-9a-z]/g, ''); // Replace all characters that are not A-Z0-9a-z with whitespace
-                setCode(processedData); // Set the processed data to the box
-              }}
-              onChange={setCode}
-              pattern="[A-Z0-9a-z]+$"
-              containerClassName="justify-start"
-              className="mb-2"
-            >
-              <InputOTPGroup>
-                <InputOTPSlot index={0} />
-                <InputOTPSlot index={1} />
-                <InputOTPSlot index={2} />
-              </InputOTPGroup>
-              <InputOTPSeparator>-</InputOTPSeparator>
-              <InputOTPGroup>
-                <InputOTPSlot index={3} />
-                <InputOTPSlot index={4} />
-                <InputOTPSlot index={5} />
-              </InputOTPGroup>
-            </InputOTP>
+              <InputOTP
+                id="course-code"
+                name="courseCode"
+                aria-describedby="course-code-help"
+                maxLength={6}
+                value={code.toUpperCase()}
+                onPaste={(e) => {
+                  e.preventDefault(); // Prevent the typical pasteing-in of data
+                  const pastedData = e.clipboardData.getData('text/plain'); // Get what the user is trying to paste
+                  const processedData = pastedData.replace(/[^A-Z0-9a-z]/g, ''); // Replace all characters that are not A-Z0-9a-z with whitespace
+                  setCode(processedData); // Set the processed data to the box
+                }}
+                onChange={setCode}
+                pattern="[A-Z0-9a-z]+$"
+                containerClassName="justify-start"
+                className="mb-2"
+              >
+                <InputOTPGroup>
+                  <InputOTPSlot index={0} />
+                  <InputOTPSlot index={1} />
+                  <InputOTPSlot index={2} />
+                </InputOTPGroup>
+                <InputOTPSeparator>-</InputOTPSeparator>
+                <InputOTPGroup>
+                  <InputOTPSlot index={3} />
+                  <InputOTPSlot index={4} />
+                  <InputOTPSlot index={5} />
+                </InputOTPGroup>
+              </InputOTP>
             </div>
           </div>
           <div className="mt-4 flex gap-2">
