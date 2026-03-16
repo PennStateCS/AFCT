@@ -62,12 +62,10 @@ export function RegexViewerDialog({ src, open, onOpenChange, title }: { src: str
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="truncate">{title ?? 'JFLAP Viewer'}</DialogTitle>
-            <DialogDescription>
-			  <div className="h-full p-4 pt-2" style={{ textAlign: 'center' }}>
-                {parsed.expression}
-              </div>
-            </DialogDescription>
           </DialogHeader>
+		   <div className="p-4 pt-2 text-center">
+             {parsed.expression}
+           </div>
         </DialogContent>
       </Dialog>
     </div>
