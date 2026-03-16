@@ -11,6 +11,7 @@ import { execSync } from 'child_process';
 import os from 'os';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
+import { XMLParser, XMLValidator } from "fast-xml-parser";
 
 // Import JavaRunner for JAR execution
 import JavaRunner from '../../../../lib/java-runner';
