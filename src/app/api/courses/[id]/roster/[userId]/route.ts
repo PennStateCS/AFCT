@@ -21,17 +21,18 @@ export async function DELETE(
       select: { role: true },
     });
     const currentCourseRole = currentRoster?.role ?? null;
+    const currentCourseRoleValue = String(currentCourseRole ?? '');
 
-    // Only global ADMIN or course-level ADMIN/FACULTY/TA may attempt removal
+    // Only global ADMIN or course-level INSTRUCTOR/FACULTY/TA may attempt removal
     if (
       currentUser.role !== 'ADMIN' &&
-      !['ADMIN', 'FACULTY', 'TA'].includes(currentCourseRole ?? '')
+      !['ADMIN', 'INSTRUCTOR', 'FACULTY', 'TA'].includes(currentCourseRoleValue)
     ) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // TAs and STUDENTs may not remove users
-    if (currentCourseRole === 'TA' || currentCourseRole === 'STUDENT') {
+    if (currentCourseRoleValue === 'TA' || currentCourseRoleValue === 'STUDENT') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -40,18 +41,23 @@ export async function DELETE(
       where: { courseId, userId },
       select: { role: true },
     });
+    const targetCourseRoleValue = String(targetRoster?.role ?? '');
 
-    // Faculty may not remove ADMIN or other FACULTY
+    // Faculty may not remove instructor/faculty
     if (
-      currentCourseRole === 'FACULTY' &&
+      currentCourseRoleValue === 'FACULTY' &&
       targetRoster &&
-      (targetRoster.role === 'ADMIN' || targetRoster.role === 'FACULTY')
+      ['ADMIN', 'INSTRUCTOR', 'FACULTY'].includes(targetCourseRoleValue)
     ) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Course admins may not remove other course admins
-    if (currentCourseRole === 'ADMIN' && targetRoster && targetRoster.role === 'ADMIN') {
+    // Course admins/instructors may not remove other course admins/instructors
+    if (
+      ['ADMIN', 'INSTRUCTOR'].includes(currentCourseRoleValue) &&
+      targetRoster &&
+      ['ADMIN', 'INSTRUCTOR'].includes(targetCourseRoleValue)
+    ) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -60,7 +66,9 @@ export async function DELETE(
       where: { courseId },
       select: { id: true },
     });
-    const assignmentIdList = assignmentIds.map((a: (typeof assignmentIds)[number]) => a.id);
+    const assignmentIdList = Array.isArray(assignmentIds)
+      ? assignmentIds.map((a: (typeof assignmentIds)[number]) => a.id)
+      : [];
 
     if (assignmentIdList.length > 0) {
       const existingSubmission = await prisma.submission.findFirst({
@@ -181,7 +189,7 @@ export async function PATCH(
 
     const body = await req.json();
     const newRole = body?.role;
-    const allowedRoles = ['ADMIN', 'FACULTY', 'TA', 'STUDENT'];
+    const allowedRoles = ['INSTRUCTOR', 'FACULTY', 'TA', 'STUDENT'];
     if (!allowedRoles.includes(newRole))
       return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
 
@@ -189,7 +197,7 @@ export async function PATCH(
     const currentRoster = await prisma.roster.findFirst({
       where: { courseId, userId: currentUser.id },
     });
-    const isAllowed = currentUser.role === 'ADMIN' || currentRoster?.role === 'ADMIN';
+    const isAllowed = currentUser.role === 'ADMIN' || currentRoster?.role === 'INSTRUCTOR';
     if (!isAllowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     // Ensure roster entry exists
@@ -200,10 +208,15 @@ export async function PATCH(
     if (!target) return NextResponse.json({ error: 'Roster entry not found' }, { status: 404 });
 
     // Prevent demoting the only faculty member
-    if (target.role === 'ADMIN' && newRole !== 'ADMIN') {
-      const adminCount = await prisma.roster.count({ where: { courseId, role: 'ADMIN' } });
-      if (adminCount <= 1) {
-        return NextResponse.json({ error: 'Cannot demote the only course admin' }, { status: 400 });
+    if (target.role === 'INSTRUCTOR' && newRole !== 'INSTRUCTOR') {
+      const instructorCount = await prisma.roster.count({
+        where: { courseId, role: 'INSTRUCTOR' },
+      });
+      if (instructorCount <= 1) {
+        return NextResponse.json(
+          { error: 'Cannot demote the only course instructor' },
+          { status: 400 },
+        );
       }
     }
 

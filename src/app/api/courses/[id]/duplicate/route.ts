@@ -4,6 +4,9 @@ import { auth } from '@/lib/auth';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
 import type { Prisma } from '@prisma/client';
 
+const courseCodeRegex = /^[A-Z]{2,8}\s?\d{1,4}[A-Z]?$/;
+const normalizeCode = (v: string) => v.trim().replace(/\s+/g, ' ').toUpperCase();
+
 // Local copy of registration code generator to match POST /api/courses behavior
 async function generateUniqueCourseCode() {
   const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -66,6 +69,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       copyTAs = false,
     } = body ?? {};
 
+    const parsedCredits = Number(credits);
+    if (!Number.isInteger(parsedCredits) || parsedCredits < 1 || parsedCredits > 6) {
+      return NextResponse.json(
+        { error: 'Credits must be an integer between 1 and 6.' },
+        { status: 400 },
+      );
+    }
+
     // Determine normalized mode: 'assignments' | 'problems' | 'assignments_with_problems'
     let mode: 'assignments' | 'problems' | 'assignments_with_problems' =
       'assignments_with_problems';
@@ -93,6 +104,40 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    if (typeof code !== 'string' || !courseCodeRegex.test(normalizeCode(code))) {
+      return NextResponse.json(
+        { error: 'Use a code like "CMPSC 221" or "MATH220".' },
+        { status: 400 },
+      );
+    }
+
+    const parsedStartDate = new Date(startDate);
+    const parsedEndDate = new Date(endDate);
+    const parsedRegistrationOpenAt = new Date(registrationOpenAt);
+    const parsedRegistrationCloseAt = new Date(registrationCloseAt);
+
+    if (
+      [parsedStartDate, parsedEndDate, parsedRegistrationOpenAt, parsedRegistrationCloseAt].some(
+        (d) => Number.isNaN(d.getTime()),
+      )
+    ) {
+      return NextResponse.json({ error: 'Invalid date/time value.' }, { status: 400 });
+    }
+
+    if (parsedStartDate > parsedEndDate) {
+      return NextResponse.json(
+        { error: 'Start date/time must be on or before the end date/time.' },
+        { status: 400 },
+      );
+    }
+
+    if (parsedRegistrationOpenAt > parsedRegistrationCloseAt) {
+      return NextResponse.json(
+        { error: 'Self registration open must be on or before the close date.' },
+        { status: 400 },
+      );
+    }
+
     // Get user's timezone (DB user > system settings > default)
     let userTimezone = 'America/New_York';
     if (session.user?.id) {
@@ -116,9 +161,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const newCourse = await tx.course.create({
         data: {
           name: title,
-          code,
+          code: normalizeCode(code),
           semester,
-          credits: Number(credits) || 0,
+          credits: parsedCredits,
           startDate: toDateTimeInTimezone(startDate, userTimezone),
           endDate: toDateTimeInTimezone(endDate, userTimezone),
           registrationOpenAt: toDateTimeInTimezone(registrationOpenAt, userTimezone),
@@ -220,7 +265,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
               title: a.title,
               description: a.description ?? undefined,
               dueDate: a.dueDate,
-              maxPoints: a.maxPoints,
               isPublished: false,
               courseId: newCourse.id,
             },

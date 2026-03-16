@@ -4,10 +4,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { toEndOfDayInTimezone } from '@/lib/date-utils';
+import { toDateTimeInTimezone, toEndOfDayInTimezone } from '@/lib/date-utils';
 
 async function resolveUserTimezone(userId?: string | null) {
-  let tz = 'America/New_York';
+  const tz = 'America/New_York';
   if (!userId) return tz;
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -16,6 +16,68 @@ async function resolveUserTimezone(userId?: string | null) {
   if (user?.timezone) return user.timezone;
   const system = await prisma.systemSettings.findUnique({ where: { id: 1 } });
   return system?.timezone || tz;
+}
+
+type LateSubmissionStateResult =
+  | { ok: true; allowLateSubmissions: boolean; lateCutoff: Date | null }
+  | { ok: false; message: string };
+
+function computeLateSubmissionState(options: {
+  incomingAllowLate?: boolean;
+  incomingLateCutoff?: string | null;
+  existingAllowLate: boolean;
+  existingLateCutoff: Date | null;
+  dueDate: Date;
+  userTimezone: string;
+}): LateSubmissionStateResult {
+  const {
+    incomingAllowLate,
+    incomingLateCutoff,
+    existingAllowLate,
+    existingLateCutoff,
+    dueDate,
+    userTimezone,
+  } = options;
+
+  const allowLateSubmissions =
+    typeof incomingAllowLate === 'boolean' ? incomingAllowLate : existingAllowLate;
+
+  let lateCutoff = existingLateCutoff;
+
+  if (allowLateSubmissions) {
+    if (incomingLateCutoff === undefined) {
+      if (!lateCutoff) {
+        return {
+          ok: false,
+          message: 'Late submission cutoff is required when late submissions are enabled.',
+        };
+      }
+    } else if (!incomingLateCutoff) {
+      return {
+        ok: false,
+        message: 'Late submission cutoff is required when late submissions are enabled.',
+      };
+    } else {
+      lateCutoff = toDateTimeInTimezone(incomingLateCutoff, userTimezone);
+    }
+
+    if (lateCutoff && lateCutoff < dueDate) {
+      return {
+        ok: false,
+        message: 'Late cutoff must be on or after the due date.',
+      };
+    }
+  } else {
+    if (incomingLateCutoff && incomingLateCutoff !== null) {
+      return {
+        ok: false,
+        message: 'Late cutoff provided but late submissions are disabled.',
+      };
+    }
+    lateCutoff = null;
+  }
+
+  return { ok: true, allowLateSubmissions, lateCutoff };
 }
 
 // Get a single assignment by ID
@@ -80,7 +142,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
-    return NextResponse.json(assignment);
+    const totalProblemPoints = (assignment.problems ?? []).reduce((sum, ap) => {
+      const value = typeof ap.maxPoints === 'number' ? ap.maxPoints : 0;
+      return sum + (Number.isFinite(value) ? value : 0);
+    }, 0);
+
+    return NextResponse.json({
+      ...assignment,
+      maxPoints: totalProblemPoints,
+    });
   } catch (error) {
     console.error('Failed to fetch assignment:', error);
     return NextResponse.json({ error: 'Failed to fetch assignment' }, { status: 500 });
@@ -125,15 +195,52 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
   }
 
+  // Prevent changing the assignment's group mode if submissions exist
+  if (data.isGroup !== undefined) {
+    const hasAnySubmission = (await prisma.submission.count({ where: { assignmentId: id } })) > 0;
+    if (hasAnySubmission) {
+      return NextResponse.json(
+        { error: 'Cannot change assignment group mode after submissions exist' },
+        { status: 403 },
+      );
+    }
+  }
+
   try {
+    const existing = await prisma.assignment.findUnique({ where: { id } });
+    if (!existing) {
+      return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+    }
+
+    const dueDate = data.dueDate
+      ? toEndOfDayInTimezone(data.dueDate, userTimezone)
+      : existing.dueDate;
+
+    const lateState = computeLateSubmissionState({
+      incomingAllowLate: data.allowLateSubmissions,
+      incomingLateCutoff: data.lateCutoff,
+      existingAllowLate: existing.allowLateSubmissions,
+      existingLateCutoff: existing.lateCutoff,
+      dueDate,
+      userTimezone,
+    });
+
+    if (!lateState.ok) {
+      return NextResponse.json({ error: lateState.message }, { status: 400 });
+    }
+
+    const { allowLateSubmissions, lateCutoff } = lateState;
+
     const updated = await prisma.assignment.update({
       where: { id },
       data: {
         title: data.title,
         description: data.description,
         dueDate: toEndOfDayInTimezone(data.dueDate, userTimezone),
-        maxPoints: data.maxPoints,
+        allowLateSubmissions,
+        lateCutoff,
         isPublished: data.isPublished,
+        isGroup: data.isGroup === undefined ? undefined : data.isGroup,
       },
     });
 
@@ -148,6 +255,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         courseId: updated.courseId,
         assignmentId: id,
         updatedFields: Object.keys(data),
+        allowLateSubmissions,
+        lateCutoff: lateCutoff ? lateCutoff.toISOString() : null,
       },
     });
 
@@ -172,7 +281,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const userTimezone = await resolveUserTimezone(session.user.id);
 
   // Make sure the assignment does not have any submissions or grades when unpublishing
-  if (!data.isPublished) {
+  if (data.isPublished === false) {
     // Note logic appears swapped for isPublished, but that is because isPublished is the next state
     const hasSubmission = !!(await prisma.assignmentProblem.findFirst({
       where: { assignmentId: id, submissions: { some: {} } },
@@ -196,23 +305,67 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
+  // Prevent changing the assignment's group mode if submissions exist
+  if (data.isGroup !== undefined) {
+    const hasAnySubmission = (await prisma.submission.count({ where: { assignmentId: id } })) > 0;
+    if (hasAnySubmission) {
+      return NextResponse.json(
+        { error: 'Cannot change assignment group mode after submissions exist' },
+        { status: 403 },
+      );
+    }
+  }
+
   try {
+    const existing = await prisma.assignment.findUnique({ where: { id } });
+    if (!existing) {
+      return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+    }
+
+    const effectiveDueDate =
+      data.dueDate !== undefined
+        ? toEndOfDayInTimezone(data.dueDate, userTimezone)
+        : existing.dueDate;
+
+    const lateState = computeLateSubmissionState({
+      incomingAllowLate: data.allowLateSubmissions,
+      incomingLateCutoff: data.lateCutoff,
+      existingAllowLate: existing.allowLateSubmissions,
+      existingLateCutoff: existing.lateCutoff,
+      dueDate: effectiveDueDate,
+      userTimezone,
+    });
+
+    if (!lateState.ok) {
+      return NextResponse.json({ error: lateState.message }, { status: 400 });
+    }
+
+    const { allowLateSubmissions, lateCutoff } = lateState;
+
     // Build update data object with only provided fields
     const updateData: {
       title?: string;
       description?: string;
       dueDate?: Date;
-      maxPoints?: number;
+      allowLateSubmissions?: boolean;
+      lateCutoff?: Date | null;
       isPublished?: boolean;
+      isGroup?: boolean;
     } = {};
 
     if (data.title !== undefined) updateData.title = data.title;
     if (data.description !== undefined) updateData.description = data.description;
     if (data.dueDate !== undefined) {
-      updateData.dueDate = toEndOfDayInTimezone(data.dueDate, userTimezone);
+      updateData.dueDate = effectiveDueDate;
     }
-    if (data.maxPoints !== undefined) updateData.maxPoints = data.maxPoints;
+    if (data.allowLateSubmissions !== undefined) {
+      updateData.allowLateSubmissions = allowLateSubmissions;
+    }
+    if (data.lateCutoff !== undefined) {
+      updateData.lateCutoff = lateCutoff;
+    }
     if (data.isPublished !== undefined) updateData.isPublished = data.isPublished;
+    if (data.isGroup !== undefined) updateData.isGroup = data.isGroup;
 
     const updated = await prisma.assignment.update({
       where: { id },
@@ -230,6 +383,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         courseId: updated.courseId,
         assignmentId: id,
         updatedFields: Object.keys(updateData),
+        allowLateSubmissions,
+        lateCutoff: lateCutoff ? lateCutoff.toISOString() : null,
       },
     });
 
@@ -256,13 +411,45 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    const allowLateSubmissions =
+      typeof data.allowLateSubmissions === 'boolean' ? data.allowLateSubmissions : true;
+
+    if (!allowLateSubmissions && data.lateCutoff) {
+      return NextResponse.json(
+        { error: 'Late cutoff provided but late submissions are disabled.' },
+        { status: 400 },
+      );
+    }
+
+    if (allowLateSubmissions && !data.lateCutoff) {
+      return NextResponse.json(
+        { error: 'Late submission cutoff is required when late submissions are enabled.' },
+        { status: 400 },
+      );
+    }
+
+    const dueDate = toEndOfDayInTimezone(data.dueDate, userTimezone);
+    const lateCutoff =
+      allowLateSubmissions && data.lateCutoff
+        ? toDateTimeInTimezone(data.lateCutoff, userTimezone)
+        : null;
+
+    if (lateCutoff && lateCutoff < dueDate) {
+      return NextResponse.json(
+        { error: 'Late cutoff must be on or after the due date.' },
+        { status: 400 },
+      );
+    }
+
     const created = await prisma.assignment.create({
       data: {
         title: data.title,
         description: data.description,
-        dueDate: toEndOfDayInTimezone(data.dueDate, userTimezone),
-        maxPoints: data.maxPoints || 0,
+        dueDate,
+        allowLateSubmissions,
+        lateCutoff,
         isPublished: data.isPublished || false,
+        isGroup: !!data.isGroup,
         courseId: data.courseId,
       },
     });
@@ -278,7 +465,7 @@ export async function POST(req: NextRequest) {
         courseId: created.courseId,
         assignmentId: created.id,
         title: created.title,
-        maxPoints: created.maxPoints,
+        isGroup: created.isGroup,
       },
     });
 

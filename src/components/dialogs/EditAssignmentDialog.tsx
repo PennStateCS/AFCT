@@ -12,18 +12,19 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Assignment } from '@prisma/client';
-import { Switch } from '@/components/ui/switch';
+import SwitchField from '@/components/ui/SwitchField';
 import { Textarea } from '@/components/ui/textarea';
 import InputGroup from '@/components/ui/InputGroup';
 
 import { useEffect, useMemo, useState } from 'react';
+
 import { useForm, Controller } from 'react-hook-form';
 import { showToast } from '@/lib/toast';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 import {
-  AssignmentFormSchema, // form-only schema (title, description, maxPoints, dueDate, courseId)
+  AssignmentFormSchema, // form-only schema (title, description, dueDate, courseId)
   UpdateAssignmentSchema, // partial + id + publish rule
 } from '@/schemas/assignment';
 
@@ -49,6 +50,10 @@ function toDateTimeLocalInTimeZone(date: Date | string, timeZone: string): strin
   return `${year}-${month}-${day}T${hour}:${minute}`;
 }
 
+function nowLocalString(timeZone: string): string {
+  return toDateTimeLocalInTimeZone(new Date(), timeZone);
+}
+
 type EditAssignmentDialogProps = {
   courseIsArchived: boolean;
   assignment: Assignment;
@@ -69,22 +74,47 @@ export function EditAssignmentDialog({
   timeZone,
   onSave,
 }: EditAssignmentDialogProps) {
+  const assignmentDueDateString = useMemo(
+    () => toDateTimeLocalInTimeZone(assignment.dueDate, timeZone),
+    [assignment.dueDate, timeZone],
+  );
+
+  const assignmentLateCutoffString = useMemo(
+    () =>
+      assignment.lateCutoff
+        ? toDateTimeLocalInTimeZone(assignment.lateCutoff, timeZone)
+        : undefined,
+    [assignment.lateCutoff, timeZone],
+  );
+
   const defaultValues: FormValues = useMemo(
     () => ({
       title: assignment.title ?? '',
       description: assignment.description ?? '',
-      maxPoints: String(assignment.maxPoints ?? 100),
-      dueDate: toDateTimeLocalInTimeZone(assignment.dueDate, timeZone), // string for input
+      dueDate: assignmentDueDateString, // string for input
+      allowLateSubmissions: assignment.allowLateSubmissions ?? false,
+      lateCutoff: assignmentLateCutoffString,
       isPublished: assignment.isPublished ?? false,
+      isGroup: assignment.isGroup ?? false,
       courseId: assignment.courseId,
     }),
-    [assignment, timeZone],
+    [
+      assignment.allowLateSubmissions,
+      assignment.courseId,
+      assignment.description,
+      assignment.isPublished,
+      assignment.title,
+      assignmentDueDateString,
+      assignmentLateCutoffString,
+    ],
   );
 
   const {
     control,
     handleSubmit,
     reset,
+    watch,
+    setValue,
     formState: { errors, isDirty, isValid, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(AssignmentFormSchema),
@@ -93,9 +123,44 @@ export function EditAssignmentDialog({
     reValidateMode: 'onChange',
   });
 
-  // Keep publish state separate since it's not part of form schema
-  const [isPublished, setIsPublished] = useState(assignment.isPublished);
+  const allowLateSubmissions = watch('allowLateSubmissions');
+  const dueDateValue = watch('dueDate');
+  const lateCutoffValue = watch('lateCutoff');
 
+  useEffect(() => {
+    if (!allowLateSubmissions) {
+      setValue('lateCutoff', undefined, {
+        shouldValidate: true,
+        shouldDirty: false,
+      });
+    }
+  }, [allowLateSubmissions, setValue]);
+
+  useEffect(() => {
+    if (allowLateSubmissions && !lateCutoffValue) {
+      setValue(
+        'lateCutoff',
+        dueDateValue ??
+          assignmentLateCutoffString ??
+          assignmentDueDateString ??
+          nowLocalString(timeZone),
+        {
+          shouldValidate: true,
+          shouldDirty: false,
+        },
+      );
+    }
+  }, [
+    allowLateSubmissions,
+    assignmentDueDateString,
+    assignmentLateCutoffString,
+    dueDateValue,
+    lateCutoffValue,
+    setValue,
+    timeZone,
+  ]);
+
+  // Keep publish state separate since it's not part of form schema
   // Reset on open/close (prevents error/touched flicker)
   useEffect(() => {
     if (open) {
@@ -105,7 +170,6 @@ export function EditAssignmentDialog({
         keepErrors: false,
         keepValues: true,
       });
-      setIsPublished(assignment.isPublished);
     } else {
       reset(defaultValues, {
         keepDirty: false,
@@ -113,9 +177,8 @@ export function EditAssignmentDialog({
         keepErrors: false,
         keepValues: false,
       });
-      setIsPublished(assignment.isPublished);
     }
-  }, [open, defaultValues, reset, assignment.isPublished]);
+  }, [open, defaultValues, reset]);
 
   const resetForm = () => {
     reset(defaultValues, {
@@ -124,24 +187,28 @@ export function EditAssignmentDialog({
       keepErrors: false,
       keepValues: false,
     });
-    setIsPublished(assignment.isPublished);
   };
 
   const onSubmit = async (raw: FormValues) => {
     // Use the update schema with form values (keep strings as strings)
     const payload = UpdateAssignmentSchema.parse({
       id: assignment.id,
-      ...raw, // Keep maxPoints as string for schema validation
+      ...raw,
     });
+
+    const preparedPayload = {
+      ...payload,
+      lateCutoff: payload.allowLateSubmissions ? payload.lateCutoff : null,
+    };
 
     try {
       const res = await fetch(`/api/assignments/${assignment.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...payload,
-          maxPoints: Number(payload.maxPoints), // Convert to number for API
-          dueDate: payload.dueDate,
+          ...preparedPayload,
+          dueDate: preparedPayload.dueDate,
+          isGroup: preparedPayload.isGroup ?? false,
         }),
       });
       if (!res.ok) {
@@ -243,19 +310,18 @@ export function EditAssignmentDialog({
             )}
           />
 
-          {/* Max Points */}
+          {/* Is a group assignment switch */}
           <Controller
-            name="maxPoints"
+            name="isGroup"
             control={control}
             render={({ field }) => (
-              <InputGroup
-                label="Max Points"
-                name="maxPoints"
-                type="number"
-                fieldProps={field}
-                min={0}
-                step={1}
-                error={errors.maxPoints?.message}
+              <SwitchField
+                label="Group Assignment"
+                name="isGroup"
+                checked={!!field.value}
+                onCheckedChange={(checked) => field.onChange(!!checked)}
+                description="Students submit and are graded as groups for this assignment."
+                descriptionPlacement="inline"
               />
             )}
           />
@@ -266,18 +332,54 @@ export function EditAssignmentDialog({
             name="isPublished"
             control={control}
             render={({ field }) => (
-              <div className="flex items-center justify-between">
-                <Label htmlFor="isPublished">Published</Label>
-                <Switch
-                  id="isPublished"
-                  checked={!!field.value}
-                  onCheckedChange={field.onChange}
-                  onBlur={field.onBlur}
-                  // RHF expects boolean
-                />
-              </div>
+              <SwitchField
+                label="Publish Now"
+                name="isPublished"
+                checked={!!field.value}
+                onCheckedChange={(checked) => field.onChange(!!checked)}
+                description="Makes the assignment visible to enrolled students."
+                descriptionPlacement="inline"
+              />
             )}
           />
+
+          {/* Late submissions toggle */}
+          <Controller
+            name="allowLateSubmissions"
+            control={control}
+            render={({ field }) => (
+              <SwitchField
+                label="Allow Late Submissions"
+                name="allowLateSubmissions"
+                checked={!!field.value}
+                onCheckedChange={(checked) => field.onChange(!!checked)}
+                description="Students can submit after the deadline until a cutoff date."
+                descriptionPlacement="inline"
+              />
+            )}
+          />
+
+          {allowLateSubmissions && (
+            <Controller
+              name="lateCutoff"
+              control={control}
+              render={({ field }) => (
+                <InputGroup
+                  label="Late Submission Cutoff"
+                  name="lateCutoff"
+                  type="datetime-local"
+                  fieldProps={{
+                    ...field,
+                    value: field.value ?? '',
+                    onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                      field.onChange(e.target.value),
+                  }}
+                  min={dueDateValue ?? nowLocalString(timeZone)}
+                  error={errors.lateCutoff?.message}
+                />
+              )}
+            />
+          )}
 
           <DialogFooter className="mt-4">
             <DialogClose asChild>

@@ -2,6 +2,40 @@ import { NextRequest, NextResponse } from 'next/server';
 import JavaRunner from '../../../../../lib/java-runner';
 import path from 'path';
 
+function getJavaRunnerCtor() {
+  const maybeCtor =
+    typeof JavaRunner === 'function'
+      ? JavaRunner
+      : (JavaRunner as unknown as { default?: unknown })?.default;
+
+  if (typeof maybeCtor !== 'function') {
+    throw new Error('Java runner constructor is unavailable');
+  }
+
+  return maybeCtor as typeof JavaRunner;
+}
+
+function createJavaRunner(jarPath: string) {
+  const JavaRunnerCtor = getJavaRunnerCtor();
+  try {
+    return new JavaRunnerCtor(jarPath);
+  } catch {
+    return (
+      JavaRunnerCtor as unknown as (path: string) => {
+        execute: (
+          args?: string[],
+          options?: { input?: string },
+        ) => Promise<{
+          stdout: string;
+          stderr: string;
+          exitCode: number;
+        }>;
+        validateJarExists: () => boolean;
+      }
+    )(jarPath);
+  }
+}
+
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
   try {
@@ -20,24 +54,18 @@ export async function POST(request: NextRequest) {
     const { jarFile, args = [], input } = await request.json();
 
     if (!jarFile) {
-      return NextResponse.json(
-        { error: 'jarFile parameter is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'jarFile parameter is required' }, { status: 400 });
     }
 
     // Construct path to JAR file (assuming they're in a 'jars' directory)
     const jarPath = path.join(process.cwd(), 'jars', jarFile);
-    
+
     // Create Java runner instance
-    const javaRunner = new JavaRunner(jarPath);
+    const javaRunner = createJavaRunner(jarPath);
 
     // Validate JAR file exists
     if (!javaRunner.validateJarExists()) {
-      return NextResponse.json(
-        { error: `JAR file not found: ${jarFile}` },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: `JAR file not found: ${jarFile}` }, { status: 404 });
     }
 
     // Execute the JAR file
@@ -47,9 +75,8 @@ export async function POST(request: NextRequest) {
       success: true,
       stdout: result.stdout,
       stderr: result.stderr,
-      exitCode: result.exitCode
+      exitCode: result.exitCode,
     });
-
   } catch (error: unknown) {
     console.error('Java execution error:', error);
     return NextResponse.json(
@@ -57,7 +84,7 @@ export async function POST(request: NextRequest) {
         error: 'Failed to execute Java application',
         details: getErrorMessage(error),
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -67,12 +94,13 @@ export async function POST(request: NextRequest) {
  */
 export async function GET() {
   try {
-    const isAvailable = await JavaRunner.isJavaAvailable();
-    const version = isAvailable ? await JavaRunner.getJavaVersion() : null;
+    const JavaRunnerCtor = getJavaRunnerCtor();
+    const isAvailable = await JavaRunnerCtor.isJavaAvailable();
+    const version = isAvailable ? await JavaRunnerCtor.getJavaVersion() : null;
 
     return NextResponse.json({
       javaAvailable: isAvailable,
-      javaVersion: version
+      javaVersion: version,
     });
   } catch (error: unknown) {
     return NextResponse.json({

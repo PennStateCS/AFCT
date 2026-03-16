@@ -69,6 +69,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
   ref,
 ) {
   const inputId = id ?? name;
+  const labelId = `${inputId}-label`;
 
   const rhfName = (fieldProps as RHFFieldProps)?.name as string | undefined;
   const rhfValue = (fieldProps as RHFFieldProps)?.value as string | undefined;
@@ -130,7 +131,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
 
   return (
     <div className={cn('flex flex-col', className)}>
-      <Label htmlFor={inputId} className="mb-1.5 text-sm font-medium">
+      <Label id={labelId} htmlFor={inputId} className="mb-1.5 text-sm font-medium">
         {label}
         {requiredMark ? <span className="text-red-600"> *</span> : null}
       </Label>
@@ -147,6 +148,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
           onBlur={handleBlur}
           placeholder={placeholder}
           disabled={disabled}
+          aria-labelledby={labelId}
           aria-invalid={!!error || undefined}
           aria-describedby={describedByAttr || undefined}
           className={cn(
