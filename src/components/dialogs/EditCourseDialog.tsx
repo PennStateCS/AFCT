@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Course, User } from '@prisma/client';
 import { useEffect, useMemo, useState } from 'react';
 import InputGroup from '@/components/ui/InputGroup';
-import { Switch } from '@/components/ui/switch';
+import SwitchField from '@/components/ui/SwitchField';
 import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
 
 import { useForm, Controller } from 'react-hook-form';
@@ -368,20 +368,12 @@ export function EditCourseDialog({
             name="isPublished"
             control={control}
             render={({ field }) => (
-              <div className="flex items-center justify-between">
-                <label
-                  className="pb-2 text-sm leading-none font-medium select-none"
-                  htmlFor="isPublished-switch"
-                >
-                  Published
-                </label>
-                <Switch
-                  id="isPublished-switch"
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                  aria-label="Published"
-                />
-              </div>
+              <SwitchField
+                label="Published"
+                name="isPublished-switch"
+                checked={!!field.value}
+                onCheckedChange={(checked) => field.onChange(!!checked)}
+              />
             )}
           />
 
@@ -390,20 +382,12 @@ export function EditCourseDialog({
             name="isArchived"
             control={control}
             render={({ field }) => (
-              <div className="flex items-center justify-between">
-                <label
-                  className="pb-2 text-sm leading-none font-medium select-none"
-                  htmlFor="isArchived-switch"
-                >
-                  Archived
-                </label>
-                <Switch
-                  id="isArchived-switch"
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                  aria-label="Archived"
-                />
-              </div>
+              <SwitchField
+                label="Archived"
+                name="isArchived-switch"
+                checked={!!field.value}
+                onCheckedChange={(checked) => field.onChange(!!checked)}
+              />
             )}
           />
 

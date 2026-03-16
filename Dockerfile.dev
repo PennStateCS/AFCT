@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1.7
 FROM node:20-bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -47,8 +46,7 @@ VOLUME ["/private/uploads", "/app/public/uploads"]
 
 # Dependencies
 COPY --chown=node:node package.json package-lock.json ./
-RUN --mount=type=cache,id=npm-cache-node20,target=/home/node/.npm,uid=1000,gid=1000 \
-    npm ci --prefer-offline --no-audit --progress=false
+RUN npm ci --prefer-offline --no-audit --progress=false
 
 # Tooling
 COPY --chown=node:node jars /app/jars
@@ -59,8 +57,7 @@ RUN if [ -f /app/bin/cfganalyzer ]; then chmod +x /app/bin/cfganalyzer; fi
 COPY --chown=node:node . .
 
 # Prisma
-RUN --mount=type=cache,id=prisma-cache-node20,target=/home/node/.cache/prisma,uid=1000,gid=1000 \
-    npx prisma generate
+RUN npx prisma generate
 
 # Verify Java installation
 RUN java -version || true

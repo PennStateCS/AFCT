@@ -226,6 +226,11 @@ body {
   @apply m-0 h-full w-full p-0;
 }
 
+html {
+  /* Reserve scrollbar space to avoid horizontal layout shifts between pages. */
+  scrollbar-gutter: stable;
+}
+
 @layer utilities {
   @keyframes fade-in-up {
     from {
@@ -320,20 +325,39 @@ body {
     animation: toast-exit 0.4s cubic-bezier(0.4, 0, 1, 1) forwards;
   }
 
+  /* Success, error, and warning toasts should use regular title weight. */
+  .custom-toast[data-type='success'] [data-title],
+  .custom-toast[data-type='error'] [data-title],
+  .custom-toast[data-type='warning'] [data-title],
+  .custom-toast[data-type='info'] [data-title] {
+    @apply py-1 font-normal;
+    letter-spacing: 0 !important;
+    text-rendering: geometricPrecision;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .custom-toast[data-type='success'] [data-description],
+  .custom-toast[data-type='error'] [data-description],
+  .custom-toast[data-type='warning'] [data-description],
+  .custom-toast[data-type='info'] [data-description] {
+    color: #4b5563 !important;
+    opacity: 0.9 !important;
+    letter-spacing: 0 !important;
+    text-rendering: geometricPrecision;
+    -webkit-font-smoothing: antialiased;
+  }
+
   @keyframes toast-enter {
     0% {
       opacity: 0;
-      transform: translateY(-20px) scale(0.95);
       filter: blur(2px);
     }
     50% {
       opacity: 0.8;
-      transform: translateY(-5px) scale(0.98);
       filter: blur(1px);
     }
     100% {
       opacity: 1;
-      transform: translateY(0) scale(1);
       filter: blur(0);
     }
   }
@@ -341,25 +365,21 @@ body {
   @keyframes toast-exit {
     0% {
       opacity: 1;
-      transform: translateY(0) scale(1);
       filter: blur(0);
       max-height: 200px;
     }
     25% {
       opacity: 0.8;
-      transform: translateY(-5px) scale(0.98);
       filter: blur(1px);
       max-height: 200px;
     }
     75% {
       opacity: 0.2;
-      transform: translateY(-15px) scale(0.9);
       filter: blur(2px);
       max-height: 200px;
     }
     100% {
       opacity: 0;
-      transform: translateY(-25px) scale(0.85);
       filter: blur(3px);
       max-height: 0;
       padding-top: 0;
@@ -378,16 +398,20 @@ body {
     --toast-muted: #4b5563;
     background: #ffffff !important;
     border: 1px solid var(--toast-border) !important;
-    border-radius: 14px !important;
-    box-shadow: 0 20px 45px rgba(15, 23, 42, 0.12) !important;
+    border-left-color: var(--toast-icon-fill) !important;
+    border-top-color: var(--toast-icon-fill) !important;
+    border-bottom-color: var(--toast-icon-fill) !important;
+    border-radius: 3px !important;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.22) !important;
     color: var(--toast-text) !important;
     display: flex !important;
-    align-items: center !important;
-    gap: 16px !important;
+    align-items: stretch !important;
+    gap: 0 !important;
+    position: absolute !important;
     min-width: 260px !important;
-    max-width: 380px !important;
-    overflow: visible !important;
-    padding: 16px 22px !important;
+    max-width: 440px !important;
+    overflow: hidden !important;
+    padding: 0 !important;
     font-family: var(--font-geist-sans, 'Inter', 'Segoe UI', sans-serif) !important;
   }
 
@@ -483,30 +507,45 @@ body {
 
   .custom-toast [data-icon] {
     align-items: center !important;
-    background: transparent !important;
+    align-self: auto !important;
+    background-color: var(--toast-icon-fill) !important;
     border-right: none !important;
     display: flex !important;
     justify-content: center !important;
-    min-width: auto !important;
-    padding: 0 !important;
+    min-width: 71px !important;
+    width: 71px !important;
+    padding: 0 16px !important;
     margin: 0 !important;
     flex-shrink: 0 !important;
+    height: auto !important;
+    position: absolute !important;
+    left: -1px !important;
+    top: -1px !important;
+    bottom: -1px !important;
+    z-index: 1 !important;
+  }
+
+  .custom-toast [data-content] {
+    position: relative !important;
+    z-index: 1 !important;
+    margin-left: 70px !important;
   }
 
   .toast-icon-symbol {
     align-items: center !important;
-    background: var(--toast-icon-fill) !important;
-    border-radius: 999px !important;
+    background: transparent !important;
+    border-radius: 0 !important;
     color: #ffffff !important;
     display: flex !important;
-    font-size: 18px !important;
-    font-weight: 600 !important;
-    height: 36px !important;
+    font-size: 26px !important;
+    font-weight: 500 !important;
+    height: auto !important;
     justify-content: center !important;
-    letter-spacing: 0.02em !important;
+    letter-spacing: 0 !important;
+    line-height: 1 !important;
     text-transform: none !important;
-    width: 36px !important;
-    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18) !important;
+    width: auto !important;
+    box-shadow: none !important;
   }
 
   .custom-toast[data-type='loading'] .toast-icon-symbol {
@@ -525,23 +564,23 @@ body {
   .custom-toast [data-content] {
     flex: 1 !important;
     min-width: 0 !important;
-    padding: 0 !important;
+    padding: 12px 14px !important;
   }
 
   .custom-toast [data-title] {
-    color: var(--toast-text) !important;
-    font-size: 15px !important;
+    color: #374151 !important;
+    font-size: 16px !important;
     font-weight: 600 !important;
-    letter-spacing: -0.01em !important;
+    letter-spacing: 0 !important;
     line-height: 1.35 !important;
     margin: 0 !important;
   }
 
   .custom-toast [data-description] {
-    color: var(--toast-muted) !important;
+    color: #4b5563 !important;
     font-size: 13px !important;
-    line-height: 1.45 !important;
-    margin-top: 6px !important;
+    line-height: 1.35 !important;
+    margin-top: 2px !important;
   }
 
   .custom-toast [data-button],
@@ -574,9 +613,11 @@ body {
   }
 
   .custom-toast [data-close-button] {
-    color: var(--toast-muted) !important;
-    height: 28px !important;
-    width: 28px !important;
+    color: #1f2937 !important;
+    height: 24px !important;
+    width: 24px !important;
+    right: 8px !important;
+    top: 8px !important;
   }
 
   .custom-toast [data-close-button]:hover {

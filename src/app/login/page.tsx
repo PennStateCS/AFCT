@@ -9,21 +9,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Wrench } from 'lucide-react';
 import InputGroup from '@/components/ui/InputGroup';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
+import { PasswordRulesHelper } from '@/components/auth/PasswordRulesHelper';
+import { isStrongPassword, passwordRules } from '@/lib/password-policy';
 
 /* ---------------- Validators ---------------- */
 
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
-// Shared rules are referenced both for live validation and helper rendering.
-const passwordRules = [
-  { label: 'At least 8 characters', test: (pw: string) => pw.length >= 8 },
-  { label: 'At least one uppercase letter', test: (pw: string) => /[A-Z]/.test(pw) },
-  { label: 'At least one lowercase letter', test: (pw: string) => /[a-z]/.test(pw) },
-  { label: 'At least one number', test: (pw: string) => /\d/.test(pw) },
-  { label: 'At least one special character', test: (pw: string) => /[^A-Za-z0-9]/.test(pw) },
-];
-
-const isStrongPassword = (password: string) => passwordRules.every((rule) => rule.test(password));
 
 // Dev-only quick login shortcuts so QA can impersonate common roles fast.
 const testLoginButtons = [
@@ -43,6 +34,7 @@ type SignupErrors = Partial<Record<SignupField, string>>;
 
 export default function LoginPage() {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [allowSignup, setAllowSignup] = useState<boolean | null>(null);
 
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -92,6 +84,36 @@ export default function LoginPage() {
     document.getElementById(mode === 'login' ? 'login-email' : 'signup-first')?.focus();
     interactionStartRef.current = getMonotonicNow();
   }, [mode]);
+
+  // Read public settings so the login page can hide signup when it is disabled system-wide.
+  useEffect(() => {
+    let active = true;
+
+    const loadPublicSettings = async () => {
+      try {
+        const res = await fetch('/api/system-settings/public', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = (await res.json()) as { allowSignup?: boolean };
+        if (!active) return;
+        setAllowSignup(data.allowSignup ?? true);
+      } catch {
+        if (!active) return;
+        setAllowSignup(true);
+      }
+    };
+
+    void loadPublicSettings();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (allowSignup === false && mode === 'signup') {
+      setMode('login');
+    }
+  }, [allowSignup, mode]);
 
   // Surface NextAuth error query params as toast feedback.
   useEffect(() => {
@@ -163,6 +185,12 @@ export default function LoginPage() {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (allowSignup !== true) {
+      showToast.error('Signups are currently disabled.');
+      setMode('login');
+      return;
+    }
+
     const trimmed = {
       first: signupFirst.trim(),
       last: signupLast.trim(),
@@ -221,6 +249,12 @@ export default function LoginPage() {
       return;
     }
 
+    if (res.status === 403) {
+      showToast.error('Signups are currently disabled.');
+      setMode('login');
+      return;
+    }
+
     if (!res.ok) {
       showToast.error('Signup failed.');
       return;
@@ -269,10 +303,10 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative flex min-h-screen w-full items-start justify-center pt-24 md:pt-[14vh]">
+    <div className="relative flex min-h-dvh w-full items-start justify-center overflow-x-hidden pt-24 md:pt-[14vh]">
       {/* Background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-[#5F9EA0] via-[#6FAFB2] to-[#2F4A8A]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.15),transparent_70%)]" />
+      <div className="fixed inset-0 z-0 bg-gradient-to-br from-[#5F9EA0] via-[#6FAFB2] to-[#2F4A8A]" />
+      <div className="fixed inset-0 z-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.15),transparent_70%)]" />
 
       {/* DEV BADGE */}
       {isDev && (
@@ -307,10 +341,17 @@ export default function LoginPage() {
                 onSubmit={handleLogin}
                 className="space-y-5"
               >
+                <p className="sr-only" aria-live="assertive">
+                  {Object.values(loginErrors)[0]
+                    ? `Form error: ${Object.values(loginErrors)[0]}`
+                    : ''}
+                </p>
                 <InputGroup
                   id="login-email"
                   label="Email"
                   name="login-email"
+                  required
+                  requiredMark
                   autoComplete="username"
                   value={loginEmail}
                   setValue={setLoginEmail}
@@ -321,6 +362,8 @@ export default function LoginPage() {
                 <InputGroup
                   label="Password"
                   name="login-password"
+                  required
+                  requiredMark
                   autoComplete="current-password"
                   value={loginPassword}
                   setValue={setLoginPassword}
@@ -342,16 +385,18 @@ export default function LoginPage() {
 
                 {renderCaptchaGate()}
 
-                <div className="text-center text-sm text-gray-600">
-                  <span className="font-semibold text-gray-500">Don&apos;t have an account?</span>{' '}
-                  <button
-                    type="button"
-                    className="font-semibold text-[#2F4A8A] underline-offset-2 hover:underline"
-                    onClick={() => setMode('signup')}
-                  >
-                    Sign up
-                  </button>
-                </div>
+                {allowSignup ? (
+                  <div className="text-center text-sm text-gray-600">
+                    <span className="font-semibold text-gray-500">Don&apos;t have an account?</span>{' '}
+                    <button
+                      type="button"
+                      className="font-semibold text-[#2F4A8A] underline-offset-2 hover:underline"
+                      onClick={() => setMode('signup')}
+                    >
+                      Sign up
+                    </button>
+                  </div>
+                ) : null}
               </motion.form>
             ) : (
               <motion.form
@@ -365,10 +410,17 @@ export default function LoginPage() {
                 onSubmit={handleSignup}
                 className="space-y-5"
               >
+                <p className="sr-only" aria-live="assertive">
+                  {Object.values(signupErrors)[0]
+                    ? `Form error: ${Object.values(signupErrors)[0]}`
+                    : ''}
+                </p>
                 <InputGroup
                   id="signup-first"
                   label="First Name"
                   name="signup-first"
+                  required
+                  requiredMark
                   autoComplete="off"
                   value={signupFirst}
                   setValue={setSignupFirst}
@@ -378,6 +430,8 @@ export default function LoginPage() {
                 <InputGroup
                   label="Last Name"
                   name="signup-last"
+                  required
+                  requiredMark
                   autoComplete="off"
                   value={signupLast}
                   setValue={setSignupLast}
@@ -387,6 +441,8 @@ export default function LoginPage() {
                 <InputGroup
                   label="Email"
                   name="signup-email"
+                  required
+                  requiredMark
                   autoComplete="username"
                   value={signupEmail}
                   setValue={setSignupEmail}
@@ -397,6 +453,8 @@ export default function LoginPage() {
                 <InputGroup
                   label="Password"
                   name="signup-password"
+                  required
+                  requiredMark
                   autoComplete="new-password"
                   value={signupPassword}
                   setValue={setSignupPassword}
@@ -411,6 +469,8 @@ export default function LoginPage() {
                 <InputGroup
                   label="Confirm Password"
                   name="signup-confirm"
+                  required
+                  requiredMark
                   autoComplete="new-password"
                   value={signupConfirm}
                   setValue={setSignupConfirm}
@@ -458,6 +518,7 @@ export default function LoginPage() {
               {testLoginButtons.map(({ role, label, classes }) => (
                 <button
                   key={role}
+                  type="button"
                   className={`w-full rounded-lg px-4 py-2 transition focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:outline-none ${classes}`}
                   onClick={() => applyTestLogin(role)}
                 >
@@ -468,30 +529,6 @@ export default function LoginPage() {
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-type PasswordRuleStatus = {
-  label: string;
-  passed: boolean;
-};
-function PasswordRulesHelper({ id, rules }: { id: string; rules: PasswordRuleStatus[] }) {
-  return (
-    <div
-      id={id}
-      aria-live="polite"
-      className="rounded-xl bg-gray-50 px-4 py-3 text-xs text-gray-700"
-    >
-      <p className="mb-2 font-semibold text-gray-800">Password must include:</p>
-      <ul className="space-y-1">
-        {rules.map((rule) => (
-          <li key={rule.label} className="flex items-center gap-2">
-            <span aria-hidden="true">{rule.passed ? '✅' : '⚠️'}</span>
-            <span className={rule.passed ? 'text-green-700' : 'text-gray-700'}>{rule.label}</span>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }

@@ -1,0 +1,66 @@
+import React from 'react';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+const prismaMock = vi.hoisted(() => ({
+  course: {
+    findUnique: vi.fn(),
+  },
+}));
+
+vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
+vi.mock('@/components/navbar/CourseBreadcrumbSource', () => ({
+  __esModule: true,
+  default: ({ courseId, courseName }: { courseId: string; courseName: string }) => (
+    <div
+      data-testid="course-breadcrumb-source"
+      data-course-id={courseId}
+      data-course-name={courseName}
+    />
+  ),
+}));
+
+import CourseLayout from './layout';
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+describe('CourseLayout', () => {
+  it('renders breadcrumb source when course exists', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({ id: 'c1', name: 'Course One' });
+
+    const result = await CourseLayout({
+      params: Promise.resolve({ id: 'c1' }),
+      children: <div data-testid="children">Child</div>,
+    });
+
+    // Basic contract: Prisma queried with awaited route params.
+    expect(prismaMock.course.findUnique).toHaveBeenCalledWith({
+      where: { id: 'c1' },
+      select: { id: true, name: true },
+    });
+
+    const element = result as React.ReactElement;
+    expect(element.props.children).toHaveLength(2);
+    const sourceNode = element.props.children[0];
+    const childNode = element.props.children[1];
+
+    expect(sourceNode.type).toBeDefined();
+    expect(sourceNode.props.courseId).toBe('c1');
+    expect(sourceNode.props.courseName).toBe('Course One');
+    expect(childNode.props['data-testid']).toBe('children');
+  });
+
+  it('renders only children when course is not found', async () => {
+    prismaMock.course.findUnique.mockResolvedValue(null);
+
+    const result = await CourseLayout({
+      params: Promise.resolve({ id: 'missing' }),
+      children: <div data-testid="children">Child</div>,
+    });
+
+    const element = result as React.ReactElement;
+    expect(element.props.children[0]).toBeNull();
+    expect(element.props.children[1].props['data-testid']).toBe('children');
+  });
+});

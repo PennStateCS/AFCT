@@ -4,8 +4,6 @@ import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import type { Prisma } from '@prisma/client';
 
-type CourseRole = 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT';
-
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const resolved = await params;
   const courseId = resolved.id;
@@ -24,39 +22,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!userIds.length)
       return NextResponse.json({ message: 'No users provided' }, { status: 400 });
 
-    // Map global role to course role
-    const mapRole = (r: string | null | undefined): CourseRole => {
-      switch (r) {
-        case 'ADMIN':
-          return 'ADMIN';
-        case 'FACULTY':
-          return 'FACULTY';
-        case 'TA':
-          return 'TA';
-        default:
-          return 'STUDENT';
-      }
-    };
-
-    // Fetch all users to get their global roles in a single query
-    const users = await prisma.user.findMany({
-      where: { id: { in: userIds } },
-      select: { id: true, role: true },
-    });
-    const roleMap = new Map(
-      users.map((u: { id: string; role: string | null }) => [u.id, mapRole(u.role)]),
-    );
-
-    // Enroll all users in a transaction using their inherited roles
+    // Enroll all users in a transaction as STUDENT course role.
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       for (const uid of userIds) {
-        const roleToAssign = roleMap.get(uid) ?? 'STUDENT';
         const existing = await tx.roster.findFirst({ where: { courseId, userId: uid } });
         if (existing) {
-          // update role to inherited role
-          await tx.roster.update({ where: { id: existing.id }, data: { role: roleToAssign } });
+          await tx.roster.update({ where: { id: existing.id }, data: { role: 'STUDENT' } });
         } else {
-          await tx.roster.create({ data: { courseId, userId: uid, role: roleToAssign } });
+          await tx.roster.create({ data: { courseId, userId: uid, role: 'STUDENT' } });
         }
       }
     });

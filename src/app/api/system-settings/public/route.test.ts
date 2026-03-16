@@ -20,16 +20,20 @@ describe('GET /api/system-settings/public', () => {
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toEqual({ timezone: 'UTC' });
+    expect(body).toEqual({ timezone: 'UTC', allowSignup: true });
   });
 
   it('returns stored timezone', async () => {
-    prismaMock.systemSettings.findUnique.mockResolvedValue({ id: 1, timezone: 'America/New_York' });
+    prismaMock.systemSettings.findUnique.mockResolvedValue({
+      id: 1,
+      timezone: 'America/New_York',
+      allowSignup: false,
+    });
 
     const res = await GET();
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toEqual({ timezone: 'America/New_York' });
+    expect(body).toEqual({ timezone: 'America/New_York', allowSignup: false });
   });
 });

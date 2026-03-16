@@ -7,6 +7,31 @@ export default defineConfig({
     globals: true,
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     setupFiles: ['src/test/setup.ts'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html'],
+      exclude: [
+        '**/*.test.ts',
+        '**/*.test.tsx',
+        '**/*.d.ts',
+        '**/node_modules/**',
+        '**/.next/**',
+        '**/coverage/**',
+
+        'next.config.ts',
+        'postcss.config.mjs',
+        'tailwind.config.js',
+        'prisma.config.ts',
+        'lib/**',
+        'prisma/**',
+
+        'src/env.mjs',
+        'src/types/**',
+        'src/app/fonts.ts',
+        'src/app/**/layout.tsx',
+        'src/app/**/page.tsx',
+      ],
+    },
   },
   resolve: {
     alias: {

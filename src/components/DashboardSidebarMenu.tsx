@@ -1,14 +1,15 @@
 'use client';
 
+import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useSession, signOut } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
 import { useState } from 'react';
 import useSWR from 'swr';
 import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils';
-import { isEnrolled } from '@/lib/course-utils';
+import { safeSignOut } from '@/lib/safe-signout';
 
 import { ChangePasswordDialog } from './dialogs/ChangePasswordDialog';
 import { EditProfileDialog } from './dialogs/EditProfileDialog';
@@ -46,9 +47,13 @@ import {
   LockKeyhole,
   UserPen,
   ChevronUp,
-  BookPlus,
+  Activity,
   Settings,
+  Wrench,
 } from 'lucide-react';
+
+const menuButtonStyles =
+  'text-sidebar-foreground hover:bg-secondary/85 focus-visible:bg-secondary/85 active:bg-secondary data-[active=true]:bg-secondary data-[active=true]:text-secondary-foreground';
 
 type Course = {
   id: string;
@@ -56,39 +61,15 @@ type Course = {
   code: string;
   isPublished: boolean;
   isArchived: boolean;
-  // enrolled is a list of user objects (with `courseRole`) for all roster members
-  enrolled?: {
-    id: string;
-    firstName?: string | null;
-    lastName?: string | null;
-    email?: string | null;
-    avatar?: string | null;
-    courseRole?: string;
-  }[];
 };
 
 // Static admin menu items
 const adminMenu = [
   { title: 'Courses', url: '/dashboard/courses', icon: Book },
   { title: 'User Accounts', url: '/dashboard/users', icon: Users },
-  { title: 'System Status', url: '/dashboard/system-status', icon: BookPlus },
+  { title: 'System Status', url: '/dashboard/system-status', icon: Activity },
   { title: 'System Settings', url: '/dashboard/system-settings', icon: Settings },
 ];
-
-// Filter courses based on user role
-function getCoursesForUser(
-  user: { id: string; role: 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT' },
-  courses: Course[],
-) {
-  // Should only see published courses even if enrolled.
-  return courses.filter((c) => {
-    const enrolled = c.enrolled ?? [];
-    const isEnr = isEnrolled(enrolled as any, user.id);
-    if (!isEnr) return false;
-    if (user.role === 'STUDENT') return c.isPublished;
-    return true;
-  });
-}
 
 export default function DashboardSidebarMenu() {
   const pathname = usePathname();
@@ -102,8 +83,8 @@ export default function DashboardSidebarMenu() {
       if (!res.ok) throw new Error('Failed to fetch courses');
       return res.json();
     });
-  const { data: courses = [] } = useSWR<Course[]>('/api/courses', fetcher, {
-    refreshInterval: 6000, // revalidate every 6s
+  const { data: courses = [] } = useSWR<Course[]>('/api/courses/nav', fetcher, {
+    refreshInterval: 0,
     revalidateOnFocus: true, // revalidate when window/tab is focused
   });
 
@@ -143,13 +124,24 @@ export default function DashboardSidebarMenu() {
     initials,
     role: (role?.toUpperCase?.() || 'STUDENT') as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT',
     password: '', // password is not exposed from session
+    temporaryPassword: Boolean(session.user.mustChangePassword),
     inactive: false, // inactive status is not exposed from session
     createdAt: new Date(), // createdAt is not exposed from session
     updatedAt: new Date(), // updatedAt is not exposed from session
   };
 
-  const filteredCourses = getCoursesForUser(user, courses);
-  const visibleCourses = filteredCourses.filter((c) => !c.isArchived);
+  const visibleCourses = courses.filter((c) => {
+    if (c.isArchived) return false;
+    if (user.role === 'STUDENT') return c.isPublished;
+    return true;
+  });
+  const isDev = process.env.NODE_ENV !== 'production';
+  const resolvedAdminMenu = isDev
+    ? [
+        ...adminMenu,
+        { title: 'Development Tests', url: '/dashboard/development-tests', icon: Wrench },
+      ]
+    : adminMenu;
 
   return (
     <>
@@ -160,26 +152,31 @@ export default function DashboardSidebarMenu() {
           <SidebarGroup>
             <SidebarGroupLabel
               aria-hidden={collapsed}
-              className={collapsed ? 'hidden' : 'text-sidebar-foreground text-sm'}
+              className={
+                collapsed
+                  ? 'hidden'
+                  : 'text-sidebar-foreground overflow-hidden text-sm whitespace-nowrap'
+              }
             >
               Admin Menu
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {adminMenu.map(({ title, url, icon: Icon }) => (
+                {resolvedAdminMenu.map(({ title, url, icon: Icon }) => (
                   <SidebarMenuItem key={url}>
                     <TooltipProvider delayDuration={100}>
-                      <Tooltip open={collapsed ? undefined : false}>
+                      <Tooltip>
                         <TooltipTrigger asChild>
                           <SidebarMenuButton
                             asChild
                             isActive={pathname === url}
-                            className={cn(
-                              'hover:bg-secondary focus:bg-secondary text-sidebar-foreground',
-                              'data-[active=true]:bg-secondary',
-                            )}
+                            className={cn(menuButtonStyles)}
                           >
-                            <Link href={url} className="flex min-w-0 items-center gap-2">
+                            <Link
+                              href={url}
+                              aria-label={title}
+                              className="flex min-w-0 items-center gap-2"
+                            >
                               <Icon className="h-4 w-4 shrink-0" />
                               <span
                                 aria-hidden={collapsed}
@@ -196,6 +193,7 @@ export default function DashboardSidebarMenu() {
                         </TooltipTrigger>
                         <TooltipContent
                           side="right"
+                          hidden={!collapsed}
                           className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
                           sideOffset={10}
                         >
@@ -215,7 +213,11 @@ export default function DashboardSidebarMenu() {
           <SidebarGroup>
             <SidebarGroupLabel
               aria-hidden={collapsed}
-              className={collapsed ? 'hidden' : 'text-sidebar-foreground text-sm'}
+              className={
+                collapsed
+                  ? 'hidden'
+                  : 'text-sidebar-foreground overflow-hidden text-sm whitespace-nowrap'
+              }
             >
               Current Courses
             </SidebarGroupLabel>
@@ -245,18 +247,16 @@ export default function DashboardSidebarMenu() {
                   visibleCourses.map((course) => (
                     <SidebarMenuItem key={course.id}>
                       <TooltipProvider delayDuration={100}>
-                        <Tooltip open={collapsed ? undefined : false}>
+                        <Tooltip>
                           <TooltipTrigger asChild>
                             <SidebarMenuButton
                               asChild
                               isActive={pathname.startsWith(`/dashboard/courses/${course.id}`)}
-                              className={cn(
-                                'hover:bg-secondary focus:bg-secondary text-sidebar-foreground',
-                                'data-[active=true]:bg-secondary',
-                              )}
+                              className={cn(menuButtonStyles)}
                             >
                               <Link
                                 href={`/dashboard/courses/${course.id}`}
+                                aria-label={`${course.code}: ${course.name}`}
                                 className="flex min-w-0 items-center gap-2"
                               >
                                 <Book className="h-4 w-4 shrink-0" />
@@ -275,6 +275,7 @@ export default function DashboardSidebarMenu() {
                           </TooltipTrigger>
                           <TooltipContent
                             side="right"
+                            hidden={!collapsed}
                             className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
                             sideOffset={10}
                           >
@@ -294,7 +295,11 @@ export default function DashboardSidebarMenu() {
         <SidebarGroup>
           <SidebarGroupLabel
             aria-hidden={collapsed}
-            className={collapsed ? 'hidden' : 'text-sidebar-foreground text-sm'}
+            className={
+              collapsed
+                ? 'hidden'
+                : 'text-sidebar-foreground overflow-hidden text-sm whitespace-nowrap'
+            }
           >
             Features
           </SidebarGroupLabel>
@@ -302,18 +307,16 @@ export default function DashboardSidebarMenu() {
             <SidebarMenu>
               <SidebarMenuItem key="features-calendar">
                 <TooltipProvider delayDuration={100}>
-                  <Tooltip open={collapsed ? undefined : false}>
+                  <Tooltip>
                     <TooltipTrigger asChild>
                       <SidebarMenuButton
                         asChild
                         isActive={pathname === '/dashboard/calendar'}
-                        className={cn(
-                          'hover:bg-secondary focus:bg-secondary text-sidebar-foreground',
-                          'data-[active=true]:bg-secondary',
-                        )}
+                        className={cn(menuButtonStyles)}
                       >
                         <Link
                           href="/dashboard/calendar"
+                          aria-label="Calendar"
                           className="flex min-w-0 items-center gap-2"
                         >
                           <Calendar className="h-4 w-4 shrink-0" />
@@ -332,6 +335,7 @@ export default function DashboardSidebarMenu() {
                     </TooltipTrigger>
                     <TooltipContent
                       side="right"
+                      hidden={!collapsed}
                       className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
                       sideOffset={10}
                     >
@@ -348,7 +352,11 @@ export default function DashboardSidebarMenu() {
         <SidebarGroup>
           <SidebarGroupLabel
             aria-hidden={collapsed}
-            className={collapsed ? 'hidden' : 'text-sidebar-foreground text-sm'}
+            className={
+              collapsed
+                ? 'hidden'
+                : 'text-sidebar-foreground overflow-hidden text-sm whitespace-nowrap'
+            }
           >
             Course Displays
           </SidebarGroupLabel>
@@ -356,17 +364,18 @@ export default function DashboardSidebarMenu() {
             {/* The Archive */}
             <SidebarMenuItem>
               <TooltipProvider delayDuration={100}>
-                <Tooltip open={collapsed ? undefined : false}>
+                <Tooltip>
                   <TooltipTrigger asChild>
                     <SidebarMenuButton
                       asChild
                       isActive={pathname === '/dashboard/archive'}
-                      className={cn(
-                        'hover:bg-secondary focus:bg-secondary text-sidebar-foreground',
-                        'data-[active=true]:bg-secondary',
-                      )}
+                      className={cn(menuButtonStyles)}
                     >
-                      <Link href="/dashboard/archive" className="flex min-w-0 items-center gap-2">
+                      <Link
+                        href="/dashboard/archive"
+                        aria-label="Archived Courses"
+                        className="flex min-w-0 items-center gap-2"
+                      >
                         <Archive className="h-4 w-4 shrink-0" />
                         <span
                           aria-hidden={collapsed}
@@ -381,6 +390,7 @@ export default function DashboardSidebarMenu() {
                   </TooltipTrigger>
                   <TooltipContent
                     side="right"
+                    hidden={!collapsed}
                     className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
                     sideOffset={10}
                   >
@@ -393,18 +403,16 @@ export default function DashboardSidebarMenu() {
             {/* All Courses */}
             <SidebarMenuItem>
               <TooltipProvider delayDuration={100}>
-                <Tooltip open={collapsed ? undefined : false}>
+                <Tooltip>
                   <TooltipTrigger asChild>
                     <SidebarMenuButton
                       asChild
                       isActive={pathname === '/dashboard/all-courses'}
-                      className={cn(
-                        'hover:bg-secondary focus:bg-secondary text-sidebar-foreground',
-                        'data-[active=true]:bg-secondary',
-                      )}
+                      className={cn(menuButtonStyles)}
                     >
                       <Link
                         href="/dashboard/all-courses"
+                        aria-label="All Courses"
                         className="flex min-w-0 items-center gap-2"
                       >
                         <Library className="h-4 w-4 shrink-0" />
@@ -421,6 +429,7 @@ export default function DashboardSidebarMenu() {
                   </TooltipTrigger>
                   <TooltipContent
                     side="right"
+                    hidden={!collapsed}
                     className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
                     sideOffset={10}
                   >
@@ -477,7 +486,7 @@ export default function DashboardSidebarMenu() {
                   <button
                     type="button"
                     className="flex w-full items-center gap-2 text-left"
-                    onClick={() => signOut({ callbackUrl: '/' })}
+                    onClick={() => void safeSignOut({ callbackUrl: '/' })}
                   >
                     <LogOut className="h-4 w-4" />
                     Sign out

@@ -1,7 +1,7 @@
 'use client';
 
 import { ColumnDef } from '@tanstack/react-table';
-import { Delete, Pencil } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import { User } from '@prisma/client';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { EditUserDialog } from '@/components/dialogs/EditUserDialog';
@@ -36,6 +36,7 @@ function ActionsCell({
   viewerRole,
   viewerDefaultRole,
 }: ActionsCellProps) {
+  void facultyCount;
   const [open, setOpen] = useState(false);
 
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -46,7 +47,7 @@ function ActionsCell({
 
   // Treat site ADMIN as having course management privileges
   const isSiteAdmin = viewerDefaultRole === 'ADMIN';
-  const isCourseAdmin = currentCourseRole === 'ADMIN' || isSiteAdmin;
+  const isCourseAdmin = currentCourseRole === 'INSTRUCTOR' || isSiteAdmin;
 
   const handleDelete = async () => {
     try {
@@ -93,10 +94,10 @@ function ActionsCell({
     // Site admin can remove anyone
     if (isSiteAdmin) return true;
     if (!viewer) return false;
-    // Course admins can remove anyone except other course admins
-    if (viewer === 'ADMIN') return target !== 'ADMIN';
-    // Faculty can remove anyone except course admins and other faculty
-    if (viewer === 'FACULTY') return target !== 'ADMIN' && target !== 'FACULTY';
+    // Instructors can remove anyone except other instructors
+    if (viewer === 'INSTRUCTOR') return target !== 'INSTRUCTOR';
+    // Faculty can remove anyone except instructors and other faculty
+    if (viewer === 'FACULTY') return target !== 'INSTRUCTOR' && target !== 'FACULTY';
     return false;
   };
 
@@ -108,7 +109,7 @@ function ActionsCell({
 
   const deleteDescription = viewerCanDelete
     ? `This will remove the user from the roster for this course. This action cannot be undone.`
-    : 'Contact the course admin to remove this user.';
+    : 'Contact the instructor to remove this user.';
   // compute UI flags used in JSX
   const removeDisabled = courseIsArchived || hasSubmissions || !viewerCanDelete;
   const removeTitle = courseIsArchived
@@ -123,31 +124,32 @@ function ActionsCell({
     <div className="flex items-center gap-2">
       <EditUserDialog user={user} open={open} setOpen={setOpen} onSave={handleSave} />
 
-      {/* Edit button: visible to course admins or site ADMINs */}
+      {/* Edit button: visible to instructors or site ADMINs */}
       {isCourseAdmin && (
         <Button
           variant="secondary"
           onClick={() => setCourseEditOpen(true)}
           disabled={courseIsArchived}
           title={courseIsArchived ? 'Cannot edit an archived course' : undefined}
-          aria-label="Edit"
+          aria-label={`Edit ${user.firstName} ${user.lastName}`}
         >
           <Pencil className="h-4 w-4" />
         </Button>
       )}
 
-      {/* Inline delete button for Faculty only (Manage dropdown provides remove action for course admins) */}
+      {/* Inline delete button for Faculty only (Manage dropdown provides remove action for instructors) */}
       {currentCourseRole === 'FACULTY' && (
         <Button
           variant="destructive"
           disabled={removeDisabled}
           title={removeTitle}
+          aria-label={`Remove ${user.firstName} ${user.lastName} from course`}
           onClick={() => {
             if (removeDisabled) return;
             setConfirmOpen(true);
           }}
         >
-          <Delete />
+          <Trash2 className="h-4 w-4" />
         </Button>
       )}
 
@@ -214,18 +216,18 @@ export const userColumns = (
   const currentCourseRole = viewerRole ?? null;
   const isSiteAdmin = viewerDefaultRole === 'ADMIN';
   const viewerHasActions =
-    isSiteAdmin || currentCourseRole === 'ADMIN' || currentCourseRole === 'FACULTY';
+    isSiteAdmin || currentCourseRole === 'INSTRUCTOR' || currentCourseRole === 'FACULTY';
 
   const cols: ColumnDef<User>[] = [
     {
       id: 'avatar',
-      header: '',
+      header: () => <span className="sr-only">Avatar</span>,
       cell: ({ row }) => {
         const user = row.original;
         const initials = `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase();
         const avatarUrl = user.avatar
-          ? `/api/uploads/pfps/${user.avatar}`
-          : '/api/uploads/pfps/default-avatar.png';
+          ? `/uploads/pfps/${user.avatar}`
+          : '/uploads/pfps/default-avatar.png';
 
         return (
           <Avatar className="h-10 w-10">

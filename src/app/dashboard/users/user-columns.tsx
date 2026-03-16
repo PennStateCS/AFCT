@@ -4,6 +4,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { roleSortingFn } from '@/lib/roles';
 import { useState } from 'react';
 import { User } from '@prisma/client';
+import type { UserListItem } from '@/lib/users-list';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/RoleBadge';
@@ -24,7 +25,10 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 
-export function getUserColumns(onUserUpdate: () => void, timeZone: string): ColumnDef<User>[] {
+export function getUserColumns(
+  onUserUpdate: () => void,
+  timeZone: string,
+): ColumnDef<UserListItem>[] {
   return [
     {
       id: 'avatar',
@@ -81,6 +85,15 @@ export function getUserColumns(onUserUpdate: () => void, timeZone: string): Colu
       sortingFn: roleSortingFn,
     },
     {
+      accessorKey: 'temporaryPassword',
+      header: 'Temp Password',
+      meta: { priority: 3 },
+      cell: ({ row }) => {
+        const temporaryPassword = row.getValue<boolean>('temporaryPassword');
+        return temporaryPassword ? 'Yes' : 'No';
+      },
+    },
+    {
       accessorKey: 'inactive',
       header: 'Active',
       meta: { priority: 4 },
@@ -99,7 +112,7 @@ export function getUserColumns(onUserUpdate: () => void, timeZone: string): Colu
     },
     {
       id: 'actions',
-      header: '',
+      header: () => <span className="sr-only">Actions</span>,
       meta: { priority: 1 },
       cell: ({ row }) => {
         const user = row.original;
@@ -110,22 +123,28 @@ export function getUserColumns(onUserUpdate: () => void, timeZone: string): Colu
 }
 
 // Extract the cell component to fix React hooks violation
-function UserActionsCell({ user, onUserUpdate }: { user: User; onUserUpdate: () => void }) {
+function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpdate: () => void }) {
   const [editOpen, setEditOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  async function handlePasswordReset(newPassword: string) {
+  async function handlePasswordReset(newPassword: string, isTemporary: boolean) {
     try {
-      await fetch('/api/admin/reset-password', {
+      const res = await fetch('/api/admin/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id, newPassword }),
+        body: JSON.stringify({ userId: user.id, newPassword, isTemporary }),
       });
-      showToast.success('Password reset successfully.');
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || 'Failed to reset password.');
+      }
+
       setResetOpen(false);
-    } catch {
-      showToast.error('Failed to reset password.');
+      onUserUpdate();
+    } catch (error) {
+      showToast.error(error instanceof Error ? error.message : 'Failed to reset password.');
     }
   }
 
@@ -154,7 +173,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: User; onUserUpdate: () 
   return (
     <>
       <EditUserDialog
-        user={user}
+        user={user as unknown as User}
         open={editOpen}
         setOpen={setEditOpen}
         onSave={async () => {
