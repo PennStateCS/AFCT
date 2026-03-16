@@ -1,6 +1,6 @@
 'use client';
 
-import { useSession, signOut } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
 import { useEffect, useRef, useState } from 'react';
 import {
   Dialog,
@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { safeSignOut } from '@/lib/safe-signout';
 
 // Constants moved outside component to avoid dependency issues
 const INACTIVITY_LIMIT = 20 * 60 * 1000; // 20 minutes (was 5 minutes)
@@ -23,15 +24,29 @@ export default function SessionWatcher() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
   const inactivityRef = useRef<NodeJS.Timeout | null>(null);
+  const warningActiveRef = useRef(false);
+  const signingOutRef = useRef(false);
 
   const [showModal, setShowModal] = useState(false);
   const [timeLeft, setTimeLeft] = useState(60);
+
+  const performSignOut = () => {
+    if (signingOutRef.current) return;
+    signingOutRef.current = true;
+
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    if (inactivityRef.current) clearTimeout(inactivityRef.current);
+
+    void safeSignOut({ callbackUrl: '/login' });
+  };
 
   // Always run hooks, but guard effects with conditions
   useEffect(() => {
     if (status !== 'authenticated' || !session?.user) return;
 
     const handleActivity = () => {
+      if (warningActiveRef.current || signingOutRef.current) return;
       if (inactivityRef.current) clearTimeout(inactivityRef.current);
       inactivityRef.current = setTimeout(triggerWarning, INACTIVITY_LIMIT);
     };
@@ -62,7 +77,7 @@ export default function SessionWatcher() {
     if (timeout > 0) {
       timerRef.current = setTimeout(triggerWarning, Math.max(timeout - WARNING_TIME, 0));
     } else {
-      signOut({ callbackUrl: '/login' });
+      performSignOut();
     }
 
     return () => {
@@ -72,6 +87,9 @@ export default function SessionWatcher() {
   }, [status, session]);
 
   const triggerWarning = () => {
+    if (warningActiveRef.current || signingOutRef.current) return;
+
+    warningActiveRef.current = true;
     setShowModal(true);
     setTimeLeft(TOTAL_COUNTDOWN);
 
@@ -85,7 +103,7 @@ export default function SessionWatcher() {
 
       if (remaining <= 0) {
         clearInterval(countdownRef.current!);
-        signOut({ callbackUrl: '/login' });
+        performSignOut();
       }
     }, 100);
   };
@@ -96,17 +114,18 @@ export default function SessionWatcher() {
       const data = await res.json();
 
       if (data.ok) {
+        warningActiveRef.current = false;
         setShowModal(false);
         if (countdownRef.current) clearInterval(countdownRef.current);
         if (inactivityRef.current) clearTimeout(inactivityRef.current);
         inactivityRef.current = setTimeout(triggerWarning, INACTIVITY_LIMIT);
         await update();
       } else {
-        signOut({ callbackUrl: '/login' });
+        performSignOut();
       }
     } catch (err) {
       console.error('Failed to extend session', err);
-      signOut({ callbackUrl: '/login' });
+      performSignOut();
     }
   };
 
@@ -142,7 +161,7 @@ export default function SessionWatcher() {
           <Button variant="secondary" onClick={extendSession}>
             Extend Session
           </Button>
-          <Button variant="destructive" onClick={() => signOut({ callbackUrl: '/login' })}>
+          <Button variant="destructive" onClick={performSignOut}>
             Logout Now
           </Button>
         </DialogFooter>

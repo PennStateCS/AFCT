@@ -13,11 +13,20 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import InputGroup from '@/components/ui/InputGroup';
+import SwitchField from '@/components/ui/SwitchField';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
+import { Check, ChevronDown, Search as SearchIcon } from 'lucide-react';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -38,7 +47,10 @@ type CreateProblemDialogProps = {
   setOpen: (open: boolean) => void;
   courseId: string;
   courseIsArchived: boolean;
-  onCreated?: (created?: Problem) => void;
+  // Optional assignment context: when provided, the dialog will automatically
+  // add the created problem to the assignment and optionally assign it to a group.
+  assignmentId?: string;
+  onCreated?: (created?: Problem, createdSuccessfully?: boolean) => void;
 };
 
 // RHF state BEFORE transforms
@@ -52,6 +64,7 @@ export function CreateProblemDialog({
   setOpen,
   courseId,
   courseIsArchived,
+  assignmentId,
   onCreated,
 }: CreateProblemDialogProps) {
   const defaults: FormValues = useMemo(
@@ -59,7 +72,11 @@ export function CreateProblemDialog({
       title: '',
       description: '',
       type: 'FA',
-      isUnlimited: true,
+      isUnlimitedSubmissions: true,
+      maxSubmissions: 100,
+      maxPoints: 100,
+      autograderEnabled: true,
+      isUnlimitedStates: true,
       maxStates: 100,
       isDeterministic: false,
       file: undefined,
@@ -73,8 +90,7 @@ export function CreateProblemDialog({
     handleSubmit,
     reset,
     watch,
-	setError,
-	clearError,
+    setError,
     formState: { errors, isSubmitting, isValid },
   } = useForm<FormValues>({
     resolver: zodResolver(ProblemFormSchema),
@@ -84,8 +100,25 @@ export function CreateProblemDialog({
   });
 
   const type = watch('type');
-  const isUnlimited = watch('isUnlimited');
+  const isUnlimitedSubmissions = watch('isUnlimitedSubmissions');
+  const isUnlimitedStates = watch('isUnlimitedStates');
   const file = watch('file');
+
+  // Group assignment support (only relevant when opened in assignment context)
+  const [assignmentIsGroup, setAssignmentIsGroup] = useState(false);
+  const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
+  const [groupsLoading, setGroupsLoading] = useState(false);
+  const [selectedGroupId, setSelectedGroupId] = useState<'ALL' | string>('ALL');
+  const [groupFilter, setGroupFilter] = useState('');
+  const filteredGroups = useMemo(() => {
+    const q = groupFilter.trim().toLowerCase();
+    if (!q) return groups;
+    return groups.filter((g) => g.name.toLowerCase().includes(q));
+  }, [groups, groupFilter]);
+
+  // Internal visibility state: only show dialog after groups are loaded (if needed)
+  const [internalOpen, setInternalOpen] = useState(false);
+  const [initializing, setInitializing] = useState(false);
 
   const fileErrorMessage = (() => {
     const e = errors.file;
@@ -103,30 +136,111 @@ export function CreateProblemDialog({
   })();
 
   useEffect(() => {
-    if (open) {
-      reset(defaults, {
-        keepDirty: false,
-        keepTouched: false,
-        keepErrors: false,
-        keepValues: false,
-      });
-    } else {
-      reset(defaults, {
-        keepDirty: false,
-        keepTouched: false,
-        keepErrors: false,
-        keepValues: false,
-      });
-    }
-  }, [open, defaults, reset]);
+    let aborted = false;
+    const ac = new AbortController();
 
-  const resetForm = () =>
+    async function init() {
+      setInitializing(true);
+      setInternalOpen(false);
+      setSelectedGroupId('ALL');
+      setAssignmentIsGroup(false);
+      setGroups([]);
+      setGroupsLoading(false);
+
+      try {
+        if (assignmentId) {
+          const res = await fetch(`/api/courses/${courseId}/${assignmentId}`, {
+            signal: ac.signal,
+          });
+          if (!res.ok) {
+            // treat as non-group assignment on failure
+            setAssignmentIsGroup(false);
+          } else {
+            const data = await res.json();
+            setAssignmentIsGroup(!!data?.isGroup);
+            if (data?.isGroup) {
+              setGroupsLoading(true);
+              try {
+                const gr = await fetch(`/api/courses/${courseId}/groups`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ action: 'list' }),
+                });
+                if (gr.ok) {
+                  const gdata = await gr.json();
+                  setGroups(Array.isArray(gdata) ? gdata : []);
+                } else {
+                  setGroups([]);
+                }
+              } catch (err: any) {
+                if (err?.name === 'AbortError') return;
+                console.error('Failed to load groups:', err);
+                setGroups([]);
+              } finally {
+                setGroupsLoading(false);
+              }
+            } else {
+              setGroups([]);
+            }
+          }
+        } else {
+          setAssignmentIsGroup(false);
+          setGroups([]);
+        }
+      } catch (err: any) {
+        if (err?.name === 'AbortError') return;
+        console.error('Failed to load assignment info:', err);
+        setAssignmentIsGroup(false);
+        setGroups([]);
+        setGroupsLoading(false);
+      } finally {
+        if (!aborted) {
+          // Ready to open the dialog: reset form and show
+          reset(defaults, {
+            keepDirty: false,
+            keepTouched: false,
+            keepErrors: false,
+            keepValues: false,
+          });
+          setInternalOpen(true);
+          setInitializing(false);
+        }
+      }
+    }
+
+    if (open) {
+      init();
+    } else {
+      // parent closed while we were possibly initializing
+      setInternalOpen(false);
+      setInitializing(false);
+      reset(defaults, {
+        keepDirty: false,
+        keepTouched: false,
+        keepErrors: false,
+        keepValues: false,
+      });
+      setSelectedGroupId('ALL');
+      setAssignmentIsGroup(false);
+      setGroups([]);
+      setGroupsLoading(false);
+    }
+
+    return () => {
+      aborted = true;
+      ac.abort();
+    };
+  }, [open, defaults, reset, assignmentId, courseId]);
+
+  const resetForm = () => {
     reset(defaults, {
       keepDirty: false,
       keepTouched: false,
       keepErrors: false,
       keepValues: false,
     });
+    setSelectedGroupId('ALL');
+  };
 
   const onSubmit = async (raw: FormValues) => {
     try {
@@ -139,47 +253,56 @@ export function CreateProblemDialog({
       formData.append('title', values.title);
       formData.append('description', values.description ?? '');
       formData.append('type', values.type);
+      formData.append(
+        'maxSubmissions',
+        values.isUnlimitedSubmissions ? '-1' : String(values.maxSubmissions ?? 0),
+      );
+      formData.append('maxPoints', String(values.maxPoints));
+      formData.append('autograderEnabled', String(!!values.autograderEnabled));
       formData.append('courseId', values.courseId);
 
       if (values.type === 'FA' || values.type === 'PDA') {
-        formData.append('maxStates', values.isUnlimited ? '-1' : String(values.maxStates ?? 0));
+        formData.append(
+          'maxStates',
+          values.isUnlimitedStates ? '-1' : String(values.maxStates ?? 0),
+        );
       }
       if (values.type === 'FA') {
         formData.append('isDeterministic', String(!!values.isDeterministic));
       }
-      
-      await new Promise<void>((resolve, reject) => {	  
-	    const reader = new FileReader();
- 
-	    reader.onload = function(e) {
-          const parser = new DOMParser(); 
-		  const jff = parser.parseFromString(e.target.result, 'text/xml');
-
-		  if (jff.querySelector('parseerror')){
-            reject('JFF file not a vaild XML');
-		  }
-
-		  const rawType = (jff.querySelector('type')?.textContent || '').toUpperCase();
-
-          if (rawType !== ((values.type === 'CFG') ? 'GRAMMAR' : values.type)){
-            console.error(`The JFF file must be of type ${values.type}`);
-            reject(`The JFF file must be of type ${values.type}`);
-		    return;
-	      }
-		  resolve();
-	    }
-
-		reader.onerror = () => reject('Error reading file');
-
-	    reader.readAsText(values.file);
-      });
 
       formData.append('file', values.file);
       const res = await fetch('/api/problems', { method: 'POST', body: formData });
-      
+
       if (res.ok) {
         const created = await res.json().catch(() => null);
-        onCreated?.(created);
+
+        // If we were opened in the context of an assignment, automatically add
+        // the created problem to that assignment (group assignment support is based on assignment.groupId)
+        if (created?.id && assignmentId) {
+          try {
+            const payload: any = { problemIds: [created.id] };
+            // If the assignment supports group assignments and a specific group
+            // was chosen (not 'ALL'), include the groupId. If 'ALL' is chosen,
+            // omit groupId to assign to all students.
+            if (assignmentIsGroup && selectedGroupId && selectedGroupId !== 'ALL') {
+              payload.groupId = selectedGroupId;
+            }
+
+            const ar = await fetch(`/api/courses/${courseId}/${assignmentId}/add-problems`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+            if (!ar.ok) {
+              console.error('Failed to add created problem to assignment');
+            }
+          } catch (err) {
+            console.error('Failed to add created problem to assignment:', err);
+          }
+        }
+
+        onCreated?.(created, true);
         resetForm();
         setOpen(false);
       } else {
@@ -188,7 +311,7 @@ export function CreateProblemDialog({
       }
     } catch (error) {
       console.error('Form submission error:', error);
-	  if (typeof error === "string") {
+      if (typeof error === 'string') {
         setError('file', { type: 'manual', message: error });
         return;
       }
@@ -202,10 +325,14 @@ export function CreateProblemDialog({
 
   return (
     <Dialog
-      open={open}
+      open={internalOpen}
       onOpenChange={(val) => {
-        setOpen(val);
-        if (!val) resetForm();
+        // only propagate close events back to parent
+        if (!val) {
+          setOpen(false);
+          resetForm();
+          setInternalOpen(false);
+        }
       }}
     >
       <DialogContent
@@ -280,6 +407,82 @@ export function CreateProblemDialog({
             )}
           />
 
+          {/* Group assignment dropdown (shown only when the assignment supports groups) */}
+          {assignmentIsGroup && (
+            <div>
+              <Label className="mb-2 block">Assign to Group</Label>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <div>
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between rounded border p-2 text-left"
+                      aria-haspopup="listbox"
+                    >
+                      <span className="truncate">
+                        {selectedGroupId === 'ALL'
+                          ? 'All students'
+                          : groups.find((g) => g.id === selectedGroupId)?.name || 'Select group'}
+                      </span>
+                      <ChevronDown className="ml-2 h-4 w-4" />
+                    </button>
+                  </div>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-80 max-w-[90vw] p-2" align="start">
+                  <div className="mb-2">
+                    <div className="relative">
+                      <SearchIcon className="text-muted-foreground absolute top-3 left-3 h-4 w-4" />
+                      <Input
+                        className="pl-10"
+                        placeholder="Search groups"
+                        value={groupFilter}
+                        onChange={(e) => setGroupFilter(e.target.value)}
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+
+                  <div className="bg-card max-h-64 overflow-auto rounded-md border">
+                    <ul>
+                      <li>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedGroupId('ALL')}
+                          className={`hover:bg-primary/10 flex w-full items-center justify-between gap-2 px-3 py-2 text-left ${
+                            selectedGroupId === 'ALL' ? 'bg-primary/10' : ''
+                          }`}
+                        >
+                          <div className="truncate">All students</div>
+                          {selectedGroupId === 'ALL' && <Check className="h-4 w-4" />}
+                        </button>
+                      </li>
+                      {groupsLoading ? (
+                        <li className="text-muted-foreground p-3 text-sm">Loading…</li>
+                      ) : filteredGroups.length === 0 ? (
+                        <li className="text-muted-foreground p-3 text-sm">No groups available</li>
+                      ) : (
+                        filteredGroups.map((g) => (
+                          <li key={g.id}>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedGroupId(g.id)}
+                              className={`hover:bg-primary/10 flex w-full items-center justify-between gap-2 px-3 py-2 text-left ${
+                                selectedGroupId === g.id ? 'bg-primary/10' : ''
+                              }`}
+                            >
+                              <div className="truncate">{g.name}</div>
+                              {selectedGroupId === g.id && <Check className="h-4 w-4" />}
+                            </button>
+                          </li>
+                        ))
+                      )}
+                    </ul>
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
+
           {/* Max States (FA/PDA only) */}
           {(type === 'FA' || type === 'PDA') && (
             <Controller
@@ -293,17 +496,17 @@ export function CreateProblemDialog({
                     type="number"
                     fieldProps={{
                       ...field,
-                      value: isUnlimited ? '' : String(field.value || ''),
+                      value: isUnlimitedStates ? '' : String(field.value || ''),
                     }}
                     min={1}
-                    max={1000}
-                    disabled={isUnlimited}
+                    max={1_000}
+                    disabled={isUnlimitedStates}
                     error={errors.maxStates?.message}
                   />
                   <div className="mt-1 flex items-center gap-2">
                     <Controller
                       control={control}
-                      name="isUnlimited"
+                      name="isUnlimitedStates"
                       render={({ field: uf }) => (
                         <>
                           <input
@@ -323,21 +526,34 @@ export function CreateProblemDialog({
 
           {/* Deterministic (FA only) */}
           {type === 'FA' && (
-            <div className="flex items-center justify-between">
-              <Label htmlFor="isDeterministic">Deterministic</Label>
-              <Controller
-                control={control}
-                name="isDeterministic"
-                render={({ field }) => (
-                  <Switch
-                    id="isDeterministic"
-                    checked={!!field.value}
-                    onCheckedChange={(checked) => field.onChange(!!checked)}
-                  />
-                )}
-              />
-            </div>
+            <Controller
+              control={control}
+              name="isDeterministic"
+              render={({ field }) => (
+                <SwitchField
+                  label="Deterministic"
+                  name="isDeterministic"
+                  id="isDeterministic"
+                  checked={!!field.value}
+                  onCheckedChange={(checked) => field.onChange(!!checked)}
+                />
+              )}
+            />
           )}
+
+          <Controller
+            control={control}
+            name="autograderEnabled"
+            render={({ field }) => (
+              <SwitchField
+                label="Automatically Graded"
+                name="autograderEnabled"
+                id="autograderEnabled"
+                checked={!!field.value}
+                onCheckedChange={(checked) => field.onChange(!!checked)}
+              />
+            )}
+          />
 
           {/* File (avoid InputGroup; file inputs must be uncontrolled) */}
           <Controller

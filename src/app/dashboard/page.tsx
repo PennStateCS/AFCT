@@ -23,7 +23,6 @@ export default async function DashboardPage() {
 
   // Get user's id
   const { id, role } = session.user;
-  const showSubmissions = role === 'FACULTY' || role === 'TA';
 
   // Get all courses for the user via roster entries
   const rosterEntries = await prisma.roster.findMany({
@@ -33,15 +32,33 @@ export default async function DashboardPage() {
         isArchived: false,
       },
     },
-    include: {
+    select: {
+      role: true,
+      courseId: true,
       course: {
-        include: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          semester: true,
+          credits: true,
+          startDate: true,
+          endDate: true,
+          isPublished: true,
+          isArchived: true,
           roster: {
-            include: {
-              user: true, // Load user info for each roster member
+            select: {
+              role: true,
+              user: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  role: true,
+                },
+              },
             },
           },
-          assignments: true,
         },
       },
     },
@@ -61,24 +78,124 @@ export default async function DashboardPage() {
 
   const courseIds = courses.map((c) => c.id);
 
+  const gradingRoleEntries = rosterEntries.filter(
+    (entry) => entry.role === 'TA' || entry.role === 'FACULTY' || entry.role === 'INSTRUCTOR',
+  );
+  const gradingCourseIds = gradingRoleEntries.map((entry) => entry.courseId);
+  const showSubmissions = gradingCourseIds.length > 0;
+
+  const pendingByAssignment = new Map<
+    string,
+    {
+      assignmentId: string;
+      assignmentTitle: string;
+      courseId: string;
+      dueDate: Date;
+      pendingCount: number;
+    }
+  >();
+
+  if (showSubmissions) {
+    const manualSubmissions = await prisma.submission.findMany({
+      where: {
+        assignmentProblem: {
+          assignment: {
+            courseId: { in: gradingCourseIds },
+            course: { isArchived: false },
+          },
+          autograderEnabled: false,
+        },
+      },
+      select: {
+        assignmentId: true,
+        problemId: true,
+        studentId: true,
+        assignmentProblem: {
+          select: {
+            assignment: {
+              select: {
+                id: true,
+                title: true,
+                courseId: true,
+                dueDate: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const manualGrades = await prisma.assignmentProblemGrade.findMany({
+      where: {
+        assignmentProblem: {
+          assignment: {
+            courseId: { in: gradingCourseIds },
+            course: { isArchived: false },
+          },
+          autograderEnabled: false,
+        },
+      },
+      select: {
+        assignmentId: true,
+        problemId: true,
+        studentId: true,
+      },
+    });
+
+    const gradedSubmissionKeys = new Set(
+      manualGrades.map((grade) => `${grade.assignmentId}:${grade.problemId}:${grade.studentId}`),
+    );
+
+    for (const submission of manualSubmissions) {
+      const isGraded = gradedSubmissionKeys.has(
+        `${submission.assignmentId}:${submission.problemId}:${submission.studentId}`,
+      );
+      if (isGraded) continue;
+
+      const assignment = submission.assignmentProblem.assignment;
+      const key = assignment.id;
+      const existing = pendingByAssignment.get(key);
+
+      if (existing) {
+        existing.pendingCount += 1;
+      } else {
+        pendingByAssignment.set(key, {
+          assignmentId: assignment.id,
+          assignmentTitle: assignment.title,
+          courseId: assignment.courseId,
+          dueDate: assignment.dueDate,
+          pendingCount: 1,
+        });
+      }
+    }
+  }
+
+  const pendingAssignments = Array.from(pendingByAssignment.values()).sort(
+    (a, b) => a.dueDate.getTime() - b.dueDate.getTime(),
+  );
+
   // Get upcoming assignments for all user's courses
-  const assignments = await prisma.assignment.findMany({
-    where: {
-      courseId: { in: courseIds },
-      isPublished: true,
-      dueDate: { gt: new Date() },
-    },
-    select: {
-      id: true,
-      title: true,
-      dueDate: true,
-      courseId: true,
-    },
-    orderBy: { dueDate: 'asc' },
-  });
+  const assignments =
+    courseIds.length === 0
+      ? []
+      : await prisma.assignment.findMany({
+          where: {
+            courseId: { in: courseIds },
+            isPublished: true,
+            dueDate: { gt: new Date() },
+          },
+          select: {
+            id: true,
+            title: true,
+            dueDate: true,
+            courseId: true,
+          },
+          orderBy: { dueDate: 'asc' },
+        });
 
   return (
-    <div className="flex h-full w-full flex-col lg:flex-row">
+    <div className="flex h-full w-full flex-col pb-4 lg:flex-row">
+      <h1 className="sr-only">Dashboard</h1>
       {/* Left (Big Column) */}
       <div className="w-full lg:w-3/4">
         <DashboardClient sessionUser={session.user} courses={courses} title={'Current Courses'} />
@@ -91,7 +208,7 @@ export default async function DashboardPage() {
         </div>
         {showSubmissions && (
           <div className="pb-4">
-            <SubmissionsModule />
+            <SubmissionsModule pendingAssignments={pendingAssignments} />
           </div>
         )}
         <div>

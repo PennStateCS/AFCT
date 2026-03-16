@@ -1,4 +1,5 @@
-import type { Metadata } from 'next';
+import React from 'react';
+import type { Metadata, Viewport } from 'next';
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 
@@ -19,6 +20,9 @@ export const metadata: Metadata = {
     title: 'AFCT Dashboard - Login',
     description: 'Sign in to the AFCT Dashboard to manage courses, assignments, and submissions.',
   },
+};
+
+export const viewport: Viewport = {
   themeColor: '#0F172A',
 };
 
@@ -26,7 +30,7 @@ export default async function LoginLayout({ children }: { children: React.ReactN
   const session = await auth();
 
   if (session) {
-    redirect('/dashboard');
+    redirect(session.user.mustChangePassword ? '/change-password' : '/dashboard');
   }
 
   return (
@@ -35,7 +39,7 @@ export default async function LoginLayout({ children }: { children: React.ReactN
       aria-label="Login page"
       className="bg-background text-foreground flex min-h-screen w-full items-center justify-center font-sans"
     >
-      <section aria-label="Authentication panel" className="w-full">
+      <section aria-label="Authentication panel" className="w-full px-4 py-6">
         {children}
       </section>
     </main>

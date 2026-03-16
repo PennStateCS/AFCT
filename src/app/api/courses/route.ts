@@ -83,7 +83,7 @@ export async function GET() {
         assignments: {
           include: {
             problems: {
-              include: { problem: { select: { id: true } } },
+              select: { maxPoints: true },
             },
           },
         },
@@ -99,9 +99,23 @@ export async function GET() {
         courseRole: r.role,
       }));
 
+      const assignmentsWithDerivedPoints = c.assignments.map((assignment) => {
+        const totalProblemPoints = (assignment.problems ?? []).reduce((sum, ap) => {
+          const value = typeof ap.maxPoints === 'number' ? ap.maxPoints : 0;
+          return sum + (Number.isFinite(value) ? value : 0);
+        }, 0);
+
+        const { problems, ...restAssignment } = assignment;
+        return {
+          ...restAssignment,
+          maxPoints: totalProblemPoints,
+          problemCount: problems?.length ?? 0,
+        };
+      });
+
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { roster, ...rest } = c;
-      return { ...rest, enrolled };
+      const { roster, assignments, ...rest } = c;
+      return { ...rest, enrolled, assignments: assignmentsWithDerivedPoints };
     });
 
     return NextResponse.json(formatted, { status: 200 });

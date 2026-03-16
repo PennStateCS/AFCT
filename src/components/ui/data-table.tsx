@@ -1,5 +1,7 @@
 'use client';
 
+import React from 'react';
+
 import {
   ColumnDef,
   flexRender,
@@ -72,6 +74,9 @@ interface DataTableProps<TData, TValue> {
   loading?: boolean;
   storageKey?: string;
   onRowClick?: (row: { original: TData }) => void;
+  tableLabel?: string;
+  showExportButton?: boolean;
+  actionButtons?: React.ReactNode;
 }
 
 export function DataTable<TData, TValue>({
@@ -80,6 +85,9 @@ export function DataTable<TData, TValue>({
   loading = false,
   storageKey = 'datatable-columns',
   onRowClick,
+  tableLabel = 'Data table',
+  showExportButton = true,
+  actionButtons,
 }: DataTableProps<TData, TValue>) {
   const [globalFilter, setGlobalFilter] = useState('');
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
@@ -170,6 +178,21 @@ export function DataTable<TData, TValue>({
     return '';
   };
 
+  const toAccessibleColumnName = (id: string) =>
+    id
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .replace(/_/g, ' ')
+      .trim()
+      .toLowerCase();
+
+  const getColumnFilterLabel = (column: ReturnType<typeof table.getAllLeafColumns>[number]) => {
+    const header = column.columnDef.header;
+    if (typeof header === 'string' && header.trim().length > 0) {
+      return header;
+    }
+    return column.id;
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -198,10 +221,14 @@ export function DataTable<TData, TValue>({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={exportToCSV} aria-label="Export table data to CSV">
-            <FileDown className="h-4 w-4" aria-hidden="true" />
-            Export to CSV
-          </Button>
+          {actionButtons}
+
+          {showExportButton ? (
+            <Button variant="outline" onClick={exportToCSV} aria-label="Export table data to CSV">
+              <FileDown className="h-4 w-4" aria-hidden="true" />
+              Export to CSV
+            </Button>
+          ) : null}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -221,7 +248,7 @@ export function DataTable<TData, TValue>({
                     checked={col.getIsVisible()}
                     onCheckedChange={(value) => col.toggleVisibility(!!value)}
                   >
-                    {col.id}
+                    {getColumnFilterLabel(col)}
                   </DropdownMenuCheckboxItem>
                 ))}
               <DropdownMenuSeparator />
@@ -234,11 +261,12 @@ export function DataTable<TData, TValue>({
       </div>
 
       <div className="overflow-x-auto rounded-md border">
-        <Table className="w-full" role="table">
+        <Table className="w-full" role="table" aria-label={tableLabel}>
           <TableHeader role="rowgroup">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow
                 key={headerGroup.id}
+                className={loading ? 'hover:bg-transparent' : undefined}
                 style={{
                   backgroundColor: 'var(--table-header)',
                   color: 'var(--table-header-foreground)',
@@ -266,23 +294,34 @@ export function DataTable<TData, TValue>({
                   return (
                     <TableHead
                       key={header.id}
-                      onClick={handleSortClick}
-                      className={`${getResponsiveClass(priority)} ${
+                      aria-sort={
                         canSort
-                          ? 'cursor-pointer whitespace-nowrap select-none'
-                          : 'whitespace-nowrap'
+                          ? sorted === 'asc'
+                            ? 'ascending'
+                            : sorted === 'desc'
+                              ? 'descending'
+                              : 'none'
+                          : undefined
+                      }
+                      className={`${getResponsiveClass(priority)} ${
+                        canSort ? 'whitespace-nowrap' : 'whitespace-nowrap'
                       } h-12 font-semibold`}
                     >
-                      {header.isPlaceholder ? null : (
+                      {header.isPlaceholder ? null : canSort ? (
+                        <button
+                          type="button"
+                          onClick={handleSortClick}
+                          className="flex w-full cursor-pointer items-center text-left select-none"
+                          aria-label={`Sort by ${toAccessibleColumnName(header.column.id)}`}
+                        >
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          {sorted === 'asc' && <ArrowUp className="ml-1 h-3 w-3" />}
+                          {sorted === 'desc' && <ArrowDown className="ml-1 h-3 w-3" />}
+                          {!sorted && <ArrowUpDown className="ml-1 h-3 w-3 opacity-40" />}
+                        </button>
+                      ) : (
                         <div className="flex items-center">
                           {flexRender(header.column.columnDef.header, header.getContext())}
-                          {canSort && (
-                            <>
-                              {sorted === 'asc' && <ArrowUp className="ml-1 h-3 w-3" />}
-                              {sorted === 'desc' && <ArrowDown className="ml-1 h-3 w-3" />}
-                              {!sorted && <ArrowUpDown className="ml-1 h-3 w-3 opacity-40" />}
-                            </>
-                          )}
                         </div>
                       )}
                     </TableHead>
@@ -294,7 +333,7 @@ export function DataTable<TData, TValue>({
 
           <TableBody>
             {loading ? (
-              <TableRow>
+              <TableRow className="pointer-events-none hover:bg-transparent">
                 <TableCell colSpan={columns.length} className="py-10 text-center">
                   <div className="flex flex-col items-center justify-center gap-2 text-gray-500">
                     <Loader2 className="h-6 w-6 animate-spin" />
@@ -330,7 +369,7 @@ export function DataTable<TData, TValue>({
                 </TableRow>
               ))
             ) : (
-              <TableRow>
+              <TableRow className="hover:bg-transparent">
                 <TableCell colSpan={columns.length} className="py-8 text-center">
                   <div className="text-muted-foreground flex flex-col items-center">
                     <Inbox className="mb-2 h-10 w-10 text-gray-400" />
@@ -344,6 +383,7 @@ export function DataTable<TData, TValue>({
 
           <TableFooter>
             <TableRow
+              className={loading ? 'hover:bg-transparent' : undefined}
               style={{
                 backgroundColor: 'var(--table-background)',
                 color: 'var(--table-header-foreground)',
@@ -351,7 +391,7 @@ export function DataTable<TData, TValue>({
             >
               <TableCell colSpan={columns.length}>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="bg-header-background flex items-center gap-2 font-normal text-foreground">
+                  <div className="bg-header-background text-foreground flex items-center gap-2 font-normal">
                     <span>
                       Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
                       &nbsp;&nbsp;&nbsp;
@@ -361,7 +401,7 @@ export function DataTable<TData, TValue>({
                       value={String(table.getState().pagination.pageSize)}
                       onValueChange={(value) => table.setPageSize(Number(value))}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger aria-label="Rows per page">
                         <SelectValue placeholder="Select rows per page" />
                       </SelectTrigger>
                       <SelectContent>

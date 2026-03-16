@@ -1,92 +1,87 @@
 'use client';
+import React from 'react';
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import useVisibleItemCount from '@/hooks/useVisibleItemCount';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
-import {
-  startOfMonth,
-  endOfMonth,
-  startOfWeek,
-  endOfWeek,
-  startOfDay,
-  endOfDay,
-  addMonths,
-  subMonths,
-} from 'date-fns';
+import { addMonths, subMonths } from 'date-fns';
 import DayAssignmentsDialog from '@/components/dialogs/DayAssignmentsDialog';
 import { DueDateModule } from '@/components/modules/DueDateModule';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { toEndOfDayInTimezone } from '@/lib/date-utils';
 import { Button } from '@/components/ui/button';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
+import { CalendarAssignment, getDateKeyInTimeZone, getMonthRangeIso } from '@/lib/calendar-shared';
 
 // Fetch assignments for courses the current user is enrolled in between given ISO start/end
-async function fetchAssignmentsInRange(startIso: string, endIso: string) {
+async function fetchAssignmentsInRange(startIso: string, endIso: string, signal?: AbortSignal) {
   const res = await fetch('/api/assignments/range', {
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ start: startIso, end: endIso }),
+    signal,
   });
-  if (!res.ok) return [];
-  return res.json();
+  if (!res.ok) throw new Error('Failed to fetch assignments');
+  return (await res.json()) as Promise<CalendarAssignment[]>;
 }
 
-function getDateKeyInTimeZone(date: Date | string, timeZone: string): string {
-  const d = new Date(date);
-  if (!Number.isFinite(d.getTime())) return '';
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(d);
-  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  const year = lookup.year ?? '0000';
-  const month = lookup.month ?? '01';
-  const day = lookup.day ?? '01';
-  return `${year}-${month}-${day}`;
-}
-
-export default function CalendarClient() {
+export default function CalendarClient({
+  initialAssignments,
+  initialMonth,
+}: {
+  initialAssignments?: CalendarAssignment[];
+  initialMonth?: string;
+}) {
   const { timezone } = useEffectiveTimezone();
-  const [assignments, setAssignments] = useState<any[]>([]);
+  const [assignments, setAssignments] = useState<CalendarAssignment[]>(initialAssignments ?? []);
   const [selected, setSelected] = useState<Date | undefined>(undefined);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!Array.isArray(initialAssignments));
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [visibleStart, setVisibleStart] = useState<Date | null>(null);
   const [visibleEnd, setVisibleEnd] = useState<Date | null>(null);
-  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [currentMonth, setCurrentMonth] = useState(
+    initialMonth ? new Date(initialMonth) : new Date(),
+  );
+  const [visibleAssignmentLimit, setVisibleAssignmentLimit] = useState(2);
+  const requestIdRef = useRef(0);
+  const activeRequestControllerRef = useRef<AbortController | null>(null);
+  const didUseInitialDataRef = useRef(Array.isArray(initialAssignments));
 
   // Dialog state
   const [dayDialogOpen, setDayDialogOpen] = useState(false);
   const [dialogDate, setDialogDate] = useState<Date | null>(null);
-  const [dialogAssignments, setDialogAssignments] = useState<any[]>([]);
+  const [dialogAssignments, setDialogAssignments] = useState<CalendarAssignment[]>([]);
 
   const fetchForMonth = useCallback(
     async (month: Date) => {
-      setLoading(true);
-      const start = startOfWeek(startOfMonth(month));
-      const end = endOfWeek(endOfMonth(month));
+      try {
+        setLoading(true);
+        setLoadError(null);
+        const currentRequest = ++requestIdRef.current;
+        activeRequestControllerRef.current?.abort();
+        const controller = new AbortController();
+        activeRequestControllerRef.current = controller;
+        const { startIso, endIso } = getMonthRangeIso(month, timezone);
 
-      // Expand to day range [00:00, 23:59:59.999]
-      const startKey = getDateKeyInTimeZone(startOfDay(start), timezone);
-      const endKey = getDateKeyInTimeZone(endOfDay(end), timezone);
-      const startIso = toEndOfDayInTimezone(`${startKey}T00:00`, timezone).toISOString();
-      const endIso = toEndOfDayInTimezone(`${endKey}T23:59`, timezone).toISOString();
+        setVisibleStart(new Date(startIso));
+        setVisibleEnd(new Date(endIso));
 
-      setVisibleStart(new Date(startIso));
-      setVisibleEnd(new Date(endIso));
-
-      const data = await fetchAssignmentsInRange(startIso, endIso);
-      setAssignments(data);
-      setLoading(false);
+        const data = await fetchAssignmentsInRange(startIso, endIso, controller.signal);
+        if (currentRequest !== requestIdRef.current) return;
+        setAssignments(data);
+      } catch (error) {
+        if ((error as Error).name === 'AbortError') return;
+        console.error('Error loading calendar assignments:', error);
+        setLoadError('Failed to load calendar assignments. Please try again.');
+      } finally {
+        setLoading(false);
+      }
     },
     [timezone],
   );
 
-  const openDayDialog = (date: Date, dayAssignments: any[]) => {
+  const openDayDialog = (date: Date, dayAssignments: CalendarAssignment[]) => {
     setDialogDate(date);
     setDialogAssignments(dayAssignments);
     setDayDialogOpen(true);
@@ -99,9 +94,35 @@ export default function CalendarClient() {
   };
 
   useEffect(() => {
-    // initial month
-    fetchForMonth(currentMonth);
+    if (didUseInitialDataRef.current) {
+      didUseInitialDataRef.current = false;
+      return;
+    }
+    void fetchForMonth(currentMonth);
   }, [fetchForMonth, currentMonth]);
+
+  useEffect(() => {
+    const updateLimit = () => {
+      const width = window.innerWidth;
+      if (width < 768) {
+        setVisibleAssignmentLimit(1);
+      } else if (width < 1280) {
+        setVisibleAssignmentLimit(2);
+      } else {
+        setVisibleAssignmentLimit(3);
+      }
+    };
+
+    updateLimit();
+    window.addEventListener('resize', updateLimit);
+    return () => window.removeEventListener('resize', updateLimit);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      activeRequestControllerRef.current?.abort();
+    };
+  }, []);
 
   const monthLabel = useMemo(() => {
     return new Intl.DateTimeFormat('en-US', {
@@ -114,25 +135,26 @@ export default function CalendarClient() {
   const goToPreviousMonth = () => {
     const nextMonth = subMonths(currentMonth, 1);
     setCurrentMonth(nextMonth);
-    fetchForMonth(nextMonth);
   };
 
   const goToNextMonth = () => {
     const nextMonth = addMonths(currentMonth, 1);
     setCurrentMonth(nextMonth);
-    fetchForMonth(nextMonth);
   };
 
   // Helper to get a YYYY-MM-DD key in the user's timezone
   const localDateKey = (date: Date | string) => getDateKeyInTimeZone(date, timezone);
 
-  // Group assignments by date string (YYYY-MM-DD) using local dates
-  const assignmentsByDate: Record<string, any[]> = {};
-  assignments.forEach((a) => {
-    const dateStr = localDateKey(a.dueDate);
-    if (!assignmentsByDate[dateStr]) assignmentsByDate[dateStr] = [];
-    assignmentsByDate[dateStr].push(a);
-  });
+  // Group assignments by date string (YYYY-MM-DD) using local dates.
+  const assignmentsByDate = useMemo(() => {
+    const grouped: Record<string, CalendarAssignment[]> = {};
+    assignments.forEach((a) => {
+      const dateStr = localDateKey(a.dueDate);
+      if (!grouped[dateStr]) grouped[dateStr] = [];
+      grouped[dateStr].push(a);
+    });
+    return grouped;
+  }, [assignments, timezone]);
 
   // Navigate to a different day in the dialog (previous/next)
   const navigateDay = (date: Date) => {
@@ -147,14 +169,35 @@ export default function CalendarClient() {
     <div className="space-y-4 pb-8">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-2xl">Calendar</CardTitle>
+          <CardTitle role="heading" aria-level={1} className="text-2xl">
+            Calendar
+          </CardTitle>
           <div className="w-8" aria-hidden="true" />
         </CardHeader>
       </Card>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
         <Card className="flex h-full w-full flex-col">
-          <CardContent className="flex min-h-0 flex-1 flex-col pt-6">
+          <CardContent className="relative flex min-h-0 flex-1 flex-col pt-6">
+            {loadError ? (
+              <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-red-300 bg-red-50 px-3 py-2">
+                <p role="alert" className="text-sm text-red-700">
+                  {loadError}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void fetchForMonth(currentMonth)}
+                >
+                  Retry
+                </Button>
+              </div>
+            ) : null}
+            {loading ? (
+              <div className="pointer-events-none absolute top-3 right-3 z-10 rounded-md border border-slate-200 bg-white/90 px-2 py-1 shadow-sm backdrop-blur-sm dark:border-neutral-700 dark:bg-neutral-900/90">
+                <p className="text-muted-foreground text-xs italic">Loading assignments...</p>
+              </div>
+            ) : null}
             <div className="mx-auto mb-2 flex w-full max-w-6xl items-center justify-center gap-2 px-2">
               <Button
                 type="button"
@@ -166,7 +209,13 @@ export default function CalendarClient() {
               >
                 <ChevronLeftIcon className="h-4 w-4" />
               </Button>
-              <div className="w-56 px-4 text-center text-lg font-medium">{monthLabel}</div>
+              <div
+                aria-live="polite"
+                aria-atomic="true"
+                className="w-56 px-4 text-center text-lg font-medium"
+              >
+                {monthLabel}
+              </div>
               <Button
                 type="button"
                 variant="default"
@@ -179,135 +228,151 @@ export default function CalendarClient() {
               </Button>
             </div>
             <div className="h-full w-full overflow-auto">
-              <Calendar
-                mode="single"
-                selected={selected}
-                onSelect={setSelected}
-                formatters={{
-                  formatWeekdayName: (date) =>
-                    new Intl.DateTimeFormat('en-US', {
-                      weekday: 'short',
-                      timeZone: timezone,
-                    }).format(date),
-                }}
-                month={currentMonth}
-                onMonthChange={(month: Date) => {
-                  setCurrentMonth(month);
-                  fetchForMonth(month);
-                }}
-                className="text-foreground bg-card mx-auto h-full w-full max-w-6xl [--cell-size:3.25rem] sm:[--cell-size:3.5rem]"
-                timeZone={timezone}
-                classNames={{
-                  nav: 'hidden',
-                  month_caption: 'hidden',
-                  caption_label: 'hidden',
-                  dropdowns: 'hidden',
-                  weekday:
-                    'text-muted-foreground rounded-md flex-1 font-semibold text-[0.8rem] select-none text-center',
-                  day: 'relative w-full h-full p-0 text-center [&:first-child[data-selected=true]_button]:rounded-l-md [&:last-child[data-selected=true]_button]:rounded-r-md group/day aspect-square select-none border border-gray-300/60 dark:border-neutral-700',
-                }}
-                components={{
-                  DayButton: (props: any) => {
-                    const dateStr = localDateKey(props.day.date);
-                    const dayAssignments = (assignmentsByDate[dateStr] || [])
-                      .slice()
-                      .sort(
-                        (a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
+              <p id="calendar-keyboard-help" className="sr-only">
+                Use arrow keys to move between calendar days. Press Enter or Space to open
+                assignments for the focused day.
+              </p>
+              <div aria-describedby="calendar-keyboard-help">
+                <Calendar
+                  mode="single"
+                  selected={selected}
+                  onSelect={setSelected}
+                  formatters={{
+                    formatWeekdayName: (date) =>
+                      new Intl.DateTimeFormat('en-US', {
+                        weekday: 'short',
+                        timeZone: timezone,
+                      }).format(date),
+                  }}
+                  month={currentMonth}
+                  onMonthChange={(month: Date) => {
+                    setCurrentMonth(month);
+                  }}
+                  className="text-foreground bg-card mx-auto h-full w-full max-w-6xl [--cell-size:3.25rem] sm:[--cell-size:3.5rem]"
+                  timeZone={timezone}
+                  classNames={{
+                    nav: 'hidden',
+                    month_caption: 'hidden',
+                    caption_label: 'hidden',
+                    dropdowns: 'hidden',
+                    weekday:
+                      'text-muted-foreground rounded-md flex-1 font-semibold text-[0.8rem] select-none text-center',
+                    day: 'relative box-border -m-px w-full h-full p-0 text-center [&:first-child[data-selected=true]_button]:rounded-l-md [&:last-child[data-selected=true]_button]:rounded-r-md group/day aspect-square select-none border border-gray-300/60 dark:border-neutral-700',
+                    today: 'rounded-none bg-transparent text-inherit',
+                  }}
+                  components={{
+                    DayButton: (props: any) => {
+                      const dateStr = localDateKey(props.day.date);
+                      const dayAssignments = (assignmentsByDate[dateStr] || [])
+                        .slice()
+                        .sort(
+                          (a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
+                        );
+
+                      const visibleCount = visibleAssignmentLimit;
+
+                      const todayDate = new Date();
+                      const dayDate = props.day.date;
+                      const isToday =
+                        dayDate.getFullYear() === todayDate.getFullYear() &&
+                        dayDate.getMonth() === todayDate.getMonth() &&
+                        dayDate.getDate() === todayDate.getDate();
+                      const isWeekend = dayDate.getDay() === 0 || dayDate.getDay() === 6;
+                      const hiddenAssignmentCount = Math.max(
+                        0,
+                        dayAssignments.length - visibleCount,
                       );
+                      const formattedDayLabel = new Intl.DateTimeFormat('en-US', {
+                        weekday: 'long',
+                        month: 'long',
+                        day: 'numeric',
+                        year: 'numeric',
+                        timeZone: timezone,
+                      }).format(dayDate);
+                      const openCurrentDay = () => {
+                        const dayOnly = new Date(
+                          props.day.date.getFullYear(),
+                          props.day.date.getMonth(),
+                          props.day.date.getDate(),
+                        );
+                        openDayDialog(dayOnly, dayAssignments);
+                      };
 
-                    // Ref and state to compute how many of the first few assignment links fit without overflowing
-                    const dayContentRef = useRef<HTMLDivElement | null>(null);
-                    const visibleCount = useVisibleItemCount(dayContentRef, dayAssignments.length, {
-                      conservativeMargin: 10,
-                      sampleText: dayAssignments[0]?.title,
-                    });
-
-                    const todayDate = new Date();
-                    const dayDate = props.day.date;
-                    const isToday =
-                      dayDate.getFullYear() === todayDate.getFullYear() &&
-                      dayDate.getMonth() === todayDate.getMonth() &&
-                      dayDate.getDate() === todayDate.getDate();
-                    const isWeekend = dayDate.getDay() === 0 || dayDate.getDay() === 6;
-
-                    return (
-                      <div
-                        role="button"
-                        tabIndex={0}
-                        aria-current={isToday ? 'date' : undefined}
-                        onClick={(e) => {
-                          const dayOnly = new Date(
-                            props.day.date.getFullYear(),
-                            props.day.date.getMonth(),
-                            props.day.date.getDate(),
-                          );
-                          openDayDialog(dayOnly, dayAssignments);
-                          props.onClick?.(e as any);
-                        }}
-                        onKeyDown={(e: any) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            const dayOnly = new Date(
-                              props.day.date.getFullYear(),
-                              props.day.date.getMonth(),
-                              props.day.date.getDate(),
-                            );
-                            openDayDialog(dayOnly, dayAssignments);
-                            props.onClick?.(e as any);
-                          }
-                        }}
-                        className={cn(
-                          'box-border grid min-h-0 w-full min-w-0 grid-rows-[auto_1fr] overflow-hidden',
-                          isToday
-                            ? 'bg-gray-200 dark:bg-neutral-800'
-                            : 'bg-white dark:bg-neutral-900',
-                          !isToday && isWeekend && 'dark:bg-neutral-850 bg-slate-50',
-                        )}
-                        style={{ aspectRatio: '1 / 1' }}
-                      >
-                        <span className="grid p-1 text-xs select-none">
-                          {props.day.date.getDate()}
-                        </span>
+                      return (
                         <div
-                          ref={dayContentRef}
-                          onClick={() =>
-                            openDayDialog(
-                              new Date(
-                                props.day.date.getFullYear(),
-                                props.day.date.getMonth(),
-                                props.day.date.getDate(),
-                              ),
-                              dayAssignments,
-                            )
-                          }
-                          className="grid min-h-0 w-full min-w-0 cursor-default content-start gap-1 overflow-hidden p-1"
-                        >
-                          {dayAssignments.slice(0, visibleCount).map((a: any) => (
-                            <Link
-                              key={a.id}
-                              href={`/dashboard/courses/${a.courseId}/${a.id}`}
-                              className={cn(
-                                'assignment-link box-border block min-h-[1rem] w-full min-w-0 cursor-pointer truncate overflow-hidden rounded bg-sky-700 py-0.5 pl-1 text-left text-xs leading-tight whitespace-nowrap text-white hover:bg-sky-800 dark:bg-sky-600 dark:hover:bg-sky-700',
-                                a.crossedOut && 'line-through opacity-80',
-                              )}
-                              title={`${a.course?.code ?? a.courseName ?? ''} - ${a.title}`}
-                              onClick={(e: any) => e.stopPropagation()}
-                            >
-                              {`${a.course?.code ?? a.courseName ?? ''} - ${a.title}`}
-                            </Link>
-                          ))}
-                          {dayAssignments.length > visibleCount && (
-                            <div
-                              aria-hidden={true}
-                              className="h-2 w-2 self-center justify-self-center rounded-full bg-blue-500"
-                            ></div>
+                          role="button"
+                          tabIndex={0}
+                          aria-current={isToday ? 'date' : undefined}
+                          aria-keyshortcuts="Enter Space"
+                          aria-label={`${formattedDayLabel}${isToday ? ', today' : ''}. ${dayAssignments.length} assignment${dayAssignments.length === 1 ? '' : 's'}. Press Enter to open assignments for this day.`}
+                          onClick={(e) => {
+                            openCurrentDay();
+                            props.onClick?.(e as any);
+                          }}
+                          onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
+                            // Do not hijack keyboard events from nested interactive elements (e.g., assignment links).
+                            if (e.target !== e.currentTarget) return;
+
+                            if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+                              e.preventDefault();
+                              openCurrentDay();
+                              props.onClick?.(e as any);
+                            }
+                          }}
+                          className={cn(
+                            'box-border grid min-h-0 w-full min-w-0 grid-rows-[auto_1fr] overflow-hidden focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 focus-visible:outline-none',
+                            isToday
+                              ? 'bg-sky-100 ring-2 ring-sky-500 ring-inset dark:bg-sky-950/60 dark:ring-sky-400'
+                              : 'bg-white dark:bg-neutral-900',
+                            !isToday && isWeekend && 'dark:bg-neutral-850 bg-slate-50',
                           )}
+                          style={{ aspectRatio: '1 / 1' }}
+                        >
+                          <span
+                            className={cn(
+                              'self-start justify-self-start p-1 text-left text-xs select-none',
+                              isToday &&
+                                'rounded bg-sky-600 px-1.5 py-0.5 font-semibold text-white dark:bg-sky-500',
+                            )}
+                          >
+                            {props.day.date.getDate()}
+                          </span>
+                          <div
+                            onClick={() => openCurrentDay()}
+                            className="grid min-h-0 w-full min-w-0 cursor-default content-start gap-1 overflow-hidden p-1"
+                          >
+                            {dayAssignments.slice(0, visibleCount).map((a) => (
+                              <Link
+                                key={a.id}
+                                href={`/dashboard/courses/${a.courseId}/${a.id}`}
+                                className={cn(
+                                  'assignment-link box-border block min-h-[1rem] w-full min-w-0 cursor-pointer truncate overflow-hidden rounded bg-sky-700 py-0.5 pl-1 text-left text-xs leading-tight whitespace-nowrap text-white hover:bg-sky-800 dark:bg-sky-600 dark:hover:bg-sky-700',
+                                  a.crossedOut && 'line-through opacity-80',
+                                )}
+                                title={`${a.course.code} - ${a.title}`}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {`${a.course.code} - ${a.title}`}
+                              </Link>
+                            ))}
+                            {dayAssignments.length > visibleCount && (
+                              <>
+                                <div
+                                  aria-hidden={true}
+                                  className="h-2 w-2 self-center justify-self-center rounded-full bg-blue-500"
+                                ></div>
+                                <span className="sr-only">
+                                  {`${hiddenAssignmentCount} more assignment${hiddenAssignmentCount === 1 ? '' : 's'} not shown in cell. Open day to view all assignments.`}
+                                </span>
+                              </>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  },
-                }}
-              />
+                      );
+                    },
+                  }}
+                />
+              </div>
             </div>
           </CardContent>
         </Card>

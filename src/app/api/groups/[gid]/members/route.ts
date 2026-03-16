@@ -1,0 +1,111 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { auth } from '@/lib/auth';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+
+// GET: list members for a group
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ gid: string; id?: string }> },
+) {
+  const { id: providedCourseId, gid: groupId } = await params;
+
+  if (!groupId) return NextResponse.json({ error: 'Missing group ID' }, { status: 400 });
+
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role))
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+  try {
+    const group = await prisma.group.findUnique({ where: { id: groupId } });
+    if (!group) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+    if (providedCourseId && group.courseId !== providedCourseId)
+      return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+
+    const members = await prisma.groupRoster.findMany({
+      where: { groupId },
+      include: { user: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const payload = members.map((m) => ({
+      userId: m.userId,
+      id: m.id,
+      addedAt: m.createdAt,
+      user: {
+        id: m.user.id,
+        firstName: m.user.firstName,
+        lastName: m.user.lastName,
+        email: m.user.email,
+        avatar: m.user.avatar,
+      },
+    }));
+
+    return NextResponse.json({ members: payload });
+  } catch (err) {
+    console.error('[GROUP_MEMBERS_GET_ERROR]', err);
+    return NextResponse.json({ error: 'Failed to fetch members' }, { status: 500 });
+  }
+}
+
+// POST: add a member to a group
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ gid: string; id?: string }> },
+) {
+  const { id: providedCourseId, gid: groupId } = await params;
+
+  if (!groupId) return NextResponse.json({ error: 'Missing group ID' }, { status: 400 });
+
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role))
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+  try {
+    const group = await prisma.group.findUnique({ where: { id: groupId } });
+    if (!group) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+    if (providedCourseId && group.courseId !== providedCourseId)
+      return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+    const courseId = group.courseId;
+
+    const body = await req.json().catch(() => ({}));
+    const userId = body?.userId ?? null;
+    const email = body?.email ?? null;
+
+    let user = null;
+    if (userId) user = await prisma.user.findUnique({ where: { id: userId } });
+    else if (email) user = await prisma.user.findUnique({ where: { email } });
+
+    if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+
+    // Ensure user is enrolled in course
+    const enrollment = await prisma.roster.findFirst({ where: { courseId, userId: user.id } });
+    if (!enrollment)
+      return NextResponse.json({ error: 'User is not enrolled in this course' }, { status: 422 });
+
+    // Prevent duplicates
+    const exists = await prisma.groupRoster.findUnique({
+      where: { groupId_userId: { groupId, userId: user.id } },
+    });
+    if (exists)
+      return NextResponse.json({ error: 'User is already in this group' }, { status: 409 });
+
+    const created = await prisma.groupRoster.create({
+      data: { groupId, userId: user.id, courseId },
+    });
+
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session.user.id,
+      action: 'ADD_GROUP_MEMBER',
+      category: 'COURSE',
+      metadata: { courseId, groupId, addedUserId: user.id },
+    });
+
+    return NextResponse.json({ member: { id: created.id, userId: user.id } }, { status: 201 });
+  } catch (err) {
+    console.error('[GROUP_MEMBERS_POST_ERROR]', err);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}

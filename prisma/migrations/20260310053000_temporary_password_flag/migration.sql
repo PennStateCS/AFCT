@@ -1,0 +1,2 @@
+ALTER TABLE "User"
+ADD COLUMN "temporaryPassword" BOOLEAN NOT NULL DEFAULT false;

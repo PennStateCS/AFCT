@@ -286,6 +286,28 @@ describe('GET /api/comments', () => {
       }),
     );
   });
+
+  it('supports assignment-scope fetch for student without problemId', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
+    prismaMock.roster.findUnique.mockResolvedValue({ id: 'r1' });
+    prismaMock.comment.findMany.mockResolvedValue([]);
+
+    const req = new NextRequest(
+      'http://localhost/api/comments?assignmentId=a1&studentId=s1&scope=assignment',
+    );
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.comment.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          assignmentId: 'a1',
+          OR: expect.any(Array),
+        }),
+      }),
+    );
+  });
 });
 
 describe('DELETE /api/comments', () => {

@@ -4,7 +4,6 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { ProblemTypeEnum } from '@/schemas/problem';
 import { z } from 'zod';
 
 // Types
@@ -19,6 +18,20 @@ interface AssignmentProblemCount {
   assignmentId: string;
   problemId: string;
 }
+
+const ProblemSettingsSchema = z.object({
+  problemId: z.string(),
+  maxPoints: z.number().min(0),
+  maxSubmissions: z
+    .number()
+    .int()
+    .refine((value) => value === -1 || value >= 1, {
+      message: 'Max submissions must be -1 (unlimited) or at least 1.',
+    }),
+  autograderEnabled: z.boolean(),
+});
+
+type ProblemSettingsInput = z.infer<typeof ProblemSettingsSchema>;
 
 // POST: Replace problems for a given assignment in a specific course
 export async function POST(
@@ -51,6 +64,18 @@ export async function POST(
     }
 
     const problemIds: string[] = Array.isArray(body.problemIds) ? body.problemIds : [];
+    const parsedSettings = z.array(ProblemSettingsSchema).safeParse(body.problemSettings ?? []);
+    if (!parsedSettings.success) {
+      return NextResponse.json(
+        { error: 'Invalid problemSettings in request body', details: parsedSettings.error.issues },
+        { status: 400 },
+      );
+    }
+    const settingsByProblemId = new Map<string, ProblemSettingsInput>(
+      parsedSettings.data.map((setting) => [setting.problemId, setting]),
+    );
+    // Optional group assignment: either a specific group id or 'ALL' for all groups
+    const groupId: string | undefined = typeof body.groupId === 'string' ? body.groupId : undefined;
     // parsed problemIds available
 
     // Validate that all problems exist and belong to the specified course
@@ -96,17 +121,62 @@ export async function POST(
 
     if (newProblemIds.length > 0) {
       await prisma.assignmentProblem.createMany({
-        data: newProblemIds.map((pid: string) => ({
-          assignmentId,
-          problemId: pid,
-        })),
+        data: newProblemIds.map((pid: string) => {
+          const config = settingsByProblemId.get(pid);
+          const resolvedMaxSubmissions =
+            config?.maxSubmissions === -1 ? -1 : Math.max(1, config?.maxSubmissions ?? 1);
+
+          return {
+            assignmentId,
+            problemId: pid,
+            maxPoints: config?.maxPoints ?? 0,
+            maxSubmissions: resolvedMaxSubmissions,
+            autograderEnabled: config?.autograderEnabled ?? true,
+          };
+        }),
       });
+    }
+
+    // If a group mapping was requested and the assignment supports group assignments,
+    // create group mappings for the requested problems **regardless** of whether the
+    // problems were newly added in this request. This enables assigning an existing
+    // assignment problem to one or more groups after it already exists on the assignment.
+    if (groupId) {
+      // Fetch the assignment to inspect isGroup and course
+      const updatedAssignment = await prisma.assignment.findUnique({ where: { id: assignmentId } });
+
+      if (updatedAssignment?.isGroup) {
+        let groupIdsToMap: string[] = [];
+        if (groupId === 'ALL') {
+          const groups = await prisma.group.findMany({ where: { courseId } });
+          groupIdsToMap = groups.map((g) => g.id);
+        } else {
+          // Validate the group exists and belongs to the course
+          const group = await prisma.group.findUnique({ where: { id: groupId } });
+          if (group && group.courseId === courseId) groupIdsToMap = [groupId];
+        }
+
+        if (groupIdsToMap.length > 0 && validIds.length > 0) {
+          const mappings = [] as { assignmentId: string; problemId: string; groupId: string }[];
+          // Map all validIds (this covers both newly added and already-present assignment problems)
+          for (const pid of validIds) {
+            for (const gid of groupIdsToMap) {
+              mappings.push({ assignmentId, problemId: pid, groupId: gid });
+            }
+          }
+          if (mappings.length > 0) {
+            await prisma.groupAssignmentProblem.createMany({
+              data: mappings,
+              skipDuplicates: true,
+            });
+          }
+        }
+      }
     }
 
     // Final set includes all existing problems + new problems
     const finalProblemIds = [...existingProblemIds, ...newProblemIds];
 
-    // Fetch the updated assignment with its problems
     const updated = await prisma.assignment.findUnique({
       where: { id: assignmentId },
       include: {
@@ -117,7 +187,7 @@ export async function POST(
     });
 
     const problems =
-      updated?.problems.map((ap: NonNullable<typeof updated>['problems'][number]) => ap.problem) ||
+      updated?.problems?.map((ap: NonNullable<typeof updated>['problems'][number]) => ap.problem) ??
       [];
 
     // Log the action to the ActivityLog

@@ -11,10 +11,60 @@ import { execSync } from 'child_process';
 import os from 'os';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
-import { XMLValidator, XMLParser } from 'fast-xml-parser';
 
 // Import JavaRunner for JAR execution
 import JavaRunner from '../../../../lib/java-runner';
+
+function getJavaRunnerCtor() {
+  const maybeCtor =
+    typeof JavaRunner === 'function'
+      ? JavaRunner
+      : (JavaRunner as unknown as { default?: unknown })?.default;
+
+  if (typeof maybeCtor !== 'function') {
+    throw new Error('Java runner constructor is unavailable');
+  }
+
+  return maybeCtor as new (jarPath: string) => {
+    execute: (
+      args: string[],
+      options?: { timeout?: number },
+    ) => Promise<{
+      stdout?: string;
+      stderr?: string;
+      exitCode?: number;
+    }>;
+  };
+}
+
+function createJavaRunner(jarPath: string) {
+  const JavaRunnerCtor = getJavaRunnerCtor();
+  try {
+    return new JavaRunnerCtor(jarPath);
+  } catch {
+    return (
+      JavaRunnerCtor as unknown as (path: string) => {
+        execute: (
+          args: string[],
+          options?: { timeout?: number },
+        ) => Promise<{
+          stdout?: string;
+          stderr?: string;
+          exitCode?: number;
+        }>;
+      }
+    )(jarPath) as {
+      execute: (
+        args: string[],
+        options?: { timeout?: number },
+      ) => Promise<{
+        stdout?: string;
+        stderr?: string;
+        exitCode?: number;
+      }>;
+    };
+  }
+}
 
 export async function POST(req: NextRequest) {
   // 1. Verify token
@@ -43,6 +93,21 @@ export async function POST(req: NextRequest) {
   const { maxBytes, maxMb } = await getSystemUploadLimit();
 
   if (!assignmentId || !problemId) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: decoded.userId,
+      action: 'SUBMISSION_INVALID_REQUEST',
+      category: 'SUBMISSION',
+      courseId,
+      assignmentId,
+      problemId,
+      metadata: {
+        userId: decoded.userId,
+        courseId,
+        assignmentId,
+        problemId,
+        error: 'Missing required fields',
+      },
+    });
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
@@ -58,7 +123,9 @@ export async function POST(req: NextRequest) {
       problem: {
         select: {
           fileName: true,
+          maxPoints: true,
           maxStates: true,
+          autograderEnabled: true,
           isDeterministic: true,
           type: true,
         },
@@ -67,10 +134,111 @@ export async function POST(req: NextRequest) {
   });
 
   if (!link) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: decoded.userId,
+      action: 'SUBMISSION_INVALID_REQUEST',
+      category: 'SUBMISSION',
+      courseId,
+      assignmentId,
+      problemId,
+      metadata: {
+        userId: decoded.userId,
+        courseId,
+        assignmentId,
+        problemId,
+        error: 'Problem is not linked to this assignment.',
+      },
+    });
     return NextResponse.json(
       { error: 'Problem is not linked to this assignment.' },
       { status: 400 },
     );
+  }
+
+  const assignment = await prisma.assignment.findUnique({
+    where: { id: assignmentId },
+    select: {
+      id: true,
+      dueDate: true,
+      allowLateSubmissions: true,
+      lateCutoff: true,
+    },
+  });
+
+  if (!assignment) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: decoded.userId,
+      action: 'SUBMISSION_INVALID_REQUEST',
+      category: 'SUBMISSION',
+      courseId,
+      assignmentId,
+      problemId,
+      metadata: {
+        userId: decoded.userId,
+        courseId,
+        assignmentId,
+        problemId,
+        error: 'Assignment not found.',
+      },
+    });
+    return NextResponse.json({ error: 'Assignment not found.' }, { status: 404 });
+  }
+
+  const now = new Date();
+  const isLate = now > assignment.dueDate;
+
+  if (isLate) {
+    if (!assignment.allowLateSubmissions) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: decoded.userId,
+        action: 'SUBMISSION_REJECTED_LATE',
+        category: 'SUBMISSION',
+        courseId,
+        assignmentId,
+        problemId,
+        metadata: {
+          userId: decoded.userId,
+          courseId,
+          assignmentId,
+          problemId,
+          dueDate: assignment.dueDate.toISOString(),
+          allowLateSubmissions: assignment.allowLateSubmissions,
+          lateCutoff: assignment.lateCutoff ? assignment.lateCutoff.toISOString() : null,
+          submittedAt: now.toISOString(),
+          reason: 'Late submissions are not allowed for this assignment.',
+        },
+      });
+      return NextResponse.json(
+        { error: 'Late submissions are not allowed for this assignment.' },
+        { status: 403 },
+      );
+    }
+
+    if (assignment.lateCutoff && now > assignment.lateCutoff) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: decoded.userId,
+        action: 'SUBMISSION_REJECTED_LATE_CUTOFF',
+        category: 'SUBMISSION',
+        courseId,
+        assignmentId,
+        problemId,
+        metadata: {
+          userId: decoded.userId,
+          courseId,
+          assignmentId,
+          problemId,
+          dueDate: assignment.dueDate.toISOString(),
+          allowLateSubmissions: assignment.allowLateSubmissions,
+          lateCutoff: assignment.lateCutoff.toISOString(),
+          submittedAt: now.toISOString(),
+          reason: 'Late submission cutoff has passed for this assignment.',
+        },
+      });
+      return NextResponse.json(
+        { error: 'Late submission cutoff has passed for this assignment.' },
+        { status: 403 },
+      );
+    }
   }
 
   let fileName: string | null = null;
@@ -219,7 +387,7 @@ export async function POST(req: NextRequest) {
             if (fs.existsSync(answerFilePath)) {
               try {
                 // Create JavaRunner instance for afct-evaluator.jar
-                const evaluator = new JavaRunner('./jars/afct-evaluator.jar');
+                const evaluator = createJavaRunner('./jars/afct-evaluator.jar');
 
                 // Build command arguments
                 const args = ['--json', answerFilePath, uploadedFilePath];
@@ -264,7 +432,7 @@ export async function POST(req: NextRequest) {
 
                 // Parse the JSON response
                 try {
-                  const evaluation = JSON.parse(result.stdout.trim());
+                  const evaluation = JSON.parse(stdoutTrimmed);
                   evaluationRaw = evaluation;
                   if (evaluation && typeof evaluation === 'object') {
                     // Extract correct field if present
@@ -428,6 +596,40 @@ export async function POST(req: NextRequest) {
           correct,
           evaluationRaw:
             evaluationRaw === null ? Prisma.JsonNull : (evaluationRaw as Prisma.InputJsonValue),
+        },
+      });
+    }
+
+    // 7. Autograde submission
+    const assignmentProblemWithOverrides = link as typeof link & {
+      autograderEnabled?: boolean | null;
+      maxPoints?: number | null;
+    };
+    const autograderEnabled =
+      assignmentProblemWithOverrides.autograderEnabled ?? link.problem.autograderEnabled;
+    const maxPoints = assignmentProblemWithOverrides.maxPoints ?? link.problem.maxPoints;
+
+    if (autograderEnabled === true && typeof correct === 'boolean') {
+      const earnedPoints = correct ? (maxPoints ?? 0) : 0;
+
+      await prisma.assignmentProblemGrade.upsert({
+        where: {
+          assignmentId_problemId_studentId: {
+            assignmentId: assignmentId,
+            problemId: problemId,
+            studentId: decoded.userId,
+          },
+        },
+        create: {
+          assignmentId: assignmentId,
+          problemId: problemId,
+          studentId: decoded.userId,
+          grade: earnedPoints,
+          feedback: feedback,
+        },
+        update: {
+          grade: earnedPoints,
+          feedback: feedback,
         },
       });
     }

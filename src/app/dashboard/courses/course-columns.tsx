@@ -9,6 +9,7 @@ import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { showToast } from '@/lib/toast';
 import { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Trash2, BookOpen, ChevronDown } from 'lucide-react';
@@ -39,6 +40,59 @@ type CourseActionsCellProps = {
   onCourseUpdated: (updated: CourseWithFaculty) => void; // Called when a course is updated (edit/save)
   onCourseDeleted: () => void; // Called after a course is deleted (triggers parent reload)
   timeZone: string;
+};
+
+const registrationBadgeTheme = {
+  upcoming: {
+    className: 'bg-blue-100 text-blue-900 border border-blue-200',
+  },
+  open: {
+    className: 'bg-green-100 text-green-900 border border-green-200',
+  },
+  closed: {
+    className: 'bg-gray-200 text-gray-900 border border-gray-300',
+  },
+} as const;
+
+const normalizeDate = (value?: string | Date | null) => {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isFinite(date.getTime()) ? date : null;
+};
+
+const getRegistrationStatus = (
+  registrationOpenAt?: string | Date | null,
+  registrationCloseAt?: string | Date | null,
+) => {
+  const openAt = normalizeDate(registrationOpenAt);
+  const closeAt = normalizeDate(registrationCloseAt);
+
+  if (!openAt || !closeAt) {
+    return {
+      label: 'Closed',
+      theme: registrationBadgeTheme.closed,
+    };
+  }
+
+  const now = Date.now();
+  if (now >= openAt.getTime() && now <= closeAt.getTime()) {
+    return {
+      label: 'Open',
+      theme: registrationBadgeTheme.open,
+    };
+  }
+
+  if (now < openAt.getTime()) {
+    return {
+      label: 'Upcoming',
+      theme: registrationBadgeTheme.upcoming,
+    };
+  }
+
+  return {
+    label: 'Closed',
+    theme: registrationBadgeTheme.closed,
+  };
 };
 
 export const columns = (
@@ -86,6 +140,26 @@ export const columns = (
     header: 'Semester',
   },
   {
+    id: 'registrationStatus',
+    accessorFn: (row) =>
+      getRegistrationStatus(row.registrationOpenAt, row.registrationCloseAt).label,
+    meta: { priority: 3 },
+    header: 'Registration',
+    cell: ({ row }) => {
+      const registrationStatus = getRegistrationStatus(
+        row.original.registrationOpenAt,
+        row.original.registrationCloseAt,
+      );
+      return (
+        <Badge
+          className={`inline-flex w-24 justify-center text-xs font-medium ${registrationStatus.theme.className}`}
+        >
+          {registrationStatus.label}
+        </Badge>
+      );
+    },
+  },
+  {
     accessorKey: 'startDate',
     meta: { priority: 4 },
     header: 'Start Date',
@@ -126,7 +200,7 @@ export const columns = (
   },
   {
     id: 'actions',
-    header: '',
+    header: () => <span className="sr-only">Actions</span>,
     enableSorting: false,
     meta: { priority: 1 },
     cell: ({ row }) => {
@@ -213,7 +287,7 @@ function CourseActionsCell({
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="secondary">
+          <Button variant="secondary" aria-label={`Manage course ${course.name}`}>
             <ChevronDown /> Manage
           </Button>
         </DropdownMenuTrigger>
@@ -223,12 +297,12 @@ function CourseActionsCell({
             {course.name}
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <Link href={`/dashboard/courses/${course.id}`} passHref>
-            <DropdownMenuItem className="hover:bg-secondary flex items-center gap-2">
+          <DropdownMenuItem asChild className="hover:bg-secondary flex items-center gap-2">
+            <Link href={`/dashboard/courses/${course.id}`}>
               <BookOpen className="mr-2 h-4 w-4" />
               View Course
-            </DropdownMenuItem>
-          </Link>
+            </Link>
+          </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => setEditOpen(true)}
             className="hover:bg-secondary flex items-center gap-2"

@@ -10,17 +10,11 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from '@/components/ui/select';
 import { UploadCloud, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import InputGroup from '@/components/ui/InputGroup';
+import SelectField from '@/components/ui/SelectField';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
@@ -285,26 +279,18 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
             name="timezone"
             control={control}
             render={({ field }) => (
-              <div className="flex flex-col">
-                <label className="pb-2 text-sm font-medium" htmlFor="timezone">
-                  Timezone
-                </label>
-                <Select
-                  value={field.value || serverTimezone}
-                  onValueChange={(v) => field.onChange(v)}
-                >
-                  <SelectTrigger className="w-full" id="timezone">
-                    <SelectValue placeholder="Select timezone" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {COMMON_TIMEZONES.map((tz) => (
-                      <SelectItem key={tz} value={tz}>
-                        {formatTimezoneLabel(tz)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <SelectField
+                label="Timezone"
+                name="timezone"
+                id="timezone"
+                value={field.value || serverTimezone}
+                onValueChange={(v) => field.onChange(v)}
+                placeholder="Select timezone"
+                options={COMMON_TIMEZONES.map((tz) => ({
+                  value: tz,
+                  label: formatTimezoneLabel(tz),
+                }))}
+              />
             )}
           />
 

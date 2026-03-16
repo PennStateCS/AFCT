@@ -3,19 +3,23 @@ import { ActivityCard } from '@/components/ActivityCard';
 import { AssignmentsCard } from '@/components/AssignmentsCard';
 import { ProblemsCard } from '@/components/ProblemsCard';
 import { RosterCard } from '@/components/RosterCard';
-import GradesCard from '@/components/GradesCard';
+import { PrivilegeGradesCard } from '@/components/PrivilegeGradesCard';
+import GroupsCard from '@/components/GroupsCard';
 import { userColumns } from '@/app/dashboard/courses/[id]/user-columns';
 import { useAssignmentColumns } from '@/app/dashboard/courses/[id]/assignment-columns';
 import { useProblemColumns } from '@/app/dashboard/courses/[id]/problem-columns';
 import { FullCourse, TabType } from '@/types/course';
 import { getInstructors } from '@/lib/course-utils';
-import { NotebookText, FileText, Users, GraduationCap, Activity } from 'lucide-react';
+import { NotebookText, FileText, GraduationCap, Table, Users, Activity } from 'lucide-react';
 import { Assignment, Problem } from '@prisma/client';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
 interface AdminCourseViewProps {
   course: FullCourse;
   tab: TabType;
+  isAssignmentsLoading?: boolean;
+  isProblemsLoading?: boolean;
+  isRosterLoading?: boolean;
   onTabChange: (value: string) => void;
   onCreateAssignment: () => void;
   onCreateProblem: () => void;
@@ -32,6 +36,9 @@ interface AdminCourseViewProps {
 export function AdminCourseView({
   course,
   tab,
+  isAssignmentsLoading = false,
+  isProblemsLoading = false,
+  isRosterLoading = false,
   onTabChange,
   onCreateAssignment,
   onCreateProblem,
@@ -45,6 +52,10 @@ export function AdminCourseView({
   onBulkEnroll,
 }: AdminCourseViewProps) {
   const { timezone } = useEffectiveTimezone();
+  const enrolled = course.enrolled ?? [];
+  const assignmentCount = course.assignmentTotal ?? course.assignments.length;
+  const problemCount = course.problemTotal ?? course.problems.length;
+  const rosterCount = course.rosterTotal ?? enrolled.length;
 
   const assignmentColumns = useAssignmentColumns(
     course.isArchived,
@@ -63,104 +74,192 @@ export function AdminCourseView({
 
   return (
     <Tabs defaultValue="assignments" value={tab} onValueChange={onTabChange}>
-      <TabsList className="bg-card border-border h-12 rounded-md border p-1 shadow-sm">
+      <TabsList
+        aria-label="Course content sections"
+        className="bg-card border-border h-12 w-full justify-start overflow-x-auto rounded-md border p-1 shadow-sm"
+      >
         <TabsTrigger
-          className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white hover:bg-gray-200"
+          id="tab-assignments"
+          aria-controls="panel-assignments"
+          aria-label={`Assignments (${assignmentCount})`}
+          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-gray-200 data-[state=active]:text-white"
           value="assignments"
         >
-          <div className="flex items-center gap-2"><NotebookText className="h-4 w-4" />Assignments</div>
+          <div className="flex items-center gap-2">
+            <NotebookText className="h-4 w-4" />
+            Assignments ({assignmentCount})
+          </div>
         </TabsTrigger>
+
         <TabsTrigger
-          className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white hover:bg-gray-200"
+          id="tab-problems"
+          aria-controls="panel-problems"
+          aria-label={`Problems (${problemCount})`}
+          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-gray-200 data-[state=active]:text-white"
           value="problems"
         >
-          <div className="flex items-center gap-2"><FileText className="h-4 w-4" />Problems</div>
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            Problems ({problemCount})
+          </div>
         </TabsTrigger>
+
         <TabsTrigger
-          className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white hover:bg-gray-200"
+          id="tab-roster"
+          aria-controls="panel-roster"
+          aria-label={`Roster (${rosterCount})`}
+          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-gray-200 data-[state=active]:text-white"
           value="roster"
         >
-          <div className="flex items-center gap-2"><Users className="h-4 w-4" />Roster</div>
+          <div className="flex items-center gap-2">
+            <GraduationCap className="h-4 w-4" />
+            Roster ({rosterCount})
+          </div>
         </TabsTrigger>
+
         <TabsTrigger
-          className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white hover:bg-gray-200"
+          id="tab-grades"
+          aria-controls="panel-grades"
+          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-gray-200 data-[state=active]:text-white"
           value="grades"
         >
-          <div className="flex items-center gap-2"><GraduationCap className="h-4 w-4" />Grades</div>
+          <div className="flex items-center gap-2">
+            <Table className="h-4 w-4" />
+            Grades
+          </div>
         </TabsTrigger>
+
         <TabsTrigger
-          className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white hover:bg-gray-200"
+          id="tab-groups"
+          aria-controls="panel-groups"
+          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-gray-200 data-[state=active]:text-white"
+          value="groups"
+        >
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            Groups
+          </div>
+        </TabsTrigger>
+
+        <TabsTrigger
+          id="tab-activity"
+          aria-controls="panel-activity"
+          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-gray-200 data-[state=active]:text-white"
           value="activity"
         >
-          <div className="flex items-center gap-2"><Activity className="h-4 w-4" />Activity</div>
+          <div className="flex items-center gap-2">
+            <Activity className="h-4 w-4" />
+            Activity
+          </div>
         </TabsTrigger>
       </TabsList>
 
       <TabsContent
+        id="panel-assignments"
+        aria-labelledby="tab-assignments"
         value="assignments"
         className="animate-fade-in-up transition-opacity duration-300"
       >
-        <div className="space-y-6 mb-8">
-          <AssignmentsCard
-            courseId={course.id}
-            courseIsArchived={course.isArchived}
-            assignments={course.assignments}
-            assignmentColumns={assignmentColumns}
-            onCreateAssignment={onCreateAssignment}
-          />
-        </div>
+        {tab === 'assignments' ? (
+          <div className="mb-8 space-y-6">
+            <AssignmentsCard
+              courseId={course.id}
+              courseIsArchived={course.isArchived}
+              assignments={course.assignments}
+              assignmentColumns={assignmentColumns}
+              onCreateAssignment={onCreateAssignment}
+              isLoading={isAssignmentsLoading}
+            />
+          </div>
+        ) : null}
       </TabsContent>
 
       <TabsContent
+        id="panel-problems"
+        aria-labelledby="tab-problems"
         value="problems"
         className="animate-fade-in-up transition-opacity duration-300"
       >
-        <div className="space-y-6 mb-8">
-          <ProblemsCard
-            courseId={course.id}
-            courseIsArchived={course.isArchived}
-            problems={course.problems}
-            problemColumns={problemColumns}
-            onCreateProblem={onCreateProblem}
-          />
+        {tab === 'problems' ? (
+          <div className="mb-8 space-y-6">
+            <ProblemsCard
+              courseId={course.id}
+              courseIsArchived={course.isArchived}
+              problems={course.problems}
+              problemColumns={problemColumns}
+              onCreateProblem={onCreateProblem}
+              isLoading={isProblemsLoading}
+            />
 
-          {problemViewDialog}
-        </div>
-      </TabsContent>
-
-      <TabsContent value="roster" className="animate-fade-in-up transition-opacity duration-300">
-        <div className="space-y-6 mb-8">
-          <RosterCard
-            courseIsArchived={course.isArchived}
-            enrolled={course.enrolled}
-            userColumns={userColumns(
-              onRefreshCourse,
-              course.id,
-              course.isArchived,
-              // compute faculty count from enrolled
-              getInstructors(course.enrolled as any[]).length,
-              course.viewerRole,
-              course.viewerDefaultRole
-            )}
-            onEnrollUser={onEnrollUser}
-            onBulkEnroll={onBulkEnroll}
-          />
-        </div>
-      </TabsContent>
-
-      <TabsContent value="grades" className="animate-fade-in-up transition-opacity duration-300">
-        <div className="space-y-6 mb-8">
-          <GradesCard courseId={course.id} />
-        </div>
+            {problemViewDialog}
+          </div>
+        ) : null}
       </TabsContent>
 
       <TabsContent
+        id="panel-roster"
+        aria-labelledby="tab-roster"
+        value="roster"
+        className="animate-fade-in-up transition-opacity duration-300"
+      >
+        {tab === 'roster' ? (
+          <div className="mb-8 space-y-6">
+            <RosterCard
+              courseIsArchived={course.isArchived}
+              enrolled={enrolled}
+              userColumns={userColumns(
+                onRefreshCourse,
+                course.id,
+                course.isArchived,
+                getInstructors(enrolled).length,
+                course.viewerRole,
+                course.viewerDefaultRole,
+              )}
+              onEnrollUser={onEnrollUser}
+              onBulkEnroll={onBulkEnroll}
+              loading={isRosterLoading}
+            />
+          </div>
+        ) : null}
+      </TabsContent>
+
+      <TabsContent
+        id="panel-grades"
+        aria-labelledby="tab-grades"
+        value="grades"
+        className="animate-fade-in-up transition-opacity duration-300"
+      >
+        {tab === 'grades' ? (
+          <div className="mb-8 space-y-6">
+            <PrivilegeGradesCard courseId={course.id} />
+          </div>
+        ) : null}
+      </TabsContent>
+
+      <TabsContent
+        id="panel-groups"
+        aria-labelledby="tab-groups"
+        value="groups"
+        className="animate-fade-in-up transition-opacity duration-300"
+      >
+        {tab === 'groups' ? (
+          <div className="mb-8 space-y-6">
+            <GroupsCard courseId={course.id} />
+          </div>
+        ) : null}
+      </TabsContent>
+
+      <TabsContent
+        id="panel-activity"
+        aria-labelledby="tab-activity"
         value="activity"
         className="animate-fade-in-up transition-opacity duration-300"
       >
-        <div className="space-y-6 mb-8">
-          <ActivityCard courseId={course.id} />
-        </div>
+        {tab === 'activity' ? (
+          <div className="mb-8 space-y-6">
+            <ActivityCard courseId={course.id} />
+          </div>
+        ) : null}
       </TabsContent>
     </Tabs>
   );
