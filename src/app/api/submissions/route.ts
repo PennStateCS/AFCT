@@ -248,6 +248,24 @@ export async function POST(req: NextRequest) {
   let evaluationRaw: unknown | null = null;
   let uploadedFilePath: string | null = null;
 
+  if (file){
+    const xml = await file.text();
+  
+    const parser = new XMLParser();
+  
+    const isValidXml = XMLValidator.validate(xml);
+
+    if (isValidXml !== true){
+      return NextResponse.json({ error: 'Submission file not xml' }, { status: 400 });
+    }
+
+    const jff = parser.parse(xml);
+
+    if (!jff.structure || jff.structure.type.toUpperCase() !== ((link.problem.type === 'CFG') ? 'GRAMMAR' : link.problem.type)){
+      return NextResponse.json({ error: `Submission file should be of type ${link.problem.type}` }, { status: 400 });
+    }
+  }
+
   try {
     // 4. Handle file upload
     if (file) {
