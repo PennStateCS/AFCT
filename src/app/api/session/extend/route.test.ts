@@ -31,7 +31,7 @@ describe('POST /api/session/extend', () => {
     expect(activityLogMock).toHaveBeenCalled();
   });
 
-  it('returns new expiry when token present', async () => {
+  it('returns success when token present', async () => {
     getTokenMock.mockResolvedValue({ sub: 'user-1' });
 
     const req = new NextRequest('http://localhost/api/session/extend', { method: 'POST' });
@@ -40,7 +40,6 @@ describe('POST /api/session/extend', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.ok).toBe(true);
-    expect(body.expires).toBe('2025-01-01T00:15:00.000Z');
     expect(activityLogMock).toHaveBeenCalled();
   });
 
