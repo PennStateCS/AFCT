@@ -5,8 +5,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
-const EXTEND_BY = 15 * 60; // Extend session by 15 minutes (in seconds)
-
 export async function POST(req: NextRequest) {
   try {
     // Extract token from the request using the NEXTAUTH secret
@@ -27,25 +25,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'Not authenticated' }, { status: 401 });
     }
 
-    // Calculate new expiration time
-    const now = Math.floor(Date.now() / 1000);
-    const newExpiry = now + EXTEND_BY;
-
-    // Log session extension to ActivityLog
+    // Log user action: client-side inactivity timer reset requested
     await createEnhancedActivityLog(prisma, req, {
       userId: token.sub,
       action: 'SESSION_EXTENDED',
       category: 'SYSTEM',
       metadata: {
-        extendedBy: `${EXTEND_BY} seconds`,
-        newExpiry: new Date(newExpiry * 1000).toISOString(),
+        kind: 'inactivity-reset',
       },
     });
 
-    // Respond with new expiration time
+    // JWT expiration is controlled by Auth.js; this endpoint confirms reset intent.
     return NextResponse.json({
       ok: true,
-      expires: new Date(newExpiry * 1000).toISOString(),
     });
   } catch (err) {
     console.error('Session extend error:', err);

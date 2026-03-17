@@ -13,6 +13,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import SwitchField from '@/components/ui/SwitchField';
+import FileUploadInput from '@/components/FileUploadInput';
+import { useMaxUploadSize } from '@/hooks/useMaxUploadSize';
 
 type ImportUsersDialogProps = {
   open: boolean;
@@ -135,16 +137,17 @@ const parseCsvText = (text: string) => {
 };
 
 export function ImportUsersDialog({ open, setOpen, onSuccess }: ImportUsersDialogProps) {
-  const [fileName, setFileName] = useState<string>('');
+  const [csvFile, setCsvFile] = useState<File | undefined>(undefined);
   const [rows, setRows] = useState<ParsedCsvRow[]>([]);
   const [parseError, setParseError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<BulkCreateResult | null>(null);
   const [temporaryPasswords, setTemporaryPasswords] = useState(false);
+  const { maxMb, loading: loadingMaxSize } = useMaxUploadSize();
 
   useEffect(() => {
     if (!open) {
-      setFileName('');
+      setCsvFile(undefined);
       setRows([]);
       setParseError(null);
       setSubmitting(false);
@@ -153,18 +156,17 @@ export function ImportUsersDialog({ open, setOpen, onSuccess }: ImportUsersDialo
     }
   }, [open]);
 
-  const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+  const handleFileChange = async (file: File | undefined) => {
     setResult(null);
 
     if (!file) {
-      setFileName('');
+      setCsvFile(undefined);
       setRows([]);
       setParseError(null);
       return;
     }
 
-    setFileName(file.name);
+    setCsvFile(file);
 
     try {
       const text = await file.text();
@@ -172,6 +174,7 @@ export function ImportUsersDialog({ open, setOpen, onSuccess }: ImportUsersDialo
       setRows(parsed.rows);
       setParseError(parsed.error);
     } catch {
+      setCsvFile(undefined);
       setRows([]);
       setParseError('Failed to read CSV file.');
     }
@@ -221,23 +224,18 @@ export function ImportUsersDialog({ open, setOpen, onSuccess }: ImportUsersDialo
         </DialogHeader>
 
         <div className="space-y-4 overflow-y-auto pr-1">
-          <div className="space-y-2">
-            <label htmlFor="import-users-csv" className="text-sm font-medium">
-              CSV file
-            </label>
-            <Input
-              id="import-users-csv"
-              type="file"
-              accept=".csv,text/csv"
-              onChange={handleFileChange}
-            />
-            {fileName ? (
-              <p className="text-muted-foreground text-xs">Selected: {fileName}</p>
-            ) : null}
-            <p className="text-muted-foreground text-xs">
-              Required headers: first name, last name, email, password.
-            </p>
-          </div>
+          <FileUploadInput
+            id="import-users-csv"
+            name="csvFile"
+            label="CSV file"
+            accept=".csv,text/csv"
+            maxSizeMb={maxMb}
+            value={csvFile}
+            onChange={handleFileChange}
+            error={parseError ? 'CSV parse error: ' + parseError : undefined}
+            disabled={loadingMaxSize || submitting}
+            hint="Required headers: first name, last name, email, password."
+          />
 
           <SwitchField
             label="Temporary passwords"

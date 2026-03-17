@@ -28,6 +28,13 @@ vi.mock('@/hooks/use-effective-timezone', () => ({
   useEffectiveTimezone: () => ({ timezone: 'UTC' }),
 }));
 
+vi.mock('@/hooks/useMaxUploadSize', () => ({
+  useMaxUploadSize: () => {
+    // Mock the hook but don't call fetch in the hook
+    return { maxMb: 25, loading: false, error: null };
+  },
+}));
+
 const globalWithReact = globalThis as typeof globalThis & { React?: typeof React };
 globalWithReact.React = React;
 
@@ -60,7 +67,17 @@ describe('EditProfileDialog', () => {
     const setOpen = vi.fn();
     const onSave = vi.fn().mockResolvedValue(undefined);
 
-    fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) } as Response);
+    fetchMock.mockImplementation((url: string) => {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          firstName: 'Ada',
+          lastName: 'Lovelace',
+          avatar: null,
+          timezone: 'UTC',
+        }),
+      } as Response);
+    });
 
     render(<EditProfileDialog user={user} open setOpen={setOpen} onSave={onSave} />);
 
@@ -71,7 +88,10 @@ describe('EditProfileDialog', () => {
 
     await userEvents.click(screen.getByRole('button', { name: 'Save Changes' }));
 
+    // Expect 1 call for saving profile (useMaxUploadSize is mocked and doesn't fetch)
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    // Check the profile save call (the only call)
     const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
     const formData = requestInit.body as FormData;
     const payload: Record<string, FormDataEntryValue> = {};
