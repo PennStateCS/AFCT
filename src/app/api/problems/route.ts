@@ -8,6 +8,7 @@ import { auth } from '@/lib/auth';
 import { ProblemType } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
+import { XMLValidator, XMLParser } from 'fast-xml-parser';
 
 // POST /api/problems - Create a new problem with file upload
 export async function POST(req: Request) {
@@ -46,6 +47,22 @@ export async function POST(req: Request) {
         { error: `File exceeds max upload size (${maxMb} MB).` },
         { status: 413 },
       );
+    }
+
+    const xml = await file.text();
+
+    const parser = new XMLParser();
+  
+    const isValidXml = XMLValidator.validate(xml);
+
+    if (isValidXml !== true){
+      return NextResponse.json({ error: 'Solution file not xml' }, { status: 400 });
+    }
+
+    const jff = parser.parse(xml);
+    
+    if (!jff.structure || jff.structure.type.toUpperCase() !== ((type === 'CFG') ? 'GRAMMAR' : type)){
+      return NextResponse.json({ error: `Solution file should be of type ${type}` }, { status: 400 });
     }
 
     // Ensure upload directory exists
