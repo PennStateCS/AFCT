@@ -85,21 +85,20 @@ export function getUserColumns(
       sortingFn: roleSortingFn,
     },
     {
-      accessorKey: 'temporaryPassword',
-      header: 'Temp Password',
-      meta: { priority: 3 },
-      cell: ({ row }) => {
-        const temporaryPassword = row.getValue<boolean>('temporaryPassword');
-        return temporaryPassword ? 'Yes' : 'No';
-      },
-    },
-    {
       accessorKey: 'inactive',
-      header: 'Active',
+      header: 'Status',
       meta: { priority: 4 },
       cell: ({ row }) => {
         const inactive = row.getValue<boolean>('inactive');
-        return inactive ? 'No' : 'Yes';
+        return inactive ? (
+          <span className="inline-flex items-center rounded-full bg-gray-200 px-3 py-0.5 text-sm font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+            Inactive
+          </span>
+        ) : (
+          <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-0.5 text-sm font-medium text-green-800 dark:bg-green-900 dark:text-green-200">
+            Active
+          </span>
+        );
       },
     },
     {
@@ -108,6 +107,23 @@ export function getUserColumns(
       meta: { priority: 4 },
       cell: ({ row }) => {
         return formatDateTimeInTimeZone(row.original.createdAt, timeZone);
+      },
+    },
+    {
+      accessorKey: 'temporaryPassword',
+      header: 'Password Status',
+      meta: { priority: 3 },
+      cell: ({ row }) => {
+        const temporaryPassword = row.getValue<boolean>('temporaryPassword');
+        return temporaryPassword ? (
+          <span className="inline-flex items-center rounded-full bg-yellow-100 px-3 py-0.5 text-sm font-medium text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+            Temporary
+          </span>
+        ) : (
+          <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-0.5 text-sm font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+            Normal
+          </span>
+        );
       },
     },
     {

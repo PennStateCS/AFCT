@@ -77,6 +77,7 @@ interface DataTableProps<TData, TValue> {
   tableLabel?: string;
   showExportButton?: boolean;
   actionButtons?: React.ReactNode;
+  defaultColumnVisibility?: VisibilityState;
 }
 
 export function DataTable<TData, TValue>({
@@ -88,16 +89,18 @@ export function DataTable<TData, TValue>({
   tableLabel = 'Data table',
   showExportButton = true,
   actionButtons,
+  defaultColumnVisibility = {},
 }: DataTableProps<TData, TValue>) {
   const [globalFilter, setGlobalFilter] = useState('');
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [columnVisibility, setColumnVisibility] =
+    useState<VisibilityState>(defaultColumnVisibility);
   const [sorting, setSorting] = useState<SortingState>([]);
 
   useEffect(() => {
     const saved = localStorage.getItem(storageKey);
     if (saved) {
       try {
-        setColumnVisibility(JSON.parse(saved));
+        setColumnVisibility({ ...defaultColumnVisibility, ...JSON.parse(saved) });
       } catch {
         console.warn('Invalid saved column state, ignoring.');
       }
@@ -134,7 +137,7 @@ export function DataTable<TData, TValue>({
   });
 
   const resetColumns = () => {
-    setColumnVisibility({});
+    setColumnVisibility(defaultColumnVisibility);
     localStorage.removeItem(storageKey);
   };
 
@@ -178,19 +181,16 @@ export function DataTable<TData, TValue>({
     return '';
   };
 
-  const toAccessibleColumnName = (id: string) =>
-    id
-      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-      .replace(/_/g, ' ')
-      .trim()
-      .toLowerCase();
-
   const getColumnFilterLabel = (column: ReturnType<typeof table.getAllLeafColumns>[number]) => {
     const header = column.columnDef.header;
     if (typeof header === 'string' && header.trim().length > 0) {
       return header;
     }
     return column.id;
+  };
+
+  const getSortableColumnLabel = (column: ReturnType<typeof table.getAllLeafColumns>[number]) => {
+    return getColumnFilterLabel(column).toLowerCase();
   };
 
   return (
@@ -261,7 +261,7 @@ export function DataTable<TData, TValue>({
       </div>
 
       <div className="overflow-x-auto rounded-md border">
-        <Table className="w-full" role="table" aria-label={tableLabel}>
+        <Table className="w-full" role="table" aria-label={tableLabel} aria-busy={loading}>
           <TableHeader role="rowgroup">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow
@@ -312,7 +312,7 @@ export function DataTable<TData, TValue>({
                           type="button"
                           onClick={handleSortClick}
                           className="flex w-full cursor-pointer items-center text-left select-none"
-                          aria-label={`Sort by ${toAccessibleColumnName(header.column.id)}`}
+                          aria-label={`Sort by ${getSortableColumnLabel(header.column)}`}
                         >
                           {flexRender(header.column.columnDef.header, header.getContext())}
                           {sorted === 'asc' && <ArrowUp className="ml-1 h-3 w-3" />}
@@ -335,8 +335,12 @@ export function DataTable<TData, TValue>({
             {loading ? (
               <TableRow className="pointer-events-none hover:bg-transparent">
                 <TableCell colSpan={columns.length} className="py-10 text-center">
-                  <div className="flex flex-col items-center justify-center gap-2 text-gray-500">
-                    <Loader2 className="h-6 w-6 animate-spin" />
+                  <div
+                    className="flex flex-col items-center justify-center gap-2 text-gray-500"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />
                     <span>Loading data, please wait...</span>
                   </div>
                 </TableCell>
