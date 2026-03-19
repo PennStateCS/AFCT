@@ -406,12 +406,10 @@ export function EditCourseDialog({
             </DialogClose>
             <Button
               type="submit"
-              disabled={!isValid || !isDirty || isSubmitting || course.isArchived}
+              disabled={!isValid || isSubmitting || course.isArchived}
               title={
                 !isValid
                   ? 'Fix validation errors to save'
-                  : !isDirty
-                    ? 'No changes to save'
                     : 'Course is not archived'
               }
             >
