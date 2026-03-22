@@ -24,10 +24,10 @@ type StudentRow = {
 };
 
 type Assignment = {
-  maxPoints: number;
   id: string;
   title: string;
   dueDate?: string;
+  maxPoints?: number;
 };
 
 type ApiStudent = {
@@ -70,6 +70,20 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         grades: Record<string, Record<string, number | null>>;
       };
 
+      // fetch maxPoints for each assignment via API helper
+      const assignmentsWithPoints: Assignment[] = await Promise.all(
+        a.map(async (asg) => {
+          try {
+            const res2 = await fetch(`/api/assignments/${asg.id}`);
+            if (!res2.ok) return { ...asg, maxPoints: 0 };
+            const json = await res2.json();
+            return { ...asg, maxPoints: json.maxPoints ?? 0 };
+          } catch {
+            return { ...asg, maxPoints: 0 };
+          }
+        }),
+      );
+
       // Build rows
       const rows: StudentRow[] = s.map((stu) => {
         const name =
@@ -90,7 +104,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
       });
 
       setStudents(rows);
-      setAssignments(a);
+      setAssignments(assignmentsWithPoints);
       setLastUpdated(new Date());
       lastFetchAtRef.current = Date.now();
     } catch (err) {
