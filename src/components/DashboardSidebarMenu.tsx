@@ -9,7 +9,6 @@ import useSWR from 'swr';
 import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils';
-import { isEnrolled } from '@/lib/course-utils';
 import { safeSignOut } from '@/lib/safe-signout';
 
 import { ChangePasswordDialog } from './dialogs/ChangePasswordDialog';
@@ -48,7 +47,7 @@ import {
   LockKeyhole,
   UserPen,
   ChevronUp,
-  BookPlus,
+  Activity,
   Settings,
   Wrench,
 } from 'lucide-react';
@@ -62,39 +61,15 @@ type Course = {
   code: string;
   isPublished: boolean;
   isArchived: boolean;
-  // enrolled is a list of user objects (with `courseRole`) for all roster members
-  enrolled?: {
-    id: string;
-    firstName?: string | null;
-    lastName?: string | null;
-    email?: string | null;
-    avatar?: string | null;
-    courseRole?: string;
-  }[];
 };
 
 // Static admin menu items
 const adminMenu = [
   { title: 'Courses', url: '/dashboard/courses', icon: Book },
   { title: 'User Accounts', url: '/dashboard/users', icon: Users },
-  { title: 'System Status', url: '/dashboard/system-status', icon: BookPlus },
+  { title: 'System Status', url: '/dashboard/system-status', icon: Activity },
   { title: 'System Settings', url: '/dashboard/system-settings', icon: Settings },
 ];
-
-// Filter courses based on user role
-function getCoursesForUser(
-  user: { id: string; role: 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT' },
-  courses: Course[],
-) {
-  // Should only see published courses even if enrolled.
-  return courses.filter((c) => {
-    const enrolled = c.enrolled ?? [];
-    const isEnr = isEnrolled(enrolled as any, user.id);
-    if (!isEnr) return false;
-    if (user.role === 'STUDENT') return c.isPublished;
-    return true;
-  });
-}
 
 export default function DashboardSidebarMenu() {
   const pathname = usePathname();
@@ -108,7 +83,7 @@ export default function DashboardSidebarMenu() {
       if (!res.ok) throw new Error('Failed to fetch courses');
       return res.json();
     });
-  const { data: courses = [] } = useSWR<Course[]>('/api/courses', fetcher, {
+  const { data: courses = [] } = useSWR<Course[]>('/api/courses/nav', fetcher, {
     refreshInterval: 0,
     revalidateOnFocus: true, // revalidate when window/tab is focused
   });
@@ -149,13 +124,17 @@ export default function DashboardSidebarMenu() {
     initials,
     role: (role?.toUpperCase?.() || 'STUDENT') as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT',
     password: '', // password is not exposed from session
+    temporaryPassword: Boolean(session.user.mustChangePassword),
     inactive: false, // inactive status is not exposed from session
     createdAt: new Date(), // createdAt is not exposed from session
     updatedAt: new Date(), // updatedAt is not exposed from session
   };
 
-  const filteredCourses = getCoursesForUser(user, courses);
-  const visibleCourses = filteredCourses.filter((c) => !c.isArchived);
+  const visibleCourses = courses.filter((c) => {
+    if (c.isArchived) return false;
+    if (user.role === 'STUDENT') return c.isPublished;
+    return true;
+  });
   const isDev = process.env.NODE_ENV !== 'production';
   const resolvedAdminMenu = isDev
     ? [

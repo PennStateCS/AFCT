@@ -11,7 +11,12 @@ export default function DevelopmentTestsClient() {
       <Card aria-labelledby="development-tests-title">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <CardTitle id="development-tests-title" className="text-2xl">
+            <CardTitle
+              id="development-tests-title"
+              role="heading"
+              aria-level={1}
+              className="text-2xl"
+            >
               Development Tests
             </CardTitle>
             <Badge variant="outline" className="bg-blue-50 text-blue-700">
@@ -26,7 +31,7 @@ export default function DevelopmentTestsClient() {
 
       <Card aria-labelledby="toast-tests-title">
         <CardHeader>
-          <CardTitle id="toast-tests-title" className="text-lg">
+          <CardTitle id="toast-tests-title" role="heading" aria-level={2} className="text-lg">
             Toast Messages
           </CardTitle>
         </CardHeader>

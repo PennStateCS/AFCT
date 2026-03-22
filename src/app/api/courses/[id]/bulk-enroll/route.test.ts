@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const prismaMock = vi.hoisted(() => ({
-  user: { findMany: vi.fn() },
   $transaction: vi.fn(),
 }));
 
@@ -61,7 +60,6 @@ describe('POST /api/courses/[id]/bulk-enroll', () => {
 
   it('bulk enrolls users', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
-    prismaMock.user.findMany.mockResolvedValue([{ id: 'u1', role: 'ADMIN' }]);
 
     const tx = {
       roster: {
@@ -82,18 +80,14 @@ describe('POST /api/courses/[id]/bulk-enroll', () => {
     const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
 
     expect(res.status).toBe(200);
-    expect(tx.roster.create).toHaveBeenCalled();
+    expect(tx.roster.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ role: 'STUDENT' }) }),
+    );
     expect(activityLogMock).toHaveBeenCalled();
   });
 
-  it('maps roles and updates existing roster entries', async () => {
+  it('sets STUDENT role for both updates and creates', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
-    prismaMock.user.findMany.mockResolvedValue([
-      { id: 'u1', role: 'ADMIN' },
-      { id: 'u2', role: 'FACULTY' },
-      { id: 'u3', role: 'TA' },
-      { id: 'u4', role: null },
-    ]);
 
     const tx = {
       roster: {
@@ -120,13 +114,13 @@ describe('POST /api/courses/[id]/bulk-enroll', () => {
 
     expect(res.status).toBe(200);
     expect(tx.roster.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { role: 'INSTRUCTOR' } }),
+      expect.objectContaining({ data: { role: 'STUDENT' } }),
     );
     expect(tx.roster.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { role: 'TA' } }),
+      expect.objectContaining({ data: { role: 'STUDENT' } }),
     );
     expect(tx.roster.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ role: 'FACULTY' }) }),
+      expect.objectContaining({ data: expect.objectContaining({ role: 'STUDENT' }) }),
     );
     expect(tx.roster.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ role: 'STUDENT' }) }),
@@ -135,7 +129,6 @@ describe('POST /api/courses/[id]/bulk-enroll', () => {
 
   it('returns 500 when enrollment transaction fails', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
-    prismaMock.user.findMany.mockResolvedValue([{ id: 'u1', role: 'FACULTY' }]);
     prismaMock.$transaction.mockRejectedValue(new Error('tx failed'));
 
     const req = new NextRequest('http://localhost/api/courses/c1/bulk-enroll', {

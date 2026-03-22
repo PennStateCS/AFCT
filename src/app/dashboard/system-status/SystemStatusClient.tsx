@@ -591,7 +591,9 @@ export default function SystemStatusClient() {
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <CardTitle className="text-2xl">System Status</CardTitle>
+            <CardTitle role="heading" aria-level={1} className="text-2xl">
+              System Status
+            </CardTitle>
             <Badge
               variant="outline"
               className={`${dbOk ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}
@@ -708,7 +710,9 @@ export default function SystemStatusClient() {
           {/* System Overview (CPUs included) */}
           <Card className="xl:col-span-2">
             <CardHeader>
-              <CardTitle className="text-lg">Performance</CardTitle>
+              <CardTitle role="heading" aria-level={2} className="text-lg">
+                Performance
+              </CardTitle>
             </CardHeader>
             <CardContent className="grid gap-6">
               {/* Basic stats */}
@@ -804,7 +808,9 @@ export default function SystemStatusClient() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Software</CardTitle>
+              <CardTitle role="heading" aria-level={2} className="text-lg">
+                Software
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <Stat label="AFCT Dashboard" value={pkg.version} />
@@ -832,7 +838,9 @@ export default function SystemStatusClient() {
 
           <Card className="xl:col-span-2">
             <CardHeader className="flex items-center justify-between">
-              <CardTitle className="text-lg">Database Overview</CardTitle>
+              <CardTitle role="heading" aria-level={2} className="text-lg">
+                Database Overview
+              </CardTitle>
               <Badge
                 variant="outline"
                 className={`${dbOk ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}
@@ -969,7 +977,9 @@ export default function SystemStatusClient() {
           {/* Network */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Network</CardTitle>
+              <CardTitle role="heading" aria-level={2} className="text-lg">
+                Network
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <Stat label="Hostname" value={status.system?.hostname ?? '—'} />
@@ -1058,7 +1068,9 @@ export default function SystemStatusClient() {
         <div className="grid gap-4 lg:grid-cols-3">
           <Card className="lg:col-span-2">
             <CardHeader className="flex items-center justify-between">
-              <CardTitle className="text-lg">Abandoned Files</CardTitle>
+              <CardTitle role="heading" aria-level={2} className="text-lg">
+                Abandoned Files
+              </CardTitle>
               <Badge variant="outline" className="bg-slate-50 text-slate-700">
                 Total: {status.abandonedFiles?.total ?? 0}
               </Badge>
@@ -1113,7 +1125,9 @@ export default function SystemStatusClient() {
           {status.docker?.isDocker ? (
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Docker</CardTitle>
+                <CardTitle role="heading" aria-level={2} className="text-lg">
+                  Docker
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <Stat
@@ -1166,7 +1180,7 @@ export default function SystemStatusClient() {
       {!loading && status && (
         <Card>
           <CardHeader className="flex items-center justify-between">
-            <CardTitle className="text-lg">
+            <CardTitle role="heading" aria-level={2} className="text-lg">
               Sessions
               {sessionSummary ? (
                 <span className="ml-2 space-x-2">
