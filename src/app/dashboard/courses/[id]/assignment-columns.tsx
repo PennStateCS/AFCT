@@ -83,10 +83,11 @@ export function useAssignmentColumns(
       accessorKey: 'title',
       header: 'Title',
       cell: ({ row }) => (
-        <div>
+        <div className="min-w-0">
           <Link
             href={`/dashboard/courses/${row.original.courseId}/${row.original.id}`}
-            className="text-blue-600 hover:underline"
+            className="block max-w-[20rem] truncate text-blue-600 hover:underline sm:max-w-[28rem] lg:max-w-[36rem]"
+            title={row.original.title}
           >
             {row.original.title}
           </Link>
