@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { truncate } from '@/app/utils/truncate';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -162,8 +163,6 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
 
         const stdoutTrimmed = result.stdout?.trim() ?? '';
         const stderrTrimmed = result.stderr?.trim() ?? '';
-        const truncate = (val: string, max = 2000) =>
-          val.length > max ? `${val.slice(0, max)}…` : val;
 
         if (stderrTrimmed) {
           await createEnhancedActivityLog(prisma, req, {
