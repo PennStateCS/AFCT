@@ -1,12 +1,16 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { Moon, Sun } from 'lucide-react';
+import { toast } from 'sonner';
+import { LockKeyhole, LogOut, Moon, Sun, UserPen, UserRound } from 'lucide-react';
 import { Badge } from '@/components/ui/RoleBadge';
 import { useNavbarBreadcrumbs } from '@/components/navbar/NavbarBreadcrumbContext';
+import { safeSignOut } from '@/lib/safe-signout';
+import { ChangePasswordDialog } from '@/components/dialogs/ChangePasswordDialog';
+import { EditProfileDialog } from '@/components/dialogs/EditProfileDialog';
 
 // UI Components
 import { Button } from '@/components/ui/button';
@@ -15,6 +19,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -32,6 +37,8 @@ import { EnhancedSidebarTrigger } from './ui/EnhancedSidebarTrigger';
 const Navbar: React.FC = () => {
   const { setTheme } = useTheme();
   const { data, status } = useSession();
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [editProfileOpen, setEditProfileOpen] = useState(false);
   const pathname = usePathname();
   const { courseLabel, assignmentLabel } = useNavbarBreadcrumbs();
 
@@ -108,6 +115,23 @@ const Navbar: React.FC = () => {
   // Use session.user.name first (which is built from firstName + lastName in auth)
   // Then fallback to building it from individual fields, then fallback to 'User'
   const fullName = data.user.name || [firstName, lastName].filter(Boolean).join(' ') || 'User';
+  const initials = (firstName?.[0] ?? '') + (lastName?.[0] ?? '') || fullName[0] || 'U';
+  const user = {
+    id: data.user.id ?? '',
+    firstName: firstName ?? '',
+    lastName: lastName ?? '',
+    name: fullName,
+    email: data.user.email ?? '',
+    avatar: avatar ?? null,
+    timezone: data.user.timezone ?? null,
+    initials,
+    role: (roleDisplay.toUpperCase() || 'STUDENT') as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT',
+    password: '',
+    temporaryPassword: Boolean(data.user.mustChangePassword),
+    inactive: false,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
 
   return (
     <nav className="bg-secondary mb-4 flex h-16 items-center justify-between rounded-lg p-3 text-white shadow-sm sm:p-4">
@@ -149,18 +173,71 @@ const Navbar: React.FC = () => {
       </div>
 
       <div className="ml-2 flex items-center gap-2 text-right sm:gap-4">
-        <div className="hidden flex-col items-end sm:flex">
-          <div className="max-w-[12rem] truncate font-medium">{fullName}</div>
-          <Badge role={roleDisplay} className="text-xs" />
-        </div>
-
-        <Avatar className="h-11 w-11" aria-label="User avatar">
-          <AvatarImage src={avatarUrl} alt={`${fullName}'s avatar`} />
-          <AvatarFallback>
-            {firstName?.[0]}
-            {lastName?.[0]}
-          </AvatarFallback>
-        </Avatar>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              className="h-auto rounded-md px-1 py-1 hover:bg-white/20 sm:px-2"
+              aria-label="User account menu"
+            >
+              <span className="flex items-center gap-2 sm:gap-3">
+                <span className="hidden flex-col items-end sm:flex">
+                  <span className="max-w-[12rem] truncate font-semibold text-white">
+                    {fullName}
+                  </span>
+                  <Badge role={roleDisplay} className="text-xs" />
+                </span>
+                <Avatar className="h-11 w-11" aria-label="User avatar">
+                  <AvatarImage src={avatarUrl} alt={`${fullName}'s avatar`} />
+                  <AvatarFallback>
+                    {firstName?.[0]}
+                    {lastName?.[0]}
+                  </AvatarFallback>
+                </Avatar>
+              </span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuItem>
+              <span className="flex w-full items-center gap-2 text-left">
+                <UserRound className="h-4 w-4" />
+                User Account
+              </span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 text-left"
+                onClick={() => setEditProfileOpen(true)}
+              >
+                <UserPen className="h-4 w-4" />
+                Edit Profile
+              </button>
+            </DropdownMenuItem>
+            <DropdownMenuItem>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 text-left"
+                onClick={() => setChangePasswordOpen(true)}
+              >
+                <LockKeyhole className="h-4 w-4" />
+                Change Password
+              </button>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 text-left"
+                onClick={() => void safeSignOut({ callbackUrl: '/' })}
+              >
+                <LogOut className="h-4 w-4" />
+                Sign out
+              </button>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -180,6 +257,25 @@ const Navbar: React.FC = () => {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      <ChangePasswordDialog
+        open={changePasswordOpen}
+        setOpen={setChangePasswordOpen}
+        onChangePassword={async (oldPassword, newPassword) => {
+          const res = await fetch('/api/users/change-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ oldPassword, newPassword }),
+          });
+          if (!res.ok) {
+            const { error } = await res.json();
+            toast.error(error || 'Failed to change password');
+            throw new Error(error || 'Failed to change password');
+          }
+          toast.success('Password changed!');
+        }}
+      />
+      <EditProfileDialog user={user} open={editProfileOpen} setOpen={setEditProfileOpen} />
     </nav>
   );
 };
