@@ -1,11 +1,17 @@
 'use client';
 
+import React from 'react';
 import { useSession } from 'next-auth/react';
 import StudentAssignmentView from '@/components/assignments/StudentAssignmentView';
 import PrivilegeAssignmentView from '@/components/assignments/PrivilegeAssignmentView';
 import LoadingSpinner from '@/components/ui/loading-spinner';
+import { AssignmentWithDetails } from '@/lib/assignment-details';
 
-export default function AssignmentClient() {
+type AssignmentClientProps = {
+  initialAssignment?: AssignmentWithDetails | null;
+};
+
+export default function AssignmentClient({ initialAssignment = null }: AssignmentClientProps) {
   const { data: session, status } = useSession();
 
   if (status === 'loading') {
@@ -19,8 +25,8 @@ export default function AssignmentClient() {
   const role = session.user?.role;
 
   if (role === 'STUDENT') {
-    return <StudentAssignmentView />;
+    return <StudentAssignmentView initialAssignment={initialAssignment} />;
   }
 
-  return <PrivilegeAssignmentView />;
+  return <PrivilegeAssignmentView initialAssignment={initialAssignment} />;
 }

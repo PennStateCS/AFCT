@@ -1,7 +1,6 @@
 'use client';
 
 import * as React from 'react';
-import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 
@@ -37,6 +36,7 @@ export default function SwitchField({
   id,
 }: SwitchFieldProps) {
   const switchId = id ?? name;
+  const labelId = `${switchId}-label`;
 
   const describedByIds: Array<string | null> = [
     error ? `${switchId}-error` : null,
@@ -60,9 +60,13 @@ export default function SwitchField({
     <div className={cn('flex flex-col', className)}>
       <div className="border-input flex min-h-11 items-center justify-between rounded-md border px-3 py-2 shadow-xs">
         <div className="min-w-0">
-          <Label htmlFor={switchId} className={cn('text-sm font-medium', labelClassName)}>
+          <label
+            id={labelId}
+            htmlFor={switchId}
+            className={cn('text-sm font-medium', labelClassName)}
+          >
             {label}
-          </Label>
+          </label>
           {description && descriptionPlacement === 'inline' && (
             <p id={`${switchId}-desc`} className="text-muted-foreground mt-0.5 text-xs">
               {description}
@@ -71,6 +75,8 @@ export default function SwitchField({
         </div>
         <Switch
           id={switchId}
+          aria-label={label}
+          aria-labelledby={labelId}
           checked={checked}
           onCheckedChange={onCheckedChange}
           disabled={disabled}

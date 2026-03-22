@@ -28,15 +28,34 @@ export default async function ArchivedCoursesPage() {
         isArchived: true,
       },
     },
-    include: {
+    select: {
+      role: true,
       course: {
-        include: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          semester: true,
+          credits: true,
+          startDate: true,
+          endDate: true,
+          isPublished: true,
+          isArchived: true,
           roster: {
-            include: {
-              user: true, // Load user info for each roster member
+            select: {
+              role: true,
+              user: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  role: true,
+                  email: true,
+                  avatar: true,
+                },
+              },
             },
           },
-          assignments: true,
         },
       },
     },

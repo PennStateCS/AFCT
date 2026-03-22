@@ -39,6 +39,8 @@ import {
   type ProblemFormRaw,
 } from '@/schemas/problem';
 import { showToast } from '@/lib/toast';
+import FileUploadInput from '@/components/FileUploadInput';
+import { useMaxUploadSize } from '@/hooks/useMaxUploadSize';
 
 // Helper: extract a string message for the file error without using `any`
 
@@ -119,6 +121,8 @@ export function CreateProblemDialog({
   // Internal visibility state: only show dialog after groups are loaded (if needed)
   const [internalOpen, setInternalOpen] = useState(false);
   const [initializing, setInitializing] = useState(false);
+
+  const { maxMb, loading: loadingMaxSize } = useMaxUploadSize();
 
   const fileErrorMessage = (() => {
     const e = errors.file;
@@ -555,31 +559,23 @@ export function CreateProblemDialog({
             )}
           />
 
-          {/* File (avoid InputGroup; file inputs must be uncontrolled) */}
+          {/* File upload with drag-and-drop and size validation */}
           <Controller
             control={control}
             name="file"
-            render={({ field: { onChange, onBlur, name, ref } }) => (
-              <div>
-                <Label htmlFor="answer-file" className="mb-2 block">
-                  Answer File
-                </Label>
-                <Input
-                  id="answer-file"
-                  name={name}
-                  type="file"
-                  accept=".txt,.fa,.pda,.cfg,.re,.jff"
-                  ref={ref}
-                  onBlur={onBlur}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    onChange(file);
-                  }}
-                />
-                {fileErrorMessage && (
-                  <p className="mt-1 text-xs text-red-600">{fileErrorMessage}</p>
-                )}
-              </div>
+            render={({ field: { onChange, value } }) => (
+              <FileUploadInput
+                id="answer-file"
+                name="file"
+                label="Answer File"
+                accept=".txt,.fa,.pda,.cfg,.re,.jff"
+                maxSizeMb={maxMb}
+                value={value}
+                onChange={onChange}
+                error={typeof errors.file?.message === 'string' ? errors.file.message : undefined}
+                disabled={loadingMaxSize || courseIsArchived}
+                hint="Supported formats: .txt, .fa, .pda, .cfg, .re, .jff"
+              />
             )}
           />
 

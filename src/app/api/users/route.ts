@@ -4,9 +4,9 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
 import { auth } from '@/lib/auth';
-import { Role } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
+import { getUsersList } from '@/lib/users-list';
 
 // Utility to validate email format
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -36,22 +36,7 @@ export async function GET(req: Request) {
     // Fetching users
 
     // 3. Query users from the database
-    const users = await prisma.user.findMany({
-      where: role ? { role: role as Role } : undefined,
-      orderBy: [{ role: 'asc' }, { lastName: 'asc' }],
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        role: true,
-        avatar: true,
-        timezone: true,
-        inactive: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+    const users = await getUsersList(role);
 
     // 4. Log the access
     await createEnhancedActivityLog(prisma, req, {

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FileText, MessageSquare, Check, X, Minus } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -435,34 +435,6 @@ export default function AssignmentSubmissions({
   );
   const [loadingGroupMemberships, setLoadingGroupMemberships] = useState(false);
 
-  // Load all course problems and prefer client-side filtering for the submissions tab.
-  // Fall back to `problems` prop if the fetch fails or isn't provided.
-  const [allProblems, setAllProblems] = useState<Problem[]>(problems ?? []);
-  const [problemsLoading, setProblemsLoading] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function loadAllProblems() {
-      if (!courseId) return;
-      setProblemsLoading(true);
-      try {
-        const res = await fetch(`/api/courses/${courseId}/problems`);
-        if (!res.ok) throw new Error('Failed to load problems');
-        const data = await res.json();
-        if (!cancelled) setAllProblems(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error('Failed to load problems:', err);
-        if (!cancelled) setAllProblems(problems ?? []);
-      } finally {
-        if (!cancelled) setProblemsLoading(false);
-      }
-    }
-    loadAllProblems();
-    return () => {
-      cancelled = true;
-    };
-  }, [courseId, problems]);
-
   // Grade editing state (robust, GradesCard style)
   const [editingGrade, setEditingGrade] = useState<string>('');
   const [isEditing, setIsEditing] = useState(false);
@@ -481,6 +453,8 @@ export default function AssignmentSubmissions({
     open: boolean;
     submission: Submission | null;
   }>({ open: false, submission: null });
+  const reviewDataAbortRef = useRef<AbortController | null>(null);
+  const reviewRequestSeqRef = useRef(0);
 
   const updateQuery = useCallback(
     (problemId: string) => {
@@ -500,23 +474,10 @@ export default function AssignmentSubmissions({
     [router, searchParamsString],
   );
 
-  // Build the assignment-specific problem list using the fetched `allProblems` (prefer enriched objects).
+  // Build the assignment-specific problem list from assignment payload.
   const assignmentProblems = useMemo(() => {
-    if (!problems || problems.length === 0) {
-      // parent didn't pass assignment problems — fall back to `allProblems`
-      return allProblems;
-    }
-    // Merge course-level problem details with assignment-level settings.
-    // Assignment-level fields (maxSubmissions/maxPoints/autograderEnabled) must win.
-    return problems.map((assignmentProblem) => {
-      const courseProblem = allProblems.find((problem) => problem.id === assignmentProblem.id);
-      if (!courseProblem) return assignmentProblem;
-      return {
-        ...courseProblem,
-        ...assignmentProblem,
-      };
-    });
-  }, [problems, allProblems]);
+    return problems ?? [];
+  }, [problems]);
 
   // Compute which problems should be visible for the selected student when
   // this is a group assignment. Rules:
@@ -758,6 +719,8 @@ export default function AssignmentSubmissions({
 
   const fetchReviewData = useCallback(async () => {
     if (!selectedStudentId) {
+      reviewDataAbortRef.current?.abort();
+      reviewDataAbortRef.current = null;
       setSubmissions({});
       setComments({});
       setProblemGrades({});
@@ -773,13 +736,22 @@ export default function AssignmentSubmissions({
     setLoadingComments(true);
     setLoadingProblemGrades(true);
 
+    reviewDataAbortRef.current?.abort();
+    const controller = new AbortController();
+    reviewDataAbortRef.current = controller;
+    const requestSeq = ++reviewRequestSeqRef.current;
+
     try {
       const res = await fetch(
         `/api/courses/${courseId}/${assignmentId}/review-data/${selectedStudentId}`,
+        { signal: controller.signal },
       );
+
+      if (requestSeq !== reviewRequestSeqRef.current) return;
 
       if (!res.ok) {
         if ([401, 403, 404].includes(res.status)) {
+          if (requestSeq !== reviewRequestSeqRef.current) return;
           setSubmissions({});
           setComments(
             Object.fromEntries(
@@ -801,6 +773,7 @@ export default function AssignmentSubmissions({
       };
 
       const data = ((await res.json()) ?? {}) as ReviewDataResponse;
+      if (requestSeq !== reviewRequestSeqRef.current) return;
       setSubmissions(data.submissions || {});
 
       const groupedComments = Object.fromEntries(
@@ -841,6 +814,8 @@ export default function AssignmentSubmissions({
         [selectedStudentId]: hasAllGrades,
       }));
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
+      if (requestSeq !== reviewRequestSeqRef.current) return;
       console.error('Fetch review data error:', err);
       showToast.error('Failed to load review data');
       setSubmissions({});
@@ -848,11 +823,19 @@ export default function AssignmentSubmissions({
       setProblemGrades({});
       setGradeInputs({});
     } finally {
+      if (requestSeq !== reviewRequestSeqRef.current) return;
       setLoadingSubmissions(false);
       setLoadingComments(false);
       setLoadingProblemGrades(false);
     }
   }, [courseId, assignmentId, selectedStudentId, assignmentProblems]);
+
+  useEffect(() => {
+    return () => {
+      reviewDataAbortRef.current?.abort();
+      reviewDataAbortRef.current = null;
+    };
+  }, []);
 
   // Fetch review data for selected student
   useEffect(() => {

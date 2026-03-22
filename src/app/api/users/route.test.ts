@@ -14,10 +14,12 @@ const prismaMock = vi.hoisted(() => ({
 const authMock = vi.hoisted(() => vi.fn());
 const activityLogMock = vi.hoisted(() => vi.fn());
 const bcryptMock = vi.hoisted(() => ({ hash: vi.fn() }));
+const getUsersListMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
+vi.mock('@/lib/users-list', () => ({ getUsersList: getUsersListMock }));
 vi.mock('bcrypt', async (importOriginal) => {
   const actual = await importOriginal<typeof import('bcrypt')>();
   return {
@@ -48,11 +50,12 @@ describe('GET /api/users', () => {
 
   it('returns users and logs activity', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
-    prismaMock.user.findMany.mockResolvedValue([{ id: 'u2', email: 'u2@example.com' }]);
+    getUsersListMock.mockResolvedValue([{ id: 'u2', email: 'u2@example.com' }]);
 
     const res = await GET(new Request('http://localhost/api/users?role=STUDENT'));
 
     expect(res.status).toBe(200);
+    expect(getUsersListMock).toHaveBeenCalledWith('STUDENT');
     const body = await res.json();
     expect(body).toEqual([{ id: 'u2', email: 'u2@example.com' }]);
     expect(activityLogMock).toHaveBeenCalled();
@@ -60,7 +63,7 @@ describe('GET /api/users', () => {
 
   it('returns 500 when database query fails', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
-    prismaMock.user.findMany.mockRejectedValue(new Error('Database error'));
+    getUsersListMock.mockRejectedValue(new Error('Database error'));
 
     const res = await GET(new Request('http://localhost/api/users'));
 
