@@ -6,15 +6,15 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatDateTimeInTimeZone } from '@/lib/date';
 
-type Assignment = {
+type DueDateAssignment = {
   id: string;
-  title: string; // updated to match schema
+  title: string;
   dueDate: string | Date;
   courseId: string;
 };
 
 type Props = {
-  assignments: Assignment[];
+  assignments: DueDateAssignment[];
 };
 
 export function DueDateModule({ assignments }: Props) {
@@ -35,7 +35,12 @@ export function DueDateModule({ assignments }: Props) {
   return (
     <Card className="w-full" aria-labelledby="upcoming-assignments-title">
       <CardHeader>
-        <CardTitle id="upcoming-assignments-title" className="text-lg font-semibold">
+        <CardTitle
+          id="upcoming-assignments-title"
+          role="heading"
+          aria-level={2}
+          className="text-lg font-semibold"
+        >
           Upcoming Assignments
         </CardTitle>
       </CardHeader>

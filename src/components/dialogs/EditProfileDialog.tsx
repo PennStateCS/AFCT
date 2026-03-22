@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 
 import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
+import FileUploadInput from '@/components/FileUploadInput';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
@@ -26,6 +27,7 @@ import {
 } from '@/schemas/profile';
 import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import { useMaxUploadSize } from '@/hooks/useMaxUploadSize';
 
 type EditProfileDialog = {
   user: User;
@@ -36,6 +38,7 @@ type EditProfileDialog = {
 export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDialog) {
   // Local preview state (keep separate from RHF file)
   const { timezone: effectiveTimezone } = useEffectiveTimezone();
+  const { maxMb, loading: loadingMaxSize } = useMaxUploadSize();
   const [avatarPreview, setAvatarPreview] = useState<string>(
     user.avatar ? `/api/uploads/pfps/${user.avatar}` : '/api/uploads/pfps/default-avatar.png',
   );
@@ -194,56 +197,57 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {/* Avatar */}
-          <div className="flex items-center gap-4">
-            <Avatar className="h-20 w-20">
-              <AvatarImage src={avatarPreview} alt="User Avatar" />
-              <AvatarFallback className="bg-secondary text-secondary-foreground">
-                {(watch('firstName') || user.firstName || '?').charAt(0)}
-                {(watch('lastName') || user.lastName || '?').charAt(0)}
-              </AvatarFallback>
-            </Avatar>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-4">
+              <Avatar className="h-20 w-20">
+                <AvatarImage src={avatarPreview} alt="User Avatar" />
+                <AvatarFallback className="bg-secondary text-secondary-foreground">
+                  {(watch('firstName') || user.firstName || '?').charAt(0)}
+                  {(watch('lastName') || user.lastName || '?').charAt(0)}
+                </AvatarFallback>
+              </Avatar>
 
-            <div className="flex flex-col gap-2">
-              <Controller
-                control={control}
-                name="avatarFile"
-                render={() => (
-                  <>
-                    <input
-                      id="avatar-upload"
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => handleAvatarUpload(e.target.files?.[0])}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => document.getElementById('avatar-upload')?.click()}
-                      className="flex items-center gap-2"
-                    >
-                      <UploadCloud className="h-4 w-4" />
-                      Upload Avatar
-                    </Button>
-                    {avatarFileErrorMessage && (
-                      <p className="mt-1 text-xs text-red-600">{avatarFileErrorMessage}</p>
-                    )}
-                  </>
+              <div className="flex flex-col gap-2">
+                {avatarPreview && avatarPreview !== '/api/uploads/pfps/default-avatar.png' && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex items-center gap-2 border-red-600 text-red-600 hover:bg-red-50"
+                    onClick={handleDeleteAvatar}
+                    size="sm"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete Avatar
+                  </Button>
                 )}
-              />
-
-              {avatarPreview && avatarPreview !== '/api/uploads/pfps/default-avatar.png' && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="flex items-center gap-2 border-red-600 text-red-600 hover:bg-red-50"
-                  onClick={handleDeleteAvatar}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Delete Avatar
-                </Button>
-              )}
+              </div>
             </div>
+
+            <Controller
+              control={control}
+              name="avatarFile"
+              render={({ field: { onChange, value } }) => (
+                <FileUploadInput
+                  id="avatar-file"
+                  name="avatarFile"
+                  label="Avatar Image"
+                  accept="image/*"
+                  maxSizeMb={maxMb}
+                  value={value}
+                  onChange={(file) => {
+                    handleAvatarUpload(file);
+                    onChange(file);
+                  }}
+                  error={
+                    typeof errors.avatarFile?.message === 'string'
+                      ? errors.avatarFile.message
+                      : undefined
+                  }
+                  disabled={loadingMaxSize}
+                  description="Recommended: square image, at least 256x256px"
+                />
+              )}
+            />
           </div>
 
           {/* First Name */}

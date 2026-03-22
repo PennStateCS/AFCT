@@ -2,12 +2,24 @@
 
 import Link from 'next/link';
 
-import type { Course, User } from '@prisma/client';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { getCourseStatusTag } from '@/lib/course-status';
-import { formatInstructorNames, getStudentCount, getTAs } from '@/lib/course-utils';
+import { EnrolledUser, formatInstructorNames, getStudentCount, getTAs } from '@/lib/course-utils';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatDateTimeInTimeZone } from '@/lib/date';
+
+type DashboardCourse = {
+  id: string;
+  name: string;
+  code: string;
+  semester: string;
+  credits: number;
+  startDate: string | Date;
+  endDate: string | Date;
+  isPublished: boolean;
+  isArchived: boolean;
+  enrolled?: EnrolledUser[];
+};
 
 type Props = {
   sessionUser: {
@@ -15,9 +27,7 @@ type Props = {
     role: string;
   };
   title: string;
-  courses: (Course & {
-    enrolled?: (User & { courseRole?: string; hasSubmissions?: boolean })[];
-  })[];
+  courses: DashboardCourse[];
 };
 
 export default function DashboardClient({ sessionUser, courses, title }: Props) {
@@ -32,7 +42,12 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
   return (
     <Card className="flex h-full" aria-labelledby="current-courses-title">
       <CardHeader>
-        <CardTitle id="current-courses-title" className="text-2xl font-semibold tracking-tight">
+        <CardTitle
+          id="current-courses-title"
+          role="heading"
+          aria-level={2}
+          className="text-2xl font-semibold tracking-tight"
+        >
           {title}
         </CardTitle>
       </CardHeader>
@@ -91,17 +106,17 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
                         {isPrivileged && (
                           <div>
                             <span className="font-semibold">Enrollment:</span>{' '}
-                            {getStudentCount(course.enrolled as any[])}
+                            {getStudentCount(course.enrolled)}
                           </div>
                         )}
                         <div>
                           <span className="font-semibold">Faculty:</span>{' '}
-                          {formatInstructorNames(course.enrolled as any)}
+                          {formatInstructorNames(course.enrolled)}
                         </div>
                         <div>
                           <span className="font-semibold">TA(s):</span>{' '}
                           {(() => {
-                            const taNames = getTAs(course.enrolled as any)
+                            const taNames = getTAs(course.enrolled)
                               .map((ta) => `${ta.firstName ?? ''} ${ta.lastName ?? ''}`.trim())
                               .filter(Boolean)
                               .join(', ');

@@ -13,6 +13,7 @@ interface ProblemsCardProps {
   problems: Problem[];
   problemColumns: ColumnDef<Problem>[];
   onCreateProblem: () => void;
+  isLoading?: boolean;
 }
 
 export function ProblemsCard({
@@ -20,6 +21,7 @@ export function ProblemsCard({
   problems,
   problemColumns,
   onCreateProblem,
+  isLoading = false,
 }: ProblemsCardProps) {
   return (
     <Card>
@@ -33,10 +35,15 @@ export function ProblemsCard({
         </Button>
       </CardHeader>
       <CardContent className="overflow-x-auto">
-        {problems.length ? (
-          <DataTable columns={problemColumns} data={problems} tableLabel="Problems table" />
-        ) : (
+        {!isLoading && !problems.length ? (
           <p className="text-muted-foreground italic">No problems added.</p>
+        ) : (
+          <DataTable
+            columns={problemColumns}
+            data={problems}
+            loading={isLoading}
+            tableLabel="Problems table"
+          />
         )}
       </CardContent>
     </Card>

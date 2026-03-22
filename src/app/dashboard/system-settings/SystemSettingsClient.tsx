@@ -1,11 +1,20 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
 import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
+import {
+  clampSessionTimeoutMinutes,
+  DEFAULT_ALLOW_SIGNUP,
+  DEFAULT_MAX_UPLOAD_SIZE_MB,
+  DEFAULT_SESSION_TIMEOUT_MINUTES,
+  DEFAULT_SYSTEM_TIMEZONE,
+  MAX_SESSION_TIMEOUT_MINUTES,
+  MIN_SESSION_TIMEOUT_MINUTES,
+} from '@/lib/system-settings';
 import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
 import SwitchField from '@/components/ui/SwitchField';
@@ -14,6 +23,7 @@ type SystemSettingsResponse = {
   timezone: string;
   maxUploadSizeMb: number;
   allowSignup: boolean;
+  sessionTimeoutMinutes: number;
 };
 
 export default function SystemSettingsClient() {
@@ -22,6 +32,7 @@ export default function SystemSettingsClient() {
   const [timezone, setTimezone] = useState('');
   const [maxUploadSizeMb, setMaxUploadSizeMb] = useState<number | ''>('');
   const [allowSignup, setAllowSignup] = useState(true);
+  const [sessionTimeoutMinutes, setSessionTimeoutMinutes] = useState<number | ''>('');
 
   useEffect(() => {
     const load = async () => {
@@ -29,9 +40,14 @@ export default function SystemSettingsClient() {
         const res = await fetch('/api/system-settings', { cache: 'no-store' });
         if (!res.ok) throw new Error('Failed to load system settings');
         const data = (await res.json()) as SystemSettingsResponse;
-        setTimezone(data.timezone || 'UTC');
-        setMaxUploadSizeMb(Number(data.maxUploadSizeMb) || 25);
-        setAllowSignup(data.allowSignup ?? true);
+        setTimezone(data.timezone || DEFAULT_SYSTEM_TIMEZONE);
+        setMaxUploadSizeMb(Number(data.maxUploadSizeMb) || DEFAULT_MAX_UPLOAD_SIZE_MB);
+        setAllowSignup(data.allowSignup ?? DEFAULT_ALLOW_SIGNUP);
+        setSessionTimeoutMinutes(
+          clampSessionTimeoutMinutes(
+            Number(data.sessionTimeoutMinutes) || DEFAULT_SESSION_TIMEOUT_MINUTES,
+          ),
+        );
       } catch {
         showToast.error('Failed to load system settings.');
       } finally {
@@ -58,18 +74,25 @@ export default function SystemSettingsClient() {
     }
 
     const clampedSize = Math.max(1, Math.min(1024, Math.trunc(Number(maxUploadSizeMb) || 0)));
+    const clampedTimeout = clampSessionTimeoutMinutes(Number(sessionTimeoutMinutes));
     setSaving(true);
     try {
       const res = await fetch('/api/system-settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ timezone, maxUploadSizeMb: clampedSize, allowSignup }),
+        body: JSON.stringify({
+          timezone,
+          maxUploadSizeMb: clampedSize,
+          allowSignup,
+          sessionTimeoutMinutes: clampedTimeout,
+        }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
         throw new Error(body?.error || 'Failed to save settings');
       }
       setMaxUploadSizeMb(clampedSize);
+      setSessionTimeoutMinutes(clampedTimeout);
       showToast.success('System settings updated successfully.');
     } catch (err) {
       showToast.error(err instanceof Error ? err.message : 'Failed to save settings.');
@@ -87,9 +110,9 @@ export default function SystemSettingsClient() {
       <Card aria-labelledby="system-settings-title">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <CardTitle id="system-settings-title" className="text-2xl">
+            <h1 id="system-settings-title" className="text-2xl leading-none font-semibold">
               System Settings
-            </CardTitle>
+            </h1>
             <Badge variant="outline" className="bg-blue-50 text-blue-700">
               Beta Feature
             </Badge>
@@ -102,9 +125,9 @@ export default function SystemSettingsClient() {
 
       <Card aria-labelledby="system-settings-general-title">
         <CardHeader>
-          <CardTitle id="system-settings-general-title" className="text-lg">
+          <h2 id="system-settings-general-title" className="text-lg leading-none font-semibold">
             General
-          </CardTitle>
+          </h2>
         </CardHeader>
         <CardContent>
           <form
@@ -136,6 +159,19 @@ export default function SystemSettingsClient() {
               setValue={(val) => setMaxUploadSizeMb(val === '' ? '' : Number(val))}
               disabled={loading || saving}
               description="Applies to all uploads. Range: 1–1024 MB."
+            />
+            <InputGroup
+              label="Session timeout (minutes)"
+              name="sessionTimeoutMinutes"
+              type="number"
+              required
+              requiredMark
+              min={MIN_SESSION_TIMEOUT_MINUTES}
+              max={MAX_SESSION_TIMEOUT_MINUTES}
+              value={sessionTimeoutMinutes === '' ? '' : String(sessionTimeoutMinutes)}
+              setValue={(val) => setSessionTimeoutMinutes(val === '' ? '' : Number(val))}
+              disabled={loading || saving}
+              description={`Automatically signs users out after inactivity. Range: ${MIN_SESSION_TIMEOUT_MINUTES}–${MAX_SESSION_TIMEOUT_MINUTES} minutes.`}
             />
             <SwitchField
               id="allow-signup"
