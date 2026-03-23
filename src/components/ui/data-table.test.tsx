@@ -96,4 +96,19 @@ describe('DataTable', () => {
 
     expect(screen.getByRole('button', { name: /custom refresh/i })).toBeInTheDocument();
   });
+
+  it('does not warn when rows lack id/_id values', () => {
+    const spy = vi.spyOn(console, 'error');
+    type NoId = { name: string; role: string };
+    const noIdColumns: ColumnDef<NoId>[] = columns as unknown as ColumnDef<NoId>[];
+    const noIdData: NoId[] = [
+      { name: 'Foo', role: 'X' },
+      { name: 'Bar', role: 'Y' },
+    ];
+
+    render(<DataTable columns={noIdColumns as any} data={noIdData as any} />);
+    expect(spy).not.toHaveBeenCalledWith(
+      expect.stringContaining('Encountered two children with the same key'),
+    );
+  });
 });

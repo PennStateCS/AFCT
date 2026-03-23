@@ -176,11 +176,13 @@ function SubmissionTable({
 type ProblemListProps = {
   problems: Problem[];
   submissions: Record<string, SubmissionData>;
+  /** grades keyed by problem id; null means not graded yet */
+  problemGrades: Record<string, number | null>;
   selectedProblemId: string | null;
   onSelect: (problemId: string) => void;
 };
 
-function ProblemList({ problems, submissions, selectedProblemId, onSelect }: ProblemListProps) {
+function ProblemList({ problems, submissions, problemGrades, selectedProblemId, onSelect }: ProblemListProps) {
   if (!problems.length) return null;
   const limitText = (value: string, max = 80) =>
     value.length > max ? `${value.slice(0, max - 1)}…` : value;
@@ -191,49 +193,84 @@ function ProblemList({ problems, submissions, selectedProblemId, onSelect }: Pro
   }));
 
   const getBadgeContent = (problemId: string) => {
-    const subs = extractSubs(submissions[problemId]);
+    const grade = problemGrades[problemId];
     const problem = problems.find((item) => item.id === problemId);
+    const maxPoints = typeof problem?.maxPoints === 'number' ? problem.maxPoints : null;
+    const subs = extractSubs(submissions[problemId]);
+    const usedCount = subs.length;
     const maxSubmissions = problem?.maxSubmissions;
     const hasFiniteSubmissionLimit =
       typeof maxSubmissions === 'number' && Number.isFinite(maxSubmissions) && maxSubmissions > 0;
-    const countLabel = hasFiniteSubmissionLimit
-      ? `${subs.length}/${maxSubmissions}`
-      : `${subs.length}/∞`;
+    // use ∞ when limit is undefined/null or negative
+    const usageLabel = hasFiniteSubmissionLimit
+      ? `${usedCount}/${maxSubmissions}`
+      : `${usedCount}/∞`;
 
-    if (!subs.length) {
-      return (
+    // status badge
+    let statusLabel = '';
+    let statusClass = 'bg-slate-100 text-slate-700';
+    if (usedCount > 0) {
+      const latest = [...subs].sort(
+        (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
+      )[0];
+      statusLabel = latest?.correct === true ? 'Correct' :
+                    latest?.correct === false ? 'Needs review' : 'Submitted';
+      if (latest?.correct === true) statusClass = 'bg-emerald-100 text-emerald-800';
+      else if (latest?.correct === false) statusClass = 'bg-amber-100 text-amber-800';
+      else statusClass = 'bg-blue-100 text-blue-800';
+    }
+
+    const badges = [] as React.ReactNode[];
+
+    // grade badge - show even when grade is missing (dash numerator)
+    if (maxPoints !== null) {
+      const display = grade !== null && grade !== undefined ? String(grade) : '-';
+      badges.push(
         <Badge
+          key="grade"
           variant="secondary"
-          className="min-w-[50px] border border-slate-300 bg-white text-[11px] font-medium text-slate-700"
+          title="Grade earned / max points"
+          className="border border-slate-300 bg-white text-[11px] font-medium text-slate-700"
         >
-          {countLabel}
-        </Badge>
+          {display}/{maxPoints}
+        </Badge>,
       );
     }
 
-    const latest = [...subs].sort(
-      (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
-    )[0];
-
-    let label = countLabel;
-    let badgeClass = 'bg-slate-100 text-slate-700';
-
-    if (latest?.correct === true) {
-      label = `Correct · ${countLabel}`;
-      badgeClass = 'bg-emerald-100 text-emerald-800';
-    } else if (latest?.correct === false) {
-      label = `Needs review · ${countLabel}`;
-      badgeClass = 'bg-amber-100 text-amber-800';
+    // submission usage badge (show always when there is any limit, including ∞)
+    if (usedCount > 0 || maxSubmissions !== undefined && maxSubmissions !== null) {
+      badges.push(
+        <Badge
+          key="usage"
+          variant="secondary"
+          title="Submissions used / allowed"
+          className="border border-slate-300 bg-white text-[11px] font-medium text-slate-700"
+        >
+          {usageLabel}
+        </Badge>,
+      );
     }
 
-    return (
-      <Badge
-        variant="secondary"
-        className={`border-transparent text-[10px] font-semibold ${badgeClass}`}
-      >
-        {label}
-      </Badge>
-    );
+    // status badge
+    if (statusLabel) {
+      badges.push(
+        <Badge
+          key="status"
+          variant="secondary"
+          title="Latest submission status"
+          className={`border-transparent text-[10px] font-semibold ${statusClass}`}
+        >
+          {statusLabel}
+        </Badge>,
+      );
+    }
+
+    if (badges.length === 0) {
+      // fallback empty state
+      return null;
+    }
+
+    return <div className="flex items-center gap-1">{badges}</div>;
   };
 
   return (
@@ -938,7 +975,7 @@ export default function AssignmentSubmissions({
         const res = await fetch(
           `/api/courses/${courseId}/${assignmentId}/problems/${problemId}/grade/${selectedStudent.id}`,
           {
-            method: 'POST',
+            method: 'GET',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ grade: numericValue }),
           },
@@ -1079,6 +1116,7 @@ export default function AssignmentSubmissions({
                     <ProblemList
                       problems={visibleProblems}
                       submissions={submissions}
+                      problemGrades={problemGrades}
                       selectedProblemId={selectedProblem?.id ?? null}
                       onSelect={handleSelectProblem}
                     />
