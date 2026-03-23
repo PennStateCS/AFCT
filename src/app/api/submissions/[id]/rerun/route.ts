@@ -178,7 +178,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
               assignmentId: submission.assignmentId,
               problemId: submission.problemId,
               submissionId: submission.id,
-              stderr: truncate(stderrTrimmed),
+              stderr: truncate(stderrTrimmed, 50),
             },
           });
         }
