@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { verifyToken } from '@/app/utils/jwt';
+import { truncate } from '@/app/utils/truncate';
 import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
@@ -411,8 +412,6 @@ export async function POST(req: NextRequest) {
 
                 const stdoutTrimmed = result.stdout?.trim() ?? '';
                 const stderrTrimmed = result.stderr?.trim() ?? '';
-                const truncate = (val: string, max = 2000) =>
-                  val.length > max ? `${val.slice(0, max)}…` : val;
                 if (stderrTrimmed) {
                   await createEnhancedActivityLog(prisma, req, {
                     userId: decoded.userId,

@@ -118,9 +118,15 @@ export function DataTable<TData, TValue>({
     // and internal row caching won't mix rows between pages. Defaults to
     // index-based ids which can cause cells to show stale values when
     // navigating pages.
-    getRowId: (row: TData) => {
+    // provide a stable id for each row; fall back to the index if no
+    // identifier property is available. Previously we returned an empty
+    // string when `id`/`_id` was missing which caused duplicate-key
+    // warnings (see GradeBreakdownDialog). Using the index guarantees
+    // uniqueness across the current page and avoids rendering errors.
+    getRowId: (row: TData, index: number) => {
       const r = row as unknown as Record<string, unknown>;
-      return String(r.id ?? r._id ?? '');
+      // prefer known id properties, otherwise use the row index
+      return String(r.id ?? r._id ?? index);
     },
     state: {
       globalFilter,
@@ -263,7 +269,7 @@ export function DataTable<TData, TValue>({
       <div className="overflow-x-auto rounded-md border">
         <Table className="w-full" role="table" aria-label={tableLabel} aria-busy={loading}>
           <TableHeader role="rowgroup">
-            {table.getHeaderGroups().map((headerGroup) => (
+            {table.getHeaderGroups().map((headerGroup, hgIndex) => (
               <TableRow
                 key={headerGroup.id}
                 className={loading ? 'hover:bg-transparent' : undefined}
@@ -272,7 +278,7 @@ export function DataTable<TData, TValue>({
                   color: 'var(--table-header-foreground)',
                 }}
               >
-                {headerGroup.headers.map((header) => {
+                {headerGroup.headers.map((header, hIndex) => {
                   const sorted = header.column.getIsSorted();
                   const canSort = header.column.getCanSort();
                   const priority = (header.column.columnDef.meta as ColumnMeta)?.priority;
@@ -293,7 +299,7 @@ export function DataTable<TData, TValue>({
 
                   return (
                     <TableHead
-                      key={header.id}
+                      key={`h-${hIndex}`}
                       aria-sort={
                         canSort
                           ? sorted === 'asc'
@@ -346,9 +352,9 @@ export function DataTable<TData, TValue>({
                 </TableCell>
               </TableRow>
             ) : table.getRowModel().rows.length ? (
-              table.getRowModel().rows.map((row) => (
+              table.getRowModel().rows.map((row, rIndex) => (
                 <TableRow
-                  key={row.id}
+                  key={`r-${rIndex}`}
                   tabIndex={onRowClick ? 0 : undefined}
                   onKeyDown={(e) => {
                     if (onRowClick && (e.key === 'Enter' || e.key === ' ')) {
@@ -362,9 +368,9 @@ export function DataTable<TData, TValue>({
                       : 'hover:bg-[var(--table-highlight)]'
                   }`}
                 >
-                  {row.getVisibleCells().map((cell) => (
+                  {row.getVisibleCells().map((cell, cIndex) => (
                     <TableCell
-                      key={cell.id}
+                      key={`c-${cIndex}`}
                       className={`whitespace-nowrap ${getResponsiveClass(cell.column.columnDef.meta?.priority)}`}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
