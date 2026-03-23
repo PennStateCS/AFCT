@@ -27,11 +27,20 @@ vi.mock('./ui/EnhancedSidebarTrigger', () => ({
   EnhancedSidebarTrigger: () => <div data-testid="sidebar-trigger" />,
 }));
 
+vi.mock('@/components/dialogs/ChangePasswordDialog', () => ({
+  ChangePasswordDialog: () => <div data-testid="change-password-dialog" />,
+}));
+
+vi.mock('@/components/dialogs/EditProfileDialog', () => ({
+  EditProfileDialog: () => <div data-testid="edit-profile-dialog" />,
+}));
+
 vi.mock('@/components/ui/dropdown-menu', () => {
   return {
     DropdownMenu: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     DropdownMenuContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    DropdownMenuSeparator: () => <hr />,
     DropdownMenuItem: ({
       children,
       onClick,

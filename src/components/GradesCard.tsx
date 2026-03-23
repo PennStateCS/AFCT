@@ -21,10 +21,10 @@ type StudentRow = {
 };
 
 type Assignment = {
-  maxPoints: number;
   id: string;
   title: string;
   dueDate?: string;
+  maxPoints?: number;
 };
 
 type ApiStudent = {
@@ -70,6 +70,19 @@ export default function GradesCard({ courseId }: { courseId: string }) {
         grades: Record<string, Record<string, number | null>>;
       };
 
+      const assignmentsWithPoints: Assignment[] = await Promise.all(
+        a.map(async (asg) => {
+          try {
+            const res2 = await fetch(`/api/assignments/${asg.id}`);
+            if (!res2.ok) return { ...asg, maxPoints: 0 };
+            const json = await res2.json();
+            return { ...asg, maxPoints: json.maxPoints ?? 0 };
+          } catch {
+            return { ...asg, maxPoints: 0 };
+          }
+        }),
+      );
+
       // Build rows
       const rows: StudentRow[] = s.map((stu) => {
         const name =
@@ -90,7 +103,7 @@ export default function GradesCard({ courseId }: { courseId: string }) {
       });
 
       setStudents(rows);
-      setAssignments(a);
+      setAssignments(assignmentsWithPoints);
       setLastUpdated(new Date());
       lastFetchAtRef.current = Date.now();
     } catch (err) {
@@ -268,21 +281,21 @@ export default function GradesCard({ courseId }: { courseId: string }) {
                 <Input
                   type="number"
                   min={0}
-                  max={a.maxPoints}
+                  max={a.maxPoints ?? 0}
                   step="1.0"
                   value={editingValue}
                   onChange={(e) => setEditingValue(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
-                      handleGradeSave(studentId, a.id, a.maxPoints);
+                      handleGradeSave(studentId, a.id, a.maxPoints ?? 0);
                     } else if (e.key === 'Escape') {
                       e.preventDefault();
                       handleGradeCancel();
                     }
                   }}
                   className="h-full w-full text-center"
-                  placeholder={`0-${a.maxPoints}`}
+                  placeholder={`0-${a.maxPoints ?? 0}`}
                   autoFocus
                 />
               </div>

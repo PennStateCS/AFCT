@@ -1,9 +1,11 @@
 import { Course, Assignment, Problem, Role } from '@prisma/client';
 
-// Assignment with problem count as returned by API
+// Assignment with problem count as returned by API. `maxPoints` is not stored on
+// the assignment record any more; consumers are expected to fetch it separately
+// from /api/assignments/:id (it is calculated by summing the problem maxPoints).
 export type AssignmentWithProblemCount = Assignment & {
   problemCount: number;
-  maxPoints: number;
+  maxPoints?: number;
   hasSubmissionsOrComments?: boolean;
   submissionCount?: number;
   commentCount?: number;
