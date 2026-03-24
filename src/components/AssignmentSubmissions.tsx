@@ -1087,6 +1087,7 @@ export default function AssignmentSubmissions({
                 onNext={goNext}
                 gradeStatuses={studentGradeStatuses}
                 assignmentTotals={assignmentTotals ?? undefined}
+                assignmentId={assignmentId}
               />
             </div>
           </CardHeader>
