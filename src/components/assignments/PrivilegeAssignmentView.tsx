@@ -49,9 +49,7 @@ import Link from 'next/link';
 import { Problem } from '@prisma/client';
 import JffViewerDialog from '@/components/JffViewerDialog';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { formatDateTimeInTimeZone } from '@/lib/date';
 import { AssignmentWithDetails } from '@/lib/assignment-details';
-import { AssignmentFormParsed } from '@/schemas';
 
 const problemTypeLabels: Record<string, string> = {
   // Add your problem type labels here
@@ -484,22 +482,6 @@ export default function AssignmentDashboardPage({
                   : ''}
             </Link>
           </div>
-          <div className="text-muted-foreground mt-1 flex flex-wrap gap-4 text-sm">
-            <span>
-              <span className="font-semibold">Due:</span>{' '}
-              {formatDateTimeInTimeZone(assignment.dueDate, timezone)}
-            </span>
-            <span>
-              <span className="font-semibold">Allow Late:</span>{' '}
-              {assignment.allowLateSubmissions ? 'Yes' : 'No'}
-            </span>
-            <span>
-              <span className="font-semibold">Late Cutoff:</span>{' '}
-              {assignment.allowLateSubmissions && assignment.lateCutoff
-                ? formatDateTimeInTimeZone(assignment.lateCutoff, timezone)
-                : 'Never'}
-            </span>
-          </div>
         </div>
         <div className="min-w-0">
           <span className="font-semibold">Description:</span>
@@ -879,7 +861,6 @@ export default function AssignmentDashboardPage({
             courseId={id}
             assignmentId={aid}
             maxAssignmentGrade={assignment.maxPoints}
-            assignmentDueDate={assignment.dueDate}
             problems={submissionTabProblems}
             // Group-assignment support: pass group list and mapping so the submissions
             // view can filter problems to the student's group (assignment-level problems
