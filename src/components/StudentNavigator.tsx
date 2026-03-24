@@ -11,11 +11,15 @@ import {
   DropdownMenuItem,
 } from './ui/dropdown-menu';
 
+import { formatDateTimeInTimeZone } from '@/lib/date';
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+
 export type StudentNavigatorStudent = {
   id: string;
   firstName?: string | null;
   lastName?: string | null;
 };
+
 
 export type StudentNavigatorProps = {
   students: StudentNavigatorStudent[];
@@ -25,6 +29,7 @@ export type StudentNavigatorProps = {
   onNext: () => void;
   gradeStatuses?: Record<string, boolean | undefined>;
   assignmentTotals?: { earned: number; available: number };
+  assignmentId: string;
 };
 
 export default function StudentNavigator({
@@ -35,10 +40,38 @@ export default function StudentNavigator({
   onNext,
   gradeStatuses,
   assignmentTotals,
+  assignmentId,
 }: StudentNavigatorProps) {
+  const { timezone } = useEffectiveTimezone();
   const [menuOpen, setMenuOpen] = useState(false);
   const [studentFilter, setStudentFilter] = useState('');
   const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const [assignment, setAssignment] = useState<{
+    dueDate?: string | Date;
+    allowLateSubmissions?: boolean;
+    lateCutoff?: string | Date | null;
+  } | null>(null);
+  const [loadingAssignment, setLoadingAssignment] = useState(false);
+
+  useEffect(() => {
+    if (!assignmentId) return;
+    setLoadingAssignment(true);
+    fetch(`/api/assignments/${assignmentId}`)
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to fetch assignment');
+        return res.json();
+      })
+      .then((data) => {
+        setAssignment({
+          dueDate: data.dueDate,
+          allowLateSubmissions: data.allowLateSubmissions,
+          lateCutoff: data.lateCutoff,
+        });
+      })
+      .catch(() => setAssignment(null))
+      .finally(() => setLoadingAssignment(false));
+  }, [assignmentId]);
 
   const selectedStudent = students[selectedIndex] ?? null;
   const selectedStatus = selectedStudent ? (gradeStatuses?.[selectedStudent.id] ?? false) : false;
@@ -77,6 +110,41 @@ export default function StudentNavigator({
 
   return (
     <div className="flex items-center gap-2">
+      <div>
+        <span className="block">
+          {loadingAssignment ? (
+            <span className="text-muted-foreground text-sm">Loading assignment...</span>
+          ) : assignment ? (
+            <>
+              <span>
+                <span className="font-semibold">Due:</span>{' '}
+                {assignment.dueDate ? formatDateTimeInTimeZone(assignment.dueDate, timezone) : '—'}
+              </span>
+              <span className="text-muted-foreground mx-2">•</span>
+              <span>
+                <span className="font-semibold">Allow Late:</span>{' '}
+                {assignment.allowLateSubmissions ? 'Yes' : 'No'}
+              </span>
+              <span className="text-muted-foreground mx-2">•</span>
+              <span>
+                <span className="font-semibold">Late Cutoff:</span>{' '}
+                {assignment.allowLateSubmissions && assignment.lateCutoff
+                  ? formatDateTimeInTimeZone(assignment.lateCutoff, timezone)
+                  : 'Never'}
+              </span>
+            </>
+          ) : null}
+        </span>
+        <span className="block">
+          Student {students.length === 0 ? 0 : selectedIndex + 1} of {students.length}
+          {assignmentTotals ? (
+            <span>
+              <span className="text-muted-foreground mx-2">•</span>
+              {formatPoints(assignmentTotals.earned)} / {formatPoints(assignmentTotals.available)} pts
+            </span>
+          ) : null}
+        </span>
+      </div>
       <Button
         variant="secondary"
         onClick={onPrev}
@@ -161,17 +229,6 @@ export default function StudentNavigator({
       >
         Next <ChevronRight className="h-4 w-4" />
       </Button>
-      <span className="text-muted-foreground ml-2 text-sm">
-        Student {students.length === 0 ? 0 : selectedIndex + 1} of {students.length}
-      </span>
-      {assignmentTotals ? (
-        <span className="text-foreground flex items-center text-sm">
-          <span className="text-muted-foreground mx-2">•</span>
-          <span>
-            {formatPoints(assignmentTotals.earned)} / {formatPoints(assignmentTotals.available)} pts
-          </span>
-        </span>
-      ) : null}
     </div>
   );
 }
