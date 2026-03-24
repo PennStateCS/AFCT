@@ -229,7 +229,7 @@ function ProblemList({ problems, submissions, problemGrades, selectedProblemId, 
         <Badge
           key="grade"
           variant="secondary"
-          title="Grade earned / max points"
+          title="Grade Earned / Max Points"
           className="border border-slate-300 bg-white text-[11px] font-medium text-slate-700"
         >
           {display}/{maxPoints}
@@ -243,7 +243,7 @@ function ProblemList({ problems, submissions, problemGrades, selectedProblemId, 
         <Badge
           key="usage"
           variant="secondary"
-          title="Submissions used / allowed"
+          title="Submissions Used / Submissions Allowed"
           className="border border-slate-300 bg-white text-[11px] font-medium text-slate-700"
         >
           {usageLabel}
