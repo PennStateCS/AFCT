@@ -25,6 +25,7 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import SelectField from '@/components/ui/SelectField';
 import { AssociateProblemsDialog } from '@/components/dialogs/AssociateProblemsDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
@@ -38,6 +39,7 @@ import {
   DialogDescription,
   DialogClose,
 } from '@/components/ui/dialog';
+import { Controller, useForm } from 'react-hook-form';
 import { showToast } from '@/lib/toast';
 import { EditAssignmentDialog } from '@/components/dialogs/EditAssignmentDialog';
 import { EditProblemDialog } from '@/components/dialogs/EditProblemDialog';
@@ -47,7 +49,6 @@ import Link from 'next/link';
 import { Problem } from '@prisma/client';
 import JffViewerDialog from '@/components/JffViewerDialog';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { formatDateTimeInTimeZone } from '@/lib/date';
 import { AssignmentWithDetails } from '@/lib/assignment-details';
 
 const problemTypeLabels: Record<string, string> = {
@@ -68,6 +69,11 @@ type PrivilegeAssignmentViewProps = {
 export default function AssignmentDashboardPage({
   initialAssignment = null,
 }: PrivilegeAssignmentViewProps) {
+  const { control } = useForm({
+    defaultValues: {
+      assignmentSelect: initialAssignment?.id || '',
+    },
+  });
   const { data: session } = useSession();
   const { timezone } = useEffectiveTimezone();
   const { id, aid } = useParams<{ id: string; aid: string }>();
@@ -76,6 +82,8 @@ export default function AssignmentDashboardPage({
 
   // Use a more flexible type for assignment to allow course details if available
   const [assignment, setAssignment] = useState<AssignmentWithDetails | null>(initialAssignment);
+  const [allAssignments, setAllAssignments] = useState<AssignmentWithDetails[]>([]);
+  const [assignmentsLoading, setAssignmentsLoading] = useState(false);
   const [allProblems, setAllProblems] = useState<Problem[]>([]);
   const [problemsLoading, setProblemsLoading] = useState(false);
   const [problemToRemove, setProblemToRemove] = useState<Problem | null>(null);
@@ -152,6 +160,20 @@ export default function AssignmentDashboardPage({
     void fetchProblems();
   }, [fetchProblems, tab, addProblemDialogOpen, createProblemOpen]);
 
+  const fetchAssignments = useCallback(() => {
+    if (!id) return Promise.resolve();
+    setAssignmentsLoading(true);
+    return fetch(`/api/courses/${id}/assignments`)
+      .then((res) => res.json())
+      .then((data) => setAllAssignments(Array.isArray(data) ? data : []))
+      .catch(() => setAllAssignments([]))
+      .finally(() => setAssignmentsLoading(false));
+  }, [id]);
+
+  useEffect(() => {
+    void fetchAssignments();
+  }, [fetchAssignments]);
+
   const refreshAssignment = useCallback(
     async (
       view: 'full' | 'problems' | 'submissions' = 'full',
@@ -161,21 +183,21 @@ export default function AssignmentDashboardPage({
       const useInlineLoading = surface === 'inline' && view === 'problems';
       if (useInlineLoading) {
         setProblemsTabLoading(true);
-      } else {
-        setLoading(true);
-      }
-      try {
-        const res = await fetch(`/api/courses/${id}/${aid}?view=${view}`);
-        if (!res.ok) throw new Error('Failed to fetch assignment');
-        const data = (await res.json()) as AssignmentWithDetails;
-        setAssignment(data);
-      } catch {
+        try {
+          const res = await fetch(`/api/courses/${id}/${aid}?view=${view}`);
+          if (!res.ok) throw new Error('Failed to fetch assignment');
+          const data = (await res.json()) as AssignmentWithDetails;
+          setAssignment(data);
+        } catch {
         setAssignment(null);
-      } finally {
-        if (useInlineLoading) {
+        } finally {
           setProblemsTabLoading(false);
+        }
+      } else {
+        if (!assignment?.id) {
+          showToast.error("Failed to load assignment");
         } else {
-          setLoading(false);
+          window.location.href = assignment?.id;
         }
       }
     },
@@ -335,9 +357,10 @@ export default function AssignmentDashboardPage({
     return map;
   }, [groupProblemsMap, groups]);
 
+
   const problemTableData = useMemo(
     () =>
-      assignment.problems.map((ap) => ({
+      (assignment.problems ?? []).map((ap) => ({
         ...ap.problem,
         description: ap.problem.description ?? null,
         assignmentMaxPoints: ap.maxPoints,
@@ -347,9 +370,10 @@ export default function AssignmentDashboardPage({
     [assignment.problems],
   );
 
+
   const submissionTabProblems = useMemo(
     () =>
-      assignment.problems.map((ap) => ({
+      (assignment.problems ?? []).map((ap) => ({
         id: ap.problem.id,
         title: ap.problem.title,
         description: ap.problem.description ?? undefined,
@@ -365,9 +389,10 @@ export default function AssignmentDashboardPage({
     [assignment.problems],
   );
 
+
   const usedProblems = useMemo(
     () =>
-      assignment.problems.map((ap) => ({
+      (assignment.problems ?? []).map((ap) => ({
         ...ap.problem,
         description: ap.problem.description ?? undefined,
         type: typeof ap.problem.type === 'string' ? ap.problem.type : undefined,
@@ -375,13 +400,15 @@ export default function AssignmentDashboardPage({
     [assignment.problems],
   );
 
+
   const estimatedProblemPoints = Math.max(
     1,
-    Math.round((assignment.maxPoints || 100) / Math.max(assignment.problems.length || 1, 1)),
+    Math.round((assignment.maxPoints || 100) / Math.max((assignment.problems?.length ?? 1), 1)),
   );
 
+
   const assignmentProblemForDialog = problemToEdit
-    ? (assignment.problems.find((ap) => ap.problem.id === problemToEdit.id) ?? null)
+    ? ((assignment.problems ?? []).find((ap) => ap.problem.id === problemToEdit.id) ?? null)
     : null;
 
   const assignmentSettingsForDialog = assignmentProblemForDialog
@@ -455,28 +482,51 @@ export default function AssignmentDashboardPage({
                   : ''}
             </Link>
           </div>
-          <div className="text-muted-foreground mt-1 flex flex-wrap gap-4 text-sm">
-            <span>
-              <span className="font-semibold">Due:</span>{' '}
-              {formatDateTimeInTimeZone(assignment.dueDate, timezone)}
-            </span>
-            <span>
-              <span className="font-semibold">Allow Late:</span>{' '}
-              {assignment.allowLateSubmissions ? 'Yes' : 'No'}
-            </span>
-            <span>
-              <span className="font-semibold">Late Cutoff:</span>{' '}
-              {assignment.allowLateSubmissions && assignment.lateCutoff
-                ? formatDateTimeInTimeZone(assignment.lateCutoff, timezone)
-                : '—'}
-            </span>
-          </div>
         </div>
         <div className="min-w-0">
           <span className="font-semibold">Description:</span>
           <p className="text-muted-foreground mt-2 max-h-40 overflow-y-auto rounded-md border p-3 break-words whitespace-pre-wrap">
             {assignment.description ?? 'No description.'}
           </p>
+        </div>
+        <div className="max-w-xs">
+          <Controller
+            control={control}
+            name="assignmentSelect"
+            render={({ field }) => (
+              <SelectField
+                label="Assignment"
+                name="assignmentSelect"
+                id="assignmentSelect"
+                value={field.value || assignment.title}
+                onValueChange={(assignmentId) => {
+                  // Find new assignment id
+                  field.onChange(assignmentId);
+                  const selectedAssignment = allAssignments.find((a) => a.id === assignmentId) ?? null;
+                  
+                  // Error handling new assignment
+                  if (!selectedAssignment) {
+                    showToast.error('Selected assignment not found');
+                    return;
+                  }
+
+                  // Set and reload for new value
+                  setAssignment(selectedAssignment);
+
+                  // Reload page
+                  window.location.href = selectedAssignment.id;
+                }}
+                placeholder={assignmentsLoading ? 'Loading...' : 'Choose assignment'}
+                disabled={assignmentsLoading}
+                options={allAssignments.map((assignOption) => ({
+                  value: assignOption.id,
+                  label: assignOption.title,
+                }))}
+                className="w-full"
+                triggerClassName="!h-8 text-xs"
+              />
+            )}
+          />
         </div>
       </div>
       <Tabs value={tab} onValueChange={handleTabChange}>
@@ -811,7 +861,6 @@ export default function AssignmentDashboardPage({
             courseId={id}
             assignmentId={aid}
             maxAssignmentGrade={assignment.maxPoints}
-            assignmentDueDate={assignment.dueDate}
             problems={submissionTabProblems}
             // Group-assignment support: pass group list and mapping so the submissions
             // view can filter problems to the student's group (assignment-level problems

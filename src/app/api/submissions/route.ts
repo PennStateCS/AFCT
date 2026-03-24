@@ -425,7 +425,7 @@ export async function POST(req: NextRequest) {
                       courseId,
                       assignmentId,
                       problemId,
-                      stderr: truncate(stderrTrimmed),
+                      stderr: truncate(stderrTrimmed, 50),
                     },
                   });
                 }
