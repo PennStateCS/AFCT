@@ -423,7 +423,7 @@ export default function AssignmentDashboardPage({
 
   return (
     <div className="mx-auto w-full text-sm">
-      <div className="bg-card relative mb-8 w-full space-y-6 rounded-lg border p-6 shadow">
+      <Card className="relative mb-8">
         <Button
           variant="default"
           aria-label="Edit Assignment"
@@ -434,14 +434,12 @@ export default function AssignmentDashboardPage({
           <Pencil className="mr-2 h-4 w-4" />
           Edit Assignment
         </Button>
-        <div>
-          <div className="flex flex-wrap items-start gap-2">
-            <h1 className="text-2xl break-words">
-              <span className="font-semibold">Assignment:</span>{' '}
-              <span className="inline-block max-w-full align-bottom" title={assignment.title}>
-                {assignment.title}
-              </span>
-            </h1>
+        <CardHeader>
+          <CardTitle role="heading" aria-level={1} className="flex min-w-0 flex-wrap items-start gap-2 text-2xl break-words">
+            <span className="font-semibold">Assignment:</span>{' '}
+            <span className="min-w-0 line-clamp-2 break-words [overflow-wrap:anywhere]" title={assignment.title}>
+              {assignment.title}
+            </span>
             {(() => {
               let status = '';
               let badgeClass = '';
@@ -467,8 +465,8 @@ export default function AssignmentDashboardPage({
                 </span>
               );
             })()}
-          </div>
-          <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-2 text-sm">
+          </CardTitle>
+          <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm">
             {/* Show course name/code as a link to the course page (fallback to courseId) */}
             <Link
               href={`/dashboard/courses/${assignment.course?.id || assignment.courseId}`}
@@ -482,14 +480,15 @@ export default function AssignmentDashboardPage({
                   : ''}
             </Link>
           </div>
-        </div>
-        <div className="min-w-0">
-          <span className="font-semibold">Description:</span>
-          <p className="text-muted-foreground mt-2 max-h-40 overflow-y-auto rounded-md border p-3 break-words whitespace-pre-wrap">
-            {assignment.description ?? 'No description.'}
-          </p>
-        </div>
-        <div className="max-w-xs">
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="min-w-0">
+            <span className="font-semibold">Description:</span>
+            <p className="text-muted-foreground max-h-auto overflow-y-auto resize-y rounded-md border p-3 break-words whitespace-pre-wrap">
+              {assignment.description ?? 'No description.'}
+            </p>
+          </div>
+          <div className="max-w-xs">
           <Controller
             control={control}
             name="assignmentSelect"
@@ -527,8 +526,9 @@ export default function AssignmentDashboardPage({
               />
             )}
           />
-        </div>
-      </div>
+          </div>
+        </CardContent>
+      </Card>
       <Tabs value={tab} onValueChange={handleTabChange}>
         <TabsList
           aria-label="Assignment sections"
