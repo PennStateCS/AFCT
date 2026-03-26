@@ -194,9 +194,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Assignment must not have any grades' }, { status: 403 });
     }
   }
-
+  
+  const result = await prisma.assignment.findFirst({
+    where: { id },
+	select: { isGroup: true },
+  });
+  
+  const curGroup = result?.isGroup;
+  
   // Prevent changing the assignment's group mode if submissions exist
-  if (data.isGroup !== undefined) {
+  if (data.isGroup !== undefined && data.isGroup !== curGroup) {
     const hasAnySubmission = (await prisma.submission.count({ where: { assignmentId: id } })) > 0;
     if (hasAnySubmission) {
       return NextResponse.json(

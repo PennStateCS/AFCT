@@ -364,12 +364,10 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
             </DialogClose>
             <Button
               type="submit"
-              disabled={!isValid || !isDirty || isSubmitting}
+              disabled={!isValid || isSubmitting}
               title={
                 !isValid
                   ? 'Fix validation errors to save'
-                  : !isDirty
-                    ? 'No changes to save'
                     : undefined
               }
             >
