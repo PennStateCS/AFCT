@@ -704,8 +704,7 @@ export function EditProblemDialog({
                 isSubmitting ||
                 courseIsArchived ||
                 assignmentMaxPointsInvalid ||
-                assignmentMaxSubmissionsInvalid ||
-                (!isDirty && !assignmentDirty)
+                assignmentMaxSubmissionsInvalid
               }
               title={
                 !isValid
@@ -714,8 +713,6 @@ export function EditProblemDialog({
                     ? 'Fix assignment settings to save'
                     : assignmentMaxSubmissionsInvalid
                       ? 'Fix assignment settings to save'
-                      : !isDirty && !assignmentDirty
-                        ? 'Make changes before saving'
                         : isSubmitting
                           ? 'Submitting...'
                           : undefined

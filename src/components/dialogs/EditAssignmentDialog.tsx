@@ -394,12 +394,10 @@ export function EditAssignmentDialog({
             </DialogClose>
             <Button
               type="submit"
-              disabled={!isValid || !isDirty || isSubmitting || courseIsArchived}
+              disabled={!isValid || isSubmitting || courseIsArchived}
               title={
                 !isValid
                   ? 'Fix validation errors to save'
-                  : !isDirty
-                    ? 'No changes to save'
                     : isSubmitting
                       ? 'Already submitting'
                       : courseIsArchived

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const prismaMock = vi.hoisted(() => ({
-  assignment: { findUnique: vi.fn(), update: vi.fn(), create: vi.fn(), delete: vi.fn() },
+  assignment: { findUnique: vi.fn(), findFirst: vi.fn(),  update: vi.fn(), create: vi.fn(), delete: vi.fn() },
   roster: { findFirst: vi.fn() },
   assignmentProblem: { findFirst: vi.fn(), deleteMany: vi.fn() },
   assignmentGrade: { findFirst: vi.fn() },
