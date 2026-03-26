@@ -283,10 +283,10 @@ export default function StudentAssignmentPage({
           <CardTitle
             role="heading"
             aria-level={1}
-            className="flex items-start gap-2 text-2xl break-words"
+            className="flex min-w-0 items-start gap-2 text-2xl"
           >
-            <BookOpen className="h-5 w-5" />
-            <span className="line-clamp-2 break-words" title={assignment.title}>
+            <BookOpen className="h-5 w-5 shrink-0" />
+            <span className="min-w-0 line-clamp-2 break-words [overflow-wrap:anywhere]" title={assignment.title}>
               {assignment.title}
             </span>
           </CardTitle>
@@ -295,7 +295,7 @@ export default function StudentAssignmentPage({
           {assignment.description && (
             <div>
               <h3 className="mb-2 font-semibold">Description</h3>
-              <p className="text-muted-foreground max-h-32 overflow-y-auto rounded-md border p-3 break-words whitespace-pre-wrap">
+              <p className="text-muted-foreground max-h-auto overflow-y-auto resize-y rounded-md border p-3 break-words whitespace-pre-wrap">
                 {assignment.description}
               </p>
             </div>
