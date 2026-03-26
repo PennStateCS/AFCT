@@ -252,7 +252,7 @@ export default function ManageGroupMembersDialog({ open, setOpen, courseId, grou
           <DialogClose asChild>
             <Button variant="secondary" type="button" onClick={handleCancel} disabled={loading}>Cancel</Button>
           </DialogClose>
-          <Button type="button" onClick={handleSave} disabled={loading || !isDirty(selected, initialSelected)}>Save Changes</Button>
+          <Button type="button" onClick={handleSave} disabled={loading}>Save Changes</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

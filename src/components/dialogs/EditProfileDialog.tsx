@@ -319,12 +319,10 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
             </DialogClose>
             <Button
               type="submit"
-              disabled={!isValid || !isDirty || isSubmitting}
+              disabled={!isValid || isSubmitting}
               title={
                 !isValid
                   ? 'Fix validation errors to save'
-                  : !isDirty
-                    ? 'No changes to save'
                     : undefined
               }
             >
