@@ -975,7 +975,7 @@ export default function AssignmentSubmissions({
         const res = await fetch(
           `/api/courses/${courseId}/${assignmentId}/problems/${problemId}/grade/${selectedStudent.id}`,
           {
-            method: 'GET',
+            method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ grade: numericValue }),
           },
