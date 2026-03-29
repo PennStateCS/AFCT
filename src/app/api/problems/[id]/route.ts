@@ -8,7 +8,7 @@ import { auth } from '@/lib/auth';
 import { ProblemType } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
-import { XMLValidator, XMLParser } from 'fast-xml-parser';
+import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 
 // PUT /api/problems/[id] - Update an existing problem
 export async function PUT(req: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -41,6 +41,7 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
     const maxSubmissions = formData.get('maxSubmissions') as string | null;
     const maxPoints = formData.get('maxPoints') as string | null;
     const courseId = formData.get('courseId') as string;
+    const assignmentId = formData.get('assignmentId') as string;
     const maxStates = formData.get('maxStates') as string | null;
     const isDeterministic = formData.get('isDeterministic') === 'true';
     const autograderEnabled = formData.get('autograderEnabled') === 'true';
@@ -64,20 +65,28 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
         );
       }
       const xml = await file.text();
+      const validation = validateStructureXML(xml, type);
 
-      const parser = new XMLParser();
-  
-      const isValidXml = XMLValidator.validate(xml);
+      // Error check
+      if (!validation.isValid) {
+        await createEnhancedActivityLog(prisma, req, {
+          userId: user.id,
+          action: 'SUBMISSION_INVALID_FILE_STRUCTURE',
+          category: 'SUBMISSION',
+          courseId,
+          assignmentId,
+          problemId,
+          metadata: {
+            userId: user.id,
+            courseId,
+            assignmentId,
+            problemId,
+            error: validation.error,
+          },
+        });
 
-      if (isValidXml !== true){
-        return NextResponse.json({ error: 'Solution file not xml' }, { status: 400 });
-      }
-
-      const jff = parser.parse(xml);
-
-      if (!jff.structure || jff.structure.type.toUpperCase() !== ((type === 'CFG') ? 'GRAMMAR' : type)){
-        return NextResponse.json({ error: `Solution file should be of type ${type}` }, { status: 400 });
-      }
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
 
       // Ensure upload directory exists
       const uploadsDir = path.join('/private', 'uploads', 'solutions');
