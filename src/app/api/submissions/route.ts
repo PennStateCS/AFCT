@@ -12,7 +12,7 @@ import { execSync } from 'child_process';
 import os from 'os';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
-import { XMLParser, XMLValidator } from "fast-xml-parser";
+import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 
 // Import JavaRunner for JAR execution
 import JavaRunner from '../../../../lib/java-runner';
@@ -250,21 +250,29 @@ export async function POST(req: NextRequest) {
   let evaluationRaw: unknown | null = null;
   let uploadedFilePath: string | null = null;
 
-  if (file){
+  if (file) {
     const xml = await file.text();
-  
-    const parser = new XMLParser();
-  
-    const isValidXml = XMLValidator.validate(xml);
+    const validation = validateStructureXML(xml, link.problem.type);
 
-    if (isValidXml !== true){
-      return NextResponse.json({ error: 'Submission file not xml' }, { status: 400 });
-    }
+    // Error check
+    if (!validation.isValid) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: decoded.userId,
+        action: 'SUBMISSION_INVALID_FILE_STRUCTURE',
+        category: 'SUBMISSION',
+        courseId,
+        assignmentId,
+        problemId,
+        metadata: {
+          userId: decoded.userId,
+          courseId,
+          assignmentId,
+          problemId,
+          error: validation.error,
+        },
+      });
 
-    const jff = parser.parse(xml);
-
-    if (!jff.structure || jff.structure.type.toUpperCase() !== ((link.problem.type === 'CFG') ? 'GRAMMAR' : link.problem.type)){
-      return NextResponse.json({ error: `Submission file should be of type ${link.problem.type}` }, { status: 400 });
+      return NextResponse.json({ error: validation.error }, { status: 400 });
     }
   }
 
