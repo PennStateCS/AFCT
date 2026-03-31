@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import SelectField from '@/components/ui/SelectField';
+import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
 import { useEffect, useMemo, useState } from 'react';
 import type { LmsPlatform } from '@/lib/lms-grade-export';
 
@@ -41,22 +42,24 @@ export function GradesLmsExportDialog({
   disabled = false,
 }: GradesLmsExportDialogProps) {
   const [platform, setPlatform] = useState<LmsPlatform>('canvas');
-  const [assignmentId, setAssignmentId] = useState<string>('');
+  const [assignmentIds, setAssignmentIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (!open) return;
-    if (assignmentId) return;
+    if (assignmentIds) return;
     if (assignments.length > 0) {
-      setAssignmentId(assignments[0].id);
+      setAssignmentId([assignments[0].id]);
     }
-  }, [open, assignmentId, assignments]);
+  }, [open, assignmentIds, assignments]);
 
   const assignmentOptions = useMemo(
     () => assignments.map((assignment) => ({ value: assignment.id, label: assignment.title })),
     [assignments],
   );
 
-  const exportDisabled = disabled || !assignmentId || assignments.length === 0;
+  const assignmentItems = assignmentOptions.map((item) => ({ id: item.value, label: item.label}));
+
+  const exportDisabled = disabled || assignmentIds.length === 0 || assignments.length === 0;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -77,12 +80,11 @@ export function GradesLmsExportDialog({
           placeholder="Select LMS"
         />
 
-        <SelectField
-          label="Assignment"
-          name="assignment"
-          value={assignmentId}
-          onValueChange={setAssignmentId}
-          options={assignmentOptions}
+        <SearchableMultiSelect
+          label="Assignments"
+          items= {assignmentItems}
+          value={assignmentIds}
+          onChange={setAssignmentIds}
           placeholder="Select assignment"
         />
 
@@ -92,7 +94,7 @@ export function GradesLmsExportDialog({
           </Button>
           <Button
             onClick={() => {
-              onExport(platform, assignmentId);
+              onExport(platform, assignmentIds);
               setOpen(false);
             }}
             disabled={exportDisabled}
