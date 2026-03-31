@@ -71,7 +71,7 @@ export function buildLmsGradesCsv(
         `${lastName}, ${firstName}`.trim().replace(/^,\s*/, ''),
         '',
         '',
-        email,
+        '',
         '',
         ...gradeCells,
       ];
