@@ -29,7 +29,9 @@ export default async function DashboardPage() {
     where: {
       userId: id,
       course: {
-        isArchived: false,
+        endDate: {
+          gte: new Date(),
+        },
       },
     },
     select: {
