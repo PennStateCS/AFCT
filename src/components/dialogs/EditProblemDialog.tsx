@@ -326,7 +326,6 @@ export function EditProblemDialog({
         }
       }
 
-      showToast.success('Problem updated.');
       resetForm();
       onSaved?.(updatedProblem ?? undefined);
       setOpen(false);
