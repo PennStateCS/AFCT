@@ -37,7 +37,6 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 import {
-  Archive,
   Calendar,
   Library,
   Book,
@@ -301,7 +300,7 @@ export default function DashboardSidebarMenu() {
                 : 'text-sidebar-foreground overflow-hidden text-sm whitespace-nowrap'
             }
           >
-            Features
+            Other Pages
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -344,101 +343,49 @@ export default function DashboardSidebarMenu() {
                   </Tooltip>
                 </TooltipProvider>
               </SidebarMenuItem>
+
+              {/* Previous Courses */}
+              <SidebarMenuItem key="features-previous-courses">
+                <TooltipProvider delayDuration={100}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={pathname === '/dashboard/previous-courses'}
+                        className={cn(menuButtonStyles)}
+                      >
+                        <Link
+                          href="/dashboard/previous-courses"
+                          aria-label="Previous Courses"
+                          className="flex min-w-0 items-center gap-2"
+                        >
+                          <Library className="h-4 w-4 shrink-0" />
+                          <span
+                            aria-hidden={collapsed}
+                            className={
+                              collapsed
+                                ? 'hidden'
+                                : 'overflow-hidden text-ellipsis whitespace-nowrap'
+                            }
+                          >
+                            Previous Courses
+                          </span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="right"
+                      hidden={!collapsed}
+                      className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
+                      sideOffset={10}
+                    >
+                      Previous Courses
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
-        </SidebarGroup>
-
-        {/* Course Displays */}
-        <SidebarGroup>
-          <SidebarGroupLabel
-            aria-hidden={collapsed}
-            className={
-              collapsed
-                ? 'hidden'
-                : 'text-sidebar-foreground overflow-hidden text-sm whitespace-nowrap'
-            }
-          >
-            Course Displays
-          </SidebarGroupLabel>
-          <SidebarMenu>
-            {/* The Archive */}
-            <SidebarMenuItem>
-              <TooltipProvider delayDuration={100}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={pathname === '/dashboard/archive'}
-                      className={cn(menuButtonStyles)}
-                    >
-                      <Link
-                        href="/dashboard/archive"
-                        aria-label="Archived Courses"
-                        className="flex min-w-0 items-center gap-2"
-                      >
-                        <Archive className="h-4 w-4 shrink-0" />
-                        <span
-                          aria-hidden={collapsed}
-                          className={
-                            collapsed ? 'hidden' : 'overflow-hidden text-ellipsis whitespace-nowrap'
-                          }
-                        >
-                          Archived Courses
-                        </span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </TooltipTrigger>
-                  <TooltipContent
-                    side="right"
-                    hidden={!collapsed}
-                    className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
-                    sideOffset={10}
-                  >
-                    Archived Courses
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </SidebarMenuItem>
-
-            {/* All Courses */}
-            <SidebarMenuItem>
-              <TooltipProvider delayDuration={100}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={pathname === '/dashboard/all-courses'}
-                      className={cn(menuButtonStyles)}
-                    >
-                      <Link
-                        href="/dashboard/all-courses"
-                        aria-label="All Courses"
-                        className="flex min-w-0 items-center gap-2"
-                      >
-                        <Library className="h-4 w-4 shrink-0" />
-                        <span
-                          aria-hidden={collapsed}
-                          className={
-                            collapsed ? 'hidden' : 'overflow-hidden text-ellipsis whitespace-nowrap'
-                          }
-                        >
-                          All Courses
-                        </span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </TooltipTrigger>
-                  <TooltipContent
-                    side="right"
-                    hidden={!collapsed}
-                    className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
-                    sideOffset={10}
-                  >
-                    All Courses
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </SidebarMenuItem>
-          </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
 
