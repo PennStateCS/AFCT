@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import DashboardClient from '../DashboardClient';
 
 export const metadata: Metadata = {
-  title: 'All Courses',
+  title: 'Previous Courses',
 };
 
 export default async function AllCoursesPage() {
@@ -24,6 +24,11 @@ export default async function AllCoursesPage() {
   const rosterEntries = await prisma.roster.findMany({
     where: {
       userId: id,
+      course: {
+        endDate: {
+          lt: new Date(),
+        },
+      },
     },
     select: {
       role: true,
@@ -72,7 +77,7 @@ export default async function AllCoursesPage() {
 
   return (
     <div className="h-full w-full flex-col lg:flex-row">
-      <DashboardClient sessionUser={session.user} courses={courses} title={'All Courses'} />
+      <DashboardClient sessionUser={session.user} courses={courses} title={'Previous Courses'} />
     </div>
   );
 }
