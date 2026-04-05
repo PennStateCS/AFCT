@@ -232,6 +232,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         header: a.title,
         cell: ({ row }) => {
           const val = row.original[a.id];
+          const max = a.maxPoints;
           const studentId = row.original.id as string;
 
           const handleClick = () => {
@@ -241,15 +242,20 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
           };
 
           return (
-            <div
+            <button
+              type="button"
               className="flex h-full w-full cursor-pointer items-center justify-center rounded px-2 py-1 hover:bg-neutral-300"
               title="View grade breakdown"
               onClick={handleClick}
+              aria-label={`View breakdown for ${row.original.name} on ${a.title}`}
             >
-              <span className={val === null || val === undefined ? 'text-muted-foreground' : ''}>
+              <span>
                 {val === null || val === undefined ? '-' : String(val)}
               </span>
-            </div>
+              <span className="font-thin text-xs">
+                {max === null || max === undefined ? '/-': `/${String(max)}`}
+              </span>
+            </button>
           );
         },
         meta: { priority: 2 },
