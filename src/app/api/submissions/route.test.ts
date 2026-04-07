@@ -54,6 +54,9 @@ vi.mock('os', async (importOriginal) => {
 vi.mock('../../../../lib/java-runner', () => ({
   default: vi.fn().mockImplementation(() => ({ execute: javaRunnerExecuteMock })),
 }));
+vi.mock('@/app/utils/xmlStructureValidate', () => ({
+  validateStructureXML: vi.fn().mockReturnValue({ isValid: true }),
+}));
 
 import { POST } from './route';
 
