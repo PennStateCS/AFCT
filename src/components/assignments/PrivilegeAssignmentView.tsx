@@ -532,17 +532,17 @@ export default function AssignmentDashboardPage({
       <Tabs value={tab} onValueChange={handleTabChange}>
         <TabsList
           aria-label="Assignment sections"
-          className="bg-card border-border h-12 rounded-md border p-1 shadow-sm"
+          className="bg-card border-border h-12 w-full rounded-md border p-1 shadow-sm"
         >
           <TabsTrigger
-            className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white"
+            className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white flex-1"
             value="problems"
           >
             <FileText className="h-4 w-4" />
             Problems
           </TabsTrigger>
           <TabsTrigger
-            className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white"
+            className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white flex-1"
             value="submissions"
           >
             <Package className="h-4 w-4" />
