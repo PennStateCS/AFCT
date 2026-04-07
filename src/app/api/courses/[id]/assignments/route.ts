@@ -13,8 +13,17 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     return NextResponse.json({ error: 'Missing course ID' }, { status: 400 });
   }
 
+  // 2. Extract and verify token
+  const authHeader = req.headers.get('authorization');
+  const token = authHeader?.split(' ')[1];
+  const decoded: JwtPayload | null = token ? verifyToken(token) : null;
+
+  if (!decoded) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
-    // 2. Ensure the course exists
+    // 3. Ensure the course exists
     const course = await prisma.course.findUnique({
       where: { id: courseId },
       select: { id: true },
@@ -24,10 +33,8 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
-    // 3. Fetch all published assignments along with problem info needed to
-    //    compute a student’s total and max grade.  We select the nested
-    //    `problems` relation in order to sum `maxPoints` and any existing
-    //    `AssignmentProblemGrade` for the current user.
+    // 4. Fetch all published assignments along with problem info needed to
+    //    compute a student's total and max grade.
     const assignments = await prisma.assignment.findMany({
       where: {
         courseId: courseId,
@@ -38,13 +45,28 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
         title: true,
         dueDate: true,
         description: true,
+        problems: {
+          select: {
+            maxPoints: true,
+            grades: {
+              select: { grade: true },
+              take: 1,
+            },
+          },
+        },
       },
       orderBy: {
         dueDate: 'asc',
       },
     });
 
-    return NextResponse.json(assignments);
+    const result = assignments.map(({ problems, ...assignment }) => {
+      const maxGrade = problems.reduce((sum, p) => sum + p.maxPoints, 0);
+      const totalGrade = problems.reduce((sum, p) => sum + (p.grades[0]?.grade ?? 0), 0);
+      return { ...assignment, totalGrade, maxGrade };
+    });
+
+    return NextResponse.json(result);
   } catch (error) {
     console.error('API GET ASSIGNMENTS error:', error);
     return NextResponse.json({ error: 'Failed to fetch assignments.' }, { status: 500 });

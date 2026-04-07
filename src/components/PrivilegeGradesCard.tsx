@@ -70,19 +70,11 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         grades: Record<string, Record<string, number | null>>;
       };
 
-      // fetch maxPoints for each assignment via API helper
-      const assignmentsWithPoints: Assignment[] = await Promise.all(
-        a.map(async (asg) => {
-          try {
-            const res2 = await fetch(`/api/assignments/${asg.id}`);
-            if (!res2.ok) return { ...asg, maxPoints: 0 };
-            const json = await res2.json();
-            return { ...asg, maxPoints: json.maxPoints ?? 0 };
-          } catch {
-            return { ...asg, maxPoints: 0 };
-          }
-        }),
-      );
+      // maxPoints is already computed by the grades API (sum of problem max points)
+      const assignmentsWithPoints: Assignment[] = a.map((asg) => ({
+        ...asg,
+        maxPoints: (asg as Assignment & { maxPoints?: number }).maxPoints ?? 0,
+      }));
 
       // Build rows
       const rows: StudentRow[] = s.map((stu) => {
@@ -261,6 +253,29 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         meta: { priority: 2 },
       });
     }
+
+    cols.push({
+      id: 'totalGrade',
+      header: 'Total',
+      cell: ({ row }) => {
+        let earned = 0;
+        let possible = 0;
+        let gradeCount = 0;
+        for (const a of assignments) {
+          const val = row.original[a.id];
+          if (val !== null && val !== undefined) {
+            earned += Number(val);
+            possible += a.maxPoints ?? 0;
+            gradeCount++;
+          }
+        }
+        if (gradeCount === 0) return <span className="text-muted-foreground">-</span>;
+        if (possible === 0) return <span className="text-muted-foreground">-</span>;
+        const pct = ((earned / possible) * 100).toFixed(1);
+        return <span className="font-medium">{pct}%</span>;
+      },
+      meta: { priority: 1 },
+    });
 
     return cols;
   }, [assignments]);
