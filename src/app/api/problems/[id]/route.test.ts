@@ -28,6 +28,9 @@ vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 vi.mock('@/lib/upload-limits', () => ({ getSystemUploadLimit: uploadLimitMock }));
+vi.mock('@/app/utils/xmlStructureValidate', () => ({
+  validateStructureXML: vi.fn().mockReturnValue({ isValid: true }),
+}));
 vi.mock('fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('fs')>();
   return {
