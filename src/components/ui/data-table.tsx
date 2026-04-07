@@ -97,18 +97,26 @@ export function DataTable<TData, TValue>({
   const [sorting, setSorting] = useState<SortingState>([]);
 
   useEffect(() => {
-    const saved = localStorage.getItem(storageKey);
-    if (saved) {
-      try {
-        setColumnVisibility({ ...defaultColumnVisibility, ...JSON.parse(saved) });
-      } catch {
-        console.warn('Invalid saved column state, ignoring.');
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        try {
+          setColumnVisibility({ ...defaultColumnVisibility, ...JSON.parse(saved) });
+        } catch {
+          console.warn('Invalid saved column state, ignoring.');
+        }
       }
+    } catch {
+      // localStorage may not be available in all environments
     }
   }, [storageKey]);
 
   useEffect(() => {
-    localStorage.setItem(storageKey, JSON.stringify(columnVisibility));
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(columnVisibility));
+    } catch {
+      // localStorage may not be available in all environments
+    }
   }, [columnVisibility, storageKey]);
 
   const table = useReactTable<TData>({
@@ -144,7 +152,11 @@ export function DataTable<TData, TValue>({
 
   const resetColumns = () => {
     setColumnVisibility(defaultColumnVisibility);
-    localStorage.removeItem(storageKey);
+    try {
+      localStorage.removeItem(storageKey);
+    } catch {
+      // localStorage may not be available in all environments
+    }
   };
 
   const exportToCSV = () => {
