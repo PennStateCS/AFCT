@@ -1,4 +1,4 @@
-export type LmsPlatform = 'canvas' | 'blackboard' | 'moodle' | 'generic';
+export type LmsPlatform = 'canvas' | 'blackboard' | 'moodle' | 'brightspace' | 'generic';
 
 export type LmsAssignment = {
   id: string;
@@ -47,6 +47,8 @@ export function buildLmsGradesCsv(
 ): { csvContent: string; filenamePrefix: string } {
   const assignmentHeaders = assignments.map((a) => a.title);
 
+  const brightspaceHeaders = assignmentHeaders.map((a) => a + ' Points Grade');
+
   const headersByPlatform: Record<LmsPlatform, string[]> = {
     canvas: ['Student', 'ID', 'SIS User ID', 'SIS Login ID', 'Section', ...assignmentHeaders],
     blackboard: [
@@ -57,7 +59,8 @@ export function buildLmsGradesCsv(
       'Availability',
       ...assignmentHeaders,
     ],
-    moodle: ['Email address', 'First name', 'Surname', 'ID number', ...assignmentHeaders],
+	brightspace: ['OrgDefinedId', 'Username', 'Last Name', 'First Name', ...brightspaceHeaders, 'End-of-Line Indicator'],
+    moodle: ['email', ...assignmentHeaders],
     generic: ['Student Name', 'Email', ...assignmentHeaders],
   };
 
@@ -81,8 +84,12 @@ export function buildLmsGradesCsv(
       return [email, firstName, lastName, student.id, 'Y', ...gradeCells];
     }
 
+    if (platform === 'brightspace') {
+      return ['', '', lastName, firstName, ...gradeCells, '#'];
+	}
+
     if (platform === 'moodle') {
-      return [email, firstName, lastName, student.id, ...gradeCells];
+      return [email,  ...gradeCells];
     }
 
     return [student.name ?? `${firstName} ${lastName}`.trim(), email, ...gradeCells];
