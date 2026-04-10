@@ -31,6 +31,7 @@ type GradesLmsExportDialogProps = {
 const LMS_OPTIONS: Array<{ value: LmsPlatform; label: string }> = [
   { value: 'canvas', label: 'Canvas' },
   { value: 'blackboard', label: 'Blackboard' },
+  { value: 'brightspace', label: 'Brightspace' },
   { value: 'moodle', label: 'Moodle' },
   { value: 'generic', label: 'Generic CSV' },
 ];
