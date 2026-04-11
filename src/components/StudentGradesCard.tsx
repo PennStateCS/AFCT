@@ -100,18 +100,18 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
         ) : assignments.length === 0 ? (
           <div className="text-sm text-muted-foreground">No graded assignments available yet.</div>
         ) : (
-          <div className="space-y-1">
+          <div className="space-y-2">
             {assignmentRows.map((assignment) => (
               <div
                 key={assignment.id}
-                className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm transition hover:shadow-md"
+                className="overflow-hidden rounded-xl border border-border/80 border-l-4 border-l-blue-600 bg-card shadow-sm transition hover:border-primary hover:bg-primary/5 hover:shadow-md"
               >
-                <CardHeader className="pb-0 pt-3 px-3">
+                <CardHeader className="p-0">
                   <div
-                    className="flex items-center justify-between gap-3 cursor-pointer"
+                    className="flex items-center justify-between gap-3 cursor-pointer px-3 py-1"
                     onClick={() => router.push(`/dashboard/courses/${courseId}/${assignment.id}`)}
                   >
-                    <div className="min-w-0 space-y-1">
+                    <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <CardTitle className="text-sm leading-none">
                           {assignment.title}
