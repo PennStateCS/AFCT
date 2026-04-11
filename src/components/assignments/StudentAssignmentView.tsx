@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,18 +16,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { showToast } from '@/lib/toast';
-import {
-  ArrowLeft,
-  Clock,
-  BookOpen,
-  Target,
-  FileText,
-  Trophy,
-  MessageSquare,
-  Send,
-  Eye,
-  Download,
-} from 'lucide-react';
+import { ArrowLeft, Clock, BookOpen, Target, FileText, Trophy, MessageSquare, Send, Eye, Download } from 'lucide-react';
 import { Badge as RoleBadge } from '@/components/ui/RoleBadge';
 import JffViewerDialog from '@/components/JffViewerDialog';
 import { ProblemListCard } from '@/components/assignments/ProblemListCard';
@@ -59,6 +48,7 @@ export default function StudentAssignmentPage({
   const assignmentId = params?.aid;
 
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session } = useSession();
   const { timezone } = useEffectiveTimezone();
   const userId = session?.user?.id ?? null;
@@ -186,13 +176,19 @@ export default function StudentAssignmentPage({
       return;
     }
 
+    const preferredProblemId = searchParams.get('problem');
+    if (preferredProblemId && assignment.problems.some((ap) => ap.problem.id === preferredProblemId)) {
+      setSelectedProblemId(preferredProblemId);
+      return;
+    }
+
     setSelectedProblemId((prev) => {
       if (prev && assignment.problems.some((ap) => ap.problem.id === prev)) {
         return prev;
       }
       return assignment.problems[0].problem.id;
     });
-  }, [assignment]);
+  }, [assignment, searchParams]);
 
   const problemListItems = useMemo(() => {
     if (!assignment) return [];
@@ -280,16 +276,10 @@ export default function StudentAssignmentPage({
     <div className="space-y-6 p-6">
       <Card>
         <CardHeader>
-          <CardTitle
-            role="heading"
-            aria-level={1}
-            className="flex min-w-0 items-start gap-2 text-2xl"
-          >
-            <BookOpen className="h-5 w-5 shrink-0" />
-            <span className="min-w-0 line-clamp-2 break-words [overflow-wrap:anywhere]" title={assignment.title}>
-              {assignment.title}
-            </span>
-          </CardTitle>
+          <CardTitle className="flex items-center gap-2 text-2xl">
+          <BookOpen className="h-6 w-6" />
+          {assignment.title}
+        </CardTitle>
         </CardHeader>
         <CardContent>
           {assignment.description && (

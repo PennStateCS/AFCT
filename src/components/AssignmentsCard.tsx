@@ -4,7 +4,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
-import { Plus, NotebookText } from 'lucide-react';
+import { Plus, BookOpen } from 'lucide-react';
 import type { AssignmentWithProblemCount } from '@/types/course';
 
 interface AssignmentsCardProps {
@@ -27,7 +27,7 @@ export function AssignmentsCard({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2 text-2xl">
-          <NotebookText className="h-5 w-5" />
+          <BookOpen className="h-6 w-6" />
           Assignments
         </CardTitle>
         <Button
