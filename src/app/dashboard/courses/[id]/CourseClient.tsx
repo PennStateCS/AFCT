@@ -184,7 +184,7 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
       />
 
       {isStudent ? (
-        <StudentCourseView course={course} />
+        <StudentCourseView course={course} tab={tab as TabType} onTabChange={handleTabChange} />
       ) : (
         <AdminCourseView
           course={course}
