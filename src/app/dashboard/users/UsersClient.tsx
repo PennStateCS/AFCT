@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { getUserColumns } from './user-columns';
 import { DataTable } from '@/components/ui/data-table';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { CreateUserDialog } from '@/components/dialogs/CreateUserDialog';
@@ -19,10 +20,12 @@ export default function UsersClient({ initialUsers }: { initialUsers?: UserListI
   const hasInitialUsers = Array.isArray(initialUsers);
 
   const [users, setUsers] = useState<UserListItem[]>(initialUsers ?? []);
+  const [activeUsers, setActiveUsers] = useState<UserListItem[]>(initialUsers ?? []);
   const [loading, setLoading] = useState(!hasInitialUsers);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [open, setOpen] = useState(searchParams.get('create') === 'open');
   const [importOpen, setImportOpen] = useState(false);
+  const [onlyActive, setOnlyActive] = useState(false);
   const { timezone } = useEffectiveTimezone();
 
   const fetchUsers = useCallback(async () => {
@@ -33,6 +36,7 @@ export default function UsersClient({ initialUsers }: { initialUsers?: UserListI
       if (!res.ok) throw new Error('Failed to fetch users');
       const data: UserListItem[] = await res.json();
       setUsers(data);
+	  setActiveUsers(data.filter(item => !item.inactive));
     } catch (error) {
       setLoadError('Failed to load users. Please try again.');
       console.error('Error loading users:', error);
@@ -65,7 +69,14 @@ export default function UsersClient({ initialUsers }: { initialUsers?: UserListI
           User Accounts
         </CardTitle>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setImportOpen(true)}>
+		  <label className="flex items-center gap-2 cursor-pointer">
+            <Checkbox
+              checked={onlyActive}
+		      onCheckedChange={(value) => setOnlyActive(!!value)}
+		    />
+            <span className='text-sm font-medium'>Show only active users</span>
+		  </label>
+		  <Button variant="outline" onClick={() => setImportOpen(true)}>
             <Users />
             Import Users
           </Button>
@@ -90,7 +101,7 @@ export default function UsersClient({ initialUsers }: { initialUsers?: UserListI
 
         <DataTable
           columns={columns}
-          data={users}
+          data={onlyActive ? activeUsers : users}
           loading={loading}
           tableLabel="Users table"
           defaultColumnVisibility={{ createdAt: false }}
