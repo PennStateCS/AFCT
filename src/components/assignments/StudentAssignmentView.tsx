@@ -613,7 +613,7 @@ export default function StudentAssignmentPage({
       )}
       {/* JffViewerDialog for viewing submitted files */}
       {openDialog.submission &&
-        ['FA', 'PDA'].includes(
+        ['FA', 'PDA', 'TM'].includes(
           assignment.problems.find((u) => u.problem.id === openDialog?.submission?.problemId)
             ?.problem?.type ?? '',
         ) && (
