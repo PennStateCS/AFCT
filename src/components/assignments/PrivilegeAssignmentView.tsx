@@ -52,7 +52,11 @@ import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { AssignmentWithDetails } from '@/lib/assignment-details';
 
 const problemTypeLabels: Record<string, string> = {
-  // Add your problem type labels here
+  FA: 'Finite Automaton',
+  PDA: 'Push-Down Automaton',
+  CFG: 'Context-Free Grammar',
+  RE: 'Regular Expression',
+  TM: 'Turing Machine',
 };
 
 type ProblemLinkSettings = {
@@ -872,7 +876,7 @@ export default function AssignmentDashboardPage({
         </TabsContent>
       </Tabs>
       {/* JFLAP Viewer Dialog */}
-      {viewerOpen && viewerSrc && ['FA', 'PDA'].includes(jffType ?? '') && (
+      {viewerOpen && viewerSrc && ['FA', 'PDA', 'TM'].includes(jffType ?? '') && (
         <JffViewerDialog
           open={viewerOpen}
           onOpenChange={setViewerOpen}
