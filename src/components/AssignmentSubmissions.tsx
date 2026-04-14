@@ -1172,7 +1172,7 @@ export default function AssignmentSubmissions({
       )}
 
       {openDialog.submission &&
-        ['FA', 'PDA'].includes(
+        ['FA', 'PDA', 'TM'].includes(
           visibleProblems.find((p) => p.id === selectedProblemId)?.type ?? '',
         ) && (
           <JffViewerDialog

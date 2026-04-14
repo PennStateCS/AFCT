@@ -25,6 +25,7 @@ const typeLabels: Record<string, string> = {
   PDA: 'Push-Down Automaton',
   CFG: 'Context-Free Grammar',
   RE: 'Regular Expression',
+  TM: 'Turing Machine',
 };
 
 export const useProblemColumns = ({
@@ -173,6 +174,7 @@ export const useProblemColumns = ({
     switch (openDialog.problem.type) {
       case 'FA':
       case 'PDA':
+      case 'TM':
         return (
           <JffViewerDialog
             open={openDialog.open}

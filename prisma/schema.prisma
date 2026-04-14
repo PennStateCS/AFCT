@@ -27,6 +27,7 @@ enum ProblemType {
   RE
   CFG
   FA
+  TM
 }
 
 model User {
