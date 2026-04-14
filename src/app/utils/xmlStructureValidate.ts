@@ -12,8 +12,9 @@ export function validateStructureXML(fileInput: string, type: string | null): St
   }
 
   const jff = parser.parse(fileInput);
+  const expectedType = type === 'CFG' ? 'GRAMMAR' : type === 'TM' ? 'TURING' : type;
 
-  if (!jff.structure || jff.structure.type.toUpperCase() !== (type === 'CFG' ? 'GRAMMAR' : type)) {
+  if (!jff.structure || jff.structure.type.toUpperCase() !== expectedType) {
     return { isValid: false, error: `Solution file should be of type ${type}` };
   }
 

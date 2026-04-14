@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /** Keep in sync with your Prisma enum */
-export const ProblemTypeEnum = z.enum(['FA', 'PDA', 'CFG', 'RE']);
+export const ProblemTypeEnum = z.enum(['FA', 'PDA', 'CFG', 'RE', 'TM']);
 
 /** Allowed upload types (adjust as needed) */
 const allowedExt = ['txt', 'fa', 'pda', 'cfg', 're', 'jff'];
