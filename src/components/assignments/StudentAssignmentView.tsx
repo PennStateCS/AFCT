@@ -5,23 +5,13 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { showToast } from '@/lib/toast';
 import { ArrowLeft, Clock, BookOpen, Target, FileText, Trophy, MessageSquare, Send, Eye, Download } from 'lucide-react';
 import { Badge as RoleBadge } from '@/components/ui/RoleBadge';
 import JffViewerDialog from '@/components/JffViewerDialog';
 import { ProblemListCard } from '@/components/assignments/ProblemListCard';
-import WorkspacePanel from '@/components/WorkspacePanel';
-import ProblemHeader from '@/components/ProblemHeader';
+import { ProblemWorkspace } from '@/components/assignments/ProblemWorkspace';
 import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
 import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
@@ -129,6 +119,26 @@ export default function StudentAssignmentPage({
       }
     },
     [loadStudentContext, newComment],
+  );
+
+  const handleDeleteComment = useCallback(
+    async (commentId: string) => {
+      try {
+        const response = await fetch(`/api/comments?commentId=${encodeURIComponent(commentId)}`, {
+          method: 'DELETE',
+        });
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error?.error || 'Failed to delete comment');
+        }
+        await loadStudentContext();
+        showToast.success('Comment deleted successfully');
+      } catch (error) {
+        console.error('Error deleting comment:', error);
+        showToast.error('Failed to delete comment');
+      }
+    },
+    [loadStudentContext],
   );
 
   useEffect(() => {
@@ -410,195 +420,35 @@ export default function StudentAssignmentPage({
                 description="Select a problem to review submissions and discussion."
               />
 
-              {selectedProblem ? (
-                <div className="flex flex-col gap-4">
-                  <ProblemHeader
-                    title={`Problem ${selectedProblemIndex}: ${selectedProblem.problem.title}`}
-                    description={selectedProblem.problem.description ?? undefined}
-                    type={selectedProblem.problem.type ?? undefined}
-                    maxStates={selectedProblem.problem.maxStates ?? undefined}
-                    isDeterministic={selectedProblem.problem.isDeterministic ?? undefined}
-                    maxSubmissions={selectedProblem.problem.maxSubmissions ?? undefined}
-                    autograderEnabled={selectedProblem.problem.autograderEnabled ?? undefined}
-                  />
-
-                  <div className="grid items-start gap-4 lg:grid-cols-[60%_40%]">
-                    <WorkspacePanel
-                      title={`Your Submissions (${selectedProblemSubmissions.length})`}
-                      icon={<FileText className="h-4 w-4" />}
-                      className="min-h-[320px]"
-                    >
-                      {submissionsLoading ? (
-                        <p className="text-muted-foreground text-sm">Loading submissions...</p>
-                      ) : selectedProblemSubmissions.length > 0 ? (
-                        <div className="overflow-x-auto rounded-lg border">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Submitted At</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Grade</TableHead>
-                                <TableHead>Feedback</TableHead>
-                                <TableHead>Download</TableHead>
-                                <TableHead>Submission</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {selectedProblemSubmissions.map((submission) => (
-                                <TableRow key={submission.id}>
-                                  <TableCell>
-                                    {formatDateTimeInTimeZone(submission.submittedAt, timezone)}
-                                  </TableCell>
-                                  <TableCell>
-                                    <span
-                                      className={`rounded-full px-2 py-1 text-xs font-medium ${
-                                        submission.status === 'GRADED'
-                                          ? 'bg-green-100 text-green-800'
-                                          : submission.status === 'LATE'
-                                            ? 'bg-red-100 text-red-800'
-                                            : 'bg-yellow-100 text-yellow-800'
-                                      }`}
-                                    >
-                                      {submission.status}
-                                    </span>
-                                  </TableCell>
-                                  <TableCell>
-                                    {submission.grade !== null ? (
-                                      <span className="font-medium">{submission.grade}</span>
-                                    ) : (
-                                      <span className="text-muted-foreground">Not graded</span>
-                                    )}
-                                  </TableCell>
-                                  <TableCell>
-                                    {submission.feedback ? (
-                                      <span className="text-sm">{submission.feedback}</span>
-                                    ) : (
-                                      <span className="text-muted-foreground">No feedback</span>
-                                    )}
-                                  </TableCell>
-                                  <TableCell>
-                                    {submission.fileName ? (
-                                      <a
-                                        href={`/api/uploads/submissions/${encodeURIComponent(submission.fileName)}`}
-                                        download={submission.originalFileName || 'Download'}
-                                        className="inline-flex items-center gap-1 text-blue-600 underline hover:text-blue-800"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        title="Download file"
-                                      >
-                                        <Download className="h-4 w-4" aria-hidden="true" />
-                                        <span>{submission.originalFileName || 'Download'}</span>
-                                      </a>
-                                    ) : (
-                                      <span className="text-muted-foreground text-sm">No file</span>
-                                    )}
-                                  </TableCell>
-                                  <TableCell>
-                                    <div className="flex items-center gap-2">
-                                      {submission.fileName ? (
-                                        <Button
-                                          size="sm"
-                                          variant="secondary"
-                                          onClick={() => setOpenDialog({ open: true, submission })}
-                                          className="flex items-center gap-1"
-                                        >
-                                          <Eye className="mr-2 h-4 w-4" />
-                                          View
-                                        </Button>
-                                      ) : (
-                                        <span className="text-muted-foreground text-sm">
-                                          No file
-                                        </span>
-                                      )}
-                                    </div>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      ) : (
-                        <p className="text-muted-foreground text-sm">No submissions yet.</p>
-                      )}
-                    </WorkspacePanel>
-
-                    <WorkspacePanel
-                      title={`Discussion (${selectedProblemComments.length})`}
-                      icon={<MessageSquare className="h-4 w-4" />}
-                      className="min-h-[320px]"
-                      contentClassName="flex h-full flex-col gap-4"
-                    >
-                      {commentsLoading ? (
-                        <div className="text-muted-foreground text-sm">Loading discussion...</div>
-                      ) : selectedProblemComments.length > 0 ? (
-                        <div className="space-y-3 overflow-y-auto pr-1">
-                          {selectedProblemComments.map((comment) => (
-                            <div key={comment.id} className="bg-card rounded-lg border p-3">
-                              <div className="mb-2 flex items-start justify-between">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-medium">{comment.authorName}</span>
-                                  <RoleBadge role={comment.authorRole} />
-                                </div>
-                                <span className="text-muted-foreground text-xs">
-                                  {formatDateTimeInTimeZone(comment.createdAt, timezone)}
-                                </span>
-                              </div>
-                              <p className="text-sm">{comment.content}</p>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-muted-foreground text-sm">No comments yet.</div>
-                      )}
-
-                      <div className="mt-auto space-y-2">
-                        <Textarea
-                          placeholder="Add a comment or question about this problem..."
-                          value={
-                            selectedProblem ? newComment[selectedProblem.problem.id] || '' : ''
-                          }
-                          onChange={(e) =>
-                            selectedProblem &&
-                            setNewComment((prev) => ({
-                              ...prev,
-                              [selectedProblem.problem.id]: e.target.value,
-                            }))
-                          }
-                          hidden={courseIsArchived}
-                          className="min-h-[80px]"
-                        />
-                        <div className="flex justify-end">
-                          <Button
-                            size="sm"
-                            onClick={() =>
-                              selectedProblem && handleSubmitComment(selectedProblem.problem.id)
-                            }
-                            disabled={
-                              !selectedProblem ||
-                              !newComment[selectedProblem.problem.id]?.trim() ||
-                              submittingComment[selectedProblem.problem.id]
-                            }
-                            hidden={courseIsArchived}
-                          >
-                            {selectedProblem && submittingComment[selectedProblem.problem.id] ? (
-                              'Submitting...'
-                            ) : (
-                              <>
-                                <Send className="mr-2 h-4 w-4" />
-                                Add Comment
-                              </>
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-                    </WorkspacePanel>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-muted-foreground flex h-full items-center justify-center rounded-md border border-dashed p-10 text-sm">
-                  Select a problem to see its details.
-                </div>
-              )}
+              <ProblemWorkspace
+                problem={selectedProblem ? selectedProblem.problem : null}
+                submissions={selectedProblemSubmissions}
+                assignmentDueDate={assignment.dueDate}
+                comments={selectedProblemComments}
+                commentText={selectedProblem ? newComment[selectedProblem.problem.id] || '' : ''}
+                onCommentTextChange={(text) =>
+                  selectedProblem &&
+                  setNewComment((prev) => ({
+                    ...prev,
+                    [selectedProblem.problem.id]: text,
+                  }))
+                }
+                onSaveComment={() =>
+                  selectedProblem && handleSubmitComment(selectedProblem.problem.id)
+                }
+                onDeleteComment={(commentId) => handleDeleteComment(commentId)}
+                isSaving={selectedProblem ? submittingComment[selectedProblem.problem.id] : false}
+                deletingComments={{}}
+                onViewSubmission={(submission) => setOpenDialog({ open: true, submission })}
+                rerunning={{}}
+                courseIsArchived={courseIsArchived}
+                gradeInput=""
+                currentGrade={null}
+                gradeError={null}
+                isPrivledgedUser={false}
+                submissionsLoading={submissionsLoading}
+                commentsLoading={commentsLoading}
+              />
             </div>
           </CardContent>
         </Card>

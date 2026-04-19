@@ -151,6 +151,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
             id: comment.id,
             content: comment.content,
             createdAt: comment.createdAt.toISOString(),
+            authorId: comment.roster.userId,
             authorName:
               `${comment.roster.user.firstName || ''} ${comment.roster.user.lastName || ''}`.trim() ||
               'Unknown User',
