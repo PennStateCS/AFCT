@@ -9,9 +9,13 @@ import { AssignmentWithDetails } from '@/lib/assignment-details';
 
 type AssignmentClientProps = {
   initialAssignment?: AssignmentWithDetails | null;
+  initialAssignments?: { id: string; title: string }[];
 };
 
-export default function AssignmentClient({ initialAssignment = null }: AssignmentClientProps) {
+export default function AssignmentClient({
+  initialAssignment = null,
+  initialAssignments,
+}: AssignmentClientProps) {
   const { data: session, status } = useSession();
 
   if (status === 'loading') {
@@ -28,5 +32,10 @@ export default function AssignmentClient({ initialAssignment = null }: Assignmen
     return <StudentAssignmentView initialAssignment={initialAssignment} />;
   }
 
-  return <PrivilegeAssignmentView initialAssignment={initialAssignment} />;
+  return (
+    <PrivilegeAssignmentView
+      initialAssignment={initialAssignment}
+      initialAssignments={initialAssignments}
+    />
+  );
 }

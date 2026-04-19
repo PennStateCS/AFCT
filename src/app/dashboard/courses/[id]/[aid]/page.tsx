@@ -21,6 +21,17 @@ export default async function AssignmentPage({ params }: PageProps) {
   }
 
   let initialAssignment: AssignmentWithDetails | null = null;
+  let initialAssignments: { id: string; title: string }[] | undefined = undefined;
+
+  const isStudent = session.user.role === 'STUDENT';
+
+  if (!isStudent) {
+    initialAssignments = await prisma.assignment.findMany({
+      where: { courseId },
+      select: { id: true, title: true },
+      orderBy: { title: 'asc' },
+    });
+  }
 
   try {
     const assignment = await prisma.assignment.findFirst({
@@ -88,5 +99,10 @@ export default async function AssignmentPage({ params }: PageProps) {
     initialAssignment = null;
   }
 
-  return <AssignmentClient initialAssignment={initialAssignment} />;
+  return (
+    <AssignmentClient
+      initialAssignment={initialAssignment}
+      initialAssignments={initialAssignments}
+    />
+  );
 }
