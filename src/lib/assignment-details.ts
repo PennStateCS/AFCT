@@ -58,6 +58,7 @@ export type StudentProblemComment = {
   id: string;
   content: string;
   createdAt: string;
+  authorId?: string | null;
   authorName: string;
   authorRole: Role;
   problemId: string;
