@@ -17,13 +17,10 @@ import type { Submission, User } from '@prisma/client';
 import { showToast } from '@/lib/toast';
 import type { Comment as DiscussionComment } from './DiscussionPanel';
 import { ProblemListCard } from '@/components/assignments/ProblemListCard';
-import ProblemDiscussionPanel from './ProblemDiscussionPanel';
+import { ProblemWorkspace } from '@/components/assignments/ProblemWorkspace';
 import StudentNavigator from './StudentNavigator';
 import JffViewerDialog from './JffViewerDialog';
-import ProblemHeader from './ProblemHeader';
-import ProblemGradeForm from './ProblemGradeForm';
 import SubmissionActionsMenu from './SubmissionActionsMenu';
-import WorkspacePanel from './WorkspacePanel';
 import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
 import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
 
@@ -173,231 +170,6 @@ function SubmissionTable({
   );
 }
 
-type ProblemListProps = {
-  problems: Problem[];
-  submissions: Record<string, SubmissionData>;
-  /** grades keyed by problem id; null means not graded yet */
-  problemGrades: Record<string, number | null>;
-  selectedProblemId: string | null;
-  onSelect: (problemId: string) => void;
-};
-
-function ProblemList({ problems, submissions, problemGrades, selectedProblemId, onSelect }: ProblemListProps) {
-  if (!problems.length) return null;
-  const limitText = (value: string, max = 80) =>
-    value.length > max ? `${value.slice(0, max - 1)}…` : value;
-
-  const items = problems.map((problem, index) => ({
-    id: problem.id,
-    title: problem.title ? `${index + 1}. ${limitText(problem.title)}` : `${index + 1}.`,
-  }));
-
-  const getBadgeContent = (problemId: string) => {
-    const grade = problemGrades[problemId];
-    const problem = problems.find((item) => item.id === problemId);
-    const maxPoints = typeof problem?.maxPoints === 'number' ? problem.maxPoints : null;
-    const subs = extractSubs(submissions[problemId]);
-    const usedCount = subs.length;
-    const maxSubmissions = problem?.maxSubmissions;
-    const hasFiniteSubmissionLimit =
-      typeof maxSubmissions === 'number' && Number.isFinite(maxSubmissions) && maxSubmissions > 0;
-    // use ∞ when limit is undefined/null or negative
-    const usageLabel = hasFiniteSubmissionLimit
-      ? `${usedCount}/${maxSubmissions}`
-      : `${usedCount}/∞`;
-
-    // status badge
-    let statusLabel = '';
-    let statusClass = 'bg-slate-100 text-slate-700';
-    if (usedCount > 0) {
-      const latest = [...subs].sort(
-        (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
-      )[0];
-      statusLabel = latest?.correct === true ? 'Correct' :
-                    latest?.correct === false ? 'Needs review' : 'Submitted';
-      if (latest?.correct === true) statusClass = 'bg-emerald-100 text-emerald-800';
-      else if (latest?.correct === false) statusClass = 'bg-amber-100 text-amber-800';
-      else statusClass = 'bg-blue-100 text-blue-800';
-    }
-
-    const badges = [] as React.ReactNode[];
-
-    // grade badge - show even when grade is missing (dash numerator)
-    if (maxPoints !== null) {
-      const display = grade !== null && grade !== undefined ? String(grade) : '-';
-      badges.push(
-        <Badge
-          key="grade"
-          variant="secondary"
-          title="Grade Earned / Max Points"
-          className="border border-slate-300 bg-white text-[11px] font-medium text-slate-700"
-        >
-          {display}/{maxPoints}
-        </Badge>,
-      );
-    }
-
-    // submission usage badge (show always when there is any limit, including ∞)
-    if (usedCount > 0 || maxSubmissions !== undefined && maxSubmissions !== null) {
-      badges.push(
-        <Badge
-          key="usage"
-          variant="secondary"
-          title="Submissions Used / Submissions Allowed"
-          className="border border-slate-300 bg-white text-[11px] font-medium text-slate-700"
-        >
-          {usageLabel}
-        </Badge>,
-      );
-    }
-
-    // status badge
-    if (statusLabel) {
-      badges.push(
-        <Badge
-          key="status"
-          variant="secondary"
-          title="Latest submission status"
-          className={`border-transparent text-[10px] font-semibold ${statusClass}`}
-        >
-          {statusLabel}
-        </Badge>,
-      );
-    }
-
-    if (badges.length === 0) {
-      // fallback empty state
-      return null;
-    }
-
-    return <div className="flex items-center gap-1">{badges}</div>;
-  };
-
-  return (
-    <ProblemListCard
-      problems={items}
-      selectedProblemId={selectedProblemId}
-      onSelect={onSelect}
-      getBadgeContent={getBadgeContent}
-      title="Problems"
-      description="Select a problem to review submissions and discussion."
-      className="h-fit"
-      scrollAreaClassName="max-h-[520px]"
-    />
-  );
-}
-
-function ProblemWorkspace({
-  problem,
-  submissions,
-  assignmentDueDate,
-  comments,
-  commentText,
-  onCommentTextChange,
-  onSaveComment,
-  onDeleteComment,
-  isSaving,
-  deletingComments,
-  onViewSubmission,
-  onRerunSubmission,
-  rerunning,
-  courseIsArchived,
-  gradeInput,
-  currentGrade,
-  gradeError,
-  onGradeInputChange,
-  onSaveGrade,
-  isSavingGrade,
-  isLoadingGrade,
-}: {
-  problem: Problem | null;
-  submissions: Submission[];
-  assignmentDueDate?: string | Date | null;
-  comments: DiscussionComment[];
-  commentText: string;
-  onCommentTextChange: (text: string) => void;
-  onSaveComment: () => void;
-  onDeleteComment: (id: string) => void;
-  isSaving?: boolean;
-  deletingComments?: Record<string, boolean>;
-  onViewSubmission: (submission: Submission) => void;
-  onRerunSubmission: (submission: Submission) => void;
-  rerunning: Record<string, boolean>;
-  courseIsArchived: boolean;
-  gradeInput: string;
-  currentGrade: number | null;
-  gradeError?: string | null;
-  onGradeInputChange: (value: string) => void;
-  onSaveGrade: () => void;
-  isSavingGrade: boolean;
-  isLoadingGrade: boolean;
-}) {
-  if (!problem) {
-    return (
-      <Card>
-        <CardContent className="text-muted-foreground p-6 text-sm">
-          Select a problem to view submissions.
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const sanitizedCurrentGrade = typeof currentGrade === 'number' ? currentGrade : null;
-  return (
-    <Card className="print:border-0 print:shadow-none">
-      <CardHeader>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <ProblemHeader
-            title={problem.title}
-            description={problem.description}
-            type={problem.type}
-            maxStates={problem.maxStates}
-            isDeterministic={problem.isDeterministic}
-            maxSubmissions={problem.maxSubmissions}
-            autograderEnabled={problem.autograderEnabled}
-          />
-
-          <ProblemGradeForm
-            value={gradeInput}
-            currentGrade={sanitizedCurrentGrade}
-            disabled={courseIsArchived}
-            isSaving={isSavingGrade}
-            isLoading={isLoadingGrade}
-            error={gradeError}
-            onChange={onGradeInputChange}
-            onSubmit={onSaveGrade}
-          />
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="grid items-stretch gap-4 lg:grid-cols-[60%_40%]">
-          <WorkspacePanel title="Submissions" icon={<FileText className="h-4 w-4" />}>
-            <SubmissionTable
-              submissions={submissions}
-              assignmentDueDate={assignmentDueDate}
-              onView={onViewSubmission}
-              onRerun={onRerunSubmission}
-              rerunning={rerunning}
-              className="h-full"
-            />
-          </WorkspacePanel>
-          <WorkspacePanel title="Discussion" icon={<MessageSquare className="h-4 w-4" />}>
-            <ProblemDiscussionPanel
-              courseIsArchived={courseIsArchived}
-              comments={comments}
-              commentText={commentText}
-              onCommentTextChange={onCommentTextChange}
-              onSaveComment={onSaveComment}
-              onDeleteComment={onDeleteComment}
-              isSaving={isSaving}
-              deletingComments={deletingComments}
-            />
-          </WorkspacePanel>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 
 export default function AssignmentSubmissions({
   courseIsArchived,
@@ -516,6 +288,93 @@ export default function AssignmentSubmissions({
     for (const pid of gpMap[selectedStudentGroupId] ?? []) allowed.add(pid);
     return assignmentProblems.filter((p) => allowed.has(p.id));
   }, [assignmentProblems, selectedStudentGroupId, groupProblemsMap, assignmentIsGroup]);
+
+  const limitText = useCallback((value: string, max = 80) => {
+    return value.length > max ? `${value.slice(0, max - 1)}…` : value;
+  }, []);
+
+  const problemListItems = useMemo(
+    () =>
+      visibleProblems.map((problem, index) => ({
+        id: problem.id,
+        title: problem.title ? `${index + 1}. ${limitText(problem.title)}` : `${index + 1}.`,
+      })),
+    [visibleProblems, limitText],
+  );
+
+  const getProblemBadgeContent = useCallback(
+    (problemId: string) => {
+      const grade = problemGrades[problemId];
+      const problem = visibleProblems.find((item) => item.id === problemId);
+      const maxPoints = typeof problem?.maxPoints === 'number' ? problem.maxPoints : null;
+      const subs = extractSubs(submissions[problemId]);
+      const usedCount = subs.length;
+      const maxSubmissions = problem?.maxSubmissions;
+      const hasFiniteSubmissionLimit =
+        typeof maxSubmissions === 'number' && Number.isFinite(maxSubmissions) && maxSubmissions > 0;
+      const usageLabel = hasFiniteSubmissionLimit ? `${usedCount}/${maxSubmissions}` : `${usedCount}/∞`;
+
+      let statusLabel = '';
+      let statusClass = 'bg-slate-100 text-slate-700';
+      if (usedCount > 0) {
+        const latest = [...subs].sort(
+          (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
+        )[0];
+        statusLabel = latest?.correct === true ? 'Correct' : latest?.correct === false ? 'Needs review' : 'Submitted';
+        if (latest?.correct === true) statusClass = 'bg-emerald-100 text-emerald-800';
+        else if (latest?.correct === false) statusClass = 'bg-amber-100 text-amber-800';
+        else statusClass = 'bg-blue-100 text-blue-800';
+      }
+
+      const badges = [] as React.ReactNode[];
+      if (maxPoints !== null) {
+        const display = grade !== null && grade !== undefined ? String(grade) : '-';
+        badges.push(
+          <Badge
+            key="grade"
+            variant="secondary"
+            title="Grade Earned / Max Points"
+            className="border border-slate-300 bg-white text-[11px] font-medium text-slate-700"
+          >
+            {display}/{maxPoints}
+          </Badge>,
+        );
+      }
+
+      if (usedCount > 0 || maxSubmissions !== undefined && maxSubmissions !== null) {
+        badges.push(
+          <Badge
+            key="usage"
+            variant="secondary"
+            title="Submissions Used / Submissions Allowed"
+            className="border border-slate-300 bg-white text-[11px] font-medium text-slate-700"
+          >
+            {usageLabel}
+          </Badge>,
+        );
+      }
+
+      if (statusLabel) {
+        badges.push(
+          <Badge
+            key="status"
+            variant="secondary"
+            title="Latest submission status"
+            className={`border-transparent text-[10px] font-semibold ${statusClass}`}
+          >
+            {statusLabel}
+          </Badge>,
+        );
+      }
+
+      if (badges.length === 0) {
+        return null;
+      }
+
+      return <div className="flex items-center gap-1">{badges}</div>;
+    },
+    [problemGrades, submissions, visibleProblems],
+  );
 
   // Initialize selected problem from the URL, but only from the set of
   // currently visible problems (handles group assignment filtering).
@@ -1114,12 +973,15 @@ export default function AssignmentSubmissions({
 
                 return (
                   <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
-                    <ProblemList
-                      problems={visibleProblems}
-                      submissions={submissions}
-                      problemGrades={problemGrades}
+                    <ProblemListCard
+                      problems={problemListItems}
                       selectedProblemId={selectedProblem?.id ?? null}
                       onSelect={handleSelectProblem}
+                      getBadgeContent={getProblemBadgeContent}
+                      title="Problems"
+                      description="Select a problem to review submissions and discussion."
+                      className="h-full"
+                      scrollAreaClassName="max-h-[520px]"
                     />
 
                     <div className="print:col-span-2">
@@ -1161,6 +1023,7 @@ export default function AssignmentSubmissions({
                           selectedProblem ? Boolean(savingProblemGrades[selectedProblem.id]) : false
                         }
                         isLoadingGrade={loadingProblemGrades}
+                        isPrivledgedUser={true}
                       />
                     </div>
                   </div>
