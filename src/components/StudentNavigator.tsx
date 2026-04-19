@@ -109,8 +109,8 @@ export default function StudentNavigator({
   };
 
   return (
-    <div className="flex items-center gap-2">
-      <div>
+    <div className="flex w-full items-center justify-between gap-2">
+      <div className="min-w-0">
         <span className="block">
           {loadingAssignment ? (
             <span className="text-muted-foreground text-sm">Loading assignment...</span>
@@ -145,90 +145,92 @@ export default function StudentNavigator({
           ) : null}
         </span>
       </div>
-      <Button
-        variant="secondary"
-        onClick={onPrev}
-        className="flex w-28 items-center justify-center gap-x-1"
-      >
-        <ChevronLeft className="h-4 w-4" /> Previous
-      </Button>
-      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="outline"
-            className="bg-card text-foreground border-border hover:bg-input focus:ring-primary-300 flex w-[320px] items-center justify-between gap-2 border focus:ring-2 focus:ring-offset-1"
-          >
-            <span className="flex items-center gap-2 truncate">
-              {selectedStudent ? (
-                <span
-                  className={`h-2.5 w-2.5 rounded-full ${selectedStatus ? 'bg-green-500' : 'bg-red-500'}`}
-                  aria-label={selectedStatus ? 'All problems graded' : 'Missing grades'}
-                />
-              ) : null}
-              <span className="truncate">
-                {selectedStudent
-                  ? `${selectedStudent.firstName ?? ''} ${selectedStudent.lastName ?? ''}`.trim() ||
-                    'Unnamed student'
-                  : 'Select student'}
+      <div className="ml-auto flex items-center gap-2">
+        <Button
+          variant="secondary"
+          onClick={onPrev}
+          className="flex w-28 items-center justify-center gap-x-1"
+        >
+          <ChevronLeft className="h-4 w-4" /> Previous
+        </Button>
+        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              className="bg-card text-foreground border-border hover:bg-input focus:ring-primary-300 flex w-[320px] items-center justify-between gap-2 border focus:ring-2 focus:ring-offset-1"
+            >
+              <span className="flex items-center gap-2 truncate">
+                {selectedStudent ? (
+                  <span
+                    className={`h-2.5 w-2.5 rounded-full ${selectedStatus ? 'bg-green-500' : 'bg-red-500'}`}
+                    aria-label={selectedStatus ? 'All problems graded' : 'Missing grades'}
+                  />
+                ) : null}
+                <span className="truncate">
+                  {selectedStudent
+                    ? `${selectedStudent.firstName ?? ''} ${selectedStudent.lastName ?? ''}`.trim() ||
+                      'Unnamed student'
+                    : 'Select student'}
+                </span>
               </span>
-            </span>
-            <ChevronDown className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent className="bg-card text-foreground border-border w-[320px] rounded-md border p-2 shadow-lg">
-          <Input
-            ref={inputRef}
-            placeholder="Search students..."
-            value={studentFilter}
-            onChange={(e) => setStudentFilter(e.target.value)}
-            className="bg-card border-input mb-2"
-            aria-label="Search students by name"
-            onKeyDown={(e) => {
-              e.stopPropagation();
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                if (filteredStudents.length > 0) {
-                  handleSelect(filteredStudents[0].id);
+              <ChevronDown className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="bg-card text-foreground border-border w-[320px] rounded-md border p-2 shadow-lg">
+            <Input
+              ref={inputRef}
+              placeholder="Search students..."
+              value={studentFilter}
+              onChange={(e) => setStudentFilter(e.target.value)}
+              className="bg-card border-input mb-2"
+              aria-label="Search students by name"
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (filteredStudents.length > 0) {
+                    handleSelect(filteredStudents[0].id);
+                  }
+                  return;
                 }
-                return;
-              }
-              if (e.key === 'Escape') {
-                setStudentFilter('');
-              }
-            }}
-          />
-          <div className="max-h-64 overflow-auto">
-            {filteredStudents.length === 0 ? (
-              <div className="text-muted-foreground p-2 text-sm">No students found</div>
-            ) : (
-              filteredStudents.map((s) => (
-                <DropdownMenuItem
-                  key={s.id}
-                  className="hover:bg-input"
-                  onClick={() => handleSelect(s.id)}
-                >
-                  <span className="flex items-center gap-2 truncate">
-                    <span
-                      className={`h-2.5 w-2.5 rounded-full ${gradeStatuses?.[s.id] ? 'bg-green-500' : 'bg-red-500'}`}
-                      aria-hidden="true"
-                    />
-                    <span className="truncate">
-                      {s.firstName} {s.lastName}
+                if (e.key === 'Escape') {
+                  setStudentFilter('');
+                }
+              }}
+            />
+            <div className="max-h-64 overflow-auto">
+              {filteredStudents.length === 0 ? (
+                <div className="text-muted-foreground p-2 text-sm">No students found</div>
+              ) : (
+                filteredStudents.map((s) => (
+                  <DropdownMenuItem
+                    key={s.id}
+                    className="hover:bg-input"
+                    onClick={() => handleSelect(s.id)}
+                  >
+                    <span className="flex items-center gap-2 truncate">
+                      <span
+                        className={`h-2.5 w-2.5 rounded-full ${gradeStatuses?.[s.id] ? 'bg-green-500' : 'bg-red-500'}`}
+                        aria-hidden="true"
+                      />
+                      <span className="truncate">
+                        {s.firstName} {s.lastName}
+                      </span>
                     </span>
-                  </span>
-                </DropdownMenuItem>
-              ))
-            )}
-          </div>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <Button
-        variant="secondary"
-        onClick={onNext}
-        className="flex w-28 items-center justify-center gap-x-1"
-      >
-        Next <ChevronRight className="h-4 w-4" />
-      </Button>
+                  </DropdownMenuItem>
+                ))
+              )}
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <Button
+          variant="secondary"
+          onClick={onNext}
+          className="flex w-28 items-center justify-center gap-x-1"
+        >
+          Next <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
     </div>
   );
 }
