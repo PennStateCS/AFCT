@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -271,6 +272,8 @@ export default function StudentAssignmentPage({
   }
 
   const dueDate = new Date(assignment.dueDate);
+  const allowLateSubmissions = assignment.allowLateSubmissions ?? false;
+  const lateCutoffDate = assignment.lateCutoff ? new Date(assignment.lateCutoff) : null;
   const isOverdue = dueDate < new Date();
   const courseIsArchived = assignment.course?.isArchived ?? false;
   const selectedProblem = selectedProblemId
@@ -282,14 +285,39 @@ export default function StudentAssignmentPage({
   const selectedProblemSubmissions = selectedProblemId ? submissions[selectedProblemId] || [] : [];
   const selectedProblemComments = selectedProblemId ? comments[selectedProblemId] || [] : [];
 
+  const statusInfo = (() => {
+    if (assignment.isPublished) {
+      if (dueDate <= new Date()) return { label: 'Past Due', badgeClass: 'border-red-200 bg-red-50 text-red-700' };
+      return { label: 'Published', badgeClass: 'border-green-200 bg-green-50 text-green-700' };
+    }
+    return { label: 'Not Published', badgeClass: 'border-yellow-200 bg-yellow-50 text-yellow-700' };
+  })();
+
   return (
     <div className="space-y-6 p-6">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-2xl">
-          <BookOpen className="h-6 w-6" />
-          {assignment.title}
-        </CardTitle>
+          <CardTitle role="heading" aria-level={1} className="flex min-w-0 flex-wrap items-start gap-2 text-2xl break-words">
+            <span className="font-semibold">Assignment:</span>
+            <span className="min-w-0 line-clamp-2 break-words [overflow-wrap:anywhere]" title={assignment.title}>
+              {assignment.title}
+            </span>
+          </CardTitle>
+          <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm">
+            {assignment.course || assignment.courseName ? (
+              <Link
+                href={`/dashboard/courses/${assignment.course?.id || assignment.courseId}`}
+                className="max-w-full break-all text-blue-700 hover:underline"
+              >
+                {assignment.course?.name || assignment.courseName || assignment.courseId}
+                {assignment.course?.code
+                  ? ` (${assignment.course.code})`
+                  : assignment.courseCode
+                    ? ` (${assignment.courseCode})`
+                    : ''}
+              </Link>
+            ) : null}
+          </div>
         </CardHeader>
         <CardContent>
           {assignment.description && (
@@ -303,111 +331,44 @@ export default function StudentAssignmentPage({
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-5">
-        <Card
-          className={`${isOverdue ? 'border-r-4 border-l-4 border-r-red-600 border-l-red-600' : 'border-r-4 border-l-4 border-r-blue-600 border-l-blue-600'}`}
-        >
-          <CardContent className="pt-1 pb-1">
-            <div className="flex items-center gap-3">
-              <div
-                className={`rounded-full p-3 ${isOverdue ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}
-              >
-                <Clock className="h-8 w-8" />
-              </div>
-              <div className="flex-1">
-                <p className="text-muted-foreground mb-1 text-sm font-medium">Due Date</p>
-                <p
-                  className={`text-lg font-bold ${isOverdue ? 'text-red-600' : 'text-foreground'}`}
-                >
-                  {formatDateInTimeZone(dueDate, timezone)}
-                </p>
-                <p className="text-muted-foreground text-sm">
-                  {formatTimeInTimeZone(dueDate, timezone)}
-                </p>
-                {isOverdue && <p className="mt-1 text-xs font-medium text-red-600">Overdue</p>}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-r-4 border-l-4 border-r-green-600 border-l-green-600">
-          <CardContent className="pt-1 pb-1">
-            <div className="flex items-center gap-3">
-              <div className="rounded-full bg-green-100 p-3 text-green-600">
-                <Target className="h-8 w-8" />
-              </div>
-              <div className="flex-1">
-                <p className="text-muted-foreground mb-1 text-sm font-medium">Max Points</p>
-                <p className="text-foreground text-2xl font-bold">{assignment.maxPoints}</p>
-                <p className="text-muted-foreground text-sm">Total possible</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-r-4 border-l-4 border-r-purple-600 border-l-purple-600">
-          <CardContent className="pt-1 pb-1">
-            <div className="flex items-center gap-3">
-              <div className="rounded-full bg-purple-100 p-3 text-purple-600">
-                <BookOpen className="h-8 w-8" />
-              </div>
-              <div className="flex-1">
-                <p className="text-muted-foreground mb-1 text-sm font-medium">Problems</p>
-                <p className="text-foreground text-2xl font-bold">{assignment.problems.length}</p>
-                <p className="text-muted-foreground text-sm">
-                  {assignment.problems.length === 1 ? 'Problem' : 'Problems'} to solve
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-r-4 border-l-4 border-r-orange-600 border-l-orange-600">
-          <CardContent className="pt-1 pb-1">
-            <div className="flex items-center gap-3">
-              <div className="rounded-full bg-orange-100 p-3 text-orange-600">
-                <FileText className="h-8 w-8" />
-              </div>
-              <div className="flex-1">
-                <p className="text-muted-foreground mb-1 text-sm font-medium">Submissions</p>
-                <p className="text-foreground text-2xl font-bold">{submissionCount}</p>
-                <p className="text-muted-foreground text-sm">
-                  {submissionCount === 1 ? 'Submission' : 'Submissions'} made
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-r-4 border-l-4 border-r-yellow-600 border-l-yellow-600">
-          <CardContent className="pt-1 pb-1">
-            <div className="flex items-center gap-3">
-              <div className="rounded-full bg-yellow-100 p-3 text-yellow-600">
-                <Trophy className="h-8 w-8" />
-              </div>
-              <div className="flex-1">
-                <p className="text-muted-foreground mb-1 text-sm font-medium">Your Grade</p>
-                {assignmentGrade !== null ? (
-                  <>
-                    <p className="text-foreground text-2xl font-bold">
-                      {Math.round((assignmentGrade / assignment.maxPoints) * 100)}%
-                    </p>
-                    <p className="text-muted-foreground text-sm">{assignmentGrade} points earned</p>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-muted-foreground text-2xl font-bold">--</p>
-                    <p className="text-muted-foreground text-sm">Not graded yet</p>
-                  </>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       {assignment.problems.length > 0 ? (
         <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg font-semibold">{assignment.title}</CardTitle>
+            <div className="text-muted-foreground flex flex-wrap items-start gap-1 text-sm">
+              <div className="flex flex-wrap items-start gap-y-1 gap-x-6">
+                <span>
+                  <span className="font-semibold">Due:</span>{' '}
+                  {formatDateTimeInTimeZone(assignment.dueDate, timezone)}
+                </span>
+                <span>
+                  <span className="font-semibold">Max Points:</span>{' '}
+                  {assignment.maxPoints}
+                </span>
+                <span>
+                  <span className="font-semibold">Problems:</span>{' '}
+                  {assignment.problems.length}
+                </span>
+                <span className="w-full" />
+                <span>
+                  <span className="font-semibold">Allow Late:</span>{' '}
+                  {allowLateSubmissions ? 'Yes' : 'No'}
+                </span>
+                <span>
+                  <span className="font-semibold">Late Cutoff:</span>{' '}
+                  {allowLateSubmissions
+                    ? lateCutoffDate
+                      ? formatDateTimeInTimeZone(lateCutoffDate, timezone)
+                      : 'Never'
+                    : 'N/A'}
+                </span>
+              </div>
+              <span className="ml-auto self-start text-right text-xl">
+                <span className="font-semibold">Grade:</span>{' '}
+                {(assignmentGrade !== null ? `${assignmentGrade}` : `-`) + `/${assignment.maxPoints}`}
+              </span>
+            </div>
+          </CardHeader>
           <CardContent>
             <div className="grid grid-cols-[minmax(240px,280px)_1fr] gap-4">
               <ProblemListCard
