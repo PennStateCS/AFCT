@@ -349,6 +349,7 @@ export default function LoginPage() {
                 <InputGroup
                   id="login-email"
                   label="Email"
+				  labelClassName="text-gray-800"
                   name="login-email"
                   required
                   requiredMark
@@ -361,6 +362,7 @@ export default function LoginPage() {
 
                 <InputGroup
                   label="Password"
+				  labelClassName="text-gray-800"
                   name="login-password"
                   required
                   requiredMark
