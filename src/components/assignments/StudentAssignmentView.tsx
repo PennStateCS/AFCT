@@ -206,7 +206,7 @@ export default function StudentAssignmentPage({
     return assignment.problems.map((assignmentProblem, index) => ({
       id: assignmentProblem.problem.id,
       title: assignmentProblem.problem.title
-        ? `Problem ${index + 1}: ${limitText(assignmentProblem.problem.title, 80)}`
+        ? limitText(assignmentProblem.problem.title, 25)
         : `Problem ${index + 1}`,
     }));
   }, [assignment]);
