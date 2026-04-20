@@ -324,7 +324,7 @@ export default function CalendarClient({
                             isToday
                               ? 'bg-sky-100 ring-2 ring-sky-500 ring-inset dark:bg-sky-950/60 dark:ring-sky-400'
                               : 'bg-white dark:bg-neutral-900',
-                            !isToday && isWeekend && 'dark:bg-neutral-850 bg-slate-50',
+                            !isToday && isWeekend && 'dark:bg-neutral-800 bg-slate-50',
                           )}
                           style={{ aspectRatio: '1 / 1' }}
                         >
