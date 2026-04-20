@@ -44,6 +44,7 @@ interface InputGroupProps extends Omit<
 const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function InputGroup(
   {
     label,
+	labelClassName = "",
     name,
     fieldProps,
     error,
@@ -131,7 +132,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
 
   return (
     <div className={cn('flex flex-col', className)}>
-      <Label id={labelId} htmlFor={inputId} className="mb-1.5 text-sm font-medium">
+      <Label id={labelId} htmlFor={inputId} className={`mb-1.5 text-sm font-medium ${labelClassName}`}>
         {label}
         {requiredMark ? <span className="text-red-600"> *</span> : null}
       </Label>
@@ -158,6 +159,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
             !error && isValid && 'border-green-500',
             type === 'number' && 'appearance-auto',
             inputPaddingRight,
+			labelClassName,
           )}
         />
 
