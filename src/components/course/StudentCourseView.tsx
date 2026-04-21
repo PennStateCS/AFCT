@@ -32,7 +32,7 @@ export function StudentCourseView({ course, tab, onTabChange }: StudentCourseVie
           id="tab-assignments"
           aria-controls="panel-assignments"
           aria-label={`Assignments (${course.assignments.length})`}
-          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-gray-200 data-[state=active]:text-white"
+          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-accent data-[state=active]:text-white"
           value="assignments"
         >
           <div className="flex items-center gap-2">
@@ -44,7 +44,7 @@ export function StudentCourseView({ course, tab, onTabChange }: StudentCourseVie
         <TabsTrigger
           id="tab-grades"
           aria-controls="panel-grades"
-          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-gray-200 data-[state=active]:text-white"
+          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-accent data-[state=active]:text-white"
           value="grades"
         >
           <div className="flex items-center gap-2">
