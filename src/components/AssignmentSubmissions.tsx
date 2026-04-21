@@ -109,7 +109,9 @@ function SubmissionTable({
         <TableBody>
           {sorted.map((s) => {
             const submittedAt = new Date(s.submittedAt);
-            const isLate = hasValidDueDate && submittedAt.getTime() > dueDate!.getTime();
+            const isLate =
+              (s as { status?: string }).status === 'LATE' ||
+              (hasValidDueDate && submittedAt.getTime() > dueDate!.getTime());
             return (
               <TableRow key={s.id} className="hover:bg-transparent">
                 <TableCell>
@@ -121,7 +123,7 @@ function SubmissionTable({
                     {isLate ? (
                       <Badge
                         variant="secondary"
-                        className="mt-1 w-fit bg-amber-100 text-amber-800 shadow-sm"
+                        className="mt-1 inline-flex items-center rounded-full bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-900 shadow-sm"
                       >
                         Late
                       </Badge>
@@ -129,20 +131,30 @@ function SubmissionTable({
                   </div>
                 </TableCell>
                 <TableCell>
-                  {s.correct === true ? (
-                    <div className="flex justify-center">
-                      <Check className="h-4 w-4 text-green-600" />
-                    </div>
-                  ) : s.correct === false ? (
-                    <div className="flex justify-center">
-                      <X className="h-4 w-4 text-red-600" />
-                    </div>
-                  ) : (
-                    <div className="text-muted-foreground flex items-center gap-2">
-                      <Minus className="h-4 w-4" />
-                      <span className="text-sm">Submitted</span>
-                    </div>
-                  )}
+                  <div className="flex justify-center">
+                    {s.correct === true ? (
+                      <span
+                        role="status"
+                        aria-label="Correct"
+                        title="Correct"
+                        className="inline-flex h-3 w-3 rounded-full bg-emerald-500"
+                      />
+                    ) : s.correct === false ? (
+                      <span
+                        role="status"
+                        aria-label="Needs review"
+                        title="Needs review"
+                        className="inline-flex h-3 w-3 rounded-full bg-red-500"
+                      />
+                    ) : (
+                      <span
+                        role="status"
+                        aria-label="Submitted"
+                        title="Submitted"
+                        className="inline-flex h-3 w-3 rounded-full bg-amber-400"
+                      />
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell className="break-words whitespace-normal">
                   {s.feedback ? (

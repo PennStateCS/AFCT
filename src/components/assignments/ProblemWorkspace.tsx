@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { FileText, MessageSquare, Check, X, Minus } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
@@ -20,6 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Eye, Download, File } from 'lucide-react';
 import ProblemHeader from '@/components/ProblemHeader';
 import ProblemGradeForm from '@/components/ProblemGradeForm';
 import WorkspacePanel from '@/components/WorkspacePanel';
@@ -166,43 +168,35 @@ export function ProblemWorkspace({
   };
 
   const renderStatusCell = (submission: ProblemSubmission) => {
+    const getStatusBadge = (colorClass: string, label: string) => (
+      <Badge
+        variant="secondary"
+        className={`inline-flex rounded-full px-2 py-1 text-[11px] font-semibold ${colorClass}`}
+      >
+        {label}
+      </Badge>
+    );
+
     if (submission.status) {
       const status = submission.status;
-      const statusClass =
-        status === 'GRADED'
-          ? 'bg-green-100 text-green-800'
-          : status === 'LATE'
-          ? 'bg-red-100 text-red-800'
-          : 'bg-yellow-100 text-yellow-800';
-      return (
-        <span className={`rounded-full px-2 py-1 text-sm font-medium ${statusClass}`}>
-          {status}
-        </span>
-      );
+      if (status === 'GRADED') {
+        return getStatusBadge('bg-emerald-100 text-emerald-900', 'Graded');
+      }
+      if (status === 'LATE') {
+        return getStatusBadge('bg-red-100 text-red-900', 'Late');
+      }
+      return getStatusBadge('bg-amber-100 text-amber-900', status);
     }
 
     if (submission.correct === true) {
-      return (
-        <div className="flex justify-center">
-          <Check className="h-4 w-4 text-green-600" />
-        </div>
-      );
+      return getStatusBadge('bg-emerald-100 text-emerald-900', 'Correct');
     }
 
     if (submission.correct === false) {
-      return (
-        <div className="flex justify-center">
-          <X className="h-4 w-4 text-red-600" />
-        </div>
-      );
+      return getStatusBadge('bg-red-100 text-red-900', 'Needs review');
     }
 
-    return (
-      <div className="text-muted-foreground flex items-center gap-2">
-        <Minus className="h-4 w-4" />
-        <span className="text-sm">Submitted</span>
-      </div>
-    );
+    return getStatusBadge('bg-amber-100 text-amber-900', 'Submitted');
   };
 
   return (
@@ -249,15 +243,16 @@ export function ProblemWorkspace({
                       <TableHead className="px-2 py-1">Submitted</TableHead>
                       <TableHead className="px-2 py-1">Status</TableHead>
                       <TableHead className="px-2 py-1">Grade</TableHead>
-                      <TableHead className="px-2 py-1">Feedback</TableHead>
-                      <TableHead className="px-2 py-1">Download</TableHead>
-                      <TableHead className="px-2 py-1">Action</TableHead>
+                      <TableHead className="px-2 py-1">Report</TableHead>
+                      <TableHead className="px-2 py-1">View</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {sortedSubmissions.map((submission) => {
                       const submittedAt = new Date(submission.submittedAt);
-                      const isLate = hasValidDueDate && submittedAt.getTime() > dueDate!.getTime();
+                      const isLate =
+                        submission.status === 'LATE' ||
+                        (hasValidDueDate && submittedAt.getTime() > dueDate!.getTime());
                       return (
                         <TableRow key={submission.id} className="hover:bg-transparent">
                           <TableCell className="p-1 align-top">
@@ -269,7 +264,7 @@ export function ProblemWorkspace({
                               {isLate ? (
                                 <Badge
                                   variant="secondary"
-                                  className="mt-1 w-fit bg-amber-100 text-amber-800 shadow-sm"
+                                  className="mt-1 inline-flex items-center rounded-full bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-900 shadow-sm"
                                 >
                                   Late
                                 </Badge>
@@ -278,61 +273,52 @@ export function ProblemWorkspace({
                           </TableCell>
                           <TableCell className="p-1 align-top">{renderStatusCell(submission)}</TableCell>
                           <TableCell className="p-1 align-top">
-                            {typeof submission.grade === 'number' ? (
-                              <span className="font-medium">{submission.grade}</span>
-                            ) : (
-                              <span className="text-muted-foreground">Not graded</span>
-                            )}
+                            <span className="font-medium">
+                              {(submission.grade ? submission.grade : '-') + '/' + problem.maxPoints}
+                            </span>
                           </TableCell>
                           <TableCell className="p-1 align-top text-sm">
                             {submission.feedback ? (
-                              <button
-                                type="button"
+                              <Button
+                                variant="secondary"
+                                size="sm"
                                 onClick={() => {
                                   setActiveFeedback(String(submission.feedback));
                                   setFeedbackDialogOpen(true);
                                 }}
-                                className="rounded-md bg-slate-100 px-2 py-1 text-sm font-medium text-slate-900 transition hover:bg-slate-200"
+                                title="View feedback"
+                                aria-label="View submission feedback"
+                                className="h-8 w-8 p-0"
                               >
-                                View feedback
-                              </button>
+                                <File className="h-4 w-4" />
+                              </Button>
                             ) : (
                               <span className="text-muted-foreground text-sm">No feedback</span>
                             )}
                           </TableCell>
                           <TableCell className="p-1 align-top">
-                            {submission.fileName ? (
-                              <button
-                                type="button"
-                                onClick={() => handleDownload(submission)}
-                                className="rounded-md bg-slate-100 px-2 py-1 text-sm font-medium text-slate-900 transition hover:bg-slate-200"
-                                title="Download file"
-                              >
-                                {submission.originalFileName || 'Download'}
-                              </button>
-                            ) : (
-                              <span className="text-muted-foreground text-sm">No file</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="p-1 align-top">
-                            <div className="flex flex-col gap-1 whitespace-nowrap text-sm">
-                              <button
-                                type="button"
+                            <div className="flex items-center gap-2 whitespace-nowrap">
+                              <Button
+                                variant="secondary"
+                                size="sm"
                                 onClick={() => onViewSubmission(submission)}
-                                className="text-blue-600 hover:underline"
+                                title="View submission"
+                                aria-label="View submission"
+                                className="h-8 w-8 p-0"
                               >
-                                View
-                              </button>
-                              {isPrivledgedUser && onRerunSubmission && submission.fileName ? (
-                                <button
-                                  type="button"
-                                  disabled={Boolean(rerunning?.[submission.id])}
-                                  onClick={() => onRerunSubmission(submission)}
-                                  className="text-slate-500 hover:text-slate-700"
-                                >
-                                  {rerunning?.[submission.id] ? 'Rerunning…' : 'Rerun'}
-                                </button>
-                              ) : null}
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                disabled={!submission.fileName}
+                                onClick={() => handleDownload(submission)}
+                                title="Download submission"
+                                aria-label="Download submission"
+                                className="h-8 w-8 p-0"
+                              >
+                                <Download className="h-4 w-4" />
+                              </Button>
                             </div>
                           </TableCell>
                         </TableRow>
