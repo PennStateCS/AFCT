@@ -216,28 +216,30 @@ export default function StudentAssignmentPage({
       const subs = submissions[problemId] ?? [];
       if (!subs.length) {
         return (
-          <Badge className="border-transparent bg-slate-100 text-[10px] font-medium text-slate-700">
-            No submissions
-          </Badge>
+          <span
+            title="No submissions"
+            className="inline-flex h-3 w-3 rounded-full bg-red-500"
+          />
         );
       }
 
       const latest = subs[0];
-      const label = latest?.correct
+      const badgeClass = latest?.correct
+        ? 'bg-emerald-500'
+        : latest?.correct === false
+          ? 'bg-amber-400'
+          : 'bg-glue-400';
+      const title = latest?.correct
         ? 'Correct'
         : latest?.correct === false
           ? 'Needs review'
           : 'Submitted';
-      const badgeClass = latest?.correct
-        ? 'bg-emerald-100 text-emerald-800'
-        : latest?.correct === false
-          ? 'bg-amber-100 text-amber-800'
-          : 'bg-blue-100 text-blue-800';
 
       return (
-        <Badge className={`border-transparent text-[10px] font-semibold ${badgeClass}`}>
-          {label}
-        </Badge>
+        <span
+          title={title}
+          className={`inline-flex h-3 w-3 rounded-full ${badgeClass}`}
+        />
       );
     },
     [submissions],
