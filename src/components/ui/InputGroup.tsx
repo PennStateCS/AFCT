@@ -24,6 +24,7 @@ interface InputGroupProps extends Omit<
 > {
   label: string;
   name: string;
+  labelClassName: string;
   fieldProps?: RHFFieldProps;
   error?: string;
   description?: string;
