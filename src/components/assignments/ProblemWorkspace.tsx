@@ -244,7 +244,7 @@ export function ProblemWorkspace({
                       <TableHead className="px-2 py-1">Submitted</TableHead>
                       <TableHead className="px-2 py-1">Status</TableHead>
                       <TableHead className="px-2 py-1">Grade</TableHead>
-                      <TableHead className="px-2 py-1">Report</TableHead>
+                      <TableHead className="px-2 py-1">Feedback</TableHead>
                       <TableHead className="px-2 py-1">View</TableHead>
                     </TableRow>
                   </TableHeader>
