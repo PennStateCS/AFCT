@@ -336,7 +336,7 @@ export function ProblemWorkspace({
           </WorkspacePanel>
 
           <Dialog open={feedbackDialogOpen} onOpenChange={setFeedbackDialogOpen}>
-            <DialogContent className="bg-card max-w-2xl p-0">
+            <DialogContent className="bg-card max-w-xl p-0">
               <DialogHeader className="px-6 pt-6">
                 <DialogTitle>Feedback</DialogTitle>
                 <DialogDescription className="text-sm text-muted-foreground">
