@@ -6,17 +6,15 @@ import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { showToast } from '@/lib/toast';
-import { ArrowLeft, Clock, BookOpen, Target, FileText, Trophy, MessageSquare, Send, Eye, Download } from 'lucide-react';
-import { Badge as RoleBadge } from '@/components/ui/RoleBadge';
+import { ArrowLeft } from 'lucide-react';
 import JffViewerDialog from '@/components/JffViewerDialog';
 import { ProblemListCard } from '@/components/assignments/ProblemListCard';
 import { ProblemWorkspace } from '@/components/assignments/ProblemWorkspace';
 import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
 import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { formatDateInTimeZone, formatTimeInTimeZone, formatDateTimeInTimeZone } from '@/lib/date';
+import { formatDateTimeInTimeZone } from '@/lib/date';
 import {
   AssignmentWithDetails,
   StudentAssignmentContext,
@@ -208,42 +206,12 @@ export default function StudentAssignmentPage({
       title: assignmentProblem.problem.title
         ? limitText(assignmentProblem.problem.title, 25)
         : `Problem ${index + 1}`,
+      grade: submissions[assignmentProblem.problem.id]?.[0]?.grade ?? null,
+      maxGrade: assignmentProblem.maxPoints ?? null,
+      submissionsCount: submissions[assignmentProblem.problem.id]?.length ?? 0,
+      maxSubmissions: assignmentProblem.maxSubmissions ?? null,
     }));
-  }, [assignment]);
-
-  const getProblemBadgeContent = useCallback(
-    (problemId: string) => {
-      const subs = submissions[problemId] ?? [];
-      if (!subs.length) {
-        return (
-          <span
-            title="No submissions"
-            className="inline-flex h-3 w-3 rounded-full bg-red-500"
-          />
-        );
-      }
-
-      const latest = subs[0];
-      const badgeClass = latest?.correct
-        ? 'bg-emerald-500'
-        : latest?.correct === false
-          ? 'bg-amber-400'
-          : 'bg-glue-400';
-      const title = latest?.correct
-        ? 'Correct'
-        : latest?.correct === false
-          ? 'Needs review'
-          : 'Submitted';
-
-      return (
-        <span
-          title={title}
-          className={`inline-flex h-3 w-3 rounded-full ${badgeClass}`}
-        />
-      );
-    },
-    [submissions],
-  );
+  }, [assignment, submissions]);
 
   if (loading) {
     return <div className="p-6">Loading assignment...</div>;
@@ -273,27 +241,22 @@ export default function StudentAssignmentPage({
     );
   }
 
-  const dueDate = new Date(assignment.dueDate);
   const allowLateSubmissions = assignment.allowLateSubmissions ?? false;
   const lateCutoffDate = assignment.lateCutoff ? new Date(assignment.lateCutoff) : null;
-  const isOverdue = dueDate < new Date();
   const courseIsArchived = assignment.course?.isArchived ?? false;
   const selectedProblem = selectedProblemId
     ? assignment.problems.find((ap) => ap.problem.id === selectedProblemId) || null
     : null;
-  const selectedProblemIndex = selectedProblem
-    ? assignment.problems.findIndex((ap) => ap.problem.id === selectedProblem.problem.id) + 1
-    : null;
   const selectedProblemSubmissions = selectedProblemId ? submissions[selectedProblemId] || [] : [];
   const selectedProblemComments = selectedProblemId ? comments[selectedProblemId] || [] : [];
-
-  const statusInfo = (() => {
-    if (assignment.isPublished) {
-      if (dueDate <= new Date()) return { label: 'Past Due', badgeClass: 'border-red-200 bg-red-50 text-red-700' };
-      return { label: 'Published', badgeClass: 'border-green-200 bg-green-50 text-green-700' };
-    }
-    return { label: 'Not Published', badgeClass: 'border-yellow-200 bg-yellow-50 text-yellow-700' };
-  })();
+  const selectedProblemDetails = selectedProblem
+    ? {
+        ...selectedProblem.problem,
+        maxPoints: selectedProblem.maxPoints ?? selectedProblem.problem.maxPoints,
+        maxSubmissions: selectedProblem.maxSubmissions ?? selectedProblem.problem.maxSubmissions,
+        autograderEnabled: selectedProblem.autograderEnabled ?? selectedProblem.problem.autograderEnabled,
+      }
+    : null;
 
   return (
     <div className="space-y-6 p-6">
@@ -377,14 +340,13 @@ export default function StudentAssignmentPage({
                 problems={problemListItems}
                 selectedProblemId={selectedProblemId}
                 onSelect={(problemId) => setSelectedProblemId(problemId)}
-                getBadgeContent={getProblemBadgeContent}
                 className="h-full"
                 scrollAreaClassName="max-h-[520px]"
                 description="Select a problem to review submissions and discussion."
               />
 
               <ProblemWorkspace
-                problem={selectedProblem ? selectedProblem.problem : null}
+                problem={selectedProblemDetails}
                 submissions={selectedProblemSubmissions}
                 assignmentDueDate={assignment.dueDate}
                 comments={selectedProblemComments}

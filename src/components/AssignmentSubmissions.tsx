@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { FileText, MessageSquare, Check, X, Minus } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -309,83 +309,15 @@ export default function AssignmentSubmissions({
     () =>
       visibleProblems.map((problem, index) => ({
         id: problem.id,
-        title: problem.title ? `${index + 1}. ${limitText(problem.title)}` : `${index + 1}.`,
+        title: problem.title
+          ? limitText(problem.title, 25)
+          : `Problem ${index + 1}`,
+        grade: problemGrades[problem.id] ?? null,
+        maxGrade: problem.maxPoints ?? null,
+        submissionsCount: extractSubs(submissions[problem.id]).length,
+        maxSubmissions: problem.maxSubmissions ?? null,
       })),
-    [visibleProblems, limitText],
-  );
-
-  const getProblemBadgeContent = useCallback(
-    (problemId: string) => {
-      const grade = problemGrades[problemId];
-      const problem = visibleProblems.find((item) => item.id === problemId);
-      const maxPoints = typeof problem?.maxPoints === 'number' ? problem.maxPoints : null;
-      const subs = extractSubs(submissions[problemId]);
-      const usedCount = subs.length;
-      const maxSubmissions = problem?.maxSubmissions;
-      const hasFiniteSubmissionLimit =
-        typeof maxSubmissions === 'number' && Number.isFinite(maxSubmissions) && maxSubmissions > 0;
-      const usageLabel = hasFiniteSubmissionLimit ? `${usedCount}/${maxSubmissions}` : `${usedCount}/∞`;
-
-      let statusLabel = '';
-      let statusClass = 'bg-slate-100 text-slate-700';
-      if (usedCount > 0) {
-        const latest = [...subs].sort(
-          (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
-        )[0];
-        statusLabel = latest?.correct === true ? 'Correct' : latest?.correct === false ? 'Needs review' : 'Submitted';
-        if (latest?.correct === true) statusClass = 'bg-emerald-100 text-emerald-800';
-        else if (latest?.correct === false) statusClass = 'bg-amber-100 text-amber-800';
-        else statusClass = 'bg-blue-100 text-blue-800';
-      }
-
-      const badges = [] as React.ReactNode[];
-      if (maxPoints !== null) {
-        const display = grade !== null && grade !== undefined ? String(grade) : '-';
-        badges.push(
-          <Badge
-            key="grade"
-            variant="secondary"
-            title="Grade Earned / Max Points"
-            className="border border-slate-300 bg-white text-[11px] font-medium text-slate-700"
-          >
-            {display}/{maxPoints}
-          </Badge>,
-        );
-      }
-
-      if (usedCount > 0 || maxSubmissions !== undefined && maxSubmissions !== null) {
-        badges.push(
-          <Badge
-            key="usage"
-            variant="secondary"
-            title="Submissions Used / Submissions Allowed"
-            className="border border-slate-300 bg-white text-[11px] font-medium text-slate-700"
-          >
-            {usageLabel}
-          </Badge>,
-        );
-      }
-
-      if (statusLabel) {
-        badges.push(
-          <Badge
-            key="status"
-            variant="secondary"
-            title="Latest submission status"
-            className={`border-transparent text-[10px] font-semibold ${statusClass}`}
-          >
-            {statusLabel}
-          </Badge>,
-        );
-      }
-
-      if (badges.length === 0) {
-        return null;
-      }
-
-      return <div className="flex items-center gap-1">{badges}</div>;
-    },
-    [problemGrades, submissions, visibleProblems],
+    [visibleProblems, limitText, problemGrades, submissions],
   );
 
   // Initialize selected problem from the URL, but only from the set of
@@ -989,7 +921,6 @@ export default function AssignmentSubmissions({
                       problems={problemListItems}
                       selectedProblemId={selectedProblem?.id ?? null}
                       onSelect={handleSelectProblem}
-                      getBadgeContent={getProblemBadgeContent}
                       title="Problems"
                       description="Select a problem to review submissions and discussion."
                       className="h-full"
