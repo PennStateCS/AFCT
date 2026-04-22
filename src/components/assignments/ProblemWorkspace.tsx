@@ -169,35 +169,24 @@ export function ProblemWorkspace({
   };
 
   const renderStatusCell = (submission: ProblemSubmission) => {
-    const getStatusBadge = (colorClass: string, label: string) => (
-      <Badge
-        variant="secondary"
-        className={`inline-flex rounded-full px-2 py-1 text-[11px] font-semibold ${colorClass}`}
-      >
-        {label}
-      </Badge>
+    const submittedAt = new Date(submission.submittedAt);
+    const isLate =
+      submission.status === 'LATE' ||
+      (hasValidDueDate && submittedAt.getTime() > dueDate!.getTime());
+
+    return (
+      <span className="inline-flex items-center gap-2">
+        <span
+          className={`inline-flex h-3.5 w-3.5 rounded-full ${
+            isLate ? 'bg-red-500' : 'bg-emerald-500'
+          }`}
+          aria-label={isLate ? 'Late' : 'On time'}
+          role="status"
+          title={isLate ? 'Late submission' : 'On time'}
+        />
+        <span className="sr-only">{isLate ? 'Late' : 'On time'}</span>
+      </span>
     );
-
-    if (submission.status) {
-      const status = submission.status;
-      if (status === 'GRADED') {
-        return getStatusBadge('bg-emerald-100 text-emerald-900', 'Graded');
-      }
-      if (status === 'LATE') {
-        return getStatusBadge('bg-red-100 text-red-900', 'Late');
-      }
-      return getStatusBadge('bg-amber-100 text-amber-900', status);
-    }
-
-    if (submission.correct === true) {
-      return getStatusBadge('bg-emerald-100 text-emerald-900', 'Correct');
-    }
-
-    if (submission.correct === false) {
-      return getStatusBadge('bg-red-100 text-red-900', 'Needs review');
-    }
-
-    return getStatusBadge('bg-amber-100 text-amber-900', 'Submitted');
   };
 
   return (
