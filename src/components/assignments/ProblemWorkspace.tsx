@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog';
 import {
@@ -335,19 +336,23 @@ export function ProblemWorkspace({
           </WorkspacePanel>
 
           <Dialog open={feedbackDialogOpen} onOpenChange={setFeedbackDialogOpen}>
-            <DialogContent>
-              <DialogHeader>
+            <DialogContent className="bg-card max-w-2xl p-0">
+              <DialogHeader className="px-6 pt-6">
                 <DialogTitle>Feedback</DialogTitle>
-                <DialogDescription className="text-sm">
+                <DialogDescription className="text-sm text-muted-foreground">
                   Review the submission feedback below.
                 </DialogDescription>
               </DialogHeader>
-              <div className="max-h-[60vh] overflow-auto text-base leading-relaxed text-slate-900">
+              <div className="max-h-[60vh] overflow-auto px-6 py-5 text-base leading-relaxed text-slate-900">
                 {activeFeedback ? activeFeedback : 'No feedback available.'}
               </div>
-              <DialogClose className="mt-4 inline-flex rounded-md bg-slate-100 px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-200">
-                Close
-              </DialogClose>
+              <DialogFooter className="px-6 pb-6 pt-2">
+                <DialogClose asChild>
+                  <Button variant="secondary" type="button" className="h-10 rounded-md px-4 py-2 text-sm font-medium">
+                    Close
+                  </Button>
+                </DialogClose>
+              </DialogFooter>
             </DialogContent>
           </Dialog>
 
