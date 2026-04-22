@@ -1,11 +1,17 @@
 import { ReactNode } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 export type ProblemListItem = {
   id: string;
   title: string;
+  grade?: number | null;
+  maxGrade?: number | null;
+  submissionsCount?: number;
+  maxSubmissions?: number | null;
 };
+
 
 export type ProblemListCardProps = {
   problems: ProblemListItem[];
@@ -17,6 +23,7 @@ export type ProblemListCardProps = {
   className?: string;
   scrollAreaClassName?: string;
 };
+
 
 export function ProblemListCard({
   problems,
@@ -40,6 +47,38 @@ export function ProblemListCard({
             {problems.map((problem) => {
               const isActive = selectedProblemId === problem.id;
               const badgeContent = getBadgeContent ? getBadgeContent(problem.id) : null;
+              const gradeBadge =
+                problem.maxGrade !== undefined && problem.maxGrade !== null ? (
+                  <Badge
+                    key="grade"
+                    variant="secondary"
+                    title="Grade Earned / Max Points"
+                    className="border border-slate-300 bg-white text-[11px] font-medium text-slate-700"
+                  >
+                    {(problem.grade !== null && problem.grade !== undefined ? problem.grade : '-')}/{problem.maxGrade}
+                  </Badge>
+                ) : null;
+              const submissionsCount = problem.submissionsCount ?? 0;
+              const hasMaxSubmissions = problem.maxSubmissions !== undefined && problem.maxSubmissions !== null;
+              const submissionLabel = hasMaxSubmissions
+                ? problem.maxSubmissions === -1
+                  ? `${submissionsCount}/∞`
+                  : `${submissionsCount}/${problem.maxSubmissions}`
+                : `${submissionsCount}/∞`;
+              const usageBadge = hasMaxSubmissions || submissionsCount > 0 ? (
+                <Badge
+                  key="usage"
+                  variant="secondary"
+                  title="Submissions Used / Submissions Allowed"
+                  className="border border-slate-300 bg-white text-[11px] font-medium text-slate-700"
+                >
+                  {submissionLabel}
+                </Badge>
+              ) : null;
+
+              const content = badgeContent ?? (
+                <div className="flex items-center gap-1">{gradeBadge}{usageBadge}</div>
+              );
 
               return (
                 <li key={problem.id}>
@@ -51,7 +90,7 @@ export function ProblemListCard({
                     }`}
                   >
                     <span className="truncate">{problem.title}</span>
-                    {badgeContent ? <div className="shrink-0">{badgeContent}</div> : null}
+                    {content}
                   </button>
                 </li>
               );
