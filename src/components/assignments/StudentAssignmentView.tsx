@@ -243,6 +243,18 @@ export default function StudentAssignmentPage({
 
   const allowLateSubmissions = assignment.allowLateSubmissions ?? false;
   const lateCutoffDate = assignment.lateCutoff ? new Date(assignment.lateCutoff) : null;
+  const dueDisplay = formatDateTimeInTimeZone(assignment.dueDate, timezone);
+  const lateCutoffDisplay = allowLateSubmissions
+    ? lateCutoffDate
+      ? formatDateTimeInTimeZone(lateCutoffDate, timezone)
+      : 'Never'
+    : 'Not allowed';
+  const latePolicyDisplay = !allowLateSubmissions
+    ? 'Not accepted'
+    : lateCutoffDate
+      ? `Accepted until ${lateCutoffDisplay}`
+      : 'Accepted anytime';
+  const gradeDisplay = assignmentGrade !== null ? `${assignmentGrade}` : '-';
   const courseIsArchived = assignment.course?.isArchived ?? false;
   const selectedProblem = selectedProblemId
     ? assignment.problems.find((ap) => ap.problem.id === selectedProblemId) || null
@@ -300,38 +312,40 @@ export default function StudentAssignmentPage({
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-lg font-semibold">{assignment.title}</CardTitle>
-            <div className="text-muted-foreground flex flex-wrap items-start gap-1 text-sm">
-              <div className="flex flex-wrap items-start gap-y-1 gap-x-6">
-                <span>
-                  <span className="font-semibold">Due:</span>{' '}
-                  {formatDateTimeInTimeZone(assignment.dueDate, timezone)}
-                </span>
-                <span>
-                  <span className="font-semibold">Max Points:</span>{' '}
-                  {assignment.maxPoints}
-                </span>
-                <span>
-                  <span className="font-semibold">Problems:</span>{' '}
-                  {assignment.problems.length}
-                </span>
-                <span className="w-full" />
-                <span>
-                  <span className="font-semibold">Allow Late:</span>{' '}
-                  {allowLateSubmissions ? 'Yes' : 'No'}
-                </span>
-                <span>
-                  <span className="font-semibold">Late Cutoff:</span>{' '}
-                  {allowLateSubmissions
-                    ? lateCutoffDate
-                      ? formatDateTimeInTimeZone(lateCutoffDate, timezone)
-                      : 'Never'
-                    : 'N/A'}
-                </span>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch lg:justify-between">
+              <div className="flex flex-1 flex-wrap gap-2">
+                <div className="inline-flex min-h-10 items-center rounded-full border bg-muted/20 px-3 py-2 text-sm leading-none">
+                  <span className="text-muted-foreground mr-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em]">
+                    Due
+                  </span>
+                  <span className="font-semibold leading-none">{dueDisplay}</span>
+                </div>
+                <div className="inline-flex min-h-10 items-center rounded-full border bg-muted/20 px-3 py-2 text-sm leading-none">
+                  <span className="text-muted-foreground mr-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em]">
+                    Points
+                  </span>
+                  <span className="font-semibold leading-none">{assignment.maxPoints}</span>
+                </div>
+                <div className="inline-flex min-h-10 items-center rounded-full border bg-muted/20 px-3 py-2 text-sm leading-none">
+                  <span className="text-muted-foreground mr-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em]">
+                    Problems
+                  </span>
+                  <span className="font-semibold leading-none">{assignment.problems.length}</span>
+                </div>
+                <div className="inline-flex min-h-10 items-center rounded-full border bg-muted/20 px-3 py-2 text-sm leading-none">
+                  <span className="text-muted-foreground mr-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em]">
+                    Late Policy
+                  </span>
+                  <span className="font-semibold leading-none">{latePolicyDisplay}</span>
+                </div>
               </div>
-              <span className="ml-auto self-start text-right text-xl">
-                <span className="font-semibold">Grade:</span>{' '}
-                {(assignmentGrade !== null ? `${assignmentGrade}` : `-`) + `/${assignment.maxPoints}`}
-              </span>
+              <div className="inline-flex min-h-10 items-center rounded-full border border-primary/20 bg-primary/5 px-4 py-2 text-right lg:self-start">
+                <span className="text-muted-foreground mr-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em]">
+                  Grade
+                </span>
+                <span className="text-xl font-semibold leading-none tracking-tight">{gradeDisplay}</span>
+                <span className="text-muted-foreground ml-1 text-sm font-medium leading-none">/{assignment.maxPoints}</span>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
