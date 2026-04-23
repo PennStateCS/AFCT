@@ -16,14 +16,24 @@ type ProblemHeaderProps = {
 const typeBadgeMap: Record<string, { label: string; className: string }> = {
   PDA: {
     label: 'Pushdown Automaton',
-    className: 'bg-purple-100 text-purple-800 border-purple-200',
+    className:
+      'bg-transparent text-purple-700 border-purple-300 dark:text-purple-300 dark:border-purple-300',
   },
-  RE: { label: 'Regular Expression', className: 'bg-blue-100 text-blue-800 border-blue-200' },
+  RE: {
+    label: 'Regular Expression',
+    className:
+      'bg-transparent text-blue-700 border-blue-300 dark:text-blue-300 dark:border-blue-300',
+  },
   CFG: {
     label: 'Context-Free Grammar',
-    className: 'bg-green-100 text-green-800 border-green-200',
+    className:
+      'bg-transparent text-emerald-700 border-emerald-300 dark:text-emerald-300 dark:border-emerald-300',
   },
-  FA: { label: 'Finite Automaton', className: 'bg-orange-100 text-orange-800 border-orange-200' },
+  FA: {
+    label: 'Finite Automaton',
+    className:
+      'bg-transparent text-orange-700 border-orange-300 dark:text-orange-300 dark:border-orange-300',
+  },
 };
 
 const getTypeBadge = (type?: string) => {
@@ -47,15 +57,18 @@ export default function ProblemHeader({
   const submissionsLabel =
     typeof maxSubmissions === 'number' ? (maxSubmissions < 0 ? 'Unlimited' : maxSubmissions) : null;
   const metaPillClass =
-    'inline-flex min-h-8 items-center rounded-full border bg-muted/20 px-3 py-1 text-xs font-medium leading-none';
+    'inline-flex min-h-8 items-center rounded-full border border-slate-200 bg-transparent px-3 py-1 text-xs font-medium leading-none dark:border-slate-200';
 
   return (
     <div className={className}>
       <div className="flex flex-wrap items-center gap-3">
         <CardTitle className="text-lg">{title}</CardTitle>
-        <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-700 dark:text-slate-200">
           {badge ? (
-            <Badge variant="outline" className={`rounded-full px-3 py-1 ${badge.className}`}>
+            <Badge
+              variant="outline"
+              className={`inline-flex min-h-8 items-center rounded-full px-3 py-1 ${badge.className}`}
+            >
               {badge.label}
             </Badge>
           ) : null}
