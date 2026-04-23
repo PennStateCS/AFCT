@@ -39,7 +39,10 @@ export function StudentAssignmentCard({ course }: StudentAssignmentCardProps) {
             </p>
             <div className="space-y-4">
               {publishedAssignments.map((assignment) => {
-                const isOverdue = new Date(assignment.dueDate) < new Date();
+                const dueDate = new Date(assignment.dueDate);
+                const isOverdue = dueDate < new Date();
+                const allowLateSubmissions = assignment.allowLateSubmissions ?? false;
+                const lateCutoffDate = assignment.lateCutoff ? new Date(assignment.lateCutoff) : null;
 
                 return (
                   <div
@@ -74,18 +77,32 @@ export function StudentAssignmentCard({ course }: StudentAssignmentCardProps) {
                           </span>
                           <span className={`text-sm font-medium ${isOverdue ? 'text-red-700' : 'text-green-700'}`}>
                             {isOverdue ? 'OVERDUE: ' : 'Due: '}
-                            {formatDateInTimeZone(assignment.dueDate, timezone)} at{' '}
-                            {formatTimeInTimeZone(assignment.dueDate, timezone)}
+                            {formatDateInTimeZone(dueDate, timezone)} at{' '}
+                            {formatTimeInTimeZone(dueDate, timezone)}
                           </span>
                         </div>
 
-                        <div className="flex items-center gap-4 text-sm">
+                        <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                           <div>
                             <span className="font-semibold">Problems:</span> {assignment.problemCount}
                           </div>
                           <div>
                             <span className="font-semibold">Points:</span> {assignment.maxPoints}
                           </div>
+                          <div>
+                            <span className="font-semibold">Allow Late:</span> {allowLateSubmissions ? 'Yes' : 'No'}
+                          </div>
+                          {allowLateSubmissions ? (
+                            <div>
+                              <span className="font-semibold">Late Cutoff:</span>{' '}
+                              {lateCutoffDate
+                                ? `${formatDateInTimeZone(lateCutoffDate, timezone)} at ${formatTimeInTimeZone(
+                                    lateCutoffDate,
+                                    timezone,
+                                  )}`
+                                : 'Never'}
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     </div>
