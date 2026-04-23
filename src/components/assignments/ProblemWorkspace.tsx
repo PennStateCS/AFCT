@@ -30,6 +30,23 @@ import ProblemDiscussionPanel from '@/components/ProblemDiscussionPanel';
 import type { Comment as DiscussionComment } from '@/components/DiscussionPanel';
 import type { StudentProblemComment } from '@/lib/assignment-details';
 
+type StatusTone = 'green' | 'amber' | 'red' | 'gray' | 'blue' | 'violet';
+
+type StatusChip = {
+  label: string;
+  tone: StatusTone;
+  title: string;
+};
+
+const statusToneClass: Record<StatusTone, string> = {
+  green: 'bg-emerald-500',
+  amber: 'bg-amber-500',
+  red: 'bg-rose-500',
+  gray: 'bg-slate-400',
+  blue: 'bg-sky-500',
+  violet: 'bg-violet-500',
+};
+
 type Problem = {
   id: string;
   title: string;
@@ -109,6 +126,67 @@ const normalizeComments = (comments: ProblemWorkspaceComment[]): DiscussionComme
     };
   });
 
+const getTimingStatusChip = (
+  submission: ProblemSubmission,
+  hasValidDueDate: boolean,
+  dueDate: Date | null,
+): StatusChip => {
+  const submittedAt = new Date(submission.submittedAt);
+  const isLate =
+    submission.status === 'LATE' ||
+    (hasValidDueDate && !!dueDate && submittedAt.getTime() > dueDate.getTime());
+
+  if (isLate) {
+    return {
+      label: 'Late',
+      tone: 'amber',
+      title: 'Submitted after due date',
+    };
+  }
+
+  return {
+    label: 'On time',
+    tone: 'green',
+    title: 'Submitted before due date',
+  };
+};
+
+const getReviewStatusChip = (submission: ProblemSubmission): StatusChip => {
+  const hasGrade = submission.grade !== null && submission.grade !== undefined;
+  if (hasGrade) {
+    return {
+      label: 'Graded',
+      tone: 'blue',
+      title: 'Submission has been graded',
+    };
+  }
+
+  return {
+    label: 'Pending',
+    tone: 'violet',
+    title: 'Submission is waiting to be graded',
+  };
+};
+
+const getNoSubmissionChip = (hasValidDueDate: boolean, dueDate: Date | null): StatusChip => {
+  const now = Date.now();
+  const pastDue = hasValidDueDate && !!dueDate && now > dueDate.getTime();
+
+  if (pastDue) {
+    return {
+      label: 'Missing submission',
+      tone: 'red',
+      title: 'No submission found and due date has passed',
+    };
+  }
+
+  return {
+    label: 'Not submitted',
+    tone: 'gray',
+    title: 'No submission yet and due date has not passed',
+  };
+};
+
 export function ProblemWorkspace({
   problem,
   submissions,
@@ -169,23 +247,25 @@ export function ProblemWorkspace({
   };
 
   const renderStatusCell = (submission: ProblemSubmission) => {
-    const submittedAt = new Date(submission.submittedAt);
-    const isLate =
-      submission.status === 'LATE' ||
-      (hasValidDueDate && submittedAt.getTime() > dueDate!.getTime());
+    const timingStatus = getTimingStatusChip(submission, hasValidDueDate, dueDate);
+    const reviewStatus = getReviewStatusChip(submission);
 
     return (
-      <span className="inline-flex items-center gap-2">
-        <span
-          className={`inline-flex h-3.5 w-3.5 rounded-full ${
-            isLate ? 'bg-red-500' : 'bg-emerald-500'
-          }`}
-          aria-label={isLate ? 'Late' : 'On time'}
-          role="status"
-          title={isLate ? 'Late submission' : 'On time'}
-        />
-        <span className="sr-only">{isLate ? 'Late' : 'On time'}</span>
-      </span>
+      <div className="flex flex-col gap-1">
+        {[timingStatus, reviewStatus].map((chip) => (
+          <span
+            key={chip.label}
+            className="inline-flex items-center gap-2 text-xs font-medium"
+            title={chip.title}
+          >
+            <span
+              className={`inline-flex h-2.5 w-2.5 rounded-full ${statusToneClass[chip.tone]}`}
+              aria-hidden="true"
+            />
+            <span>{chip.label}</span>
+          </span>
+        ))}
+      </div>
     );
   };
 
@@ -226,7 +306,26 @@ export function ProblemWorkspace({
                 <p className="text-muted-foreground text-sm">Loading submissions...</p>
               </div>
             ) : sortedSubmissions.length > 0 ? (
-              <div className="overflow-x-auto rounded-md border">
+              <div className="space-y-2">
+                <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[11px] font-medium">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" aria-hidden="true" />
+                    On time
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-flex h-2.5 w-2.5 rounded-full bg-amber-500" aria-hidden="true" />
+                    Late
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-flex h-2.5 w-2.5 rounded-full bg-sky-500" aria-hidden="true" />
+                    Graded
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-flex h-2.5 w-2.5 rounded-full bg-violet-500" aria-hidden="true" />
+                    Pending
+                  </span>
+                </div>
+                <div className="overflow-x-auto rounded-md border">
                 <Table className="text-sm">
                   <TableHeader>
                     <TableRow>
@@ -316,10 +415,27 @@ export function ProblemWorkspace({
                     })}
                   </TableBody>
                 </Table>
+                </div>
               </div>
             ) : (
-              <div className="text-muted-foreground rounded-md border border-dashed p-4 text-center text-sm">
-                No submissions yet.
+              <div className="text-muted-foreground space-y-2 rounded-md border border-dashed p-4 text-center text-sm">
+                <div className="inline-flex items-center gap-2">
+                  {(() => {
+                    const noSubmissionStatus = getNoSubmissionChip(hasValidDueDate, dueDate);
+                    return (
+                      <>
+                        <span
+                          className={`inline-flex h-2.5 w-2.5 rounded-full ${statusToneClass[noSubmissionStatus.tone]}`}
+                          aria-hidden="true"
+                        />
+                        <span className="font-medium" title={noSubmissionStatus.title}>
+                          {noSubmissionStatus.label}
+                        </span>
+                      </>
+                    );
+                  })()}
+                </div>
+                <p>No submissions yet.</p>
               </div>
             )}
           </WorkspacePanel>

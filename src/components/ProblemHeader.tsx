@@ -46,26 +46,30 @@ export default function ProblemHeader({
   const badge = getTypeBadge(type);
   const submissionsLabel =
     typeof maxSubmissions === 'number' ? (maxSubmissions < 0 ? 'Unlimited' : maxSubmissions) : null;
+  const metaPillClass =
+    'inline-flex min-h-8 items-center rounded-full border bg-muted/20 px-3 py-1 text-xs font-medium leading-none';
 
   return (
     <div className={className}>
       <div className="flex flex-wrap items-center gap-3">
         <CardTitle className="text-lg">{title}</CardTitle>
-        <div className="text-muted-foreground flex flex-wrap items-center gap-4 text-xs">
+        <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
           {badge ? (
-            <Badge variant="outline" className={badge.className}>
+            <Badge variant="outline" className={`rounded-full px-3 py-1 ${badge.className}`}>
               {badge.label}
             </Badge>
           ) : null}
           {typeof maxStates === 'number' ? (
-            <span>Max States: {maxStates === -1 ? 'Unlimited' : maxStates}</span>
+            <span className={metaPillClass}>Max States: {maxStates === -1 ? 'Unlimited' : maxStates}</span>
           ) : null}
           {typeof isDeterministic === 'boolean' ? (
-            <span>{isDeterministic ? 'Deterministic' : 'Nondeterministic'}</span>
+            <span className={metaPillClass}>{isDeterministic ? 'Deterministic' : 'Nondeterministic'}</span>
           ) : null}
-          {submissionsLabel !== null ? <span>Max Submissions: {submissionsLabel}</span> : null}
+          {submissionsLabel !== null ? (
+            <span className={metaPillClass}>Max Submissions: {submissionsLabel}</span>
+          ) : null}
           {typeof autograderEnabled === 'boolean' ? (
-            <span>Autograder: {autograderEnabled ? 'On' : 'Off'}</span>
+            <span className={metaPillClass}>Autograder: {autograderEnabled ? 'On' : 'Off'}</span>
           ) : null}
         </div>
       </div>
