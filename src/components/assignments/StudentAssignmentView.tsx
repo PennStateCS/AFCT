@@ -2,30 +2,19 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { showToast } from '@/lib/toast';
-import { ArrowLeft, Clock, BookOpen, Target, FileText, Trophy, MessageSquare, Send, Eye, Download } from 'lucide-react';
-import { Badge as RoleBadge } from '@/components/ui/RoleBadge';
+import { ArrowLeft } from 'lucide-react';
 import JffViewerDialog from '@/components/JffViewerDialog';
 import { ProblemListCard } from '@/components/assignments/ProblemListCard';
-import WorkspacePanel from '@/components/WorkspacePanel';
-import ProblemHeader from '@/components/ProblemHeader';
+import { ProblemWorkspace } from '@/components/assignments/ProblemWorkspace';
 import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
 import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { formatDateInTimeZone, formatTimeInTimeZone, formatDateTimeInTimeZone } from '@/lib/date';
+import { formatDateTimeInTimeZone } from '@/lib/date';
 import {
   AssignmentWithDetails,
   StudentAssignmentContext,
@@ -131,6 +120,26 @@ export default function StudentAssignmentPage({
     [loadStudentContext, newComment],
   );
 
+  const handleDeleteComment = useCallback(
+    async (commentId: string) => {
+      try {
+        const response = await fetch(`/api/comments?commentId=${encodeURIComponent(commentId)}`, {
+          method: 'DELETE',
+        });
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error?.error || 'Failed to delete comment');
+        }
+        await loadStudentContext();
+        showToast.success('Comment deleted successfully');
+      } catch (error) {
+        console.error('Error deleting comment:', error);
+        showToast.error('Failed to delete comment');
+      }
+    },
+    [loadStudentContext],
+  );
+
   useEffect(() => {
     const fetchAssignment = async () => {
       if (initialAssignment) {
@@ -195,42 +204,14 @@ export default function StudentAssignmentPage({
     return assignment.problems.map((assignmentProblem, index) => ({
       id: assignmentProblem.problem.id,
       title: assignmentProblem.problem.title
-        ? `Problem ${index + 1}: ${limitText(assignmentProblem.problem.title, 80)}`
+        ? limitText(assignmentProblem.problem.title, 25)
         : `Problem ${index + 1}`,
+      grade: submissions[assignmentProblem.problem.id]?.[0]?.grade ?? null,
+      maxGrade: assignmentProblem.maxPoints ?? null,
+      submissionsCount: submissions[assignmentProblem.problem.id]?.length ?? 0,
+      maxSubmissions: assignmentProblem.maxSubmissions ?? null,
     }));
-  }, [assignment]);
-
-  const getProblemBadgeContent = useCallback(
-    (problemId: string) => {
-      const subs = submissions[problemId] ?? [];
-      if (!subs.length) {
-        return (
-          <Badge className="border-transparent bg-slate-100 text-[10px] font-medium text-slate-700">
-            No submissions
-          </Badge>
-        );
-      }
-
-      const latest = subs[0];
-      const label = latest?.correct
-        ? 'Correct'
-        : latest?.correct === false
-          ? 'Needs review'
-          : 'Submitted';
-      const badgeClass = latest?.correct
-        ? 'bg-emerald-100 text-emerald-800'
-        : latest?.correct === false
-          ? 'bg-amber-100 text-amber-800'
-          : 'bg-blue-100 text-blue-800';
-
-      return (
-        <Badge className={`border-transparent text-[10px] font-semibold ${badgeClass}`}>
-          {label}
-        </Badge>
-      );
-    },
-    [submissions],
-  );
+  }, [assignment, submissions]);
 
   if (loading) {
     return <div className="p-6">Loading assignment...</div>;
@@ -260,26 +241,60 @@ export default function StudentAssignmentPage({
     );
   }
 
-  const dueDate = new Date(assignment.dueDate);
-  const isOverdue = dueDate < new Date();
+  const allowLateSubmissions = assignment.allowLateSubmissions ?? false;
+  const lateCutoffDate = assignment.lateCutoff ? new Date(assignment.lateCutoff) : null;
+  const dueDisplay = formatDateTimeInTimeZone(assignment.dueDate, timezone);
+  const lateCutoffDisplay = allowLateSubmissions
+    ? lateCutoffDate
+      ? formatDateTimeInTimeZone(lateCutoffDate, timezone)
+      : 'Never'
+    : 'Not allowed';
+  const latePolicyDisplay = !allowLateSubmissions
+    ? 'Not accepted'
+    : lateCutoffDate
+      ? `Accepted until ${lateCutoffDisplay}`
+      : 'Accepted anytime';
+  const gradeDisplay = assignmentGrade !== null ? `${assignmentGrade}` : '-';
   const courseIsArchived = assignment.course?.isArchived ?? false;
   const selectedProblem = selectedProblemId
     ? assignment.problems.find((ap) => ap.problem.id === selectedProblemId) || null
     : null;
-  const selectedProblemIndex = selectedProblem
-    ? assignment.problems.findIndex((ap) => ap.problem.id === selectedProblem.problem.id) + 1
-    : null;
   const selectedProblemSubmissions = selectedProblemId ? submissions[selectedProblemId] || [] : [];
   const selectedProblemComments = selectedProblemId ? comments[selectedProblemId] || [] : [];
+  const selectedProblemDetails = selectedProblem
+    ? {
+        ...selectedProblem.problem,
+        maxPoints: selectedProblem.maxPoints ?? selectedProblem.problem.maxPoints,
+        maxSubmissions: selectedProblem.maxSubmissions ?? selectedProblem.problem.maxSubmissions,
+        autograderEnabled: selectedProblem.autograderEnabled ?? selectedProblem.problem.autograderEnabled,
+      }
+    : null;
 
   return (
     <div className="space-y-6 p-6">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-2xl">
-          <BookOpen className="h-6 w-6" />
-          {assignment.title}
-        </CardTitle>
+          <CardTitle role="heading" aria-level={1} className="flex min-w-0 flex-wrap items-start gap-2 text-2xl break-words">
+            <span className="font-semibold">Assignment:</span>
+            <span className="min-w-0 line-clamp-2 break-words [overflow-wrap:anywhere]" title={assignment.title}>
+              {assignment.title}
+            </span>
+          </CardTitle>
+          <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm">
+            {assignment.course || assignment.courseName ? (
+              <Link
+                href={`/dashboard/courses/${assignment.course?.id || assignment.courseId}`}
+                className="max-w-full break-all text-blue-700 hover:underline"
+              >
+                {assignment.course?.name || assignment.courseName || assignment.courseId}
+                {assignment.course?.code
+                  ? ` (${assignment.course.code})`
+                  : assignment.courseCode
+                    ? ` (${assignment.courseCode})`
+                    : ''}
+              </Link>
+            ) : null}
+          </div>
         </CardHeader>
         <CardContent>
           {assignment.description && (
@@ -293,312 +308,86 @@ export default function StudentAssignmentPage({
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-5">
-        <Card
-          className={`${isOverdue ? 'border-r-4 border-l-4 border-r-red-600 border-l-red-600' : 'border-r-4 border-l-4 border-r-blue-600 border-l-blue-600'}`}
-        >
-          <CardContent className="pt-1 pb-1">
-            <div className="flex items-center gap-3">
-              <div
-                className={`rounded-full p-3 ${isOverdue ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}
-              >
-                <Clock className="h-8 w-8" />
-              </div>
-              <div className="flex-1">
-                <p className="text-muted-foreground mb-1 text-sm font-medium">Due Date</p>
-                <p
-                  className={`text-lg font-bold ${isOverdue ? 'text-red-600' : 'text-foreground'}`}
-                >
-                  {formatDateInTimeZone(dueDate, timezone)}
-                </p>
-                <p className="text-muted-foreground text-sm">
-                  {formatTimeInTimeZone(dueDate, timezone)}
-                </p>
-                {isOverdue && <p className="mt-1 text-xs font-medium text-red-600">Overdue</p>}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-r-4 border-l-4 border-r-green-600 border-l-green-600">
-          <CardContent className="pt-1 pb-1">
-            <div className="flex items-center gap-3">
-              <div className="rounded-full bg-green-100 p-3 text-green-600">
-                <Target className="h-8 w-8" />
-              </div>
-              <div className="flex-1">
-                <p className="text-muted-foreground mb-1 text-sm font-medium">Max Points</p>
-                <p className="text-foreground text-2xl font-bold">{assignment.maxPoints}</p>
-                <p className="text-muted-foreground text-sm">Total possible</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-r-4 border-l-4 border-r-purple-600 border-l-purple-600">
-          <CardContent className="pt-1 pb-1">
-            <div className="flex items-center gap-3">
-              <div className="rounded-full bg-purple-100 p-3 text-purple-600">
-                <BookOpen className="h-8 w-8" />
-              </div>
-              <div className="flex-1">
-                <p className="text-muted-foreground mb-1 text-sm font-medium">Problems</p>
-                <p className="text-foreground text-2xl font-bold">{assignment.problems.length}</p>
-                <p className="text-muted-foreground text-sm">
-                  {assignment.problems.length === 1 ? 'Problem' : 'Problems'} to solve
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-r-4 border-l-4 border-r-orange-600 border-l-orange-600">
-          <CardContent className="pt-1 pb-1">
-            <div className="flex items-center gap-3">
-              <div className="rounded-full bg-orange-100 p-3 text-orange-600">
-                <FileText className="h-8 w-8" />
-              </div>
-              <div className="flex-1">
-                <p className="text-muted-foreground mb-1 text-sm font-medium">Submissions</p>
-                <p className="text-foreground text-2xl font-bold">{submissionCount}</p>
-                <p className="text-muted-foreground text-sm">
-                  {submissionCount === 1 ? 'Submission' : 'Submissions'} made
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-r-4 border-l-4 border-r-yellow-600 border-l-yellow-600">
-          <CardContent className="pt-1 pb-1">
-            <div className="flex items-center gap-3">
-              <div className="rounded-full bg-yellow-100 p-3 text-yellow-600">
-                <Trophy className="h-8 w-8" />
-              </div>
-              <div className="flex-1">
-                <p className="text-muted-foreground mb-1 text-sm font-medium">Your Grade</p>
-                {assignmentGrade !== null ? (
-                  <>
-                    <p className="text-foreground text-2xl font-bold">
-                      {Math.round((assignmentGrade / assignment.maxPoints) * 100)}%
-                    </p>
-                    <p className="text-muted-foreground text-sm">{assignmentGrade} points earned</p>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-muted-foreground text-2xl font-bold">--</p>
-                    <p className="text-muted-foreground text-sm">Not graded yet</p>
-                  </>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       {assignment.problems.length > 0 ? (
         <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg font-semibold">{assignment.title}</CardTitle>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch lg:justify-between">
+              <div className="flex flex-1 flex-wrap gap-2">
+                <div className="inline-flex min-h-10 items-center rounded-full border border-slate-200 bg-transparent px-3 py-2 text-sm leading-none text-slate-700 dark:border-slate-200 dark:text-slate-200">
+                  <span className="mr-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em]">
+                    Due
+                  </span>
+                  <span className="font-semibold leading-none">{dueDisplay}</span>
+                </div>
+                <div className="inline-flex min-h-10 items-center rounded-full border border-slate-200 bg-transparent px-3 py-2 text-sm leading-none text-slate-700 dark:border-slate-200 dark:text-slate-200">
+                  <span className="mr-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em]">
+                    Points
+                  </span>
+                  <span className="font-semibold leading-none">{assignment.maxPoints}</span>
+                </div>
+                <div className="inline-flex min-h-10 items-center rounded-full border border-slate-200 bg-transparent px-3 py-2 text-sm leading-none text-slate-700 dark:border-slate-200 dark:text-slate-200">
+                  <span className="mr-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em]">
+                    Problems
+                  </span>
+                  <span className="font-semibold leading-none">{assignment.problems.length}</span>
+                </div>
+                <div className="inline-flex min-h-10 items-center rounded-full border border-slate-200 bg-transparent px-3 py-2 text-sm leading-none text-slate-700 dark:border-slate-200 dark:text-slate-200">
+                  <span className="mr-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em]">
+                    Late Policy
+                  </span>
+                  <span className="font-semibold leading-none">{latePolicyDisplay}</span>
+                </div>
+              </div>
+              <div className="inline-flex min-h-10 items-center rounded-full border border-slate-200 bg-transparent px-4 py-2 text-right lg:self-start text-slate-700 dark:border-slate-200 dark:text-slate-200">
+                <span className="mr-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em]">
+                  Grade
+                </span>
+                <span className="text-xl font-semibold leading-none tracking-tight">{gradeDisplay}</span>
+                <span className="ml-1 text-sm font-medium leading-none">/{assignment.maxPoints}</span>
+              </div>
+            </div>
+          </CardHeader>
           <CardContent>
             <div className="grid grid-cols-[minmax(240px,280px)_1fr] gap-4">
               <ProblemListCard
                 problems={problemListItems}
                 selectedProblemId={selectedProblemId}
                 onSelect={(problemId) => setSelectedProblemId(problemId)}
-                getBadgeContent={getProblemBadgeContent}
                 className="h-full"
                 scrollAreaClassName="max-h-[520px]"
                 description="Select a problem to review submissions and discussion."
               />
 
-              {selectedProblem ? (
-                <div className="flex flex-col gap-4">
-                  <ProblemHeader
-                    title={`Problem ${selectedProblemIndex}: ${selectedProblem.problem.title}`}
-                    description={selectedProblem.problem.description ?? undefined}
-                    type={selectedProblem.problem.type ?? undefined}
-                    maxStates={selectedProblem.problem.maxStates ?? undefined}
-                    isDeterministic={selectedProblem.problem.isDeterministic ?? undefined}
-                    maxSubmissions={selectedProblem.problem.maxSubmissions ?? undefined}
-                    autograderEnabled={selectedProblem.problem.autograderEnabled ?? undefined}
-                  />
-
-                  <div className="grid items-start gap-4 lg:grid-cols-[60%_40%]">
-                    <WorkspacePanel
-                      title={`Your Submissions (${selectedProblemSubmissions.length})`}
-                      icon={<FileText className="h-4 w-4" />}
-                      className="min-h-[320px]"
-                    >
-                      {submissionsLoading ? (
-                        <p className="text-muted-foreground text-sm">Loading submissions...</p>
-                      ) : selectedProblemSubmissions.length > 0 ? (
-                        <div className="overflow-x-auto rounded-lg border">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Submitted At</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Grade</TableHead>
-                                <TableHead>Feedback</TableHead>
-                                <TableHead>Download</TableHead>
-                                <TableHead>Submission</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {selectedProblemSubmissions.map((submission) => (
-                                <TableRow key={submission.id}>
-                                  <TableCell>
-                                    {formatDateTimeInTimeZone(submission.submittedAt, timezone)}
-                                  </TableCell>
-                                  <TableCell>
-                                    <span
-                                      className={`rounded-full px-2 py-1 text-xs font-medium ${
-                                        submission.status === 'GRADED'
-                                          ? 'bg-green-100 text-green-800'
-                                          : submission.status === 'LATE'
-                                            ? 'bg-red-100 text-red-800'
-                                            : 'bg-yellow-100 text-yellow-800'
-                                      }`}
-                                    >
-                                      {submission.status}
-                                    </span>
-                                  </TableCell>
-                                  <TableCell>
-                                    {submission.grade !== null ? (
-                                      <span className="font-medium">{submission.grade}</span>
-                                    ) : (
-                                      <span className="text-muted-foreground">Not graded</span>
-                                    )}
-                                  </TableCell>
-                                  <TableCell>
-                                    {submission.feedback ? (
-                                      <span className="text-sm">{submission.feedback}</span>
-                                    ) : (
-                                      <span className="text-muted-foreground">No feedback</span>
-                                    )}
-                                  </TableCell>
-                                  <TableCell>
-                                    {submission.fileName ? (
-                                      <a
-                                        href={`/api/uploads/submissions/${encodeURIComponent(submission.fileName)}`}
-                                        download={submission.originalFileName || 'Download'}
-                                        className="inline-flex items-center gap-1 text-blue-600 underline hover:text-blue-800"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        title="Download file"
-                                      >
-                                        <Download className="h-4 w-4" aria-hidden="true" />
-                                        <span>{submission.originalFileName || 'Download'}</span>
-                                      </a>
-                                    ) : (
-                                      <span className="text-muted-foreground text-sm">No file</span>
-                                    )}
-                                  </TableCell>
-                                  <TableCell>
-                                    <div className="flex items-center gap-2">
-                                      {submission.fileName ? (
-                                        <Button
-                                          size="sm"
-                                          variant="secondary"
-                                          onClick={() => setOpenDialog({ open: true, submission })}
-                                          className="flex items-center gap-1"
-                                        >
-                                          <Eye className="mr-2 h-4 w-4" />
-                                          View
-                                        </Button>
-                                      ) : (
-                                        <span className="text-muted-foreground text-sm">
-                                          No file
-                                        </span>
-                                      )}
-                                    </div>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      ) : (
-                        <p className="text-muted-foreground text-sm">No submissions yet.</p>
-                      )}
-                    </WorkspacePanel>
-
-                    <WorkspacePanel
-                      title={`Discussion (${selectedProblemComments.length})`}
-                      icon={<MessageSquare className="h-4 w-4" />}
-                      className="min-h-[320px]"
-                      contentClassName="flex h-full flex-col gap-4"
-                    >
-                      {commentsLoading ? (
-                        <div className="text-muted-foreground text-sm">Loading discussion...</div>
-                      ) : selectedProblemComments.length > 0 ? (
-                        <div className="space-y-3 overflow-y-auto pr-1">
-                          {selectedProblemComments.map((comment) => (
-                            <div key={comment.id} className="bg-card rounded-lg border p-3">
-                              <div className="mb-2 flex items-start justify-between">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-medium">{comment.authorName}</span>
-                                  <RoleBadge role={comment.authorRole} />
-                                </div>
-                                <span className="text-muted-foreground text-xs">
-                                  {formatDateTimeInTimeZone(comment.createdAt, timezone)}
-                                </span>
-                              </div>
-                              <p className="text-sm">{comment.content}</p>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-muted-foreground text-sm">No comments yet.</div>
-                      )}
-
-                      <div className="mt-auto space-y-2">
-                        <Textarea
-                          placeholder="Add a comment or question about this problem..."
-                          value={
-                            selectedProblem ? newComment[selectedProblem.problem.id] || '' : ''
-                          }
-                          onChange={(e) =>
-                            selectedProblem &&
-                            setNewComment((prev) => ({
-                              ...prev,
-                              [selectedProblem.problem.id]: e.target.value,
-                            }))
-                          }
-                          hidden={courseIsArchived}
-                          className="min-h-[80px]"
-                        />
-                        <div className="flex justify-end">
-                          <Button
-                            size="sm"
-                            onClick={() =>
-                              selectedProblem && handleSubmitComment(selectedProblem.problem.id)
-                            }
-                            disabled={
-                              !selectedProblem ||
-                              !newComment[selectedProblem.problem.id]?.trim() ||
-                              submittingComment[selectedProblem.problem.id]
-                            }
-                            hidden={courseIsArchived}
-                          >
-                            {selectedProblem && submittingComment[selectedProblem.problem.id] ? (
-                              'Submitting...'
-                            ) : (
-                              <>
-                                <Send className="mr-2 h-4 w-4" />
-                                Add Comment
-                              </>
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-                    </WorkspacePanel>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-muted-foreground flex h-full items-center justify-center rounded-md border border-dashed p-10 text-sm">
-                  Select a problem to see its details.
-                </div>
-              )}
+              <ProblemWorkspace
+                problem={selectedProblemDetails}
+                submissions={selectedProblemSubmissions}
+                assignmentDueDate={assignment.dueDate}
+                comments={selectedProblemComments}
+                commentText={selectedProblem ? newComment[selectedProblem.problem.id] || '' : ''}
+                onCommentTextChange={(text) =>
+                  selectedProblem &&
+                  setNewComment((prev) => ({
+                    ...prev,
+                    [selectedProblem.problem.id]: text,
+                  }))
+                }
+                onSaveComment={() =>
+                  selectedProblem && handleSubmitComment(selectedProblem.problem.id)
+                }
+                onDeleteComment={(commentId) => handleDeleteComment(commentId)}
+                isSaving={selectedProblem ? submittingComment[selectedProblem.problem.id] : false}
+                deletingComments={{}}
+                onViewSubmission={(submission) => setOpenDialog({ open: true, submission })}
+                rerunning={{}}
+                courseIsArchived={courseIsArchived}
+                gradeInput=""
+                currentGrade={null}
+                gradeError={null}
+                isPrivledgedUser={false}
+                submissionsLoading={submissionsLoading}
+                commentsLoading={commentsLoading}
+              />
             </div>
           </CardContent>
         </Card>

@@ -6,6 +6,8 @@ import { Course, Assignment, Problem, Role } from '@prisma/client';
 export type AssignmentWithProblemCount = Assignment & {
   problemCount: number;
   maxPoints?: number;
+  allowLateSubmissions?: boolean;
+  lateCutoff?: string | Date | null;
   hasSubmissionsOrComments?: boolean;
   submissionCount?: number;
   commentCount?: number;
