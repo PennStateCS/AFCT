@@ -86,7 +86,9 @@ export function ProblemListCard({
                     type="button"
                     onClick={() => onSelect(problem.id)}
                     className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition ${
-                      isActive ? 'bg-secondary text-secondary-foreground' : 'hover:bg-slate-50'
+                      isActive
+                        ? 'bg-secondary text-secondary-foreground'
+                        : 'hover:bg-slate-50 dark:hover:bg-slate-800'
                     }`}
                   >
                     <span className="truncate">{problem.title}</span>
