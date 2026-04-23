@@ -23,6 +23,7 @@ import {
   getTermForDate,
   getTermSequence,
   logSeedCounts,
+  upsertRoster,
   withRole,
 } from './seed-utils';
 import bcrypt from 'bcrypt';
@@ -201,6 +202,17 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
   const studentUsers = studentData.filter((student) => student.id) as Array<
     (typeof studentData)[number] & { id: string }
   >;
+  const charles = facultyData.find((faculty) => faculty.email === 'faculty@example.com');
+  const oliver = studentData.find((student) => student.email === 'student@example.com');
+  const charlesCmpen271Course =
+    courses.find((course, index) => {
+      const seedCourse = courseData[index];
+      return seedCourse?.code === 'CMPEN 271' && seedCourse?.regCode === 'ABC123';
+    }) ??
+    courses.find((course, index) => {
+      const seedCourse = courseData[index];
+      return seedCourse?.code === 'CMPEN 271';
+    });
 
   console.log('[seed] development: assigning course rosters');
   // Randomly assign instructor/TA/students per course.
@@ -214,6 +226,31 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
     taUsers,
     studentUsers,
   );
+
+  console.log('[seed] development: setting explicit rosters for Charles Xavier and Oliver Green');
+  try {
+    if (charles?.id && charlesCmpen271Course) {
+      await upsertRoster(prisma, charlesCmpen271Course.id, charles.id, 'INSTRUCTOR');
+    }
+
+    if (oliver?.id) {
+      const targetCourses = courses.filter((course, index) => {
+        const seedCourse = courseData[index];
+        return (
+          course.id === charlesCmpen271Course?.id ||
+          seedCourse?.code === 'CMPSC 131'
+        );
+      });
+
+      for (const course of targetCourses) {
+        await upsertRoster(prisma, course.id, oliver.id, 'STUDENT');
+      }
+
+      console.log(`[seed] development: enrolled Oliver Green in ${targetCourses.length} course(s)`);
+    }
+  } catch (error) {
+    console.error('[seed] development: error enrolling Oliver Green', error);
+  }
 
   console.log('[seed] development: creating problems for courses');
   // Create problems for each course. All courses get the same problems.
@@ -406,6 +443,113 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
     );
   } catch (error) {
     console.error('[seed] development: error assigning problems to assignments', error);
+    throw error;
+  }
+
+  console.log('[seed] development: creating Flip Flops submissions for Oliver Green');
+  try {
+    const flipFlopsAssignment = charlesCmpen271Course
+      ? (createdAssignments[charlesCmpen271Course.id] || []).find(
+          (assignment) => assignment.title === 'Flip Flops',
+        )
+      : undefined;
+
+    if (!oliver?.id || !charlesCmpen271Course || !flipFlopsAssignment) {
+      console.warn(
+        '[seed] development: skipping Oliver Flip Flops submissions (missing Oliver, course, or assignment)',
+      );
+    } else {
+      const oliverId = oliver.id;
+      const submissionSourceDir = path.join(process.cwd(), 'prisma', 'solution_files');
+      const containerSubmissionDestinationDir = path.join(
+        path.sep,
+        'private',
+        'uploads',
+        'submissions',
+      );
+      const localSubmissionDestinationDir = path.join(
+        process.cwd(),
+        'private',
+        'uploads',
+        'submissions',
+      );
+
+      let submissionDestinationDir = containerSubmissionDestinationDir;
+      try {
+        await fs.mkdir(submissionDestinationDir, { recursive: true });
+      } catch {
+        submissionDestinationDir = localSubmissionDestinationDir;
+        await fs.mkdir(submissionDestinationDir, { recursive: true });
+      }
+
+      const flipFlopsProblems = await prisma.assignmentProblem.findMany({
+        where: { assignmentId: flipFlopsAssignment.id },
+        select: {
+          problemId: true,
+          problem: {
+            select: {
+              title: true,
+              originalFileName: true,
+            },
+          },
+        },
+      });
+
+      const oneDayMs = 24 * 60 * 60 * 1000;
+      const submissionsToCreate = await Promise.all(flipFlopsProblems.flatMap(async (assignmentProblem, index) => {
+        const submittedBase = new Date(Date.now() - (flipFlopsProblems.length - index + 2) * oneDayMs);
+        const originalFileName = assignmentProblem.problem.originalFileName ?? 'submission.jff';
+        const extension = path.extname(originalFileName) || '.jff';
+
+        const createStoredSubmission = async () => {
+          const storedFileName = `${randomUUID()}${extension}`;
+          const sourcePath = path.join(submissionSourceDir, originalFileName);
+          const destinationPath = path.join(submissionDestinationDir, storedFileName);
+
+          await fs.copyFile(sourcePath, destinationPath);
+          return {
+            fileName: storedFileName,
+            originalFileName,
+          };
+        };
+
+        const firstStoredSubmission = await createStoredSubmission();
+        const revisedStoredSubmission = await createStoredSubmission();
+
+        return [
+          {
+            assignmentId: flipFlopsAssignment.id,
+            problemId: assignmentProblem.problemId,
+            studentId: oliverId,
+            submittedAt: submittedBase,
+            correct: false,
+            feedback: `Initial attempt for ${assignmentProblem.problem.title} needs another revision.`,
+            fileName: firstStoredSubmission.fileName,
+            originalFileName: firstStoredSubmission.originalFileName,
+          },
+          {
+            assignmentId: flipFlopsAssignment.id,
+            problemId: assignmentProblem.problemId,
+            studentId: oliverId,
+            submittedAt: new Date(submittedBase.getTime() + 6 * 60 * 60 * 1000),
+            correct: true,
+            feedback: `${assignmentProblem.problem.title} submission accepted after revision.`,
+            fileName: revisedStoredSubmission.fileName,
+            originalFileName: revisedStoredSubmission.originalFileName,
+          },
+        ];
+      })).then((submissionGroups) => submissionGroups.flat());
+
+      const createdSubmissions = await prisma.submission.createMany({
+        data: submissionsToCreate,
+      });
+
+      console.log(
+        `[seed] development: created ${createdSubmissions.count} Flip Flops submissions for Oliver Green`,
+      );
+    }
+  } catch (error) {
+    console.error('[seed] development: error creating Flip Flops submissions for Oliver Green', error);
     throw error;
   }
 

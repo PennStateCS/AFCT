@@ -66,12 +66,19 @@ type ProblemLinkSettings = {
   autograderEnabled: boolean;
 };
 
+type AssignmentSummary = {
+  id: string;
+  title: string;
+};
+
 type PrivilegeAssignmentViewProps = {
   initialAssignment?: AssignmentWithDetails | null;
+  initialAssignments?: AssignmentSummary[];
 };
 
 export default function AssignmentDashboardPage({
   initialAssignment = null,
+  initialAssignments,
 }: PrivilegeAssignmentViewProps) {
   const { control } = useForm({
     defaultValues: {
@@ -86,7 +93,7 @@ export default function AssignmentDashboardPage({
 
   // Use a more flexible type for assignment to allow course details if available
   const [assignment, setAssignment] = useState<AssignmentWithDetails | null>(initialAssignment);
-  const [allAssignments, setAllAssignments] = useState<AssignmentWithDetails[]>([]);
+  const [allAssignments, setAllAssignments] = useState<AssignmentSummary[]>(initialAssignments ?? []);
   const [assignmentsLoading, setAssignmentsLoading] = useState(false);
   const [allProblems, setAllProblems] = useState<Problem[]>([]);
   const [problemsLoading, setProblemsLoading] = useState(false);
@@ -169,14 +176,25 @@ export default function AssignmentDashboardPage({
     setAssignmentsLoading(true);
     return fetch(`/api/courses/${id}/assignments`)
       .then((res) => res.json())
-      .then((data) => setAllAssignments(Array.isArray(data) ? data : []))
+      .then((data) =>
+        setAllAssignments(
+          Array.isArray(data)
+            ? data.map((assignment: { id: string; title: string }) => ({
+                id: assignment.id,
+                title: assignment.title,
+              }))
+            : [],
+        ),
+      )
       .catch(() => setAllAssignments([]))
       .finally(() => setAssignmentsLoading(false));
   }, [id]);
 
   useEffect(() => {
-    void fetchAssignments();
-  }, [fetchAssignments]);
+    if (allAssignments.length === 0) {
+      void fetchAssignments();
+    }
+  }, [allAssignments.length, fetchAssignments]);
 
   const refreshAssignment = useCallback(
     async (
@@ -501,23 +519,21 @@ export default function AssignmentDashboardPage({
                 label="Assignment"
                 name="assignmentSelect"
                 id="assignmentSelect"
-                value={field.value || assignment.title}
+                value={field.value}
                 onValueChange={(assignmentId) => {
-                  // Find new assignment id
                   field.onChange(assignmentId);
                   const selectedAssignment = allAssignments.find((a) => a.id === assignmentId) ?? null;
-                  
-                  // Error handling new assignment
+
                   if (!selectedAssignment) {
                     showToast.error('Selected assignment not found');
                     return;
                   }
 
-                  // Set and reload for new value
-                  setAssignment(selectedAssignment);
-
-                  // Reload page
-                  window.location.href = selectedAssignment.id;
+                  if (id) {
+                    router.push(`/dashboard/courses/${id}/${selectedAssignment.id}`);
+                  } else {
+                    window.location.href = selectedAssignment.id;
+                  }
                 }}
                 placeholder={assignmentsLoading ? 'Loading...' : 'Choose assignment'}
                 disabled={assignmentsLoading}

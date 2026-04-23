@@ -57,6 +57,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       id: comment.id,
       content: comment.content,
       createdAt: comment.createdAt.toISOString(),
+      authorId: comment.roster.userId,
       authorName:
         `${comment.roster.user.firstName || ''} ${comment.roster.user.lastName || ''}`.trim() ||
         'Unknown User',
