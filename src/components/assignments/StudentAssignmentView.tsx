@@ -314,37 +314,37 @@ export default function StudentAssignmentPage({
             <CardTitle className="text-lg font-semibold">{assignment.title}</CardTitle>
             <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch lg:justify-between">
               <div className="flex flex-1 flex-wrap gap-2">
-                <div className="inline-flex min-h-10 items-center rounded-full border bg-muted/20 px-3 py-2 text-sm leading-none">
-                  <span className="text-muted-foreground mr-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em]">
+                <div className="inline-flex min-h-10 items-center rounded-full border border-slate-200 bg-transparent px-3 py-2 text-sm leading-none text-slate-700 dark:border-slate-200 dark:text-slate-200">
+                  <span className="mr-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em]">
                     Due
                   </span>
                   <span className="font-semibold leading-none">{dueDisplay}</span>
                 </div>
-                <div className="inline-flex min-h-10 items-center rounded-full border bg-muted/20 px-3 py-2 text-sm leading-none">
-                  <span className="text-muted-foreground mr-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em]">
+                <div className="inline-flex min-h-10 items-center rounded-full border border-slate-200 bg-transparent px-3 py-2 text-sm leading-none text-slate-700 dark:border-slate-200 dark:text-slate-200">
+                  <span className="mr-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em]">
                     Points
                   </span>
                   <span className="font-semibold leading-none">{assignment.maxPoints}</span>
                 </div>
-                <div className="inline-flex min-h-10 items-center rounded-full border bg-muted/20 px-3 py-2 text-sm leading-none">
-                  <span className="text-muted-foreground mr-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em]">
+                <div className="inline-flex min-h-10 items-center rounded-full border border-slate-200 bg-transparent px-3 py-2 text-sm leading-none text-slate-700 dark:border-slate-200 dark:text-slate-200">
+                  <span className="mr-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em]">
                     Problems
                   </span>
                   <span className="font-semibold leading-none">{assignment.problems.length}</span>
                 </div>
-                <div className="inline-flex min-h-10 items-center rounded-full border bg-muted/20 px-3 py-2 text-sm leading-none">
-                  <span className="text-muted-foreground mr-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em]">
+                <div className="inline-flex min-h-10 items-center rounded-full border border-slate-200 bg-transparent px-3 py-2 text-sm leading-none text-slate-700 dark:border-slate-200 dark:text-slate-200">
+                  <span className="mr-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em]">
                     Late Policy
                   </span>
                   <span className="font-semibold leading-none">{latePolicyDisplay}</span>
                 </div>
               </div>
-              <div className="inline-flex min-h-10 items-center rounded-full border border-primary/20 bg-primary/5 px-4 py-2 text-right lg:self-start">
-                <span className="text-muted-foreground mr-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em]">
+              <div className="inline-flex min-h-10 items-center rounded-full border border-slate-200 bg-transparent px-4 py-2 text-right lg:self-start text-slate-700 dark:border-slate-200 dark:text-slate-200">
+                <span className="mr-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em]">
                   Grade
                 </span>
                 <span className="text-xl font-semibold leading-none tracking-tight">{gradeDisplay}</span>
-                <span className="text-muted-foreground ml-1 text-sm font-medium leading-none">/{assignment.maxPoints}</span>
+                <span className="ml-1 text-sm font-medium leading-none">/{assignment.maxPoints}</span>
               </div>
             </div>
           </CardHeader>
