@@ -68,6 +68,7 @@ const adminMenu = [
   { title: 'User Accounts', url: '/dashboard/users', icon: Users },
   { title: 'System Status', url: '/dashboard/system-status', icon: Activity },
   { title: 'System Settings', url: '/dashboard/system-settings', icon: Settings },
+  { title: 'System Logs', url: '/dashboard/system-logs', icon: Activity },
 ];
 
 export default function DashboardSidebarMenu() {
