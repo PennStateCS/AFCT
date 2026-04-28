@@ -31,7 +31,7 @@ export async function GET(req: Request) {
       ...obj,
 	  userId: lookup[obj.userId] ?? obj.userId
 	}));
-
+	
     return NextResponse.json(result);
   } catch (error) {
     console.error('[LOGS_LIST_GET_ERROR]', error);

@@ -10,6 +10,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { UserRoundPlus, Users } from 'lucide-react';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import type { EnhancedActivityLogData } from '@/lib/activity-log-utils.ts ';
+import { LogViewerDialog } from '@/components/dialogs/LogViewerDialog';
 
 export default function SystemLoggingClient({ initialLogs }: { initialLogs?: EnhancedActivityLogData[] }) {
   const searchParams = useSearchParams();
@@ -19,10 +20,20 @@ export default function SystemLoggingClient({ initialLogs }: { initialLogs?: Enh
   const [logs, setLogs] = useState<EnhancedActivityLogData[]>(initialLogs ?? []);
   const [loading, setLoading] = useState(!hasInitialLogs);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [open, setOpen] = useState(searchParams.get('create') === 'open');
-  const [importOpen, setImportOpen] = useState(false);
-  const [onlyActive, setOnlyActive] = useState(false);
+  const [selectedData, setSelectedData] = useState('');
+  const [title, setTitle] = useState('');
+  const [open, setOpen] = useState(false);
   const { timezone } = useEffectiveTimezone();
+
+  const handleOpen = (row) => {
+    setSelectedData(JSON.stringify(row, null, 2));
+	const formatted = new Date(row.timestamp).toLocaleString(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short'
+    });
+    setTitle(formatted);
+    setOpen(true);
+  };
 
   const fetchLogs = useCallback(async () => {
     try {
@@ -65,9 +76,22 @@ export default function SystemLoggingClient({ initialLogs }: { initialLogs?: Enh
 	  header: 'User'
     },
 	{
+	  accessorKey: 'category',
+	  header: 'Category'
+    },
+	{
 	  accessorKey: 'action',
 	  header: 'Action'
     },
+	{
+      id: 'viewer',
+      header: 'Logs',
+	  cell: ({ row }) => (
+        <Button onClick={() => handleOpen(row.original)}>
+          Full Log
+        </Button>
+      )
+	}
   ];
 
   const handleDialogClose = (value: boolean) => {
@@ -105,6 +129,12 @@ export default function SystemLoggingClient({ initialLogs }: { initialLogs?: Enh
           loading={loading}
           tableLabel="Users table"
           defaultColumnVisibility={{ createdAt: false }}
+        />
+		<LogViewerDialog
+          data={selectedData}
+          open={open}
+          onOpenChange={setOpen}
+          title={title}
         />
       </CardContent>
     </Card>
