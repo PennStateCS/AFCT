@@ -9,13 +9,30 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    const data = await prisma.activityLog.findMany({
+	const names = await prisma.user.findMany({
+		select: {
+			id: true,
+			firstName: true,
+			lastName: true,
+		},
+	});
+
+	const lookup = Object.fromEntries(
+		names.map(obj => [obj.id, obj.firstName + ' ' + obj.lastName])
+	);
+
+    var data = await prisma.activityLog.findMany({
       orderBy: {
         timestamp: 'desc',
       },
     });
 
-    return NextResponse.json(data);
+    const result = data.map(obj => ({
+      ...obj,
+	  userId: lookup[obj.userId] ?? obj.userId
+	}));
+
+    return NextResponse.json(result);
   } catch (error) {
     console.error('[LOGS_LIST_GET_ERROR]', error);
     return NextResponse.json({ error: 'Failed to fetch logs' }, { status: 500 });
