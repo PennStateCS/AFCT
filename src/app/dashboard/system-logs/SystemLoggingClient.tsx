@@ -46,7 +46,29 @@ export default function SystemLoggingClient({ initialLogs }: { initialLogs?: Enh
     }
   }, [fetchLogs, hasInitialLogs]);
 
-  const columns = [{accessorKey: 'userId', header: 'User ID'}, {accessorKey: 'action', header: 'Action'},];
+  const columns = [
+    {
+      accessorKey: 'timestamp',
+	  header: 'Time',
+	  cell: ({ getValue }) => {
+	    const value = getValue();
+		return value
+		  ? new Date(value).toLocaleString(undefined, {
+		    dateStyle: 'medium',
+            timeStyle: 'short'
+		  })
+		: '';
+	  } 
+	}, 
+	{
+      accessorKey: 'userId',
+	  header: 'User'
+    },
+	{
+	  accessorKey: 'action',
+	  header: 'Action'
+    },
+  ];
 
   const handleDialogClose = (value: boolean) => {
     setOpen(value);
