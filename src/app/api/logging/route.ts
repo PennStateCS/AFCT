@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 
 // GET: Lightweight function for getting all logs sorted by recency.
