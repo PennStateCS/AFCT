@@ -30,7 +30,9 @@ export async function GET(req: Request) {
 
     const result = data.map(obj => ({
       ...obj,
-	  userId: lookup[obj.userId] ?? obj.userId
+	  userId: obj.userId != null
+    ? lookup[obj.userId] ?? obj.userId
+    : obj.userId
 	}));
 	
     return NextResponse.json(result);
