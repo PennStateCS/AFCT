@@ -25,7 +25,7 @@ export default function SystemLoggingClient({ initialLogs }: { initialLogs?: Enh
   const [open, setOpen] = useState(false);
   const { timezone } = useEffectiveTimezone();
 
-  const handleOpen = (row) => {
+  const handleOpen = (row: any) => {
     setSelectedData(JSON.stringify(row, null, 2));
 	const formatted = new Date(row.timestamp).toLocaleString(undefined, {
       dateStyle: 'medium',
