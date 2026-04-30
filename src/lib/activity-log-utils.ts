@@ -17,7 +17,7 @@ export type ActivityCategory =
 export interface EnhancedActivityLogData {
   userId?: string | null;
   action: string;
-  timestamp: DateTime;
+  timestamp?: DateTime;
   category?: ActivityCategory;
   courseId?: string | null;
   assignmentId?: string | null;
