@@ -61,7 +61,7 @@ export default function SystemLoggingClient({ initialLogs }: { initialLogs?: Enh
     {
       accessorKey: 'timestamp',
 	  header: 'Time',
-	  cell: ({ getValue: () => any  }) => {
+	  cell: ({ getValue }: { getValue: () => any }) => {
 	    const value = getValue();
 		return value
 		  ? new Date(value).toLocaleString(undefined, {
