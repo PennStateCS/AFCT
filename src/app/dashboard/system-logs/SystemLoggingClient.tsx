@@ -61,7 +61,7 @@ export default function SystemLoggingClient({ initialLogs }: { initialLogs?: Enh
     {
       accessorKey: 'timestamp',
 	  header: 'Time',
-	  cell: ({ getValue }) => {
+	  cell: ({ getValue: any }) => {
 	    const value = getValue();
 		return value
 		  ? new Date(value).toLocaleString(undefined, {
@@ -86,7 +86,7 @@ export default function SystemLoggingClient({ initialLogs }: { initialLogs?: Enh
 	{
       id: 'viewer',
       header: 'Logs',
-	  cell: ({ row }) => (
+	  cell: ({ row: any }) => (
         <Button onClick={() => handleOpen(row.original)}>
           Full Log
         </Button>
