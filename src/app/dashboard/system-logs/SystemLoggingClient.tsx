@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { UserRoundPlus, Users } from 'lucide-react';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import type { EnhancedActivityLogData } from '@/lib/activity-log-utils.ts ';
+import type { EnhancedActivityLogData } from '@/lib/activity-log-utils';
 import { LogViewerDialog } from '@/components/dialogs/LogViewerDialog';
 
 export default function SystemLoggingClient({ initialLogs }: { initialLogs?: EnhancedActivityLogData[] }) {
