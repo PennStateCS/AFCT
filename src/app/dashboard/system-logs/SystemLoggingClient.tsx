@@ -86,7 +86,7 @@ export default function SystemLoggingClient({ initialLogs }: { initialLogs?: Enh
 	{
       id: 'viewer',
       header: 'Logs',
-	  cell: ({ row }: { row: { original: any }) => (
+	  cell: ({ row }: { row: { original: any } }) => (
         <Button onClick={() => handleOpen(row.original)}>
           Full Log
         </Button>
