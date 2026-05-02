@@ -9,7 +9,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import SelectField from '@/components/ui/SelectField';
+import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
 import { useEffect, useMemo, useState } from 'react';
 import type { LmsPlatform } from '@/lib/lms-grade-export';
 
@@ -29,6 +31,7 @@ type GradesLmsExportDialogProps = {
 const LMS_OPTIONS: Array<{ value: LmsPlatform; label: string }> = [
   { value: 'canvas', label: 'Canvas' },
   { value: 'blackboard', label: 'Blackboard' },
+  { value: 'brightspace', label: 'Brightspace' },
   { value: 'moodle', label: 'Moodle' },
   { value: 'generic', label: 'Generic CSV' },
 ];
@@ -41,22 +44,25 @@ export function GradesLmsExportDialog({
   disabled = false,
 }: GradesLmsExportDialogProps) {
   const [platform, setPlatform] = useState<LmsPlatform>('canvas');
-  const [assignmentId, setAssignmentId] = useState<string>('');
+  const [assignmentIds, setAssignmentIds] = useState<string[]>([]);
+  const [selectAll, setSelectAll] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    if (assignmentId) return;
+    if (assignmentIds) return;
     if (assignments.length > 0) {
-      setAssignmentId(assignments[0].id);
+      setAssignmentId([assignments[0].id]);
     }
-  }, [open, assignmentId, assignments]);
+  }, [open, assignmentIds, assignments]);
 
   const assignmentOptions = useMemo(
     () => assignments.map((assignment) => ({ value: assignment.id, label: assignment.title })),
     [assignments],
   );
 
-  const exportDisabled = disabled || !assignmentId || assignments.length === 0;
+  const assignmentItems = assignmentOptions.map((item) => ({ id: item.value, label: item.label}));
+
+  const exportDisabled = disabled || (!selectAll && assignmentIds.length === 0) || assignments.length === 0;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -76,15 +82,22 @@ export function GradesLmsExportDialog({
           options={LMS_OPTIONS}
           placeholder="Select LMS"
         />
+        
+		<label className="flex items-center gap-2 cursor-pointer">
+          <Checkbox
+            checked={selectAll}
+		    onCheckedChange={(value) => setSelectAll(!!value)}
+		  />
+          <span className='text-sm font-medium'>Export whole gradebook</span>
+		</label>
 
-        <SelectField
-          label="Assignment"
-          name="assignment"
-          value={assignmentId}
-          onValueChange={setAssignmentId}
-          options={assignmentOptions}
-          placeholder="Select assignment"
-        />
+        {!selectAll && <SearchableMultiSelect
+          label="Assignments"
+          items= {assignmentItems}
+          value={assignmentIds}
+          onChange={setAssignmentIds}
+          placeholder="Select assignments..."
+        />}
 
         <DialogFooter>
           <Button variant="secondary" onClick={() => setOpen(false)} disabled={disabled}>
@@ -92,7 +105,7 @@ export function GradesLmsExportDialog({
           </Button>
           <Button
             onClick={() => {
-              onExport(platform, assignmentId);
+              onExport(platform, selectAll ? assignmentItems.map((assignment) => (assignment.id)): assignmentIds);
               setOpen(false);
             }}
             disabled={exportDisabled}
