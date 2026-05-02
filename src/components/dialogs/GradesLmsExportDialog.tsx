@@ -23,7 +23,7 @@ type ExportAssignmentOption = {
 type GradesLmsExportDialogProps = {
   open: boolean;
   setOpen: (open: boolean) => void;
-  onExport: (platform: LmsPlatform, assignmentId: string) => void;
+  onExport: (platform: LmsPlatform, assignmentId: string[]) => void;
   assignments: ExportAssignmentOption[];
   disabled?: boolean;
 };
@@ -51,7 +51,7 @@ export function GradesLmsExportDialog({
     if (!open) return;
     if (assignmentIds) return;
     if (assignments.length > 0) {
-      setAssignmentId([assignments[0].id]);
+      setAssignmentIds([assignments[0].id]);
     }
   }, [open, assignmentIds, assignments]);
 
