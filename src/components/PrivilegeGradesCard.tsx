@@ -132,20 +132,21 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
   }, [fetchGrades]);
 
   const exportGrades = useCallback(
-    (platform: LmsPlatform, assignmentId: string) => {
-      const selectedForExport = assignments.find((assignment) => assignment.id === assignmentId);
+    (platform: LmsPlatform, assignmentIds: string[]) => {
+      const selectedForExport = assignments.filter((assignment) => assignmentIds.includes(assignment.id));
       if (!selectedForExport) {
         showToast.error('Please select an assignment to export.');
         return;
       }
 
-      const exportAssignments = [{ id: selectedForExport.id, title: selectedForExport.title }];
+     //const exportAssignments = [{ id: selectedForExport.id, title: selectedForExport.title }];
+	  const exportAssignments = selectedForExport.map((assignment) => ({ id: assignment.id, title: assignment.title}));
       const { csvContent, filenamePrefix } = buildLmsGradesCsv(
         platform,
         students,
         exportAssignments,
       );
-      const assignmentSlug = selectedForExport.title
+      const assignmentSlug = selectedForExport[0].title
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/(^-|-$)/g, '');
@@ -158,14 +159,14 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
       link.setAttribute('href', url);
       link.setAttribute(
         'download',
-        `${filenamePrefix}-${assignmentSlug || assignmentId}-${timestamp}.csv`,
+        `${filenamePrefix}-${assignmentSlug || assignmentIds[0]}-${timestamp}.csv`,
       );
       link.style.visibility = 'hidden';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
 
-      showToast.success(`Grades exported for ${platform}: ${selectedForExport.title}`);
+      showToast.success(`Grades exported for ${platform}`);
     },
     [students, assignments],
   );
