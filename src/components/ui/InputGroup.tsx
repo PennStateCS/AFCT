@@ -158,7 +158,6 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
             'focus-visible:ring-0',
 			'border-black',
             error && 'border-red-500',
-            !error && isValid && 'border-green-500',
             type === 'number' && 'appearance-auto',
             inputPaddingRight,
 			labelClassName,
