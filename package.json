@@ -97,6 +97,7 @@
     "framer-motion": "^12.23.12",
     "html-to-image": "^1.11.13",
     "input-otp": "^1.4.2",
+    "json-2-csv": "^5.5.11",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.469.0",
     "next": "^15.5.12",
