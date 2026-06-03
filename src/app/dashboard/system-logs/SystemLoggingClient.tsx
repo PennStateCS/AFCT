@@ -4,17 +4,14 @@ import React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { DataTable } from '@/components/ui/data-table';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { UserRoundPlus, Users } from 'lucide-react';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import type { EnhancedActivityLogData } from '@/lib/activity-log-utils';
 import { LogViewerDialog } from '@/components/dialogs/LogViewerDialog';
+import { DownloadLogsDialog } from '@/components/dialogs/DownloadLogsDialog';
 
 export default function SystemLoggingClient({ initialLogs }: { initialLogs?: EnhancedActivityLogData[] }) {
-  const searchParams = useSearchParams();
-  const router = useRouter();
   const hasInitialLogs = Array.isArray(initialLogs);
 
   const [logs, setLogs] = useState<EnhancedActivityLogData[]>(initialLogs ?? []);
@@ -22,17 +19,17 @@ export default function SystemLoggingClient({ initialLogs }: { initialLogs?: Enh
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedData, setSelectedData] = useState('');
   const [title, setTitle] = useState('');
-  const [open, setOpen] = useState(false);
-  const { timezone } = useEffectiveTimezone();
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [downloadOpen, setDownloadOpen] = useState(false);
 
-  const handleOpen = (row: any) => {
+  const handleViewerOpen = (row: any) => {
     setSelectedData(JSON.stringify(row, null, 2));
 	const formatted = new Date(row.timestamp).toLocaleString(undefined, {
       dateStyle: 'medium',
       timeStyle: 'short'
     });
     setTitle(formatted);
-    setOpen(true);
+    setViewerOpen(true);
   };
 
   const fetchLogs = useCallback(async () => {
@@ -87,21 +84,12 @@ export default function SystemLoggingClient({ initialLogs }: { initialLogs?: Enh
       id: 'viewer',
       header: 'Logs',
 	  cell: ({ row }: { row: { original: any } }) => (
-        <Button onClick={() => handleOpen(row.original)}>
+        <Button onClick={() => handleViewerOpen(row.original)}>
           Full Log
         </Button>
       )
 	}
   ];
-
-  const handleDialogClose = (value: boolean) => {
-    setOpen(value);
-    if (!value) {
-      const params = new URLSearchParams(searchParams.toString());
-      params.delete('create');
-      router.replace(`?${params.toString()}`, { scroll: false });
-    }
-  };
 
   return (
     <Card className="p-4">
@@ -109,6 +97,9 @@ export default function SystemLoggingClient({ initialLogs }: { initialLogs?: Enh
         <CardTitle role="heading" aria-level={1} className="text-2xl">
           System Logs
         </CardTitle>
+        <Button onClick={() => setDownloadOpen(true)}>
+          Download Logs
+        </Button>
       </CardHeader>
 
       <CardContent>
@@ -130,11 +121,17 @@ export default function SystemLoggingClient({ initialLogs }: { initialLogs?: Enh
           tableLabel="Users table"
           defaultColumnVisibility={{ createdAt: false }}
         />
-		<LogViewerDialog
+
+        {/* Dialogs */}
+		    <LogViewerDialog
           data={selectedData}
-          open={open}
-          onOpenChange={setOpen}
+          open={viewerOpen}
+          onOpenChange={setViewerOpen}
           title={title}
+        />
+        <DownloadLogsDialog
+          open={downloadOpen}
+          onOpenChange={setDownloadOpen}
         />
       </CardContent>
     </Card>

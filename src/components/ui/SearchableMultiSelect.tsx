@@ -26,6 +26,7 @@ interface SearchableMultiSelectProps {
   searchPlaceholder?: string;
   emptyStateText?: string;
   error?: string;
+  isValid?: boolean;
   disabled?: boolean;
 }
 
@@ -38,6 +39,7 @@ export function SearchableMultiSelect({
   searchPlaceholder = 'Search...',
   emptyStateText = 'No results found.',
   error,
+  isValid,
   id,
   disabled,
 }: SearchableMultiSelectProps) {
