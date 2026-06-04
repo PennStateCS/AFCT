@@ -253,7 +253,7 @@ model GroupAssignmentProblem {
 
 model Submission {
   id          String   @id @default(cuid())
-  gradedAt DateTime @default(now())
+  gradedAt DateTime?
   feedback    String?
   correct     Boolean?
   evaluationRaw Json?
