@@ -30,6 +30,13 @@ enum ProblemType {
   TM
 }
 
+enum SubmissionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 model User {
   id        String  @id @default(cuid())
   email     String  @unique
@@ -246,7 +253,7 @@ model GroupAssignmentProblem {
 
 model Submission {
   id          String   @id @default(cuid())
-  submittedAt DateTime @default(now())
+  gradedAt DateTime @default(now())
   feedback    String?
   correct     Boolean?
   evaluationRaw Json?
@@ -270,6 +277,11 @@ model Submission {
   group   Group?  @relation(fields: [groupId], references: [id], onDelete: SetNull)
   groupId String?
 
+  // Queue
+  status   SubmissionStatus @default(PENDING)
+  submittedAt DateTime         @default(now())
+
+  // Logs
   activityLogs ActivityLog[]
 
   @@unique([assignmentId, problemId, groupId])
@@ -281,6 +293,7 @@ model Submission {
   // Performance indexes
   @@index([assignmentId, problemId])
   @@index([studentId, assignmentId, problemId, submittedAt])
+  @@index([status])
 }
 
 model AssignmentGrade {
