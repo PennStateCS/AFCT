@@ -374,7 +374,7 @@ export async function POST(req: NextRequest) {
     });
 
     // Success
-    return NextResponse.json(submission, { status: 201 });
+    return NextResponse.json(submission, { status: 202 });
 
     // Error
   } catch (error: unknown) {
