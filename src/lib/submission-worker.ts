@@ -67,7 +67,10 @@ async function runWorkerLoop() {
     // Get next submission
     const nextSubmission = await prisma.submission.findFirst({
       where: { status: 'PENDING' },
-      orderBy: { submittedAt: 'asc' },
+      orderBy: [
+        { student : { role : 'asc' } },
+        { assignmentProblem: { assignment: { dueDate: 'asc' } } },
+      ],
       select: { id: true }
     });
 
