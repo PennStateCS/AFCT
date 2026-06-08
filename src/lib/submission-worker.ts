@@ -26,7 +26,8 @@ interface SubmissionEvaluationResult {
 
 async function logSubmissionActivity(submission: any, action: string, metadata: any) {
   try {
-    await fetch('/api/submissions', {
+    const HOST = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+    await fetch(`${HOST}/api/log_submission`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -118,8 +119,7 @@ async function evaluateSubmission(id: string) {
     submission = await prisma.submission.findUnique({
       where: { id },
       include: {
-        problem: true,
-        assignment: true,
+        assignmentProblem: true,
         student: true,
       },
     });
@@ -291,7 +291,7 @@ async function runJavaEvaluator(submission: any): Promise<SubmissionEvaluationRe
     const isDocker = process.env.CFGANALYZER_BINARY !== undefined;
 
     if (!isDocker && os.platform() === 'win32') {
-      // Windows local development: Count lines as before
+      // Windows local development: Count lines
       const result = execSync(
         `powershell -Command "(Get-Content '${uploadedFilePath}').Count"`,
         { encoding: 'utf-8' },

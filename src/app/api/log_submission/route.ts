@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
-export async function GET(req: NextRequest) {
+export async function POST(req: NextRequest) {
     const body = await req.json();
     const {submission, action, metadata } = body;
     
