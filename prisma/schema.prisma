@@ -85,6 +85,7 @@ model Course {
   roster       Roster[] // Users in the course with roles
   assignments  Assignment[]
   problems     Problem[]
+  submissions   Submission[]
   groups       Group[]
   groupRosters GroupRoster[]
   activityLogs ActivityLog[]
@@ -273,6 +274,10 @@ model Submission {
   student   User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   studentId String
 
+  // Course reference
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseId String
+
   // Optional group reference for group submissions
   group   Group?  @relation(fields: [groupId], references: [id], onDelete: SetNull)
   groupId String?
@@ -287,12 +292,13 @@ model Submission {
   @@unique([assignmentId, problemId, groupId])
   @@index([assignmentId])
   @@index([studentId])
+  @@index([courseId])
   @@index([groupId])
   @@index([assignmentId, problemId, studentId])
 
   // Performance indexes
   @@index([assignmentId, problemId])
-  @@index([studentId, assignmentId, problemId, submittedAt])
+  @@index([studentId, courseId, assignmentId, problemId, submittedAt])
   @@index([status])
 }
 
