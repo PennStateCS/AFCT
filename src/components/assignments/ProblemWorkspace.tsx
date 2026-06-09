@@ -195,7 +195,18 @@ const getReviewStatusChip = (submission: ProblemSubmission): StatusChip => {
   };
 };
 
-type SubmissionStatusFilter = 'all' | 'pending' | 'processing' | 'failed' | 'completed' | 'correct' | 'incorrect';
+type SubmissionStatusFilter = 'on-time' | 'late' | 'pending' | 'processing' | 'failed' | 'completed' | 'correct' | 'incorrect';
+
+const STATUS_FILTER_OPTIONS: { value: SubmissionStatusFilter; label: string; dot: string }[] = [
+  { value: 'on-time',    label: 'On time',    dot: 'bg-emerald-500' },
+  { value: 'late',       label: 'Late',       dot: 'bg-amber-500'   },
+  { value: 'correct',    label: 'Correct',    dot: 'bg-sky-500'     },
+  { value: 'incorrect',  label: 'Incorrect',  dot: 'bg-rose-500'    },
+  { value: 'pending',    label: 'Pending',    dot: 'bg-violet-500'  },
+  { value: 'processing', label: 'Processing', dot: 'bg-yellow-300'  },
+  { value: 'failed',     label: 'Failed',     dot: 'bg-pink-500'    },
+  { value: 'completed',  label: 'Completed',  dot: 'bg-slate-400'   },
+];
 
 const getSubmissionReviewStatus = (submission: ProblemSubmission): string => {
   const subm_status = submission.status?.toLowerCase() ?? '';
@@ -208,13 +219,23 @@ const getSubmissionReviewStatus = (submission: ProblemSubmission): string => {
 
 const filterSubmissions = (
   submissions: ProblemSubmission[],
-  filter: SubmissionStatusFilter,
+  activeFilters: Set<SubmissionStatusFilter>,
+  dueDate: Date | null,
+  hasValidDueDate: boolean,
 ): ProblemSubmission[] => {
-  if (filter === 'all') return submissions;
+  if (activeFilters.size === 0) return submissions;
   return submissions.filter((s) => {
     const reviewStatus = getSubmissionReviewStatus(s);
-    if (filter === 'completed') return reviewStatus === 'correct' || reviewStatus === 'incorrect';
-    return reviewStatus === filter;
+    const submittedAt = new Date(s.submittedAt);
+    const isLate =
+      s.status === 'LATE' ||
+      (hasValidDueDate && !!dueDate && submittedAt.getTime() > dueDate.getTime());
+
+    if (activeFilters.has('late') && isLate) return true;
+    if (activeFilters.has('on-time') && !isLate) return true;
+    if (activeFilters.has('completed') && (reviewStatus === 'correct' || reviewStatus === 'incorrect')) return true;
+    if (activeFilters.has(reviewStatus as SubmissionStatusFilter)) return true;
+    return false;
   });
 };
 
@@ -265,7 +286,16 @@ export function ProblemWorkspace({
 }: ProblemWorkspaceProps) {
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
   const [activeFeedback, setActiveFeedback] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<SubmissionStatusFilter>('all');
+  const [activeFilters, setActiveFilters] = useState<Set<SubmissionStatusFilter>>(new Set());
+
+  const toggleFilter = (f: SubmissionStatusFilter) => {
+    setActiveFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(f)) next.delete(f);
+      else next.add(f);
+      return next;
+    });
+  };
   if (!problem) {
     return (
       <Card>
@@ -358,52 +388,35 @@ export function ProblemWorkspace({
               </div>
             ) : sortedSubmissions.length > 0 ? (
               <div className="space-y-2">
-                <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[11px] font-medium">
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" aria-hidden="true" />
-                    On time
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="inline-flex h-2.5 w-2.5 rounded-full bg-amber-500" aria-hidden="true" />
-                    Late
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="inline-flex h-2.5 w-2.5 rounded-full bg-sky-500" aria-hidden="true" />
-                    Correct
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="inline-flex h-2.5 w-2.5 rounded-full bg-rose-500" aria-hidden="true" />
-                    Incorrect
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="inline-flex h-2.5 w-2.5 rounded-full bg-violet-500" aria-hidden="true" />
-                    Pending
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="inline-flex h-2.5 w-2.5 rounded-full bg-yellow-300" aria-hidden="true" />
-                    Processing
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="inline-flex h-2.5 w-2.5 rounded-full bg-pink-500" aria-hidden="true" />
-                    Failed
-                  </span>
-                </div>
-
                 {/* Status filter */}
                 <div className="flex flex-wrap gap-1 px-1">
-                  {(['all', 'pending', 'processing', 'failed', 'completed', 'correct', 'incorrect'] as SubmissionStatusFilter[]).map((f) => (
-                    <button
-                      key={f}
-                      onClick={() => setStatusFilter(f)}
-                      className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium capitalize transition-colors ${
-                        statusFilter === f
-                          ? 'border-foreground bg-foreground text-background'
-                          : 'border-border text-muted-foreground hover:border-foreground/50 hover:text-foreground'
-                      }`}
-                    >
-                      {f}
-                    </button>
-                  ))}
+                  <button
+                    onClick={() => setActiveFilters(new Set())}
+                    className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
+                      activeFilters.size === 0
+                        ? 'border-foreground bg-foreground text-background'
+                        : 'border-border text-muted-foreground hover:border-foreground/50 hover:text-foreground'
+                    }`}
+                  >
+                    All
+                  </button>
+                  {STATUS_FILTER_OPTIONS.map(({ value, label, dot }) => {
+                    const active = activeFilters.has(value);
+                    return (
+                      <button
+                        key={value}
+                        onClick={() => toggleFilter(value)}
+                        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
+                          active
+                            ? 'border-foreground bg-foreground text-background'
+                            : 'border-border text-muted-foreground hover:border-foreground/50 hover:text-foreground'
+                        }`}
+                      >
+                        <span className={`inline-flex h-2 w-2 rounded-full ${dot}`} aria-hidden="true" />
+                        {label}
+                      </button>
+                    );
+                  })}
                 </div>
 
                 <div className="overflow-x-auto rounded-md border">
@@ -418,13 +431,13 @@ export function ProblemWorkspace({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filterSubmissions(sortedSubmissions, statusFilter).length === 0 ? (
+                    {filterSubmissions(sortedSubmissions, activeFilters, dueDate, hasValidDueDate).length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={5} className="text-muted-foreground py-6 text-center text-sm">
                           No submissions match the selected filter.
                         </TableCell>
                       </TableRow>
-                    ) : filterSubmissions(sortedSubmissions, statusFilter).map((submission) => {
+                    ) : filterSubmissions(sortedSubmissions, activeFilters, dueDate, hasValidDueDate).map((submission) => {
                       const submittedAt = new Date(submission.submittedAt);
                       const isLate =
                         submission.status === 'LATE' ||
