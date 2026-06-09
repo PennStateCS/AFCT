@@ -47,6 +47,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
           select: {
             id: true,
             title: true,
+            autograderEnabled: true,
           },
         },
       },
@@ -111,6 +112,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const groupedProblems = problems.reduce<Record<string, Array<{
       id: string;
       title: string | null;
+      autograderEnabled: boolean;
       maxPoints: number;
       maxSubmissions: number;
     }>>>((acc, problem) => {
@@ -118,6 +120,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       acc[problem.assignmentId].push({
         id: problem.problem.id,
         title: problem.problem.title,
+        autograderEnabled: problem.problem.autograderEnabled,
         maxPoints: Number(problem.maxPoints ?? 0),
         maxSubmissions: Number(problem.maxSubmissions ?? 0),
       });
@@ -129,6 +132,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       const problemDetails = assignmentProblems.map((problem) => ({
         id: problem.id,
         title: problem.title,
+        autograderEnabled: problem.autograderEnabled,
         maxPoints: problem.maxPoints,
         maxSubmissions: problem.maxSubmissions,
         status: submissionStatusMap.get(`${assignment.id}:${problem.id}`) ?? "",

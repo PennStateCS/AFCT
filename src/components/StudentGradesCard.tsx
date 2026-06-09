@@ -25,6 +25,7 @@ type StudentGradesResponse = {
       submissionCount: number;
       grade: number | null;
       status: string;
+      autograderEnabled: boolean;
     }>;
   }>;
 };
@@ -188,9 +189,12 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
                             <span className="rounded-full border border-border px-2 py-1 text-[10px] text-muted-foreground">
                               {problem.submissionCount ? problem.submissionCount : 0}/{problem.maxSubmissions < 0 ? '∞' : problem.maxSubmissions} Submissions
                             </span>
-                            <span className="rounded-full border border-border px-2 py-1 text-[10px] text-muted-foreground">
-                              {problem.status != "" ? "Latest Status: " + problem.status : "No Submission"}
-                            </span>
+                            { (problem.autograderEnabled && problem.submissionCount ) ? (
+                              <span className="rounded-full border border-border px-2 py-1 text-[10px] text-muted-foreground">
+                                {"Latest Status: " + problem.status}
+                              </span>
+                              ) : ( <span></span> )
+                            }
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="rounded-full border border-border px-2 py-1 text-[10px] font-semibold text-slate-700">
