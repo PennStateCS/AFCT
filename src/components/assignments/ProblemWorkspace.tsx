@@ -153,7 +153,7 @@ const getTimingStatusChip = (
   };
 };
 
-const getReviewStatusChip = (submission: ProblemSubmission): StatusChip => {
+const getReviewStatusChip = (submission: ProblemSubmission, autograderEnabled: boolean | undefined): StatusChip => {
   const hasGrade = submission.grade !== null && submission.grade !== undefined;
   if (hasGrade) {
     return {
@@ -163,30 +163,36 @@ const getReviewStatusChip = (submission: ProblemSubmission): StatusChip => {
     };
   }
 
-  const subm_status = submission.status.toLocaleLowerCase();
-  console.log(subm_status);
-  console.log(submission);
-  if (subm_status == 'processing') {
+  if (autograderEnabled) {
+    const subm_status = submission.status.toLocaleLowerCase();
+    if (subm_status == 'processing') {
+      return {
+        label: 'Processing',
+        tone: 'yellow',
+        title: 'Submission being graded',
+      };
+    }
+
+    if (subm_status == 'failed') {
+      return {
+        label: 'Failed',
+        tone: 'pink',
+        title: 'Submission analysis failed',
+      };
+    }
+
     return {
-      label: 'Processing',
-      tone: 'yellow',
-      title: 'Submission being graded',
+      label: 'Pending',
+      tone: 'violet',
+      title: 'Submission is waiting to be graded',
+    };
+  } else {
+    return {
+      label: 'Pending Grade',
+      tone: 'violet',
+      title: 'Submission is waiting to be graded',
     };
   }
-
-  if (subm_status == 'failed') {
-    return {
-      label: 'Failed',
-      tone: 'pink',
-      title: 'Submission analysis failed',
-    };
-  }
-
-  return {
-    label: 'Pending',
-    tone: 'violet',
-    title: 'Submission is waiting to be graded',
-  };
 };
 
 const getNoSubmissionChip = (hasValidDueDate: boolean, dueDate: Date | null): StatusChip => {
@@ -267,9 +273,9 @@ export function ProblemWorkspace({
     document.body.removeChild(link);
   };
 
-  const renderStatusCell = (submission: ProblemSubmission) => {
+  const renderStatusCell = (submission: ProblemSubmission, autoGraderEnabled: boolean | undefined) => {
     const timingStatus = getTimingStatusChip(submission, hasValidDueDate, dueDate);
-    const reviewStatus = getReviewStatusChip(submission);
+    const reviewStatus = getReviewStatusChip(submission, autoGraderEnabled);
 
     return (
       <div className="flex flex-col gap-1">
@@ -341,18 +347,29 @@ export function ProblemWorkspace({
                     <span className="inline-flex h-2.5 w-2.5 rounded-full bg-sky-500" aria-hidden="true" />
                     Graded
                   </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="inline-flex h-2.5 w-2.5 rounded-full bg-violet-500" aria-hidden="true" />
-                    Pending
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="inline-flex h-2.5 w-2.5 rounded-full bg-yellow-300" aria-hidden="true" />
-                    Processing
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="inline-flex h-2.5 w-2.5 rounded-full bg-pink-500" aria-hidden="true" />
-                    Failed
-                  </span>
+                  { problem.autograderEnabled ? (
+                    <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[11px] font-medium">
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="inline-flex h-2.5 w-2.5 rounded-full bg-violet-500" aria-hidden="true" />
+                        Pending
+                      </span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="inline-flex h-2.5 w-2.5 rounded-full bg-yellow-300" aria-hidden="true" />
+                        Processing
+                      </span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="inline-flex h-2.5 w-2.5 rounded-full bg-pink-500" aria-hidden="true" />
+                        Failed
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[11px] font-medium">
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="inline-flex h-2.5 w-2.5 rounded-full bg-violet-500" aria-hidden="true" />
+                        Pending Grade
+                      </span>
+                    </div>
+                  )}
                 </div>
                 <div className="overflow-x-auto rounded-md border">
                 <Table className="text-sm">
@@ -389,7 +406,7 @@ export function ProblemWorkspace({
                               ) : null}
                             </div>
                           </TableCell>
-                          <TableCell className="p-1 align-top">{renderStatusCell(submission)}</TableCell>
+                          <TableCell className="p-1 align-top">{renderStatusCell(submission, problem.autograderEnabled ?? undefined)}</TableCell>
                           <TableCell className="p-1 align-top">
                             <span className="font-medium">
                               {(submission.grade ? submission.grade : '-') + '/' + problem.maxPoints}
