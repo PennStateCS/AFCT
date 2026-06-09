@@ -24,6 +24,7 @@ type StudentGradesResponse = {
       maxSubmissions: number;
       submissionCount: number;
       grade: number | null;
+      status: string;
     }>;
   }>;
 };
@@ -185,7 +186,10 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
                               {problem.grade === null ? 'Ungraded' : 'Graded'}
                             </span>
                             <span className="rounded-full border border-border px-2 py-1 text-[10px] text-muted-foreground">
-                              {problem.submissionCount}/{problem.maxSubmissions < 0 ? '∞' : problem.maxSubmissions} Submissions
+                              {problem.submissionCount ? problem.submissionCount : 0}/{problem.maxSubmissions < 0 ? '∞' : problem.maxSubmissions} Submissions
+                            </span>
+                            <span className="rounded-full border border-border px-2 py-1 text-[10px] text-muted-foreground">
+                              {problem.status != "" ? "Latest Status: " + problem.status : "No Submission"}
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
