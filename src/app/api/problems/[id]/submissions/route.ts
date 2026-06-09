@@ -45,6 +45,7 @@ export async function GET(
         fileName: true,
         originalFileName: true,
         problemId: true,
+        status: true,
       },
     });
 
@@ -57,7 +58,7 @@ export async function GET(
       fileName: submission.fileName,
       originalFileName: submission.originalFileName,
       problemId: submission.problemId,
-      status: 'SUBMITTED' as 'SUBMITTED' | 'GRADED' | 'LATE',
+      status: submission.status,
     }));
 
     return NextResponse.json(formattedSubmissions);

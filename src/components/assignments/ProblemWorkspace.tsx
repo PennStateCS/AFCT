@@ -30,7 +30,7 @@ import ProblemDiscussionPanel from '@/components/ProblemDiscussionPanel';
 import type { Comment as DiscussionComment } from '@/components/DiscussionPanel';
 import type { StudentProblemComment } from '@/lib/assignment-details';
 
-type StatusTone = 'green' | 'amber' | 'red' | 'gray' | 'blue' | 'violet';
+type StatusTone = 'green' | 'amber' | 'red' | 'gray' | 'blue' | 'violet' | 'yellow' | 'pink';
 
 type StatusChip = {
   label: string;
@@ -45,6 +45,8 @@ const statusToneClass: Record<StatusTone, string> = {
   gray: 'bg-slate-400',
   blue: 'bg-sky-500',
   violet: 'bg-violet-500',
+  yellow: 'bg-yellow-300',
+  pink: 'bg-pink-500',
 };
 
 type Problem = {
@@ -69,7 +71,7 @@ type ProblemSubmission = {
   originalFileName?: string | null;
   feedback?: string | null;
   grade?: number | null;
-  status?: string;
+  status: string;
   correct?: boolean | null;
   problemId?: string | null;
   [key: string]: unknown;
@@ -158,6 +160,25 @@ const getReviewStatusChip = (submission: ProblemSubmission): StatusChip => {
       label: 'Graded',
       tone: 'blue',
       title: 'Submission has been graded',
+    };
+  }
+
+  const subm_status = submission.status.toLocaleLowerCase();
+  console.log(subm_status);
+  console.log(submission);
+  if (subm_status == 'processing') {
+    return {
+      label: 'Processing',
+      tone: 'yellow',
+      title: 'Submission being graded',
+    };
+  }
+
+  if (subm_status == 'failed') {
+    return {
+      label: 'Failed',
+      tone: 'pink',
+      title: 'Submission analysis failed',
     };
   }
 
@@ -323,6 +344,14 @@ export function ProblemWorkspace({
                   <span className="inline-flex items-center gap-1.5">
                     <span className="inline-flex h-2.5 w-2.5 rounded-full bg-violet-500" aria-hidden="true" />
                     Pending
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-flex h-2.5 w-2.5 rounded-full bg-yellow-300" aria-hidden="true" />
+                    Processing
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-flex h-2.5 w-2.5 rounded-full bg-pink-500" aria-hidden="true" />
+                    Failed
                   </span>
                 </div>
                 <div className="overflow-x-auto rounded-md border">
