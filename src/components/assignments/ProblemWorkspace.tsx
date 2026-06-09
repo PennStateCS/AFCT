@@ -154,31 +154,37 @@ const getTimingStatusChip = (
 };
 
 const getReviewStatusChip = (submission: ProblemSubmission): StatusChip => {
-  const hasGrade = submission.grade !== null && submission.grade !== undefined;
-  if (hasGrade) {
-    return {
-      label: 'Graded',
-      tone: 'blue',
-      title: 'Submission has been graded',
-    };
-  }
+  const subm_status = submission.status?.toLowerCase() ?? '';
 
-  const subm_status = submission.status.toLocaleLowerCase();
-  console.log(subm_status);
-  console.log(submission);
-  if (subm_status == 'processing') {
+  if (subm_status === 'processing') {
     return {
       label: 'Processing',
       tone: 'yellow',
-      title: 'Submission being graded',
+      title: 'Submission is being processed',
     };
   }
 
-  if (subm_status == 'failed') {
+  if (subm_status === 'failed') {
     return {
       label: 'Failed',
       tone: 'pink',
       title: 'Submission analysis failed',
+    };
+  }
+
+  if (submission.correct === true) {
+    return {
+      label: 'Correct',
+      tone: 'blue',
+      title: 'Submission is correct',
+    };
+  }
+
+  if (submission.correct === false) {
+    return {
+      label: 'Incorrect',
+      tone: 'red',
+      title: 'Submission is incorrect',
     };
   }
 
@@ -187,6 +193,29 @@ const getReviewStatusChip = (submission: ProblemSubmission): StatusChip => {
     tone: 'violet',
     title: 'Submission is waiting to be graded',
   };
+};
+
+type SubmissionStatusFilter = 'all' | 'pending' | 'processing' | 'failed' | 'completed' | 'correct' | 'incorrect';
+
+const getSubmissionReviewStatus = (submission: ProblemSubmission): string => {
+  const subm_status = submission.status?.toLowerCase() ?? '';
+  if (subm_status === 'processing') return 'processing';
+  if (subm_status === 'failed') return 'failed';
+  if (submission.correct === true) return 'correct';
+  if (submission.correct === false) return 'incorrect';
+  return 'pending';
+};
+
+const filterSubmissions = (
+  submissions: ProblemSubmission[],
+  filter: SubmissionStatusFilter,
+): ProblemSubmission[] => {
+  if (filter === 'all') return submissions;
+  return submissions.filter((s) => {
+    const reviewStatus = getSubmissionReviewStatus(s);
+    if (filter === 'completed') return reviewStatus === 'correct' || reviewStatus === 'incorrect';
+    return reviewStatus === filter;
+  });
 };
 
 const getNoSubmissionChip = (hasValidDueDate: boolean, dueDate: Date | null): StatusChip => {
@@ -236,6 +265,7 @@ export function ProblemWorkspace({
 }: ProblemWorkspaceProps) {
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
   const [activeFeedback, setActiveFeedback] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<SubmissionStatusFilter>('all');
   if (!problem) {
     return (
       <Card>
@@ -339,7 +369,11 @@ export function ProblemWorkspace({
                   </span>
                   <span className="inline-flex items-center gap-1.5">
                     <span className="inline-flex h-2.5 w-2.5 rounded-full bg-sky-500" aria-hidden="true" />
-                    Graded
+                    Correct
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-flex h-2.5 w-2.5 rounded-full bg-rose-500" aria-hidden="true" />
+                    Incorrect
                   </span>
                   <span className="inline-flex items-center gap-1.5">
                     <span className="inline-flex h-2.5 w-2.5 rounded-full bg-violet-500" aria-hidden="true" />
@@ -354,6 +388,24 @@ export function ProblemWorkspace({
                     Failed
                   </span>
                 </div>
+
+                {/* Status filter */}
+                <div className="flex flex-wrap gap-1 px-1">
+                  {(['all', 'pending', 'processing', 'failed', 'completed', 'correct', 'incorrect'] as SubmissionStatusFilter[]).map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => setStatusFilter(f)}
+                      className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium capitalize transition-colors ${
+                        statusFilter === f
+                          ? 'border-foreground bg-foreground text-background'
+                          : 'border-border text-muted-foreground hover:border-foreground/50 hover:text-foreground'
+                      }`}
+                    >
+                      {f}
+                    </button>
+                  ))}
+                </div>
+
                 <div className="overflow-x-auto rounded-md border">
                 <Table className="text-sm">
                   <TableHeader>
@@ -366,7 +418,13 @@ export function ProblemWorkspace({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {sortedSubmissions.map((submission) => {
+                    {filterSubmissions(sortedSubmissions, statusFilter).length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-muted-foreground py-6 text-center text-sm">
+                          No submissions match the selected filter.
+                        </TableCell>
+                      </TableRow>
+                    ) : filterSubmissions(sortedSubmissions, statusFilter).map((submission) => {
                       const submittedAt = new Date(submission.submittedAt);
                       const isLate =
                         submission.status === 'LATE' ||
