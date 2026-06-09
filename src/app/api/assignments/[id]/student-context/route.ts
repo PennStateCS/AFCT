@@ -66,6 +66,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
           fileName: true,
           originalFileName: true,
           problemId: true,
+          status: true,
         },
       }),
       prisma.comment.findMany({
@@ -140,7 +141,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
             fileName: submission.fileName,
             originalFileName: submission.originalFileName,
             problemId: submission.problemId,
-            status: 'SUBMITTED' as const,
+            status: submission.status,
           })),
         ]),
       ),
