@@ -184,7 +184,7 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
                               Problem {index + 1}: {problem.title ?? 'Untitled'}
                             </p>
                             <span className="rounded-full border border-border px-2 py-1 text-[10px] text-muted-foreground">
-                              {problem.grade === null ? 'Ungraded' : 'Graded'}
+                              {problem.status.toLowerCase() == "processing" ? 'Grading' : (problem.grade === null) ? 'Not Graded' : 'Graded'}
                             </span>
                             <span className="rounded-full border border-border px-2 py-1 text-[10px] text-muted-foreground">
                               {problem.submissionCount ? problem.submissionCount : 0}/{problem.maxSubmissions < 0 ? '∞' : problem.maxSubmissions} Submissions
