@@ -424,6 +424,7 @@ export function ProblemWorkspace({
                                 title="View feedback"
                                 aria-label="View submission feedback"
                                 className="h-8 w-8 p-0"
+                                disabled={submission.status.toLowerCase() == "pending" || submission.status.toLowerCase() == "processing"}
                               >
                                 <File className="h-4 w-4" />
                               </Button>
