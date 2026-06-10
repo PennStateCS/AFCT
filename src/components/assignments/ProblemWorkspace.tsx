@@ -136,7 +136,7 @@ const getTimingStatusChip = (
 ): StatusChip => {
   const submittedAt = new Date(submission.submittedAt);
   const isLate =
-    submission.status === 'LATE' ||
+    submission.status?.toLowerCase() === 'late' ||
     (hasValidDueDate && !!dueDate && submittedAt.getTime() > dueDate.getTime());
 
   if (isLate) {
@@ -164,8 +164,16 @@ const getReviewStatusChip = (submission: ProblemSubmission, autograderEnabled: b
     };
   }
 
-  const subm_status = submission.status?.toLocaleLowerCase() ?? '';
-  if (subm_status == 'processing') {
+  const subm_status = submission.status?.toLowerCase() ?? '';
+  if (subm_status === 'pending') {
+    return {
+      label: 'Pending',
+      tone: 'violet',
+      title: 'Submission analysis is pending',
+    };
+  }
+
+  if (subm_status === 'processing') {
     return {
       label: 'Processing',
       tone: 'yellow',
@@ -197,14 +205,6 @@ const getReviewStatusChip = (submission: ProblemSubmission, autograderEnabled: b
     };
   }
 
-  if (subm_status == 'pending') {
-    return {
-      label: 'Pending',
-      tone: 'violet',
-      title: 'Submission analysis is pending',
-    };
-  }
-
   return {
     label: 'Completed',
     tone: 'lime',
@@ -217,21 +217,21 @@ type SubmissionStatusFilter = 'on-time' | 'late' | 'pending' | 'processing' | 'f
 const STATUS_FILTER_OPTIONS: { value: SubmissionStatusFilter; label: string; dot: string }[] = [
   { value: 'on-time',    label: 'On time',    dot: 'bg-emerald-500' },
   { value: 'late',       label: 'Late',       dot: 'bg-amber-500'   },
-  { value: 'correct',    label: 'Correct',    dot: 'bg-sky-500'     },
-  { value: 'incorrect',  label: 'Incorrect',  dot: 'bg-rose-500'    },
   { value: 'pending',    label: 'Pending',    dot: 'bg-violet-500'  },
   { value: 'processing', label: 'Processing', dot: 'bg-yellow-300'  },
   { value: 'failed',     label: 'Failed',     dot: 'bg-pink-500'    },
+  { value: 'correct',    label: 'Correct',    dot: 'bg-sky-500'     },
+  { value: 'incorrect',  label: 'Incorrect',  dot: 'bg-rose-500'    },
   { value: 'completed',  label: 'Completed',  dot: 'bg-slate-400'   },
 ];
 
 const getSubmissionReviewStatus = (submission: ProblemSubmission): string => {
   const subm_status = submission.status?.toLowerCase() ?? '';
   if (subm_status === 'processing') return 'processing';
+  if (subm_status === 'pending') return 'pending';
   if (subm_status === 'failed') return 'failed';
   if (submission.correct === true) return 'correct';
-  if (submission.correct === false) return 'incorrect';
-  return 'pending';
+  return 'incorrect';
 };
 
 const filterSubmissions = (
@@ -245,7 +245,7 @@ const filterSubmissions = (
     const reviewStatus = getSubmissionReviewStatus(s);
     const submittedAt = new Date(s.submittedAt);
     const isLate =
-      s.status === 'LATE' ||
+      s.status?.toLowerCase() === 'late' ||
       (hasValidDueDate && !!dueDate && submittedAt.getTime() > dueDate.getTime());
 
     if (activeFilters.has('late') && isLate) return true;
@@ -457,7 +457,7 @@ export function ProblemWorkspace({
                     ) : filterSubmissions(sortedSubmissions, activeFilters, dueDate, hasValidDueDate).map((submission) => {
                       const submittedAt = new Date(submission.submittedAt);
                       const isLate =
-                        submission.status === 'LATE' ||
+                        submission.status?.toLowerCase() === 'late' ||
                         (hasValidDueDate && submittedAt.getTime() > dueDate!.getTime());
                       return (
                         <TableRow key={submission.id} className="hover:bg-transparent">
@@ -495,7 +495,7 @@ export function ProblemWorkspace({
                                 title="View feedback"
                                 aria-label="View submission feedback"
                                 className="h-8 w-8 p-0"
-                                disabled={submission.status?.toLowerCase() == "pending" || submission.status?.toLowerCase() == "processing"}
+                                disabled={submission.status?.toLowerCase() === "pending" || submission.status?.toLowerCase() === "processing"}
                               >
                                 <File className="h-4 w-4" />
                               </Button>
