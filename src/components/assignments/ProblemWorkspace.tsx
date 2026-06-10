@@ -389,6 +389,8 @@ export function ProblemWorkspace({
               error={gradeError}
               onChange={onGradeInputChange}
               onSubmit={onSaveGrade}
+              autograderStatus={submissions[0]?.status ?? null}
+              onRerun={onRerunSubmission ? () => onRerunSubmission(submissions[0]) : undefined}
             />
           ) : null}
         </div>
