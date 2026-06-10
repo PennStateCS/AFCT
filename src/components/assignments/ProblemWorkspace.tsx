@@ -30,7 +30,7 @@ import ProblemDiscussionPanel from '@/components/ProblemDiscussionPanel';
 import type { Comment as DiscussionComment } from '@/components/DiscussionPanel';
 import type { StudentProblemComment } from '@/lib/assignment-details';
 
-type StatusTone = 'green' | 'amber' | 'red' | 'gray' | 'blue' | 'violet' | 'yellow' | 'pink';
+type StatusTone = 'green' | 'amber' | 'red' | 'gray' | 'blue' | 'violet' | 'yellow' | 'lime' | 'pink';
 
 type StatusChip = {
   label: string;
@@ -46,6 +46,7 @@ const statusToneClass: Record<StatusTone, string> = {
   blue: 'bg-sky-500',
   violet: 'bg-violet-500',
   yellow: 'bg-yellow-300',
+  lime: 'bg-lime-400',
   pink: 'bg-pink-500',
 };
 
@@ -153,10 +154,18 @@ const getTimingStatusChip = (
   };
 };
 
-const getReviewStatusChip = (submission: ProblemSubmission): StatusChip => {
-  const subm_status = submission.status?.toLowerCase() ?? '';
+const getReviewStatusChip = (submission: ProblemSubmission, autograderEnabled: boolean | undefined): StatusChip => {
+  const hasGrade = submission.grade !== null && submission.grade !== undefined;
+  if (hasGrade) {
+    return {
+      label: 'Graded',
+      tone: 'blue',
+      title: 'Submission has been graded',
+    };
+  }
 
-  if (subm_status === 'processing') {
+  const subm_status = submission.status.toLocaleLowerCase();
+  if (subm_status == 'processing') {
     return {
       label: 'Processing',
       tone: 'yellow',
@@ -188,11 +197,63 @@ const getReviewStatusChip = (submission: ProblemSubmission): StatusChip => {
     };
   }
 
+  if (subm_status == 'pending') {
+    return {
+      label: 'Pending',
+      tone: 'violet',
+      title: 'Submission analysis is pending',
+    };
+  }
+
   return {
-    label: 'Pending',
-    tone: 'violet',
-    title: 'Submission is waiting to be graded',
+    label: 'Completed',
+    tone: 'lime',
+    title: 'Submission is analysis is completed',
   };
+};
+
+type SubmissionStatusFilter = 'on-time' | 'late' | 'pending' | 'processing' | 'failed' | 'completed' | 'correct' | 'incorrect';
+
+const STATUS_FILTER_OPTIONS: { value: SubmissionStatusFilter; label: string; dot: string }[] = [
+  { value: 'on-time',    label: 'On time',    dot: 'bg-emerald-500' },
+  { value: 'late',       label: 'Late',       dot: 'bg-amber-500'   },
+  { value: 'correct',    label: 'Correct',    dot: 'bg-sky-500'     },
+  { value: 'incorrect',  label: 'Incorrect',  dot: 'bg-rose-500'    },
+  { value: 'pending',    label: 'Pending',    dot: 'bg-violet-500'  },
+  { value: 'processing', label: 'Processing', dot: 'bg-yellow-300'  },
+  { value: 'failed',     label: 'Failed',     dot: 'bg-pink-500'    },
+  { value: 'completed',  label: 'Completed',  dot: 'bg-slate-400'   },
+];
+
+const getSubmissionReviewStatus = (submission: ProblemSubmission): string => {
+  const subm_status = submission.status?.toLowerCase() ?? '';
+  if (subm_status === 'processing') return 'processing';
+  if (subm_status === 'failed') return 'failed';
+  if (submission.correct === true) return 'correct';
+  if (submission.correct === false) return 'incorrect';
+  return 'pending';
+};
+
+const filterSubmissions = (
+  submissions: ProblemSubmission[],
+  activeFilters: Set<SubmissionStatusFilter>,
+  dueDate: Date | null,
+  hasValidDueDate: boolean,
+): ProblemSubmission[] => {
+  if (activeFilters.size === 0) return submissions;
+  return submissions.filter((s) => {
+    const reviewStatus = getSubmissionReviewStatus(s);
+    const submittedAt = new Date(s.submittedAt);
+    const isLate =
+      s.status === 'LATE' ||
+      (hasValidDueDate && !!dueDate && submittedAt.getTime() > dueDate.getTime());
+
+    if (activeFilters.has('late') && isLate) return true;
+    if (activeFilters.has('on-time') && !isLate) return true;
+    if (activeFilters.has('completed') && (reviewStatus === 'correct' || reviewStatus === 'incorrect')) return true;
+    if (activeFilters.has(reviewStatus as SubmissionStatusFilter)) return true;
+    return false;
+  });
 };
 
 type SubmissionStatusFilter = 'on-time' | 'late' | 'pending' | 'processing' | 'failed' | 'completed' | 'correct' | 'incorrect';
@@ -327,9 +388,9 @@ export function ProblemWorkspace({
     document.body.removeChild(link);
   };
 
-  const renderStatusCell = (submission: ProblemSubmission) => {
+  const renderStatusCell = (submission: ProblemSubmission, autoGraderEnabled: boolean | undefined) => {
     const timingStatus = getTimingStatusChip(submission, hasValidDueDate, dueDate);
-    const reviewStatus = getReviewStatusChip(submission);
+    const reviewStatus = getReviewStatusChip(submission, autoGraderEnabled);
 
     return (
       <div className="flex flex-col gap-1">
@@ -460,7 +521,7 @@ export function ProblemWorkspace({
                               ) : null}
                             </div>
                           </TableCell>
-                          <TableCell className="p-1 align-top">{renderStatusCell(submission)}</TableCell>
+                          <TableCell className="p-1 align-top">{renderStatusCell(submission, problem.autograderEnabled ?? undefined)}</TableCell>
                           <TableCell className="p-1 align-top">
                             <span className="font-medium">
                               {(submission.grade ? submission.grade : '-') + '/' + problem.maxPoints}
@@ -478,6 +539,7 @@ export function ProblemWorkspace({
                                 title="View feedback"
                                 aria-label="View submission feedback"
                                 className="h-8 w-8 p-0"
+                                disabled={submission.status.toLowerCase() == "pending" || submission.status.toLowerCase() == "processing"}
                               >
                                 <File className="h-4 w-4" />
                               </Button>
