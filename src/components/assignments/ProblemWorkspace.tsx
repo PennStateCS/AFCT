@@ -30,7 +30,7 @@ import ProblemDiscussionPanel from '@/components/ProblemDiscussionPanel';
 import type { Comment as DiscussionComment } from '@/components/DiscussionPanel';
 import type { StudentProblemComment } from '@/lib/assignment-details';
 
-type StatusTone = 'green' | 'amber' | 'red' | 'gray' | 'blue' | 'violet' | 'yellow' | 'pink';
+type StatusTone = 'green' | 'amber' | 'red' | 'gray' | 'blue' | 'violet' | 'yellow' | 'lime' | 'pink';
 
 type StatusChip = {
   label: string;
@@ -46,6 +46,7 @@ const statusToneClass: Record<StatusTone, string> = {
   blue: 'bg-sky-500',
   violet: 'bg-violet-500',
   yellow: 'bg-yellow-300',
+  lime: 'bg-lime-400',
   pink: 'bg-pink-500',
 };
 
@@ -163,36 +164,36 @@ const getReviewStatusChip = (submission: ProblemSubmission, autograderEnabled: b
     };
   }
 
-  if (autograderEnabled) {
-    const subm_status = submission.status.toLocaleLowerCase();
-    if (subm_status == 'processing') {
-      return {
-        label: 'Processing',
-        tone: 'yellow',
-        title: 'Submission being graded',
-      };
-    }
+  const subm_status = submission.status.toLocaleLowerCase();
+  if (subm_status == 'processing') {
+    return {
+      label: 'Processing',
+      tone: 'yellow',
+      title: 'Submission being graded',
+    };
+  }
 
-    if (subm_status == 'failed') {
-      return {
-        label: 'Failed',
-        tone: 'pink',
-        title: 'Submission analysis failed',
-      };
-    }
+  if (subm_status == 'failed') {
+    return {
+      label: 'Failed',
+      tone: 'pink',
+      title: 'Submission analysis failed',
+    };
+  }
 
+  if (subm_status == 'pending') {
     return {
       label: 'Pending',
       tone: 'violet',
-      title: 'Submission is waiting to be graded',
-    };
-  } else {
-    return {
-      label: 'Pending Grade',
-      tone: 'violet',
-      title: 'Submission is waiting to be graded',
+      title: 'Submission analysis is pending',
     };
   }
+
+  return {
+    label: 'Completed',
+    tone: 'lime',
+    title: 'Submission is analysis is completed',
+  };
 };
 
 const getNoSubmissionChip = (hasValidDueDate: boolean, dueDate: Date | null): StatusChip => {
@@ -334,7 +335,7 @@ export function ProblemWorkspace({
               </div>
             ) : sortedSubmissions.length > 0 ? (
               <div className="space-y-2">
-                <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[11px] font-medium">
+                <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[10px] font-small">
                   <span className="inline-flex items-center gap-1.5">
                     <span className="inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" aria-hidden="true" />
                     On time
@@ -347,29 +348,22 @@ export function ProblemWorkspace({
                     <span className="inline-flex h-2.5 w-2.5 rounded-full bg-sky-500" aria-hidden="true" />
                     Graded
                   </span>
-                  { problem.autograderEnabled ? (
-                    <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[11px] font-medium">
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className="inline-flex h-2.5 w-2.5 rounded-full bg-violet-500" aria-hidden="true" />
-                        Pending
-                      </span>
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className="inline-flex h-2.5 w-2.5 rounded-full bg-yellow-300" aria-hidden="true" />
-                        Processing
-                      </span>
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className="inline-flex h-2.5 w-2.5 rounded-full bg-pink-500" aria-hidden="true" />
-                        Failed
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[11px] font-medium">
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className="inline-flex h-2.5 w-2.5 rounded-full bg-violet-500" aria-hidden="true" />
-                        Pending Grade
-                      </span>
-                    </div>
-                  )}
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-flex h-2.5 w-2.5 rounded-full bg-violet-500" aria-hidden="true" />
+                    Pending
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-flex h-2.5 w-2.5 rounded-full bg-yellow-300" aria-hidden="true" />
+                    Processing
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-flex h-2.5 w-2.5 rounded-full bg-lime-400" aria-hidden="true" />
+                    Completed
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-flex h-2.5 w-2.5 rounded-full bg-pink-500" aria-hidden="true" />
+                    Failed
+                  </span>
                 </div>
                 <div className="overflow-x-auto rounded-md border">
                 <Table className="text-sm">
