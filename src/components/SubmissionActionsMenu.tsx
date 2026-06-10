@@ -34,6 +34,19 @@ const formatStatus = (status: string | null | undefined): string => {
   return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
 };
 
+const statusBadgeClass = (status: string | null | undefined): string => {
+  switch (status?.toUpperCase()) {
+    case 'PROCESSING': return 'bg-yellow-100 text-yellow-900';
+    case 'FAILED':     return 'bg-rose-100 text-rose-900';
+    case 'CORRECT':    return 'bg-emerald-100 text-emerald-900';
+    case 'INCORRECT':  return 'bg-red-100 text-red-900';
+    case 'COMPLETED':  return 'bg-lime-100 text-lime-900';
+    case 'PENDING':    return 'bg-violet-100 text-violet-900';
+    case 'LATE':       return 'bg-amber-100 text-amber-900';
+    default:           return 'bg-slate-100 text-slate-700';
+  }
+};
+
 export default function SubmissionActionsMenu({
   submission,
   rerunning,
@@ -97,7 +110,7 @@ export default function SubmissionActionsMenu({
         </Dialog>
       </DropdownMenuContent>
     </DropdownMenu>
-      <span className="text-xs text-rose-900 px-2 py-1 rounded bg-rose-100 font-medium">
+      <span className={`text-xs px-2 py-1 rounded font-medium ${statusBadgeClass(submission.status)}`}>
         {formatStatus(submission.status)}
       </span>
     </div>
