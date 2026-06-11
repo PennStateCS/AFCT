@@ -154,7 +154,7 @@ const getTimingStatusChip = (
   };
 };
 
-const getReviewStatusChip = (submission: ProblemSubmission, autograderEnabled: boolean | undefined): StatusChip => {
+const getReviewStatusChip = (submission: ProblemSubmission): StatusChip => {
   const hasGrade = submission.grade !== null && submission.grade !== undefined;
   if (hasGrade) {
     return {
@@ -197,22 +197,14 @@ const getReviewStatusChip = (submission: ProblemSubmission, autograderEnabled: b
     };
   }
 
-  if (submission.correct === false) {
-    return {
-      label: 'Incorrect',
-      tone: 'red',
-      title: 'Submission is incorrect',
-    };
-  }
-
   return {
-    label: 'Completed',
-    tone: 'lime',
-    title: 'Submission is analysis is completed',
+    label: 'Incorrect',
+    tone: 'red',
+    title: 'Submission is incorrect',
   };
 };
 
-type SubmissionStatusFilter = 'on-time' | 'late' | 'pending' | 'processing' | 'failed' | 'completed' | 'correct' | 'incorrect';
+type SubmissionStatusFilter = 'on-time' | 'late' | 'pending' | 'processing' | 'failed' | 'correct' | 'incorrect';
 
 const STATUS_FILTER_OPTIONS: { value: SubmissionStatusFilter; label: string; dot: string }[] = [
   { value: 'on-time',    label: 'On time',    dot: 'bg-emerald-500' },
@@ -222,7 +214,6 @@ const STATUS_FILTER_OPTIONS: { value: SubmissionStatusFilter; label: string; dot
   { value: 'failed',     label: 'Failed',     dot: 'bg-pink-500'    },
   { value: 'correct',    label: 'Correct',    dot: 'bg-sky-500'     },
   { value: 'incorrect',  label: 'Incorrect',  dot: 'bg-rose-500'    },
-  { value: 'completed',  label: 'Completed',  dot: 'bg-slate-400'   },
 ];
 
 const getSubmissionReviewStatus = (submission: ProblemSubmission): string => {
@@ -250,7 +241,6 @@ const filterSubmissions = (
 
     if (activeFilters.has('late') && isLate) return true;
     if (activeFilters.has('on-time') && !isLate) return true;
-    if (activeFilters.has('completed') && (reviewStatus === 'correct' || reviewStatus === 'incorrect')) return true;
     if (activeFilters.has(reviewStatus as SubmissionStatusFilter)) return true;
     return false;
   });
@@ -342,9 +332,9 @@ export function ProblemWorkspace({
     link.click();
   };
 
-  const renderStatusCell = (submission: ProblemSubmission, autoGraderEnabled: boolean | undefined) => {
+  const renderStatusCell = (submission: ProblemSubmission) => {
     const timingStatus = getTimingStatusChip(submission, hasValidDueDate, dueDate);
-    const reviewStatus = getReviewStatusChip(submission, autoGraderEnabled);
+    const reviewStatus = getReviewStatusChip(submission);
 
     return (
       <div className="flex flex-col gap-1">
@@ -477,7 +467,7 @@ export function ProblemWorkspace({
                               ) : null}
                             </div>
                           </TableCell>
-                          <TableCell className="p-1 align-top">{renderStatusCell(submission, problem.autograderEnabled ?? undefined)}</TableCell>
+                          <TableCell className="p-1 align-top">{renderStatusCell(submission)}</TableCell>
                           <TableCell className="p-1 align-top">
                             <span className="font-medium">
                               {(submission.grade ? submission.grade : '-') + '/' + problem.maxPoints}
