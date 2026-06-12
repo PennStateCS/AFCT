@@ -13,7 +13,6 @@ services:
 
     ports:
       - '3000:3000'
-      - '5555:5555'
 
     environment:
       NODE_ENV: development
@@ -97,6 +96,24 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  prisma-studio:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: afct-prisma-studio
+    restart: unless-stopped
+    ports:
+      - '5555:5555'
+    environment:
+      DATABASE_URL: postgres://afct_user:afct_pass@postgres:5432/afct
+    volumes:
+      - .:/app:cached
+      - afct-dev-node-modules:/app/node_modules
+    command: ['npx', 'prisma', 'studio', '--browser', 'none', '--hostname', '0.0.0.0']
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   nginx_certs:

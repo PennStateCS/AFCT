@@ -2,52 +2,6 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { truncate } from '@/app/utils/truncate';
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
-import { execSync } from 'child_process';
-import JavaRunner from '../../../../../../lib/java-runner';
-
-function getJavaRunnerCtor() {
-  const maybeCtor =
-    typeof JavaRunner === 'function'
-      ? JavaRunner
-      : (JavaRunner as unknown as { default?: unknown })?.default;
-
-  if (typeof maybeCtor !== 'function') {
-    throw new Error('Java runner constructor is unavailable');
-  }
-
-  return maybeCtor as new (jarPath: string) => {
-    execute: (
-      args: string[],
-      options?: { timeout?: number },
-    ) => Promise<{
-      stdout?: string;
-      stderr?: string;
-      exitCode?: number;
-    }>;
-  };
-}
-
-function createJavaRunner(jarPath: string) {
-  const JavaRunnerCtor = getJavaRunnerCtor();
-  try {
-    return new JavaRunnerCtor(jarPath);
-  } catch {
-    return (JavaRunnerCtor as unknown as (path: string) => { execute: Function })(jarPath) as {
-      execute: (
-        args: string[],
-        options?: { timeout?: number },
-      ) => Promise<{
-        stdout?: string;
-        stderr?: string;
-        exitCode?: number;
-      }>;
-    };
-  }
-}
 
 export async function POST(req: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
@@ -115,151 +69,13 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
       );
     }
 
-    const submissionPath = path.join('/private', 'uploads', 'submissions', submission.fileName);
-    if (!fs.existsSync(submissionPath)) {
-      return NextResponse.json({ error: 'Submission file not found' }, { status: 404 });
-    }
-
-    const answerFileName = link.problem.fileName;
-    if (!answerFileName) {
-      return NextResponse.json(
-        { error: 'No answer file configured for this problem.' },
-        { status: 400 },
-      );
-    }
-
-    const answerFilePath = path.join('/private', 'uploads', 'solutions', answerFileName);
-    if (!fs.existsSync(answerFilePath)) {
-      return NextResponse.json({ error: 'Answer file not found on server.' }, { status: 404 });
-    }
-
-    let feedback: string | null = null;
-    let correct: boolean | undefined = undefined;
-    let evaluationRaw: unknown | null = null;
-
-    try {
-      const isDocker = process.env.CFGANALYZER_BINARY !== undefined;
-
-      if (!isDocker && os.platform() === 'win32') {
-        const result = execSync(`powershell -Command "(Get-Content '${submissionPath}').Count"`, {
-          encoding: 'utf-8',
-        });
-        feedback = `File has ${result.trim()} lines (Windows).`;
-      } else {
-        const evaluator = createJavaRunner('./jars/afct-evaluator.jar');
-        const args = ['--json', answerFilePath, submissionPath];
-
-        if (link.problem.type === 'FA' || link.problem.type === 'PDA') {
-          const maxStates = link.problem.maxStates ?? -1;
-          args.push(maxStates.toString());
-
-          if (link.problem.type === 'FA') {
-            const deterministic = link.problem.isDeterministic ?? false;
-            args.push(deterministic.toString());
-          }
-        }
-
-        const result = await evaluator.execute(args, { timeout: 30000 });
-
-        const stdoutTrimmed = result.stdout?.trim() ?? '';
-        const stderrTrimmed = result.stderr?.trim() ?? '';
-
-        if (stderrTrimmed) {
-          await createEnhancedActivityLog(prisma, req, {
-            userId: user.id,
-            action: 'SUBMISSION_RERUN_STDERR',
-            category: 'SUBMISSION',
-            courseId: assignment?.courseId ?? null,
-            assignmentId: submission.assignmentId,
-            problemId: submission.problemId,
-            submissionId: submission.id,
-            metadata: {
-              userId: user.id,
-              assignmentId: submission.assignmentId,
-              problemId: submission.problemId,
-              submissionId: submission.id,
-              stderr: truncate(stderrTrimmed, 50),
-            },
-          });
-        }
-
-        try {
-          const evaluation = JSON.parse(stdoutTrimmed);
-          evaluationRaw = evaluation;
-          if (evaluation && typeof evaluation === 'object') {
-            if (typeof evaluation.correct === 'boolean') {
-              correct = evaluation.correct;
-            }
-
-            if (typeof evaluation.feedback === 'string') {
-              const isJavaStreamString = /java\.lang\..*Stream@/i.test(evaluation.feedback);
-              feedback = isJavaStreamString
-                ? `Evaluation completed - correct: ${correct}`
-                : evaluation.feedback;
-            } else {
-              feedback = `Evaluation completed - correct: ${correct}`;
-            }
-          } else {
-            feedback = `ERROR: Invalid JSON response from evaluator: ${stdoutTrimmed}`;
-          }
-        } catch (parseErr) {
-          evaluationRaw = stdoutTrimmed || null;
-          feedback = `ERROR: Failed to parse evaluation result - ${stdoutTrimmed}`;
-          await createEnhancedActivityLog(prisma, req, {
-            userId: user.id,
-            action: 'SUBMISSION_RERUN_ERROR',
-            category: 'SUBMISSION',
-            courseId: assignment?.courseId ?? null,
-            assignmentId: submission.assignmentId,
-            problemId: submission.problemId,
-            submissionId: submission.id,
-            metadata: {
-              userId: user.id,
-              assignmentId: submission.assignmentId,
-              problemId: submission.problemId,
-              submissionId: submission.id,
-              error: feedback,
-              parseError: parseErr instanceof Error ? parseErr.message : String(parseErr),
-            },
-          });
-        }
-      }
-    } catch (evaluatorErr) {
-      feedback = `ERROR: Evaluation failed - ${
-        evaluatorErr instanceof Error ? evaluatorErr.message : 'Unknown error'
-      }`;
-      await createEnhancedActivityLog(prisma, req, {
-        userId: user.id,
-        action: 'SUBMISSION_RERUN_ERROR',
-        category: 'SUBMISSION',
-        courseId: assignment?.courseId ?? null,
-        assignmentId: submission.assignmentId,
-        problemId: submission.problemId,
-        submissionId: submission.id,
-        metadata: {
-          userId: user.id,
-          assignmentId: submission.assignmentId,
-          problemId: submission.problemId,
-          submissionId: submission.id,
-          error: feedback,
-        },
-      });
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updated = await (prisma as any).submission.update({
-      where: { id: submission.id },
+    const updated = await prisma.submission.update({
+      where: { id },
       data: {
-        feedback,
-        correct,
-        evaluationRaw,
-      },
-      select: {
-        id: true,
-        feedback: true,
-        correct: true,
-        evaluationRaw: true,
-        updatedAt: true,
+        status: "PENDING",
+        feedback: null,
+        correct: null,
+        updatedAt: new Date(),
       },
     });
 
@@ -276,11 +92,11 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
         assignmentId: submission.assignmentId,
         problemId: submission.problemId,
         submissionId: submission.id,
-        correct: updated.correct,
+        status: 'PENDING'
       },
     });
 
-    return NextResponse.json({ success: true, submission: updated }, { status: 200 });
+    return NextResponse.json({ success: true, submission: updated }, { status: 202 });
   } catch (error) {
     console.error('POST /api/submissions/[id]/rerun error:', error);
     return NextResponse.json({ error: 'Failed to rerun submission' }, { status: 500 });

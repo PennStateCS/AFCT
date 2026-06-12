@@ -94,6 +94,9 @@ export default async function DashboardPage() {
       courseId: string;
       dueDate: Date;
       pendingCount: number;
+      processingCount: number;
+      gradedCount: number;
+      failedCount: number;
     }
   >();
 
@@ -112,6 +115,7 @@ export default async function DashboardPage() {
         assignmentId: true,
         problemId: true,
         studentId: true,
+        status: true,
         assignmentProblem: {
           select: {
             assignment: {
@@ -152,22 +156,28 @@ export default async function DashboardPage() {
       const isGraded = gradedSubmissionKeys.has(
         `${submission.assignmentId}:${submission.problemId}:${submission.studentId}`,
       );
-      if (isGraded) continue;
 
       const assignment = submission.assignmentProblem.assignment;
       const key = assignment.id;
       const existing = pendingByAssignment.get(key);
 
       if (existing) {
+        if (isGraded) {
+          existing.gradedCount += 1;
+          continue;
+        }
+
+        if (submission.status == 'FAILED') {
+          existing.failedCount += 1;
+          continue;
+        }
+
+        if (submission.status == 'PROCESSING') {
+          existing.processingCount += 1;
+          continue;
+        }
+
         existing.pendingCount += 1;
-      } else {
-        pendingByAssignment.set(key, {
-          assignmentId: assignment.id,
-          assignmentTitle: assignment.title,
-          courseId: assignment.courseId,
-          dueDate: assignment.dueDate,
-          pendingCount: 1,
-        });
       }
     }
   }
@@ -210,7 +220,7 @@ export default async function DashboardPage() {
         </div>
         {showSubmissions && (
           <div className="pb-4">
-            <SubmissionsModule pendingAssignments={pendingAssignments} />
+            <SubmissionsModule assignments={pendingAssignments} />
           </div>
         )}
         <div>

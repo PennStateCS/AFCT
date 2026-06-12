@@ -4,15 +4,6 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FileText } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import type { Submission, User } from '@prisma/client';
 import { showToast } from '@/lib/toast';
 import type { Comment as DiscussionComment } from './DiscussionPanel';
@@ -20,7 +11,6 @@ import { ProblemListCard } from '@/components/assignments/ProblemListCard';
 import { ProblemWorkspace } from '@/components/assignments/ProblemWorkspace';
 import StudentNavigator from './StudentNavigator';
 import JffViewerDialog from './JffViewerDialog';
-import SubmissionActionsMenu from './SubmissionActionsMenu';
 import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
 import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
 
@@ -58,130 +48,21 @@ type Props = {
 };
 
 // Helpers
+const hasSubmissions = (obj: any): obj is { submissions: Submission[] } => {
+  return obj && typeof obj === 'object' && Array.isArray(obj.submissions);
+};
+
 const extractSubs = (raw?: SubmissionData): Submission[] => {
   if (!raw) return [];
   if (Array.isArray(raw)) return raw;
-  if (raw && typeof raw === 'object' && 'submissions' in raw)
-    return (raw as { submissions: Submission[] }).submissions;
-  return [];
-};
-
-function SubmissionTable({
-  submissions,
-  assignmentDueDate,
-  onView,
-  onRerun,
-  rerunning,
-  className = '',
-}: {
-  submissions: Submission[];
-  assignmentDueDate?: string | Date | null;
-  onView: (submission: Submission) => void;
-  onRerun: (submission: Submission) => void;
-  rerunning: Record<string, boolean>;
-  className?: string;
-}) {
-  if (!submissions.length) {
-    return (
-      <div className="text-muted-foreground rounded-md border border-dashed p-6 text-center text-sm">
-        No submissions yet.
-      </div>
-    );
+  
+  // TypeScript now automatically knows 'raw' has the submissions array
+  if (hasSubmissions(raw)) {
+    return raw.submissions; 
   }
-
-  const sorted = [...submissions].sort(
-    (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
-  );
-  const dueDate = assignmentDueDate ? new Date(assignmentDueDate) : null;
-  const hasValidDueDate = !!dueDate && !Number.isNaN(dueDate.getTime());
-
-  return (
-    <div className={`overflow-hidden rounded-md border ${className}`}>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Submitted</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Feedback</TableHead>
-            <TableHead>Action</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {sorted.map((s) => {
-            const submittedAt = new Date(s.submittedAt);
-            const isLate =
-              (s as { status?: string }).status === 'LATE' ||
-              (hasValidDueDate && submittedAt.getTime() > dueDate!.getTime());
-            return (
-              <TableRow key={s.id} className="hover:bg-transparent">
-                <TableCell>
-                  <div className="flex flex-col">
-                    <span>{submittedAt.toLocaleDateString()}</span>
-                    <span className="text-muted-foreground text-xs">
-                      {submittedAt.toLocaleTimeString()}
-                    </span>
-                    {isLate ? (
-                      <Badge
-                        variant="secondary"
-                        className="mt-1 inline-flex items-center rounded-full bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-900 shadow-sm"
-                      >
-                        Late
-                      </Badge>
-                    ) : null}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex justify-center">
-                    {s.correct === true ? (
-                      <span
-                        role="status"
-                        aria-label="Correct"
-                        title="Correct"
-                        className="inline-flex h-3 w-3 rounded-full bg-emerald-500"
-                      />
-                    ) : s.correct === false ? (
-                      <span
-                        role="status"
-                        aria-label="Needs review"
-                        title="Needs review"
-                        className="inline-flex h-3 w-3 rounded-full bg-red-500"
-                      />
-                    ) : (
-                      <span
-                        role="status"
-                        aria-label="Submitted"
-                        title="Submitted"
-                        className="inline-flex h-3 w-3 rounded-full bg-amber-400"
-                      />
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell className="break-words whitespace-normal">
-                  {s.feedback ? (
-                    <span className="text-sm">{s.feedback}</span>
-                  ) : (
-                    <span className="text-muted-foreground text-sm">No feedback</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2 whitespace-nowrap">
-                    <SubmissionActionsMenu
-                      submission={s}
-                      rerunning={Boolean(rerunning[s.id])}
-                      onView={onView}
-                      onRerun={onRerun}
-                    />
-                  </div>
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
-
+  
+  return [];
+};;
 
 export default function AssignmentSubmissions({
   courseIsArchived,
@@ -910,7 +791,7 @@ export default function AssignmentSubmissions({
                 const selectedProblem = selectedProblemId
                   ? visibleProblems.find((p) => p.id === selectedProblemId) || null
                   : visibleProblems[0] || null;
-                const selectedSubs = selectedProblem
+                  const selectedSubs = selectedProblem
                   ? extractSubs(submissions[selectedProblem.id])
                   : [];
                 const selectedComments = selectedProblem ? comments[selectedProblem.id] || [] : [];

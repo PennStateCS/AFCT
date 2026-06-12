@@ -48,7 +48,7 @@ export type StudentProblemSubmission = {
   grade: number | null;
   feedback: string | null;
   problemId: string;
-  status: 'SUBMITTED' | 'GRADED' | 'LATE';
+  status: string;
   fileName?: string | null;
   originalFileName?: string | null;
   correct?: boolean | null;

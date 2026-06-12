@@ -329,7 +329,7 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
 
   console.log('[seed] development: creating assignments for courses');
   // Create assignments for each course without duplicates.
-  const createdAssignments: { [courseId: string]: Array<{ id: string; title: string }> } = {};
+  const createdAssignments: { [courseId: string]: Array<{ courseId: string, id: string; title: string }> } = {};
 
   try {
     // Prepare all assignment data for batch insertion
@@ -382,7 +382,7 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
     for (const course of courses) {
       createdAssignments[course.id] = allAssignments
         .filter((a) => a.courseId === course.id)
-        .map((a) => ({ id: a.id, title: a.title }));
+        .map((a) => ({ courseId: a.courseId, id: a.id, title: a.title }));
     }
 
     console.log(`[seed] development: created ${createdAssignmentRecords.count} assignments`);
@@ -518,6 +518,7 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
 
         return [
           {
+            courseId: flipFlopsAssignment.courseId,
             assignmentId: flipFlopsAssignment.id,
             problemId: assignmentProblem.problemId,
             studentId: oliverId,
@@ -528,6 +529,7 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
             originalFileName: firstStoredSubmission.originalFileName,
           },
           {
+            courseId: flipFlopsAssignment.courseId,
             assignmentId: flipFlopsAssignment.id,
             problemId: assignmentProblem.problemId,
             studentId: oliverId,

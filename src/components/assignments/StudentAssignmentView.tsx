@@ -48,7 +48,6 @@ export default function StudentAssignmentPage({
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [submissionCount, setSubmissionCount] = useState(0);
-  const [assignmentGrade, setAssignmentGrade] = useState<number | null>(null);
   const [submissions, setSubmissions] = useState<Record<string, StudentProblemSubmission[]>>({});
   const [comments, setComments] = useState<Record<string, StudentProblemComment[]>>({});
   const [newComment, setNewComment] = useState<Record<string, string>>({});
@@ -72,14 +71,12 @@ export default function StudentAssignmentPage({
       if (!response.ok) throw new Error('Failed to fetch assignment context');
 
       const context = (await response.json()) as StudentAssignmentContext;
-      setAssignmentGrade(context.assignmentGrade);
       setSubmissionCount(context.submissionCount);
       setSubmissions(context.submissionsByProblem);
       setComments(context.commentsByProblem);
     } catch (error) {
       console.error('Error fetching assignment context:', error);
       showToast.error('Failed to load assignment context');
-      setAssignmentGrade(null);
       setSubmissionCount(0);
       setSubmissions({});
       setComments({});
@@ -254,6 +251,7 @@ export default function StudentAssignmentPage({
     : lateCutoffDate
       ? `Accepted until ${lateCutoffDisplay}`
       : 'Accepted anytime';
+  const assignmentGrade = null; // Fix later
   const gradeDisplay = assignmentGrade !== null ? `${assignmentGrade}` : '-';
   const courseIsArchived = assignment.course?.isArchived ?? false;
   const selectedProblem = selectedProblemId
