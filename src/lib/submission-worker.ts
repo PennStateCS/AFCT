@@ -8,6 +8,7 @@ import { execSync } from 'child_process';
 import os from 'os';
 
 import JavaRunner from '../../lib/java-runner';
+import { Truculenta } from 'next/font/google';
 
 // Basic variables (probally should put some of these in a GUI or .env file except *)
 let workerStarted = false; // *
@@ -119,7 +120,22 @@ async function evaluateSubmission(id: string) {
     submission = await prisma.submission.findUnique({
       where: { id },
       include: {
-        assignmentProblem: true,
+        assignmentProblem: {
+          select: {
+            problem: {
+              select: {
+                fileName: true,
+                type: true,
+                maxStates: true,
+                isDeterministic: true,
+              }
+            },
+            assignmentId: true,
+            problemId: true,
+            maxPoints: true,
+            autograderEnabled: true,
+          },
+        },
         student: true,
       },
     });
@@ -143,8 +159,8 @@ async function evaluateSubmission(id: string) {
     });
 
     // Autograde submission if enabled
-    if ((submission.problem as any)?.autograderEnabled === true && typeof evaluation.correct === 'boolean') {
-      const earnedPoints = evaluation.correct ? ((submission.problem as any).maxPoints ?? 0) : 0;
+    if (submission.assignmentProblem.autograderEnabled === true) {
+      const earnedPoints = evaluation.correct ? submission.assignmentProblem.maxPoints : 0;
 
       await prisma.assignmentProblemGrade.upsert({
         where: {
@@ -299,7 +315,7 @@ async function runJavaEvaluator(submission: any): Promise<SubmissionEvaluationRe
       feedback = `File has ${result.trim()} lines (Windows).`;
     } else {
       // Docker/Linux: Use afct-evaluator.jar with JavaRunner
-      const answerFileName = submission.problem?.fileName;
+      const answerFileName = submission.assignmentProblem.problem.fileName;
 
       if (!answerFileName) {
         status = 'FAILED';
@@ -327,12 +343,12 @@ async function runJavaEvaluator(submission: any): Promise<SubmissionEvaluationRe
             const args = ['--json', answerFilePath, uploadedFilePath];
 
             // Add optional arguments based on problem type
-            if (submission.problem.type === 'FA' || submission.problem.type === 'PDA') {
-              const maxStates = submission.problem.maxStates ?? -1;
+            if (submission.assignmentProblem.problem.type === 'FA' || submission.assignmentProblem.problem.type === 'PDA') {
+              const maxStates = submission.assignmentProblem.problem.maxStates ?? -1;
               args.push(maxStates.toString());
 
-              if (submission.problem.type === 'FA') {
-                const deterministic = submission.problem.isDeterministic ?? false;
+              if (submission.assignmentProblem.problem.type === 'FA') {
+                const deterministic = submission.assignmentProblem.problem.isDeterministic ?? false;
                 args.push(deterministic.toString());
               }
             }
