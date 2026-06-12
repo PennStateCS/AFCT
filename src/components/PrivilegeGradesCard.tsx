@@ -161,10 +161,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         'download',
         `${filenamePrefix}-${assignmentSlug || assignmentIds[0]}-${timestamp}.csv`,
       );
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
 
       showToast.success(`Grades exported for ${platform}`);
     },

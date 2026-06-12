@@ -47,6 +47,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
           select: {
             id: true,
             title: true,
+            autograderEnabled: true,
           },
         },
       },
@@ -76,6 +77,23 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       },
     });
 
+    // Get most recent status
+    const latestSubmissions = await prisma.submission.findMany({
+      where: {
+        assignmentId: { in: assignmentIds },
+        studentId: session.user.id,
+      },
+      distinct: ['assignmentId', 'problemId'],
+      orderBy: {
+        createdAt: 'desc',
+      },
+      select: {
+        assignmentId: true,
+        problemId: true,
+        status: true,
+      },
+    })
+
     const gradeMap = new Map<string, number | null>();
     grades.forEach((grade) => {
       gradeMap.set(`${grade.assignmentId}:${grade.problemId}`, grade.grade ?? null);
@@ -86,9 +104,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       submissionCountMap.set(`${item.assignmentId}:${item.problemId}`, item._count.id);
     });
 
+    const submissionStatusMap = new Map<string, string>();
+    latestSubmissions.forEach((item) => {
+      submissionStatusMap.set(`${item.assignmentId}:${item.problemId}`, item.status);
+    });
+
     const groupedProblems = problems.reduce<Record<string, Array<{
       id: string;
       title: string | null;
+      autograderEnabled: boolean;
       maxPoints: number;
       maxSubmissions: number;
     }>>>((acc, problem) => {
@@ -96,6 +120,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       acc[problem.assignmentId].push({
         id: problem.problem.id,
         title: problem.problem.title,
+        autograderEnabled: problem.problem.autograderEnabled,
         maxPoints: Number(problem.maxPoints ?? 0),
         maxSubmissions: Number(problem.maxSubmissions ?? 0),
       });
@@ -107,8 +132,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       const problemDetails = assignmentProblems.map((problem) => ({
         id: problem.id,
         title: problem.title,
+        autograderEnabled: problem.autograderEnabled,
         maxPoints: problem.maxPoints,
         maxSubmissions: problem.maxSubmissions,
+        status: submissionStatusMap.get(`${assignment.id}:${problem.id}`) ?? "",
         submissionCount: submissionCountMap.get(`${assignment.id}:${problem.id}`) ?? 0,
         grade: gradeMap.get(`${assignment.id}:${problem.id}`) ?? null,
       }));

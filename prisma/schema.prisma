@@ -30,6 +30,13 @@ enum ProblemType {
   TM
 }
 
+enum SubmissionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 model User {
   id        String  @id @default(cuid())
   email     String  @unique
@@ -47,7 +54,6 @@ model User {
 
   rosterEntries Roster[]
   submissions   Submission[]
-  assignmentGrades AssignmentGrade[]
   problemGrades AssignmentProblemGrade[]
   activityLogs  ActivityLog[]
   groupRosters  GroupRoster[] // Group memberships across courses
@@ -78,6 +84,7 @@ model Course {
   roster       Roster[] // Users in the course with roles
   assignments  Assignment[]
   problems     Problem[]
+  submissions   Submission[]
   groups       Group[]
   groupRosters GroupRoster[]
   activityLogs ActivityLog[]
@@ -130,7 +137,6 @@ model Assignment {
   problems     AssignmentProblem[]
   comments     Comment[]
   activityLogs ActivityLog[]
-  grades       AssignmentGrade[] // Student grades for this assignment
   groupAssignmentProblems GroupAssignmentProblem[]
 
   @@index([courseId])
@@ -246,7 +252,7 @@ model GroupAssignmentProblem {
 
 model Submission {
   id          String   @id @default(cuid())
-  submittedAt DateTime @default(now())
+  gradedAt DateTime?
   feedback    String?
   correct     Boolean?
   evaluationRaw Json?
@@ -266,40 +272,32 @@ model Submission {
   student   User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   studentId String
 
+  // Course reference
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseId String
+
   // Optional group reference for group submissions
   group   Group?  @relation(fields: [groupId], references: [id], onDelete: SetNull)
   groupId String?
 
+  // Queue
+  status   SubmissionStatus @default(PENDING)
+  submittedAt DateTime         @default(now())
+
+  // Logs
   activityLogs ActivityLog[]
 
   @@unique([assignmentId, problemId, groupId])
   @@index([assignmentId])
   @@index([studentId])
+  @@index([courseId])
   @@index([groupId])
   @@index([assignmentId, problemId, studentId])
 
   // Performance indexes
   @@index([assignmentId, problemId])
-  @@index([studentId, assignmentId, problemId, submittedAt])
-}
-
-model AssignmentGrade {
-  id       String  @id @default(cuid())
-  grade    Float
-  feedback String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  assignmentId String
-
-  student   User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  studentId String
-
-  @@unique([assignmentId, studentId])
-  @@index([assignmentId])
-  @@index([studentId])
+  @@index([studentId, courseId, assignmentId, problemId, submittedAt])
+  @@index([status])
 }
 
 model AssignmentProblemGrade {
