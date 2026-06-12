@@ -54,7 +54,6 @@ model User {
 
   rosterEntries Roster[]
   submissions   Submission[]
-  assignmentGrades AssignmentGrade[]
   problemGrades AssignmentProblemGrade[]
   activityLogs  ActivityLog[]
   groupRosters  GroupRoster[] // Group memberships across courses
@@ -138,7 +137,6 @@ model Assignment {
   problems     AssignmentProblem[]
   comments     Comment[]
   activityLogs ActivityLog[]
-  grades       AssignmentGrade[] // Student grades for this assignment
   groupAssignmentProblems GroupAssignmentProblem[]
 
   @@index([courseId])
@@ -300,25 +298,6 @@ model Submission {
   @@index([assignmentId, problemId])
   @@index([studentId, courseId, assignmentId, problemId, submittedAt])
   @@index([status])
-}
-
-model AssignmentGrade {
-  id       String  @id @default(cuid())
-  grade    Float
-  feedback String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  assignmentId String
-
-  student   User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  studentId String
-
-  @@unique([assignmentId, studentId])
-  @@index([assignmentId])
-  @@index([studentId])
 }
 
 model AssignmentProblemGrade {

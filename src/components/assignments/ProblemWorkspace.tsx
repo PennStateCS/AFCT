@@ -278,7 +278,6 @@ export function ProblemWorkspace({
   deletingComments = {},
   onViewSubmission,
   onRerunSubmission,
-  rerunning = {},
   courseIsArchived,
   gradeInput = '',
   currentGrade = null,
@@ -432,7 +431,6 @@ export function ProblemWorkspace({
                     <TableRow>
                       <TableHead className="px-2 py-1">Submitted</TableHead>
                       <TableHead className="px-2 py-1">Status</TableHead>
-                      <TableHead className="px-2 py-1">Grade</TableHead>
                       <TableHead className="px-2 py-1">Feedback</TableHead>
                       <TableHead className="px-2 py-1">View</TableHead>
                     </TableRow>
@@ -468,11 +466,6 @@ export function ProblemWorkspace({
                             </div>
                           </TableCell>
                           <TableCell className="p-1 align-top">{renderStatusCell(submission)}</TableCell>
-                          <TableCell className="p-1 align-top">
-                            <span className="font-medium">
-                              {(submission.grade ? submission.grade : '-') + '/' + problem.maxPoints}
-                            </span>
-                          </TableCell>
                           <TableCell className="p-1 align-top text-sm">
                             {submission.feedback ? (
                               <Button
