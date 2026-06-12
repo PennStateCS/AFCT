@@ -24,6 +24,8 @@ type StudentGradesResponse = {
       maxSubmissions: number;
       submissionCount: number;
       grade: number | null;
+      status: string;
+      autograderEnabled: boolean;
     }>;
   }>;
 };
@@ -182,11 +184,19 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
                               Problem {index + 1}: {problem.title ?? 'Untitled'}
                             </p>
                             <span className="rounded-full border border-border px-2 py-1 text-[10px] text-muted-foreground">
-                              {problem.grade === null ? 'Ungraded' : 'Graded'}
+                              {problem.status.toLowerCase() == "processing" ? 'Evaluating' : 
+                              (problem.grade === null && (problem.status.toLowerCase() == 'failed' || problem.status.toLowerCase() == 'completed')) ? 'Processed' : 
+                              (problem.grade === null) ? 'Not Graded' : 'Graded'}
                             </span>
                             <span className="rounded-full border border-border px-2 py-1 text-[10px] text-muted-foreground">
-                              {problem.submissionCount}/{problem.maxSubmissions < 0 ? '∞' : problem.maxSubmissions} Submissions
+                              {problem.submissionCount ? problem.submissionCount : 0}/{problem.maxSubmissions < 0 ? '∞' : problem.maxSubmissions} Submissions
                             </span>
+                            { (problem.autograderEnabled && problem.submissionCount ) ? (
+                              <span className="rounded-full border border-border px-2 py-1 text-[10px] text-muted-foreground">
+                                {"Latest Status: " + problem.status}
+                              </span>
+                              ) : ( <span></span> )
+                            }
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="rounded-full border border-border px-2 py-1 text-[10px] font-semibold text-slate-700">

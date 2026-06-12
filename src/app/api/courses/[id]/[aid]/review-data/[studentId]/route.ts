@@ -7,6 +7,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 type SubmissionRecord = {
   id: string;
   submittedAt: Date;
+  status: string;
   feedback: string | null;
   correct: boolean | null;
   evaluationRaw?: unknown;
@@ -18,6 +19,7 @@ type SubmissionRecord = {
 const submissionSelectWithEvaluation = {
   id: true,
   submittedAt: true,
+  status: true,
   feedback: true,
   correct: true,
   evaluationRaw: true,
@@ -29,8 +31,10 @@ const submissionSelectWithEvaluation = {
 const submissionSelectWithoutEvaluation = {
   id: true,
   submittedAt: true,
+  status: true,
   feedback: true,
   correct: true,
+  evaluationRaw: true,
   fileName: true,
   originalFileName: true,
   problemId: true,
@@ -153,6 +157,7 @@ export async function GET(
         submissions: {
           id: string;
           submittedAt: Date;
+          status: string;
           feedback: string | null;
           correct: boolean | null;
           evaluationRaw?: unknown | null;
@@ -169,6 +174,7 @@ export async function GET(
         submissions: subsForProblem.map((s) => ({
           id: s.id,
           submittedAt: s.submittedAt,
+          status: s.status,
           feedback: s.feedback,
           correct: s.correct,
           evaluationRaw: s.evaluationRaw ?? null,

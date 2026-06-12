@@ -67,10 +67,10 @@ export default function useVisibleItemCount(
         sample.style.top = '0';
         sample.style.visibility = 'hidden';
         sample.style.width = `${container.clientWidth}px`;
-        document.body.appendChild(sample);
+        document.body?.appendChild(sample);
 
         const h = Math.max(0, sample.getBoundingClientRect().height);
-        document.body.removeChild(sample);
+        document.body?.removeChild(sample);
 
         const cs = getComputedStyle(container);
         const gap = parseFloat(cs.rowGap || cs.gap || '0') || 0;

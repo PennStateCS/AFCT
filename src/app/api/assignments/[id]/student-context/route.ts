@@ -50,7 +50,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 
     const problemIds = assignment.problems.map((problem) => problem.problemId);
 
-    const [submissions, comments, assignmentGrade] = await Promise.all([
+    const [submissions, comments] = await Promise.all([
       prisma.submission.findMany({
         where: {
           assignmentId,
@@ -66,6 +66,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
           fileName: true,
           originalFileName: true,
           problemId: true,
+          status: true,
         },
       }),
       prisma.comment.findMany({
@@ -87,17 +88,6 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
           },
         },
         orderBy: { createdAt: 'asc' },
-      }),
-      prisma.assignmentGrade.findUnique({
-        where: {
-          assignmentId_studentId: {
-            assignmentId,
-            studentId: userId,
-          },
-        },
-        select: {
-          grade: true,
-        },
       }),
     ]);
 
@@ -126,7 +116,6 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     }
 
     return NextResponse.json({
-      assignmentGrade: assignmentGrade?.grade ?? null,
       submissionCount: submissions.length,
       submissionsByProblem: Object.fromEntries(
         Object.entries(submissionsByProblem).map(([problemId, problemSubmissions]) => [
@@ -140,7 +129,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
             fileName: submission.fileName,
             originalFileName: submission.originalFileName,
             problemId: submission.problemId,
-            status: 'SUBMITTED' as const,
+            status: submission.status,
           })),
         ]),
       ),
