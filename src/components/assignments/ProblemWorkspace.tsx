@@ -535,6 +535,7 @@ export function ProblemWorkspace({
                                 title="Rerun submission"
                                 aria-label="Rerun submission"
                                 className="h-8 w-8 p-0"
+                                hidden={!isPrivledgedUser}
                               >
                                 <RotateCcw className="h-4 w-4" />
                               </Button>
