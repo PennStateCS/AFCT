@@ -113,18 +113,18 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
                     className="flex items-center justify-between gap-3 cursor-pointer px-3 py-1"
                     onClick={() => router.push(`/dashboard/courses/${courseId}/${assignment.id}`)}
                   >
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-col gap-1">
                         <CardTitle className="text-sm leading-none">
                           {assignment.title}
                         </CardTitle>
                         <div className="flex flex-wrap gap-2 text-[10px] text-muted-foreground">
                           {assignment.dueDate ? (
-                            <span className="rounded-full border border-border px-2 py-1">
+                            <span className="whitespace-nowrap rounded-full border border-border px-2 py-1">
                               Due {formatDateInTimeZone(assignment.dueDate, timezone)}
                             </span>
                           ) : null}
-                          <span className="rounded-full border border-border px-2 py-1">
+                          <span className="whitespace-nowrap rounded-full border border-border px-2 py-1">
                             {assignment.problems.length} Problems
                           </span>
                         </div>
@@ -136,7 +136,7 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
                         <span className="text-sm font-semibold text-foreground text-left">
                           {(assignment.grade === null ? '-' : `${assignment.grade}`) + `/${assignment.maxPoints}`}
                         </span>
-                        <span className="text-right text-[10px] text-muted-foreground">
+                        <span className="text-right text-sm text-muted-foreground">
                           {assignment.grade !== null && assignment.percentage !== null ? `${assignment.percentage}%` : '-%'}
                         </span>
                       </p>
