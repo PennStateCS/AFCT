@@ -239,16 +239,16 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
               onClick={handleClick}
               aria-label={`View breakdown for ${row.original.name} on ${a.title}`}
             >
-              <span>
+              <span className="text-sm">
                 {val === null || val === undefined ? '-' : String(val)}
               </span>
-              <span className="font-thin text-xs">
-                {max === null || max === undefined ? '/-': `/${String(max)}`}
+              <span className="text-sm text-muted-foreground">
+                {max === null || max === undefined ? '/-' : `/${String(max)}`}
               </span>
             </button>
           );
         },
-        meta: { priority: 2 },
+        meta: { priority: 2, align: 'center' },
       });
     }
 
@@ -272,7 +272,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         const pct = ((earned / possible) * 100).toFixed(1);
         return <span className="font-medium">{pct}%</span>;
       },
-      meta: { priority: 1 },
+      meta: { priority: 1, align: 'center' },
     });
 
     return cols;
@@ -281,8 +281,8 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-y-1">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <CardTitle className="flex items-center gap-2 text-2xl">
               <Table className="h-5 w-5" />
               Grades
