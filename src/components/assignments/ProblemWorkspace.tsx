@@ -386,6 +386,11 @@ export function ProblemWorkspace({
               autograderStatus={submissions[0]?.status ?? null}
               onRerun={onRerunSubmission ? () => onRerunSubmission(submissions[0]) : undefined}
             />
+          ) : !isPrivledgedUser ? (
+            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-transparent px-3 py-2 text-[0.70rem] text-slate-700 dark:border-slate-200 dark:text-slate-200 whitespace-nowrap">
+              <span className="font-semibold uppercase tracking-[0.16em]">Grade</span>
+              <span>{currentGrade !== null ? currentGrade : '-'} / {problem.maxPoints}</span>
+            </div>
           ) : null}
         </div>
       </CardHeader>
@@ -436,6 +441,7 @@ export function ProblemWorkspace({
                       variant="secondary"
                       onClick={() => onRerunVisibleSubmissions?.(visibleSubmissions)}
                       disabled={visibleSubmissions.length === 0 || isRunning}
+                      hidden={!isPrivledgedUser}
                       className="whitespace-nowrap"
                       title="Rerun Visible Submissions"
                     >

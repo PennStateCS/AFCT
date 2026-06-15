@@ -67,6 +67,7 @@ export type StudentProblemComment = {
 export type StudentAssignmentContext = {
   assignmentGrade: number | null;
   submissionCount: number;
+  problemGrades: Record<string, number | null>;
   submissionsByProblem: Record<string, StudentProblemSubmission[]>;
   commentsByProblem: Record<string, StudentProblemComment[]>;
 };
