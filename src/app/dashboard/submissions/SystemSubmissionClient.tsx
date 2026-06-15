@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -113,28 +113,39 @@ const getStatusChip = (submission: SystemSubmission): StatusChip => {
 };
 
 export default function SystemSubmissionClient() {
-  const [courseFilter, setCourseFilter] = useState('');
-  const [assignmentFilter, setAssignmentFilter] = useState('');
+  const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
+  const [selectedAssignments, setSelectedAssignments] = useState<string[]>([]);
   const [activeFilters, setActiveFilters] = useState<Set<SubmissionStatusFilter>>(new Set());
   const [submissions] = useState<SystemSubmission[]>([]);
 
-  const visibleSubmissions = useMemo(() => {
-    const normalizedCourse = courseFilter.trim().toLowerCase();
-    const normalizedAssignment = assignmentFilter.trim().toLowerCase();
+  const courseOptions = useMemo(
+    () =>
+      Array.from(new Set(submissions.map((submission) => submission.course)))
+        .sort()
+        .map((course) => ({ id: course, label: course })),
+    [submissions],
+  );
 
+  const assignmentOptions = useMemo(
+    () =>
+      Array.from(new Set(submissions.map((submission) => submission.assignment)))
+        .sort()
+        .map((assignment) => ({ id: assignment, label: assignment })),
+    [submissions],
+  );
+
+  const visibleSubmissions = useMemo(() => {
     return filterSubmissions(
       submissions.filter((submission) => {
-        const matchesCourse = normalizedCourse
-          ? submission.course.toLowerCase().includes(normalizedCourse)
-          : true;
-        const matchesAssignment = normalizedAssignment
-          ? submission.assignment.toLowerCase().includes(normalizedAssignment)
-          : true;
+        const matchesCourse =
+          selectedCourses.length === 0 || selectedCourses.includes(submission.course);
+        const matchesAssignment =
+          selectedAssignments.length === 0 || selectedAssignments.includes(submission.assignment);
         return matchesCourse && matchesAssignment;
       }),
       activeFilters,
     );
-  }, [activeFilters, assignmentFilter, courseFilter, submissions]);
+  }, [activeFilters, selectedAssignments, selectedCourses, submissions]);
 
   const toggleFilter = (filter: SubmissionStatusFilter) => {
     setActiveFilters((prev) => {
@@ -174,29 +185,32 @@ export default function SystemSubmissionClient() {
           onClick={handleRerunVisible}
           disabled={visibleSubmissions.length === 0}
           className="whitespace-nowrap"
+          title="Rerun Visible Submissions"
         >
-          Rerun visible submissions
+          Rerun
         </Button>
       </CardHeader>
 
       <CardContent className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-[1fr_1fr]">
-          <div>
-            <label className="mb-2 block text-sm font-medium text-muted-foreground">Course filter</label>
-            <Input
-              value={courseFilter}
-              onChange={(event) => setCourseFilter(event.target.value)}
-              placeholder="Search by course"
-            />
-          </div>
-          <div>
-            <label className="mb-2 block text-sm font-medium text-muted-foreground">Assignment filter</label>
-            <Input
-              value={assignmentFilter}
-              onChange={(event) => setAssignmentFilter(event.target.value)}
-              placeholder="Search by assignment"
-            />
-          </div>
+          <SearchableMultiSelect
+            label="Course filter"
+            items={courseOptions}
+            value={selectedCourses}
+            onChange={setSelectedCourses}
+            placeholder="All courses"
+            searchPlaceholder="Search courses"
+            emptyStateText="No courses found."
+          />
+          <SearchableMultiSelect
+            label="Assignment filter"
+            items={assignmentOptions}
+            value={selectedAssignments}
+            onChange={setSelectedAssignments}
+            placeholder="All assignments"
+            searchPlaceholder="Search assignments"
+            emptyStateText="No assignments found."
+          />
         </div>
 
         <div className="flex flex-wrap gap-2">
