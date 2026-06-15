@@ -47,7 +47,7 @@ describe('course-status-checks', () => {
       const endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days from now
 
       vi.mocked(mockPrisma.submission.findFirst).mockResolvedValue(null);
-      vi.mocked(mockPrisma.assignmentGrade.findFirst).mockResolvedValue(null);
+      vi.mocked(mockPrisma.assignmentProblemGrade.findFirst).mockResolvedValue(null);
 
       const result = await canArchiveCourse(mockPrisma, 'course-1', startDate, endDate);
 
@@ -62,7 +62,7 @@ describe('course-status-checks', () => {
         },
         select: { id: true },
       });
-      expect(mockPrisma.assignmentGrade.findFirst).toHaveBeenCalledWith({
+      expect(mockPrisma.assignmentProblemGrade.findFirst).toHaveBeenCalledWith({
         where: {
           assignment: {
             courseId: 'course-1',
@@ -84,7 +84,7 @@ describe('course-status-checks', () => {
         canArchive: false,
         reason: 'Course must not have any submitted problems or not in session to archive',
       });
-      expect(mockPrisma.assignmentGrade.findFirst).not.toHaveBeenCalled();
+      expect(mockPrisma.assignmentProblemGrade.findFirst).not.toHaveBeenCalled();
     });
 
     it('should prevent archiving in-session course with grades', async () => {
@@ -92,7 +92,7 @@ describe('course-status-checks', () => {
       const endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
       vi.mocked(mockPrisma.submission.findFirst).mockResolvedValue(null);
-      vi.mocked(mockPrisma.assignmentGrade.findFirst).mockResolvedValue({ id: 'grade-1' } as any);
+      vi.mocked(mockPrisma.assignmentProblemGrade.findFirst).mockResolvedValue({ id: 'grade-1' } as any);
 
       const result = await canArchiveCourse(mockPrisma, 'course-1', startDate, endDate);
 
@@ -107,7 +107,7 @@ describe('course-status-checks', () => {
       const endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
       vi.mocked(mockPrisma.submission.findFirst).mockResolvedValue(null);
-      vi.mocked(mockPrisma.assignmentGrade.findFirst).mockResolvedValue(null);
+      vi.mocked(mockPrisma.assignmentProblemGrade.findFirst).mockResolvedValue(null);
 
       const result = await canArchiveCourse(mockPrisma, 'course-1', now, endDate);
 
@@ -119,7 +119,7 @@ describe('course-status-checks', () => {
       const now = new Date().toISOString();
 
       vi.mocked(mockPrisma.submission.findFirst).mockResolvedValue(null);
-      vi.mocked(mockPrisma.assignmentGrade.findFirst).mockResolvedValue(null);
+      vi.mocked(mockPrisma.assignmentProblemGrade.findFirst).mockResolvedValue(null);
 
       const result = await canArchiveCourse(mockPrisma, 'course-1', startDate, now);
 
@@ -130,7 +130,7 @@ describe('course-status-checks', () => {
   describe('canUnpublishCourse', () => {
     it('should allow unpublishing when no submissions or grades exist', async () => {
       vi.mocked(mockPrisma.submission.findFirst).mockResolvedValue(null);
-      vi.mocked(mockPrisma.assignmentGrade.findFirst).mockResolvedValue(null);
+      vi.mocked(mockPrisma.assignmentProblemGrade.findFirst).mockResolvedValue(null);
 
       const result = await canUnpublishCourse(mockPrisma, 'course-1');
 
@@ -145,7 +145,7 @@ describe('course-status-checks', () => {
         },
         select: { id: true },
       });
-      expect(mockPrisma.assignmentGrade.findFirst).toHaveBeenCalledWith({
+      expect(mockPrisma.assignmentProblemGrade.findFirst).toHaveBeenCalledWith({
         where: {
           assignment: {
             courseId: 'course-1',
@@ -164,12 +164,12 @@ describe('course-status-checks', () => {
         canUnpublish: false,
         reason: 'Course must not have any submitted problems to unpublish',
       });
-      expect(mockPrisma.assignmentGrade.findFirst).not.toHaveBeenCalled();
+      expect(mockPrisma.assignmentProblemGrade.findFirst).not.toHaveBeenCalled();
     });
 
     it('should prevent unpublishing when grades exist', async () => {
       vi.mocked(mockPrisma.submission.findFirst).mockResolvedValue(null);
-      vi.mocked(mockPrisma.assignmentGrade.findFirst).mockResolvedValue({ id: 'grade-1' } as any);
+      vi.mocked(mockPrisma.assignmentProblemGrade.findFirst).mockResolvedValue({ id: 'grade-1' } as any);
 
       const result = await canUnpublishCourse(mockPrisma, 'course-1');
 
@@ -181,7 +181,7 @@ describe('course-status-checks', () => {
 
     it('should prevent unpublishing when both submissions and grades exist', async () => {
       vi.mocked(mockPrisma.submission.findFirst).mockResolvedValue({ id: 'submission-1' } as any);
-      vi.mocked(mockPrisma.assignmentGrade.findFirst).mockResolvedValue({ id: 'grade-1' } as any);
+      vi.mocked(mockPrisma.assignmentProblemGrade.findFirst).mockResolvedValue({ id: 'grade-1' } as any);
 
       const result = await canUnpublishCourse(mockPrisma, 'course-1');
 
@@ -190,12 +190,12 @@ describe('course-status-checks', () => {
         reason: 'Course must not have any submitted problems to unpublish',
       });
       // Should stop at submissions check
-      expect(mockPrisma.assignmentGrade.findFirst).not.toHaveBeenCalled();
+      expect(mockPrisma.assignmentProblemGrade.findFirst).not.toHaveBeenCalled();
     });
 
     it('should work with different courseIds', async () => {
       vi.mocked(mockPrisma.submission.findFirst).mockResolvedValue(null);
-      vi.mocked(mockPrisma.assignmentGrade.findFirst).mockResolvedValue(null);
+      vi.mocked(mockPrisma.assignmentProblemGrade.findFirst).mockResolvedValue(null);
 
       await canUnpublishCourse(mockPrisma, 'different-course-id');
 
