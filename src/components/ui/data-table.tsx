@@ -28,6 +28,7 @@ import { Button } from '@/components/ui/button';
 // Define meta type for table columns
 interface ColumnMeta {
   priority?: number;
+  align?: 'left' | 'center' | 'right';
 }
 
 // Extend @tanstack/react-table types
@@ -35,6 +36,7 @@ declare module '@tanstack/react-table' {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface ColumnMeta<TData, TValue> {
     priority?: number;
+    align?: 'left' | 'center' | 'right';
   }
 }
 
@@ -309,6 +311,16 @@ export function DataTable<TData, TValue>({
                     }
                   };
 
+                  const align = (header.column.columnDef.meta as ColumnMeta)?.align;
+                  const alignHeadClass =
+                    align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : '';
+                  const alignFlexClass =
+                    align === 'center'
+                      ? 'justify-center'
+                      : align === 'right'
+                        ? 'justify-end'
+                        : '';
+
                   return (
                     <TableHead
                       key={`h-${hIndex}`}
@@ -321,15 +333,13 @@ export function DataTable<TData, TValue>({
                               : 'none'
                           : undefined
                       }
-                      className={`${getResponsiveClass(priority)} ${
-                        canSort ? 'whitespace-nowrap' : 'whitespace-nowrap'
-                      } h-12 font-semibold`}
+                      className={`${getResponsiveClass(priority)} whitespace-nowrap h-12 font-semibold ${alignHeadClass}`}
                     >
                       {header.isPlaceholder ? null : canSort ? (
                         <button
                           type="button"
                           onClick={handleSortClick}
-                          className="flex w-full cursor-pointer items-center text-left select-none"
+                          className={`flex w-full cursor-pointer items-center select-none ${alignFlexClass || 'text-left'}`}
                           aria-label={`Sort by ${getSortableColumnLabel(header.column)}`}
                         >
                           {flexRender(header.column.columnDef.header, header.getContext())}
@@ -338,7 +348,7 @@ export function DataTable<TData, TValue>({
                           {!sorted && <ArrowUpDown className="ml-1 h-3 w-3 opacity-40" />}
                         </button>
                       ) : (
-                        <div className="flex items-center">
+                        <div className={`flex items-center ${alignFlexClass}`}>
                           {flexRender(header.column.columnDef.header, header.getContext())}
                         </div>
                       )}
@@ -380,14 +390,23 @@ export function DataTable<TData, TValue>({
                       : 'hover:bg-[var(--table-highlight)]'
                   }`}
                 >
-                  {row.getVisibleCells().map((cell, cIndex) => (
-                    <TableCell
-                      key={`c-${cIndex}`}
-                      className={`whitespace-nowrap ${getResponsiveClass(cell.column.columnDef.meta?.priority)}`}
-                    >
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
+                  {row.getVisibleCells().map((cell, cIndex) => {
+                    const cellAlign = cell.column.columnDef.meta?.align;
+                    const cellAlignClass =
+                      cellAlign === 'center'
+                        ? 'text-center'
+                        : cellAlign === 'right'
+                          ? 'text-right'
+                          : '';
+                    return (
+                      <TableCell
+                        key={`c-${cIndex}`}
+                        className={`whitespace-nowrap ${getResponsiveClass(cell.column.columnDef.meta?.priority)} ${cellAlignClass}`}
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    );
+                  })}
                 </TableRow>
               ))
             ) : (
