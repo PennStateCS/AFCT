@@ -9,6 +9,7 @@ import { showToast } from '@/lib/toast';
 import type { Comment as DiscussionComment } from './DiscussionPanel';
 import { ProblemListCard } from '@/components/assignments/ProblemListCard';
 import { ProblemWorkspace } from '@/components/assignments/ProblemWorkspace';
+import type { ProblemSubmission } from '@/components/assignments/ProblemWorkspace';
 import StudentNavigator from './StudentNavigator';
 import JffViewerDialog from './JffViewerDialog';
 import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
@@ -550,6 +551,61 @@ export default function AssignmentSubmissions({
     [fetchReviewData],
   );
 
+  const handleRerunVisibleSubmissions = useCallback(
+    async (visibleSubmissions: ProblemSubmission[]) => {
+      if (!visibleSubmissions?.length) return;
+      const uniqueSubmissions = Array.from(
+        new Map(visibleSubmissions.filter((submission) => submission?.id).map((submission) => [submission.id, submission])).values(),
+      );
+
+      setRerunning((prev) => {
+        const next = { ...prev };
+        uniqueSubmissions.forEach((submission) => {
+          if (submission.id) next[submission.id] = true;
+        });
+        return next;
+      });
+
+      try {
+        const results = await Promise.allSettled(
+          uniqueSubmissions.map((submission) =>
+            fetch(`/api/submissions/${submission.id}/rerun`, {
+              method: 'POST',
+            }),
+          ),
+        );
+
+        const failures = results.filter(
+          (result) => result.status === 'rejected' || (result.status === 'fulfilled' && !result.value.ok),
+        );
+
+        if (failures.length > 0) {
+          showToast.error(
+            failures.length === 1
+              ? 'One submission failed to rerun.'
+              : `${failures.length} submissions failed to rerun.`,
+          );
+        } else {
+          showToast.success('Visible submissions are being re-evaluated');
+        }
+
+        await fetchReviewData();
+      } catch (err) {
+        console.error('Bulk rerun submission error:', err);
+        showToast.error(err instanceof Error ? err.message : 'Failed to rerun visible submissions');
+      } finally {
+        setRerunning((prev) => {
+          const next = { ...prev };
+          uniqueSubmissions.forEach((submission) => {
+            if (submission.id) next[submission.id] = false;
+          });
+          return next;
+        });
+      }
+    },
+    [fetchReviewData],
+  );
+
   const saveComment = useCallback(
     async (problemId: string) => {
       const commentText = commentTexts[problemId]?.trim();
@@ -830,6 +886,7 @@ export default function AssignmentSubmissions({
                         deletingComments={deletingComments}
                         onViewSubmission={(submission) => setOpenDialog({ open: true, submission })}
                         onRerunSubmission={handleRerunSubmission}
+                        onRerunVisibleSubmissions={handleRerunVisibleSubmissions}
                         rerunning={rerunning}
                         courseIsArchived={courseIsArchived}
                         gradeInput={selectedProblem ? gradeInputs[selectedProblem.id] || '' : ''}

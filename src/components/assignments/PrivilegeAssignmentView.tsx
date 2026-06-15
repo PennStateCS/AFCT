@@ -882,9 +882,6 @@ export default function AssignmentDashboardPage({
             assignmentId={aid}
             maxAssignmentGrade={assignment.maxPoints}
             problems={submissionTabProblems}
-            // Group-assignment support: pass group list and mapping so the submissions
-            // view can filter problems to the student's group (assignment-level problems
-            // still apply to all students).
             assignmentIsGroup={assignment.isGroup ?? false}
             groups={groups}
             groupProblemsMap={groupProblemsMap}

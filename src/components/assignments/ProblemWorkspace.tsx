@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { FileText, MessageSquare, Check, X, Minus } from 'lucide-react';
+import { FileText, MessageSquare, RotateCcw } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -65,7 +65,7 @@ type Problem = {
   problemId?: string | null;
 };
 
-type ProblemSubmission = {
+export type ProblemSubmission = {
   id: string;
   submittedAt: string | Date;
   fileName?: string | null;
@@ -93,6 +93,7 @@ export type ProblemWorkspaceProps = {
   deletingComments?: Record<string, boolean>;
   onViewSubmission: (submission: any) => void;
   onRerunSubmission?: (submission: any) => void;
+  onRerunVisibleSubmissions?: (submissions: ProblemSubmission[]) => void;
   rerunning?: Record<string, boolean>;
   courseIsArchived: boolean;
   gradeInput?: string;
@@ -278,6 +279,7 @@ export function ProblemWorkspace({
   deletingComments = {},
   onViewSubmission,
   onRerunSubmission,
+  onRerunVisibleSubmissions,
   courseIsArchived,
   gradeInput = '',
   currentGrade = null,
@@ -291,6 +293,7 @@ export function ProblemWorkspace({
   commentsLoading = false,
 }: ProblemWorkspaceProps) {
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
   const [activeFeedback, setActiveFeedback] = useState<string | null>(null);
   const [activeFilters, setActiveFilters] = useState<Set<SubmissionStatusFilter>>(new Set());
 
@@ -320,6 +323,8 @@ export function ProblemWorkspace({
   const sortedSubmissions = [...submissions].sort(
     (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
   );
+
+  const visibleSubmissions = filterSubmissions(sortedSubmissions, activeFilters, dueDate, hasValidDueDate);
 
   const handleDownload = (submission: ProblemSubmission) => {
     if (!submission.fileName) return;
@@ -394,35 +399,49 @@ export function ProblemWorkspace({
               </div>
             ) : sortedSubmissions.length > 0 ? (
               <div className="space-y-2">
-                {/* Status filter */}
-                <div className="flex flex-wrap gap-1 px-1">
-                  <button
-                    onClick={() => setActiveFilters(new Set())}
-                    className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
-                      activeFilters.size === 0
-                        ? 'border-foreground bg-foreground text-background'
-                        : 'border-border text-muted-foreground hover:border-foreground/50 hover:text-foreground'
-                    }`}
-                  >
-                    All
-                  </button>
-                  {STATUS_FILTER_OPTIONS.map(({ value, label, dot }) => {
-                    const active = activeFilters.has(value);
-                    return (
-                      <button
-                        key={value}
-                        onClick={() => toggleFilter(value)}
-                        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
-                          active
-                            ? 'border-foreground bg-foreground text-background'
-                            : 'border-border text-muted-foreground hover:border-foreground/50 hover:text-foreground'
-                        }`}
-                      >
-                        <span className={`inline-flex h-2 w-2 rounded-full ${dot}`} aria-hidden="true" />
-                        {label}
-                      </button>
-                    );
-                  })}
+                <div className="flex flex-col gap-3 px-1 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-wrap gap-1">
+                    <button
+                      onClick={() => setActiveFilters(new Set())}
+                      className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
+                        activeFilters.size === 0
+                          ? 'border-foreground bg-foreground text-background'
+                          : 'border-border text-muted-foreground hover:border-foreground/50 hover:text-foreground'
+                      }`}
+                    >
+                      All
+                    </button>
+                    {STATUS_FILTER_OPTIONS.map(({ value, label, dot }) => {
+                      const active = activeFilters.has(value);
+                      return (
+                        <button
+                          key={value}
+                          onClick={() => toggleFilter(value)}
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
+                            active
+                              ? 'border-foreground bg-foreground text-background'
+                              : 'border-border text-muted-foreground hover:border-foreground/50 hover:text-foreground'
+                          }`}
+                        >
+                          <span className={`inline-flex h-2 w-2 rounded-full ${dot}`} aria-hidden="true" />
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => onRerunVisibleSubmissions?.(visibleSubmissions)}
+                      disabled={visibleSubmissions.length === 0 || isRunning}
+                      className="whitespace-nowrap"
+                      title="Rerun Visible Submissions"
+                    >
+                      Rerun
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="overflow-x-auto rounded-md border">
@@ -431,18 +450,17 @@ export function ProblemWorkspace({
                     <TableRow>
                       <TableHead className="px-2 py-1">Submitted</TableHead>
                       <TableHead className="px-2 py-1">Status</TableHead>
-                      <TableHead className="px-2 py-1">Feedback</TableHead>
-                      <TableHead className="px-2 py-1">View</TableHead>
+                      <TableHead className="px-2 py-1">Manage</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filterSubmissions(sortedSubmissions, activeFilters, dueDate, hasValidDueDate).length === 0 ? (
+                    {visibleSubmissions.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={5} className="text-muted-foreground py-6 text-center text-sm">
                           No submissions match the selected filter.
                         </TableCell>
                       </TableRow>
-                    ) : filterSubmissions(sortedSubmissions, activeFilters, dueDate, hasValidDueDate).map((submission) => {
+                    ) : visibleSubmissions.map((submission) => {
                       const submittedAt = new Date(submission.submittedAt);
                       const isLate =
                         submission.status?.toLowerCase() === 'late' ||
@@ -466,28 +484,22 @@ export function ProblemWorkspace({
                             </div>
                           </TableCell>
                           <TableCell className="p-1 align-top">{renderStatusCell(submission)}</TableCell>
-                          <TableCell className="p-1 align-top text-sm">
-                            {submission.feedback ? (
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => {
-                                  setActiveFeedback(String(submission.feedback));
-                                  setFeedbackDialogOpen(true);
-                                }}
-                                title="View feedback"
-                                aria-label="View submission feedback"
-                                className="h-8 w-8 p-0"
-                                disabled={submission.status?.toLowerCase() === "pending" || submission.status?.toLowerCase() === "processing"}
-                              >
-                                <File className="h-4 w-4" />
-                              </Button>
-                            ) : (
-                              <span className="text-muted-foreground text-sm">No feedback</span>
-                            )}
-                          </TableCell>
                           <TableCell className="p-1 align-top">
-                            <div className="flex items-center gap-2 whitespace-nowrap">
+                              <div className="flex items-center gap-2 whitespace-nowrap">
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => {
+                                    setActiveFeedback(String(submission.feedback));
+                                    setFeedbackDialogOpen(true);
+                                  }}
+                                  title="View feedback"
+                                  aria-label="View submission feedback"
+                                  className="h-8 w-8 p-0"
+                                  disabled={!submission.feedback || submission.status?.toLowerCase() === "pending" || submission.status?.toLowerCase() === "processing"}
+                                >
+                                  <File className="h-4 w-4" />
+                                </Button>
                               <Button
                                 variant="secondary"
                                 size="sm"
@@ -508,6 +520,17 @@ export function ProblemWorkspace({
                                 className="h-8 w-8 p-0"
                               >
                                 <Download className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                disabled={submission.status?.toLowerCase() === "pending" || submission.status?.toLowerCase() === "processing"}
+                                onClick={() => onRerunSubmission?.(submission)}
+                                title="Rerun submission"
+                                aria-label="Rerun submission"
+                                className="h-8 w-8 p-0"
+                              >
+                                <RotateCcw className="h-4 w-4" />
                               </Button>
                             </div>
                           </TableCell>
