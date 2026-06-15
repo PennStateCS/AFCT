@@ -178,7 +178,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       select: { assignmentId: true },
     }));
 
-    const hasGrade = !!(await prisma.assignmentGrade.findFirst({
+    const hasGrade = !!(await prisma.assignmentProblemGrade.findFirst({
       where: { assignmentId: id },
       select: { assignmentId: true },
     }));
@@ -295,7 +295,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       select: { assignmentId: true },
     }));
 
-    const hasGrade = !!(await prisma.assignmentGrade.findFirst({
+    const hasGrade = !!(await prisma.assignmentProblemGrade.findFirst({
       where: { assignmentId: id },
       select: { assignmentId: true },
     }));
