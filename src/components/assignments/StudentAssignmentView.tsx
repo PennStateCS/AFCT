@@ -22,10 +22,6 @@ import {
   StudentProblemSubmission,
 } from '@/lib/assignment-details';
 
-interface AssignmentProblem {
-  problem: AssignmentWithDetails['problems'][number]['problem'];
-}
-
 type StudentAssignmentViewProps = {
   initialAssignment?: AssignmentWithDetails | null;
 };
@@ -52,6 +48,8 @@ export default function StudentAssignmentPage({
   const [comments, setComments] = useState<Record<string, StudentProblemComment[]>>({});
   const [newComment, setNewComment] = useState<Record<string, string>>({});
   const [submittingComment, setSubmittingComment] = useState<Record<string, boolean>>({});
+  const [problemGrades, setProblemGrades] = useState<Record<string, number | null>>({});
+  const [assignmentGrade, setAssignmentGrade] = useState<number | null>(null);
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
   const [openDialog, setOpenDialog] = useState<{
     open: boolean;
@@ -71,6 +69,8 @@ export default function StudentAssignmentPage({
       if (!response.ok) throw new Error('Failed to fetch assignment context');
 
       const context = (await response.json()) as StudentAssignmentContext;
+      setAssignmentGrade(context.assignmentGrade);
+      setProblemGrades(context.problemGrades);
       setSubmissionCount(context.submissionCount);
       setSubmissions(context.submissionsByProblem);
       setComments(context.commentsByProblem);
@@ -203,12 +203,12 @@ export default function StudentAssignmentPage({
       title: assignmentProblem.problem.title
         ? limitText(assignmentProblem.problem.title, 25)
         : `Problem ${index + 1}`,
-      grade: submissions[assignmentProblem.problem.id]?.[0]?.grade ?? null,
+      grade: problemGrades[assignmentProblem.problem.id] ?? null,
       maxGrade: assignmentProblem.maxPoints ?? null,
       submissionsCount: submissions[assignmentProblem.problem.id]?.length ?? 0,
       maxSubmissions: assignmentProblem.maxSubmissions ?? null,
     }));
-  }, [assignment, submissions]);
+  }, [assignment, submissions, problemGrades]);
 
   if (loading) {
     return <div className="p-6">Loading assignment...</div>;
@@ -251,7 +251,6 @@ export default function StudentAssignmentPage({
     : lateCutoffDate
       ? `Accepted until ${lateCutoffDisplay}`
       : 'Accepted anytime';
-  const assignmentGrade = null; // Fix later
   const gradeDisplay = assignmentGrade !== null ? `${assignmentGrade}` : '-';
   const courseIsArchived = assignment.course?.isArchived ?? false;
   const selectedProblem = selectedProblemId
@@ -259,6 +258,9 @@ export default function StudentAssignmentPage({
     : null;
   const selectedProblemSubmissions = selectedProblemId ? submissions[selectedProblemId] || [] : [];
   const selectedProblemComments = selectedProblemId ? comments[selectedProblemId] || [] : [];
+  const selectedProblemGrade = selectedProblem
+    ? problemGrades[selectedProblem.problem.id] ?? selectedProblemSubmissions[0]?.grade ?? null
+    : null;
   const selectedProblemDetails = selectedProblem
     ? {
         ...selectedProblem.problem,
@@ -268,6 +270,7 @@ export default function StudentAssignmentPage({
       }
     : null;
 
+  console.log()
   return (
     <div className="space-y-6 p-6">
       <Card>
@@ -341,8 +344,8 @@ export default function StudentAssignmentPage({
                 <span className="mr-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em]">
                   Grade
                 </span>
-                <span className="text-xl font-semibold leading-none tracking-tight">{gradeDisplay}</span>
-                <span className="ml-1 text-sm font-medium leading-none">/{assignment.maxPoints}</span>
+                <span className="ml-1 text-sm font-medium leading-none">{gradeDisplay}</span>
+                <span className="ml-1 text-sm font-medium leading-none">/ {assignment.maxPoints}</span>
               </div>
             </div>
           </CardHeader>
@@ -377,11 +380,8 @@ export default function StudentAssignmentPage({
                 isSaving={selectedProblem ? submittingComment[selectedProblem.problem.id] : false}
                 deletingComments={{}}
                 onViewSubmission={(submission) => setOpenDialog({ open: true, submission })}
-                rerunning={{}}
                 courseIsArchived={courseIsArchived}
-                gradeInput=""
-                currentGrade={null}
-                gradeError={null}
+                currentGrade={selectedProblemGrade}
                 isPrivledgedUser={false}
                 submissionsLoading={submissionsLoading}
                 commentsLoading={commentsLoading}

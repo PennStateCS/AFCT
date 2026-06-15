@@ -50,7 +50,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 
     const problemIds = assignment.problems.map((problem) => problem.problemId);
 
-    const [submissions, comments] = await Promise.all([
+    const [submissions, comments, grades] = await Promise.all([
       prisma.submission.findMany({
         where: {
           assignmentId,
@@ -89,6 +89,17 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
         },
         orderBy: { createdAt: 'asc' },
       }),
+      prisma.assignmentProblemGrade.findMany({
+        where: {
+          assignmentId,
+          studentId: userId,
+          problemId: { in: problemIds },
+        },
+        select: {
+          problemId: true,
+          grade: true,
+        },
+      }),
     ]);
 
     const submissionsByProblem: Record<string, (typeof submissions)[number][]> = {};
@@ -115,7 +126,18 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       commentsByProblem[comment.problemId].push(comment);
     }
 
+    const gradeMap = new Map(grades.map((grade) => [grade.problemId, grade.grade]));
+    const problemGrades = Object.fromEntries(
+      problemIds.map((problemId) => [problemId, gradeMap.get(problemId) ?? null]),
+    );
+    const hasAnyGrade = Object.values(problemGrades).some((grade) => grade !== null);
+    const assignmentGrade = hasAnyGrade
+      ? Object.values(problemGrades).reduce((sum, grade) => sum + (grade ?? 0), 0)
+      : null;
+
     return NextResponse.json({
+      assignmentGrade,
+      problemGrades,
       submissionCount: submissions.length,
       submissionsByProblem: Object.fromEntries(
         Object.entries(submissionsByProblem).map(([problemId, problemSubmissions]) => [
@@ -123,7 +145,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
           problemSubmissions.map((submission) => ({
             id: submission.id,
             submittedAt: submission.submittedAt.toISOString(),
-            grade: null,
+            grade: gradeMap.get(submission.problemId) ?? null,
             feedback: submission.feedback,
             correct: submission.correct,
             fileName: submission.fileName,
