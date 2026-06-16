@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, JwtPayload } from '@/app/utils/jwt';
+import { auth } from '@/lib/auth';
 
 // GET: Fetch all published assignments for a course
 export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -8,18 +8,18 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
   const params = await context.params;
   const courseId = await params.id;
 
-  // 1. Validate courseId
+    // Get authenticated user session
+    const session = await auth();
+    const user = session?.user;
+
+    // 1. Allow only ADMIN or FACULTY to toggle archive status
+    if (!user || !['ADMIN', 'FACULTY'].includes(user.role)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
+  // 2. Validate courseId
   if (!courseId) {
     return NextResponse.json({ error: 'Missing course ID' }, { status: 400 });
-  }
-
-  // 2. Extract and verify token
-  const authHeader = req.headers.get('authorization');
-  const token = authHeader?.split(' ')[1];
-  const decoded: JwtPayload | null = token ? verifyToken(token) : null;
-
-  if (!decoded) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {

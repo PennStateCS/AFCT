@@ -1,15 +1,10 @@
 ﻿'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import type { Assignment, Course } from '@prisma/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {
   Table,
   TableBody,
@@ -18,30 +13,24 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Eye, Download, RefreshCw, FileText } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 
 type StatusTone = 'green' | 'amber' | 'red' | 'gray' | 'blue' | 'violet' | 'yellow' | 'lime' | 'pink';
 
-type StatusChip = {
-  label: string;
-  tone: StatusTone;
-  title: string;
-};
-
-type SystemSubmission = {
-  id: string;
-  submittedAt: string;
-  course: string;
-  assignment: string;
-  fileName?: string | null;
-  originalFileName?: string | null;
-  status: string;
-  correct?: boolean | null;
-  feedback?: string | null;
-};
-
 type SubmissionStatusFilter = 'on-time' | 'late' | 'pending' | 'processing' | 'failed' | 'correct' | 'incorrect';
+
+type CourseItem = Pick<Course, 'id' | 'name' | 'code'>;
+
+type AssignmentItem = Pick<Assignment, 'id' | 'title' | 'dueDate'>;
+
+type AssignmentRow = {
+  id: string;
+  courseId: string;
+  courseName: string;
+  assignmentTitle: string;
+  dueDate?: string | Date | null;
+  status: SubmissionStatusFilter;
+};
 
 const statusToneClass: Record<StatusTone, string> = {
   green: 'bg-emerald-500',
@@ -65,87 +54,134 @@ const STATUS_FILTER_OPTIONS: { value: SubmissionStatusFilter; label: string; dot
   { value: 'incorrect', label: 'Incorrect', dot: 'bg-rose-500' },
 ];
 
-const getSubmissionReviewStatus = (submission: SystemSubmission): SubmissionStatusFilter => {
-  const status = submission.status?.toLowerCase() ?? '';
-  if (status === 'processing') return 'processing';
-  if (status === 'pending') return 'pending';
-  if (status === 'failed') return 'failed';
-  if (submission.correct === true) return 'correct';
-  return 'incorrect';
+const getStatusChip = (status: SubmissionStatusFilter): { label: string; tone: StatusTone; title: string } => {
+  switch (status) {
+    case 'pending':
+      return { label: 'Pending', tone: 'violet', title: 'Submission is pending' };
+    case 'processing':
+      return { label: 'Processing', tone: 'yellow', title: 'Submission is being processed' };
+    case 'failed':
+      return { label: 'Failed', tone: 'pink', title: 'Submission failed' };
+    case 'correct':
+      return { label: 'Correct', tone: 'blue', title: 'Submission is correct' };
+    case 'incorrect':
+      return { label: 'Incorrect', tone: 'red', title: 'Submission is incorrect' };
+    case 'late':
+      return { label: 'Late', tone: 'amber', title: 'Submission was late' };
+    case 'on-time':
+    default:
+      return { label: 'On time', tone: 'green', title: 'Submission was on time' };
+  }
 };
 
-const filterSubmissions = (
-  submissions: SystemSubmission[],
-  activeFilters: Set<SubmissionStatusFilter>,
-): SystemSubmission[] => {
-  if (activeFilters.size === 0) return submissions;
-  return submissions.filter((submission) => {
-    const reviewStatus = getSubmissionReviewStatus(submission);
-    const isLate = submission.status?.toLowerCase() === 'late';
-
-    if (activeFilters.has('late') && isLate) return true;
-    if (activeFilters.has('on-time') && !isLate) return true;
-    if (activeFilters.has(reviewStatus)) return true;
-    return false;
-  });
+const fetchCourseList = async (): Promise<CourseItem[]> => {
+  const response = await fetch('/api/courses/list', { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error('Failed to load courses');
+  }
+  return (await response.json()) as CourseItem[];
 };
 
-const getStatusChip = (submission: SystemSubmission): StatusChip => {
-  const status = submission.status?.toLowerCase() ?? '';
+const fetchAssignmentsForCourse = async (course: CourseItem): Promise<AssignmentRow[]> => {
+  const response = await fetch(`/api/courses/${course.id}/assignments`, { cache: 'no-store' });
+  if (!response.ok) return [];
 
-  if (status === 'pending') {
-    return { label: 'Pending', tone: 'violet', title: 'Submission analysis is pending' };
-  }
-
-  if (status === 'processing') {
-    return { label: 'Processing', tone: 'yellow', title: 'Submission is being processed' };
-  }
-
-  if (status === 'failed') {
-    return { label: 'Failed', tone: 'pink', title: 'Submission analysis failed' };
-  }
-
-  if (submission.correct === true) {
-    return { label: 'Correct', tone: 'blue', title: 'Submission is correct' };
-  }
-
-  return { label: 'Incorrect', tone: 'red', title: 'Submission is incorrect' };
+  const assignments = (await response.json()) as AssignmentItem[];
+  return assignments.map((assignment) => ({
+    id: assignment.id,
+    courseId: course.id,
+    courseName: course.name ?? course.code ?? course.id,
+    assignmentTitle: assignment.title,
+    dueDate: assignment.dueDate ?? null,
+    status: assignment.dueDate ? 'on-time' : 'pending',
+  }));
 };
 
 export default function SystemSubmissionClient() {
+  const [courses, setCourses] = useState<CourseItem[]>([]);
+  const [assignments, setAssignments] = useState<AssignmentRow[]>([]);
   const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
   const [selectedAssignments, setSelectedAssignments] = useState<string[]>([]);
   const [activeFilters, setActiveFilters] = useState<Set<SubmissionStatusFilter>>(new Set());
-  const [submissions] = useState<SystemSubmission[]>([]);
+  const [loadingCourses, setLoadingCourses] = useState(false);
+  const [loadingAssignments, setLoadingAssignments] = useState(false);
+  const [rerunning, setRerunning] = useState(false);
+  const [initialized, setInitialized] = useState(false);
+
+  useEffect(() => {
+    const loadCourses = async () => {
+      setLoadingCourses(true);
+      try {
+        const courseList = await fetchCourseList();
+        setCourses(courseList);
+        setSelectedCourses(courseList.map((course) => course.id));
+      } catch (error) {
+        console.error(error);
+        showToast.error('Unable to load courses');
+      } finally {
+        setLoadingCourses(false);
+      }
+    };
+    void loadCourses();
+  }, []);
+
+  useEffect(() => {
+    const loadAssignments = async () => {
+      if (selectedCourses.length === 0) {
+        setAssignments([]);
+        return;
+      }
+
+      setLoadingAssignments(true);
+      try {
+        const rows = await Promise.all(
+          selectedCourses.map(async (courseId) => {
+            const course = courses.find((item) => item.id === courseId);
+            if (!course) return [] as AssignmentRow[];
+            return fetchAssignmentsForCourse(course);
+          }),
+        );
+        const flat = rows.flat();
+        setAssignments(flat);
+
+        if (!initialized) {
+          setSelectedAssignments(flat.map((assignment) => assignment.id));
+          setInitialized(true);
+        }
+      } catch (error) {
+        console.error(error);
+        showToast.error('Unable to load assignments');
+        setAssignments([]);
+      } finally {
+        setLoadingAssignments(false);
+      }
+    };
+    void loadAssignments();
+  }, [selectedCourses, courses, initialized]);
 
   const courseOptions = useMemo(
-    () =>
-      Array.from(new Set(submissions.map((submission) => submission.course)))
-        .sort()
-        .map((course) => ({ id: course, label: course })),
-    [submissions],
+    () => courses.map((course) => ({ id: course.id, label: course.name ?? course.code ?? course.id })),
+    [courses],
   );
 
   const assignmentOptions = useMemo(
     () =>
-      Array.from(new Set(submissions.map((submission) => submission.assignment)))
-        .sort()
-        .map((assignment) => ({ id: assignment, label: assignment })),
-    [submissions],
+      assignments
+        .map((assignment) => ({ id: assignment.id, label: assignment.assignmentTitle }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [assignments],
   );
 
-  const visibleSubmissions = useMemo(() => {
-    return filterSubmissions(
-      submissions.filter((submission) => {
-        const matchesCourse =
-          selectedCourses.length === 0 || selectedCourses.includes(submission.course);
-        const matchesAssignment =
-          selectedAssignments.length === 0 || selectedAssignments.includes(submission.assignment);
-        return matchesCourse && matchesAssignment;
+  const visibleAssignments = useMemo(
+    () =>
+      assignments.filter((assignment) => {
+        const matchesCourse = selectedCourses.length === 0 || selectedCourses.includes(assignment.courseId);
+        const matchesAssignment = selectedAssignments.length === 0 || selectedAssignments.includes(assignment.id);
+        const matchesFilter = activeFilters.size === 0 || activeFilters.has(assignment.status);
+        return matchesCourse && matchesAssignment && matchesFilter;
       }),
-      activeFilters,
-    );
-  }, [activeFilters, selectedAssignments, selectedCourses, submissions]);
+    [activeFilters, assignments, selectedAssignments, selectedCourses],
+  );
 
   const toggleFilter = (filter: SubmissionStatusFilter) => {
     setActiveFilters((prev) => {
@@ -156,19 +192,37 @@ export default function SystemSubmissionClient() {
     });
   };
 
-  const handleRerunVisible = () => {
-    if (visibleSubmissions.length === 0) return;
-    showToast.success('Rerun requested for visible submissions');
+  const handleSelectAll = () => {
+    setSelectedCourses(courses.map((course) => course.id));
+    setSelectedAssignments(assignments.map((assignment) => assignment.id));
   };
 
-  const handleRerunSubmission = (submission: SystemSubmission) => {
-    showToast.success(`Rerun requested for ${submission.originalFileName || submission.id}`);
+  const handleClearAll = () => {
+    setSelectedCourses([]);
+    setSelectedAssignments([]);
   };
 
-  const handleDownload = (submission: SystemSubmission) => {
-    if (!submission.fileName) return;
-    const url = `/api/uploads/submissions/${encodeURIComponent(submission.fileName)}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
+  const handleRerunVisible = async () => {
+    if (visibleAssignments.length === 0) return;
+
+    const courseIds = Array.from(new Set(visibleAssignments.map((assignment) => assignment.courseId)));
+    setRerunning(true);
+    try {
+      for (const courseId of courseIds) {
+        const response = await fetch(`/api/course_submissions/${courseId}`, {
+          method: 'POST',
+        });
+        if (!response.ok) {
+          throw new Error(`Failed to rerun course ${courseId}`);
+        }
+      }
+      showToast.success(`Requested rerun for ${visibleAssignments.length} visible items.`);
+    } catch (error) {
+      console.error(error);
+      showToast.error('Failed to rerun visible items.');
+    } finally {
+      setRerunning(false);
+    }
   };
 
   return (
@@ -176,40 +230,50 @@ export default function SystemSubmissionClient() {
       <CardHeader className="flex flex-col gap-4 pb-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <CardTitle role="heading" aria-level={1} className="text-2xl">
-            System Logs
+            System Submission Logs
           </CardTitle>
         </div>
         <Button
           size="sm"
           variant="secondary"
           onClick={handleRerunVisible}
-          disabled={visibleSubmissions.length === 0}
+          disabled={visibleAssignments.length === 0 || rerunning}
           className="whitespace-nowrap"
-          title="Rerun Visible Submissions"
         >
-          Rerun
+          {rerunning ? 'Rerunning…' : 'Rerun'}
         </Button>
       </CardHeader>
 
       <CardContent className="space-y-4">
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="secondary" onClick={handleSelectAll} disabled={courses.length === 0}>
+            Select all
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleClearAll}>
+            Clear all
+          </Button>
+        </div>
+
         <div className="grid gap-3 sm:grid-cols-[1fr_1fr]">
           <SearchableMultiSelect
             label="Course filter"
             items={courseOptions}
             value={selectedCourses}
             onChange={setSelectedCourses}
-            placeholder="All courses"
+            placeholder={loadingCourses ? 'Loading courses…' : 'No selected courses'}
             searchPlaceholder="Search courses"
-            emptyStateText="No courses found."
+            emptyStateText={loadingCourses ? 'Loading courses…' : 'No courses found.'}
+            disabled={loadingCourses}
           />
           <SearchableMultiSelect
             label="Assignment filter"
             items={assignmentOptions}
             value={selectedAssignments}
             onChange={setSelectedAssignments}
-            placeholder="All assignments"
+            placeholder={loadingAssignments ? 'Loading assignments…' : 'No selected assignments'}
             searchPlaceholder="Search assignments"
-            emptyStateText="No assignments found."
+            emptyStateText={loadingAssignments ? 'Loading assignments…' : 'No assignments found.'}
+            disabled={loadingAssignments || selectedCourses.length === 0}
           />
         </div>
 
@@ -251,54 +315,34 @@ export default function SystemSubmissionClient() {
               <TableRow>
                 <TableHead className="px-2 py-2">Course</TableHead>
                 <TableHead className="px-2 py-2">Assignment</TableHead>
-                <TableHead className="px-2 py-2">Submitted</TableHead>
+                <TableHead className="px-2 py-2">Due</TableHead>
                 <TableHead className="px-2 py-2">Status</TableHead>
-                <TableHead className="px-2 py-2">Manage</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {visibleSubmissions.length === 0 ? (
+              {visibleAssignments.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-muted-foreground py-8 text-center text-sm">
-                    No system submissions match your filters.
+                  <TableCell colSpan={4} className="text-muted-foreground py-8 text-center text-sm">
+                    {loadingCourses || loadingAssignments
+                      ? 'Loading visible items...'
+                      : 'No assignments match your current filters.'}
                   </TableCell>
                 </TableRow>
               ) : (
-                visibleSubmissions.map((submission) => {
-                  const statusChip = getStatusChip(submission);
+                visibleAssignments.map((assignment) => {
+                  const statusChip = getStatusChip(assignment.status);
                   return (
-                    <TableRow key={submission.id} className="hover:bg-slate-50">
-                      <TableCell className="px-2 py-2 align-top">{submission.course}</TableCell>
-                      <TableCell className="px-2 py-2 align-top">{submission.assignment}</TableCell>
-                      <TableCell className="px-2 py-2 align-top">{new Date(submission.submittedAt).toLocaleString()}</TableCell>
+                    <TableRow key={`${assignment.courseId}-${assignment.id}`} className="hover:bg-slate-50">
+                      <TableCell className="px-2 py-2 align-top">{assignment.courseName}</TableCell>
+                      <TableCell className="px-2 py-2 align-top">{assignment.assignmentTitle}</TableCell>
+                      <TableCell className="px-2 py-2 align-top">
+                        {assignment.dueDate ? new Date(assignment.dueDate).toLocaleDateString() : 'No due date'}
+                      </TableCell>
                       <TableCell className="px-2 py-2 align-top">
                         <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium">
                           <span className={`inline-flex h-2.5 w-2.5 rounded-full ${statusToneClass[statusChip.tone]}`} aria-hidden="true" />
                           {statusChip.label}
                         </span>
-                      </TableCell>
-                      <TableCell className="px-2 py-2 align-top">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button size="sm" variant="secondary" className="whitespace-nowrap">
-                              Manage
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem className="flex items-center gap-2" onClick={() => showToast.info(`Viewing ${submission.originalFileName || submission.id}`)}>
-                              <Eye className="h-4 w-4" /> View details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="flex items-center gap-2" disabled={submission.status?.toLowerCase() === 'processing'} onClick={() => handleRerunSubmission(submission)}>
-                              <RefreshCw className="h-4 w-4" /> Rerun evaluator
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="flex items-center gap-2" onClick={() => handleDownload(submission)} disabled={!submission.fileName}>
-                              <Download className="h-4 w-4" /> Download submission
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="flex items-center gap-2" onClick={() => showToast.info('View raw submission JSON')}>
-                              <FileText className="h-4 w-4" /> View raw JSON
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   );
