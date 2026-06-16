@@ -3,6 +3,7 @@
 import Link from 'next/link';
 
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { getCourseStatusTag } from '@/lib/course-status';
 import { EnrolledUser, formatInstructorNames, getStudentCount, getTAs } from '@/lib/course-utils';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
@@ -91,14 +92,8 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
                         </div>
 
                         {(() => {
-                          const { status, bgColor } = getCourseStatusTag(course);
-                          return (
-                            <span
-                              className={`inline-block rounded ${bgColor} px-2 py-1 text-sm text-white shadow-sm ring-1 ring-gray-900/30`}
-                            >
-                              {status}
-                            </span>
-                          );
+                          const { status, variant } = getCourseStatusTag(course);
+                          return <Badge variant={variant}>{status}</Badge>;
                         })()}
                       </div>
 
