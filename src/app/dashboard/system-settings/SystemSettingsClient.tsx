@@ -113,9 +113,7 @@ export default function SystemSettingsClient() {
             <h1 id="system-settings-title" className="text-2xl leading-none font-semibold">
               System Settings
             </h1>
-            <Badge variant="outline" className="bg-blue-50 text-blue-700">
-              Beta Feature
-            </Badge>
+            <Badge variant="info">Beta Feature</Badge>
           </div>
           <div className="text-muted-foreground text-sm">
             Configuration tools will be added here over time.
