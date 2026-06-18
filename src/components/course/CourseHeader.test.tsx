@@ -15,10 +15,6 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-vi.mock('@/lib/course-status', () => ({
-  getCourseStatusTag: () => ({ status: 'Open', bgColor: 'bg-green-500' }),
-}));
-
 vi.mock('@/hooks/use-effective-timezone', () => ({
   useEffectiveTimezone: () => ({ timezone: 'America/New_York' }),
 }));

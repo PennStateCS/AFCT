@@ -25,6 +25,7 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import SelectField from '@/components/ui/SelectField';
 import { AssociateProblemsDialog } from '@/components/dialogs/AssociateProblemsDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
@@ -463,29 +464,10 @@ export default function AssignmentDashboardPage({
               {assignment.title}
             </span>
             {(() => {
-              let status = '';
-              let badgeClass = '';
-
-              if (assignment.isPublished) {
-                if (new Date(assignment.dueDate) <= new Date()) {
-                  status = 'Past Due';
-                  badgeClass = 'border-red-200 bg-red-50 text-red-700';
-                } else {
-                  status = 'Published';
-                  badgeClass = 'border-green-200 bg-green-50 text-green-700';
-                }
-              } else {
-                status = 'Not Published';
-                badgeClass = 'border-yellow-200 bg-yellow-50 text-yellow-700';
-              }
-
-              return (
-                <span
-                  className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${badgeClass}`}
-                >
-                  {status}
-                </span>
-              );
+              const pastDue = assignment.isPublished && new Date(assignment.dueDate) <= new Date();
+              const variant = !assignment.isPublished ? 'warning' : pastDue ? 'danger' : 'success';
+              const status = !assignment.isPublished ? 'Not Published' : pastDue ? 'Past Due' : 'Published';
+              return <Badge variant={variant}>{status}</Badge>;
             })()}
           </CardTitle>
           <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm">

@@ -20,7 +20,6 @@ import type { FullCourse } from '@/types/course';
 import { getInstructors, getStudentCount } from '@/lib/course-utils';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatDateTimeInTimeZone } from '@/lib/date';
-import { getCourseStatusTag } from '@/lib/course-status';
 
 interface CourseHeaderProps {
   course: FullCourse;
@@ -42,7 +41,6 @@ export function CourseHeader({
   const { timezone } = useEffectiveTimezone();
   // -- helpers ---------------------------------------------------------------
   // Get course status tag at the top
-  const { status, bgColor } = getCourseStatusTag(course);
   const regCodeFormatted = useMemo(() => {
     if (!course.regCode) return null;
     const rc = course.regCode.toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -63,15 +61,9 @@ export function CourseHeader({
   const formatCourseDate = (value: Date | null) =>
     value ? formatDateTimeInTimeZone(value, timezone) : 'Not set';
   const badgeTheme = {
-    upcoming: {
-      className: 'bg-blue-100 text-blue-900 border border-blue-200',
-    },
-    open: {
-      className: 'bg-green-100 text-green-900 border border-green-200',
-    },
-    closed: {
-      className: 'bg-gray-200 text-gray-900 border border-gray-300',
-    },
+    upcoming: { variant: 'info' as const },
+    open: { variant: 'success' as const },
+    closed: { variant: 'neutral' as const },
   } as const;
 
   const registrationStatus = (() => {
@@ -297,7 +289,7 @@ export function CourseHeader({
                 <div className="grid grid-cols-1 gap-y-2 text-sm">
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground text-xs">Status</span>
-                    <Badge className={`text-xs font-medium ${courseStatus.theme.className}`}>
+                    <Badge variant={courseStatus.theme.variant}>
                       {courseStatus.label}
                     </Badge>
                   </div>
@@ -346,7 +338,7 @@ export function CourseHeader({
                 <div className="grid gap-2 text-sm">
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground text-xs">Status</span>
-                    <Badge className={`text-xs font-medium ${registrationStatus.theme.className}`}>
+                    <Badge variant={registrationStatus.theme.variant}>
                       {registrationStatus.label}
                     </Badge>
                   </div>

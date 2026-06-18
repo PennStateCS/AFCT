@@ -6,6 +6,7 @@ import type { Problem } from '@prisma/client';
 import { useState } from 'react';
 import { ChevronDown, Pencil, Trash2, FileText, Eye } from 'lucide-react';
 import { Badge } from '@/components/ui/RoleBadge';
+import { Badge as StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import JffViewerDialog from '@/components/JffViewerDialog';
 import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
@@ -54,9 +55,7 @@ export const useProblemColumns = ({
           <div className="flex items-center gap-2">
             <span>{row.original.title}</span>
             {problemWithMeta.usedByAssignment ? (
-              <Badge variant="outline" className="bg-amber-600 px-2 py-0 text-xs text-white">
-                Used
-              </Badge>
+              <StatusBadge variant="warning">Used</StatusBadge>
             ) : null}
           </div>
         );

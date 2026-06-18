@@ -347,7 +347,7 @@ export default function StudentAssignmentPage({
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-[minmax(240px,280px)_1fr] gap-4">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(240px,280px)_1fr]">
               <ProblemListCard
                 problems={problemListItems}
                 selectedProblemId={selectedProblemId}

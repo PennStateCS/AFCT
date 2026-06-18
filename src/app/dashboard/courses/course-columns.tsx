@@ -43,15 +43,9 @@ type CourseActionsCellProps = {
 };
 
 const registrationBadgeTheme = {
-  upcoming: {
-    className: 'bg-blue-100 text-blue-900 border border-blue-200',
-  },
-  open: {
-    className: 'bg-green-100 text-green-900 border border-green-200',
-  },
-  closed: {
-    className: 'bg-gray-200 text-gray-900 border border-gray-300',
-  },
+  upcoming: { variant: 'info' as const },
+  open: { variant: 'success' as const },
+  closed: { variant: 'neutral' as const },
 } as const;
 
 const normalizeDate = (value?: string | Date | null) => {
@@ -151,9 +145,7 @@ export const columns = (
         row.original.registrationCloseAt,
       );
       return (
-        <Badge
-          className={`inline-flex w-24 justify-center text-xs font-medium ${registrationStatus.theme.className}`}
-        >
+        <Badge variant={registrationStatus.theme.variant}>
           {registrationStatus.label}
         </Badge>
       );
