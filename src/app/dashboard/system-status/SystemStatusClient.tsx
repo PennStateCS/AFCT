@@ -352,17 +352,13 @@ const Stat = ({
 const TrendBadge = ({ delta }: { delta: number }) => {
   const up = delta > 0;
   const flat = Math.abs(delta) < 0.1;
-  const cls = flat
-    ? 'bg-slate-50 text-slate-700'
-    : up
-      ? 'bg-emerald-50 text-emerald-700'
-      : 'bg-rose-50 text-rose-700';
+  const variant = flat ? 'neutral' : up ? 'success' : 'danger';
   const arrow = flat ? '•' : up ? '▲' : '▼';
   const mag = Math.abs(delta) < 1 ? delta.toFixed(1) : Math.round(delta);
   return (
-    <span className={`ml-2 inline-flex items-center rounded px-2 py-0.5 text-xs ${cls}`}>
+    <Badge variant={variant} className="ml-2 text-xs">
       {arrow} {mag}
-    </span>
+    </Badge>
   );
 };
 
@@ -595,21 +591,16 @@ export default function SystemStatusClient() {
               System Status
             </CardTitle>
             <Badge
-              variant="outline"
-              className={`${dbOk ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}
+              variant={dbOk ? 'success' : 'danger'}
               title={status?.database?.message || ''}
             >
               DB {dbOk ? 'OK' : 'DOWN'}
             </Badge>
-            <Badge variant="outline" className="bg-blue-50 text-blue-700" title="Database provider">
+            <Badge variant="info" title="Database provider">
               {(provider || 'unknown').toUpperCase()}
             </Badge>
             {typeof status?.metrics?.latencyMs === 'number' && (
-              <Badge
-                variant="outline"
-                className="bg-amber-50 text-amber-700"
-                title="Endpoint latency"
-              >
+              <Badge variant="warning" title="Endpoint latency">
                 {status.metrics.latencyMs} ms
               </Badge>
             )}
@@ -841,10 +832,7 @@ export default function SystemStatusClient() {
               <CardTitle role="heading" aria-level={2} className="text-lg">
                 Database Overview
               </CardTitle>
-              <Badge
-                variant="outline"
-                className={`${dbOk ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}
-              >
+              <Badge variant={dbOk ? 'success' : 'danger'}>
                 {dbOk ? 'OK' : 'DOWN'}
               </Badge>
             </CardHeader>
@@ -1071,7 +1059,7 @@ export default function SystemStatusClient() {
               <CardTitle role="heading" aria-level={2} className="text-lg">
                 Abandoned Files
               </CardTitle>
-              <Badge variant="outline" className="bg-slate-50 text-slate-700">
+              <Badge variant="neutral">
                 Total: {status.abandonedFiles?.total ?? 0}
               </Badge>
             </CardHeader>
@@ -1184,19 +1172,19 @@ export default function SystemStatusClient() {
               Sessions
               {sessionSummary ? (
                 <span className="ml-2 space-x-2">
-                  <Badge variant="outline" className="bg-slate-50 text-slate-700">
+                  <Badge variant="neutral">
                     24h: {sessionSummary.total24h}
                   </Badge>
-                  <Badge variant="outline" className="bg-slate-50 text-slate-700">
+                  <Badge variant="neutral">
                     Users: {sessionSummary.uniqUsers24h}
                   </Badge>
-                  <Badge variant="outline" className="bg-slate-50 text-slate-700">
+                  <Badge variant="neutral">
                     5m: {sessionSummary.last5m}
                   </Badge>
-                  <Badge variant="outline" className="bg-slate-50 text-slate-700">
+                  <Badge variant="neutral">
                     15m: {sessionSummary.last15m}
                   </Badge>
-                  <Badge variant="outline" className="bg-slate-50 text-slate-700">
+                  <Badge variant="neutral">
                     60m: {sessionSummary.last60m}
                   </Badge>
                 </span>
