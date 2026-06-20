@@ -7,8 +7,7 @@ export type LmsAssignment = {
 
 export type LmsStudentRow = {
   id: string;
-  name?: string;
-  email?: string | null;
+  email: string;
   firstName?: string;
   lastName?: string;
   [key: string]: unknown;

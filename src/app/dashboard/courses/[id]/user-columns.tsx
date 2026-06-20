@@ -3,7 +3,9 @@
 import { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Trash2 } from 'lucide-react';
 import { User } from '@prisma/client';
+import { getInitials } from '@/app/utils/initials';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import CourseEditUserDialog from '@/components/dialogs/CourseEditUserDialog';
 import { EditUserDialog } from '@/components/dialogs/EditUserDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { Button } from '@/components/ui/button';
@@ -11,8 +13,7 @@ import { Badge } from '@/components/ui/RoleBadge';
 import { roleSortingFn } from '@/lib/roles';
 import { showToast } from '@/lib/toast';
 import { useState } from 'react';
-import CourseEditUserDialog from '@/components/dialogs/CourseEditUserDialog';
-// RosterUser is a User record augmented with course-specific role and flags
+
 type RosterUser = User & { role?: string; hasSubmissions?: boolean };
 
 type ActionsCellProps = {
@@ -224,16 +225,12 @@ export const userColumns = (
       header: () => <span className="sr-only">Avatar</span>,
       cell: ({ row }) => {
         const user = row.original;
-        const initials = `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase();
-        const avatarUrl = user.avatar
-          ? `/uploads/pfps/${user.avatar}`
-          : '/uploads/pfps/default-avatar.png';
 
         return (
           <Avatar className="h-10 w-10">
-            <AvatarImage src={avatarUrl} alt={`${user.firstName} ${user.lastName}`} />
+            <AvatarImage src={`/uploads/pfps/${user.avatar}`} alt={`${user.firstName} ${user.lastName}`} />
             <AvatarFallback className="bg-secondary text-secondary-foreground">
-              {initials || 'U'}
+              { getInitials(user.firstName, user.lastName, user.email) }
             </AvatarFallback>
           </Avatar>
         );

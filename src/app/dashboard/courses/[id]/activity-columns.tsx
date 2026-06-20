@@ -4,6 +4,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { getInitials } from '@/app/utils/initials';
 import { Clock, Info } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { formatDateTimeInTimeZone } from '@/lib/date';
@@ -195,13 +196,6 @@ const formatAction = (action: string) => {
   return formattedAction;
 };
 
-const getInitials = (user: ActivityUser | null) => {
-  if (!user) return 'U';
-  const first = user.firstName?.charAt(0) || '';
-  const last = user.lastName?.charAt(0) || '';
-  return first + last || user.email.charAt(0).toUpperCase();
-};
-
 const formatTimestamp = (timestamp: string) => {
   const date = new Date(timestamp);
   const now = new Date();
@@ -256,15 +250,11 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
       return (
         <Avatar className="h-10 w-10">
           <AvatarImage
-            src={
-              activity.user?.avatar
-                ? `/api/uploads/pfps/${activity.user.avatar}`
-                : `/api/uploads/pfps/default-avatar.png`
-            }
+            src={`/api/uploads/pfps/${activity.user?.avatar}`}
             alt={`${activity.user?.firstName} ${activity.user?.lastName}`}
           />
           <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
-            {getInitials(activity.user)}
+            {getInitials(activity.user?.firstName, activity.user?.lastName, activity.user?.email)}
           </AvatarFallback>
         </Avatar>
       );

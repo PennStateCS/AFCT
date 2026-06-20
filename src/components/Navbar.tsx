@@ -6,11 +6,13 @@ import { usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
 import { LockKeyhole, LogOut, Moon, Sun, UserPen, UserRound } from 'lucide-react';
+import { getInitials } from '@/app/utils/initials'
 import { Badge } from '@/components/ui/RoleBadge';
 import { useNavbarBreadcrumbs } from '@/components/navbar/NavbarBreadcrumbContext';
 import { safeSignOut } from '@/lib/safe-signout';
 import { ChangePasswordDialog } from '@/components/dialogs/ChangePasswordDialog';
 import { EditProfileDialog } from '@/components/dialogs/EditProfileDialog';
+import type { SessionUser } from '@/types/next-auth';
 
 // UI Components
 import { Button } from '@/components/ui/button';
@@ -108,30 +110,7 @@ const Navbar: React.FC = () => {
 
   if (!data?.user) return null;
 
-  const { firstName, lastName, role, avatar } = data.user;
-  const roleDisplay = role || 'STUDENT';
-  const avatarUrl = avatar ? `/api/uploads/pfps/${avatar}` : '/api/uploads/pfps/default-avatar.png';
-
-  // Use session.user.name first (which is built from firstName + lastName in auth)
-  // Then fallback to building it from individual fields, then fallback to 'User'
-  const fullName = data.user.name || [firstName, lastName].filter(Boolean).join(' ') || 'User';
-  const initials = (firstName?.[0] ?? '') + (lastName?.[0] ?? '') || fullName[0] || 'U';
-  const user = {
-    id: data.user.id ?? '',
-    firstName: firstName ?? '',
-    lastName: lastName ?? '',
-    name: fullName,
-    email: data.user.email ?? '',
-    avatar: avatar ?? null,
-    timezone: data.user.timezone ?? null,
-    initials,
-    role: (roleDisplay.toUpperCase() || 'STUDENT') as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT',
-    password: '',
-    temporaryPassword: Boolean(data.user.mustChangePassword),
-    inactive: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
+  const user: SessionUser = data.user;
 
   return (
     <nav className="bg-secondary mb-4 flex h-16 items-center justify-between rounded-lg p-3 text-white shadow-sm sm:p-4">
@@ -183,15 +162,16 @@ const Navbar: React.FC = () => {
               <span className="flex items-center gap-2 sm:gap-3">
                 <span className="hidden flex-col items-end sm:flex">
                   <span className="max-w-[12rem] truncate font-semibold text-white">
-                    {fullName}
+                    {`${user.firstName} ${user.lastName}`}
                   </span>
-                  <Badge role={roleDisplay} className="text-xs" />
+                  <Badge role={user.role} className="text-xs" />
                 </span>
                 <Avatar className="h-11 w-11" aria-label="User avatar">
-                  <AvatarImage src={avatarUrl} alt={`${fullName}'s avatar`} />
+                  <AvatarImage 
+                    src={`/api/uploads/pfps/${user.avatar}`}
+                    alt={`${user.firstName} ${user.lastName}`} />
                   <AvatarFallback>
-                    {firstName?.[0]}
-                    {lastName?.[0]}
+                    {getInitials(user.firstName, user.lastName, user.email)}
                   </AvatarFallback>
                 </Avatar>
               </span>

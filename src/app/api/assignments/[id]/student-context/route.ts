@@ -130,9 +130,10 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     const problemGrades = Object.fromEntries(
       problemIds.map((problemId) => [problemId, gradeMap.get(problemId) ?? null]),
     );
-    const hasAnyGrade = Object.values(problemGrades).some((grade) => grade !== null);
+    const gradesList = Object.values(problemGrades);
+    const hasAnyGrade = gradesList.some((grade) => grade !== null);
     const assignmentGrade = hasAnyGrade
-      ? Object.values(problemGrades).reduce((sum, grade) => sum + (grade ?? 0), 0)
+      ? gradesList.reduce((sum: number, grade) => sum + (grade ?? 0), 0)
       : null;
 
     return NextResponse.json({
