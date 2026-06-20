@@ -6,10 +6,12 @@ import { FileText } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Submission, User } from '@prisma/client';
 import { showToast } from '@/lib/toast';
+import { rerunSubmission } from '@/app/utils/rerunSubmission';
+import { rerunVisibleSubmissions } from '@/app/utils/rerunVisibleSubmissions';
 import type { Comment as DiscussionComment } from './DiscussionPanel';
 import { ProblemListCard } from '@/components/assignments/ProblemListCard';
-import { ProblemWorkspace } from '@/components/assignments/ProblemWorkspace';
-import type { ProblemSubmission } from '@/components/assignments/ProblemWorkspace';
+import ProblemWorkspace from '@/components/assignments/ProblemWorkspace';
+import type { ProblemSubmission } from '@/lib/problem-submission';
 import StudentNavigator from './StudentNavigator';
 import JffViewerDialog from './JffViewerDialog';
 import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
@@ -40,9 +42,6 @@ type Props = {
   maxAssignmentGrade: number;
   assignmentDueDate?: string | Date | null;
   problems?: Problem[];
-  // When assignmentIsGroup is true the parent will pass `groups` and
-  // `groupProblemsMap` so this component can show only the problems
-  // assigned to the student's group (unassigned problems apply to all).
   assignmentIsGroup?: boolean;
   groups?: { id: string; name: string }[];
   groupProblemsMap?: Record<string, string[]>;
@@ -102,12 +101,6 @@ export default function AssignmentSubmissions({
   const [loadingGroupMemberships, setLoadingGroupMemberships] = useState(false);
 
   // Grade editing state (robust, GradesCard style)
-  const [editingGrade, setEditingGrade] = useState<string>('');
-  const [isEditing, setIsEditing] = useState(false);
-  const [isSavingGrade, setIsSavingGrade] = useState(false);
-  const [gradeError, setGradeError] = useState<string | null>(null);
-  const [userGrade, setUserGrade] = useState<number | null>(null);
-  const [isLoadingGrade, setIsLoadingGrade] = useState(false);
   const [problemGrades, setProblemGrades] = useState<Record<string, number | null>>({});
   const [gradeInputs, setGradeInputs] = useState<Record<string, string>>({});
   const [problemGradeErrors, setProblemGradeErrors] = useState<Record<string, string | null>>({});
@@ -117,7 +110,7 @@ export default function AssignmentSubmissions({
   const [studentGradeStatuses, setStudentGradeStatuses] = useState<Record<string, boolean>>({});
   const [openDialog, setOpenDialog] = useState<{
     open: boolean;
-    submission: Submission | null;
+    submission: Submission | ProblemSubmission | null;
   }>({ open: false, submission: null });
   const reviewDataAbortRef = useRef<AbortController | null>(null);
   const reviewRequestSeqRef = useRef(0);
@@ -529,79 +522,18 @@ export default function AssignmentSubmissions({
 
   const handleRerunSubmission = useCallback(
     async (submission: Submission) => {
-      if (!submission?.id) return;
-      setRerunning((prev) => ({ ...prev, [submission.id]: true }));
-      try {
-        const res = await fetch(`/api/submissions/${submission.id}/rerun`, {
-          method: 'POST',
-        });
-        if (!res.ok) {
-          const error = await res.json().catch(() => ({}));
-          throw new Error(error?.error || 'Failed to rerun submission');
-        }
-        showToast.success('Submission re-evaluated');
-        await fetchReviewData();
-      } catch (err) {
-        console.error('Rerun submission error:', err);
-        showToast.error(err instanceof Error ? err.message : 'Failed to rerun submission');
-      } finally {
-        setRerunning((prev) => ({ ...prev, [submission.id]: false }));
-      }
+      await rerunSubmission({ submission, setRerunning, fetchReviewData });
     },
     [fetchReviewData],
   );
 
   const handleRerunVisibleSubmissions = useCallback(
     async (visibleSubmissions: ProblemSubmission[]) => {
-      if (!visibleSubmissions?.length) return;
-      const uniqueSubmissions = Array.from(
-        new Map(visibleSubmissions.filter((submission) => submission?.id).map((submission) => [submission.id, submission])).values(),
-      );
-
-      setRerunning((prev) => {
-        const next = { ...prev };
-        uniqueSubmissions.forEach((submission) => {
-          if (submission.id) next[submission.id] = true;
-        });
-        return next;
+      await rerunVisibleSubmissions({
+        visibleSubmissions,
+        setRerunning,
+        fetchReviewData,
       });
-
-      try {
-        const results = await Promise.allSettled(
-          uniqueSubmissions.map((submission) =>
-            fetch(`/api/submissions/${submission.id}/rerun`, {
-              method: 'POST',
-            }),
-          ),
-        );
-
-        const failures = results.filter(
-          (result) => result.status === 'rejected' || (result.status === 'fulfilled' && !result.value.ok),
-        );
-
-        if (failures.length > 0) {
-          showToast.error(
-            failures.length === 1
-              ? 'One submission failed to rerun.'
-              : `${failures.length} submissions failed to rerun.`,
-          );
-        } else {
-          showToast.success('Visible submissions are being re-evaluated');
-        }
-
-        await fetchReviewData();
-      } catch (err) {
-        console.error('Bulk rerun submission error:', err);
-        showToast.error(err instanceof Error ? err.message : 'Failed to rerun visible submissions');
-      } finally {
-        setRerunning((prev) => {
-          const next = { ...prev };
-          uniqueSubmissions.forEach((submission) => {
-            if (submission.id) next[submission.id] = false;
-          });
-          return next;
-        });
-      }
     },
     [fetchReviewData],
   );
@@ -871,7 +803,7 @@ export default function AssignmentSubmissions({
                         assignmentDueDate={assignmentDueDate}
                         comments={selectedComments}
                         commentText={selectedProblem ? commentTexts[selectedProblem.id] || '' : ''}
-                        onCommentTextChange={(text) =>
+                        onCommentTextChange={(text: string) =>
                           selectedProblem &&
                           setCommentTexts((prev) => ({
                             ...prev,
@@ -879,12 +811,12 @@ export default function AssignmentSubmissions({
                           }))
                         }
                         onSaveComment={() => selectedProblem && saveComment(selectedProblem.id)}
-                        onDeleteComment={(commentId) =>
+                        onDeleteComment={(commentId: string) =>
                           selectedProblem && deleteComment(commentId, selectedProblem.id)
                         }
                         isSaving={selectedProblem ? savingComments[selectedProblem.id] : false}
                         deletingComments={deletingComments}
-                        onViewSubmission={(submission) => setOpenDialog({ open: true, submission })}
+                        onViewSubmission={(submission: ProblemSubmission) => setOpenDialog({ open: true, submission })}
                         onRerunSubmission={handleRerunSubmission}
                         onRerunVisibleSubmissions={handleRerunVisibleSubmissions}
                         rerunning={rerunning}

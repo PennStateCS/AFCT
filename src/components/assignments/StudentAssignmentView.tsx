@@ -10,7 +10,7 @@ import { showToast } from '@/lib/toast';
 import { ArrowLeft } from 'lucide-react';
 import JffViewerDialog from '@/components/JffViewerDialog';
 import { ProblemListCard } from '@/components/assignments/ProblemListCard';
-import { ProblemWorkspace } from '@/components/assignments/ProblemWorkspace';
+import ProblemWorkspace from '@/components/assignments/ProblemWorkspace';
 import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
 import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
@@ -366,7 +366,7 @@ export default function StudentAssignmentPage({
                 assignmentDueDate={assignment.dueDate}
                 comments={selectedProblemComments}
                 commentText={selectedProblem ? newComment[selectedProblem.problem.id] || '' : ''}
-                onCommentTextChange={(text) =>
+                onCommentTextChange={(text: string) =>
                   selectedProblem &&
                   setNewComment((prev) => ({
                     ...prev,
@@ -376,10 +376,12 @@ export default function StudentAssignmentPage({
                 onSaveComment={() =>
                   selectedProblem && handleSubmitComment(selectedProblem.problem.id)
                 }
-                onDeleteComment={(commentId) => handleDeleteComment(commentId)}
+                onDeleteComment={(commentId: string) => handleDeleteComment(commentId)}
                 isSaving={selectedProblem ? submittingComment[selectedProblem.problem.id] : false}
                 deletingComments={{}}
-                onViewSubmission={(submission) => setOpenDialog({ open: true, submission })}
+                onViewSubmission={(submission: StudentProblemSubmission) =>
+                  setOpenDialog({ open: true, submission })
+                }
                 courseIsArchived={courseIsArchived}
                 currentGrade={selectedProblemGrade}
                 isPrivledgedUser={false}

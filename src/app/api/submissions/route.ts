@@ -1,9 +1,9 @@
 // /src/app/api/submissions/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
-import { verifyToken } from '@/app/utils/jwt';
 import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
@@ -12,12 +12,9 @@ import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 
 export async function POST(req: NextRequest) {
-  // 1. Verify token
-  const authHeader = req.headers.get('authorization');
-  const token = authHeader?.split(' ')[1];
-  const decoded = token ? verifyToken(token) : null;
-
-  if (!decoded) {
+  // 1. Verify session
+  const session = await auth();
+  if (!session) {
     console.warn('Unauthorized submission attempt');
     await createEnhancedActivityLog(prisma, req, {
       userId: undefined,
@@ -39,14 +36,14 @@ export async function POST(req: NextRequest) {
 
   if (!assignmentId || !problemId) {
     await createEnhancedActivityLog(prisma, req, {
-      userId: decoded.userId,
+      userId: session.user.id,
       action: 'SUBMISSION_INVALID_REQUEST',
       category: 'SUBMISSION',
       courseId,
       assignmentId,
       problemId,
       metadata: {
-        userId: decoded.userId,
+        userId: session.user.id,
         courseId,
         assignmentId,
         problemId,
@@ -80,14 +77,14 @@ export async function POST(req: NextRequest) {
 
   if (!link) {
     await createEnhancedActivityLog(prisma, req, {
-      userId: decoded.userId,
+      userId: session.user.id,
       action: 'SUBMISSION_INVALID_REQUEST',
       category: 'SUBMISSION',
       courseId,
       assignmentId,
       problemId,
       metadata: {
-        userId: decoded.userId,
+        userId: session.user.id,
         courseId,
         assignmentId,
         problemId,
@@ -112,14 +109,14 @@ export async function POST(req: NextRequest) {
 
   if (!assignment) {
     await createEnhancedActivityLog(prisma, req, {
-      userId: decoded.userId,
+      userId: session.user.id,
       action: 'SUBMISSION_INVALID_REQUEST',
       category: 'SUBMISSION',
       courseId,
       assignmentId,
       problemId,
       metadata: {
-        userId: decoded.userId,
+        userId: session.user.id,
         courseId,
         assignmentId,
         problemId,
@@ -135,14 +132,14 @@ export async function POST(req: NextRequest) {
   if (isLate) {
     if (!assignment.allowLateSubmissions) {
       await createEnhancedActivityLog(prisma, req, {
-        userId: decoded.userId,
+        userId: session.user.id,
         action: 'SUBMISSION_REJECTED_LATE',
         category: 'SUBMISSION',
         courseId,
         assignmentId,
         problemId,
         metadata: {
-          userId: decoded.userId,
+          userId: session.user.id,
           courseId,
           assignmentId,
           problemId,
@@ -161,14 +158,14 @@ export async function POST(req: NextRequest) {
 
     if (assignment.lateCutoff && now > assignment.lateCutoff) {
       await createEnhancedActivityLog(prisma, req, {
-        userId: decoded.userId,
+        userId: session.user.id,
         action: 'SUBMISSION_REJECTED_LATE_CUTOFF',
         category: 'SUBMISSION',
         courseId,
         assignmentId,
         problemId,
         metadata: {
-          userId: decoded.userId,
+          userId: session.user.id,
           courseId,
           assignmentId,
           problemId,
@@ -200,14 +197,14 @@ export async function POST(req: NextRequest) {
     // Error check
     if (!validation.isValid) {
       await createEnhancedActivityLog(prisma, req, {
-        userId: decoded.userId,
+        userId: session.user.id,
         action: 'SUBMISSION_INVALID_FILE_STRUCTURE',
         category: 'SUBMISSION',
         courseId,
         assignmentId,
         problemId,
         metadata: {
-          userId: decoded.userId,
+          userId: session.user.id,
           courseId,
           assignmentId,
           problemId,
@@ -223,14 +220,14 @@ export async function POST(req: NextRequest) {
     // 4. Handle file upload
     if (file) {
       await createEnhancedActivityLog(prisma, req, {
-        userId: decoded.userId,
+        userId: session.user.id,
         action: 'SUBMISSION_FILE_RECEIVED',
         category: 'SUBMISSION',
         courseId,
         assignmentId,
         problemId,
         metadata: {
-          userId: decoded.userId,
+          userId: session.user.id,
           courseId,
           assignmentId,
           problemId,
@@ -266,7 +263,7 @@ export async function POST(req: NextRequest) {
         courseId,
         assignmentId,
         problemId,
-        studentId: decoded.userId,
+        studentId: session.user.id,
         fileName,
         originalFileName,
         feedback,
@@ -278,7 +275,7 @@ export async function POST(req: NextRequest) {
 
     if (fileName) {
       await createEnhancedActivityLog(prisma, req, {
-        userId: decoded.userId,
+        userId: session.user.id,
         action: 'SUBMISSION_FILE_STORED',
         category: 'SUBMISSION',
         courseId,
@@ -286,7 +283,7 @@ export async function POST(req: NextRequest) {
         problemId,
         submissionId: submission.id,
         metadata: {
-          userId: decoded.userId,
+          userId: session.user.id,
           courseId,
           assignmentId,
           problemId,
@@ -299,7 +296,7 @@ export async function POST(req: NextRequest) {
 
     // 6. Log successful submission
     await createEnhancedActivityLog(prisma, req, {
-      userId: decoded.userId,
+      userId: session.user.id,
       action: 'SUBMISSION_CREATED',
       category: 'SUBMISSION',
       courseId,
@@ -307,7 +304,7 @@ export async function POST(req: NextRequest) {
       problemId,
       submissionId: submission.id,
       metadata: {
-        userId: decoded.userId,
+        userId: session.user.id,
         courseId: courseId,
         assignmentId: assignmentId,
         problemId: problemId,
@@ -323,14 +320,14 @@ export async function POST(req: NextRequest) {
     // Error
   } catch (error: unknown) {
     await createEnhancedActivityLog(prisma, req, {
-      userId: decoded.userId,
+      userId: session.user.id,
       action: 'SUBMISSION_ERROR',
       category: 'SUBMISSION',
       courseId,
       assignmentId,
       problemId,
       metadata: {
-        userId: decoded.userId,
+        userId: session.user.id,
         courseId: courseId,
         assignmentId: assignmentId,
         problemId: problemId,
@@ -341,4 +338,72 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ error: 'Failed to create submission' }, { status: 500 });
   }
+}
+
+export async function GET(req: NextRequest, { params }: { params: Promise<{ sid: string }> }) {
+  const session = await auth();
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (session.user.role != 'ADMIN' && session.user.role != 'FACULTY') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { sid } = await params;
+
+  const submission = await prisma.submission.findUnique({
+    where: {
+      id: sid,
+    },
+    select: {
+      id: true,
+      studentId: true,
+      courseId: true,
+      assignmentId: true,
+      problemId: true,
+      student: {
+        select: {
+          firstName: true,
+          lastName: true,
+        }
+      },
+      course: {
+        select: { name: true },
+      },
+      assignmentProblem: {
+        select: {
+          assignment: {
+            select: { title: true },
+          }
+        }
+      },
+      submittedAt: true,
+      status: true,
+      fileName: true,
+      originalFileName: true,
+    }
+  });
+
+  // No submission found
+  if (!submission) {
+    return null;
+  }
+
+  const transformedSubmission = {
+    id: submission.id,
+    studentId: submission.studentId,
+    courseId: submission.courseId,
+    assignmentId: submission.assignmentId,
+    problemId: submission.problemId,
+    studentName: `${submission.student.firstName} ${submission.student.lastName}`,
+    courseName: submission.course.name,
+    assignmentTitle: submission.assignmentProblem.assignment.title,
+    submittedAt: submission.submittedAt,
+    status: submission.status,
+    fileName: submission.fileName,
+    originalFileName: submission.originalFileName,   
+  };
+
+  return NextResponse.json(transformedSubmission);
 }

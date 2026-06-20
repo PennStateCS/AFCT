@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef, useMemo } from 'react';
+import { getInitials } from '@/app/utils/initials';
 import {
   Dialog,
   DialogContent,
@@ -24,7 +25,6 @@ type Props = {
   courseId: string;
   userId: string;
   onSaved?: () => void;
-  // Optional fast-path: preloaded roster (from table row) to avoid fetching on open
   initialRoster?: any | null;
   initialViewerCourseRole?: string | null;
   initialViewerDefaultRole?: string | null;
@@ -71,11 +71,7 @@ export default function CourseEditUserDialog({
       setRoster(initialRoster);
       setViewerCourseRole(initialViewerCourseRole ?? null);
       setViewerDefaultRole(initialViewerDefaultRole ?? null);
-      setAvatarPreview(
-        initialRoster?.user?.avatar
-          ? `/api/uploads/pfps/${initialRoster.user.avatar}`
-          : '/api/uploads/pfps/default-avatar.png',
-      );
+      setAvatarPreview(`/api/uploads/pfps/${initialRoster.user.avatar}`);
       originalRosterRef.current = JSON.parse(JSON.stringify(initialRoster));
       return;
     }
@@ -95,13 +91,8 @@ export default function CourseEditUserDialog({
         setRoster(body?.roster ?? null);
         setViewerCourseRole(body?.viewerCourseRole ?? null);
         setViewerDefaultRole(body?.viewerDefaultRole ?? null);
-        // Initialize avatar preview from fetched user profile (if available)
-        setAvatarPreview(
-          body?.roster?.user?.avatar
-            ? `/api/uploads/pfps/${body.roster.user.avatar}`
-            : '/api/uploads/pfps/default-avatar.png',
-        );
-        // Save a copy of the original roster entry for dirty checks
+        setAvatarPreview(`/api/uploads/pfps/${body.roster.user.avatar}`);
+
         originalRosterRef.current = JSON.parse(JSON.stringify(body?.roster ?? null));
       } catch (err) {
         console.error('Error loading roster entry', err);
@@ -182,11 +173,7 @@ export default function CourseEditUserDialog({
         if (!v && originalRosterRef.current) {
           const orig = JSON.parse(JSON.stringify(originalRosterRef.current));
           setRoster(orig);
-          setAvatarPreview(
-            orig?.user?.avatar
-              ? `/api/uploads/pfps/${orig.user.avatar}`
-              : '/api/uploads/pfps/default-avatar.png',
-          );
+          setAvatarPreview(`/api/uploads/pfps/${orig.user.avatar}`);
           setConfirmOpen(false);
         }
       }}
@@ -209,12 +196,11 @@ export default function CourseEditUserDialog({
               <div className="flex items-center gap-4">
                 <Avatar className="h-20 w-20">
                   <AvatarImage
-                    src={avatarPreview ?? '/api/uploads/pfps/default-avatar.png'}
+                    src={avatarPreview || '/api/uploads/pfps/'}
                     alt="User Avatar"
                   />
                   <AvatarFallback className="bg-secondary text-secondary-foreground">
-                    {(roster.user?.firstName || '?').charAt(0)}
-                    {(roster.user?.lastName || '?').charAt(0)}
+                    {getInitials(roster.user.firstName, roster.user.lastName, roster.user.email)}
                   </AvatarFallback>
                 </Avatar>
 
@@ -248,8 +234,6 @@ export default function CourseEditUserDialog({
                             showToast.error(body?.error || 'Failed to delete avatar');
                             return;
                           }
-                          setAvatarPreview('/api/uploads/pfps/default-avatar.png');
-                          // update roster object to remove avatar client-side
                           setRoster({ ...roster, user: { ...roster.user, avatar: null } });
                           showToast.success('Profile photo removed');
                           onSaved?.();
