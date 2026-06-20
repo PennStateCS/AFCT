@@ -47,6 +47,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
         description: true,
         problems: {
           select: {
+            problemId: true,
             maxPoints: true,
             grades: {
               select: { grade: true },

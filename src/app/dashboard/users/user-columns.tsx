@@ -4,6 +4,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { roleSortingFn } from '@/lib/roles';
 import { useState } from 'react';
 import { User } from '@prisma/client';
+import { getInitials } from '@/app/utils/initials';
 import type { UserListItem } from '@/lib/users-list';
 
 import { Button } from '@/components/ui/button';
@@ -40,15 +41,11 @@ export function getUserColumns(
         return (
           <Avatar className="h-12 w-12">
             <AvatarImage
-              src={
-                user.avatar
-                  ? `/api/uploads/pfps/${user.avatar}`
-                  : `/api/uploads/pfps/default-avatar.png`
-              }
+              src={`/api/uploads/pfps/${user.avatar}`}
               alt={`${user.firstName} ${user.lastName}`}
             />
             <AvatarFallback className="bg-secondary text-secondary-foreground">
-              {initials || 'U'}
+              {getInitials(user.firstName, user.lastName, user.email)}
             </AvatarFallback>
           </Avatar>
         );

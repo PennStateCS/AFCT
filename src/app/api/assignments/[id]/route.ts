@@ -82,14 +82,13 @@ function computeLateSubmissionState(options: {
 
 // Get a single assignment by ID
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-
   const session = await auth();
 
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const { id } = await params;
   try {
     const assignment = await prisma.assignment.findUnique({
       where: { id },
