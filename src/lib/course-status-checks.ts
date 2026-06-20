@@ -23,10 +23,12 @@ export async function canArchiveCourse(prisma: PrismaClient, courseId: string, s
   }
 
   // Check for grades
-  const hasGrade = await prisma.assignmentGrade.findFirst({
+  const hasGrade = await prisma.assignmentProblemGrade.findFirst({
     where: {
-      assignment: {
-        courseId: courseId,
+      assignmentProblem: {
+        assignment: {
+          courseId: courseId,
+        }
       },
     },
     select: { id: true },
@@ -55,10 +57,12 @@ export async function canUnpublishCourse(prisma: PrismaClient, courseId: string)
   }
 
   // Check for grades
-  const hasGrade = await prisma.assignmentGrade.findFirst({
+  const hasGrade = await prisma.assignmentProblemGrade.findFirst({
     where: {
-      assignment: {
-        courseId: courseId,
+      assignmentProblem: {
+        assignment: {
+          courseId: courseId,
+        }
       },
     },
     select: { id: true },
