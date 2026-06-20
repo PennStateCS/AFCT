@@ -1,7 +1,7 @@
 // /src/app/api/assignments/[id]/problems/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, JwtPayload } from '@/app/utils/jwt';
+import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { ProblemTypeEnum } from '@/schemas/problem';
 import { z } from 'zod';
@@ -38,12 +38,14 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     return NextResponse.json({ error: 'Missing course ID' }, { status: 400 });
   }
 
-  // 2. Extract and verify token
-  const authHeader = req.headers.get('authorization');
-  const token = authHeader?.split(' ')[1];
-  const decoded: JwtPayload | null = token ? verifyToken(token) : null;
+  // 2. Verify
+  const session = await auth();
+  
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
-  if (!decoded) {
+  if (session.user.role !== 'ADMIN' && session.user.role !== 'FACULTY') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -58,19 +60,9 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 
-    // ---- UserId from token ----
-    const userId = decoded.userId;
-
-    // ---- Enrollment check (any role) ----
+    // ---- User and Course Id ----
+    const userId = session.user.id;
     const courseId = assignment.courseId;
-    const enrollment = await prisma.roster.findFirst({
-      where: { courseId, userId },
-      select: { id: true },
-    });
-
-    if (!enrollment) {
-      return NextResponse.json({ error: 'You are not enrolled in this course' }, { status: 403 });
-    }
 
     // ---- Load problems ----
     // If this is a group assignment, determine the user's group for the course

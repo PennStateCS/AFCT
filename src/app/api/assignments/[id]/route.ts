@@ -82,14 +82,13 @@ function computeLateSubmissionState(options: {
 
 // Get a single assignment by ID
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-
   const session = await auth();
 
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const { id } = await params;
   try {
     const assignment = await prisma.assignment.findUnique({
       where: { id },
@@ -178,7 +177,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       select: { assignmentId: true },
     }));
 
-    const hasGrade = !!(await prisma.assignmentGrade.findFirst({
+    const hasGrade = !!(await prisma.assignmentProblemGrade.findFirst({
       where: { assignmentId: id },
       select: { assignmentId: true },
     }));
@@ -295,7 +294,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       select: { assignmentId: true },
     }));
 
-    const hasGrade = !!(await prisma.assignmentGrade.findFirst({
+    const hasGrade = !!(await prisma.assignmentProblemGrade.findFirst({
       where: { assignmentId: id },
       select: { assignmentId: true },
     }));

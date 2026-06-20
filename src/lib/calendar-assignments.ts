@@ -61,7 +61,7 @@ export async function getAssignmentsForUserRange(params: {
     });
     const submissionSet = new Set(studentSubmissions.map((s) => s.assignmentId));
 
-    const studentGrades = await prisma.assignmentGrade.findMany({
+    const studentGrades = await prisma.assignmentProblemGrade.findMany({
       where: { studentId: userId, assignmentId: { in: assignmentIds } },
       select: { assignmentId: true },
     });
@@ -87,7 +87,7 @@ export async function getAssignmentsForUserRange(params: {
     studentCountByCourse[c.courseId] = c._count._all;
   });
 
-  const gradedCounts = await prisma.assignmentGrade.groupBy({
+  const gradedCounts = await prisma.assignmentProblemGrade.groupBy({
     by: ['assignmentId'],
     where: { assignmentId: { in: assignmentIds } },
     _count: { _all: true },
