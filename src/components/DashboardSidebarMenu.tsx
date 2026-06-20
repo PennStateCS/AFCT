@@ -1,5 +1,7 @@
 'use client';
 
+// FIXME
+
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -42,7 +44,9 @@ import {
   Book,
   Users,
   UserRound,
+  Layers,
   LogOut,
+  Logs,
   LockKeyhole,
   UserPen,
   ChevronUp,
@@ -66,9 +70,10 @@ type Course = {
 const adminMenu = [
   { title: 'Courses', url: '/dashboard/courses', icon: Book },
   { title: 'User Accounts', url: '/dashboard/users', icon: Users },
+  { title: 'Submission Logs', url: '/dashboard/submissions', icon: Layers },
   { title: 'System Status', url: '/dashboard/system-status', icon: Activity },
   { title: 'System Settings', url: '/dashboard/system-settings', icon: Settings },
-  { title: 'System Logs', url: '/dashboard/system-logs', icon: Activity },
+  { title: 'System Logs', url: '/dashboard/system-logs', icon: Logs },
 ];
 
 export default function DashboardSidebarMenu() {

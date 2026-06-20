@@ -51,8 +51,11 @@ export function startSubmissionWorker() {
     return;
   }
 
-  // Start worker
-  runWorkerLoop();
+  // Start worker loops concurrently
+  for (let i = 0; i < MAX_WORKERS; i++) {
+    void runWorkerLoop();
+  }
+  
   workerStarted = true;
   console.log("[SubmissionWorker] Started safely");
 }
@@ -97,7 +100,7 @@ async function runWorkerLoop() {
     // Claim a worker slot
     activeWorkers++;
     try {
-      await evaluateSubmission(nextSubmission!.id);
+      evaluateSubmission(nextSubmission!.id);
     } finally {
       activeWorkers--;
     }

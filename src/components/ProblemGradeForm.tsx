@@ -65,19 +65,6 @@ export default function ProblemGradeForm({
 
   return (
     <div className="flex flex-col gap-2">
-      {isPending && (
-        <p className="text-xs text-yellow-700">Autograder still running</p>
-      )}
-      {isFailed && (
-        <div className="flex items-center gap-2">
-          <p className="text-xs text-rose-700">Autograder failed. You may rerun it or grade manually.</p>
-          {onRerun && (
-            <Button size="sm" variant="secondary" type="button" onClick={onRerun} className="whitespace-nowrap">
-              Rerun
-            </Button>
-          )}
-        </div>
-      )}
     <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-3">
       <Input
         type="number"
@@ -85,7 +72,7 @@ export default function ProblemGradeForm({
         value={gradeValue}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder={isLoading ? '—' : sanitizedCurrent === null ? '-' : ''}
+        placeholder={isLoading ? '-' : sanitizedCurrent === null ? '-' : ''}
         className="w-28"
         aria-label="Problem grade"
         disabled={disabled || isLoading || isSaving}

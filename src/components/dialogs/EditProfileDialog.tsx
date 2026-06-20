@@ -1,4 +1,5 @@
-import { use, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { getInitials } from '@/app/utils/initials';
 import {
   Dialog,
   DialogContent,
@@ -10,7 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { UploadCloud, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import InputGroup from '@/components/ui/InputGroup';
@@ -19,7 +20,7 @@ import FileUploadInput from '@/components/FileUploadInput';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
-import type { User } from '@prisma/client';
+import type { SessionUser } from '@/types/next-auth';
 import {
   UpdateProfileSchema,
   type UpdateProfileRaw,
@@ -30,18 +31,16 @@ import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { useMaxUploadSize } from '@/hooks/useMaxUploadSize';
 
 type EditProfileDialog = {
-  user: User;
+  user: SessionUser;
   open: boolean;
   setOpen: (open: boolean) => void;
-  onSave?: (updatedUser: Partial<User>) => Promise<void>;
+  onSave?: (updatedUser: Partial<SessionUser>) => Promise<void>;
 };
 export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDialog) {
   // Local preview state (keep separate from RHF file)
   const { timezone: effectiveTimezone } = useEffectiveTimezone();
   const { maxMb, loading: loadingMaxSize } = useMaxUploadSize();
-  const [avatarPreview, setAvatarPreview] = useState<string>(
-    user.avatar ? `/api/uploads/pfps/${user.avatar}` : '/api/uploads/pfps/default-avatar.png',
-  );
+  const [avatarPreview, setAvatarPreview] = useState<string>(`/api/uploads/pfps/${user.avatar}`);
   const [serverTimezone, setServerTimezone] = useState('UTC');
 
   // RHF defaults – email is read-only so it isn't in the schema
@@ -61,7 +60,6 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
     control,
     handleSubmit,
     reset,
-    watch,
     setValue,
     getValues,
     formState: { errors, isSubmitting, isValid, isDirty },
@@ -82,9 +80,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
         keepValues: false,
       });
       // Reset preview from current user
-      setAvatarPreview(
-        user.avatar ? `/api/uploads/pfps/${user.avatar}` : '/api/uploads/pfps/default-avatar.png',
-      );
+      setAvatarPreview(`/api/uploads/pfps/${user.avatar}`);
     } else {
       reset(defaults, {
         keepDirty: false,
@@ -104,22 +100,6 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
     }
   }, [open, user.timezone, effectiveTimezone, getValues, setValue]);
 
-  // Avatar error message extraction
-  const avatarFileErrorMessage = (() => {
-    const e = errors.avatarFile;
-    if (!e) return '';
-    if (typeof e === 'string') return e;
-    if (typeof e === 'object' && e !== null) {
-      const m = (e as { message?: unknown }).message;
-      if (typeof m === 'string') return m;
-    }
-    try {
-      return JSON.stringify(e);
-    } catch {
-      return String(e);
-    }
-  })();
-
   const handleAvatarUpload = (file?: File) => {
     // Update RHF state and local state
     setValue('avatarFile', file, {
@@ -138,7 +118,6 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
   };
 
   const handleDeleteAvatar = () => {
-    setAvatarPreview('/api/uploads/pfps/default-avatar.png');
     setValue('deleteAvatar', true, { shouldDirty: true });
   };
 
@@ -202,13 +181,12 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
               <Avatar className="h-20 w-20">
                 <AvatarImage src={avatarPreview} alt="User Avatar" />
                 <AvatarFallback className="bg-secondary text-secondary-foreground">
-                  {(watch('firstName') || user.firstName || '?').charAt(0)}
-                  {(watch('lastName') || user.lastName || '?').charAt(0)}
+                  {getInitials(user.firstName, user.lastName, user.email)}
                 </AvatarFallback>
               </Avatar>
 
               <div className="flex flex-col gap-2">
-                {avatarPreview && avatarPreview !== '/api/uploads/pfps/default-avatar.png' && (
+                {
                   <Button
                     type="button"
                     variant="outline"
@@ -219,7 +197,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
                     <Trash2 className="h-4 w-4" />
                     Delete Avatar
                   </Button>
-                )}
+                }
               </div>
             </div>
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import { getInitials } from '@/app/utils/initials'
 import { DataTable } from '@/components/ui/data-table';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { ColumnDef } from '@tanstack/react-table';
@@ -14,9 +15,9 @@ import { formatTimeInTimeZone } from '@/lib/date';
 
 type StudentRow = {
   id: string;
-  name: string;
-  email?: string | null;
-  // dynamic assignment columns will be string keyed
+  email: string;
+  firstName?: string,
+  lastName?: string,
   [key: string]: unknown;
 };
 
@@ -29,10 +30,10 @@ type Assignment = {
 
 type ApiStudent = {
   id: string;
-  firstName?: string | null;
-  lastName?: string | null;
-  email?: string | null;
-  avatar?: string | null;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  avatar?: string;
 };
 
 export default function GradesCard({ courseId }: { courseId: string }) {
@@ -85,15 +86,12 @@ export default function GradesCard({ courseId }: { courseId: string }) {
 
       // Build rows
       const rows: StudentRow[] = s.map((stu) => {
-        const name =
-          [stu.firstName, stu.lastName].filter(Boolean).join(' ') || stu.email || 'Unknown';
         const row: StudentRow = {
           id: stu.id,
-          name,
           email: stu.email,
-          avatar: stu.avatar ?? null,
-          firstName: stu.firstName ?? '',
-          lastName: stu.lastName ?? '',
+          avatar: stu.avatar,
+          firstName: stu.firstName,
+          lastName: stu.lastName,
         };
         for (const asg of a) {
           const grade = grades?.[stu.id]?.[asg.id];
@@ -226,22 +224,15 @@ export default function GradesCard({ courseId }: { courseId: string }) {
         header: '',
         accessorKey: 'avatar',
         cell: ({ row }) => {
-          const avatar = row.original.avatar as string | null | undefined;
-          const initials =
-            `${String(row.original.firstName ?? '')?.[0] ?? ''}${String(row.original.lastName ?? '')?.[0] ?? ''}`.toUpperCase();
-          const avatarUrl = avatar
-            ? `/api/uploads/pfps/${avatar}`
-            : '/api/uploads/pfps/default-avatar.png';
+          const user = row.original;
           return (
             <Avatar className="h-10 w-10">
               <AvatarImage
-                src={avatarUrl}
-                alt={
-                  String(row.original.firstName ?? '') + ' ' + String(row.original.lastName ?? '')
-                }
+                src={`/api/uploads/pfps/${user.avatar}`}
+                alt={`${user.firstName} ${user.lastName}`}
               />
               <AvatarFallback className="bg-secondary text-secondary-foreground">
-                {initials || 'U'}
+                {getInitials(user.firstName, user.lastName, user.email)}
               </AvatarFallback>
             </Avatar>
           );

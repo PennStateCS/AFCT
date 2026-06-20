@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import { getInitials } from '@/app/utils/initials';
 import { DataTable } from '@/components/ui/data-table';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { ColumnDef } from '@tanstack/react-table';
@@ -17,9 +18,9 @@ import { useSession } from 'next-auth/react';
 
 type StudentRow = {
   id: string;
-  name: string;
-  email?: string | null;
-  // dynamic assignment columns will be string keyed
+  email: string;
+  firstName?: string,
+  lastName?: string,
   [key: string]: unknown;
 };
 
@@ -32,10 +33,10 @@ type Assignment = {
 
 type ApiStudent = {
   id: string;
-  firstName?: string | null;
-  lastName?: string | null;
-  email?: string | null;
-  avatar?: string | null;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  avatar?: string;
 };
 
 export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
@@ -78,15 +79,12 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
 
       // Build rows
       const rows: StudentRow[] = s.map((stu) => {
-        const name =
-          [stu.firstName, stu.lastName].filter(Boolean).join(' ') || stu.email || 'Unknown';
         const row: StudentRow = {
           id: stu.id,
-          name,
           email: stu.email,
-          avatar: stu.avatar ?? null,
-          firstName: stu.firstName ?? '',
-          lastName: stu.lastName ?? '',
+          avatar: stu.avatar,
+          firstName: stu.firstName,
+          lastName: stu.lastName,
         };
         for (const asg of a) {
           const grade = grades?.[stu.id]?.[asg.id];
@@ -179,22 +177,15 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         header: '',
         accessorKey: 'avatar',
         cell: ({ row }) => {
-          const avatar = row.original.avatar as string | null | undefined;
-          const initials =
-            `${String(row.original.firstName ?? '')?.[0] ?? ''}${String(row.original.lastName ?? '')?.[0] ?? ''}`.toUpperCase();
-          const avatarUrl = avatar
-            ? `/api/uploads/pfps/${avatar}`
-            : '/api/uploads/pfps/default-avatar.png';
+          const user = row.original;
           return (
             <Avatar className="h-10 w-10">
               <AvatarImage
-                src={avatarUrl}
-                alt={
-                  String(row.original.firstName ?? '') + ' ' + String(row.original.lastName ?? '')
-                }
+                src={`/api/uploads/pfps/${user.avatar}`}
+                alt={`${user.firstName} ${user.lastName}`}
               />
               <AvatarFallback className="bg-secondary text-secondary-foreground">
-                {initials || 'U'}
+                {getInitials(user.firstName, user.lastName, user.email)}
               </AvatarFallback>
             </Avatar>
           );
@@ -221,12 +212,12 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         accessorKey: a.id,
         header: a.title,
         cell: ({ row }) => {
-          const val = row.original[a.id];
+          const user = row.original;
+          const val = user[a.id];
           const max = a.maxPoints;
-          const studentId = row.original.id as string;
 
           const handleClick = () => {
-            setSelectedStudent({ id: studentId, name: row.original.name });
+            setSelectedStudent({ id: user.id, name: `${user.firstName} ${user.lastName}` });
             setSelectedAssignment(a);
             setDialogOpen(true);
           };
@@ -237,7 +228,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
               className="flex h-full w-full cursor-pointer items-center justify-center rounded px-2 py-1 hover:bg-neutral-300"
               title="View grade breakdown"
               onClick={handleClick}
-              aria-label={`View breakdown for ${row.original.name} on ${a.title}`}
+              aria-label={`View breakdown for ${user.firstName} ${user.l} on ${a.title}`}
             >
               <span className="text-sm">
                 {val === null || val === undefined ? '-' : String(val)}

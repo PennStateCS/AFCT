@@ -36,9 +36,7 @@ type EditUserDialogProps = {
 export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogProps) {
   const { timezone: effectiveTimezone } = useEffectiveTimezone();
   // Local preview state (keep separate from RHF file)
-  const [avatarPreview, setAvatarPreview] = useState<string>(
-    user.avatar ? `/api/uploads/pfps/${user.avatar}` : '/api/uploads/pfps/default-avatar.png',
-  );
+  const [avatarPreview, setAvatarPreview] = useState<string>(`/api/uploads/pfps/${user.avatar}`);
   const [serverTimezone, setServerTimezone] = useState('UTC');
 
   // RHF defaults – email is read-only so it isn't in the schema
@@ -80,9 +78,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
         keepValues: true,
       });
       // Reset preview from current user
-      setAvatarPreview(
-        user.avatar ? `/api/uploads/pfps/${user.avatar}` : '/api/uploads/pfps/default-avatar.png',
-      );
+      setAvatarPreview(`/api/uploads/pfps/${user.avatar}`);
     } else {
       reset(defaults, {
         keepDirty: false,
@@ -136,7 +132,6 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
   };
 
   const onDeleteAvatar = () => {
-    setAvatarPreview('/api/uploads/pfps/default-avatar.png');
     setValue('avatarFile', undefined, { shouldDirty: true });
     setValue('deleteAvatar', true, { shouldDirty: true });
   };
@@ -240,7 +235,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
                 )}
               />
 
-              {avatarPreview && avatarPreview !== '/api/uploads/pfps/default-avatar.png' && (
+              {avatarPreview && (
                 <Button
                   type="button"
                   variant="outline"

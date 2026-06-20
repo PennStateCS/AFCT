@@ -236,10 +236,10 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.488 0.243 264.376);
-  --table-header: #000000;
-  --table-header-foreground: #000000;
-  --table-highlight: #0f0f0f;
-  --table-background: #1f1f1f;
+  --table-header: #111827;
+  --table-header-foreground: #f8fafc;
+  --table-highlight: #1e293b;
+  --table-background: #0f172a;
   --node-color: #caa22b;
   --grid-color: #1a1814;
   --success: #86c95a;
