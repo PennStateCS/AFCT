@@ -10,9 +10,8 @@ import {
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
+import InputGroup from '@/components/ui/InputGroup';
 import { Badge } from '@/components/ui/RoleBadge';
 import { User } from '@prisma/client';
 
@@ -127,18 +126,15 @@ export function EnrollUserDialog({
           <DialogDescription>Find and select a user to enroll in this course.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          <div>
-            <Label htmlFor="user-search">Search users</Label>
-            <Input
-              id="user-search"
-              className="mt-2"
-              placeholder="Type name or email"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              autoFocus
-              onKeyDown={handleKeyDown}
-            />
-          </div>
+          <InputGroup
+            label="Search users"
+            name="user-search"
+            placeholder="Type name or email"
+            value={search}
+            setValue={setSearch}
+            autoFocus
+            onKeyDown={handleKeyDown}
+          />
           <div className="h-80 overflow-auto rounded-md border">
             {filteredUsers.length === 0 ? (
               <div className="text-muted-foreground p-3 text-center text-sm">No users found.</div>
