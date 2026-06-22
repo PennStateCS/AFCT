@@ -109,6 +109,6 @@ export async function getAssignmentsForUserRange(params: {
       totalStudents,
       gradedCount,
       allGraded,
-    };
+        };
   });
 }
