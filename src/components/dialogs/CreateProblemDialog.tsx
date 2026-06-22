@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import InputGroup from '@/components/ui/InputGroup';
+import { Checkbox } from '@/components/ui/checkbox';
 import SwitchField from '@/components/ui/SwitchField';
 import {
   DropdownMenu,
@@ -513,10 +514,9 @@ export function CreateProblemDialog({
                       name="isUnlimitedStates"
                       render={({ field: uf }) => (
                         <>
-                          <input
-                            type="checkbox"
+                          <Checkbox
                             checked={!!uf.value}
-                            onChange={(e) => uf.onChange(e.target.checked)}
+                            onCheckedChange={(val) => uf.onChange(!!val)}
                           />
                           <span className="text-muted-foreground text-sm">Unlimited</span>
                         </>
