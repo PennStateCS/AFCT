@@ -1,33 +1,30 @@
 // /src/app/api/session/extend/route.ts
 
-import { getToken } from 'next-auth/jwt';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { auth } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
   try {
-    // Extract token from the request using the NEXTAUTH secret
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+    // Verify
+    const session = await auth();
 
-    // If no token is found, the user is not authenticated
-    if (!token) {
-      console.warn('Session extension failed: no token present');
-
+    if (!session || !session.user) {
       await createEnhancedActivityLog(prisma, req, {
         action: 'SESSION_EXTENSION_FAILED',
         category: 'SYSTEM',
         metadata: {
-          reason: 'No token found',
+          reason: 'Not authenticated',
         },
       });
 
-      return NextResponse.json({ ok: false, error: 'Not authenticated' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Log user action: client-side inactivity timer reset requested
     await createEnhancedActivityLog(prisma, req, {
-      userId: token.sub,
+      userId: session.user.id,
       action: 'SESSION_EXTENDED',
       category: 'SYSTEM',
       metadata: {
@@ -35,7 +32,6 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // JWT expiration is controlled by Auth.js; this endpoint confirms reset intent.
     return NextResponse.json({
       ok: true,
     });

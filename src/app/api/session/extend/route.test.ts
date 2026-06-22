@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
-const getTokenMock = vi.hoisted(() => vi.fn());
+const authMock = vi.hoisted(() => vi.fn());
 const activityLogMock = vi.hoisted(() => vi.fn());
 
-vi.mock('next-auth/jwt', () => ({ getToken: getTokenMock }));
+vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 vi.mock('@/lib/prisma', () => ({ prisma: {} }));
 
@@ -21,8 +21,8 @@ afterEach(() => {
 });
 
 describe('POST /api/session/extend', () => {
-  it('returns 401 when no token', async () => {
-    getTokenMock.mockResolvedValue(null);
+  it('returns 401 when no session is present', async () => {
+    authMock.mockResolvedValue(null);
 
     const req = new NextRequest('http://localhost/api/session/extend', { method: 'POST' });
     const res = await POST(req);
@@ -31,8 +31,8 @@ describe('POST /api/session/extend', () => {
     expect(activityLogMock).toHaveBeenCalled();
   });
 
-  it('returns success when token present', async () => {
-    getTokenMock.mockResolvedValue({ sub: 'user-1' });
+  it('returns success when session is present', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1' } });
 
     const req = new NextRequest('http://localhost/api/session/extend', { method: 'POST' });
     const res = await POST(req);
@@ -43,8 +43,8 @@ describe('POST /api/session/extend', () => {
     expect(activityLogMock).toHaveBeenCalled();
   });
 
-  it('returns 500 when token lookup throws', async () => {
-    getTokenMock.mockRejectedValue(new Error('boom'));
+  it('returns 500 when auth lookup throws', async () => {
+    authMock.mockRejectedValue(new Error('boom'));
 
     const req = new NextRequest('http://localhost/api/session/extend', { method: 'POST' });
     const res = await POST(req);
