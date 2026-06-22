@@ -583,94 +583,12 @@ html {
   .toast-icon-symbol {
     align-items: center !important;
     background: transparent !important;
-    border-radius: 0 !important;
-    color: #ffffff !important;
     display: flex !important;
-    font-size: 26px !important;
-    font-weight: 500 !important;
-    height: auto !important;
     justify-content: center !important;
-    letter-spacing: 0 !important;
+    color: white !important;
+    font-size: 14px !important;
     line-height: 1 !important;
-    text-transform: none !important;
-    width: auto !important;
-    box-shadow: none !important;
-  }
-
-  .custom-toast[data-type='loading'] .toast-icon-symbol {
-    animation: toast-spin 1.2s linear infinite;
-  }
-
-  @keyframes toast-spin {
-    0% {
-      transform: rotate(0deg);
-    }
-    100% {
-      transform: rotate(360deg);
-    }
-  }
-
-  .custom-toast [data-content] {
-    flex: 1 !important;
-    min-width: 0 !important;
-    padding: 12px 14px !important;
-  }
-
-  .custom-toast [data-title] {
-    color: #374151 !important;
-    font-size: 16px !important;
-    font-weight: 600 !important;
-    letter-spacing: 0 !important;
-    line-height: 1.35 !important;
-    margin: 0 !important;
-  }
-
-  .custom-toast [data-description] {
-    color: #4b5563 !important;
-    font-size: 13px !important;
-    line-height: 1.35 !important;
-    margin-top: 2px !important;
-  }
-
-  .custom-toast [data-button],
-  .custom-toast [data-cancel] {
-    border-radius: 999px !important;
-    font-size: 12px !important;
-    font-weight: 600 !important;
-    padding: 6px 14px !important;
-  }
-
-  .custom-toast [data-button] {
-    background: var(--toast-icon-fill) !important;
-    color: #ffffff !important;
-  }
-
-  .custom-toast [data-button]:hover {
-    filter: brightness(0.95) !important;
-  }
-
-  .custom-toast [data-cancel] {
-    background: transparent !important;
-    border: 1px solid var(--toast-border) !important;
-    color: var(--toast-text) !important;
-    margin-left: 8px !important;
-  }
-
-  .custom-toast [data-progress] {
-    background: var(--toast-icon-fill) !important;
-    opacity: 0.25 !important;
-  }
-
-  .custom-toast [data-close-button] {
-    color: #1f2937 !important;
-    height: 24px !important;
-    width: 24px !important;
-    right: 8px !important;
-    top: 8px !important;
-  }
-
-  .custom-toast [data-close-button]:hover {
-    color: var(--toast-text) !important;
-    background: rgba(0, 0, 0, 0.04) !important;
+    width: 100% !important;
+    height: 100% !important;
   }
 }

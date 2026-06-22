@@ -86,7 +86,7 @@ export function useAssignmentColumns(
         <div className="min-w-0">
           <Link
             href={`/dashboard/courses/${row.original.courseId}/${row.original.id}`}
-            className="block max-w-[20rem] truncate text-blue-600 hover:underline sm:max-w-[28rem] lg:max-w-[36rem]"
+            className="block max-w-[8rem] truncate text-blue-600 hover:underline sm:max-w-[12rem] lg:max-w-[16rem]"
             title={row.original.title}
           >
             {row.original.title}
@@ -102,6 +102,7 @@ export function useAssignmentColumns(
     {
       accessorKey: 'maxPoints',
       header: () => 'Points',
+      meta: { priority: 2 },
       cell: ({ row }) => {
         const [pts, setPts] = useState<number | null>(
           row.original.maxPoints ?? null,
@@ -134,6 +135,7 @@ export function useAssignmentColumns(
         return <div>{count}</div>;
       },
       enableSorting: true,
+      meta: { priority: 2 },
     },
     {
       id: 'allowLateSubmissions',
@@ -141,6 +143,7 @@ export function useAssignmentColumns(
       accessorFn: (row) => (row.allowLateSubmissions ? 'Yes' : 'No'),
       cell: ({ row }) => <div>{row.original.allowLateSubmissions ? 'Yes' : 'No'}</div>,
       enableSorting: true,
+      meta: { priority: 3 },
     },
     {
       accessorKey: 'lateCutoff',
@@ -152,6 +155,7 @@ export function useAssignmentColumns(
             : '—'}
         </div>
       ),
+      meta: { priority: 4 },
     },
     {
       id: 'submissionCount',
@@ -159,6 +163,7 @@ export function useAssignmentColumns(
       accessorKey: 'submissionCount',
       cell: ({ row }) => <div>{row.original.submissionCount ?? 0}</div>,
       enableSorting: true,
+      meta: { priority: 3 },
     },
     {
       id: 'commentCount',
@@ -166,6 +171,7 @@ export function useAssignmentColumns(
       accessorKey: 'commentCount',
       cell: ({ row }) => <div>{row.original.commentCount ?? 0}</div>,
       enableSorting: true,
+      meta: { priority: 4 },
     },
     {
       accessorKey: 'isPublished',
@@ -226,7 +232,7 @@ export function useAssignmentColumns(
                   className={`flex items-center gap-2 ${disabled ? 'cursor-not-allowed text-gray-500 opacity-50' : 'text-red-600 focus:text-red-600'}`}
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
-                  Delete Assignment
+                                  Delete Assignment
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

@@ -12,7 +12,8 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import InputGroup from '@/components/ui/InputGroup';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { showToast } from '@/lib/toast';
 
@@ -138,13 +139,11 @@ export default function RandomGroupsDialog({ open, setOpen, courseId, students, 
 
         <div className="space-y-4">
           <div>
-            <Label htmlFor="rg-prefix">Group Name Prefix</Label>
-            <Input id="rg-prefix" className="mt-2" value={prefix} onChange={(e) => setPrefix(e.target.value)} />
+            <InputGroup label="Group Name Prefix" name="rg-prefix" value={prefix} setValue={setPrefix} />
           </div>
 
           <div>
-            <Label htmlFor="exclude-search">Exclude Students</Label>
-            <Input id="exclude-search" className="mt-2" placeholder="Search to exclude" value={filter} onChange={(e) => setFilter(e.target.value)} />
+            <InputGroup label="Exclude Students" name="exclude-search" placeholder="Search to exclude" value={filter} setValue={setFilter} />
             <div className="h-44 overflow-auto rounded-md border mt-2">
               {students.length === 0 ? (
                 <div className="text-muted-foreground p-3 text-center text-sm">No students.</div>
@@ -153,7 +152,7 @@ export default function RandomGroupsDialog({ open, setOpen, courseId, students, 
                   {students.filter((s) => ((s.firstName || '') + ' ' + (s.lastName || '') + ' ' + (s.email || '')).toLowerCase().includes(filter.trim().toLowerCase())).slice(0, 500).map((s) => (
                     <li key={s.id} className="px-3 py-2">
                       <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" checked={excluded.has(s.id)} onChange={() => {
+                        <Checkbox checked={excluded.has(s.id)} onCheckedChange={() => {
                           setExcluded((prev) => {
                             const copy = new Set(prev);
                             if (copy.has(s.id)) copy.delete(s.id); else copy.add(s.id);

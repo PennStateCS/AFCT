@@ -460,7 +460,7 @@ export default function AssignmentDashboardPage({
         <CardHeader>
           <CardTitle role="heading" aria-level={1} className="flex min-w-0 flex-wrap items-start gap-2 text-2xl break-words">
             <span className="font-semibold">Assignment:</span>{' '}
-            <span className="min-w-0 line-clamp-2 break-words [overflow-wrap:anywhere]" title={assignment.title}>
+            <span className="min-w-0 break-words [overflow-wrap:anywhere]">
               {assignment.title}
             </span>
             {(() => {
