@@ -8,7 +8,6 @@ import { execSync } from 'child_process';
 import os from 'os';
 
 import JavaRunner from '../../lib/java-runner';
-import { Truculenta } from 'next/font/google';
 
 // Basic variables (probally should put some of these in a GUI or .env file except *)
 let workerStarted = false; // *
