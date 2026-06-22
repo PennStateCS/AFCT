@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import InputGroup from '@/components/ui/InputGroup';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { showToast } from '@/lib/toast';
 
 type Enrollable = { id: string; firstName?: string | null; lastName?: string | null; email?: string | null };

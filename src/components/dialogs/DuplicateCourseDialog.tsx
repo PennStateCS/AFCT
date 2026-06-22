@@ -13,6 +13,7 @@ import {
 import { Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import InputGroup from '@/components/ui/InputGroup';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -422,10 +423,9 @@ export default function DuplicateCourseDialog({
                     name="copyFaculty"
                     render={({ field }) => (
                       <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           checked={!!field.value}
-                          onChange={(e) => field.onChange(e.target.checked)}
+                          onCheckedChange={(val) => field.onChange(!!val)}
                         />
                         <span className="text-sm">Copy faculty roster</span>
                       </label>
@@ -437,10 +437,9 @@ export default function DuplicateCourseDialog({
                     name="copyTAs"
                     render={({ field }) => (
                       <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           checked={!!field.value}
-                          onChange={(e) => field.onChange(e.target.checked)}
+                          onCheckedChange={(val) => field.onChange(!!val)}
                         />
                         <span className="text-sm">Copy TA roster</span>
                       </label>
@@ -507,11 +506,10 @@ export default function DuplicateCourseDialog({
               </div>
 
               <label className="mt-2 flex items-center gap-2">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={confirmChecked}
                   disabled={isSubmitting}
-                  onChange={(e) => setConfirmChecked(e.target.checked)}
+                  onCheckedChange={(val) => setConfirmChecked(!!val)}
                 />
                 <span className="text-sm">
                   I confirm I want to duplicate this course with the options above

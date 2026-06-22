@@ -440,7 +440,7 @@ async function runJavaEvaluator(submission: any): Promise<SubmissionEvaluationRe
 
     return {
       feedback,
-      correct,
+      correct: submission.correct,
       evaluationRaw: evaluationRaw === null ? null : evaluationRaw,
       status,
     };
