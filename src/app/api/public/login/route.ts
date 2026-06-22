@@ -1,7 +1,7 @@
 // /src/app/api/public/login/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticateUser } from '@/app/services/authService';
+import bcrypt from 'bcrypt';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
@@ -22,55 +22,62 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
     }
 
-    // Authenticate user (returns token and user info on success)
-    const auth = await authenticateUser(email, password);
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
 
-    // If authentication fails, log and return 401
-    if (!auth) {
-      console.warn(`Login failed for ${email}: Invalid credentials`);
+    if (!user) {
+      console.warn(`Login failed for ${normalizedEmail}: Invalid credentials`);
       await createEnhancedActivityLog(prisma, req, {
         action: 'LOGIN_FAILED',
         category: 'SYSTEM',
-        metadata: { reason: 'Invalid credentials', email: email },
+        metadata: { reason: 'Invalid credentials', email: normalizedEmail },
       });
 
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 
-    // If user is not active, state user is not active
-    if (auth.user.inactive) {
-      console.warn(`Login failed for ${email}: Inactive user`);
+    const passwordMatches = await bcrypt.compare(password, user.password);
+    if (!passwordMatches) {
+      console.warn(`Login failed for ${normalizedEmail}: Invalid credentials`);
       await createEnhancedActivityLog(prisma, req, {
         action: 'LOGIN_FAILED',
         category: 'SYSTEM',
-        metadata: { reason: 'Inactive user', email: email },
+        metadata: { reason: 'Invalid credentials', email: normalizedEmail },
+      });
+
+      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
+    }
+
+    if (user.inactive) {
+      console.warn(`Login failed for ${normalizedEmail}: Inactive user`);
+      await createEnhancedActivityLog(prisma, req, {
+        action: 'LOGIN_FAILED',
+        category: 'SYSTEM',
+        metadata: { reason: 'Inactive user', email: normalizedEmail },
       });
 
       return NextResponse.json({ error: 'Inactive user' }, { status: 401 });
     }
 
-    // Log successful login
     await createEnhancedActivityLog(prisma, req, {
-      userId: auth.user.id,
+      userId: user.id,
       action: 'LOGIN_SUCCESS',
       category: 'SYSTEM',
       metadata: {
-        userId: auth.user.id,
-        email: auth.user.email,
-        role: auth.user.role,
+        userId: user.id,
+        email: user.email,
+        role: user.role,
       },
     });
 
-    // Return token and user info
     return NextResponse.json(
       {
-        token: auth.token,
         user: {
-          id: auth.user.id,
-          email: auth.user.email,
-          firstName: auth.user.firstName,
-          lastName: auth.user.lastName,
-          role: auth.user.role,
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
         },
       },
       { status: 200 },
@@ -78,7 +85,6 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error('Login error:', err);
 
-    // Log unexpected error
     await createEnhancedActivityLog(prisma, req, {
       action: 'LOGIN_ERROR',
       category: 'SYSTEM',
