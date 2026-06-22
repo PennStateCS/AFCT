@@ -94,6 +94,7 @@ export function CreateProblemDialog({
     reset,
     watch,
     setError,
+    clearErrors,
     formState: { errors, isSubmitting, isValid },
   } = useForm<FormValues>({
     resolver: zodResolver(ProblemFormSchema),
@@ -312,7 +313,15 @@ export function CreateProblemDialog({
         setOpen(false);
       } else {
         const msg = await safeMessage(res);
-        console.error('Failed to create problem:', msg);
+        const display = msg ?? `Request failed (${res.status})`;
+        console.error('Failed to create problem:', display);
+        // 4xx = validation/user error → show inline on the file field
+        // 5xx = server error → toast only
+        if (res.status >= 400 && res.status < 500) {
+          setError('file', { type: 'manual', message: display });
+        } else {
+          showToast.error(display);
+        }
       }
     } catch (error) {
       console.error('Form submission error:', error);
@@ -571,7 +580,34 @@ export function CreateProblemDialog({
                 accept=".txt,.fa,.pda,.cfg,.re,.jff"
                 maxSizeMb={maxMb}
                 value={value}
-                onChange={onChange}
+                onChange={async (file) => {
+                  if (file) {
+                    const text = await file.text();
+                    if (!text.trimStart().startsWith('<')) {
+                      setError('file', {
+                        type: 'manual',
+                        message: 'File must be a valid XML file (.jff, .fa, .pda, etc.)',
+                      });
+                      onChange(undefined);
+                      return;
+                    }
+                    // Check JFLAP structure type matches the selected problem type
+                    const expectedType =
+                      type === 'CFG' ? 'GRAMMAR' : type === 'TM' ? 'TURING' : type;
+                    const typeMatch = text.match(/<type[^>]*>([\s\S]*?)<\/type>/i);
+                    const fileType = typeMatch?.[1]?.trim().toUpperCase();
+                    if (fileType && fileType !== expectedType) {
+                      setError('file', {
+                        type: 'manual',
+                        message: `File is type ${fileType} but problem type is ${type} — please upload the correct file.`,
+                      });
+                      onChange(undefined);
+                      return;
+                    }
+                    clearErrors('file');
+                  }
+                  onChange(file);
+                }}
                 error={typeof errors.file?.message === 'string' ? errors.file.message : undefined}
                 disabled={loadingMaxSize || courseIsArchived}
                 hint="Supported formats: .txt, .fa, .pda, .cfg, .re, .jff"
@@ -595,7 +631,7 @@ export function CreateProblemDialog({
   );
 }
 
-async function safeMessage(res: Response) {
+async function safeMessage(res: Response): Promise<string | null> {
   try {
     const data = await res.json();
     return (
@@ -604,6 +640,8 @@ async function safeMessage(res: Response) {
       null
     );
   } catch {
+    // Response wasn't JSON (e.g. Next.js HTML error page) — return null so
+    // the caller can fall back to showing the HTTP status code instead.
     return null;
   }
 }
