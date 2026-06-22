@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, JwtPayload } from '@/app/utils/jwt';
+import { auth } from '@/lib/auth';
 
 // ----------------------------------------
-// GET /api/courses/userCourses
+// GET /api/courses/userCourses/[email]
 // ----------------------------------------
 export async function GET(req: Request, context: { params: Promise<{ email: string }> }) {
   const { email } = await context.params;
@@ -13,12 +13,9 @@ export async function GET(req: Request, context: { params: Promise<{ email: stri
     return NextResponse.json({ error: 'Missing email' }, { status: 400 });
   }
 
-  // 2. Extract and verify token
-  const authHeader = req.headers.get('authorization');
-  const token = authHeader?.split(' ')[1];
-  const decoded: JwtPayload | null = token ? verifyToken(token) : null;
-
-  if (!decoded) {
+  // 2. Verify user
+  const session = await auth();
+  if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -30,7 +27,7 @@ export async function GET(req: Request, context: { params: Promise<{ email: stri
         roster: {
           some: {
             // Use the userId instead of the user's email to prevent enumeration
-            userId: decoded.userId,
+            userId: session.user.id,
           }
         },
         isArchived: false,
