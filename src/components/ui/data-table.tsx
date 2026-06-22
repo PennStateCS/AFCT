@@ -454,23 +454,6 @@ export function DataTable<TData, TValue>({
                       </SelectContent>
                     </Select>
                   </div>
-
-                  <div className="flex gap-2">
-                    <Button
-                      variant="default"
-                      onClick={() => table.previousPage()}
-                      disabled={!table.getCanPreviousPage()}
-                    >
-                      <ArrowLeft /> Previous
-                    </Button>
-                    <Button
-                      variant="default"
-                      onClick={() => table.nextPage()}
-                      disabled={!table.getCanNextPage()}
-                    >
-                      Next <ArrowRight />
-                    </Button>
-                  </div>
                 </div>
               </TableCell>
             </TableRow>
