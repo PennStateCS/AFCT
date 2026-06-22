@@ -105,7 +105,7 @@ const SelectField = React.forwardRef<React.ElementRef<typeof SelectTrigger>, Sel
             <SelectContent {...contentProps}>
               {options?.map((option) => (
                 <SelectItem key={option.value} value={option.value} disabled={option.disabled}>
-                  {option.label}
+                  <span className="block truncate max-w-[16rem]">{option.label}</span>
                 </SelectItem>
               ))}
             </SelectContent>
