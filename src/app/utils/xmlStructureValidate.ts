@@ -5,16 +5,20 @@ export type StructureValidationResult = { isValid: true } | { isValid: false; er
 export function validateStructureXML(fileInput: string, type: string | null): StructureValidationResult {
   const parser = new XMLParser();
 
-  const isValidXml = XMLValidator.validate(fileInput);
+  const xmlResult = XMLValidator.validate(fileInput);
 
-  if (isValidXml !== true) {
-    return { isValid: false, error: 'Solution file is not in valid XML format' };
+  if (xmlResult !== true) {
+    const detail =
+      typeof xmlResult === 'object' && xmlResult.err?.msg
+        ? `: ${xmlResult.err.msg} (line ${xmlResult.err.line})`
+        : '';
+    return { isValid: false, error: `Solution file is not valid XML${detail}` };
   }
 
   const jff = parser.parse(fileInput);
   const expectedType = type === 'CFG' ? 'GRAMMAR' : type === 'TM' ? 'TURING' : type;
 
-  if (!jff.structure || jff.structure.type.toUpperCase() !== expectedType) {
+  if (!jff.structure || String(jff.structure.type).toUpperCase() !== expectedType) {
     return { isValid: false, error: `Solution file should be of type ${type}` };
   }
 

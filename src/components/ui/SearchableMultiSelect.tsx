@@ -3,6 +3,7 @@
 import React, { useId, useMemo, useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -123,11 +124,9 @@ export function SearchableMultiSelect({
                     className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 px-3 py-2 text-sm"
                     onClick={(event) => event.stopPropagation()}
                   >
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={!!checked}
-                      onChange={() => toggleSelection(item.id)}
-                      className="h-4 w-4"
+                      onCheckedChange={() => toggleSelection(item.id)}
                     />
                     <span className="truncate">{item.label}</span>
                   </label>

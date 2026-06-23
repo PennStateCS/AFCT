@@ -15,6 +15,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import InputGroup from '@/components/ui/InputGroup';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 
 import { useEffect, useMemo, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
@@ -428,24 +429,21 @@ export function EditProblemDialog({
             <>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <Label htmlFor="assignment-max-points" className="mb-2 block">
-                    Max Points
-                  </Label>
-                  <Input
-                    id="assignment-max-points"
+                  <InputGroup
+                    label="Max Points"
+                    name="assignment-max-points"
                     type="number"
                     min={0}
                     step="1"
-                    value={assignmentConfig.maxPoints ?? 0}
-                    onChange={(event) => {
-                      const next = Number(event.target.value);
+                    value={String(assignmentConfig.maxPoints ?? 0)}
+                    setValue={(val) => {
+                      const next = Number(val);
                       if (!Number.isFinite(next)) return;
                       setAssignmentConfig((prev) => ({
                         ...prev,
                         maxPoints: Math.max(0, Math.floor(next)),
                       }));
                     }}
-                    className="sm:flex-1"
                   />
                   {assignmentMaxPointsInvalid ? (
                     <p className="mt-1 text-xs text-red-600">Max points must be zero or greater.</p>
@@ -553,10 +551,9 @@ export function EditProblemDialog({
                           name="isUnlimitedSubmissions"
                           render={({ field: uf }) => (
                             <>
-                              <input
-                                type="checkbox"
+                              <Checkbox
                                 checked={!!uf.value}
-                                onChange={(e) => uf.onChange(e.target.checked)}
+                                onCheckedChange={(val) => uf.onChange(!!val)}
                               />
                               <span className="text-muted-foreground text-sm">Unlimited</span>
                             </>
@@ -636,10 +633,9 @@ export function EditProblemDialog({
                       name="isUnlimitedStates"
                       render={({ field: uf }) => (
                         <>
-                          <input
-                            type="checkbox"
+                          <Checkbox
                             checked={!!uf.value}
-                            onChange={(e) => uf.onChange(e.target.checked)}
+                            onCheckedChange={(val) => uf.onChange(!!val)}
                           />
                           <span className="text-muted-foreground text-sm">Unlimited</span>
                         </>
@@ -675,14 +671,14 @@ export function EditProblemDialog({
             name="file"
             render={({ field }) => (
               <div>
-                <Label htmlFor="answer-file" className="mb-2 block">
-                  {problem.type === type ? 'Replace Answer File (optional)' : 'Replace Answer File'}
-                </Label>
-                <Input
-                  id="answer-file"
+                <InputGroup
+                  label={problem.type === type ? 'Replace Answer File (optional)' : 'Replace Answer File'}
+                  name="answer-file"
                   type="file"
                   accept=".txt,.fa,.pda,.cfg,.re,.jff"
-                  onChange={(e) => field.onChange(e.target.files?.[0])}
+                  fieldProps={{
+                    onChange: (e) => field.onChange(e.target.files?.[0]),
+                  }}
                 />
                 {fileErrorMessage && (
                   <p className="mt-1 text-xs text-red-600">{fileErrorMessage}</p>

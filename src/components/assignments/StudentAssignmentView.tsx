@@ -277,7 +277,7 @@ export default function StudentAssignmentPage({
         <CardHeader>
           <CardTitle role="heading" aria-level={1} className="flex min-w-0 flex-wrap items-start gap-2 text-2xl break-words">
             <span className="font-semibold">Assignment:</span>
-            <span className="min-w-0 line-clamp-2 break-words [overflow-wrap:anywhere]" title={assignment.title}>
+            <span className="min-w-0 break-words [overflow-wrap:anywhere]">
               {assignment.title}
             </span>
           </CardTitle>
@@ -432,7 +432,7 @@ export default function StudentAssignmentPage({
             open={openDialog.open}
             onOpenChange={(open) => setOpenDialog({ open, submission: null })}
             src={`/api/uploads/submissions/${encodeURIComponent(openDialog.submission.fileName ?? '')}`}
-            title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
+            title={`${openDialog.submission.originalFileName || openDialog?.submission?.fileName} - Submission`}
           />
         )}
     </div>

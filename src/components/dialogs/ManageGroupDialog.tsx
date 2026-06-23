@@ -11,8 +11,7 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import InputGroup from '@/components/ui/InputGroup';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/RoleBadge';
 import { showToast } from '@/lib/toast';
@@ -195,8 +194,7 @@ export default function ManageGroupMembersDialog({ open, setOpen, courseId, grou
 
         <div className="space-y-4">
           <div>
-            <Label htmlFor="member-filter">Search students</Label>
-            <Input id="member-filter" className="mt-2" placeholder="Type name or email" value={filter} onChange={(e) => setFilter(e.target.value)} autoFocus onKeyDown={handleKeyDown} />
+            <InputGroup label="Search students" name="member-filter" placeholder="Type name or email" value={filter} setValue={setFilter} autoFocus onKeyDown={handleKeyDown} />
           </div>
 
           <div className="h-80 overflow-auto rounded-md border">

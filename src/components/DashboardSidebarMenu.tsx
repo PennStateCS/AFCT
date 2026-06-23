@@ -469,6 +469,7 @@ export default function DashboardSidebarMenu() {
           toast.success('Password changed!');
         }}
       />
+      
       <EditProfileDialog user={user} open={editProfileOpen} setOpen={setEditProfileOpen} />
     </>
   );
