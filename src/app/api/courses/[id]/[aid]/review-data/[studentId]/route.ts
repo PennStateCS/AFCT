@@ -234,7 +234,7 @@ export async function GET(
       problemGrades,
     });
   } catch (error) {
-    console.error('GET /api/courses/[id]/[aid]/review-data/[studentId] error:', error);
-    return NextResponse.json({ error: 'Failed to fetch review data' }, { status: 500 });
+    console.error('GET /api/courses/[id]/[aid]/review-data/[studentId]/route.ts error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
