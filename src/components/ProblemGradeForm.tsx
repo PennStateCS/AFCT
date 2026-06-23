@@ -78,11 +78,7 @@ export default function ProblemGradeForm({
         disabled={disabled || isLoading || isSaving}
       />
       <Button
-        size="sm"
-        type="submit"
-        disabled={disableButton}
-        variant="secondary"
-        className="whitespace-nowrap"
+        size="sm"        className="whitespace-nowrap"
       >
         {isSaving ? 'Saving…' : 'Save Grade'}
       </Button>

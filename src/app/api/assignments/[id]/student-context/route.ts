@@ -163,18 +163,16 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
             id: comment.id,
             content: comment.content,
             createdAt: comment.createdAt.toISOString(),
-            authorId: comment.roster.userId,
-            authorName:
-              `${comment.roster.user.firstName || ''} ${comment.roster.user.lastName || ''}`.trim() ||
-              'Unknown User',
-            authorRole: comment.roster.role,
+            authorId: comment.roster?.userId ?? null,
+            authorName: [comment.roster?.user?.firstName, comment.roster?.user?.lastName].filter(Boolean).join(' ') || 'Unknown',
+            authorRole: comment.roster?.role ?? 'STUDENT',
             problemId: comment.problemId,
           })),
         ]),
       ),
     });
   } catch (error) {
-    console.error('Error fetching student assignment context:', error);
-    return NextResponse.json({ error: 'Failed to fetch assignment context' }, { status: 500 });
+    console.error('GET student-context error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
