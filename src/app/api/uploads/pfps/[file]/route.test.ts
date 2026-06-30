@@ -78,7 +78,7 @@ describe('GET /api/uploads/pfps/[file]', () => {
     expect(json.error).toBe('File not found on disk');
   });
 
-  it('returns generated default avatar svg when default-avatar.png is missing', async () => {
+  it('returns 404 when default-avatar.png is missing', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1' } });
     fsMock.existsSync.mockReturnValue(false);
 
@@ -86,11 +86,9 @@ describe('GET /api/uploads/pfps/[file]', () => {
       params: Promise.resolve({ file: 'default-avatar.png' }),
     });
 
-    expect(res.status).toBe(200);
-    expect(res.headers.get('Content-Type')).toContain('image/svg+xml');
-    expect(res.headers.get('Content-Disposition')).toContain('default-avatar.svg');
-    const text = await res.text();
-    expect(text).toContain('<svg');
+    expect(res.status).toBe(404);
+    const json = await res.json();
+    expect(json.error).toBe('File not found on disk');
   });
 
   it('returns file when authenticated and file exists', async () => {
