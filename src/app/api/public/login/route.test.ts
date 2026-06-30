@@ -1,14 +1,28 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
-const authenticateUserMock = vi.hoisted(() => vi.fn());
+const prismaMock = vi.hoisted(() => ({
+  user: { findUnique: vi.fn() },
+}));
+const bcryptCompareMock = vi.hoisted(() => vi.fn());
 const activityLogMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@/app/services/authService', () => ({ authenticateUser: authenticateUserMock }));
+vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
+vi.mock('bcrypt', () => ({ default: { compare: bcryptCompareMock } }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
-vi.mock('@/lib/prisma', () => ({ prisma: {} }));
 
 import { POST } from './route';
+
+const makeUser = (overrides: Record<string, unknown> = {}) => ({
+  id: 'u1',
+  email: 'test@example.com',
+  password: 'hashed',
+  firstName: 'Test',
+  lastName: 'User',
+  role: 'STUDENT',
+  inactive: false,
+  ...overrides,
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -27,8 +41,23 @@ describe('POST /api/public/login', () => {
     expect(activityLogMock).toHaveBeenCalled();
   });
 
-  it('returns 401 for invalid credentials', async () => {
-    authenticateUserMock.mockResolvedValue(null);
+  it('returns 401 when user not found', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(null);
+
+    const req = new NextRequest('http://localhost/api/public/login', {
+      method: 'POST',
+      body: JSON.stringify({ email: 'test@example.com', password: 'bad' }),
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(401);
+    expect(activityLogMock).toHaveBeenCalled();
+  });
+
+  it('returns 401 for invalid password', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(makeUser());
+    bcryptCompareMock.mockResolvedValue(false);
 
     const req = new NextRequest('http://localhost/api/public/login', {
       method: 'POST',
@@ -42,17 +71,8 @@ describe('POST /api/public/login', () => {
   });
 
   it('returns 401 for inactive users', async () => {
-    authenticateUserMock.mockResolvedValue({
-      token: 'token',
-      user: {
-        id: 'u1',
-        email: 'test@example.com',
-        firstName: 'Test',
-        lastName: 'User',
-        role: 'STUDENT',
-        inactive: true,
-      },
-    });
+    prismaMock.user.findUnique.mockResolvedValue(makeUser({ inactive: true }));
+    bcryptCompareMock.mockResolvedValue(true);
 
     const req = new NextRequest('http://localhost/api/public/login', {
       method: 'POST',
@@ -65,18 +85,9 @@ describe('POST /api/public/login', () => {
     expect(activityLogMock).toHaveBeenCalled();
   });
 
-  it('returns token and user for valid login', async () => {
-    authenticateUserMock.mockResolvedValue({
-      token: 'token',
-      user: {
-        id: 'u1',
-        email: 'test@example.com',
-        firstName: 'Test',
-        lastName: 'User',
-        role: 'STUDENT',
-        inactive: false,
-      },
-    });
+  it('returns user for valid login', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(makeUser());
+    bcryptCompareMock.mockResolvedValue(true);
 
     const req = new NextRequest('http://localhost/api/public/login', {
       method: 'POST',
@@ -88,7 +99,6 @@ describe('POST /api/public/login', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toMatchObject({
-      token: 'token',
       user: {
         id: 'u1',
         email: 'test@example.com',
@@ -100,8 +110,8 @@ describe('POST /api/public/login', () => {
     expect(activityLogMock).toHaveBeenCalled();
   });
 
-  it('returns 500 when auth throws', async () => {
-    authenticateUserMock.mockRejectedValue(new Error('boom'));
+  it('returns 500 when lookup throws', async () => {
+    prismaMock.user.findUnique.mockRejectedValue(new Error('boom'));
 
     const req = new NextRequest('http://localhost/api/public/login', {
       method: 'POST',
