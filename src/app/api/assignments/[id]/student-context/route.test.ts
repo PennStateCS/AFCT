@@ -6,7 +6,7 @@ const prismaMock = vi.hoisted(() => ({
   roster: { findFirst: vi.fn() },
   submission: { findMany: vi.fn() },
   comment: { findMany: vi.fn() },
-  assignmentGrade: { findUnique: vi.fn() },
+  assignmentProblemGrade: { findMany: vi.fn() },
 }));
 
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
@@ -73,7 +73,7 @@ describe('GET /api/assignments/[id]/student-context', () => {
         },
       },
     ]);
-    prismaMock.assignmentGrade.findUnique.mockResolvedValue({ grade: 95 });
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([{ problemId: 'p1', grade: 95 }]);
 
     const res = await GET(new Request('http://localhost/api/assignments/a1/student-context'), {
       params: Promise.resolve({ id: 'a1' }),

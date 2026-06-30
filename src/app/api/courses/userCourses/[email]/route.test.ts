@@ -4,10 +4,10 @@ const prismaMock = vi.hoisted(() => ({
   course: { findMany: vi.fn() },
 }));
 
-const verifyTokenMock = vi.hoisted(() => vi.fn());
+const authMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
-vi.mock('@/app/utils/jwt', () => ({ verifyToken: verifyTokenMock }));
+vi.mock('@/lib/auth', () => ({ auth: authMock }));
 
 import { GET } from './route';
 
@@ -24,13 +24,11 @@ describe('GET /api/courses/userCourses/[email]', () => {
     expect(res.status).toBe(400);
   });
 
-  it('returns 401 when token invalid', async () => {
-    verifyTokenMock.mockReturnValue(null);
+  it('returns 401 when unauthenticated', async () => {
+    authMock.mockResolvedValue(null);
 
     const res = await GET(
-      new Request('http://localhost/api/courses/userCourses/a@example.com', {
-        headers: { authorization: 'Bearer test-token' },
-      }),
+      new Request('http://localhost/api/courses/userCourses/a@example.com'),
       {
         params: Promise.resolve({ email: 'a@example.com' }),
       },
@@ -40,13 +38,11 @@ describe('GET /api/courses/userCourses/[email]', () => {
   });
 
   it('returns courses for user', async () => {
-    verifyTokenMock.mockReturnValue({ userId: 'u1' });
+    authMock.mockResolvedValue({ user: { id: 'u1' } });
     prismaMock.course.findMany.mockResolvedValue([{ id: 'c1', name: 'Course' }]);
 
     const res = await GET(
-      new Request('http://localhost/api/courses/userCourses/a@example.com', {
-        headers: { authorization: 'Bearer test-token' },
-      }),
+      new Request('http://localhost/api/courses/userCourses/a@example.com'),
       {
         params: Promise.resolve({ email: 'a@example.com' }),
       },
