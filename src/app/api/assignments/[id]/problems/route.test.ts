@@ -8,11 +8,11 @@ const prismaMock = vi.hoisted(() => ({
   groupRoster: { findFirst: vi.fn() },
 }));
 
-const verifyTokenMock = vi.hoisted(() => vi.fn());
+const authMock = vi.hoisted(() => vi.fn());
 const activityLogMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
-vi.mock('@/app/utils/jwt', () => ({ verifyToken: verifyTokenMock }));
+vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 
 import { GET } from './route';
@@ -29,46 +29,37 @@ describe('GET /api/assignments/[id]/problems', () => {
     expect(res.status).toBe(400);
   });
 
-  it('returns 401 when token invalid', async () => {
-    verifyTokenMock.mockReturnValue(null);
+  it('returns 401 when unauthenticated', async () => {
+    authMock.mockResolvedValue(null);
 
-    const req = new NextRequest('http://localhost/api/assignments/a1/problems', {
-      headers: { authorization: 'Bearer test-token' },
-    });
+    const req = new NextRequest('http://localhost/api/assignments/a1/problems');
+    const res = await GET(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 401 when role is not ADMIN or FACULTY', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+
+    const req = new NextRequest('http://localhost/api/assignments/a1/problems');
     const res = await GET(req, { params: Promise.resolve({ id: 'a1' }) });
 
     expect(res.status).toBe(401);
   });
 
   it('returns 404 when assignment not found', async () => {
-    verifyTokenMock.mockReturnValue({ userId: 'u1' });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.assignment.findUnique.mockResolvedValue(null);
 
-    const req = new NextRequest('http://localhost/api/assignments/a1/problems', {
-      headers: { authorization: 'Bearer test-token' },
-    });
+    const req = new NextRequest('http://localhost/api/assignments/a1/problems');
     const res = await GET(req, { params: Promise.resolve({ id: 'a1' }) });
 
     expect(res.status).toBe(404);
   });
 
-  it('returns 403 when not enrolled', async () => {
-    verifyTokenMock.mockReturnValue({ userId: 'u1' });
-    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
-    prismaMock.roster.findFirst.mockResolvedValue(null);
-
-    const req = new NextRequest('http://localhost/api/assignments/a1/problems', {
-      headers: { authorization: 'Bearer test-token' },
-    });
-    const res = await GET(req, { params: Promise.resolve({ id: 'a1' }) });
-
-    expect(res.status).toBe(403);
-  });
-
   it('returns problems list', async () => {
-    verifyTokenMock.mockReturnValue({ userId: 'u1' });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1', isGroup: false });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1' });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
       {
         problem: {
@@ -95,9 +86,8 @@ describe('GET /api/assignments/[id]/problems', () => {
   });
 
   it('group assignment returns only problems for user\'s group + unassigned problems', async () => {
-    verifyTokenMock.mockReturnValue({ userId: 'u1' });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1', isGroup: true });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1' });
     prismaMock.groupRoster.findFirst.mockResolvedValue({ groupId: 'g1' });
 
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
@@ -159,9 +149,8 @@ describe('GET /api/assignments/[id]/problems', () => {
   });
 
   it('group assignment: user not in a group sees only unassigned problems', async () => {
-    verifyTokenMock.mockReturnValue({ userId: 'u1' });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1', isGroup: true });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1' });
     prismaMock.groupRoster.findFirst.mockResolvedValue(null); // user not in a group
 
     prismaMock.assignmentProblem.findMany.mockResolvedValue([

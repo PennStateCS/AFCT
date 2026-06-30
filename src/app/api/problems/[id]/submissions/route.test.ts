@@ -50,6 +50,7 @@ describe('GET /api/problems/[id]/submissions', () => {
         fileName: 'file.jff',
         originalFileName: 'orig.jff',
         problemId: 'problem-1',
+        status: 'SUBMITTED',
       },
     ]);
 

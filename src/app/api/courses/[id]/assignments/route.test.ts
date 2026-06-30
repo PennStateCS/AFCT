@@ -6,10 +6,10 @@ const prismaMock = vi.hoisted(() => ({
   assignment: { findMany: vi.fn() },
 }));
 
-const verifyTokenMock = vi.hoisted(() => vi.fn());
+const authMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
-vi.mock('@/app/utils/jwt', () => ({ verifyToken: verifyTokenMock }));
+vi.mock('@/lib/auth', () => ({ auth: authMock }));
 
 import { GET } from './route';
 
@@ -19,37 +19,35 @@ beforeEach(() => {
 
 describe('GET /api/courses/[id]/assignments', () => {
   it('returns 400 when courseId missing', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+
     const req = new NextRequest('http://localhost/api/courses//assignments');
     const res = await GET(req, { params: Promise.resolve({ id: '' }) });
 
     expect(res.status).toBe(400);
   });
 
-  it('returns 401 when token invalid', async () => {
-    verifyTokenMock.mockReturnValue(null);
+  it('returns 403 when unauthorized', async () => {
+    authMock.mockResolvedValue(null);
 
-    const req = new NextRequest('http://localhost/api/courses/c1/assignments', {
-      headers: { authorization: 'Bearer test-token' },
-    });
+    const req = new NextRequest('http://localhost/api/courses/c1/assignments');
     const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
 
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(403);
   });
 
   it('returns 404 when course not found', async () => {
-    verifyTokenMock.mockReturnValue({ userId: 'u1' });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.course.findUnique.mockResolvedValue(null);
 
-    const req = new NextRequest('http://localhost/api/courses/c1/assignments', {
-      headers: { authorization: 'Bearer test-token' },
-    });
+    const req = new NextRequest('http://localhost/api/courses/c1/assignments');
     const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
 
     expect(res.status).toBe(404);
   });
 
   it('returns assignments with grade totals', async () => {
-    verifyTokenMock.mockReturnValue({ userId: 'u1' });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.course.findUnique.mockResolvedValue({ id: 'c1' });
     // include problems needed for grade math
     prismaMock.assignment.findMany.mockResolvedValue([
