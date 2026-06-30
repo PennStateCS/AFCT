@@ -37,4 +37,13 @@ describe('GET /api/debug/enrollments', () => {
     expect(body).toMatchObject({ userId: 'u1', userRole: 'STUDENT' });
     expect(body.enrollments).toHaveLength(1);
   });
+
+  it('returns 500 when the lookup fails', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.roster.findMany.mockRejectedValue(new Error('db down'));
+
+    const res = await GET();
+
+    expect(res.status).toBe(500);
+  });
 });

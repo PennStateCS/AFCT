@@ -353,6 +353,101 @@ describe('PUT /api/courses/[id]', () => {
     expect(activityLogMock).toHaveBeenCalled();
   });
 
+  it('rejects an empty instructor list once the registration window is provided', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
+
+    const req = new Request('http://localhost/api/courses/1', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Course 1',
+        code: 'CS101',
+        semester: 'Fall 2026',
+        credits: 3,
+        startDate: '2026-08-25T09:00',
+        endDate: '2026-12-15T17:00',
+        registrationOpenAt: '2026-07-01T09:00',
+        registrationCloseAt: '2026-09-01T09:00',
+        isPublished: true,
+        isArchived: false,
+        instructorIds: [],
+      }),
+    });
+
+    const res = await PUT(req, { params: Promise.resolve({ id: 'course-1' }) });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('At least one faculty member is required.');
+  });
+
+  it('falls back to the system timezone and groups TA/student roster rows', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    // No personal timezone -> system settings fallback path.
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: null });
+    prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
+
+    const txMock = {
+      course: {
+        update: vi.fn().mockResolvedValue({ id: 'course-1' }),
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'course-1',
+          name: 'Course 1',
+          code: 'CS101',
+          regCode: 'ABC123',
+          semester: 'Fall 2026',
+          credits: 3,
+          startDate: new Date('2026-08-25T13:00:00.000Z'),
+          endDate: new Date('2026-12-15T22:00:00.000Z'),
+          isPublished: true,
+          isArchived: false,
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+          problems: [],
+          assignments: [],
+          roster: [
+            { role: 'FACULTY', user: { id: 'u1', firstName: 'Ada', lastName: 'L', role: 'FACULTY' } },
+            { role: 'TA', user: { id: 'u2', firstName: 'Tim', lastName: 'A', role: 'TA' } },
+            { role: 'STUDENT', user: { id: 'u3', firstName: 'Sam', lastName: 'S', role: 'STUDENT' } },
+          ],
+        }),
+      },
+      roster: {
+        findMany: vi.fn().mockResolvedValue([{ userId: 'u1', role: 'FACULTY' }]),
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+        createMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+    };
+
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(txMock));
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+
+    const req = new Request('http://localhost/api/courses/1', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Course 1',
+        code: 'CS101',
+        semester: 'Fall 2026',
+        credits: 3,
+        startDate: '2026-08-25T09:00',
+        endDate: '2026-12-15T17:00',
+        registrationOpenAt: '2026-07-01T09:00',
+        registrationCloseAt: '2026-09-01T09:00',
+        isPublished: true,
+        isArchived: false,
+        instructorIds: ['u1'],
+      }),
+    });
+
+    const res = await PUT(req, { params: Promise.resolve({ id: 'course-1' }) });
+    expect(res.status).toBe(200);
+    expect(prismaMock.systemSettings.findUnique).toHaveBeenCalled();
+    const body = await res.json();
+    expect(body.enrolled).toHaveLength(3);
+  });
+
   it('syncs faculty remove/promote/add and includes admin in instructor lists', async () => {
     authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
