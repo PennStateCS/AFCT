@@ -5,7 +5,7 @@ const prismaMock = vi.hoisted(() => ({
   assignment: { findUnique: vi.fn(), findFirst: vi.fn(),  update: vi.fn(), create: vi.fn(), delete: vi.fn() },
   roster: { findFirst: vi.fn() },
   assignmentProblem: { findFirst: vi.fn(), deleteMany: vi.fn() },
-  assignmentGrade: { findFirst: vi.fn() },
+  assignmentProblemGrade: { findFirst: vi.fn() },
   submission: { findFirst: vi.fn(), count: vi.fn() },
   user: { findUnique: vi.fn() },
   systemSettings: { findUnique: vi.fn() },
@@ -194,7 +194,7 @@ describe('PUT /api/assignments/[id]', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
-    prismaMock.assignmentGrade.findFirst.mockResolvedValue({ assignmentId: 'a1' });
+    prismaMock.assignmentProblemGrade.findFirst.mockResolvedValue({ assignmentId: 'a1' });
 
     const req = new NextRequest('http://localhost/api/assignments/a1', {
       method: 'PUT',
@@ -211,7 +211,7 @@ describe('PUT /api/assignments/[id]', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
-    prismaMock.assignmentGrade.findFirst.mockResolvedValue(null);
+    prismaMock.assignmentProblemGrade.findFirst.mockResolvedValue(null);
     prismaMock.assignment.findUnique.mockResolvedValue({
       id: 'a1',
       courseId: 'c1',
@@ -240,7 +240,7 @@ describe('PUT /api/assignments/[id]', () => {
     prismaMock.user.findUnique.mockResolvedValue(null);
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
-    prismaMock.assignmentGrade.findFirst.mockResolvedValue(null);
+    prismaMock.assignmentProblemGrade.findFirst.mockResolvedValue(null);
     prismaMock.assignment.findUnique.mockResolvedValue({
       id: 'a1',
       courseId: 'c1',
@@ -266,7 +266,7 @@ describe('PUT /api/assignments/[id]', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
-    prismaMock.assignmentGrade.findFirst.mockResolvedValue(null);
+    prismaMock.assignmentProblemGrade.findFirst.mockResolvedValue(null);
     prismaMock.assignment.findUnique.mockResolvedValue({
       id: 'a1',
       courseId: 'c1',
@@ -297,7 +297,7 @@ describe('PUT /api/assignments/[id]', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
-    prismaMock.assignmentGrade.findFirst.mockResolvedValue(null);
+    prismaMock.assignmentProblemGrade.findFirst.mockResolvedValue(null);
     prismaMock.assignment.findUnique.mockResolvedValue({
       id: 'a1',
       courseId: 'c1',

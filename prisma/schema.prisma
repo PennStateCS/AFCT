@@ -282,6 +282,7 @@ model Submission {
   // Queue
   status   SubmissionStatus @default(PENDING)
   submittedAt DateTime         @default(now())
+  attempts Int              @default(0) // Number of times the worker has claimed this submission
 
   // Logs
   activityLogs ActivityLog[]
@@ -296,6 +297,8 @@ model Submission {
   // Performance indexes
   @@index([assignmentId, problemId])
   @@index([studentId, courseId, assignmentId, problemId, submittedAt])
+  // Hot path for the submission queue worker's claim query
+  @@index([status, submittedAt])
   @@index([status])
 }
 

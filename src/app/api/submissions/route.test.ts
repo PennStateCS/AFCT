@@ -1,1249 +1,285 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import fs from 'fs';
-import * as os from 'os';
-import { execSync } from 'child_process';
+import { Prisma } from '@prisma/client';
+
+// Submissions are no longer evaluated synchronously. POST validates the request,
+// stores the uploaded file, persists the submission in the PENDING state for the
+// background queue to pick up, and returns 202 (Accepted). No Java execution,
+// grading, or feedback parsing happens in the request path anymore.
 
 const prismaMock = vi.hoisted(() => ({
   assignmentProblem: { findUnique: vi.fn() },
   assignment: { findUnique: vi.fn() },
-  assignmentProblemGrade: { upsert: vi.fn() },
-  submission: { create: vi.fn(), update: vi.fn() },
+  submission: { create: vi.fn(), findFirst: vi.fn() },
+  roster: { findFirst: vi.fn() },
 }));
 
-const verifyTokenMock = vi.hoisted(() => vi.fn());
+const authMock = vi.hoisted(() => vi.fn());
 const activityLogMock = vi.hoisted(() => vi.fn());
 const uploadLimitMock = vi.hoisted(() => vi.fn());
-const javaRunnerExecuteMock = vi.hoisted(() => vi.fn());
+const validateStructureXMLMock = vi.hoisted(() => vi.fn());
+const fsMock = vi.hoisted(() => ({
+  existsSync: vi.fn().mockReturnValue(true),
+  mkdirSync: vi.fn(),
+  writeFileSync: vi.fn(),
+}));
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
-vi.mock('@/app/utils/jwt', () => ({ verifyToken: verifyTokenMock }));
+vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 vi.mock('@/lib/upload-limits', () => ({ getSystemUploadLimit: uploadLimitMock }));
-vi.mock('fs', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('fs')>();
-  const existsSync = vi.fn().mockReturnValue(true);
-  const mkdirSync = vi.fn();
-  const writeFileSync = vi.fn();
-  return {
-    ...actual,
-    existsSync,
-    mkdirSync,
-    writeFileSync,
-    default: {
-      ...actual,
-      existsSync,
-      mkdirSync,
-      writeFileSync,
-    },
-  };
-});
-vi.mock('child_process', () => ({ execSync: vi.fn().mockReturnValue('1') }));
-vi.mock('crypto', () => ({ randomUUID: vi.fn().mockReturnValue('uuid-1') }));
-vi.mock('os', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('os')>();
-  return {
-    ...actual,
-    platform: vi.fn().mockReturnValue('linux'),
-    default: {
-      ...actual,
-      platform: vi.fn().mockReturnValue('linux'),
-    },
-  };
-});
-vi.mock('../../../../lib/java-runner', () => ({
-  default: vi.fn().mockImplementation(() => ({ execute: javaRunnerExecuteMock })),
-}));
 vi.mock('@/app/utils/xmlStructureValidate', () => ({
-  validateStructureXML: vi.fn().mockReturnValue({ isValid: true }),
+  validateStructureXML: validateStructureXMLMock,
 }));
+vi.mock('fs', () => ({
+  default: fsMock,
+  ...fsMock,
+}));
+vi.mock('crypto', () => ({ randomUUID: vi.fn().mockReturnValue('uuid-1') }));
 
 import { POST } from './route';
 
+const FUTURE = new Date('2099-01-01T00:00:00.000Z');
+const PAST = new Date('2000-01-01T00:00:00.000Z');
+
+const makeFile = (size = 10, name = 'a.jff') =>
+  Object.assign(new File([new Uint8Array(size)], name, { type: 'text/plain' }), {
+    arrayBuffer: async () => new Uint8Array(size).buffer,
+    text: async () => '<structure/>',
+  });
+
+const makeFormData = (
+  fields: Record<string, string> = {
+    courseId: 'course-1',
+    assignmentId: 'assignment-1',
+    problemId: 'problem-1',
+  },
+  file?: File,
+) => {
+  const fd = new FormData();
+  for (const [key, value] of Object.entries(fields)) fd.set(key, value);
+  if (file) fd.set('file', file);
+  return fd;
+};
+
+const makeRequest = (formData: FormData) =>
+  ({
+    headers: new Headers(),
+    formData: async () => formData,
+  }) as unknown as NextRequest;
+
+const logActions = () => activityLogMock.mock.calls.map((call) => call[2]?.action);
+
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(os.platform).mockReturnValue('linux');
-  if ('default' in os && os.default && 'platform' in os.default) {
-    vi.mocked(os.default.platform).mockReturnValue('linux');
-  }
+  fsMock.existsSync.mockReturnValue(true);
+  authMock.mockResolvedValue({ user: { id: 'user-1' } });
   uploadLimitMock.mockResolvedValue({ maxBytes: 5 * 1024 * 1024, maxMb: 5 });
+  validateStructureXMLMock.mockReturnValue({ isValid: true });
+  prismaMock.assignmentProblem.findUnique.mockResolvedValue({
+    problem: {
+      fileName: 'answer.jff',
+      maxPoints: 10,
+      maxStates: null,
+      autograderEnabled: true,
+      isDeterministic: null,
+      type: 'FA',
+    },
+  });
   prismaMock.assignment.findUnique.mockResolvedValue({
     id: 'assignment-1',
-    dueDate: new Date('2099-01-01T00:00:00.000Z'),
+    courseId: 'course-1',
+    dueDate: FUTURE,
     allowLateSubmissions: false,
     lateCutoff: null,
   });
-  prismaMock.assignmentProblemGrade.upsert.mockResolvedValue({});
-  prismaMock.submission.create.mockResolvedValue({ id: 'submission-1' });
-  prismaMock.submission.update.mockResolvedValue({ id: 'submission-1' });
-  if (!('arrayBuffer' in File.prototype)) {
-    File.prototype.arrayBuffer = async function () {
-      return new Uint8Array(this.size).buffer;
-    };
-  }
+  prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1' });
+  prismaMock.submission.findFirst.mockResolvedValue(null);
+  prismaMock.submission.create.mockResolvedValue({
+    id: 'submission-1',
+    status: 'PENDING',
+    fileName: 'uuid-1.jff',
+  });
 });
 
 describe('POST /api/submissions', () => {
-  const makeFile = (size = 10, name = 'a.jff') =>
-    Object.assign(new File([new Uint8Array(size)], name, { type: 'text/plain' }), {
-      arrayBuffer: async () => new Uint8Array(size).buffer,
-    });
+  it('returns 401 when unauthenticated', async () => {
+    authMock.mockResolvedValue(null);
 
-  it('returns 401 when token is missing', async () => {
-    verifyTokenMock.mockReturnValue(null);
-
-    const req = new NextRequest('http://localhost/api/submissions', { method: 'POST' });
-    const res = await POST(req);
+    const res = await POST(makeRequest(makeFormData()));
 
     expect(res.status).toBe(401);
-    expect(activityLogMock).toHaveBeenCalled();
+    expect(logActions()).toContain('SUBMISSION_UNAUTHORIZED');
+    expect(prismaMock.submission.create).not.toHaveBeenCalled();
   });
 
-  it('returns 400 when required fields missing', async () => {
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-
-    const formData = new FormData();
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
+  it('returns 400 when required fields are missing', async () => {
+    const res = await POST(makeRequest(makeFormData({ courseId: 'course-1' })));
 
     expect(res.status).toBe(400);
-    const invalidRequestLogCall = activityLogMock.mock.calls.find(
-      (call) => call[2]?.action === 'SUBMISSION_INVALID_REQUEST',
-    );
-    expect(invalidRequestLogCall).toBeDefined();
+    expect(logActions()).toContain('SUBMISSION_INVALID_REQUEST');
+    expect(prismaMock.submission.create).not.toHaveBeenCalled();
   });
 
-  it('returns 400 when problem not linked to assignment', async () => {
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
+  it('returns 400 when the problem is not linked to the assignment', async () => {
     prismaMock.assignmentProblem.findUnique.mockResolvedValue(null);
 
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
-
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
+    const res = await POST(makeRequest(makeFormData()));
 
     expect(res.status).toBe(400);
-    const invalidRequestLogCall = activityLogMock.mock.calls.find(
-      (call) => call[2]?.action === 'SUBMISSION_INVALID_REQUEST',
-    );
-    expect(invalidRequestLogCall).toBeDefined();
+    const body = await res.json();
+    expect(body.error).toContain('not linked');
+    expect(prismaMock.submission.create).not.toHaveBeenCalled();
   });
 
-  it('returns 404 when assignment is not found', async () => {
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
-    });
+  it('returns 404 when the assignment does not exist', async () => {
     prismaMock.assignment.findUnique.mockResolvedValue(null);
 
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
-
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
+    const res = await POST(makeRequest(makeFormData()));
 
     expect(res.status).toBe(404);
-    const invalidRequestLogCall = activityLogMock.mock.calls.find(
-      (call) => call[2]?.action === 'SUBMISSION_INVALID_REQUEST',
-    );
-    expect(invalidRequestLogCall).toBeDefined();
+    expect(prismaMock.submission.create).not.toHaveBeenCalled();
   });
 
-  it('returns 403 when submission is late and late submissions are disabled', async () => {
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
-    });
+  it('returns 403 when the assignment is past due and late submissions are disabled', async () => {
     prismaMock.assignment.findUnique.mockResolvedValue({
       id: 'assignment-1',
-      dueDate: new Date('2000-01-01T00:00:00.000Z'),
+      courseId: 'course-1',
+      dueDate: PAST,
       allowLateSubmissions: false,
       lateCutoff: null,
     });
 
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
-
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
+    const res = await POST(makeRequest(makeFormData()));
 
     expect(res.status).toBe(403);
+    expect(logActions()).toContain('SUBMISSION_REJECTED_LATE');
     expect(prismaMock.submission.create).not.toHaveBeenCalled();
-    const rejectionLogCall = activityLogMock.mock.calls.find(
-      (call) => call[2]?.action === 'SUBMISSION_REJECTED_LATE',
-    );
-    expect(rejectionLogCall).toBeDefined();
   });
 
-  it('returns 403 when submission is after late cutoff', async () => {
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
-    });
+  it('returns 403 when the late submission cutoff has passed', async () => {
     prismaMock.assignment.findUnique.mockResolvedValue({
       id: 'assignment-1',
-      dueDate: new Date('2000-01-01T00:00:00.000Z'),
+      courseId: 'course-1',
+      dueDate: PAST,
       allowLateSubmissions: true,
-      lateCutoff: new Date('2000-01-02T00:00:00.000Z'),
+      lateCutoff: PAST,
     });
 
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
-
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
+    const res = await POST(makeRequest(makeFormData()));
 
     expect(res.status).toBe(403);
+    expect(logActions()).toContain('SUBMISSION_REJECTED_LATE_CUTOFF');
     expect(prismaMock.submission.create).not.toHaveBeenCalled();
-    const rejectionLogCall = activityLogMock.mock.calls.find(
-      (call) => call[2]?.action === 'SUBMISSION_REJECTED_LATE_CUTOFF',
-    );
-    expect(rejectionLogCall).toBeDefined();
   });
 
-  it('accepts late submission when late submissions are enabled and no cutoff is set', async () => {
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
-    });
-    prismaMock.assignment.findUnique.mockResolvedValue({
-      id: 'assignment-1',
-      dueDate: new Date('2000-01-01T00:00:00.000Z'),
-      allowLateSubmissions: true,
-      lateCutoff: null,
-    });
+  it('returns 403 when the user is not on the course roster', async () => {
+    prismaMock.roster.findFirst.mockResolvedValue(null);
 
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
+    const res = await POST(makeRequest(makeFormData()));
 
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
+    expect(res.status).toBe(403);
+    expect(logActions()).toContain('SUBMISSION_FORBIDDEN');
+    expect(prismaMock.submission.create).not.toHaveBeenCalled();
+  });
 
-    const res = await POST(req);
+  it('allows an admin to submit without a roster entry', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue(null);
 
-    expect(res.status).toBe(201);
+    const res = await POST(makeRequest(makeFormData()));
+
+    expect(res.status).toBe(202);
+    expect(prismaMock.roster.findFirst).not.toHaveBeenCalled();
     expect(prismaMock.submission.create).toHaveBeenCalled();
   });
 
-  it('accepts submission exactly at late cutoff time', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2000-01-02T00:00:00.000Z'));
+  it('returns 429 when resubmitting to the same problem within the cooldown', async () => {
+    prismaMock.submission.findFirst.mockResolvedValue({ submittedAt: new Date() });
 
-    try {
-      verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-      prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-        problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
-      });
-      prismaMock.assignment.findUnique.mockResolvedValue({
-        id: 'assignment-1',
-        dueDate: new Date('2000-01-01T00:00:00.000Z'),
-        allowLateSubmissions: true,
-        lateCutoff: new Date('2000-01-02T00:00:00.000Z'),
-      });
+    const res = await POST(makeRequest(makeFormData()));
 
-      const formData = new FormData();
-      formData.set('courseId', 'course-1');
-      formData.set('assignmentId', 'assignment-1');
-      formData.set('problemId', 'problem-1');
-
-      const req = {
-        headers: new Headers({ authorization: 'Bearer token' }),
-        formData: async () => formData,
-      } as unknown as NextRequest;
-
-      const res = await POST(req);
-
-      expect(res.status).toBe(201);
-      expect(prismaMock.submission.create).toHaveBeenCalled();
-      const cutoffRejectionLogCall = activityLogMock.mock.calls.find(
-        (call) => call[2]?.action === 'SUBMISSION_REJECTED_LATE_CUTOFF',
-      );
-      expect(cutoffRejectionLogCall).toBeUndefined();
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(res.status).toBe(429);
+    expect(res.headers.get('Retry-After')).toBeTruthy();
+    expect(logActions()).toContain('SUBMISSION_RATE_LIMITED');
+    expect(prismaMock.submission.create).not.toHaveBeenCalled();
   });
 
-  it('creates a submission without a file', async () => {
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
-    });
+  it('returns 400 when the uploaded file fails structure validation', async () => {
+    validateStructureXMLMock.mockReturnValue({ isValid: false, error: 'Invalid structure' });
 
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
+    const res = await POST(makeRequest(makeFormData(undefined, makeFile())));
 
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
-
-    if (res.status !== 201) {
-      const errorCall = activityLogMock.mock.calls.find(
-        (call) => call[2]?.action === 'SUBMISSION_ERROR',
-      );
-      throw new Error(`Unexpected 500: ${errorCall?.[2]?.metadata?.error ?? 'unknown error'}`);
-    }
-
-    expect(res.status).toBe(201);
-    expect(prismaMock.submission.create).toHaveBeenCalled();
-    expect(prismaMock.submission.update).not.toHaveBeenCalled();
-    expect(activityLogMock).toHaveBeenCalled();
+    expect(res.status).toBe(400);
+    expect(logActions()).toContain('SUBMISSION_INVALID_FILE_STRUCTURE');
+    expect(prismaMock.submission.create).not.toHaveBeenCalled();
   });
 
-  it('returns 413 when file exceeds max size', async () => {
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-    uploadLimitMock.mockResolvedValue({ maxBytes: 1, maxMb: 0.000001 });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
-    });
+  it('returns 413 when the file exceeds the upload limit', async () => {
+    uploadLimitMock.mockResolvedValue({ maxBytes: 5, maxMb: 5 });
 
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
-    formData.set('file', makeFile(2));
-
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
+    const res = await POST(makeRequest(makeFormData(undefined, makeFile(10))));
 
     expect(res.status).toBe(413);
+    expect(prismaMock.submission.create).not.toHaveBeenCalled();
   });
 
-  it('creates upload directory when it does not exist', async () => {
-    vi.mocked(os.platform).mockReturnValue('linux');
-    if ('default' in os && os.default && 'platform' in os.default) {
-      vi.mocked(os.default.platform).mockReturnValue('linux');
-    }
-    javaRunnerExecuteMock.mockResolvedValue({
-      stdout: JSON.stringify({ correct: true, feedback: 'Looks good' }),
-      stderr: '',
-    });
-
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      autograderEnabled: true,
-      maxPoints: 7,
-      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'FA' },
-    });
-
-    const existsSyncMock = vi.mocked(fs.existsSync);
-    existsSyncMock.mockImplementation((p) => {
-      const normalized = String(p).replace(/\\/g, '/');
-      return normalized.includes('/private/uploads/submissions') ? false : true;
-    });
-
-    const mkdirSyncMock = vi.mocked(fs.mkdirSync);
-
-    const file = makeFile(10, 'submission.jff');
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
-    formData.set('file', file);
-
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
-
-    expect(res.status).toBe(201);
-    expect(mkdirSyncMock).toHaveBeenCalled();
-    expect(javaRunnerExecuteMock).toHaveBeenCalledWith(
-      expect.arrayContaining(['-1', 'false']),
-      expect.any(Object),
-    );
-  });
-
-  it('handles Windows local analysis path', async () => {
-    const envBackup = process.env.CFGANALYZER_BINARY;
-    delete process.env.CFGANALYZER_BINARY;
-    vi.mocked(os.platform).mockReturnValue('win32');
-    if ('default' in os && os.default && 'platform' in os.default) {
-      vi.mocked(os.default.platform).mockReturnValue('win32');
-    }
-
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      autograderEnabled: true,
-      maxPoints: 5,
-      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
-    });
-
-    const existsSyncMock = vi.mocked(fs.existsSync);
-    existsSyncMock.mockReturnValue(true);
-
-    const file = makeFile(10, 'submission.jff');
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
-    formData.set('file', file);
-
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
-
-    if (envBackup !== undefined) {
-      process.env.CFGANALYZER_BINARY = envBackup;
-    }
-
-    expect(res.status).toBe(201);
-    expect(javaRunnerExecuteMock).not.toHaveBeenCalled();
-    expect(prismaMock.submission.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ feedback: 'File has 1 lines (Windows).' }),
-      }),
-    );
-  });
-
-  it('stores evaluator feedback when answer file exists', async () => {
-    vi.mocked(os.platform).mockReturnValue('linux');
-    javaRunnerExecuteMock.mockResolvedValue({
-      stdout: JSON.stringify({ correct: true, feedback: 'Looks good' }),
-      stderr: '',
-    });
-
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
-    });
-
-    const existsSyncMock = vi.mocked(fs.existsSync);
-    existsSyncMock.mockImplementation((p) =>
-      String(p).includes('/private/uploads/solutions') ? true : true,
-    );
-
-    const file = makeFile(10, 'submission.jff');
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
-    formData.set('file', file);
-
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
-
-    if (res.status !== 201) {
-      const errorCall = activityLogMock.mock.calls.find(
-        (call) => call[2]?.action === 'SUBMISSION_ERROR',
-      );
-      throw new Error(`Unexpected 500: ${errorCall?.[2]?.metadata?.error ?? 'unknown error'}`);
-    }
-
-    expect(res.status).toBe(201);
-    expect(javaRunnerExecuteMock).toHaveBeenCalled();
-    expect(prismaMock.submission.update).toHaveBeenCalled();
-  });
-
-  it('autogrades to max points when autograder is enabled and evaluator returns true', async () => {
-    vi.mocked(os.platform).mockReturnValue('linux');
-    javaRunnerExecuteMock.mockResolvedValue({
-      stdout: JSON.stringify({ correct: true, feedback: 'Looks good' }),
-      stderr: '',
-    });
-
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      autograderEnabled: true,
-      maxPoints: 7,
-      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
-    });
-
-    const existsSyncMock = vi.mocked(fs.existsSync);
-    existsSyncMock.mockReturnValue(true);
-
-    const file = makeFile(10, 'submission.jff');
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
-    formData.set('file', file);
-
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
-
-    expect(res.status).toBe(201);
-    expect(prismaMock.assignmentProblemGrade.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        create: expect.objectContaining({ grade: 7 }),
-        update: expect.objectContaining({ grade: 7 }),
-      }),
-    );
-  });
-
-  it('autogrades to zero when maxPoints is null and evaluator returns true', async () => {
-    vi.mocked(os.platform).mockReturnValue('linux');
-    javaRunnerExecuteMock.mockResolvedValue({
-      stdout: JSON.stringify({ correct: true, feedback: 'Looks good' }),
-      stderr: '',
-    });
-
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      autograderEnabled: true,
-      maxPoints: null,
-      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
-    });
-
-    const existsSyncMock = vi.mocked(fs.existsSync);
-    existsSyncMock.mockReturnValue(true);
-
-    const file = makeFile(10, 'submission.jff');
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
-    formData.set('file', file);
-
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
-
-    expect(res.status).toBe(201);
-    expect(prismaMock.assignmentProblemGrade.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        create: expect.objectContaining({ grade: 0 }),
-        update: expect.objectContaining({ grade: 0 }),
-      }),
-    );
-  });
-
-  it('autogrades to zero when autograder is enabled and evaluator returns false', async () => {
-    vi.mocked(os.platform).mockReturnValue('linux');
-    javaRunnerExecuteMock.mockResolvedValue({
-      stdout: JSON.stringify({ correct: false, feedback: 'Incorrect' }),
-      stderr: '',
-    });
-
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      autograderEnabled: true,
-      maxPoints: 11,
-      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
-    });
-
-    const existsSyncMock = vi.mocked(fs.existsSync);
-    existsSyncMock.mockReturnValue(true);
-
-    const file = makeFile(10, 'submission.jff');
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
-    formData.set('file', file);
-
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
-
-    expect(res.status).toBe(201);
-    expect(prismaMock.assignmentProblemGrade.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        create: expect.objectContaining({ grade: 0 }),
-        update: expect.objectContaining({ grade: 0 }),
-      }),
-    );
-  });
-
-  it('does not autograde when autograder is disabled', async () => {
-    vi.mocked(os.platform).mockReturnValue('linux');
-    javaRunnerExecuteMock.mockResolvedValue({
-      stdout: JSON.stringify({ correct: true, feedback: 'Looks good' }),
-      stderr: '',
-    });
-
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      autograderEnabled: false,
-      maxPoints: 9,
-      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
-    });
-
-    const existsSyncMock = vi.mocked(fs.existsSync);
-    existsSyncMock.mockReturnValue(true);
-
-    const file = makeFile(10, 'submission.jff');
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
-    formData.set('file', file);
-
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
-
-    expect(res.status).toBe(201);
-    expect(prismaMock.assignmentProblemGrade.upsert).not.toHaveBeenCalled();
-  });
-
-  it('does not autograde when evaluator does not return boolean correctness', async () => {
-    vi.mocked(os.platform).mockReturnValue('linux');
-    javaRunnerExecuteMock.mockResolvedValue({
-      stdout: JSON.stringify({ feedback: 'No correctness returned' }),
-      stderr: '',
-    });
-
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      autograderEnabled: true,
-      maxPoints: 12,
-      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
-    });
-
-    const existsSyncMock = vi.mocked(fs.existsSync);
-    existsSyncMock.mockReturnValue(true);
-
-    const file = makeFile(10, 'submission.jff');
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
-    formData.set('file', file);
-
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
-
-    expect(res.status).toBe(201);
-    expect(prismaMock.assignmentProblemGrade.upsert).not.toHaveBeenCalled();
-  });
-
-  it('returns evaluation error when answer file missing', async () => {
-    vi.mocked(os.platform).mockReturnValue('linux');
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
-    });
-
-    const existsSyncMock = vi.mocked(fs.existsSync);
-    existsSyncMock.mockImplementation((p) => {
-      const normalized = String(p).replace(/\\/g, '/');
-      return normalized.includes('/private/uploads/solutions') ? false : true;
-    });
-
-    const file = makeFile(10, 'submission.jff');
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
-    formData.set('file', file);
-
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
-
-    expect(res.status).toBe(201);
-    expect(activityLogMock).toHaveBeenCalled();
-    expect(prismaMock.submission.update).toHaveBeenCalled();
-  });
-
-  it('handles Windows command failure with non-docker feedback fallback', async () => {
-    const envBackup = process.env.CFGANALYZER_BINARY;
-    delete process.env.CFGANALYZER_BINARY;
-
-    vi.mocked(os.platform).mockReturnValue('win32');
-    if ('default' in os && os.default && 'platform' in os.default) {
-      vi.mocked(os.default.platform).mockReturnValue('win32');
-    }
-    vi.mocked(execSync).mockImplementation(() => {
-      throw new Error('powershell failed');
-    });
-
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
-    });
-
-    const existsSyncMock = vi.mocked(fs.existsSync);
-    existsSyncMock.mockReturnValue(true);
-
-    const file = makeFile(10, 'submission.jff');
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
-    formData.set('file', file);
-
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
-
-    if (envBackup !== undefined) {
-      process.env.CFGANALYZER_BINARY = envBackup;
-    }
-
-    expect(res.status).toBe(201);
-    expect(prismaMock.submission.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ feedback: 'ERROR: Failed to analyze file.' }),
-      }),
-    );
-  });
-
-  it('handles FA type problem with maxStates and deterministic flags', async () => {
-    vi.mocked(os.platform).mockReturnValue('linux');
-    javaRunnerExecuteMock.mockResolvedValue({
-      stdout: JSON.stringify({ correct: false, feedback: 'States exceeded' }),
-      stderr: '',
-    });
-
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      problem: {
-        fileName: 'answer.jff',
-        maxStates: 5,
-        isDeterministic: true,
-        type: 'FA',
-      },
-    });
-
-    const existsSyncMock = vi.mocked(fs.existsSync);
-    existsSyncMock.mockReturnValue(true);
-
-    const file = makeFile(10, 'submission.jff');
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
-    formData.set('file', file);
-
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
-
-    expect(res.status).toBe(201);
-    expect(javaRunnerExecuteMock).toHaveBeenCalledWith(
-      expect.arrayContaining(['5', 'true']),
-      expect.any(Object),
-    );
-    expect(prismaMock.submission.update).toHaveBeenCalled();
-  });
-
-  it('handles PDA type problem with maxStates', async () => {
-    vi.mocked(os.platform).mockReturnValue('linux');
-    javaRunnerExecuteMock.mockResolvedValue({
-      stdout: JSON.stringify({ correct: true, feedback: 'Correct' }),
-      stderr: '',
-    });
-
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      problem: {
-        fileName: 'answer.jff',
-        maxStates: 10,
-        isDeterministic: null,
-        type: 'PDA',
-      },
-    });
-
-    const existsSyncMock = vi.mocked(fs.existsSync);
-    existsSyncMock.mockReturnValue(true);
-
-    const file = makeFile(10, 'submission.jff');
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
-    formData.set('file', file);
-
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
-
-    expect(res.status).toBe(201);
-    expect(javaRunnerExecuteMock).toHaveBeenCalledWith(
-      expect.arrayContaining(['10']),
-      expect.any(Object),
-    );
-    expect(prismaMock.submission.update).toHaveBeenCalled();
-  });
-
-  it('handles evaluator stderr output', async () => {
-    vi.mocked(os.platform).mockReturnValue('linux');
-    javaRunnerExecuteMock.mockResolvedValue({
-      stdout: JSON.stringify({ correct: true, feedback: 'Ok' }),
-      stderr: 'Warning: some warning message',
-    });
-
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
-    });
-
-    const existsSyncMock = vi.mocked(fs.existsSync);
-    existsSyncMock.mockReturnValue(true);
-
-    const file = makeFile(10, 'submission.jff');
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
-    formData.set('file', file);
-
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
-
-    expect(res.status).toBe(201);
-    const stderrLogCall = activityLogMock.mock.calls.find(
-      (call) => call[2]?.action === 'SUBMISSION_EVALUATION_STDERR',
-    );
-    expect(stderrLogCall).toBeDefined();
-    expect(prismaMock.submission.update).toHaveBeenCalled();
-  });
-
-  it('handles invalid JSON from evaluator', async () => {
-    vi.mocked(os.platform).mockReturnValue('linux');
-    javaRunnerExecuteMock.mockResolvedValue({
-      stdout: 'Not valid JSON',
-      stderr: '',
-    });
-
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
-    });
-
-    const existsSyncMock = vi.mocked(fs.existsSync);
-    existsSyncMock.mockReturnValue(true);
-
-    const file = makeFile(10, 'submission.jff');
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
-    formData.set('file', file);
-
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
-
-    expect(res.status).toBe(201);
-    const errorLogCall = activityLogMock.mock.calls.find(
-      (call) => call[2]?.action === 'SUBMISSION_EVALUATION_ERROR',
-    );
-    expect(errorLogCall).toBeDefined();
-    expect(prismaMock.submission.update).toHaveBeenCalled();
-  });
-
-  it('handles primitive JSON evaluator response as invalid object', async () => {
-    vi.mocked(os.platform).mockReturnValue('linux');
-    javaRunnerExecuteMock.mockResolvedValue({
-      stdout: '123',
-      stderr: undefined,
-    });
-
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      autograderEnabled: true,
-      maxPoints: 6,
-      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
-    });
-
-    const existsSyncMock = vi.mocked(fs.existsSync);
-    existsSyncMock.mockReturnValue(true);
-
-    const file = makeFile(10, 'submission.jff');
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
-    formData.set('file', file);
-
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
-
-    expect(res.status).toBe(201);
-    const errorLogCall = activityLogMock.mock.calls.find(
-      (call) => call[2]?.action === 'SUBMISSION_EVALUATION_ERROR',
-    );
-    expect(errorLogCall).toBeDefined();
-    expect(prismaMock.assignmentProblemGrade.upsert).not.toHaveBeenCalled();
-  });
-
-  it('handles evaluator execution error', async () => {
-    vi.mocked(os.platform).mockReturnValue('linux');
-    javaRunnerExecuteMock.mockRejectedValue(new Error('Timeout'));
-
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
-    });
-
-    const existsSyncMock = vi.mocked(fs.existsSync);
-    existsSyncMock.mockReturnValue(true);
-
-    const file = makeFile(10, 'submission.jff');
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
-    formData.set('file', file);
-
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
-
-    expect(res.status).toBe(201);
-    const errorLogCall = activityLogMock.mock.calls.find(
-      (call) => call[2]?.action === 'SUBMISSION_EVALUATION_ERROR',
-    );
-    expect(errorLogCall).toBeDefined();
-    expect(errorLogCall?.[2]?.metadata?.error).toContain('Timeout');
-    expect(prismaMock.submission.update).toHaveBeenCalled();
-  });
-
-  it('handles non-Error evaluator execution rejection', async () => {
-    vi.mocked(os.platform).mockReturnValue('linux');
-    javaRunnerExecuteMock.mockRejectedValue('boom');
-
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
-    });
-
-    const existsSyncMock = vi.mocked(fs.existsSync);
-    existsSyncMock.mockReturnValue(true);
-
-    const file = makeFile(10, 'submission.jff');
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
-    formData.set('file', file);
-
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
-
-    expect(res.status).toBe(201);
-    const errorLogCall = activityLogMock.mock.calls.find(
-      (call) => call[2]?.action === 'SUBMISSION_EVALUATION_ERROR',
-    );
-    expect(errorLogCall).toBeDefined();
-    expect(errorLogCall?.[2]?.metadata?.error).toContain('boom');
-  });
-
-  it('handles cmdErr catch path for Windows analyzer failure', async () => {
-    vi.mocked(os.platform).mockReturnValue('linux');
-    if ('default' in os && os.default && 'platform' in os.default) {
-      vi.mocked(os.default.platform).mockReturnValue('linux');
-    }
-
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
-    });
-
-    const existsSyncMock = vi.mocked(fs.existsSync);
-    existsSyncMock.mockImplementation((p) => {
-      if (String(p).includes('solutions')) {
-        throw 'existsSync-failed';
-      }
-      return true;
-    });
-
-    const file = makeFile(10, 'submission.jff');
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
-    formData.set('file', file);
-
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
-
-    expect(res.status).toBe(201);
-    expect(prismaMock.submission.update).toHaveBeenCalledWith(
+  it('stores the file and queues a PENDING submission with 202', async () => {
+    const res = await POST(makeRequest(makeFormData(undefined, makeFile())));
+
+    expect(res.status).toBe(202);
+    const body = await res.json();
+    expect(body).toMatchObject({ id: 'submission-1', status: 'PENDING' });
+
+    // File is written to disk and the submission is created as PENDING with no
+    // evaluation results (those are produced later by the queue worker).
+    expect(fsMock.writeFileSync).toHaveBeenCalled();
+    expect(prismaMock.submission.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          feedback: expect.stringContaining('Evaluation failed - Unknown error'),
+          courseId: 'course-1',
+          assignmentId: 'assignment-1',
+          problemId: 'problem-1',
+          studentId: 'user-1',
+          fileName: 'uuid-1.jff',
+          originalFileName: 'a.jff',
+          feedback: null,
+          evaluationRaw: Prisma.JsonNull,
+        }),
+      }),
+    );
+
+    const createdLog = activityLogMock.mock.calls.find(
+      (call) => call[2]?.action === 'SUBMISSION_CREATED',
+    );
+    expect(createdLog).toBeDefined();
+    expect(createdLog?.[2]?.metadata?.status).toBe('PENDING');
+  });
+
+  it('queues a submission without a file', async () => {
+    prismaMock.submission.create.mockResolvedValue({ id: 'submission-2', status: 'PENDING' });
+
+    const res = await POST(makeRequest(makeFormData()));
+
+    expect(res.status).toBe(202);
+    expect(fsMock.writeFileSync).not.toHaveBeenCalled();
+    expect(prismaMock.submission.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          studentId: 'user-1',
+          fileName: null,
+          originalFileName: null,
         }),
       }),
     );
   });
 
-  it('handles missing answer file configuration', async () => {
-    vi.mocked(os.platform).mockReturnValue('linux');
+  it('returns 500 and logs an error when creating the submission fails', async () => {
+    prismaMock.submission.create.mockRejectedValue(new Error('db down'));
 
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      problem: { fileName: null, maxStates: null, isDeterministic: null, type: 'RE' },
-    });
-
-    const existsSyncMock = vi.mocked(fs.existsSync);
-    existsSyncMock.mockReturnValue(true);
-
-    const file = makeFile(10, 'submission.jff');
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
-    formData.set('file', file);
-
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
-
-    expect(res.status).toBe(201);
-    const errorLogCall = activityLogMock.mock.calls.find(
-      (call) =>
-        call[2]?.action === 'SUBMISSION_EVALUATION_ERROR' &&
-        call[2]?.metadata?.error?.includes('No answer file configured'),
-    );
-    expect(errorLogCall).toBeDefined();
-    expect(prismaMock.submission.update).toHaveBeenCalled();
-  });
-
-  it('handles Java stream string in feedback', async () => {
-    vi.mocked(os.platform).mockReturnValue('linux');
-    javaRunnerExecuteMock.mockResolvedValue({
-      stdout: JSON.stringify({
-        correct: true,
-        feedback: 'java.lang.IntStream@12345',
-      }),
-      stderr: '',
-    });
-
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
-    });
-
-    const existsSyncMock = vi.mocked(fs.existsSync);
-    existsSyncMock.mockReturnValue(true);
-
-    const file = makeFile(10, 'submission.jff');
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
-    formData.set('file', file);
-
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
-
-    expect(res.status).toBe(201);
-    expect(prismaMock.submission.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'submission-1' },
-        data: expect.objectContaining({
-          feedback: 'Evaluation completed - correct: true',
-        }),
-      }),
-    );
-  });
-
-  it('handles non-object evaluation response', async () => {
-    vi.mocked(os.platform).mockReturnValue('linux');
-    javaRunnerExecuteMock.mockResolvedValue({
-      stdout: '["not", "an", "object"]',
-      stderr: '',
-    });
-
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
-    });
-
-    const existsSyncMock = vi.mocked(fs.existsSync);
-    existsSyncMock.mockReturnValue(true);
-
-    const file = makeFile(10, 'submission.jff');
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
-    formData.set('file', file);
-
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
-
-    expect(res.status).toBe(201);
-    // Arrays are objects in JS, so it treats as success but without correct/feedback fields
-    const successLogCall = activityLogMock.mock.calls.find(
-      (call) => call[2]?.action === 'SUBMISSION_EVALUATION_SUCCESS',
-    );
-    expect(successLogCall).toBeDefined();
-    expect(prismaMock.submission.update).toHaveBeenCalled();
-  });
-
-  it('handles submission creation error in catch block', async () => {
-    vi.mocked(os.platform).mockReturnValue('linux');
-
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
-    });
-    prismaMock.submission.create.mockRejectedValue(new Error('Database error'));
-
-    const existsSyncMock = vi.mocked(fs.existsSync);
-    existsSyncMock.mockReturnValue(true);
-
-    javaRunnerExecuteMock.mockResolvedValue({
-      stdout: JSON.stringify({ correct: true, feedback: 'Correct' }),
-      stderr: '',
-    });
-
-    const file = makeFile(10, 'submission.jff');
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
-    formData.set('file', file);
-
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
+    const res = await POST(makeRequest(makeFormData(undefined, makeFile())));
 
     expect(res.status).toBe(500);
-    const errorLogCall = activityLogMock.mock.calls.find(
-      (call) => call[2]?.action === 'SUBMISSION_ERROR',
-    );
-    expect(errorLogCall).toBeDefined();
-    expect(errorLogCall?.[2]?.metadata?.error).toContain('Database error');
-  });
-
-  it('handles non-Error submission creation failure in outer catch', async () => {
-    vi.mocked(os.platform).mockReturnValue('linux');
-
-    verifyTokenMock.mockReturnValue({ userId: 'user-1' });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
-    });
-    prismaMock.submission.create.mockRejectedValue('db-string-error');
-
-    const formData = new FormData();
-    formData.set('courseId', 'course-1');
-    formData.set('assignmentId', 'assignment-1');
-    formData.set('problemId', 'problem-1');
-
-    const req = {
-      headers: new Headers({ authorization: 'Bearer token' }),
-      formData: async () => formData,
-    } as unknown as NextRequest;
-
-    const res = await POST(req);
-
-    expect(res.status).toBe(500);
-    const errorLogCall = activityLogMock.mock.calls.find(
-      (call) => call[2]?.action === 'SUBMISSION_ERROR',
-    );
-    expect(errorLogCall).toBeDefined();
-    expect(errorLogCall?.[2]?.metadata?.error).toContain('db-string-error');
+    expect(logActions()).toContain('SUBMISSION_ERROR');
   });
 });
