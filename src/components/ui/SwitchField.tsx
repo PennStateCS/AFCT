@@ -17,6 +17,7 @@ export interface SwitchFieldProps {
   className?: string;
   labelClassName?: string;
   switchClassName?: string;
+  boxClassName?: string;
   id?: string;
 }
 
@@ -33,6 +34,7 @@ export default function SwitchField({
   className,
   labelClassName,
   switchClassName,
+  boxClassName,
   id,
 }: SwitchFieldProps) {
   const switchId = id ?? name;
@@ -58,7 +60,12 @@ export default function SwitchField({
 
   return (
     <div className={cn('flex flex-col', className)}>
-      <div className="border-input flex min-h-11 items-center justify-between rounded-md border px-3 py-2 shadow-xs">
+      <div
+        className={cn(
+          'border-input flex min-h-11 items-center justify-between rounded-md border px-3 py-2 shadow-xs',
+          boxClassName,
+        )}
+      >
         <div className="min-w-0">
           <label
             id={labelId}
