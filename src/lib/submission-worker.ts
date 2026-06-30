@@ -35,9 +35,9 @@ interface SubmissionEvaluationResult {
 }
 
 async function logSubmissionActivity(submission: any, action: string, metadata: any) {
-  // Write straight to the DB rather than POSTing back to /api/log_submission —
-  // we're in the same process, so the HTTP round-trip only added a failure mode.
-  // Only scalar ids are pulled off the submission; never the full student record.
+  // Write straight to the DB — we're in the same process, so there's no reason
+  // to go back out over HTTP. Only scalar ids are pulled off the submission;
+  // never the full student record.
   try {
     await createEnhancedActivityLog(prisma, WORKER_REQUEST, {
       userId: submission.studentId ?? null,
