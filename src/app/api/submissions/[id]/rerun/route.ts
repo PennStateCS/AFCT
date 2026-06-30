@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
@@ -75,6 +76,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
         status: "PENDING",
         feedback: null,
         correct: null,
+        evaluationRaw: Prisma.DbNull,
         updatedAt: new Date(),
       },
     });

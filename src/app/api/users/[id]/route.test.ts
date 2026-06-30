@@ -302,6 +302,37 @@ describe('PATCH /api/users/[id]', () => {
     expect(writeFileMock).toHaveBeenCalled();
   });
 
+  it('still uploads a new avatar when removing the old one fails', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.user.findUnique.mockResolvedValue({ avatar: 'old-avatar.png' });
+    prismaMock.user.update.mockResolvedValue({
+      id: 'u1',
+      email: 'u1@example.com',
+      firstName: 'A',
+      lastName: 'B',
+      role: 'ADMIN',
+      inactive: false,
+      avatar: 'new-avatar.png',
+      timezone: null,
+    });
+    unlinkMock.mockRejectedValue(new Error('fs error'));
+
+    const avatarBuffer = Buffer.from('new-image-data');
+    const formData = new FormData();
+    formData.append('avatar', new Blob([avatarBuffer], { type: 'image/png' }), 'new.png');
+
+    const req = new NextRequest('http://localhost/api/users/u1', {
+      method: 'PATCH',
+      body: formData,
+    });
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'u1' }) });
+
+    // The old-avatar unlink rejection is swallowed; the new file is still written.
+    expect(res.status).toBe(200);
+    expect(writeFileMock).toHaveBeenCalled();
+  });
+
   it('handles deleteAvatar flag in form data', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
     prismaMock.user.findUnique.mockResolvedValue({ avatar: 'avatar-to-delete.png' });
@@ -329,6 +360,36 @@ describe('PATCH /api/users/[id]', () => {
 
     expect(res.status).toBe(200);
     expect(unlinkMock).toHaveBeenCalled();
+  });
+
+  it('still succeeds when removing the old avatar file fails', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.user.findUnique.mockResolvedValue({ avatar: 'avatar-to-delete.png' });
+    prismaMock.user.update.mockResolvedValue({
+      id: 'u1',
+      email: 'u1@example.com',
+      firstName: 'A',
+      lastName: 'B',
+      role: 'ADMIN',
+      inactive: false,
+      avatar: null,
+      timezone: null,
+    });
+    unlinkMock.mockRejectedValue(new Error('fs error'));
+
+    const formData = new FormData();
+    formData.append('deleteAvatar', 'true');
+    formData.append('firstName', 'A');
+
+    const req = new NextRequest('http://localhost/api/users/u1', {
+      method: 'PATCH',
+      body: formData,
+    });
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'u1' }) });
+
+    // The unlink rejection is swallowed by the .catch() handler.
+    expect(res.status).toBe(200);
   });
 
   it('updates role when parseRole returns valid role', async () => {
@@ -612,6 +673,32 @@ describe('DELETE /api/users/[id]', () => {
 
     expect(res.status).toBe(200);
     expect(unlinkMock).toHaveBeenCalled();
+  });
+
+  it('still deletes the user when removing the avatar file fails', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN' } });
+    prismaMock.user.findUnique.mockResolvedValue({ avatar: 'user-avatar.png' });
+    prismaMock.user.delete.mockResolvedValue({
+      id: 'u1',
+      email: 'u1@example.com',
+      firstName: 'A',
+      lastName: 'B',
+      role: 'STUDENT',
+      inactive: false,
+      avatar: 'user-avatar.png',
+      timezone: null,
+      password: 'hashed',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    unlinkMock.mockRejectedValue(new Error('fs error'));
+
+    const req = new NextRequest('http://localhost/api/users/u1', { method: 'DELETE' });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'u1' }) });
+
+    // The unlink rejection is swallowed by the .catch() handler.
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.delete).toHaveBeenCalled();
   });
 
   it('skips avatar deletion when user has no avatar', async () => {

@@ -60,6 +60,14 @@ describe('GET /api/courses/[id]/student-grades', () => {
     expect(res.status).toBe(401);
   });
 
+  it('returns 400 when the course id is missing', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+
+    const res = await GET(makeRequest(), params(''));
+
+    expect(res.status).toBe(400);
+  });
+
   it('returns 403 when the user is neither enrolled nor staff', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
     prismaMock.roster.findUnique.mockResolvedValue(null);
@@ -67,6 +75,36 @@ describe('GET /api/courses/[id]/student-grades', () => {
     const res = await GET(makeRequest(), params());
 
     expect(res.status).toBe(403);
+  });
+
+  it('applies default values when a problem has no submissions or grades', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.roster.findUnique.mockResolvedValue({ id: 'r1' });
+    prismaMock.assignment.findMany.mockResolvedValue([
+      { id: 'a1', title: 'Assignment 1', description: null, dueDate: null },
+    ]);
+    prismaMock.assignmentProblem.findMany.mockResolvedValue([
+      {
+        assignmentId: 'a1',
+        maxPoints: 10,
+        maxSubmissions: 3,
+        problem: { id: 'p1', title: 'Problem 1', autograderEnabled: false },
+      },
+    ]);
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
+    prismaMock.submission.groupBy.mockResolvedValue([]);
+    prismaMock.submission.findMany.mockResolvedValue([]);
+
+    const res = await GET(makeRequest(), params());
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.assignments[0]).toMatchObject({ dueDate: null, grade: null });
+    expect(body.assignments[0].problems[0]).toMatchObject({
+      status: '',
+      submissionCount: 0,
+      grade: null,
+    });
   });
 
   it('returns assignment grade payload for an enrolled student', async () => {
