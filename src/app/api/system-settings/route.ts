@@ -4,9 +4,19 @@ import { auth } from '@/lib/auth';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import {
   clampSessionTimeoutMinutes,
+  clampSubmissionEvalTimeoutMs,
+  clampSubmissionEvalMaxMemoryMb,
+  clampSubmissionResubmitCooldownMs,
+  clampSubmissionMaxConcurrent,
+  clampSubmissionMaxAttempts,
   DEFAULT_ALLOW_SIGNUP,
   DEFAULT_MAX_UPLOAD_SIZE_MB,
   DEFAULT_SESSION_TIMEOUT_MINUTES,
+  DEFAULT_SUBMISSION_EVAL_TIMEOUT_MS,
+  DEFAULT_SUBMISSION_EVAL_MAX_MEMORY_MB,
+  DEFAULT_SUBMISSION_RESUBMIT_COOLDOWN_MS,
+  DEFAULT_SUBMISSION_MAX_CONCURRENT,
+  DEFAULT_SUBMISSION_MAX_ATTEMPTS,
   DEFAULT_SYSTEM_TIMEZONE,
 } from '@/lib/system-settings';
 
@@ -23,8 +33,30 @@ export async function GET() {
     maxUploadSizeMb: settings?.maxUploadSizeMb ?? DEFAULT_MAX_UPLOAD_SIZE_MB,
     allowSignup: settings?.allowSignup ?? DEFAULT_ALLOW_SIGNUP,
     sessionTimeoutMinutes: settings?.sessionTimeoutMinutes ?? DEFAULT_SESSION_TIMEOUT_MINUTES,
+    submissionEvalTimeoutMs:
+      settings?.submissionEvalTimeoutMs ?? DEFAULT_SUBMISSION_EVAL_TIMEOUT_MS,
+    submissionEvalMaxMemoryMb:
+      settings?.submissionEvalMaxMemoryMb ?? DEFAULT_SUBMISSION_EVAL_MAX_MEMORY_MB,
+    submissionResubmitCooldownMs:
+      settings?.submissionResubmitCooldownMs ?? DEFAULT_SUBMISSION_RESUBMIT_COOLDOWN_MS,
+    submissionMaxConcurrent:
+      settings?.submissionMaxConcurrent ?? DEFAULT_SUBMISSION_MAX_CONCURRENT,
+    submissionMaxAttempts:
+      settings?.submissionMaxAttempts ?? DEFAULT_SUBMISSION_MAX_ATTEMPTS,
   });
 }
+
+type SettingsBody = {
+  timezone?: string;
+  maxUploadSizeMb?: number;
+  allowSignup?: boolean;
+  sessionTimeoutMinutes?: number;
+  submissionEvalTimeoutMs?: number;
+  submissionEvalMaxMemoryMb?: number;
+  submissionResubmitCooldownMs?: number;
+  submissionMaxConcurrent?: number;
+  submissionMaxAttempts?: number;
+};
 
 export async function PUT(req: Request) {
   const session = await auth();
@@ -33,19 +65,9 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
-  let body: {
-    timezone?: string;
-    maxUploadSizeMb?: number;
-    allowSignup?: boolean;
-    sessionTimeoutMinutes?: number;
-  };
+  let body: SettingsBody;
   try {
-    body = (await req.json()) as {
-      timezone?: string;
-      maxUploadSizeMb?: number;
-      allowSignup?: boolean;
-      sessionTimeoutMinutes?: number;
-    };
+    body = (await req.json()) as SettingsBody;
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
@@ -63,15 +85,30 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: 'Invalid timezone' }, { status: 400 });
   }
 
+  // Queue settings are optional in the payload; only persist the ones provided so
+  // a partial update can't reset the others.
+  const queueData: Record<string, number> = {};
+  if (body.submissionEvalTimeoutMs !== undefined)
+    queueData.submissionEvalTimeoutMs = clampSubmissionEvalTimeoutMs(Number(body.submissionEvalTimeoutMs));
+  if (body.submissionEvalMaxMemoryMb !== undefined)
+    queueData.submissionEvalMaxMemoryMb = clampSubmissionEvalMaxMemoryMb(Number(body.submissionEvalMaxMemoryMb));
+  if (body.submissionResubmitCooldownMs !== undefined)
+    queueData.submissionResubmitCooldownMs = clampSubmissionResubmitCooldownMs(Number(body.submissionResubmitCooldownMs));
+  if (body.submissionMaxConcurrent !== undefined)
+    queueData.submissionMaxConcurrent = clampSubmissionMaxConcurrent(Number(body.submissionMaxConcurrent));
+  if (body.submissionMaxAttempts !== undefined)
+    queueData.submissionMaxAttempts = clampSubmissionMaxAttempts(Number(body.submissionMaxAttempts));
+
   const updateData: {
     timezone: string;
     maxUploadSizeMb: number;
     sessionTimeoutMinutes: number;
     allowSignup?: boolean;
-  } = {
+  } & Record<string, unknown> = {
     timezone,
     maxUploadSizeMb,
     sessionTimeoutMinutes,
+    ...queueData,
   };
   if (hasAllowSignup) updateData.allowSignup = body.allowSignup;
 
@@ -81,11 +118,12 @@ export async function PUT(req: Request) {
     maxUploadSizeMb: number;
     sessionTimeoutMinutes: number;
     allowSignup?: boolean;
-  } = {
+  } & Record<string, unknown> = {
     id: 1,
     timezone,
     maxUploadSizeMb,
     sessionTimeoutMinutes,
+    ...queueData,
   };
   if (hasAllowSignup) createData.allowSignup = body.allowSignup;
 
@@ -100,5 +138,10 @@ export async function PUT(req: Request) {
     maxUploadSizeMb: settings.maxUploadSizeMb,
     allowSignup: settings.allowSignup,
     sessionTimeoutMinutes: settings.sessionTimeoutMinutes,
+    submissionEvalTimeoutMs: settings.submissionEvalTimeoutMs,
+    submissionEvalMaxMemoryMb: settings.submissionEvalMaxMemoryMb,
+    submissionResubmitCooldownMs: settings.submissionResubmitCooldownMs,
+    submissionMaxConcurrent: settings.submissionMaxConcurrent,
+    submissionMaxAttempts: settings.submissionMaxAttempts,
   });
 }

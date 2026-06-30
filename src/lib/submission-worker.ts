@@ -8,20 +8,27 @@ import { execSync } from 'child_process';
 import os from 'os';
 
 import JavaRunner from '../../lib/java-runner';
-import { getEvaluatorConfig, type EvaluatorConfig } from './eval-config';
+import { getEvaluatorConfig, getQueueSettings, type EvaluatorConfig } from './eval-config';
 import { createEnhancedActivityLog } from './activity-log-utils';
+import {
+  DEFAULT_SUBMISSION_MAX_CONCURRENT,
+  DEFAULT_SUBMISSION_MAX_ATTEMPTS,
+} from './system-settings';
 
 // The activity logger expects a Request (for IP/user-agent). The worker has no
 // real request, so hand it a stand-in; IP and UA simply come back empty.
 const WORKER_REQUEST = new Request('http://submission-worker.local');
 
-// Basic variables (probally should put some of these in a GUI or .env file except *)
-let workerStarted = false; // *
-let activeWorkers = 0; // *
-// We run MAX_WORKERS loops, each handling one submission at a time, so this is
-// effectively the cap on concurrent evaluations.
-const MAX_WORKERS = 5;
-const MAX_ATTEMPTS = 3; // give up on a submission after this many claim attempts
+let workerStarted = false;
+
+// Concurrency is the number of live worker loops (each handles one submission at
+// a time). desiredWorkers and maxAttempts are refreshed from SystemSettings, so
+// an admin can retune the queue without a restart — see refreshQueueSettings().
+let loopCount = 0;
+let desiredWorkers = DEFAULT_SUBMISSION_MAX_CONCURRENT;
+let maxAttempts = DEFAULT_SUBMISSION_MAX_ATTEMPTS;
+
+const SETTINGS_REFRESH_MS = 30_000; // how often to re-read the queue settings
 const REAP_INTERVAL_MS = 60_000; // how often to scan for stuck PROCESSING rows
 const STUCK_GRACE_MS = 60_000; // grace beyond the eval timeout before a row is "stuck"
 
@@ -63,17 +70,43 @@ export function startSubmissionWorker() {
     console.error("[SubmissionWorker] Already started");
     return;
   }
+  workerStarted = true;
 
-  // Start worker loops concurrently
-  for (let i = 0; i < MAX_WORKERS; i++) {
-    void runWorkerLoop();
-  }
+  // Spawn the initial pool from the defaults, then refresh from settings (which
+  // adjusts the pool and reschedules itself).
+  ensureWorkers();
+  void refreshQueueSettings();
 
   // Start the reaper that recovers submissions left PROCESSING by a crash/restart
   void reapStuckSubmissions();
 
-  workerStarted = true;
   console.log("[SubmissionWorker] Started safely");
+}
+
+
+// Spawn loops until we're running `desiredWorkers` of them. Scaling down is
+// handled by each loop retiring itself (see runWorkerLoop).
+function ensureWorkers() {
+  while (loopCount < desiredWorkers) {
+    loopCount++;
+    void runWorkerLoop();
+  }
+}
+
+
+// Periodically pull the queue settings so concurrency / attempt limits can be
+// changed at runtime. On any error we keep the last known values.
+async function refreshQueueSettings() {
+  try {
+    const settings = await getQueueSettings();
+    desiredWorkers = settings.maxConcurrent;
+    maxAttempts = settings.maxAttempts;
+    ensureWorkers(); // scale up if the limit was raised
+  } catch (error) {
+    console.error('[SubmissionWorker] Settings refresh error:', error);
+  } finally {
+    setTimeout(refreshQueueSettings, SETTINGS_REFRESH_MS);
+  }
 }
 
 
@@ -103,10 +136,9 @@ async function reapStuckSubmissions() {
 
 
 async function runWorkerLoop() {
-  // Redundant given the loop count caps us already, but kept as a guard in case
-  // someone spins up extra loops later.
-  if (activeWorkers >= MAX_WORKERS) {
-    setTimeout(runWorkerLoop, 100); // Small sleep because the queue is full
+  // Scale down: if concurrency was lowered, retire this loop.
+  if (loopCount > desiredWorkers) {
+    loopCount--;
     return;
   }
 
@@ -143,7 +175,7 @@ async function runWorkerLoop() {
 
     // Poison-pill guard: a submission that has been claimed too many times keeps
     // failing (or keeps getting reaped) — fail it rather than retry forever.
-    if (nextSubmission.attempts >= MAX_ATTEMPTS) {
+    if (nextSubmission.attempts >= maxAttempts) {
       await prisma.submission.updateMany({
         where: { id: nextSubmission.id, status: 'PENDING' },
         data: {
@@ -168,13 +200,9 @@ async function runWorkerLoop() {
       return;
     }
 
-    // Claim a worker slot and hold it until evaluation finishes
-    activeWorkers++;
-    try {
-      await evaluateSubmission(nextSubmission.id);
-    } finally {
-      activeWorkers--;
-    }
+    // Hold this loop until the evaluation finishes — one loop, one submission,
+    // so the live loop count is the real concurrency limit.
+    await evaluateSubmission(nextSubmission.id);
 
     // Move to next check
     setTimeout(runWorkerLoop, 100); // Small sleep as code ran and could be full
@@ -279,7 +307,7 @@ async function evaluateSubmission(id: string) {
     // crash). Known bad-input cases come back as evaluation.status === 'FAILED'
     // above and never reach here. So retry by returning to PENDING until we've
     // burned through the attempt budget, then fail it for good.
-    const giveUp = (submission?.attempts ?? MAX_ATTEMPTS) >= MAX_ATTEMPTS;
+    const giveUp = (submission?.attempts ?? maxAttempts) >= maxAttempts;
 
     await prisma.submission.update({
       where: { id },

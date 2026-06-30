@@ -9,14 +9,8 @@ import path from 'path';
 import { randomUUID } from 'crypto';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
+import { getQueueSettings } from '@/lib/eval-config';
 import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
-
-// Minimum time a student must wait between submissions to the same problem.
-// Configurable via env now; can be promoted to SystemSettings/admin UI later.
-const RESUBMIT_COOLDOWN_MS = Math.max(
-  0,
-  Number(process.env.SUBMISSION_RESUBMIT_COOLDOWN_MS ?? 10_000),
-);
 
 export async function POST(req: NextRequest) {
   // 1. Verify session
@@ -169,7 +163,8 @@ export async function POST(req: NextRequest) {
 
   // Rate limit: enforce a short cooldown between submissions to the same problem
   // so a single student cannot flood the evaluation queue with rapid resubmits.
-  if (RESUBMIT_COOLDOWN_MS > 0) {
+  const { resubmitCooldownMs } = await getQueueSettings();
+  if (resubmitCooldownMs > 0) {
     const lastSubmission = await prisma.submission.findFirst({
       where: { assignmentId, problemId, studentId: session.user.id },
       orderBy: { submittedAt: 'desc' },
@@ -178,8 +173,8 @@ export async function POST(req: NextRequest) {
 
     if (lastSubmission) {
       const elapsedMs = Date.now() - lastSubmission.submittedAt.getTime();
-      if (elapsedMs < RESUBMIT_COOLDOWN_MS) {
-        const retryAfterSec = Math.ceil((RESUBMIT_COOLDOWN_MS - elapsedMs) / 1000);
+      if (elapsedMs < resubmitCooldownMs) {
+        const retryAfterSec = Math.ceil((resubmitCooldownMs - elapsedMs) / 1000);
 
         await createEnhancedActivityLog(prisma, req, {
           userId: session.user.id,
@@ -193,7 +188,7 @@ export async function POST(req: NextRequest) {
             courseId,
             assignmentId,
             problemId,
-            cooldownMs: RESUBMIT_COOLDOWN_MS,
+            cooldownMs: resubmitCooldownMs,
             elapsedMs,
           },
         });
