@@ -1,10 +1,19 @@
-import { afterEach, beforeEach, describe, it, expect } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+
+// No SystemSettings row, so the getter falls back to env/defaults — the behavior
+// these tests exercise.
+const prismaMock = vi.hoisted(() => ({
+  systemSettings: { findUnique: vi.fn().mockResolvedValue(null) },
+}));
+vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
+
 import { getEvaluatorConfig } from './eval-config';
 
 describe('eval-config', () => {
   const originalEnv = { ...process.env };
 
   beforeEach(() => {
+    prismaMock.systemSettings.findUnique.mockResolvedValue(null);
     delete process.env.SUBMISSION_EVAL_TIMEOUT_MS;
     delete process.env.SUBMISSION_EVAL_MAX_MEMORY_MB;
   });
