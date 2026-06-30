@@ -7,7 +7,7 @@ const prismaMock = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
-import { getEvaluatorConfig } from './eval-config';
+import { getEvaluatorConfig, getQueueSettings } from './eval-config';
 
 describe('eval-config', () => {
   const originalEnv = { ...process.env };
@@ -16,6 +16,9 @@ describe('eval-config', () => {
     prismaMock.systemSettings.findUnique.mockResolvedValue(null);
     delete process.env.SUBMISSION_EVAL_TIMEOUT_MS;
     delete process.env.SUBMISSION_EVAL_MAX_MEMORY_MB;
+    delete process.env.SUBMISSION_RESUBMIT_COOLDOWN_MS;
+    delete process.env.SUBMISSION_MAX_CONCURRENT;
+    delete process.env.SUBMISSION_MAX_ATTEMPTS;
   });
 
   afterEach(() => {
@@ -50,5 +53,78 @@ describe('eval-config', () => {
 
     const config = await getEvaluatorConfig();
     expect(config).toEqual({ timeoutMs: 30_000, maxMemoryMb: 256 });
+  });
+
+  describe('getQueueSettings', () => {
+    const DEFAULTS = {
+      evalTimeoutMs: 30_000,
+      evalMaxMemoryMb: 256,
+      resubmitCooldownMs: 10_000,
+      maxConcurrent: 5,
+      maxAttempts: 3,
+    };
+
+    it('returns all defaults with no row and no env', async () => {
+      prismaMock.systemSettings.findUnique.mockResolvedValue(null);
+      expect(await getQueueSettings()).toEqual(DEFAULTS);
+    });
+
+    it('reads every value from the SystemSettings row', async () => {
+      prismaMock.systemSettings.findUnique.mockResolvedValue({
+        submissionEvalTimeoutMs: 45_000,
+        submissionEvalMaxMemoryMb: 512,
+        submissionResubmitCooldownMs: 5_000,
+        submissionMaxConcurrent: 8,
+        submissionMaxAttempts: 2,
+      });
+
+      expect(await getQueueSettings()).toEqual({
+        evalTimeoutMs: 45_000,
+        evalMaxMemoryMb: 512,
+        resubmitCooldownMs: 5_000,
+        maxConcurrent: 8,
+        maxAttempts: 2,
+      });
+    });
+
+    it('prefers the DB row over env vars', async () => {
+      process.env.SUBMISSION_EVAL_TIMEOUT_MS = '99000';
+      prismaMock.systemSettings.findUnique.mockResolvedValue({
+        submissionEvalTimeoutMs: 45_000,
+        submissionEvalMaxMemoryMb: 256,
+        submissionResubmitCooldownMs: 10_000,
+        submissionMaxConcurrent: 5,
+        submissionMaxAttempts: 3,
+      });
+
+      expect((await getQueueSettings()).evalTimeoutMs).toBe(45_000);
+    });
+
+    it('clamps out-of-range DB values', async () => {
+      prismaMock.systemSettings.findUnique.mockResolvedValue({
+        submissionEvalTimeoutMs: 1, // below 1s floor
+        submissionEvalMaxMemoryMb: 999_999, // above 8192 ceiling
+        submissionResubmitCooldownMs: -5, // below 0 floor
+        submissionMaxConcurrent: 999, // above 20 cap
+        submissionMaxAttempts: 99, // above 10 cap
+      });
+
+      expect(await getQueueSettings()).toEqual({
+        evalTimeoutMs: 1_000,
+        evalMaxMemoryMb: 8_192,
+        resubmitCooldownMs: 0,
+        maxConcurrent: 20,
+        maxAttempts: 10,
+      });
+    });
+
+    it('falls back to env then defaults when the DB is unavailable', async () => {
+      process.env.SUBMISSION_MAX_CONCURRENT = '7';
+      prismaMock.systemSettings.findUnique.mockRejectedValue(new Error('db down'));
+
+      const settings = await getQueueSettings();
+      expect(settings.maxConcurrent).toBe(7); // from env
+      expect(settings.maxAttempts).toBe(3); // default
+    });
   });
 });
