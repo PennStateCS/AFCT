@@ -24,3 +24,47 @@ export function clampUploadSizeMb(maxMb: number): number {
   }
   return Math.max(MIN_UPLOAD_SIZE_MB, Math.min(MAX_UPLOAD_SIZE_MB, Math.trunc(maxMb)));
 }
+
+/* ---------------- Submission queue ---------------- */
+// Time values are kept in milliseconds to match the worker/route code; the UI
+// presents the two duration fields in seconds.
+
+export const DEFAULT_SUBMISSION_EVAL_TIMEOUT_MS = 30_000;
+export const MIN_SUBMISSION_EVAL_TIMEOUT_MS = 1_000;
+export const MAX_SUBMISSION_EVAL_TIMEOUT_MS = 600_000;
+
+export const DEFAULT_SUBMISSION_EVAL_MAX_MEMORY_MB = 256;
+export const MIN_SUBMISSION_EVAL_MAX_MEMORY_MB = 64;
+export const MAX_SUBMISSION_EVAL_MAX_MEMORY_MB = 8_192;
+
+export const DEFAULT_SUBMISSION_RESUBMIT_COOLDOWN_MS = 10_000;
+export const MIN_SUBMISSION_RESUBMIT_COOLDOWN_MS = 0;
+export const MAX_SUBMISSION_RESUBMIT_COOLDOWN_MS = 3_600_000;
+
+export const DEFAULT_SUBMISSION_MAX_CONCURRENT = 5;
+export const MIN_SUBMISSION_MAX_CONCURRENT = 1;
+export const MAX_SUBMISSION_MAX_CONCURRENT = 20;
+
+export const DEFAULT_SUBMISSION_MAX_ATTEMPTS = 3;
+export const MIN_SUBMISSION_MAX_ATTEMPTS = 1;
+export const MAX_SUBMISSION_MAX_ATTEMPTS = 10;
+
+function clampInt(value: number, min: number, max: number, fallback: number): number {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.max(min, Math.min(max, Math.trunc(value)));
+}
+
+export const clampSubmissionEvalTimeoutMs = (v: number) =>
+  clampInt(v, MIN_SUBMISSION_EVAL_TIMEOUT_MS, MAX_SUBMISSION_EVAL_TIMEOUT_MS, DEFAULT_SUBMISSION_EVAL_TIMEOUT_MS);
+
+export const clampSubmissionEvalMaxMemoryMb = (v: number) =>
+  clampInt(v, MIN_SUBMISSION_EVAL_MAX_MEMORY_MB, MAX_SUBMISSION_EVAL_MAX_MEMORY_MB, DEFAULT_SUBMISSION_EVAL_MAX_MEMORY_MB);
+
+export const clampSubmissionResubmitCooldownMs = (v: number) =>
+  clampInt(v, MIN_SUBMISSION_RESUBMIT_COOLDOWN_MS, MAX_SUBMISSION_RESUBMIT_COOLDOWN_MS, DEFAULT_SUBMISSION_RESUBMIT_COOLDOWN_MS);
+
+export const clampSubmissionMaxConcurrent = (v: number) =>
+  clampInt(v, MIN_SUBMISSION_MAX_CONCURRENT, MAX_SUBMISSION_MAX_CONCURRENT, DEFAULT_SUBMISSION_MAX_CONCURRENT);
+
+export const clampSubmissionMaxAttempts = (v: number) =>
+  clampInt(v, MIN_SUBMISSION_MAX_ATTEMPTS, MAX_SUBMISSION_MAX_ATTEMPTS, DEFAULT_SUBMISSION_MAX_ATTEMPTS);
