@@ -56,6 +56,11 @@ describe('GET /api/system-settings', () => {
       maxUploadSizeMb: 100,
       allowSignup: false,
       sessionTimeoutMinutes: 45,
+      submissionEvalTimeoutMs: 45000,
+      submissionEvalMaxMemoryMb: 512,
+      submissionResubmitCooldownMs: 5000,
+      submissionMaxConcurrent: 8,
+      submissionMaxAttempts: 2,
     });
 
     const res = await GET();
@@ -67,11 +72,11 @@ describe('GET /api/system-settings', () => {
       maxUploadSizeMb: 100,
       allowSignup: false,
       sessionTimeoutMinutes: 45,
-      submissionEvalTimeoutMs: 30000,
-      submissionEvalMaxMemoryMb: 256,
-      submissionResubmitCooldownMs: 10000,
-      submissionMaxConcurrent: 5,
-      submissionMaxAttempts: 3,
+      submissionEvalTimeoutMs: 45000,
+      submissionEvalMaxMemoryMb: 512,
+      submissionResubmitCooldownMs: 5000,
+      submissionMaxConcurrent: 8,
+      submissionMaxAttempts: 2,
     });
   });
 });
