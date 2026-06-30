@@ -11,6 +11,13 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 
+// Minimum time a student must wait between submissions to the same problem.
+// Configurable via env now; can be promoted to SystemSettings/admin UI later.
+const RESUBMIT_COOLDOWN_MS = Math.max(
+  0,
+  Number(process.env.SUBMISSION_RESUBMIT_COOLDOWN_MS ?? 10_000),
+);
+
 export async function POST(req: NextRequest) {
   // 1. Verify session
   const session = await auth();
@@ -157,6 +164,45 @@ export async function POST(req: NextRequest) {
         },
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+  }
+
+  // Rate limit: enforce a short cooldown between submissions to the same problem
+  // so a single student cannot flood the evaluation queue with rapid resubmits.
+  if (RESUBMIT_COOLDOWN_MS > 0) {
+    const lastSubmission = await prisma.submission.findFirst({
+      where: { assignmentId, problemId, studentId: session.user.id },
+      orderBy: { submittedAt: 'desc' },
+      select: { submittedAt: true },
+    });
+
+    if (lastSubmission) {
+      const elapsedMs = Date.now() - lastSubmission.submittedAt.getTime();
+      if (elapsedMs < RESUBMIT_COOLDOWN_MS) {
+        const retryAfterSec = Math.ceil((RESUBMIT_COOLDOWN_MS - elapsedMs) / 1000);
+
+        await createEnhancedActivityLog(prisma, req, {
+          userId: session.user.id,
+          action: 'SUBMISSION_RATE_LIMITED',
+          category: 'SUBMISSION',
+          courseId,
+          assignmentId,
+          problemId,
+          metadata: {
+            userId: session.user.id,
+            courseId,
+            assignmentId,
+            problemId,
+            cooldownMs: RESUBMIT_COOLDOWN_MS,
+            elapsedMs,
+          },
+        });
+
+        return NextResponse.json(
+          { error: `Please wait ${retryAfterSec}s before resubmitting to this problem.` },
+          { status: 429, headers: { 'Retry-After': String(retryAfterSec) } },
+        );
+      }
     }
   }
 

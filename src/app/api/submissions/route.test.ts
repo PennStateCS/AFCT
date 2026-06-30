@@ -10,7 +10,7 @@ import { Prisma } from '@prisma/client';
 const prismaMock = vi.hoisted(() => ({
   assignmentProblem: { findUnique: vi.fn() },
   assignment: { findUnique: vi.fn() },
-  submission: { create: vi.fn() },
+  submission: { create: vi.fn(), findFirst: vi.fn() },
   roster: { findFirst: vi.fn() },
 }));
 
@@ -94,6 +94,7 @@ beforeEach(() => {
     lateCutoff: null,
   });
   prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1' });
+  prismaMock.submission.findFirst.mockResolvedValue(null);
   prismaMock.submission.create.mockResolvedValue({
     id: 'submission-1',
     status: 'PENDING',
@@ -191,6 +192,17 @@ describe('POST /api/submissions', () => {
     expect(res.status).toBe(202);
     expect(prismaMock.roster.findFirst).not.toHaveBeenCalled();
     expect(prismaMock.submission.create).toHaveBeenCalled();
+  });
+
+  it('returns 429 when resubmitting to the same problem within the cooldown', async () => {
+    prismaMock.submission.findFirst.mockResolvedValue({ submittedAt: new Date() });
+
+    const res = await POST(makeRequest(makeFormData()));
+
+    expect(res.status).toBe(429);
+    expect(res.headers.get('Retry-After')).toBeTruthy();
+    expect(logActions()).toContain('SUBMISSION_RATE_LIMITED');
+    expect(prismaMock.submission.create).not.toHaveBeenCalled();
   });
 
   it('returns 400 when the uploaded file fails structure validation', async () => {

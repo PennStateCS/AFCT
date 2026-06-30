@@ -8,12 +8,22 @@ import { execSync } from 'child_process';
 import os from 'os';
 
 import JavaRunner from '../../lib/java-runner';
+import { getEvaluatorConfig, type EvaluatorConfig } from './eval-config';
+import { createEnhancedActivityLog } from './activity-log-utils';
+
+// The activity logger expects a Request (for IP/user-agent). The worker has no
+// real request, so hand it a stand-in; IP and UA simply come back empty.
+const WORKER_REQUEST = new Request('http://submission-worker.local');
 
 // Basic variables (probally should put some of these in a GUI or .env file except *)
 let workerStarted = false; // *
 let activeWorkers = 0; // *
+// We run MAX_WORKERS loops, each handling one submission at a time, so this is
+// effectively the cap on concurrent evaluations.
 const MAX_WORKERS = 5;
-const MAX_EVAL_TIME = 30_000; // 30 seconds limit
+const MAX_ATTEMPTS = 3; // give up on a submission after this many claim attempts
+const REAP_INTERVAL_MS = 60_000; // how often to scan for stuck PROCESSING rows
+const STUCK_GRACE_MS = 60_000; // grace beyond the eval timeout before a row is "stuck"
 
 type SubmissionEvaluationStatus = keyof typeof SubmissionStatus;
 
@@ -25,21 +35,25 @@ interface SubmissionEvaluationResult {
 }
 
 async function logSubmissionActivity(submission: any, action: string, metadata: any) {
+  // Write straight to the DB rather than POSTing back to /api/log_submission —
+  // we're in the same process, so the HTTP round-trip only added a failure mode.
+  // Only scalar ids are pulled off the submission; never the full student record.
   try {
-    const HOST = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
-    await fetch(`${HOST}/api/log_submission`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    await createEnhancedActivityLog(prisma, WORKER_REQUEST, {
+      userId: submission.studentId ?? null,
+      action,
+      category: 'SUBMISSION',
+      courseId: submission.courseId ?? null,
+      assignmentId: submission.assignmentId ?? null,
+      problemId: submission.problemId ?? null,
+      submissionId: submission.id ?? null,
+      metadata: {
+        submissionId: submission.id,
+        ...metadata,
       },
-      body: JSON.stringify({
-        submission: submission,
-        action: action,
-        metadata: metadata,
-      }),
     });
   } catch (error) {
-    console.error(error);
+    console.error('[SubmissionWorker] Failed to write activity log:', error);
   }
 }
 
@@ -54,28 +68,71 @@ export function startSubmissionWorker() {
   for (let i = 0; i < MAX_WORKERS; i++) {
     void runWorkerLoop();
   }
-  
+
+  // Start the reaper that recovers submissions left PROCESSING by a crash/restart
+  void reapStuckSubmissions();
+
   workerStarted = true;
   console.log("[SubmissionWorker] Started safely");
 }
 
 
+// Recover submissions stuck in PROCESSING (e.g. the server died mid-evaluation)
+// by returning them to PENDING so another worker can pick them up. The attempts
+// counter is already incremented at claim time, so a repeatedly-stuck submission
+// is eventually failed by the poison-pill guard in runWorkerLoop.
+async function reapStuckSubmissions() {
+  try {
+    const { timeoutMs } = await getEvaluatorConfig();
+    const cutoff = new Date(Date.now() - (timeoutMs + STUCK_GRACE_MS));
+
+    const reaped = await prisma.submission.updateMany({
+      where: { status: 'PROCESSING', updatedAt: { lt: cutoff } },
+      data: { status: 'PENDING' },
+    });
+
+    if (reaped.count > 0) {
+      console.warn(`[SubmissionWorker] Reaped ${reaped.count} stuck submission(s) back to PENDING`);
+    }
+  } catch (error) {
+    console.error('[SubmissionWorker] Reaper error:', error);
+  } finally {
+    setTimeout(reapStuckSubmissions, REAP_INTERVAL_MS);
+  }
+}
+
+
 async function runWorkerLoop() {
-  // Check if semaphore is full
+  // Redundant given the loop count caps us already, but kept as a guard in case
+  // someone spins up extra loops later.
   if (activeWorkers >= MAX_WORKERS) {
     setTimeout(runWorkerLoop, 100); // Small sleep because the queue is full
     return;
   }
 
   try {
-    // Get next submission
+    // Fairness: a student who already has a submission being processed is skipped
+    // so one student cannot occupy multiple worker slots at once.
+    const inFlight = await prisma.submission.findMany({
+      where: { status: 'PROCESSING' },
+      select: { studentId: true },
+      distinct: ['studentId'],
+    });
+    const busyStudentIds = inFlight.map((s) => s.studentId);
+
+    // Priority: staff before students (role asc), then nearest deadline, then FIFO.
     const nextSubmission = await prisma.submission.findFirst({
-      where: { status: 'PENDING' },
+      where: {
+        status: 'PENDING',
+        // Only add the filter when we have ids — an empty notIn is a Prisma footgun.
+        ...(busyStudentIds.length ? { studentId: { notIn: busyStudentIds } } : {}),
+      },
       orderBy: [
         { student : { role : 'asc' } },
         { assignmentProblem: { assignment: { dueDate: 'asc' } } },
+        { submittedAt: 'asc' },
       ],
-      select: { id: true }
+      select: { id: true, attempts: true }
     });
 
     // No work to be done
@@ -84,13 +141,28 @@ async function runWorkerLoop() {
       return;
     }
 
-    // Claim this submission
+    // Poison-pill guard: a submission that has been claimed too many times keeps
+    // failing (or keeps getting reaped) — fail it rather than retry forever.
+    if (nextSubmission.attempts >= MAX_ATTEMPTS) {
+      await prisma.submission.updateMany({
+        where: { id: nextSubmission.id, status: 'PENDING' },
+        data: {
+          status: 'FAILED',
+          feedback: 'Autograder gave up after too many failed attempts.',
+        },
+      });
+      setTimeout(runWorkerLoop, 100);
+      return;
+    }
+
+    // The PENDING guard in the WHERE is the actual claim: the row flips to
+    // PROCESSING in a single statement, so only one worker can win it.
     const claimed = await prisma.submission.updateMany({
-      where: { id: nextSubmission!.id, status: 'PENDING' },
-      data: { status: 'PROCESSING' }
+      where: { id: nextSubmission.id, status: 'PENDING' },
+      data: { status: 'PROCESSING', attempts: { increment: 1 } }
     });
 
-    // If count is 0, another horizontal server instance grabbed it first. Move on.
+    // count === 0 means another loop/instance beat us to it. Move on.
     if (claimed.count === 0) {
       setTimeout(runWorkerLoop, 100); // Small sleep because it could be full
       return;
@@ -99,7 +171,7 @@ async function runWorkerLoop() {
     // Claim a worker slot and hold it until evaluation finishes
     activeWorkers++;
     try {
-      await evaluateSubmission(nextSubmission!.id);
+      await evaluateSubmission(nextSubmission.id);
     } finally {
       activeWorkers--;
     }
@@ -138,7 +210,9 @@ async function evaluateSubmission(id: string) {
             autograderEnabled: true,
           },
         },
-        student: true,
+        // Intentionally no `student: true` — the worker only needs the scalar
+        // studentId (already on the row), and including the User pulls its
+        // password hash into memory and into logs.
       },
     });
 
@@ -147,8 +221,9 @@ async function evaluateSubmission(id: string) {
       return;
     }
 
-    // Run Java evaluator
-    const evaluation = await runJavaEvaluator(submission);
+    // Run Java evaluator with the configured resource limits
+    const evalConfig = await getEvaluatorConfig();
+    const evaluation = await runJavaEvaluator(submission, evalConfig);
 
     await prisma.submission.update({
       where: { id },
@@ -192,22 +267,29 @@ async function evaluateSubmission(id: string) {
 
     console.log(`[SubmissionWorker] Successfully evaluated submission ${id}`);
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
     if (submission) {
-      await logSubmissionActivity(submission, 'SUBMISSION_ERROR', {
-        error: error instanceof Error ? error.message : String(error),
-      });
+      await logSubmissionActivity(submission, 'SUBMISSION_ERROR', { error: message });
     }
 
     console.error(`[SubmissionWorker] Failed submission ${id}:`, error);
 
+    // This catch only fires on unexpected/transient errors (DB blip, evaluator
+    // crash). Known bad-input cases come back as evaluation.status === 'FAILED'
+    // above and never reach here. So retry by returning to PENDING until we've
+    // burned through the attempt budget, then fail it for good.
+    const giveUp = (submission?.attempts ?? MAX_ATTEMPTS) >= MAX_ATTEMPTS;
+
     await prisma.submission.update({
       where: { id },
-      data: {
-        status: 'FAILED',
-        feedback: 'Autograder failed while processing this submission.',
-        evaluationRaw:
-          error instanceof Error ? (error.message as Prisma.InputJsonValue) : (String(error) as Prisma.InputJsonValue),
-      },
+      data: giveUp
+        ? {
+            status: 'FAILED',
+            feedback: 'Autograder failed while processing this submission.',
+            evaluationRaw: message as Prisma.InputJsonValue,
+          }
+        : { status: 'PENDING' },
     });
   }
 }
@@ -226,7 +308,7 @@ function getJavaRunnerCtor() {
   return maybeCtor as new (jarPath: string) => {
     execute: (
       args: string[],
-      options?: { timeout?: number },
+      options?: { timeout?: number; maxMemoryMb?: number },
     ) => Promise<{
       stdout?: string;
       stderr?: string;
@@ -245,7 +327,7 @@ function createJavaRunner(jarPath: string) {
       JavaRunnerCtor as unknown as (path: string) => {
         execute: (
           args: string[],
-          options?: { timeout?: number },
+          options?: { timeout?: number; maxMemoryMb?: number },
         ) => Promise<{
           stdout?: string;
           stderr?: string;
@@ -255,7 +337,7 @@ function createJavaRunner(jarPath: string) {
     )(jarPath) as {
       execute: (
         args: string[],
-        options?: { timeout?: number },
+        options?: { timeout?: number; maxMemoryMb?: number },
       ) => Promise<{
         stdout?: string;
         stderr?: string;
@@ -266,7 +348,10 @@ function createJavaRunner(jarPath: string) {
 }
 
 
-async function runJavaEvaluator(submission: any): Promise<SubmissionEvaluationResult> {
+async function runJavaEvaluator(
+  submission: any,
+  config: EvaluatorConfig,
+): Promise<SubmissionEvaluationResult> {
   let feedback: string | null = null;
   let correct: boolean | undefined = undefined;
   let evaluationRaw: unknown | null = null;
@@ -355,9 +440,10 @@ async function runJavaEvaluator(submission: any): Promise<SubmissionEvaluationRe
               }
             }
 
-            // Execute the evaluator with 30 second timeout
+            // Execute the evaluator with the configured timeout and memory cap
             const result = await evaluator.execute(args, {
-              timeout: MAX_EVAL_TIME,
+              timeout: config.timeoutMs,
+              maxMemoryMb: config.maxMemoryMb,
             });
 
             const stdoutTrimmed = result.stdout?.trim() ?? '';
