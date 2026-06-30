@@ -71,4 +71,55 @@ describe('POST /api/courses/[id]/enroll', () => {
     expect(prismaMock.roster.upsert).toHaveBeenCalled();
     expect(activityLogMock).toHaveBeenCalled();
   });
+
+  it('maps FACULTY and ADMIN global roles to the FACULTY course role', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'u1', role: 'ADMIN', inactive: false });
+    authMock.mockResolvedValue({ user: { id: 'admin' } });
+
+    const req = new Request('http://localhost/api/courses/c1/enroll', {
+      method: 'POST',
+      body: JSON.stringify({ userId: 'u1' }),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.roster.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ role: 'FACULTY' }),
+        update: expect.objectContaining({ role: 'FACULTY' }),
+      }),
+    );
+  });
+
+  it('maps the TA global role to the TA course role', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'u1', role: 'TA', inactive: false });
+    authMock.mockResolvedValue({ user: { id: 'admin' } });
+
+    const req = new Request('http://localhost/api/courses/c1/enroll', {
+      method: 'POST',
+      body: JSON.stringify({ userId: 'u1' }),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.roster.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ create: expect.objectContaining({ role: 'TA' }) }),
+    );
+  });
+
+  it('returns 500 when the roster upsert fails', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'u1', role: 'STUDENT', inactive: false });
+    prismaMock.roster.upsert.mockRejectedValue(new Error('db down'));
+
+    const req = new Request('http://localhost/api/courses/c1/enroll', {
+      method: 'POST',
+      body: JSON.stringify({ userId: 'u1' }),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(500);
+  });
 });

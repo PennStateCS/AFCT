@@ -96,10 +96,10 @@ async function runWorkerLoop() {
       return;
     }
 
-    // Claim a worker slot
+    // Claim a worker slot and hold it until evaluation finishes
     activeWorkers++;
     try {
-      evaluateSubmission(nextSubmission!.id);
+      await evaluateSubmission(nextSubmission!.id);
     } finally {
       activeWorkers--;
     }
@@ -439,7 +439,7 @@ async function runJavaEvaluator(submission: any): Promise<SubmissionEvaluationRe
 
     return {
       feedback,
-      correct: submission.correct,
+      correct,
       evaluationRaw: evaluationRaw === null ? null : evaluationRaw,
       status,
     };

@@ -11,6 +11,7 @@ const prismaMock = vi.hoisted(() => ({
   assignmentProblem: { findUnique: vi.fn() },
   assignment: { findUnique: vi.fn() },
   submission: { create: vi.fn() },
+  roster: { findFirst: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -87,10 +88,12 @@ beforeEach(() => {
   });
   prismaMock.assignment.findUnique.mockResolvedValue({
     id: 'assignment-1',
+    courseId: 'course-1',
     dueDate: FUTURE,
     allowLateSubmissions: false,
     lateCutoff: null,
   });
+  prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1' });
   prismaMock.submission.create.mockResolvedValue({
     id: 'submission-1',
     status: 'PENDING',
@@ -140,6 +143,7 @@ describe('POST /api/submissions', () => {
   it('returns 403 when the assignment is past due and late submissions are disabled', async () => {
     prismaMock.assignment.findUnique.mockResolvedValue({
       id: 'assignment-1',
+      courseId: 'course-1',
       dueDate: PAST,
       allowLateSubmissions: false,
       lateCutoff: null,
@@ -155,6 +159,7 @@ describe('POST /api/submissions', () => {
   it('returns 403 when the late submission cutoff has passed', async () => {
     prismaMock.assignment.findUnique.mockResolvedValue({
       id: 'assignment-1',
+      courseId: 'course-1',
       dueDate: PAST,
       allowLateSubmissions: true,
       lateCutoff: PAST,
@@ -165,6 +170,27 @@ describe('POST /api/submissions', () => {
     expect(res.status).toBe(403);
     expect(logActions()).toContain('SUBMISSION_REJECTED_LATE_CUTOFF');
     expect(prismaMock.submission.create).not.toHaveBeenCalled();
+  });
+
+  it('returns 403 when the user is not on the course roster', async () => {
+    prismaMock.roster.findFirst.mockResolvedValue(null);
+
+    const res = await POST(makeRequest(makeFormData()));
+
+    expect(res.status).toBe(403);
+    expect(logActions()).toContain('SUBMISSION_FORBIDDEN');
+    expect(prismaMock.submission.create).not.toHaveBeenCalled();
+  });
+
+  it('allows an admin to submit without a roster entry', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue(null);
+
+    const res = await POST(makeRequest(makeFormData()));
+
+    expect(res.status).toBe(202);
+    expect(prismaMock.roster.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.submission.create).toHaveBeenCalled();
   });
 
   it('returns 400 when the uploaded file fails structure validation', async () => {

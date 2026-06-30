@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
 
   // 2. Parse multipart form data
   const formData = await req.formData();
-  const courseId = formData.get('courseId')?.toString();
+  let courseId = formData.get('courseId')?.toString();
   const assignmentId = formData.get('assignmentId')?.toString();
   const problemId = formData.get('problemId')?.toString();
   const file = formData.get('file') as File | null;
@@ -101,6 +101,7 @@ export async function POST(req: NextRequest) {
     where: { id: assignmentId },
     select: {
       id: true,
+      courseId: true,
       dueDate: true,
       allowLateSubmissions: true,
       lateCutoff: true,
@@ -124,6 +125,39 @@ export async function POST(req: NextRequest) {
       },
     });
     return NextResponse.json({ error: 'Assignment not found.' }, { status: 404 });
+  }
+
+  // Use the assignment's course as the source of truth rather than trusting the
+  // client-supplied courseId, which may be missing or refer to a different course.
+  courseId = assignment.courseId;
+
+  // Authorization: admins may submit to any course; everyone else (students,
+  // faculty, TAs) must be on the course roster (enrolled or assigned).
+  if (session.user.role !== 'ADMIN' && prisma.roster?.findFirst) {
+    const rosterEntry = await prisma.roster.findFirst({
+      where: { courseId, userId: session.user.id },
+      select: { id: true },
+    });
+
+    if (!rosterEntry) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session.user.id,
+        action: 'SUBMISSION_FORBIDDEN',
+        category: 'SUBMISSION',
+        courseId,
+        assignmentId,
+        problemId,
+        metadata: {
+          userId: session.user.id,
+          courseId,
+          assignmentId,
+          problemId,
+          role: session.user.role,
+          error: 'User is not enrolled in or assigned to this course.',
+        },
+      });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
   }
 
   const now = new Date();
@@ -185,12 +219,34 @@ export async function POST(req: NextRequest) {
 
   let fileName: string | null = null;
   let originalFileName: string | null = null;
-  let feedback: string | null = null;
-  let correct: boolean | undefined = undefined;
-  let evaluationRaw: unknown | null = null;
   let uploadedFilePath: string | null = null;
 
   if (file) {
+    // Reject oversized uploads before reading the file into memory
+    if (file.size > maxBytes) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session.user.id,
+        action: 'SUBMISSION_FILE_TOO_LARGE',
+        category: 'SUBMISSION',
+        courseId,
+        assignmentId,
+        problemId,
+        metadata: {
+          userId: session.user.id,
+          courseId,
+          assignmentId,
+          problemId,
+          fileName: file.name,
+          fileSizeBytes: file.size,
+          maxBytes,
+        },
+      });
+      return NextResponse.json(
+        { error: `File exceeds max upload size (${maxMb} MB).` },
+        { status: 413 },
+      );
+    }
+
     const xml = await file.text();
     const validation = validateStructureXML(xml, link.problem.type);
 
@@ -236,12 +292,6 @@ export async function POST(req: NextRequest) {
           fileType: file.type,
         },
       });
-      if (file.size > maxBytes) {
-        return NextResponse.json(
-          { error: `File exceeds max upload size (${maxMb} MB).` },
-          { status: 413 },
-        );
-      }
       originalFileName = file.name;
       const fileExt = path.extname(originalFileName);
       fileName = `${randomUUID()}${fileExt}`;
@@ -253,23 +303,22 @@ export async function POST(req: NextRequest) {
 
       const filePath = path.join(uploadDir, fileName);
       const buffer = Buffer.from(await file.arrayBuffer());
-      fs.writeFileSync(filePath, buffer, { mode: 0o755 });
+      fs.writeFileSync(filePath, buffer, { mode: 0o644 });
       uploadedFilePath = filePath;
     }
 
     // 5. Store the submission
     let submission = await prisma.submission.create({
       data: {
-        courseId,
+        courseId: assignment.courseId,
         assignmentId,
         problemId,
         studentId: session.user.id,
         fileName,
         originalFileName,
-        feedback,
-        correct,
-        evaluationRaw:
-          evaluationRaw === null ? Prisma.JsonNull : (evaluationRaw as Prisma.InputJsonValue),
+        feedback: null,
+        correct: undefined,
+        evaluationRaw: Prisma.JsonNull,
       },
     });
 
@@ -319,6 +368,15 @@ export async function POST(req: NextRequest) {
 
     // Error
   } catch (error: unknown) {
+    // Clean up the orphaned upload if the submission record was never created
+    if (uploadedFilePath) {
+      try {
+        fs.unlinkSync(uploadedFilePath);
+      } catch (cleanupError) {
+        console.error('Failed to clean up orphaned submission file:', cleanupError);
+      }
+    }
+
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'SUBMISSION_ERROR',
