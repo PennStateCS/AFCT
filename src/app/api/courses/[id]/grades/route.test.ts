@@ -118,4 +118,56 @@ describe('GET /api/courses/[id]/grades', () => {
     expect(body.grades).toEqual({ s1: {} });
     expect(prismaMock.assignmentProblemGrade.groupBy).not.toHaveBeenCalled();
   });
+
+  it('returns an empty matrix and skips the user lookup when the roster is empty', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findMany.mockResolvedValue([]);
+    prismaMock.assignment.findMany.mockResolvedValue([
+      { id: 'a1', title: 'A1', dueDate: '2025-01-01', problems: [{ maxPoints: 10 }] },
+    ]);
+
+    const req = new NextRequest('http://localhost/api/courses/c1/grades');
+    const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.students).toEqual([]);
+    expect(body.grades).toEqual({});
+    expect(prismaMock.user.findMany).not.toHaveBeenCalled();
+    expect(prismaMock.assignmentProblemGrade.groupBy).not.toHaveBeenCalled();
+  });
+
+  it('coerces null summed grades to 0 and ignores rows for unknown students', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findMany.mockResolvedValue([{ userId: 's1', role: 'STUDENT' }]);
+    prismaMock.user.findMany.mockResolvedValue([
+      { id: 's1', firstName: 'A', lastName: 'B', email: 's1@example.com', avatar: null },
+    ]);
+    prismaMock.assignment.findMany.mockResolvedValue([
+      { id: 'a1', title: 'A1', dueDate: '2025-01-01', problems: [{ maxPoints: 10 }] },
+    ]);
+    prismaMock.assignmentProblemGrade.groupBy.mockResolvedValue([
+      { studentId: 's1', assignmentId: 'a1', _sum: { grade: null } },
+      { studentId: 'ghost', assignmentId: 'a1', _sum: { grade: 5 } },
+    ]);
+
+    const req = new NextRequest('http://localhost/api/courses/c1/grades');
+    const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.grades).toEqual({ s1: { a1: 0 } });
+  });
+
+  it('returns 500 when a query fails', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findMany.mockRejectedValue(new Error('db down'));
+
+    const req = new NextRequest('http://localhost/api/courses/c1/grades');
+    const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(500);
+    consoleSpy.mockRestore();
+  });
 });
