@@ -40,6 +40,11 @@ describe('GET /api/system-settings', () => {
       maxUploadSizeMb: 25,
       allowSignup: true,
       sessionTimeoutMinutes: 20,
+      submissionEvalTimeoutMs: 30000,
+      submissionEvalMaxMemoryMb: 256,
+      submissionResubmitCooldownMs: 10000,
+      submissionMaxConcurrent: 5,
+      submissionMaxAttempts: 3,
     });
   });
 
@@ -62,6 +67,11 @@ describe('GET /api/system-settings', () => {
       maxUploadSizeMb: 100,
       allowSignup: false,
       sessionTimeoutMinutes: 45,
+      submissionEvalTimeoutMs: 30000,
+      submissionEvalMaxMemoryMb: 256,
+      submissionResubmitCooldownMs: 10000,
+      submissionMaxConcurrent: 5,
+      submissionMaxAttempts: 3,
     });
   });
 });
@@ -140,6 +150,11 @@ describe('PUT /api/system-settings', () => {
       maxUploadSizeMb: 20,
       allowSignup: false,
       sessionTimeoutMinutes: 30,
+      submissionEvalTimeoutMs: 30000,
+      submissionEvalMaxMemoryMb: 256,
+      submissionResubmitCooldownMs: 10000,
+      submissionMaxConcurrent: 5,
+      submissionMaxAttempts: 3,
     });
 
     const req = new Request('http://localhost/api/system-settings', {
@@ -177,7 +192,52 @@ describe('PUT /api/system-settings', () => {
       maxUploadSizeMb: 20,
       allowSignup: false,
       sessionTimeoutMinutes: 30,
+      submissionEvalTimeoutMs: 30000,
+      submissionEvalMaxMemoryMb: 256,
+      submissionResubmitCooldownMs: 10000,
+      submissionMaxConcurrent: 5,
+      submissionMaxAttempts: 3,
     });
+  });
+
+  it('clamps and persists submission queue settings when provided', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.systemSettings.upsert.mockResolvedValue({
+      id: 1,
+      timezone: 'UTC',
+      maxUploadSizeMb: 25,
+      allowSignup: true,
+      sessionTimeoutMinutes: 20,
+      submissionEvalTimeoutMs: 600000,
+      submissionEvalMaxMemoryMb: 64,
+      submissionResubmitCooldownMs: 10000,
+      submissionMaxConcurrent: 20,
+      submissionMaxAttempts: 3,
+    });
+
+    const req = new Request('http://localhost/api/system-settings', {
+      method: 'PUT',
+      body: JSON.stringify({
+        timezone: 'UTC',
+        maxUploadSizeMb: 25,
+        submissionEvalTimeoutMs: 99_999_999, // above the 10m ceiling
+        submissionEvalMaxMemoryMb: 1, // below the 64MB floor
+        submissionMaxConcurrent: 999, // above the cap
+      }),
+    });
+
+    const res = await PUT(req);
+
+    expect(res.status).toBe(200);
+    const call = prismaMock.systemSettings.upsert.mock.calls[0][0];
+    expect(call.update).toMatchObject({
+      submissionEvalTimeoutMs: 600000,
+      submissionEvalMaxMemoryMb: 64,
+      submissionMaxConcurrent: 20,
+    });
+    // Fields not sent are left untouched.
+    expect(call.update.submissionResubmitCooldownMs).toBeUndefined();
+    expect(call.update.submissionMaxAttempts).toBeUndefined();
   });
 
   it('clamps session timeout to minimum when too low', async () => {

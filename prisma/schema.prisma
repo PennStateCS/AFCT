@@ -393,6 +393,13 @@ model SystemSettings {
   allowSignup     Boolean @default(true)
   sessionTimeoutMinutes Int @default(20)
 
+  // Submission queue tunables (time values stored in ms)
+  submissionEvalTimeoutMs      Int @default(30000)
+  submissionEvalMaxMemoryMb    Int @default(256)
+  submissionResubmitCooldownMs Int @default(10000)
+  submissionMaxConcurrent      Int @default(5)
+  submissionMaxAttempts        Int @default(3)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
