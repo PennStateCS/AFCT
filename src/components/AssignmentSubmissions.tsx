@@ -14,6 +14,7 @@ import ProblemWorkspace from '@/components/assignments/ProblemWorkspace';
 import type { ProblemSubmission } from '@/lib/problem-submission';
 import StudentNavigator from './StudentNavigator';
 import JffViewerDialog from './JffViewerDialog';
+import { useEmptyStringSymbol } from '@/lib/useEmptyStringSymbol';
 import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
 import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
 
@@ -75,6 +76,7 @@ export default function AssignmentSubmissions({
   groupProblemsMap = {},
 }: Props) {
   const router = useRouter();
+  const epsSymbol = useEmptyStringSymbol(courseId);
   const searchParams = useSearchParams();
   const searchParamsString = searchParams.toString();
   const selectedStudentIdParam = searchParams.get('studentId');
@@ -860,6 +862,7 @@ export default function AssignmentSubmissions({
             title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
             width="70vw"
             height="70vh"
+            epsSymbol={epsSymbol}
           />
         )}
       {openDialog.submission &&

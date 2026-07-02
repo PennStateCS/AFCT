@@ -63,9 +63,8 @@ const GRID_COLOR =
       '#0f172a'
     : '#0f172a';
 
-
 const EDGE_WIDTH = 1.6;
-const DEFAULT_EPS = 'λ';
+const DEFAULT_EPS = 'ε';
 
 /* ────────────────────────────── Parse .jff ─────────────────────────────── */
 
@@ -291,8 +290,7 @@ export function JffCytoscapeViewer({
 
   const backgroundStyle: React.CSSProperties = grid
     ? {
-        backgroundImage:
-          `linear-gradient(${GRID_COLOR} 1px, transparent 1px), linear-gradient(90deg, ${GRID_COLOR} 1px, transparent 1px)`,
+        backgroundImage: `linear-gradient(${GRID_COLOR} 1px, transparent 1px), linear-gradient(90deg, ${GRID_COLOR} 1px, transparent 1px)`,
         backgroundSize: '24px 24px',
         backgroundPosition: 'center center',
       }
@@ -950,7 +948,10 @@ export default function JffViewerDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-none max-h-[calc(100vh-2rem)] overflow-auto p-0" style={{ width }}>
+      <DialogContent
+        className="max-h-[calc(100vh-2rem)] !max-w-none overflow-auto p-0"
+        style={{ width }}
+      >
         <DialogHeader className="px-4 pt-4">
           <DialogTitle className="truncate">{title ?? 'JFLAP Viewer'}</DialogTitle>
         </DialogHeader>

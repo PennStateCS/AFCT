@@ -1,4 +1,12 @@
 import { z } from 'zod';
+import {
+  EMPTY_STRING_NOTATIONS,
+  DEFAULT_EMPTY_STRING_NOTATION,
+} from '@/lib/empty-string-notation';
+
+const EmptyStringNotationSchema = z
+  .enum(EMPTY_STRING_NOTATIONS as unknown as [string, ...string[]])
+  .default(DEFAULT_EMPTY_STRING_NOTATION);
 
 /**
  * Course code examples: CMPSC 221, MATH220, EE 200A
@@ -74,6 +82,7 @@ const BaseCourseObject = z
     registrationOpenAt: DateTimeLocal,
     registrationCloseAt: DateTimeLocal,
     isPublished: z.boolean().default(false),
+    emptyStringNotation: EmptyStringNotationSchema,
   })
   .strict();
 
@@ -90,6 +99,7 @@ const BaseCourseFormObject = z
     endDate: DateTimeLocalForm,
     registrationOpenAt: DateTimeLocalForm,
     registrationCloseAt: DateTimeLocalForm,
+    emptyStringNotation: EmptyStringNotationSchema,
   })
   .strict();
 
