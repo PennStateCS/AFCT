@@ -256,4 +256,88 @@ describe('POST /api/courses', () => {
     const res = await POST(req);
     expect(res.status).toBe(400);
   });
+
+  it('seeds instructor roster rows and excludes them from faculty-only rows', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN' } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
+    prismaMock.course.findFirst.mockResolvedValue(null);
+
+    const txMock = {
+      course: {
+        create: vi.fn().mockResolvedValue({
+          id: 'course-1',
+          name: 'Course 1',
+          code: 'CS101',
+          regCode: 'ABC123',
+          semester: 'Fall 2026',
+          credits: 3,
+          startDate: new Date('2026-08-25T13:00:00.000Z'),
+          endDate: new Date('2026-12-15T22:00:00.000Z'),
+          isPublished: false,
+          isArchived: false,
+        }),
+        findUnique: vi.fn().mockResolvedValue({ id: 'course-1', roster: [] }),
+      },
+      roster: { createMany: vi.fn().mockResolvedValue({ count: 1 }) },
+    };
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(txMock));
+
+    const req = new Request('http://localhost/api/courses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Course 1',
+        code: 'CS101',
+        semester: 'Fall 2026',
+        credits: 3,
+        startDate: '2026-08-25T09:00',
+        endDate: '2026-12-15T17:00',
+        registrationOpenAt: '2026-08-01T09:00',
+        registrationCloseAt: '2026-08-31T17:00',
+        instructorIds: ['i1'],
+        facultyIds: ['i1', 'f2'],
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(201);
+
+    // One call for instructors, one for the faculty-only members (i1 filtered out).
+    expect(txMock.roster.createMany).toHaveBeenCalledTimes(2);
+    expect(txMock.roster.createMany).toHaveBeenCalledWith({
+      data: [{ userId: 'i1', courseId: 'course-1', role: 'FACULTY' }],
+    });
+    expect(txMock.roster.createMany).toHaveBeenCalledWith({
+      data: [{ userId: 'f2', courseId: 'course-1', role: 'FACULTY' }],
+    });
+  });
+
+  it('returns 500 when course creation throws a non-validation error', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN' } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
+    prismaMock.course.findFirst.mockResolvedValue(null);
+    prismaMock.course.findUnique.mockResolvedValue(null);
+    prismaMock.$transaction.mockRejectedValue(new Error('db down'));
+    validationResponseMock.mockReturnValue({ status: 500 });
+
+    const req = new Request('http://localhost/api/courses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Course 1',
+        code: 'CS101',
+        semester: 'Fall 2026',
+        credits: 3,
+        startDate: '2026-08-25T09:00',
+        endDate: '2026-12-15T17:00',
+        registrationOpenAt: '2026-08-01T09:00',
+        registrationCloseAt: '2026-08-31T17:00',
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(500);
+    consoleSpy.mockRestore();
+  });
 });

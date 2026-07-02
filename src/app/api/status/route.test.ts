@@ -530,4 +530,93 @@ describe('GET /api/status', () => {
     const network = body.network as { auth?: { port?: number | null } } | undefined;
     expect(network?.auth?.port).toBe(80);
   });
+
+  it('enumerates sqlite tables across attached databases', async () => {
+    prismaMock.$queryRawUnsafe.mockImplementation(async (query: unknown) => {
+      const sql = String(query ?? '');
+      if (sql.includes('PRAGMA database_list')) {
+        return [{ seq: 0, name: 'main', file: '/data/app.db' }];
+      }
+      if (sql.includes('sqlite_schema') && sql.includes('SELECT name FROM')) {
+        return [{ name: 'Users' }, { name: 'Courses' }, { name: null }];
+      }
+      return [];
+    });
+
+    const req = new Request('http://localhost/api/status');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    const database = body.database as
+      | { details?: { table_names?: string[]; table_count?: number } }
+      | undefined;
+    expect(database?.details?.table_names).toEqual(['Users', 'Courses']);
+    expect(database?.details?.table_count).toBe(2);
+  });
+
+  it('classifies orphaned upload files by category', async () => {
+    vi.mocked(fs.promises.readdir).mockImplementation(async (dir: unknown) => {
+      const d = String(dir);
+      const ent = (name: string) => ({ isFile: () => true, name });
+      if (d.includes('solutions')) return [ent('sol1.jff'), ent('orphan-sol.jff')] as any;
+      if (d.includes('submissions')) return [ent('sub1.txt'), ent('orphan-sub.txt')] as any;
+      if (d.includes('pfps')) return [ent('avatar1.png'), ent('orphan-pfp.png')] as any;
+      if (d.includes('problems')) return [ent('prob1.jff')] as any;
+      return [] as any;
+    });
+    // Some rows carry null filenames to exercise the non-null filter predicate.
+    prismaMock.problem.findMany.mockResolvedValue([
+      { fileName: 'sol1.jff' },
+      { fileName: 'prob1.jff' },
+      { fileName: null },
+    ]);
+    prismaMock.submission.findMany.mockResolvedValue([{ fileName: 'sub1.txt' }, { fileName: null }]);
+    prismaMock.user.findMany.mockResolvedValue([{ avatar: 'avatar1.png' }, { avatar: null }]);
+
+    const req = new Request('http://localhost/api/status');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    const abandoned = body.abandonedFiles as
+      | { total: number; byCategory: Record<string, number> }
+      | undefined;
+    expect(abandoned?.byCategory).toEqual({
+      solutions: 1,
+      submissions: 1,
+      pfps: 1,
+      problems: 0,
+    });
+    expect(abandoned?.total).toBe(3);
+  });
+
+  it('tolerates upload directories that cannot be read', async () => {
+    vi.mocked(fs.promises.readdir).mockRejectedValue(new Error('EACCES'));
+
+    const req = new Request('http://localhost/api/status');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    const abandoned = body.abandonedFiles as { total: number } | undefined;
+    expect(abandoned?.total).toBe(0);
+  });
+
+  it('includes top queries for a deep postgres probe', async () => {
+    process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/db';
+    prismaMock.$queryRaw.mockResolvedValue([
+      { pid: 42, state: 'active', age_ms: 1234.6, query_trunc: 'SELECT 1' },
+    ]);
+
+    const req = new Request('http://localhost/api/status?deep=1');
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    const database = body.database as
+      | { stats?: { pg?: { top_queries?: Array<{ pid: number; age_ms: number }> } } }
+      | undefined;
+    expect(database?.stats?.pg?.top_queries?.[0]).toMatchObject({ pid: 42, age_ms: 1235 });
+  });
 });
