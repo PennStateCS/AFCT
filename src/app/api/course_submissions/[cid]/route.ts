@@ -36,7 +36,7 @@ export async function POST(req: Request, context: { params: Promise<{ cid: strin
                 status: "PENDING",
                 feedback: null,
                 correct: null,
-                queuedAt: new Date(),
+                updatedAt: new Date(),
             },
         });
 

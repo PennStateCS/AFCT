@@ -282,6 +282,7 @@ model Submission {
   // Queue
   status   SubmissionStatus @default(PENDING)
   submittedAt DateTime         @default(now())
+  attempts Int              @default(0) // Number of times the worker has claimed this submission
 
   // Logs
   activityLogs ActivityLog[]
@@ -296,6 +297,8 @@ model Submission {
   // Performance indexes
   @@index([assignmentId, problemId])
   @@index([studentId, courseId, assignmentId, problemId, submittedAt])
+  // Hot path for the submission queue worker's claim query
+  @@index([status, submittedAt])
   @@index([status])
 }
 
@@ -389,6 +392,13 @@ model SystemSettings {
   maxUploadSizeMb Int    @default(25)
   allowSignup     Boolean @default(true)
   sessionTimeoutMinutes Int @default(20)
+
+  // Submission queue tunables (time values stored in ms)
+  submissionEvalTimeoutMs      Int @default(30000)
+  submissionEvalMaxMemoryMb    Int @default(256)
+  submissionResubmitCooldownMs Int @default(10000)
+  submissionMaxConcurrent      Int @default(5)
+  submissionMaxAttempts        Int @default(3)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

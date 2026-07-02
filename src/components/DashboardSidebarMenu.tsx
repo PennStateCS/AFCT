@@ -66,14 +66,14 @@ type Course = {
   isArchived: boolean;
 };
 
-// Static admin menu items
+// Static admin menu items (kept alphabetical by title)
 const adminMenu = [
   { title: 'Courses', url: '/dashboard/courses', icon: Book },
-  { title: 'User Accounts', url: '/dashboard/users', icon: Users },
   { title: 'Submission Logs', url: '/dashboard/submissions', icon: Layers },
-  { title: 'System Status', url: '/dashboard/system-status', icon: Activity },
-  { title: 'System Settings', url: '/dashboard/system-settings', icon: Settings },
   { title: 'System Logs', url: '/dashboard/system-logs', icon: Logs },
+  { title: 'System Settings', url: '/dashboard/system-settings', icon: Settings },
+  { title: 'System Status', url: '/dashboard/system-status', icon: Activity },
+  { title: 'User Accounts', url: '/dashboard/users', icon: Users },
 ];
 
 export default function DashboardSidebarMenu() {
@@ -141,12 +141,16 @@ export default function DashboardSidebarMenu() {
     return true;
   });
   const isDev = process.env.NODE_ENV !== 'production';
-  const resolvedAdminMenu = isDev
-    ? [
-        ...adminMenu,
-        { title: 'Development Tests', url: '/dashboard/development-tests', icon: Wrench },
-      ]
-    : adminMenu;
+  const resolvedAdminMenu = (
+    isDev
+      ? [
+          ...adminMenu,
+          { title: 'Development Tests', url: '/dashboard/development-tests', icon: Wrench },
+        ]
+      : adminMenu
+  )
+    .slice()
+    .sort((a, b) => a.title.localeCompare(b.title));
 
   return (
     <>

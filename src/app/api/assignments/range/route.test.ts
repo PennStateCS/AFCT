@@ -7,7 +7,7 @@ const prismaMock = vi.hoisted(() => ({
   roster: { findMany: vi.fn(), groupBy: vi.fn() },
   assignment: { findMany: vi.fn() },
   submission: { findMany: vi.fn() },
-  assignmentGrade: { findMany: vi.fn(), groupBy: vi.fn() },
+  assignmentProblemGrade: { findMany: vi.fn(), groupBy: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -74,7 +74,7 @@ describe('POST /api/assignments/range', () => {
       },
     ]);
     prismaMock.submission.findMany.mockResolvedValue([{ assignmentId: 'a1' }]);
-    prismaMock.assignmentGrade.findMany.mockResolvedValue([]);
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
 
     const req = new NextRequest('http://localhost/api/assignments/range', {
       method: 'POST',
@@ -100,7 +100,7 @@ describe('POST /api/assignments/range', () => {
       },
     ]);
     prismaMock.roster.groupBy.mockResolvedValue([{ courseId: 'c1', _count: { _all: 2 } }]);
-    prismaMock.assignmentGrade.groupBy.mockResolvedValue([
+    prismaMock.assignmentProblemGrade.groupBy.mockResolvedValue([
       { assignmentId: 'a1', _count: { _all: 2 } },
     ]);
 

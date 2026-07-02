@@ -93,8 +93,10 @@ vi.mock('@/components/ui/tooltip', () => {
   };
 });
 
-const ChangePasswordDialogMock = vi.fn(() => <div data-testid="change-password-dialog" />);
-const EditProfileDialogMock = vi.fn(() => <div data-testid="edit-profile-dialog" />);
+const ChangePasswordDialogMock = vi.fn((_props: unknown) => (
+  <div data-testid="change-password-dialog" />
+));
+const EditProfileDialogMock = vi.fn((_props: unknown) => <div data-testid="edit-profile-dialog" />);
 
 vi.mock('./dialogs/ChangePasswordDialog', () => ({
   ChangePasswordDialog: (props: unknown) => ChangePasswordDialogMock(props),
@@ -124,14 +126,12 @@ beforeEach(() => {
 });
 
 describe('DashboardSidebarMenu', () => {
-  const originalNodeEnv = process.env.NODE_ENV;
-
   beforeEach(() => {
-    process.env.NODE_ENV = 'test';
+    vi.stubEnv('NODE_ENV', 'test');
   });
 
   afterEach(() => {
-    process.env.NODE_ENV = originalNodeEnv;
+    vi.unstubAllEnvs();
   });
 
   it('renders admin navigation links for privileged users', () => {
@@ -157,7 +157,7 @@ describe('DashboardSidebarMenu', () => {
   });
 
   it('hides Development Tests link in production mode', () => {
-    process.env.NODE_ENV = 'production';
+    vi.stubEnv('NODE_ENV', 'production');
 
     render(<DashboardSidebarMenu />);
 
