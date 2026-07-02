@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import type { EmptyStringNotation } from '@prisma/client';
 
 export type CourseListItem = {
   id: string;
@@ -13,6 +14,7 @@ export type CourseListItem = {
   registrationCloseAt: Date | null;
   isPublished: boolean;
   isArchived: boolean;
+  emptyStringNotation: EmptyStringNotation;
   createdAt: Date;
   updatedAt: Date;
   enrolled?: Array<{
@@ -54,6 +56,7 @@ export async function getCoursesListForUser(
       registrationCloseAt: true,
       isPublished: true,
       isArchived: true,
+      emptyStringNotation: true,
       createdAt: true,
       updatedAt: true,
       roster: {
@@ -88,6 +91,7 @@ export async function getCoursesListForUser(
     registrationCloseAt: course.registrationCloseAt,
     isPublished: course.isPublished,
     isArchived: course.isArchived,
+    emptyStringNotation: course.emptyStringNotation,
     createdAt: course.createdAt,
     updatedAt: course.updatedAt,
     enrolled: course.roster.map((r) => ({

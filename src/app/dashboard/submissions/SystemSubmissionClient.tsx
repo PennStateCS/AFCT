@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import JffViewerDialog from '@/components/JffViewerDialog';
+import { useEmptyStringSymbol } from '@/lib/useEmptyStringSymbol';
 import { FeedbackDialog } from '@/components/dialogs/FeedbackDialog';
 import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
 import Link from 'next/link';
@@ -185,6 +186,8 @@ export default function SystemSubmissionClient() {
   const [jffViewerOpen, setJffViewerOpen] = useState(false);
   const [jffViewerSrc, setJffViewerSrc] = useState<string | null>(null);
   const [jffViewerTitle, setJffViewerTitle] = useState<string | null>(null);
+  const [jffViewerCourseId, setJffViewerCourseId] = useState<string | null>(null);
+  const jffEpsSymbol = useEmptyStringSymbol(jffViewerCourseId);
   const isRerunning = useMemo(
     () => Object.values(rerunning).some(Boolean),
     [rerunning],
@@ -223,6 +226,7 @@ export default function SystemSubmissionClient() {
 
     setJffViewerSrc(`/api/uploads/submissions/${encodeURIComponent(submission.fileName)}`);
     setJffViewerTitle(submission.originalFileName || submission.fileName);
+    setJffViewerCourseId(submission.courseId ?? null);
     setJffViewerOpen(true);
   };
 
@@ -713,10 +717,12 @@ export default function SystemSubmissionClient() {
             if (!open) {
               setJffViewerSrc(null);
               setJffViewerTitle(null);
+              setJffViewerCourseId(null);
             }
           }}
           src={jffViewerSrc ?? ''}
           title={jffViewerTitle ?? 'Submission'}
+          epsSymbol={jffEpsSymbol}
         />
 
         <FeedbackDialog

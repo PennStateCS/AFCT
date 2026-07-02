@@ -66,6 +66,7 @@ export default async function AdminCoursePage({ params }: Props) {
     registrationCloseAt: course.registrationCloseAt,
     isPublished: course.isPublished,
     isArchived: course.isArchived,
+    emptyStringNotation: course.emptyStringNotation,
     createdAt: course.createdAt,
     updatedAt: course.updatedAt,
     enrolled: course.roster.map((r) => ({ ...r.user, courseRole: r.role, hasSubmissions: false })),

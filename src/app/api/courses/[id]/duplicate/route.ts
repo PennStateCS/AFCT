@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
+import { toEmptyStringNotation } from '@/lib/empty-string-notation';
 import type { Prisma } from '@prisma/client';
 
 const courseCodeRegex = /^[A-Z]{2,8}\s?\d{1,4}[A-Z]?$/;
@@ -62,6 +63,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       registrationOpenAt,
       registrationCloseAt,
       credits,
+      emptyStringNotation,
       copyAssignments: bodyCopyAssignments,
       copyProblems: bodyCopyProblems,
       copyMode,
@@ -170,6 +172,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           registrationCloseAt: toDateTimeInTimezone(registrationCloseAt, userTimezone),
           isPublished: false,
           isArchived: false,
+          emptyStringNotation: toEmptyStringNotation(emptyStringNotation),
           regCode,
         },
       });
