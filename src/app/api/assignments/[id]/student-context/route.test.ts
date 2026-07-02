@@ -6,7 +6,7 @@ const prismaMock = vi.hoisted(() => ({
   roster: { findFirst: vi.fn() },
   submission: { findMany: vi.fn() },
   comment: { findMany: vi.fn() },
-  assignmentGrade: { findUnique: vi.fn() },
+  assignmentProblemGrade: { findMany: vi.fn() },
 }));
 
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
@@ -73,7 +73,7 @@ describe('GET /api/assignments/[id]/student-context', () => {
         },
       },
     ]);
-    prismaMock.assignmentGrade.findUnique.mockResolvedValue({ grade: 95 });
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([{ problemId: 'p1', grade: 95 }]);
 
     const res = await GET(new Request('http://localhost/api/assignments/a1/student-context'), {
       params: Promise.resolve({ id: 'a1' }),
@@ -87,5 +87,101 @@ describe('GET /api/assignments/[id]/student-context', () => {
     expect(body.submissionsByProblem.p2).toHaveLength(0);
     expect(body.commentsByProblem.p1).toHaveLength(1);
     expect(body.commentsByProblem.p2).toHaveLength(0);
+  });
+
+  it('returns 404 when an unpublished assignment is requested by a student', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.assignment.findUnique.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      isPublished: false,
+      problems: [],
+    });
+
+    const res = await GET(new Request('http://localhost/api/assignments/a1/student-context'), {
+      params: Promise.resolve({ id: 'a1' }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 404 when the user is not on the course roster', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.assignment.findUnique.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      isPublished: true,
+      problems: [{ problemId: 'p1' }],
+    });
+    prismaMock.roster.findFirst.mockResolvedValue(null);
+
+    const res = await GET(new Request('http://localhost/api/assignments/a1/student-context'), {
+      params: Promise.resolve({ id: 'a1' }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  it('buckets submissions and comments for problems not in the assignment list', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.assignment.findUnique.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      isPublished: true,
+      problems: [{ problemId: 'p1' }],
+    });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1' });
+    // Submission/comment reference 'p2', which was not pre-seeded from the problem list.
+    prismaMock.submission.findMany.mockResolvedValue([
+      {
+        id: 's1',
+        submittedAt: new Date('2026-03-01T10:00:00.000Z'),
+        feedback: null,
+        correct: null,
+        fileName: 'f.jff',
+        originalFileName: 'orig.jff',
+        problemId: 'p2',
+        status: 'PENDING',
+      },
+    ]);
+    prismaMock.comment.findMany.mockResolvedValue([
+      {
+        id: 'c1',
+        content: 'note',
+        createdAt: new Date('2026-03-01T11:00:00.000Z'),
+        problemId: 'p2',
+        roster: null,
+      },
+    ]);
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
+
+    const res = await GET(new Request('http://localhost/api/assignments/a1/student-context'), {
+      params: Promise.resolve({ id: 'a1' }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.submissionsByProblem.p2).toHaveLength(1);
+    expect(body.commentsByProblem.p2).toHaveLength(1);
+    // No grades -> assignmentGrade stays null.
+    expect(body.assignmentGrade).toBeNull();
+  });
+
+  it('returns 500 when a data fetch fails', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.assignment.findUnique.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      isPublished: true,
+      problems: [{ problemId: 'p1' }],
+    });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1' });
+    prismaMock.submission.findMany.mockRejectedValue(new Error('db down'));
+
+    const res = await GET(new Request('http://localhost/api/assignments/a1/student-context'), {
+      params: Promise.resolve({ id: 'a1' }),
+    });
+
+    expect(res.status).toBe(500);
   });
 });
