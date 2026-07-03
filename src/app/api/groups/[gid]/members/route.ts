@@ -14,8 +14,15 @@ export async function GET(
 
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role))
+  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'GROUP_MEMBERS_VIEW_DENIED',
+      severity: 'SECURITY',
+      metadata: { role: session?.user?.role ?? null },
+    });
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
 
   try {
     const group = await prisma.group.findUnique({ where: { id: groupId } });
@@ -60,8 +67,15 @@ export async function POST(
 
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role))
+  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'GROUP_MEMBER_ADD_DENIED',
+      severity: 'SECURITY',
+      metadata: { role: session?.user?.role ?? null },
+    });
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
 
   try {
     const group = await prisma.group.findUnique({ where: { id: groupId } });
@@ -107,6 +121,12 @@ export async function POST(
     return NextResponse.json({ member: { id: created.id, userId: user.id } }, { status: 201 });
   } catch (err) {
     console.error('[GROUP_MEMBERS_POST_ERROR]', err);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'GROUP_MEMBER_ADD_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

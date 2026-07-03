@@ -29,6 +29,12 @@ export async function PUT(
     const user = session?.user;
 
     if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'ASSIGNMENT_PROBLEM_SETTINGS_UPDATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -116,6 +122,12 @@ export async function PUT(
     return NextResponse.json({ success: true, assignmentProblem: updated });
   } catch (error) {
     console.error('Failed to update assignment problem settings:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: null,
+      action: 'ASSIGNMENT_PROBLEM_SETTINGS_UPDATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json(
       { error: 'Failed to update assignment problem settings.' },
       { status: 500 },

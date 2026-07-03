@@ -120,6 +120,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
 
     if (!rosterEntry) {
+      await createEnhancedActivityLog(prisma, request, {
+        userId: session?.user?.id ?? null,
+        action: 'COMMENT_CREATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
     }
 
@@ -179,6 +185,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json(transformedComment, { status: 201 });
   } catch (error) {
     console.error('Error creating comment:', error);
+    await createEnhancedActivityLog(prisma, request, {
+      userId: null,
+      action: 'COMMENT_CREATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Failed to create comment' }, { status: 500 });
   }
 }

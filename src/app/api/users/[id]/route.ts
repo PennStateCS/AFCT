@@ -31,6 +31,12 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       isAdminOnly || currentUser.id === userId || ['FACULTY', 'TA'].includes(currentUser.role);
     if (!canEdit) {
       console.warn(`[PATCH] Forbidden: ${currentUser.id} tried to update user ${userId}`);
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'USER_UPDATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -136,6 +142,12 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
             console.error(
               '[PATCH] Error updating user: User in an unarchived active course cannot be inactive',
             );
+            await createEnhancedActivityLog(prisma, req, {
+              userId: session?.user?.id ?? null,
+              action: 'USER_UPDATE_DENIED',
+              severity: 'SECURITY',
+              metadata: { role: session?.user?.role ?? null },
+            });
             return NextResponse.json(
               { error: 'Users in an active course cannot be inactive' },
               { status: 403 },
@@ -195,6 +207,12 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     return NextResponse.json(updatedUser);
   } catch (error) {
     console.error('[PATCH] Error updating user:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: null,
+      action: 'USER_UPDATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Failed to update user' }, { status: 500 });
   }
 }
@@ -212,6 +230,12 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
 
     if (!currentUser || !['ADMIN', 'FACULTY', 'TA'].includes(currentUser.role)) {
       console.warn(`[DELETE] Forbidden: ${currentUser?.id} tried to delete user ${userId}`);
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'USER_DELETE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -255,6 +279,12 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     return NextResponse.json({ success: true, message: 'User deleted' });
   } catch (error) {
     console.error('[DELETE] Error deleting user:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: null,
+      action: 'USER_DELETE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Failed to delete user' }, { status: 500 });
   }
 }

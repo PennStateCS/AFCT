@@ -33,6 +33,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           | undefined;
 
         if (!emailInput || !credentials?.password) {
+          void logSecurityEvent('LOGIN_FAILED', {
+            ip: ipAddress,
+            identifier: emailInput,
+            reason: 'missing credentials',
+          });
           return null;
         }
 
@@ -77,12 +82,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         });
 
         if (!user) {
+          // No active account matches — unknown email or a disabled account.
+          void logSecurityEvent('LOGIN_FAILED', {
+            ip: ipAddress,
+            identifier: emailInput,
+            reason: 'unknown or inactive account',
+          });
           return null;
         }
 
         const valid = await bcrypt.compare(credentials.password as string, user.password);
 
         if (!valid) {
+          void logSecurityEvent(
+            'LOGIN_FAILED',
+            { ip: ipAddress, identifier: emailInput, reason: 'invalid password' },
+            user.id,
+          );
           return null;
         }
 
@@ -190,6 +206,25 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         console.error('Failed to log signIn event:', e);
       }
     },
+    async signOut(message) {
+      try {
+        // JWT strategy: the signed-out user's token is provided.
+        const token = (message as { token?: { id?: unknown } | null }).token;
+        const userId = typeof token?.id === 'string' ? token.id : null;
+        await prisma.activityLog.create({
+          data: {
+            userId,
+            action: 'LOGOUT',
+            category: 'SYSTEM',
+            severity: inferSeverity('LOGOUT'),
+            metadata: {},
+          },
+        });
+      } catch (e) {
+        // don't block sign-out on logging failure
+        console.error('Failed to log signOut event:', e);
+      }
+    },
   },
   pages: {
     signIn: '/login',
@@ -208,15 +243,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 type SecurityEventAction =
   | 'LOGIN_RATE_LIMIT'
   | 'LOGIN_CHALLENGE_REQUIRED'
-  | 'LOGIN_CHALLENGE_SOLVED';
+  | 'LOGIN_CHALLENGE_SOLVED'
+  | 'LOGIN_FAILED';
 
 const logSecurityEvent = async (
   action: SecurityEventAction,
-  metadata: { ip?: string; identifier?: string },
+  metadata: { ip?: string; identifier?: string; reason?: string },
+  userId?: string | null,
 ) => {
   try {
     await prisma.activityLog.create({
       data: {
+        userId: userId ?? null,
         action,
         category: 'SECURITY',
         severity: inferSeverity(action),

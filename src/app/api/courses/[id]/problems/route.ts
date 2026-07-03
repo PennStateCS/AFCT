@@ -33,6 +33,12 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
     const user = session?.user;
 
     if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'PROBLEM_CREATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -113,6 +119,12 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
     return NextResponse.json(problem, { status: 201 });
   } catch (error) {
     console.error('Error creating problem:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: null,
+      action: 'PROBLEM_CREATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

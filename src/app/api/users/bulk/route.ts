@@ -31,6 +31,12 @@ export async function POST(req: Request) {
   try {
     const session = await auth();
     if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'USER_BULK_CREATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -159,6 +165,12 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     console.error('[USERS_BULK_POST_ERROR]', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: null,
+      action: 'USER_BULK_CREATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

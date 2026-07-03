@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import type { OnChangeFn, PaginationState } from '@tanstack/react-table';
+import type { OnChangeFn, PaginationState, SortingState } from '@tanstack/react-table';
 import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -55,6 +55,7 @@ export default function SystemLoggingClient() {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [severity, setSeverity] = useState<Severity | typeof ALL_SEVERITIES>(ALL_SEVERITIES);
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'timestamp', desc: true }]);
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -83,6 +84,11 @@ export default function SystemLoggingClient() {
       });
       if (search) params.set('q', search);
       if (severity !== ALL_SEVERITIES) params.set('severity', severity);
+      const sort = sorting[0];
+      if (sort) {
+        params.set('sortBy', sort.id);
+        params.set('sortDir', sort.desc ? 'desc' : 'asc');
+      }
 
       const res = await fetch(`/api/logging?${params.toString()}`, { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed to fetch logs');
@@ -95,7 +101,7 @@ export default function SystemLoggingClient() {
     } finally {
       setLoading(false);
     }
-  }, [pageIndex, pageSize, search, severity]);
+  }, [pageIndex, pageSize, search, severity, sorting]);
 
   useEffect(() => {
     void fetchLogs();
@@ -117,12 +123,18 @@ export default function SystemLoggingClient() {
     setPageSize(next.pageSize);
   };
 
-  // Server controls order and paging, so columns aren't client-sortable.
+  // Sorting is done server-side; changing it resets to the first page.
+  const handleSortingChange: OnChangeFn<SortingState> = (updater) => {
+    const next = typeof updater === 'function' ? updater(sorting) : updater;
+    setSorting(next);
+    setPageIndex(0);
+  };
+
+  // Columns sort server-side (see the API's orderBy). The Full Log action isn't sortable.
   const columns = [
     {
       accessorKey: 'timestamp',
       header: 'Time',
-      enableSorting: false,
       cell: ({ getValue }: { getValue: () => unknown }) => {
         const value = getValue();
         return value
@@ -136,15 +148,14 @@ export default function SystemLoggingClient() {
     {
       accessorKey: 'severity',
       header: 'Severity',
-      enableSorting: false,
       cell: ({ getValue }: { getValue: () => unknown }) => {
         const s = ((getValue() as string) || 'INFO') as Severity;
         return <Badge variant={SEVERITY_VARIANT[s] ?? 'neutral'}>{s}</Badge>;
       },
     },
-    { accessorKey: 'userId', header: 'User', enableSorting: false },
-    { accessorKey: 'category', header: 'Category', enableSorting: false },
-    { accessorKey: 'action', header: 'Action', enableSorting: false },
+    { accessorKey: 'userId', header: 'User' },
+    { accessorKey: 'category', header: 'Category' },
+    { accessorKey: 'action', header: 'Action' },
     {
       id: 'viewer',
       header: 'Logs',
@@ -213,6 +224,9 @@ export default function SystemLoggingClient() {
           manualFiltering
           globalFilter={searchInput}
           onGlobalFilterChange={setSearchInput}
+          manualSorting
+          sorting={sorting}
+          onSortingChange={handleSortingChange}
         />
 
         {/* Dialogs */}
