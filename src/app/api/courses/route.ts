@@ -17,6 +17,7 @@ import { validationResponse } from '@/lib/zod-error';
 import { auth } from '@/lib/auth';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { toEmptyStringNotation } from '@/lib/empty-string-notation';
 import type { Prisma } from '@prisma/client';
 
 /**
@@ -202,6 +203,7 @@ export async function POST(req: Request) {
             : null,
           isPublished: json.isPublished ?? false,
           isArchived: false,
+          emptyStringNotation: toEmptyStringNotation(json.emptyStringNotation),
         },
       });
 
@@ -280,6 +282,7 @@ export async function POST(req: Request) {
           registrationCloseAt: created.course.registrationCloseAt,
           isPublished: created.course.isPublished,
           isArchived: created.course.isArchived,
+          emptyStringNotation: created.course.emptyStringNotation,
           enrolled:
             created.withRoster?.roster.map((r: RosterItem) => ({
               ...r.user,

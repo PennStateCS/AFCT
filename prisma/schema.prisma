@@ -37,6 +37,12 @@ enum SubmissionStatus {
   FAILED
 }
 
+// How the empty string is rendered in automata/languages for a course.
+enum EmptyStringNotation {
+  EPSILON // ε
+  LAMBDA // λ
+}
+
 model User {
   id        String  @id @default(cuid())
   email     String  @unique
@@ -77,6 +83,9 @@ model Course {
   registrationCloseAt DateTime?
   isPublished Boolean  @default(false)
   isArchived  Boolean  @default(false)
+
+  // How the empty string is displayed in automata/languages for this course.
+  emptyStringNotation EmptyStringNotation @default(EPSILON)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
