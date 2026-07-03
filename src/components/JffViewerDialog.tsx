@@ -288,9 +288,12 @@ export function JffCytoscapeViewer({
 
   //
 
+  // Grid lines read the theme var live (subtle light gray in light mode, subtle
+  // dark line in dark mode), falling back to the load-time color.
+  const gridLine = `var(--grid-color, ${GRID_COLOR})`;
   const backgroundStyle: React.CSSProperties = grid
     ? {
-        backgroundImage: `linear-gradient(${GRID_COLOR} 1px, transparent 1px), linear-gradient(90deg, ${GRID_COLOR} 1px, transparent 1px)`,
+        backgroundImage: `linear-gradient(${gridLine} 1px, transparent 1px), linear-gradient(90deg, ${gridLine} 1px, transparent 1px)`,
         backgroundSize: '24px 24px',
         backgroundPosition: 'center center',
       }
@@ -808,16 +811,27 @@ export function JffCytoscapeViewer({
     URL.revokeObjectURL(url);
   };
 
+  // Use the canvas's actual background (white in light mode) so exported/copied
+  // images match the viewer instead of coming out transparent.
+  const exportBackground = () => {
+    const el = containerRef.current;
+    if (el) {
+      const bg = getComputedStyle(el).backgroundColor;
+      if (bg && bg !== 'transparent' && bg !== 'rgba(0, 0, 0, 0)') return bg;
+    }
+    return '#ffffff';
+  };
+
   const downloadPNG = async () => {
     if (!cyRef.current) return;
-    const dataUrl: string = cyRef.current.png({ scale: 2, full: true, bg: null });
+    const dataUrl: string = cyRef.current.png({ scale: 2, full: true, bg: exportBackground() });
     await downloadDataUrl(`${(title ?? 'automaton').replace(/\s+/g, '_')}.png`, dataUrl);
   };
 
   const copyPNG = async () => {
     if (!cyRef.current) return;
     try {
-      const dataUrl: string = cyRef.current.png({ scale: 2, full: true, bg: null });
+      const dataUrl: string = cyRef.current.png({ scale: 2, full: true, bg: exportBackground() });
       const res = await fetch(dataUrl);
       const blob = await res.blob();
       const ClipboardItemCtor: any =
@@ -857,63 +871,123 @@ export function JffCytoscapeViewer({
     );
   };
 
+  // White fill so the outline/idle buttons stand out against the gray toolbar.
+  const controlBtnClass = 'bg-card';
+
   return (
-    <div className="bg-background w-full rounded-md border">
-      <div className="flex items-center justify-between gap-2 overflow-x-auto border-b p-2">
+    <div className="bg-card w-full overflow-hidden rounded-md border">
+      {/* Toolbar: muted gray so it reads as a distinct control strip above the white body */}
+      <div className="bg-background flex items-center justify-between gap-2 overflow-x-auto border-b p-2">
         <div className="flex min-w-0 items-center gap-2">
-          <div className="truncate text-sm font-medium">{title ?? src}</div>
+          {/* Title is shown in the dialog header above; only the type label lives here. */}
           <TypeBadge t={type} />
         </div>
-        <div className="flex items-center gap-1">
-          <Button
-            size="sm"
-            variant={grid ? 'default' : 'outline'}
-            onClick={() => setGrid((s) => !s)}
-            title="Toggle grid"
-          >
-            <Grid className="mr-2 h-4 w-4" /> Grid
-          </Button>
-          <Button
-            size="sm"
-            variant={honorPositions ? 'default' : 'outline'}
-            onClick={() => setHonorPositions((p) => !p)}
-            title="Original Positions"
-          >
-            <Waypoints className="mr-2 h-4 w-4" />
-            Original Positions
-          </Button>
-          <Button size="sm" variant="outline" onClick={zoomOut} title="Zoom out">
-            <ZoomOut className="h-4 w-4" />
-          </Button>
-          <Button size="sm" variant="outline" onClick={zoomIn} title="Zoom in">
-            <ZoomIn className="h-4 w-4" />
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              onResizeRef.current?.();
-            }}
-            title="Fit"
-          >
-            <Maximize2 className="h-4 w-4" />
-          </Button>
-          <Button size="sm" variant="outline" onClick={downloadSVG} title="Download SVG">
-            <Download className="mr-2 h-4 w-4" /> SVG
-          </Button>
-          <Button size="sm" variant="outline" onClick={downloadPNG} title="Download PNG">
-            <ImageDown className="mr-2 h-4 w-4" /> PNG
-          </Button>
-          <Button size="sm" variant="outline" onClick={copyPNG} title="Copy PNG to clipboard">
-            <Copy className="mr-2 h-4 w-4" /> Copy PNG
-          </Button>
+        <div className="flex items-center gap-2">
+          {/* View controls */}
+          <div className="flex items-center gap-1" role="group" aria-label="View controls">
+            <Button
+              size="sm"
+              variant={grid ? 'default' : 'outline'}
+              className={grid ? undefined : controlBtnClass}
+              onClick={() => setGrid((s) => !s)}
+              title="Toggle grid"
+              aria-label="Toggle grid"
+              aria-pressed={grid}
+            >
+              <Grid className="mr-2 h-4 w-4" /> Grid
+            </Button>
+            <Button
+              size="sm"
+              variant={honorPositions ? 'default' : 'outline'}
+              className={honorPositions ? undefined : controlBtnClass}
+              onClick={() => setHonorPositions((p) => !p)}
+              title="Original Positions"
+              aria-label="Original positions"
+              aria-pressed={honorPositions}
+            >
+              <Waypoints className="mr-2 h-4 w-4" />
+              Original Positions
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className={controlBtnClass}
+              onClick={zoomOut}
+              title="Zoom out"
+              aria-label="Zoom out"
+            >
+              <ZoomOut className="h-4 w-4" />
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className={controlBtnClass}
+              onClick={zoomIn}
+              title="Zoom in"
+              aria-label="Zoom in"
+            >
+              <ZoomIn className="h-4 w-4" />
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className={controlBtnClass}
+              onClick={() => {
+                onResizeRef.current?.();
+              }}
+              title="Fit"
+              aria-label="Fit to view"
+            >
+              <Maximize2 className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {/* Separator between control groups */}
+          <div
+            className="bg-muted-foreground/40 mx-0.5 h-6 w-px shrink-0"
+            aria-hidden="true"
+          />
+
+          {/* Export controls */}
+          <div className="flex items-center gap-1" role="group" aria-label="Export controls">
+            <Button
+              size="sm"
+              variant="outline"
+              className={controlBtnClass}
+              onClick={downloadSVG}
+              title="Download SVG"
+              aria-label="Download SVG"
+            >
+              <Download className="mr-2 h-4 w-4" /> SVG
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className={controlBtnClass}
+              onClick={downloadPNG}
+              title="Download PNG"
+              aria-label="Download PNG"
+            >
+              <ImageDown className="mr-2 h-4 w-4" /> PNG
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className={controlBtnClass}
+              onClick={copyPNG}
+              title="Copy PNG to clipboard"
+              aria-label="Copy PNG to clipboard"
+            >
+              <Copy className="mr-2 h-4 w-4" /> Copy PNG
+            </Button>
+          </div>
         </div>
       </div>
 
       <div
         ref={containerRef}
         style={{ height, ...backgroundStyle }}
-        className="relative overflow-hidden"
+        className="bg-card relative overflow-hidden"
       >
         {error ? <div className="p-4 text-sm text-red-600">{error}</div> : null}
       </div>
@@ -949,7 +1023,7 @@ export default function JffViewerDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-h-[calc(100vh-2rem)] !max-w-none overflow-auto p-0"
+        className="bg-card max-h-[calc(100vh-2rem)] !max-w-none overflow-auto p-0"
         style={{ width }}
       >
         <DialogHeader className="px-4 pt-4">
