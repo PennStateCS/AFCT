@@ -34,6 +34,7 @@ export async function DELETE(
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'REMOVE_GROUP_MEMBER',
+      severity: 'INFO',
       category: 'COURSE',
       metadata: { courseId, groupId, removedUserId: userId },
     });

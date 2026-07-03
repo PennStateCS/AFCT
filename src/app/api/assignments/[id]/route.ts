@@ -253,6 +253,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'UPDATE_ASSIGNMENT',
+      severity: 'INFO',
       category: 'ASSIGNMENT',
       courseId: updated.courseId,
       assignmentId: id,
@@ -381,6 +382,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'UPDATE_ASSIGNMENT',
+      severity: 'INFO',
       category: 'ASSIGNMENT',
       courseId: updated.courseId,
       assignmentId: id,
@@ -463,6 +465,7 @@ export async function POST(req: NextRequest) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'CREATE_ASSIGNMENT',
+      severity: 'INFO',
       category: 'ASSIGNMENT',
       courseId: created.courseId,
       assignmentId: created.id,
@@ -527,6 +530,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       await createEnhancedActivityLog(prisma, req as Request, {
         userId: session.user.id,
         action: 'DELETE_ASSIGNMENT',
+        severity: 'INFO',
         category: 'ASSIGNMENT',
         courseId: deleted.courseId,
         assignmentId: id,

@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
     await createEnhancedActivityLog(prisma, req, {
       userId: undefined,
       action: 'SUBMISSION_UNAUTHORIZED',
+      severity: 'SECURITY',
       category: 'SUBMISSION',
       metadata: { userId: undefined },
     });
@@ -39,6 +40,7 @@ export async function POST(req: NextRequest) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'SUBMISSION_INVALID_REQUEST',
+      severity: 'WARNING',
       category: 'SUBMISSION',
       courseId,
       assignmentId,
@@ -80,6 +82,7 @@ export async function POST(req: NextRequest) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'SUBMISSION_INVALID_REQUEST',
+      severity: 'WARNING',
       category: 'SUBMISSION',
       courseId,
       assignmentId,
@@ -113,6 +116,7 @@ export async function POST(req: NextRequest) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'SUBMISSION_INVALID_REQUEST',
+      severity: 'WARNING',
       category: 'SUBMISSION',
       courseId,
       assignmentId,
@@ -144,6 +148,7 @@ export async function POST(req: NextRequest) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session.user.id,
         action: 'SUBMISSION_FORBIDDEN',
+        severity: 'SECURITY',
         category: 'SUBMISSION',
         courseId,
         assignmentId,
@@ -179,6 +184,7 @@ export async function POST(req: NextRequest) {
         await createEnhancedActivityLog(prisma, req, {
           userId: session.user.id,
           action: 'SUBMISSION_RATE_LIMITED',
+          severity: 'WARNING',
           category: 'SUBMISSION',
           courseId,
           assignmentId,
@@ -209,6 +215,7 @@ export async function POST(req: NextRequest) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session.user.id,
         action: 'SUBMISSION_REJECTED_LATE',
+        severity: 'WARNING',
         category: 'SUBMISSION',
         courseId,
         assignmentId,
@@ -235,6 +242,7 @@ export async function POST(req: NextRequest) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session.user.id,
         action: 'SUBMISSION_REJECTED_LATE_CUTOFF',
+        severity: 'WARNING',
         category: 'SUBMISSION',
         courseId,
         assignmentId,
@@ -268,6 +276,7 @@ export async function POST(req: NextRequest) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session.user.id,
         action: 'SUBMISSION_FILE_TOO_LARGE',
+        severity: 'WARNING',
         category: 'SUBMISSION',
         courseId,
         assignmentId,
@@ -296,6 +305,7 @@ export async function POST(req: NextRequest) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session.user.id,
         action: 'SUBMISSION_INVALID_FILE_STRUCTURE',
+        severity: 'WARNING',
         category: 'SUBMISSION',
         courseId,
         assignmentId,
@@ -319,6 +329,7 @@ export async function POST(req: NextRequest) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session.user.id,
         action: 'SUBMISSION_FILE_RECEIVED',
+        severity: 'INFO',
         category: 'SUBMISSION',
         courseId,
         assignmentId,
@@ -367,6 +378,7 @@ export async function POST(req: NextRequest) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session.user.id,
         action: 'SUBMISSION_FILE_STORED',
+        severity: 'INFO',
         category: 'SUBMISSION',
         courseId,
         assignmentId,
@@ -388,6 +400,7 @@ export async function POST(req: NextRequest) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'SUBMISSION_CREATED',
+      severity: 'INFO',
       category: 'SUBMISSION',
       courseId,
       assignmentId,
@@ -421,6 +434,7 @@ export async function POST(req: NextRequest) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'SUBMISSION_ERROR',
+      severity: 'ERROR',
       category: 'SUBMISSION',
       courseId,
       assignmentId,

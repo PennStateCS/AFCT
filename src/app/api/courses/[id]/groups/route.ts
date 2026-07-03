@@ -29,6 +29,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'VIEW_GROUPS',
+      severity: 'INFO',
       category: 'COURSE',
       metadata: { courseId: id },
     });
@@ -70,6 +71,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         await createEnhancedActivityLog(prisma, req, {
           userId: session.user.id,
           action: 'VIEW_GROUPS',
+          severity: 'INFO',
           category: 'COURSE',
           metadata: { courseId: id },
         });
@@ -104,6 +106,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'CREATE_GROUP',
+      severity: 'INFO',
       category: 'COURSE',
       metadata: { courseId: id, groupId: group.id },
     });

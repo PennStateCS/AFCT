@@ -137,6 +137,7 @@ export async function POST(request: NextRequest) {
     await createEnhancedActivityLog(prisma, request, {
       userId: user.id,
       action: 'CREATE_COMMENT',
+      severity: 'INFO',
       category: 'ASSIGNMENT',
       courseId: assignment.courseId,
       assignmentId,
@@ -325,6 +326,7 @@ export async function DELETE(request: NextRequest) {
     await createEnhancedActivityLog(prisma, request, {
       userId: user.id,
       action: 'DELETE_COMMENT',
+      severity: 'INFO',
       category: 'ASSIGNMENT',
       courseId: comment.assignment.courseId,
       assignmentId: comment.assignmentId,

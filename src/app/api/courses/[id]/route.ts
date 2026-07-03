@@ -534,6 +534,7 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
     await createEnhancedActivityLog(prisma, req, {
       userId: user.id,
       action: 'UPDATE_COURSE',
+      severity: 'INFO',
       category: 'COURSE',
       courseId: updatedCourse.id,
       metadata: {
@@ -629,6 +630,7 @@ export async function DELETE(req: Request, context: { params: Promise<{ id: stri
     await createEnhancedActivityLog(prisma, req, {
       userId: user.id,
       action: 'DELETE_COURSE',
+      severity: 'INFO',
       category: 'COURSE',
       metadata: { courseName: deletedCourse.name },
     });

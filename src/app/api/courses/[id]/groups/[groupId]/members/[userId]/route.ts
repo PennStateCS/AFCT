@@ -31,6 +31,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'REMOVE_GROUP_MEMBER',
+      severity: 'INFO',
       category: 'COURSE',
       metadata: { courseId: id, groupId, userId },
     });

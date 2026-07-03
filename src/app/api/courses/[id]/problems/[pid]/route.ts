@@ -70,6 +70,7 @@ export async function DELETE(
     await createEnhancedActivityLog(prisma, req, {
       userId: user.id,
       action: 'DELETE_PROBLEM',
+      severity: 'INFO',
       category: 'PROBLEM',
       courseId,
       problemId,

@@ -49,6 +49,7 @@ export async function PATCH(
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'UPDATE_GROUP',
+      severity: 'INFO',
       category: 'COURSE',
       metadata: { courseId: id, groupId, name },
     });
@@ -87,6 +88,7 @@ export async function DELETE(
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'DELETE_GROUP',
+      severity: 'INFO',
       category: 'COURSE',
       metadata: { courseId: id, groupId },
     });

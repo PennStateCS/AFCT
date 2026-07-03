@@ -149,6 +149,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     await createEnhancedActivityLog(prisma, request, {
       userId: session.user.id,
       action: 'CREATE_COMMENT',
+      severity: 'INFO',
       category: 'ASSIGNMENT',
       courseId: assignment.course.id,
       assignmentId: assignment.id,

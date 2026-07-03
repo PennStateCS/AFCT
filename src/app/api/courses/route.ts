@@ -255,6 +255,7 @@ export async function POST(req: Request) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session.user.id,
         action: 'CREATE_COURSE',
+        severity: 'INFO',
         category: 'COURSE',
         courseId: created.course.id,
         metadata: {

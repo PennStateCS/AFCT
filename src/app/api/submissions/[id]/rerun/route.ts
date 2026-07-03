@@ -84,6 +84,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
     await createEnhancedActivityLog(prisma, req, {
       userId: user.id,
       action: 'SUBMISSION_RERUN',
+      severity: 'INFO',
       category: 'SUBMISSION',
       courseId: assignment?.courseId ?? null,
       assignmentId: submission.assignmentId,
