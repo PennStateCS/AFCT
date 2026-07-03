@@ -6,6 +6,7 @@ import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canArchiveCourse, canUnpublishCourse } from '@/lib/course-status-checks';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
+import { toEmptyStringNotation } from '@/lib/empty-string-notation';
 
 // GET: Fetch a course by ID with view-based metadata
 export async function GET(req: Request, context: { params: Promise<{ id: string }> }) {
@@ -262,6 +263,7 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
       registrationCloseAt: course.registrationCloseAt,
       isPublished: course.isPublished,
       isArchived: course.isArchived,
+      emptyStringNotation: course.emptyStringNotation,
       createdAt: course.createdAt,
       updatedAt: course.updatedAt,
       // Only include a single enrolled array (user objects with courseRole)
@@ -379,6 +381,7 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
             : null,
           isPublished: body.isPublished,
           isArchived: body.isArchived,
+          emptyStringNotation: toEmptyStringNotation(body.emptyStringNotation),
         },
       });
 
@@ -566,6 +569,7 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
       registrationCloseAt: updatedCourse.registrationCloseAt,
       isPublished: updatedCourse.isPublished,
       isArchived: updatedCourse.isArchived,
+      emptyStringNotation: updatedCourse.emptyStringNotation,
       createdAt: updatedCourse.createdAt,
       updatedAt: updatedCourse.updatedAt,
       // Only include a single enrolled array (user objects with courseRole)

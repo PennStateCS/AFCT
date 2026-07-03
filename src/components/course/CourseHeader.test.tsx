@@ -36,6 +36,7 @@ const mockCourse: FullCourse = {
   registrationCloseAt: new Date('2025-08-15T13:00:00Z'),
   isPublished: true,
   isArchived: false,
+  emptyStringNotation: 'EPSILON',
   regCode: 'abc123',
   problems: [],
   assignments: [],

@@ -72,6 +72,7 @@ export default function DuplicateCourseDialog({
     registrationCloseAt: course?.registrationCloseAt
       ? toDateTimeLocalInTimeZone(course.registrationCloseAt, timeZone)
       : '',
+    emptyStringNotation: course?.emptyStringNotation ?? 'EPSILON',
     copyMode: 'assignments_with_problems',
     copyFaculty: false,
     copyTAs: false,
@@ -116,6 +117,7 @@ export default function DuplicateCourseDialog({
       registrationCloseAt: course?.registrationCloseAt
         ? toDateTimeLocalInTimeZone(course.registrationCloseAt, timeZone)
         : '',
+      emptyStringNotation: course?.emptyStringNotation ?? 'EPSILON',
       copyMode: 'assignments_with_problems',
       copyFaculty: false,
       copyTAs: false,

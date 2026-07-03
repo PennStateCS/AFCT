@@ -14,7 +14,9 @@ import { Button } from '@/components/ui/button';
 import { User } from '@prisma/client';
 import { toast } from 'sonner';
 import InputGroup from '@/components/ui/InputGroup';
+import SelectField from '@/components/ui/SelectField';
 import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
+import { EMPTY_STRING_NOTATION_OPTIONS } from '@/lib/empty-string-notation';
 
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -46,6 +48,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
       registrationCloseAt: '',
       isPublished: false,
       instructorIds: [],
+      emptyStringNotation: 'EPSILON',
     }),
     [],
   );
@@ -306,6 +309,24 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
                 searchPlaceholder="Search faculty..."
                 emptyStateText="No faculty found."
                 error={errors.instructorIds?.message}
+              />
+            )}
+          />
+
+          {/* EMPTY STRING NOTATION */}
+          <Controller
+            control={control}
+            name="emptyStringNotation"
+            render={({ field }) => (
+              <SelectField
+                label="Empty string notation"
+                name="emptyStringNotation"
+                id="emptyStringNotation"
+                value={field.value}
+                onValueChange={field.onChange}
+                options={EMPTY_STRING_NOTATION_OPTIONS}
+                description="Choose how the empty string should appear in automata and languages."
+                error={errors.emptyStringNotation?.message}
               />
             )}
           />

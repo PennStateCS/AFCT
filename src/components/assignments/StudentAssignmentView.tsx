@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
 import { ArrowLeft } from 'lucide-react';
 import JffViewerDialog from '@/components/JffViewerDialog';
+import { useEmptyStringSymbol } from '@/lib/useEmptyStringSymbol';
 import { ProblemListCard } from '@/components/assignments/ProblemListCard';
 import ProblemWorkspace from '@/components/assignments/ProblemWorkspace';
 import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
@@ -40,6 +41,7 @@ export default function StudentAssignmentPage({
   const isStudent = session?.user?.role === 'STUDENT';
 
   const [assignment, setAssignment] = useState<AssignmentWithDetails | null>(initialAssignment);
+  const epsSymbol = useEmptyStringSymbol(assignment?.courseId);
   const [loading, setLoading] = useState(!initialAssignment);
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
   const [commentsLoading, setCommentsLoading] = useState(false);
@@ -413,6 +415,7 @@ export default function StudentAssignmentPage({
             title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
             width="70vw"
             height="70vh"
+            epsSymbol={epsSymbol}
           />
         )}
       {openDialog.submission &&
