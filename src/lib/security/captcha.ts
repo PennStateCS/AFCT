@@ -1,7 +1,9 @@
+import { getHcaptchaSecretKey } from '@/lib/hcaptcha';
+
 const HCAPTCHA_ENDPOINT = 'https://hcaptcha.com/siteverify';
 
 export async function verifyCaptchaToken(token?: string | null, ip?: string | null) {
-  const secret = process.env.HCAPTCHA_SECRET_KEY;
+  const secret = await getHcaptchaSecretKey();
 
   if (!secret || !token) {
     return false;

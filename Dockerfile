@@ -59,6 +59,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     postgresql-client \
     netcat-openbsd \
     tini \
+    openssl \
     ca-certificates
 
 # Install Java 21 (Temurin JRE)
@@ -116,6 +117,9 @@ RUN mkdir -p /private/uploads/pfps \
     /private/uploads/submissions && \
     chmod -R 775 /private/uploads && \
     chown -R node:node /private/uploads
+
+# App-owned dir for the admin-uploaded TLS cert (named volume inherits ownership)
+RUN mkdir -p /app/certs && chmod 750 /app/certs && chown -R node:node /app/certs
 
 # Declare upload volumes for persistence
 VOLUME ["/private/uploads"]

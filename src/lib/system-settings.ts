@@ -49,6 +49,12 @@ export const DEFAULT_SUBMISSION_MAX_ATTEMPTS = 3;
 export const MIN_SUBMISSION_MAX_ATTEMPTS = 1;
 export const MAX_SUBMISSION_MAX_ATTEMPTS = 10;
 
+// cfganalyzer exploration bound (CFGANALYZER_LIMIT). Higher = deeper checks but
+// slower; the eval timeout still guards runaway cases.
+export const DEFAULT_SUBMISSION_ANALYZER_LIMIT = 15;
+export const MIN_SUBMISSION_ANALYZER_LIMIT = 1;
+export const MAX_SUBMISSION_ANALYZER_LIMIT = 100;
+
 function clampInt(value: number, min: number, max: number, fallback: number): number {
   if (!Number.isFinite(value)) return fallback;
   return Math.max(min, Math.min(max, Math.trunc(value)));
@@ -68,3 +74,6 @@ export const clampSubmissionMaxConcurrent = (v: number) =>
 
 export const clampSubmissionMaxAttempts = (v: number) =>
   clampInt(v, MIN_SUBMISSION_MAX_ATTEMPTS, MAX_SUBMISSION_MAX_ATTEMPTS, DEFAULT_SUBMISSION_MAX_ATTEMPTS);
+
+export const clampSubmissionAnalyzerLimit = (v: number) =>
+  clampInt(v, MIN_SUBMISSION_ANALYZER_LIMIT, MAX_SUBMISSION_ANALYZER_LIMIT, DEFAULT_SUBMISSION_ANALYZER_LIMIT);

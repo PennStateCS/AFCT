@@ -12,11 +12,13 @@ import {
   DEFAULT_SUBMISSION_RESUBMIT_COOLDOWN_MS,
   DEFAULT_SUBMISSION_MAX_CONCURRENT,
   DEFAULT_SUBMISSION_MAX_ATTEMPTS,
+  DEFAULT_SUBMISSION_ANALYZER_LIMIT,
   clampSubmissionEvalTimeoutMs,
   clampSubmissionEvalMaxMemoryMb,
   clampSubmissionResubmitCooldownMs,
   clampSubmissionMaxConcurrent,
   clampSubmissionMaxAttempts,
+  clampSubmissionAnalyzerLimit,
 } from '@/lib/system-settings';
 
 export type QueueSettings = {
@@ -25,6 +27,7 @@ export type QueueSettings = {
   resubmitCooldownMs: number;
   maxConcurrent: number;
   maxAttempts: number;
+  analyzerLimit: number;
 };
 
 export type EvaluatorConfig = {
@@ -32,6 +35,8 @@ export type EvaluatorConfig = {
   timeoutMs: number;
   /** Max JVM heap for the evaluator process (MB). */
   maxMemoryMb: number;
+  /** Exploration bound passed to cfganalyzer (CFGANALYZER_LIMIT). */
+  analyzerLimit: number;
 };
 
 // Returns the env var as a number, or the fallback when it's unset/non-numeric.
@@ -49,6 +54,7 @@ export async function getQueueSettings(): Promise<QueueSettings> {
     submissionResubmitCooldownMs: number;
     submissionMaxConcurrent: number;
     submissionMaxAttempts: number;
+    submissionAnalyzerLimit: number;
   } | null = null;
 
   try {
@@ -60,6 +66,7 @@ export async function getQueueSettings(): Promise<QueueSettings> {
         submissionResubmitCooldownMs: true,
         submissionMaxConcurrent: true,
         submissionMaxAttempts: true,
+        submissionAnalyzerLimit: true,
       },
     });
   } catch {
@@ -87,10 +94,14 @@ export async function getQueueSettings(): Promise<QueueSettings> {
       row?.submissionMaxAttempts ??
         fromEnv('SUBMISSION_MAX_ATTEMPTS', DEFAULT_SUBMISSION_MAX_ATTEMPTS),
     ),
+    analyzerLimit: clampSubmissionAnalyzerLimit(
+      row?.submissionAnalyzerLimit ??
+        fromEnv('CFGANALYZER_LIMIT', DEFAULT_SUBMISSION_ANALYZER_LIMIT),
+    ),
   };
 }
 
 export async function getEvaluatorConfig(): Promise<EvaluatorConfig> {
   const s = await getQueueSettings();
-  return { timeoutMs: s.evalTimeoutMs, maxMemoryMb: s.evalMaxMemoryMb };
+  return { timeoutMs: s.evalTimeoutMs, maxMemoryMb: s.evalMaxMemoryMb, analyzerLimit: s.analyzerLimit };
 }
