@@ -108,6 +108,7 @@ export async function DELETE(
     await createEnhancedActivityLog(prisma, req as unknown as Request, {
       userId: currentUser.id,
       action: 'REMOVE_FROM_COURSE',
+      severity: 'INFO',
       category: 'COURSE',
       courseId,
       metadata: {
@@ -228,6 +229,7 @@ export async function PATCH(
     await createEnhancedActivityLog(prisma, req as unknown as Request, {
       userId: currentUser.id,
       action: 'CHANGE_COURSE_ROLE',
+      severity: 'INFO',
       category: 'COURSE',
       courseId,
       metadata: { userId: currentUser.id, courseId, targetUserId: userId, newRole },

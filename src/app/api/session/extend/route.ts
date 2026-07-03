@@ -13,6 +13,7 @@ export async function POST(req: NextRequest) {
     if (!session || !session.user) {
       await createEnhancedActivityLog(prisma, req, {
         action: 'SESSION_EXTENSION_FAILED',
+        severity: 'WARNING',
         category: 'SYSTEM',
         metadata: {
           reason: 'Not authenticated',
@@ -26,6 +27,7 @@ export async function POST(req: NextRequest) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'SESSION_EXTENDED',
+      severity: 'INFO',
       category: 'SYSTEM',
       metadata: {
         kind: 'inactivity-reset',
@@ -40,6 +42,7 @@ export async function POST(req: NextRequest) {
 
     await createEnhancedActivityLog(prisma, req, {
       action: 'SESSION_EXTENSION_ERROR',
+      severity: 'ERROR',
       category: 'SYSTEM',
       metadata: {
         error: err instanceof Error ? err.message : 'Unknown error',

@@ -66,6 +66,7 @@ export async function POST(req: Request) {
       await safeAuditLog(req, {
         userId: session.user.id,
         action: 'TLS_UPDATE_DENIED',
+        severity: 'SECURITY',
         category: 'SYSTEM',
         metadata: { role: session.user.role ?? null },
       });
@@ -130,6 +131,8 @@ export async function POST(req: Request) {
     await safeAuditLog(req, {
       userId: session.user.id,
       action: auditAction,
+      // CSR generation and every cert install are routine operations.
+      severity: 'INFO',
       category: 'SYSTEM',
       metadata: auditMeta,
     });
@@ -141,6 +144,7 @@ export async function POST(req: Request) {
       await safeAuditLog(req, {
         userId: session.user.id,
         action: 'TLS_CERT_REJECTED',
+        severity: 'WARNING',
         category: 'SYSTEM',
         metadata: { attempted: body.action ?? 'install', reason: err.message },
       });
@@ -150,6 +154,7 @@ export async function POST(req: Request) {
     await safeAuditLog(req, {
       userId: session.user.id,
       action: 'TLS_CERT_ERROR',
+      severity: 'ERROR',
       category: 'SYSTEM',
       metadata: {
         attempted: body.action ?? 'install',
@@ -167,6 +172,7 @@ export async function DELETE(req: Request) {
       await safeAuditLog(req, {
         userId: session.user.id,
         action: 'TLS_UPDATE_DENIED',
+        severity: 'SECURITY',
         category: 'SYSTEM',
         metadata: { role: session.user.role ?? null, attempted: 'reset' },
       });

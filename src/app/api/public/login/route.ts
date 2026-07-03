@@ -15,6 +15,7 @@ export async function POST(req: NextRequest) {
       console.warn('Login failed: Missing email or password');
       await createEnhancedActivityLog(prisma, req, {
         action: 'LOGIN_FAILED',
+        severity: 'SECURITY',
         category: 'SYSTEM',
         metadata: { reason: 'Missing credentials', email: email },
       });
@@ -29,6 +30,7 @@ export async function POST(req: NextRequest) {
       console.warn(`Login failed for ${normalizedEmail}: Invalid credentials`);
       await createEnhancedActivityLog(prisma, req, {
         action: 'LOGIN_FAILED',
+        severity: 'SECURITY',
         category: 'SYSTEM',
         metadata: { reason: 'Invalid credentials', email: normalizedEmail },
       });
@@ -41,6 +43,7 @@ export async function POST(req: NextRequest) {
       console.warn(`Login failed for ${normalizedEmail}: Invalid credentials`);
       await createEnhancedActivityLog(prisma, req, {
         action: 'LOGIN_FAILED',
+        severity: 'SECURITY',
         category: 'SYSTEM',
         metadata: { reason: 'Invalid credentials', email: normalizedEmail },
       });
@@ -52,6 +55,7 @@ export async function POST(req: NextRequest) {
       console.warn(`Login failed for ${normalizedEmail}: Inactive user`);
       await createEnhancedActivityLog(prisma, req, {
         action: 'LOGIN_FAILED',
+        severity: 'SECURITY',
         category: 'SYSTEM',
         metadata: { reason: 'Inactive user', email: normalizedEmail },
       });
@@ -62,6 +66,7 @@ export async function POST(req: NextRequest) {
     await createEnhancedActivityLog(prisma, req, {
       userId: user.id,
       action: 'LOGIN_SUCCESS',
+      severity: 'INFO',
       category: 'SYSTEM',
       metadata: {
         userId: user.id,
@@ -87,6 +92,7 @@ export async function POST(req: NextRequest) {
 
     await createEnhancedActivityLog(prisma, req, {
       action: 'LOGIN_ERROR',
+      severity: 'ERROR',
       category: 'SYSTEM',
       metadata: {
         error: err instanceof Error ? err.message : 'Unknown error',

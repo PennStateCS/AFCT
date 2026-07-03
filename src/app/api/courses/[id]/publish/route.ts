@@ -53,6 +53,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     await createEnhancedActivityLog(prisma, req, {
       userId: user.id,
       action: isPublished ? 'COURSE_PUBLISHED' : 'COURSE_UNPUBLISHED',
+      severity: 'INFO',
       category: 'COURSE',
       courseId,
       metadata: {

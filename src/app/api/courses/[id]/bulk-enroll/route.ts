@@ -38,6 +38,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     await createEnhancedActivityLog(prisma, req as unknown as Request, {
       userId: session?.user?.id,
       action: 'BULK_ENROLL_USERS',
+      severity: 'INFO',
       category: 'COURSE',
       courseId,
       metadata: {

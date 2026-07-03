@@ -46,6 +46,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ file
       await createEnhancedActivityLog(prisma, req, {
         userId: session.user.id,
         action: 'DOWNLOAD_SOLUTION_FILE',
+        severity: 'INFO',
         category: 'PROBLEM',
         courseId: problem.courseId,
         problemId: problem.id,

@@ -30,6 +30,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       await createEnhancedActivityLog(prisma, _ as Request, {
         userId: user.id,
         action: 'VIEW_GROUP_PROBLEMS',
+        severity: 'INFO',
         category: 'ASSIGNMENT',
         courseId,
         assignmentId,
@@ -77,6 +78,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       await createEnhancedActivityLog(prisma, req as Request, {
         userId: user.id,
         action: 'VIEW_GROUP_PROBLEMS',
+        severity: 'INFO',
         category: 'ASSIGNMENT',
         courseId,
         assignmentId,
@@ -147,6 +149,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
       await createEnhancedActivityLog(prisma, req as Request, {
         userId: user.id,
         action: 'REMOVE_GROUP_PROBLEMS',
+        severity: 'INFO',
         category: 'ASSIGNMENT',
         courseId,
         assignmentId,

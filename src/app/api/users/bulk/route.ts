@@ -138,6 +138,7 @@ export async function POST(req: Request) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'BULK_CREATE_USERS',
+      severity: 'INFO',
       category: 'USER',
       metadata: {
         userId: session.user.id,

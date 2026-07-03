@@ -175,6 +175,7 @@ export async function GET(
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,
         action: 'VIEW_ASSIGNMENT_SUBMISSIONS',
+        severity: 'INFO',
         category: 'SUBMISSION',
         courseId,
         assignmentId,

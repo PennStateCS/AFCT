@@ -93,6 +93,7 @@ export async function PUT(
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,
         action: 'UPDATE_ASSIGNMENT_PROBLEM_SETTINGS',
+        severity: 'INFO',
         category: 'ASSIGNMENT',
         courseId,
         assignmentId,

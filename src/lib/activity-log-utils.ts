@@ -14,11 +14,50 @@ export type ActivityCategory =
   | 'PROBLEM' // Problem CRUD
   | 'SUBMISSION'; // Submission CRUD, grading
 
+export type LogSeverity = 'INFO' | 'WARNING' | 'ERROR' | 'SECURITY';
+
+/**
+ * Classify an action into a severity from its name. Our actions follow a
+ * consistent verb/outcome convention, so the suffix reliably encodes intent:
+ *   - access-control denials and auth failures  -> SECURITY
+ *   - operational failures (…_ERROR)             -> ERROR
+ *   - expected rejections / invalid input        -> WARNING
+ *   - everything else (normal activity)          -> INFO
+ * Callers may pass an explicit severity to override this.
+ */
+export function inferSeverity(action: string): LogSeverity {
+  const a = action.toUpperCase();
+  const isAuth = a.includes('LOGIN') || a.includes('SIGNUP') || a.includes('AUTH');
+
+  if (a.includes('DENIED') || a.includes('UNAUTHORIZED') || a.includes('FORBIDDEN')) {
+    return 'SECURITY';
+  }
+  if (a.includes('CHALLENGE_REQUIRED')) return 'SECURITY';
+  if (isAuth && (a.includes('FAILED') || a.includes('RATE_LIMIT'))) return 'SECURITY';
+
+  if (a.includes('ERROR')) return 'ERROR';
+
+  if (
+    a.includes('REJECTED') ||
+    a.includes('INVALID') ||
+    a.includes('TOO_LARGE') ||
+    a.includes('RATE_LIMIT') ||
+    a.includes('FAILED') ||
+    a.includes('STDERR')
+  ) {
+    return 'WARNING';
+  }
+
+  return 'INFO';
+}
+
 export interface EnhancedActivityLogData {
   userId?: string | null;
   action: string;
   timestamp?: Date;
   category?: ActivityCategory;
+  /** Overrides the severity inferred from the action name. */
+  severity?: LogSeverity;
   courseId?: string | null;
   assignmentId?: string | null;
   problemId?: string | null;
@@ -162,6 +201,7 @@ export async function createEnhancedActivityLog(
   data: EnhancedActivityLogData,
 ): Promise<void> {
   const category = data.category || getActivityCategory(data.action);
+  const severity = data.severity ?? inferSeverity(data.action);
   const ipAddress = getClientIp(req);
   const userAgent = req.headers.get('user-agent') || undefined;
   const includeDisplayMetadata = data.includeDisplayMetadata !== false;
@@ -267,6 +307,7 @@ export async function createEnhancedActivityLog(
         userId: safeUserId,
         action: data.action,
         category,
+        severity,
         courseId: data.courseId ?? null,
         assignmentId: data.assignmentId ?? null,
         problemId: data.problemId ?? null,
