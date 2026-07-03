@@ -3,6 +3,10 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import {
+  createEnhancedActivityLog,
+  type EnhancedActivityLogData,
+} from '@/lib/activity-log-utils';
+import {
   clampSessionTimeoutMinutes,
   clampSubmissionEvalTimeoutMs,
   clampSubmissionEvalMaxMemoryMb,
@@ -21,6 +25,50 @@ import {
   DEFAULT_SUBMISSION_ANALYZER_LIMIT,
   DEFAULT_SYSTEM_TIMEZONE,
 } from '@/lib/system-settings';
+
+// Settings whose changes are safe to record verbatim in the audit log. The
+// hCaptcha secret is deliberately excluded — we only log whether it was
+// set/cleared, never its value.
+const AUDITED_FIELDS = [
+  'timezone',
+  'maxUploadSizeMb',
+  'allowSignup',
+  'sessionTimeoutMinutes',
+  'submissionEvalTimeoutMs',
+  'submissionEvalMaxMemoryMb',
+  'submissionResubmitCooldownMs',
+  'submissionMaxConcurrent',
+  'submissionMaxAttempts',
+  'submissionAnalyzerLimit',
+  'hcaptchaSiteKey',
+] as const;
+
+// The audited fields hold only JSON primitives (strings, numbers, booleans).
+type JsonPrimitive = string | number | boolean | null;
+
+// Build a { field: { from, to } } diff of the audited fields. A null `before`
+// (first-time create) reports every field as newly set.
+function diffSettings(
+  before: Record<string, unknown> | null,
+  after: Record<string, unknown>,
+): Record<string, { from: JsonPrimitive; to: JsonPrimitive }> {
+  const changes: Record<string, { from: JsonPrimitive; to: JsonPrimitive }> = {};
+  for (const field of AUDITED_FIELDS) {
+    const from = (before ? (before[field] ?? null) : null) as JsonPrimitive;
+    const to = (after[field] ?? null) as JsonPrimitive;
+    if (from !== to) changes[field] = { from, to };
+  }
+  return changes;
+}
+
+// Audit logging must never turn a successful save into a 500, so swallow its errors.
+async function safeAuditLog(req: Request, data: EnhancedActivityLogData): Promise<void> {
+  try {
+    await createEnhancedActivityLog(prisma, req, data);
+  } catch (err) {
+    console.error('[system-settings] audit log failed:', err);
+  }
+}
 
 export async function GET() {
   const session = await auth();
@@ -73,6 +121,16 @@ export async function PUT(req: Request) {
   const session = await auth();
   const role = session?.user?.role;
   if (!role || !['ADMIN', 'FACULTY'].includes(role)) {
+    // Record write attempts from a signed-in user who lacks permission — a
+    // privilege-escalation probe is worth a trail. Unauthenticated hits are skipped.
+    if (session?.user?.id) {
+      await safeAuditLog(req, {
+        userId: session.user.id,
+        action: 'SYSTEM_SETTINGS_UPDATE_DENIED',
+        category: 'SYSTEM',
+        metadata: { role: role ?? null },
+      });
+    }
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -154,11 +212,52 @@ export async function PUT(req: Request) {
   };
   if (hasAllowSignup) createData.allowSignup = body.allowSignup;
 
-  const settings = await prisma.systemSettings.upsert({
-    where: { id: 1 },
-    update: updateData,
-    create: createData,
-  });
+  // Snapshot the prior state so the audit log can report what actually changed.
+  const existing = await prisma.systemSettings.findUnique({ where: { id: 1 } });
+
+  let settings;
+  try {
+    settings = await prisma.systemSettings.upsert({
+      where: { id: 1 },
+      update: updateData,
+      create: createData,
+    });
+  } catch (err) {
+    console.error('[system-settings] failed to persist update:', err);
+    await safeAuditLog(req, {
+      userId: session.user?.id,
+      action: 'SYSTEM_SETTINGS_UPDATE_ERROR',
+      category: 'SYSTEM',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
+    return NextResponse.json({ error: 'Failed to update settings' }, { status: 500 });
+  }
+
+  // Audit the change: which fields moved (with before/after), plus whether the
+  // hCaptcha secret was set or cleared — never its value. Skip a no-op save.
+  const changes = diffSettings(
+    existing as Record<string, unknown> | null,
+    settings as unknown as Record<string, unknown>,
+  );
+  const hcaptchaSecretCleared = body.hcaptchaSecretClear === true;
+  const hcaptchaSecretUpdated =
+    !hcaptchaSecretCleared &&
+    typeof body.hcaptchaSecretKey === 'string' &&
+    body.hcaptchaSecretKey.trim() !== '';
+  if (Object.keys(changes).length || hcaptchaSecretUpdated || hcaptchaSecretCleared) {
+    await safeAuditLog(req, {
+      userId: session.user?.id,
+      action: 'SYSTEM_SETTINGS_UPDATED',
+      category: 'SYSTEM',
+      metadata: {
+        created: !existing,
+        changedFields: Object.keys(changes),
+        changes,
+        hcaptchaSecretUpdated,
+        hcaptchaSecretCleared,
+      },
+    });
+  }
 
   return NextResponse.json({
     timezone: settings.timezone,
