@@ -19,6 +19,7 @@ describe('eval-config', () => {
     delete process.env.SUBMISSION_RESUBMIT_COOLDOWN_MS;
     delete process.env.SUBMISSION_MAX_CONCURRENT;
     delete process.env.SUBMISSION_MAX_ATTEMPTS;
+    delete process.env.CFGANALYZER_LIMIT;
   });
 
   afterEach(() => {
@@ -27,15 +28,16 @@ describe('eval-config', () => {
 
   it('returns the defaults when no env vars are set', async () => {
     const config = await getEvaluatorConfig();
-    expect(config).toEqual({ timeoutMs: 30_000, maxMemoryMb: 256 });
+    expect(config).toEqual({ timeoutMs: 30_000, maxMemoryMb: 256, analyzerLimit: 15 });
   });
 
   it('reads overrides from environment variables', async () => {
     process.env.SUBMISSION_EVAL_TIMEOUT_MS = '45000';
     process.env.SUBMISSION_EVAL_MAX_MEMORY_MB = '512';
+    process.env.CFGANALYZER_LIMIT = '40';
 
     const config = await getEvaluatorConfig();
-    expect(config).toEqual({ timeoutMs: 45_000, maxMemoryMb: 512 });
+    expect(config).toEqual({ timeoutMs: 45_000, maxMemoryMb: 512, analyzerLimit: 40 });
   });
 
   it('clamps values outside the allowed range', async () => {
@@ -52,7 +54,7 @@ describe('eval-config', () => {
     process.env.SUBMISSION_EVAL_MAX_MEMORY_MB = 'abc';
 
     const config = await getEvaluatorConfig();
-    expect(config).toEqual({ timeoutMs: 30_000, maxMemoryMb: 256 });
+    expect(config).toEqual({ timeoutMs: 30_000, maxMemoryMb: 256, analyzerLimit: 15 });
   });
 
   describe('getQueueSettings', () => {
@@ -62,6 +64,7 @@ describe('eval-config', () => {
       resubmitCooldownMs: 10_000,
       maxConcurrent: 5,
       maxAttempts: 3,
+      analyzerLimit: 15,
     };
 
     it('returns all defaults with no row and no env', async () => {
@@ -76,6 +79,7 @@ describe('eval-config', () => {
         submissionResubmitCooldownMs: 5_000,
         submissionMaxConcurrent: 8,
         submissionMaxAttempts: 2,
+        submissionAnalyzerLimit: 40,
       });
 
       expect(await getQueueSettings()).toEqual({
@@ -84,6 +88,7 @@ describe('eval-config', () => {
         resubmitCooldownMs: 5_000,
         maxConcurrent: 8,
         maxAttempts: 2,
+        analyzerLimit: 40,
       });
     });
 
@@ -107,6 +112,7 @@ describe('eval-config', () => {
         submissionResubmitCooldownMs: -5, // below 0 floor
         submissionMaxConcurrent: 999, // above 20 cap
         submissionMaxAttempts: 99, // above 10 cap
+        submissionAnalyzerLimit: 999, // above 100 cap
       });
 
       expect(await getQueueSettings()).toEqual({
@@ -115,6 +121,7 @@ describe('eval-config', () => {
         resubmitCooldownMs: 0,
         maxConcurrent: 20,
         maxAttempts: 10,
+        analyzerLimit: 100,
       });
     });
 

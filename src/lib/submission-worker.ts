@@ -336,7 +336,7 @@ function getJavaRunnerCtor() {
   return maybeCtor as new (jarPath: string) => {
     execute: (
       args: string[],
-      options?: { timeout?: number; maxMemoryMb?: number },
+      options?: { timeout?: number; maxMemoryMb?: number; env?: Record<string, string> },
     ) => Promise<{
       stdout?: string;
       stderr?: string;
@@ -355,7 +355,7 @@ function createJavaRunner(jarPath: string) {
       JavaRunnerCtor as unknown as (path: string) => {
         execute: (
           args: string[],
-          options?: { timeout?: number; maxMemoryMb?: number },
+          options?: { timeout?: number; maxMemoryMb?: number; env?: Record<string, string> },
         ) => Promise<{
           stdout?: string;
           stderr?: string;
@@ -365,7 +365,7 @@ function createJavaRunner(jarPath: string) {
     )(jarPath) as {
       execute: (
         args: string[],
-        options?: { timeout?: number; maxMemoryMb?: number },
+        options?: { timeout?: number; maxMemoryMb?: number; env?: Record<string, string> },
       ) => Promise<{
         stdout?: string;
         stderr?: string;
@@ -468,10 +468,12 @@ async function runJavaEvaluator(
               }
             }
 
-            // Execute the evaluator with the configured timeout and memory cap
+            // Execute the evaluator with the configured timeout, memory cap, and
+            // analyzer bound (overrides the CFGANALYZER_LIMIT env default).
             const result = await evaluator.execute(args, {
               timeout: config.timeoutMs,
               maxMemoryMb: config.maxMemoryMb,
+              env: { CFGANALYZER_LIMIT: String(config.analyzerLimit) },
             });
 
             const stdoutTrimmed = result.stdout?.trim() ?? '';

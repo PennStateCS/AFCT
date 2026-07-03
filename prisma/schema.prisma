@@ -408,6 +408,13 @@ model SystemSettings {
   submissionResubmitCooldownMs Int @default(10000)
   submissionMaxConcurrent      Int @default(5)
   submissionMaxAttempts        Int @default(3)
+  // Exploration bound passed to the cfganalyzer evaluator (CFGANALYZER_LIMIT).
+  submissionAnalyzerLimit      Int @default(15)
+
+  // hCaptcha keys (null = fall back to env, then disabled). Secret is never
+  // returned to the client.
+  hcaptchaSiteKey   String?
+  hcaptchaSecretKey String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
