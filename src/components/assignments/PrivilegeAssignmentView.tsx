@@ -49,6 +49,7 @@ import AssignmentSubmissions from '@/components/AssignmentSubmissions';
 import Link from 'next/link';
 import { Problem } from '@prisma/client';
 import JffViewerDialog from '@/components/JffViewerDialog';
+import { useEmptyStringSymbol } from '@/lib/useEmptyStringSymbol';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { AssignmentWithDetails } from '@/lib/assignment-details';
 
@@ -89,6 +90,7 @@ export default function AssignmentDashboardPage({
   const { data: session } = useSession();
   const { timezone } = useEffectiveTimezone();
   const { id, aid } = useParams<{ id: string; aid: string }>();
+  const epsSymbol = useEmptyStringSymbol(id);
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -880,6 +882,7 @@ export default function AssignmentDashboardPage({
           width="80vw"
           height="80vh"
           showGridDefault={true}
+          epsSymbol={epsSymbol}
         />
       )}
       {viewerOpen && viewerSrc && 'RE' === jffType && (
