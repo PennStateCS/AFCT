@@ -51,6 +51,9 @@ services:
       # Private uploads managed by Docker (named volume)
       - afct-dev-private-uploads:/private/uploads
 
+      # App-owned volume for the admin-uploaded TLS cert (nginx reads it)
+      - afct-dev-tls-certs:/app/certs
+
     command: ['npm', 'run', 'dev']
 
     healthcheck:
@@ -70,6 +73,7 @@ services:
     volumes:
       - nginx_certs:/etc/nginx/certs
       - afct-dev-uploads-data:/usr/share/nginx/html/uploads
+      - afct-dev-tls-certs:/etc/nginx/custom-certs:ro
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ./docker/nginx/entrypoint.sh:/entrypoint.sh:ro
     entrypoint: ['/bin/sh', '/entrypoint.sh']
@@ -122,3 +126,4 @@ volumes:
   afct-dev-next:
   afct-dev-private-uploads:
   afct-dev-uploads-data:
+  afct-dev-tls-certs:

@@ -45,6 +45,9 @@ describe('GET /api/system-settings', () => {
       submissionResubmitCooldownMs: 10000,
       submissionMaxConcurrent: 5,
       submissionMaxAttempts: 3,
+      submissionAnalyzerLimit: 15,
+      hcaptchaSiteKey: '',
+      hcaptchaSecretConfigured: false,
     });
   });
 
@@ -61,6 +64,7 @@ describe('GET /api/system-settings', () => {
       submissionResubmitCooldownMs: 5000,
       submissionMaxConcurrent: 8,
       submissionMaxAttempts: 2,
+      submissionAnalyzerLimit: 40,
     });
 
     const res = await GET();
@@ -77,6 +81,9 @@ describe('GET /api/system-settings', () => {
       submissionResubmitCooldownMs: 5000,
       submissionMaxConcurrent: 8,
       submissionMaxAttempts: 2,
+      submissionAnalyzerLimit: 40,
+      hcaptchaSiteKey: '',
+      hcaptchaSecretConfigured: false,
     });
   });
 });
@@ -202,6 +209,8 @@ describe('PUT /api/system-settings', () => {
       submissionResubmitCooldownMs: 10000,
       submissionMaxConcurrent: 5,
       submissionMaxAttempts: 3,
+      hcaptchaSiteKey: '',
+      hcaptchaSecretConfigured: false,
     });
   });
 
@@ -243,6 +252,66 @@ describe('PUT /api/system-settings', () => {
     // Fields not sent are left untouched.
     expect(call.update.submissionResubmitCooldownMs).toBeUndefined();
     expect(call.update.submissionMaxAttempts).toBeUndefined();
+  });
+
+  const okUpsert = () =>
+    prismaMock.systemSettings.upsert.mockResolvedValue({
+      id: 1,
+      timezone: 'UTC',
+      maxUploadSizeMb: 25,
+      allowSignup: true,
+      sessionTimeoutMinutes: 20,
+      submissionEvalTimeoutMs: 30000,
+      submissionEvalMaxMemoryMb: 256,
+      submissionResubmitCooldownMs: 10000,
+      submissionMaxConcurrent: 5,
+      submissionMaxAttempts: 3,
+      hcaptchaSiteKey: 'site-1',
+      hcaptchaSecretKey: 'secret-1',
+    });
+
+  const putBody = (body: Record<string, unknown>) =>
+    new Request('http://localhost/api/system-settings', {
+      method: 'PUT',
+      body: JSON.stringify({ timezone: 'UTC', maxUploadSizeMb: 25, ...body }),
+    });
+
+  it('persists hcaptcha site + secret keys and never echoes the secret', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    okUpsert();
+
+    const res = await PUT(putBody({ hcaptchaSiteKey: ' site-1 ', hcaptchaSecretKey: ' secret-1 ' }));
+
+    expect(res.status).toBe(200);
+    const call = prismaMock.systemSettings.upsert.mock.calls[0][0];
+    expect(call.update).toMatchObject({ hcaptchaSiteKey: 'site-1', hcaptchaSecretKey: 'secret-1' });
+    const body = await res.json();
+    expect(body.hcaptchaSiteKey).toBe('site-1');
+    expect(body.hcaptchaSecretConfigured).toBe(true);
+    expect(body.hcaptchaSecretKey).toBeUndefined();
+  });
+
+  it('keeps the existing secret when a blank secret is sent', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    okUpsert();
+
+    const res = await PUT(putBody({ hcaptchaSiteKey: 'site-1', hcaptchaSecretKey: '' }));
+
+    expect(res.status).toBe(200);
+    const call = prismaMock.systemSettings.upsert.mock.calls[0][0];
+    expect(call.update.hcaptchaSiteKey).toBe('site-1');
+    expect(call.update.hcaptchaSecretKey).toBeUndefined(); // untouched
+  });
+
+  it('clears the secret when hcaptchaSecretClear is set', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    okUpsert();
+
+    const res = await PUT(putBody({ hcaptchaSecretClear: true, hcaptchaSecretKey: 'ignored' }));
+
+    expect(res.status).toBe(200);
+    const call = prismaMock.systemSettings.upsert.mock.calls[0][0];
+    expect(call.update.hcaptchaSecretKey).toBeNull();
   });
 
   it('clamps session timeout to minimum when too low', async () => {

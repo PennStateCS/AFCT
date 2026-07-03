@@ -140,26 +140,40 @@ openssl rand -base64 64
 https://your-domain.com
 ```
 
-- **hCaptcha** — set both `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` and `HCAPTCHA_SECRET_KEY` using keys generated in the hCaptcha dashboard (<https://dashboard.hcaptcha.com/sites>). Each environment should have its own key pair; never reuse the public test keys in production.
+- **hCaptcha** — optional. hCaptcha only appears as a challenge after repeated failed logins; a fresh install works without it. You can configure it later from the browser in **System Settings → Security · hCaptcha** (this takes precedence over the env vars), or pre-seed the keys here via `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` and `HCAPTCHA_SECRET_KEY` from the hCaptcha dashboard (<https://dashboard.hcaptcha.com/sites>). Never reuse the public test keys in production.
 
 ---
 
 ## 5) TLS / HTTPS Certificates
 
-AFCT includes an nginx container that **automatically generates a self-signed certificate on first startup** if no certificate exists.
+On first startup AFCT **automatically generates a self-signed certificate**, so
+HTTPS works immediately with no configuration. Browsers will show a "not secure"
+warning until you install a trusted certificate — for a trusted internal network
+this is often acceptable; for a public site, install your own certificate.
 
-⚠️ **Self-signed certificates are not recommended for production.**
+### Managing certificates from the admin interface (recommended)
 
-### Option A (Recommended): Use Your Own Certificate
+You can install and replace your TLS certificate from the browser — no shell,
+no file copying:
 
-```bash
-docker compose up -d
+1. Sign in as an **admin** and open **System Settings**.
+2. In the **TLS Certificate** card you'll see the active certificate (or
+   "self-signed (default)").
+3. Upload your **Certificate (PEM)** and **Private key (PEM)**. If your CA
+   provided intermediate/chain certificates, add them under **Chain /
+   intermediates**.
+4. Click **Apply certificate**. It takes effect within about **15 seconds** — no
+   restart needed.
+5. To revert at any time, click **Reset to self-signed**.
 
-docker cp /path/to/fullchain.pem afct-nginx:/etc/nginx/certs/server.crt
-docker cp /path/to/privkey.pem  afct-nginx:/etc/nginx/certs/server.key
+The certificate and key are validated before they're applied (the key must match
+the certificate and it must not be expired). If a certificate is invalid, it is
+rejected and the current one is kept, so HTTPS can never go down from a bad
+upload. The private key is stored securely and is never shown again.
 
-docker compose restart nginx
-```
+> **Where to get a certificate:** a public site can use a free certificate from
+> [Let's Encrypt](https://letsencrypt.org/) (e.g. via `certbot`); an internal
+> deployment can use a certificate issued by your organization's internal CA.
 
 ---
 

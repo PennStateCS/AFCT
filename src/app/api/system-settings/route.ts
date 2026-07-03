@@ -9,6 +9,7 @@ import {
   clampSubmissionResubmitCooldownMs,
   clampSubmissionMaxConcurrent,
   clampSubmissionMaxAttempts,
+  clampSubmissionAnalyzerLimit,
   DEFAULT_ALLOW_SIGNUP,
   DEFAULT_MAX_UPLOAD_SIZE_MB,
   DEFAULT_SESSION_TIMEOUT_MINUTES,
@@ -17,6 +18,7 @@ import {
   DEFAULT_SUBMISSION_RESUBMIT_COOLDOWN_MS,
   DEFAULT_SUBMISSION_MAX_CONCURRENT,
   DEFAULT_SUBMISSION_MAX_ATTEMPTS,
+  DEFAULT_SUBMISSION_ANALYZER_LIMIT,
   DEFAULT_SYSTEM_TIMEZONE,
 } from '@/lib/system-settings';
 
@@ -43,6 +45,11 @@ export async function GET() {
       settings?.submissionMaxConcurrent ?? DEFAULT_SUBMISSION_MAX_CONCURRENT,
     submissionMaxAttempts:
       settings?.submissionMaxAttempts ?? DEFAULT_SUBMISSION_MAX_ATTEMPTS,
+    submissionAnalyzerLimit:
+      settings?.submissionAnalyzerLimit ?? DEFAULT_SUBMISSION_ANALYZER_LIMIT,
+    // Public site key is returned; the secret is never sent, only whether it's set.
+    hcaptchaSiteKey: settings?.hcaptchaSiteKey ?? '',
+    hcaptchaSecretConfigured: Boolean(settings?.hcaptchaSecretKey),
   });
 }
 
@@ -56,6 +63,10 @@ type SettingsBody = {
   submissionResubmitCooldownMs?: number;
   submissionMaxConcurrent?: number;
   submissionMaxAttempts?: number;
+  submissionAnalyzerLimit?: number;
+  hcaptchaSiteKey?: string;
+  hcaptchaSecretKey?: string;
+  hcaptchaSecretClear?: boolean;
 };
 
 export async function PUT(req: Request) {
@@ -98,6 +109,20 @@ export async function PUT(req: Request) {
     queueData.submissionMaxConcurrent = clampSubmissionMaxConcurrent(Number(body.submissionMaxConcurrent));
   if (body.submissionMaxAttempts !== undefined)
     queueData.submissionMaxAttempts = clampSubmissionMaxAttempts(Number(body.submissionMaxAttempts));
+  if (body.submissionAnalyzerLimit !== undefined)
+    queueData.submissionAnalyzerLimit = clampSubmissionAnalyzerLimit(Number(body.submissionAnalyzerLimit));
+
+  // hCaptcha keys: site key set/clear when provided; secret only updated when a
+  // non-empty value is sent, or explicitly cleared. Empty secret means "keep".
+  const hcaptchaData: Record<string, string | null> = {};
+  if (typeof body.hcaptchaSiteKey === 'string') {
+    hcaptchaData.hcaptchaSiteKey = body.hcaptchaSiteKey.trim() || null;
+  }
+  if (body.hcaptchaSecretClear === true) {
+    hcaptchaData.hcaptchaSecretKey = null;
+  } else if (typeof body.hcaptchaSecretKey === 'string' && body.hcaptchaSecretKey.trim() !== '') {
+    hcaptchaData.hcaptchaSecretKey = body.hcaptchaSecretKey.trim();
+  }
 
   const updateData: {
     timezone: string;
@@ -109,6 +134,7 @@ export async function PUT(req: Request) {
     maxUploadSizeMb,
     sessionTimeoutMinutes,
     ...queueData,
+    ...hcaptchaData,
   };
   if (hasAllowSignup) updateData.allowSignup = body.allowSignup;
 
@@ -124,6 +150,7 @@ export async function PUT(req: Request) {
     maxUploadSizeMb,
     sessionTimeoutMinutes,
     ...queueData,
+    ...hcaptchaData,
   };
   if (hasAllowSignup) createData.allowSignup = body.allowSignup;
 
@@ -143,5 +170,8 @@ export async function PUT(req: Request) {
     submissionResubmitCooldownMs: settings.submissionResubmitCooldownMs,
     submissionMaxConcurrent: settings.submissionMaxConcurrent,
     submissionMaxAttempts: settings.submissionMaxAttempts,
+    submissionAnalyzerLimit: settings.submissionAnalyzerLimit,
+    hcaptchaSiteKey: settings.hcaptchaSiteKey ?? '',
+    hcaptchaSecretConfigured: Boolean(settings.hcaptchaSecretKey),
   });
 }
