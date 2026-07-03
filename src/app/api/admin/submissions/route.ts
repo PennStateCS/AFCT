@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,6 +11,12 @@ export async function POST(req: NextRequest) {
     }
 
     if (session.user.role !== 'ADMIN' && session.user.role !== 'FACULTY') {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'ADMIN_SUBMISSIONS_ACCESS_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -108,6 +115,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(formattedSubmissions);
   } catch (error) {
     console.error('Error fetching submissions:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: null,
+      action: 'ADMIN_SUBMISSIONS_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json(
       { error: 'Failed to fetch submissions' },
       { status: 500 }

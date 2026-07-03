@@ -16,6 +16,7 @@
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { NextResponse } from 'next/server';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 type Role = 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT';
 
@@ -67,11 +68,23 @@ export async function POST(req: Request) {
   // Handle courses not published or archived
   if (!course.isPublished && (role == 'ADMIN' || role == 'FACULTY')) {
     // Notify admin or faculty that the course was not publihsed
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'COURSE_JOIN_DENIED',
+      severity: 'SECURITY',
+      metadata: { role: session?.user?.role ?? null },
+    });
     return NextResponse.json({ error: 'Course not published' }, { status: 403 });
   }
 
   if (course.isArchived && (role === 'ADMIN' || role == 'FACULTY')) {
     // Notify admin or faculty that the course is archived)
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'COURSE_JOIN_DENIED',
+      severity: 'SECURITY',
+      metadata: { role: session?.user?.role ?? null },
+    });
     return NextResponse.json({ error: 'Course archived' }, { status: 403 });
   }
 

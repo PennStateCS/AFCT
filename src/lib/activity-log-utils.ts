@@ -221,15 +221,20 @@ export async function createEnhancedActivityLog(
     email: string | null;
   } | null = null;
   if (safeUserId) {
-    const userRecord = await prisma.user.findUnique({
-      where: { id: safeUserId },
-      select: { id: true, firstName: true, lastName: true, email: true },
-    });
-    if (!userRecord) {
-      // Drop the FK so the log still records without crashing
+    try {
+      const userRecord = await prisma.user.findUnique({
+        where: { id: safeUserId },
+        select: { id: true, firstName: true, lastName: true, email: true },
+      });
+      if (!userRecord) {
+        // Drop the FK so the log still records without crashing
+        safeUserId = null;
+      } else {
+        userDisplay = userRecord;
+      }
+    } catch {
+      // Best-effort enrichment; never let a lookup failure break logging.
       safeUserId = null;
-    } else {
-      userDisplay = userRecord;
     }
   }
 
@@ -324,8 +329,8 @@ export async function createEnhancedActivityLog(
       console.warn('[ActivityLog] FK violation skipped (P2003):', err.meta);
       return;
     }
-    // Other errors should surface
-    throw err;
+    // Audit logging must never break the request it is recording.
+    console.error('[ActivityLog] write failed:', err);
   }
 }
 

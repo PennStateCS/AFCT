@@ -71,6 +71,12 @@ export async function GET(
         select: { id: true },
       });
       if (!rosterEntry) {
+        await createEnhancedActivityLog(prisma, req, {
+          userId: session?.user?.id ?? null,
+          action: 'SUBMISSIONS_ACCESS_DENIED',
+          severity: 'SECURITY',
+          metadata: { role: session?.user?.role ?? null },
+        });
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
     }

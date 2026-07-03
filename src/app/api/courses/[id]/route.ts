@@ -307,6 +307,12 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
 
   // Allow only ADMIN, FACULTY, or TA to edit courses
   if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'COURSE_UPDATE_DENIED',
+      severity: 'SECURITY',
+      metadata: { role: session?.user?.role ?? null },
+    });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -337,6 +343,12 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
   if (body.isArchived) {
     const { canArchive, reason } = await canArchiveCourse(prisma, id, body.startDate, body.endDate);
     if (!canArchive) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'COURSE_ARCHIVE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: reason }, { status: 403 });
     }
   }
@@ -345,6 +357,12 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
   if (!body.isPublished) {
     const { canUnpublish, reason } = await canUnpublishCourse(prisma, id);
     if (!canUnpublish) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'COURSE_PUBLISH_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: reason }, { status: 403 });
     }
   }
@@ -585,6 +603,12 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
     });
   } catch (error) {
     console.error('PUT /api/courses/[id] error:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'COURSE_UPDATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Failed to update course' }, { status: 500 });
   }
 }
@@ -602,6 +626,12 @@ export async function DELETE(req: Request, context: { params: Promise<{ id: stri
   const user = session?.user;
 
   if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'COURSE_DELETE_DENIED',
+      severity: 'SECURITY',
+      metadata: { role: session?.user?.role ?? null },
+    });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -612,6 +642,12 @@ export async function DELETE(req: Request, context: { params: Promise<{ id: stri
   });
 
   if (courseIsArchived === null || courseIsArchived.isArchived === false) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'COURSE_DELETE_DENIED',
+      severity: 'SECURITY',
+      metadata: { role: session?.user?.role ?? null },
+    });
     return NextResponse.json({ error: 'Course must be archived' }, { status: 403 });
   }
 
@@ -637,6 +673,12 @@ export async function DELETE(req: Request, context: { params: Promise<{ id: stri
     return NextResponse.json({ status: 204 });
   } catch (error) {
     console.error('DELETE /api/courses/[id] error:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'COURSE_DELETE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json({ error: error }, { status: 500 });
   }
 }

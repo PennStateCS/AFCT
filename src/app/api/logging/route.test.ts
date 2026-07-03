@@ -100,6 +100,38 @@ describe('GET /api/logging', () => {
     expect(body.rows[0].userId).toBe('Ada Lovelace');
   });
 
+  it('sorts by an allowed column and direction', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    prismaMock.activityLog.count.mockResolvedValue(0);
+    prismaMock.activityLog.findMany.mockResolvedValue([]);
+
+    await GET(request('?sortBy=action&sortDir=asc'));
+
+    expect(prismaMock.activityLog.findMany.mock.calls[0][0].orderBy).toEqual({ action: 'asc' });
+  });
+
+  it('sorts the user column by author last name', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    prismaMock.activityLog.count.mockResolvedValue(0);
+    prismaMock.activityLog.findMany.mockResolvedValue([]);
+
+    await GET(request('?sortBy=userId&sortDir=desc'));
+
+    expect(prismaMock.activityLog.findMany.mock.calls[0][0].orderBy).toEqual({
+      user: { lastName: 'desc' },
+    });
+  });
+
+  it('defaults to newest-first for an unknown sort column', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    prismaMock.activityLog.count.mockResolvedValue(0);
+    prismaMock.activityLog.findMany.mockResolvedValue([]);
+
+    await GET(request('?sortBy=bogus&sortDir=asc'));
+
+    expect(prismaMock.activityLog.findMany.mock.calls[0][0].orderBy).toEqual({ timestamp: 'desc' });
+  });
+
   it('filters by severity when a valid level is given (case-insensitive)', async () => {
     authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
     prismaMock.activityLog.count.mockResolvedValue(0);

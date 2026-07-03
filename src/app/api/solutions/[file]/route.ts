@@ -29,6 +29,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ file
     // Allow access only for admin/faculty/ta
     const role = session.user.role;
     if (!['ADMIN', 'FACULTY', 'TA'].includes(role)) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'SOLUTION_DOWNLOAD_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

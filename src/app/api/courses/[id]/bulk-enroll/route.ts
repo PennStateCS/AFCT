@@ -14,8 +14,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     // Only faculty/admin/ta can bulk enroll
     const role = session.user.role;
-    if (!['FACULTY', 'ADMIN', 'TA'].includes(role))
+    if (!['FACULTY', 'ADMIN', 'TA'].includes(role)) {
+      await createEnhancedActivityLog(prisma, req as unknown as Request, {
+        userId: session?.user?.id ?? null,
+        action: 'COURSE_BULK_ENROLL_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const body = await req.json();
     const userIds: string[] = (body?.userIds ?? []).map((s: string) => String(s)).filter(Boolean);
@@ -51,6 +58,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ success: true, enrolled: userIds.length }, { status: 200 });
   } catch (err) {
     console.error('bulk-enroll error', err);
+    await createEnhancedActivityLog(prisma, req as unknown as Request, {
+      userId: null,
+      action: 'COURSE_BULK_ENROLL_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }

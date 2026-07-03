@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 export async function GET(
   _req: NextRequest,
@@ -20,6 +21,12 @@ export async function GET(
 
     const isStaff = ['ADMIN', 'FACULTY', 'TA'].includes(session.user.role);
     if (session.user.id !== studentId && !isStaff) {
+      await createEnhancedActivityLog(prisma, _req, {
+        userId: session?.user?.id ?? null,
+        action: 'PROBLEM_GRADE_ACCESS_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -79,6 +86,12 @@ export async function POST(
     }
 
     if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'PROBLEM_GRADE_UPDATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -153,6 +166,12 @@ export async function POST(
     });
   } catch (error) {
     console.error('POST /api/courses/[id]/[aid]/problems/[pid]/grade/[studentId] error:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: null,
+      action: 'PROBLEM_GRADE_UPDATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Failed to save problem grade' }, { status: 500 });
   }
 }

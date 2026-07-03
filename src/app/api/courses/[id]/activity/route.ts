@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
@@ -32,6 +33,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       });
 
       if (!rosterEntry) {
+        await createEnhancedActivityLog(prisma, request, {
+          userId: session?.user?.id ?? null,
+          action: 'COURSE_ACTIVITY_ACCESS_DENIED',
+          severity: 'SECURITY',
+          metadata: { role: session?.user?.role ?? null },
+        });
         return NextResponse.json({ error: 'Access denied' }, { status: 403 });
       }
     }
