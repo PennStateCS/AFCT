@@ -18,6 +18,12 @@ export async function POST(req: Request) {
     const user = session?.user;
 
     if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'PROBLEM_CREATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -120,6 +126,12 @@ export async function POST(req: Request) {
     return NextResponse.json(problem);
   } catch (err) {
     console.error('Problem creation error:', err);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: null,
+      action: 'PROBLEM_CREATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }

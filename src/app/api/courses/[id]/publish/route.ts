@@ -25,6 +25,12 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
 
     // Allow only ADMIN or FACULTY to toggle publish status
     if (!user || !['ADMIN', 'FACULTY'].includes(user.role)) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'COURSE_PUBLISH_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -32,6 +38,12 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     if (!isPublished) {
       const { canUnpublish, reason } = await canUnpublishCourse(prisma, courseId);
       if (!canUnpublish) {
+        await createEnhancedActivityLog(prisma, req, {
+          userId: session?.user?.id ?? null,
+          action: 'COURSE_PUBLISH_DENIED',
+          severity: 'SECURITY',
+          metadata: { role: session?.user?.role ?? null },
+        });
         return NextResponse.json({ error: reason }, { status: 403 });
       }
     }
@@ -68,6 +80,12 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     return NextResponse.json(updated);
   } catch (error) {
     console.error('PATCH /api/courses/[id]/publish error:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: null,
+      action: 'COURSE_PUBLISH_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return new NextResponse('Failed to update publish status', { status: 500 });
   }
 }

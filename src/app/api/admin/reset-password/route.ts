@@ -13,6 +13,12 @@ export async function POST(req: Request) {
 
   // Restrict access to users with ADMIN or FACULTY roles only
   if (!session || !['ADMIN', 'FACULTY'].includes(session.user.role)) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'ADMIN_RESET_PASSWORD_DENIED',
+      severity: 'SECURITY',
+      metadata: { role: session?.user?.role ?? null },
+    });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -57,6 +63,12 @@ export async function POST(req: Request) {
   } catch (error) {
     // Log any unexpected error to the server console
     console.error('Reset password error:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'ADMIN_RESET_PASSWORD_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Failed to reset password' }, { status: 500 });
   }
 }

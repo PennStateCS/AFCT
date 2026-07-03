@@ -28,11 +28,23 @@ export async function DELETE(
       currentUser.role !== 'ADMIN' &&
       !['ADMIN', 'INSTRUCTOR', 'FACULTY', 'TA'].includes(currentCourseRoleValue)
     ) {
+      await createEnhancedActivityLog(prisma, req as unknown as Request, {
+        userId: session?.user?.id ?? null,
+        action: 'ROSTER_REMOVE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // TAs and STUDENTs may not remove users
     if (currentCourseRoleValue === 'TA' || currentCourseRoleValue === 'STUDENT') {
+      await createEnhancedActivityLog(prisma, req as unknown as Request, {
+        userId: session?.user?.id ?? null,
+        action: 'ROSTER_REMOVE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -49,6 +61,12 @@ export async function DELETE(
       targetRoster &&
       ['ADMIN', 'INSTRUCTOR', 'FACULTY'].includes(targetCourseRoleValue)
     ) {
+      await createEnhancedActivityLog(prisma, req as unknown as Request, {
+        userId: session?.user?.id ?? null,
+        action: 'ROSTER_REMOVE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -58,6 +76,12 @@ export async function DELETE(
       targetRoster &&
       ['ADMIN', 'INSTRUCTOR'].includes(targetCourseRoleValue)
     ) {
+      await createEnhancedActivityLog(prisma, req as unknown as Request, {
+        userId: session?.user?.id ?? null,
+        action: 'ROSTER_REMOVE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -122,6 +146,12 @@ export async function DELETE(
     return NextResponse.json({ success: true, removed: deleted.count });
   } catch (err) {
     console.error('DELETE /api/courses/[id]/roster/[userId] error:', err);
+    await createEnhancedActivityLog(prisma, req as unknown as Request, {
+      userId: null,
+      action: 'ROSTER_REMOVE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }
@@ -199,7 +229,15 @@ export async function PATCH(
       where: { courseId, userId: currentUser.id },
     });
     const isAllowed = currentUser.role === 'ADMIN' || currentRoster?.role === 'INSTRUCTOR';
-    if (!isAllowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!isAllowed) {
+      await createEnhancedActivityLog(prisma, req as unknown as Request, {
+        userId: session?.user?.id ?? null,
+        action: 'ROSTER_UPDATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     // Ensure roster entry exists
     const target = await prisma.roster.findFirst({
@@ -238,6 +276,12 @@ export async function PATCH(
     return NextResponse.json({ success: true, roster: updated });
   } catch (err) {
     console.error('PATCH /api/courses/[id]/roster/[userId] error:', err);
+    await createEnhancedActivityLog(prisma, req as unknown as Request, {
+      userId: null,
+      action: 'ROSTER_UPDATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }

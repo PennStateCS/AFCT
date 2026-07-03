@@ -74,11 +74,25 @@ export async function GET(req: Request) {
     if (severity) conditions.push({ severity });
     const where: Prisma.ActivityLogWhereInput = conditions.length ? { AND: conditions } : {};
 
+    // Sorting: only known columns are allowed. `userId` sorts by the author's
+    // name (the column shows the resolved name, not the id). Default: newest first.
+    const sortDir: 'asc' | 'desc' =
+      url.searchParams.get('sortDir') === 'asc' ? 'asc' : 'desc';
+    const sortBy = url.searchParams.get('sortBy') ?? '';
+    const ORDER_BY: Record<string, Prisma.ActivityLogOrderByWithRelationInput> = {
+      timestamp: { timestamp: sortDir },
+      severity: { severity: sortDir },
+      category: { category: sortDir },
+      action: { action: sortDir },
+      userId: { user: { lastName: sortDir } },
+    };
+    const orderBy = ORDER_BY[sortBy] ?? { timestamp: 'desc' };
+
     const [total, logs] = await Promise.all([
       prisma.activityLog.count({ where }),
       prisma.activityLog.findMany({
         where,
-        orderBy: { timestamp: 'desc' },
+        orderBy,
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),

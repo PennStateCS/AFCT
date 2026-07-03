@@ -26,6 +26,12 @@ export async function POST(req: NextRequest) {
     const ALLOWED_ROLES = ['STUDENT', 'TA', 'FACULTY', 'ADMIN'];
     if (!ALLOWED_ROLES.includes(userRole)) {
       console.warn(`[CHANGE_PASSWORD] Forbidden role: ${userRole}`);
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'CHANGE_PASSWORD_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -95,6 +101,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, message: 'Password updated successfully' });
   } catch (err) {
     console.error('[CHANGE_PASSWORD_ERROR]', err);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: null,
+      action: 'CHANGE_PASSWORD_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }

@@ -64,6 +64,12 @@ export async function POST(req: Request) {
     const session = await auth();
     if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
       console.warn('[USERS_POST] Unauthorized access attempt');
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'USER_CREATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -147,6 +153,12 @@ export async function POST(req: Request) {
     return NextResponse.json(newUser, { status: 201 });
   } catch (error) {
     console.error('[USERS_POST_ERROR]', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: null,
+      action: 'USER_CREATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

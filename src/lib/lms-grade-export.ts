@@ -69,11 +69,13 @@ export function buildLmsGradesCsv(
     const gradeCells = getAssignmentGrades(student, assignments);
 
     if (platform === 'canvas') {
+      // Columns: Student, ID, SIS User ID, SIS Login ID, Section, ...grades.
+      // Canvas matches students on SIS Login ID, which is their login/email.
       return [
         `${lastName}, ${firstName}`.trim().replace(/^,\s*/, ''),
         '',
         '',
-        '',
+        email,
         '',
         ...gradeCells,
       ];

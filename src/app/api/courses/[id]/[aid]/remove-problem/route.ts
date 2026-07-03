@@ -32,6 +32,12 @@ export async function POST(
   const user = session?.user;
 
   if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'ASSIGNMENT_REMOVE_PROBLEM_DENIED',
+      severity: 'SECURITY',
+      metadata: { role: session?.user?.role ?? null },
+    });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -119,6 +125,12 @@ export async function POST(
     return NextResponse.json({ success: true, problems });
   } catch (error) {
     console.error('Error removing problem from assignment:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'ASSIGNMENT_REMOVE_PROBLEM_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Failed to remove problem.' }, { status: 500 });
   }
 }
