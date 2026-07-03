@@ -159,7 +159,8 @@ function sanEntry(host: string): string {
   return isIp ? `IP:${host}` : `DNS:${host}`;
 }
 
-function buildSubjectAndSan(fields: CsrFields): { subj: string; san: string } {
+// Exported for unit testing of the input sanitization (injection guards).
+export function buildSubjectAndSan(fields: CsrFields): { subj: string; san: string } {
   const cn = cleanHost(fields.commonName);
   if (!cn) throw new CertValidationError('A hostname (Common Name) is required.');
   const org = cleanSubjectValue(fields.organization);
