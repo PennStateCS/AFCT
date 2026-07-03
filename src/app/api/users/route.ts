@@ -42,6 +42,7 @@ export async function GET(req: Request) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'VIEW_USERS',
+      severity: 'INFO',
       category: 'USER',
       metadata: {
         userId: session.user.id,
@@ -133,6 +134,7 @@ export async function POST(req: Request) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'CREATE_USER',
+      severity: 'INFO',
       category: 'USER',
       metadata: {
         userId: session.user.id,

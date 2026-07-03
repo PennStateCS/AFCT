@@ -95,6 +95,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
     await createEnhancedActivityLog(prisma, req, {
       userId: user.id,
       action: 'CREATE_PROBLEM',
+      severity: 'INFO',
       category: 'PROBLEM',
       courseId,
       problemId: problem.id,

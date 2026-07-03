@@ -3,7 +3,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
-import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { createEnhancedActivityLog, inferSeverity } from '@/lib/activity-log-utils';
 import {
   applyBotFriction,
   evaluateSignupRateLimit,
@@ -127,6 +127,7 @@ export async function POST(req: Request) {
     await createEnhancedActivityLog(prisma, req, {
       userId: newUser.id,
       action: 'USER_SIGNUP',
+      severity: 'INFO',
       category: 'USER',
       metadata: {
         userId: newUser.id,
@@ -159,6 +160,7 @@ async function logSecurityEvent(
       data: {
         action,
         category: 'SECURITY',
+        severity: inferSeverity(action),
         metadata,
       },
     });

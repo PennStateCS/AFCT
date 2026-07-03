@@ -45,6 +45,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'DOWNLOAD_SUBMISSION_FILE',
+      severity: 'INFO',
       category: 'SUBMISSION',
       assignmentId: submission.assignmentId,
       submissionId: submission.id,

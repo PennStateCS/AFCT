@@ -195,6 +195,7 @@ export async function POST(
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,
         action: 'UPDATE_ASSIGNMENT_PROBLEMS',
+        severity: 'INFO',
         category: 'ASSIGNMENT',
         courseId,
         assignmentId,

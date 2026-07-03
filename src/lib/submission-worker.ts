@@ -9,7 +9,7 @@ import os from 'os';
 
 import JavaRunner from '../../lib/java-runner';
 import { getEvaluatorConfig, getQueueSettings, type EvaluatorConfig } from './eval-config';
-import { createEnhancedActivityLog } from './activity-log-utils';
+import { createEnhancedActivityLog, type LogSeverity } from './activity-log-utils';
 import {
   DEFAULT_SUBMISSION_MAX_CONCURRENT,
   DEFAULT_SUBMISSION_MAX_ATTEMPTS,
@@ -41,7 +41,12 @@ interface SubmissionEvaluationResult {
   status: SubmissionEvaluationStatus;
 }
 
-async function logSubmissionActivity(submission: any, action: string, metadata: any) {
+async function logSubmissionActivity(
+  submission: any,
+  action: string,
+  severity: LogSeverity,
+  metadata: any,
+) {
   // Write straight to the DB — we're in the same process, so there's no reason
   // to go back out over HTTP. Only scalar ids are pulled off the submission;
   // never the full student record.
@@ -49,6 +54,7 @@ async function logSubmissionActivity(submission: any, action: string, metadata: 
     await createEnhancedActivityLog(prisma, WORKER_REQUEST, {
       userId: submission.studentId ?? null,
       action,
+      severity,
       category: 'SUBMISSION',
       courseId: submission.courseId ?? null,
       assignmentId: submission.assignmentId ?? null,
@@ -298,7 +304,7 @@ async function evaluateSubmission(id: string) {
     const message = error instanceof Error ? error.message : String(error);
 
     if (submission) {
-      await logSubmissionActivity(submission, 'SUBMISSION_ERROR', { error: message });
+      await logSubmissionActivity(submission, 'SUBMISSION_ERROR', 'ERROR', { error: message });
     }
 
     console.error(`[SubmissionWorker] Failed submission ${id}:`, error);
@@ -388,7 +394,7 @@ async function runJavaEvaluator(
   // No file submitted
   if (!submission.fileName) {
     status = 'FAILED';
-    await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', {
+    await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
       error: 'No file submitted.',
     });
 
@@ -406,7 +412,7 @@ async function runJavaEvaluator(
     // Check if uploaded file exists
     if (!fs.existsSync(uploadedFilePath)) {
       status = 'FAILED';
-      await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', {
+      await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
         error: 'Uploaded file not found.',
       });
 
@@ -435,7 +441,7 @@ async function runJavaEvaluator(
       if (!answerFileName) {
         status = 'FAILED';
         feedback = 'ERROR: No answer file configured for this problem.';
-        await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', {
+        await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
           error: 'No answer file configured for this problem.',
         });
       } else {
@@ -445,7 +451,7 @@ async function runJavaEvaluator(
         if (!fs.existsSync(answerFilePath)) {
           status = 'FAILED';
           feedback = 'ERROR: Answer file not found on server.';
-          await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', {
+          await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
             error: 'Answer file not found on server.',
             answerFilePath,
           });
@@ -479,7 +485,7 @@ async function runJavaEvaluator(
             const stdoutTrimmed = result.stdout?.trim() ?? '';
             const stderrTrimmed = result.stderr?.trim() ?? '';
             if (stderrTrimmed) {
-              await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_STDERR', {
+              await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_STDERR', 'WARNING', {
                 stderr: stderrTrimmed.substring(0, 500),
               });
 
@@ -509,14 +515,14 @@ async function runJavaEvaluator(
                   feedback = `Evaluation completed - correct: ${correct}`;
                 }
 
-                await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_SUCCESS', {
+                await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_SUCCESS', 'INFO', {
                   correct: correct ?? false,
                   evaluation,
                 });
               } else {
                 status = 'FAILED';
                 const errorMessage = `Invalid JSON response from evaluator: ${stdoutTrimmed}`;
-                await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', {
+                await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
                   error: errorMessage,
                   stdout: stdoutTrimmed,
                 });
@@ -526,7 +532,7 @@ async function runJavaEvaluator(
               status = 'FAILED';
               evaluationRaw = stdoutTrimmed || null;
               const errorMessage = `Failed to parse evaluation result - ${stdoutTrimmed}`;
-              await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', {
+              await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
                 error: errorMessage,
                 parseError: parseErr instanceof Error ? parseErr.message : String(parseErr),
                 stdout: stdoutTrimmed,
@@ -540,7 +546,7 @@ async function runJavaEvaluator(
           } catch (evaluatorErr) {
             status = 'FAILED';
             const errorMessage = evaluatorErr instanceof Error ? evaluatorErr.message : String(evaluatorErr);
-            await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', {
+            await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
               error: errorMessage,
             });
             feedback = `ERROR: Evaluation failed - ${errorMessage}`;
@@ -562,7 +568,7 @@ async function runJavaEvaluator(
   } catch (cmdErr) {
     status = 'FAILED';
     feedback = `ERROR: Evaluation failed - ${cmdErr instanceof Error ? cmdErr.message : 'Unknown error'}`;
-    await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', {
+    await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
       error: feedback,
     });
     console.error(`[SubmissionWorker] Command error for submission ${submission.id}:`, cmdErr);

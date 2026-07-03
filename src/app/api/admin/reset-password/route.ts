@@ -43,6 +43,7 @@ export async function POST(req: Request) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'RESET_PASSWORD',
+      severity: 'INFO',
       category: 'USER',
       metadata: {
         userId: session.user.id,

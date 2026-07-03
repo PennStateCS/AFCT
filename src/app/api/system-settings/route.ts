@@ -127,6 +127,7 @@ export async function PUT(req: Request) {
       await safeAuditLog(req, {
         userId: session.user.id,
         action: 'SYSTEM_SETTINGS_UPDATE_DENIED',
+        severity: 'SECURITY',
         category: 'SYSTEM',
         metadata: { role: role ?? null },
       });
@@ -227,6 +228,7 @@ export async function PUT(req: Request) {
     await safeAuditLog(req, {
       userId: session.user?.id,
       action: 'SYSTEM_SETTINGS_UPDATE_ERROR',
+      severity: 'ERROR',
       category: 'SYSTEM',
       metadata: { error: err instanceof Error ? err.message : 'unknown error' },
     });
@@ -248,6 +250,7 @@ export async function PUT(req: Request) {
     await safeAuditLog(req, {
       userId: session.user?.id,
       action: 'SYSTEM_SETTINGS_UPDATED',
+      severity: 'INFO',
       category: 'SYSTEM',
       metadata: {
         created: !existing,

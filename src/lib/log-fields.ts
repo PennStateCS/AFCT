@@ -7,6 +7,7 @@ export const EXPORTABLE_LOG_FIELDS = [
   'userId',
   'action',
   'category',
+  'severity',
   'ipAddress',
   'userAgent',
   'courseId',

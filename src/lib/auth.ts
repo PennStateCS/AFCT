@@ -4,6 +4,7 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
 import { Role } from '@prisma/client';
+import { inferSeverity } from '@/lib/activity-log-utils';
 import {
   applyBotFriction,
   evaluateLoginRateLimit,
@@ -175,6 +176,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             userId: user?.id ?? undefined,
             action: 'LOGIN_SUCCESS',
             category: 'SYSTEM',
+            severity: inferSeverity('LOGIN_SUCCESS'),
             metadata: {
               email: user?.email ?? null,
               provider: account?.provider ?? null,
@@ -217,6 +219,7 @@ const logSecurityEvent = async (
       data: {
         action,
         category: 'SECURITY',
+        severity: inferSeverity(action),
         metadata,
       },
     });

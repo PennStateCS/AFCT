@@ -99,6 +99,7 @@ export async function POST(
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'ADD_GROUP_MEMBER',
+      severity: 'INFO',
       category: 'COURSE',
       metadata: { courseId, groupId, addedUserId: user.id },
     });

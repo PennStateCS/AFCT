@@ -71,6 +71,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
     await createEnhancedActivityLog(prisma, req, {
       userId: actingUser?.id,
       action: 'ENROLL_USER',
+      severity: 'INFO',
       category: 'COURSE',
       courseId,
       metadata: {

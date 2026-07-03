@@ -182,6 +182,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     await createEnhancedActivityLog(prisma, req, {
       userId: currentUser.id,
       action: 'UPDATE_USER',
+      severity: 'INFO',
       category: 'USER',
       metadata: {
         userId: currentUser.id,
@@ -242,6 +243,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     await createEnhancedActivityLog(prisma, req, {
       userId: currentUser.id,
       action: 'DELETE_USER',
+      severity: 'INFO',
       category: 'USER',
       metadata: {
         userId: currentUser.id,

@@ -58,6 +58,7 @@ export async function POST(req: Request) {
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,
         action: 'SUBMISSION_INVALID_FILE_STRUCTURE',
+        severity: 'WARNING',
         category: 'SUBMISSION',
         courseId,
         assignmentId,
@@ -103,6 +104,7 @@ export async function POST(req: Request) {
     await createEnhancedActivityLog(prisma, req, {
       userId: user.id,
       action: 'CREATE_PROBLEM',
+      severity: 'INFO',
       category: 'PROBLEM',
       courseId,
       problemId: problem.id,

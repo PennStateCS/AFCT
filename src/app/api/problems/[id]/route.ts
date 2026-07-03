@@ -72,6 +72,7 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
         await createEnhancedActivityLog(prisma, req, {
           userId: user.id,
           action: 'SUBMISSION_INVALID_FILE_STRUCTURE',
+          severity: 'WARNING',
           category: 'SUBMISSION',
           courseId,
           assignmentId,
@@ -131,6 +132,7 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
     await createEnhancedActivityLog(prisma, req, {
       userId: user.id,
       action: 'UPDATE_PROBLEM',
+      severity: 'INFO',
       category: 'PROBLEM',
       courseId,
       problemId,
@@ -207,6 +209,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     await createEnhancedActivityLog(prisma, req, {
       userId: user.id,
       action: 'DELETE_PROBLEM',
+      severity: 'INFO',
       category: 'PROBLEM',
       courseId: existingProblem.courseId,
       problemId,
