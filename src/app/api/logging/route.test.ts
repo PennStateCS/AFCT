@@ -68,9 +68,44 @@ describe('GET /api/logging', () => {
     expect(body[0].userId).toBe('ghost');
   });
 
+  it('falls back to email when the user has no name', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    prismaMock.activityLog.findMany.mockResolvedValue([
+      { id: 'log1', userId: 'u1', action: 'A', timestamp: new Date() },
+    ]);
+    prismaMock.user.findMany.mockResolvedValue([
+      { id: 'u1', firstName: null, lastName: null, email: 'nameless@x.edu' },
+    ]);
+
+    const res = await GET(makeRequest());
+
+    const body = await res.json();
+    expect(body[0].userId).toBe('nameless@x.edu');
+  });
+
+  it('bounds the query to a default limit and honors ?limit=, clamping to the max', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    prismaMock.activityLog.findMany.mockResolvedValue([]);
+
+    await GET(new Request('http://localhost/api/logging'));
+    expect(prismaMock.activityLog.findMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({ take: 1000 }),
+    );
+
+    await GET(new Request('http://localhost/api/logging?limit=50'));
+    expect(prismaMock.activityLog.findMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({ take: 50 }),
+    );
+
+    await GET(new Request('http://localhost/api/logging?limit=999999'));
+    expect(prismaMock.activityLog.findMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({ take: 5000 }),
+    );
+  });
+
   it('returns 500 when the query fails', async () => {
     authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
-    prismaMock.user.findMany.mockRejectedValue(new Error('db down'));
+    prismaMock.activityLog.findMany.mockRejectedValue(new Error('db down'));
 
     const res = await GET(makeRequest());
 
