@@ -7,14 +7,25 @@ import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import type { EnhancedActivityLogData } from '@/lib/activity-log-utils';
 import { LogViewerDialog } from '@/components/dialogs/LogViewerDialog';
 import { DownloadLogsDialog } from '@/components/dialogs/DownloadLogsDialog';
 
-export default function SystemLoggingClient({ initialLogs }: { initialLogs?: EnhancedActivityLogData[] }) {
+// Shape returned by GET /api/logging (userId is resolved to a display name).
+type LogRow = {
+  id: string;
+  timestamp: string;
+  userId: string | null;
+  action: string;
+  category: string | null;
+  metadata?: unknown;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+};
+
+export default function SystemLoggingClient({ initialLogs }: { initialLogs?: LogRow[] }) {
   const hasInitialLogs = Array.isArray(initialLogs);
 
-  const [logs, setLogs] = useState<EnhancedActivityLogData[]>(initialLogs ?? []);
+  const [logs, setLogs] = useState<LogRow[]>(initialLogs ?? []);
   const [loading, setLoading] = useState(!hasInitialLogs);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedData, setSelectedData] = useState('');
@@ -37,8 +48,8 @@ export default function SystemLoggingClient({ initialLogs }: { initialLogs?: Enh
       setLoading(true);
       setLoadError(null); 
       const res = await fetch('/api/logging', { cache: 'no-store' });
-      if (!res.ok) throw new Error('Failed to fetch users');
-      const data: EnhancedActivityLogData[] = await res.json();
+      if (!res.ok) throw new Error('Failed to fetch logs');
+      const data: LogRow[] = await res.json();
 	  setLogs(data);
     } catch (error) {
       setLoadError('Failed to load logs. Please try again.');
@@ -118,8 +129,7 @@ export default function SystemLoggingClient({ initialLogs }: { initialLogs?: Enh
           columns={columns}
           data={logs}
           loading={loading}
-          tableLabel="Users table"
-          defaultColumnVisibility={{ createdAt: false }}
+          tableLabel="System logs table"
         />
 
         {/* Dialogs */}
