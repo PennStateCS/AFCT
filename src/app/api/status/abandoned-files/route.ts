@@ -20,10 +20,18 @@ const isSafeFileName = (name: string) => {
 };
 
 export async function DELETE(req: Request) {
+  let actorId: string | null = null;
   try {
     const session = await auth();
+    actorId = session?.user?.id ?? null;
     const role = session?.user?.role;
     if (!session?.user?.id || !role || !['ADMIN', 'FACULTY', 'TA'].includes(role)) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'ABANDONED_FILES_DELETE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -71,11 +79,20 @@ export async function DELETE(req: Request) {
     }
 
     await fs.promises.unlink(resolvedFile);
+
+    await createEnhancedActivityLog(prisma, req, {
+      userId: actorId,
+      action: 'ABANDONED_FILE_DELETED',
+      severity: 'INFO',
+      category: 'SYSTEM',
+      metadata: { userId: actorId, category, fileName },
+    });
+
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error('Delete abandoned file error:', err);
     await createEnhancedActivityLog(prisma, req, {
-      userId: null,
+      userId: actorId,
       action: 'ABANDONED_FILES_DELETE_ERROR',
       severity: 'ERROR',
       metadata: { error: err instanceof Error ? err.message : 'unknown error' },
