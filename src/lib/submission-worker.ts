@@ -70,6 +70,26 @@ async function logSubmissionActivity(
   }
 }
 
+// Queue-level events that aren't tied to a single submission (loop/reaper errors,
+// crash recovery). Categorized as SYSTEM.
+async function logQueueEvent(
+  action: string,
+  severity: LogSeverity,
+  metadata: Record<string, string | number | boolean | null>,
+) {
+  try {
+    await createEnhancedActivityLog(prisma, WORKER_REQUEST, {
+      userId: null,
+      action,
+      severity,
+      category: 'SYSTEM',
+      metadata,
+    });
+  } catch (error) {
+    console.error('[SubmissionWorker] Failed to write queue log:', error);
+  }
+}
+
 export function startSubmissionWorker() {
   // Worker already started
   if (workerStarted) {
@@ -132,9 +152,14 @@ async function reapStuckSubmissions() {
 
     if (reaped.count > 0) {
       console.warn(`[SubmissionWorker] Reaped ${reaped.count} stuck submission(s) back to PENDING`);
+      // Stuck PROCESSING rows almost always mean the server died mid-evaluation.
+      await logQueueEvent('SUBMISSION_QUEUE_REAPED', 'WARNING', { count: reaped.count });
     }
   } catch (error) {
     console.error('[SubmissionWorker] Reaper error:', error);
+    await logQueueEvent('SUBMISSION_QUEUE_REAPER_ERROR', 'ERROR', {
+      error: error instanceof Error ? error.message : String(error),
+    });
   } finally {
     setTimeout(reapStuckSubmissions, REAP_INTERVAL_MS);
   }
@@ -182,13 +207,26 @@ async function runWorkerLoop() {
     // Poison-pill guard: a submission that has been claimed too many times keeps
     // failing (or keeps getting reaped) — fail it rather than retry forever.
     if (nextSubmission.attempts >= maxAttempts) {
-      await prisma.submission.updateMany({
+      const failed = await prisma.submission.updateMany({
         where: { id: nextSubmission.id, status: 'PENDING' },
         data: {
           status: 'FAILED',
           feedback: 'Autograder gave up after too many failed attempts.',
         },
       });
+      // A student's submission can no longer be graded — surface it for staff.
+      if (failed.count > 0) {
+        const info = await prisma.submission.findUnique({
+          where: { id: nextSubmission.id },
+          select: { id: true, studentId: true, courseId: true, assignmentId: true, problemId: true },
+        });
+        if (info) {
+          await logSubmissionActivity(info, 'SUBMISSION_FAILED_PERMANENTLY', 'ERROR', {
+            attempts: nextSubmission.attempts,
+            reason: 'exceeded max attempts',
+          });
+        }
+      }
       setTimeout(runWorkerLoop, 100);
       return;
     }
@@ -215,6 +253,9 @@ async function runWorkerLoop() {
     return;
   } catch (error) {
     console.error("[SubmissionWorker] Database or loop error:", error);
+    await logQueueEvent('SUBMISSION_QUEUE_ERROR', 'ERROR', {
+      error: error instanceof Error ? error.message : String(error),
+    });
     setTimeout(runWorkerLoop, 5_000); // Super long sleep due to error
     return;
   }
@@ -294,6 +335,13 @@ async function evaluateSubmission(id: string) {
         },
       });
 
+      await logSubmissionActivity(submission, 'SUBMISSION_AUTOGRADED', 'INFO', {
+        studentId: submission.studentId,
+        grade: earnedPoints,
+        maxPoints: submission.assignmentProblem.maxPoints,
+        correct: evaluation.correct,
+      });
+
       console.log(
         `[SubmissionWorker] Auto-graded submission ${id}: ${earnedPoints} points (correct: ${evaluation.correct})`,
       );
@@ -303,17 +351,23 @@ async function evaluateSubmission(id: string) {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
 
-    if (submission) {
-      await logSubmissionActivity(submission, 'SUBMISSION_ERROR', 'ERROR', { error: message });
-    }
-
-    console.error(`[SubmissionWorker] Failed submission ${id}:`, error);
-
     // This catch only fires on unexpected/transient errors (DB blip, evaluator
     // crash). Known bad-input cases come back as evaluation.status === 'FAILED'
     // above and never reach here. So retry by returning to PENDING until we've
     // burned through the attempt budget, then fail it for good.
     const giveUp = (submission?.attempts ?? maxAttempts) >= maxAttempts;
+
+    if (submission) {
+      // Distinguish a will-retry error from a permanent give-up (can't grade it).
+      await logSubmissionActivity(
+        submission,
+        giveUp ? 'SUBMISSION_FAILED_PERMANENTLY' : 'SUBMISSION_ERROR',
+        'ERROR',
+        { error: message, attempts: submission.attempts },
+      );
+    }
+
+    console.error(`[SubmissionWorker] Failed submission ${id}:`, error);
 
     await prisma.submission.update({
       where: { id },

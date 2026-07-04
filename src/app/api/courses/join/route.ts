@@ -129,13 +129,40 @@ export async function POST(req: Request) {
   }
 
   // Create roster entry
-  await prisma.roster.create({
-    data: {
-      courseId: course.id,
+  try {
+    await prisma.roster.create({
+      data: {
+        courseId: course.id,
+        userId,
+        role: role, // use user's global role as course role
+      },
+    });
+
+    await createEnhancedActivityLog(prisma, req, {
       userId,
-      role: role, // use user's global role as course role
-    },
-  });
+      action: 'COURSE_JOINED',
+      severity: 'INFO',
+      category: 'COURSE',
+      courseId: course.id,
+      metadata: {
+        userId,
+        courseId: course.id,
+        courseCode: course.code,
+        courseName: course.name,
+        role,
+      },
+    });
+  } catch (error) {
+    console.error('POST /api/courses/join error:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId,
+      action: 'COURSE_JOIN_ERROR',
+      severity: 'ERROR',
+      category: 'COURSE',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
+    return NextResponse.json({ error: 'Failed to join the course.' }, { status: 500 });
+  }
 
   let message = '';
   if (role === 'STUDENT') message = `You have successfully joined ${course.name} as a Student.`;

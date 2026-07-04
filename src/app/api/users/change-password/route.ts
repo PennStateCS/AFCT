@@ -8,6 +8,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy';
 
 export async function POST(req: NextRequest) {
+  let actorId: string | null = null;
   try {
     // 1. Verify the current session (must be logged in)
     const session = await auth();
@@ -18,6 +19,7 @@ export async function POST(req: NextRequest) {
     }
 
     const userId = session.user.id;
+    actorId = userId;
     const userRole = session.user.role;
 
     // Change password attempt
@@ -60,6 +62,15 @@ export async function POST(req: NextRequest) {
     const isValid = await bcrypt.compare(oldPassword, user.password);
     if (!isValid) {
       console.warn(`[CHANGE_PASSWORD] Incorrect old password for user ${userId}`);
+      // A logged-in session that can't produce the current password is a security
+      // signal (possible session misuse), not just a validation error.
+      await createEnhancedActivityLog(prisma, req, {
+        userId,
+        action: 'CHANGE_PASSWORD_FAILED',
+        severity: 'SECURITY',
+        category: 'USER',
+        metadata: { userId, reason: 'incorrect current password' },
+      });
       return NextResponse.json({ error: 'Incorrect old password' }, { status: 400 });
     }
 
@@ -102,7 +113,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error('[CHANGE_PASSWORD_ERROR]', err);
     await createEnhancedActivityLog(prisma, req, {
-      userId: null,
+      userId: actorId,
       action: 'CHANGE_PASSWORD_ERROR',
       severity: 'ERROR',
       metadata: { error: err instanceof Error ? err.message : 'unknown error' },
