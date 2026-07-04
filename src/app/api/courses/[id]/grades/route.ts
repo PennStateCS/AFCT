@@ -4,6 +4,72 @@ import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 // Route handler for course grades
 
+// Records a gradebook export. The CSV is built and downloaded client-side, so the
+// client pings this endpoint (fire-and-forget) so the export is captured in the audit log.
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+
+  if (!id) {
+    return NextResponse.json({ error: 'Missing course ID' }, { status: 400 });
+  }
+
+  let actorId: string | null = null;
+  try {
+    const session = await auth();
+    actorId = session?.user?.id ?? null;
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'GRADES_EXPORT_DENIED',
+        severity: 'SECURITY',
+        courseId: id,
+        metadata: { role: session?.user?.role ?? null },
+      });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const platform = typeof body?.platform === 'string' ? body.platform : 'unknown';
+    const wholeGradebook = body?.wholeGradebook === true;
+    const assignmentCount = Number.isFinite(Number(body?.assignmentCount))
+      ? Number(body.assignmentCount)
+      : 0;
+    const studentCount = Number.isFinite(Number(body?.studentCount)) ? Number(body.studentCount) : 0;
+
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session.user.id,
+      action: 'GRADES_EXPORTED',
+      severity: 'INFO',
+      category: 'SUBMISSION',
+      courseId: id,
+      metadata: {
+        userId: session.user.id,
+        courseId: id,
+        platform,
+        wholeGradebook,
+        assignmentCount,
+        studentCount,
+      },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('POST /api/courses/[id]/grades (export log) error:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: actorId,
+      action: 'GRADES_EXPORT_ERROR',
+      severity: 'ERROR',
+      courseId: id,
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
+    return NextResponse.json({ error: 'Failed to record export' }, { status: 500 });
+  }
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
