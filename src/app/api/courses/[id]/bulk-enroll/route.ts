@@ -7,9 +7,11 @@ import type { Prisma } from '@prisma/client';
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const resolved = await params;
   const courseId = resolved.id;
+  let actorId: string | null = null;
 
   try {
     const session = await auth();
+    actorId = session?.user?.id ?? null;
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     // Only faculty/admin/ta can bulk enroll
@@ -59,9 +61,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   } catch (err) {
     console.error('bulk-enroll error', err);
     await createEnhancedActivityLog(prisma, req as unknown as Request, {
-      userId: null,
+      userId: actorId,
       action: 'COURSE_BULK_ENROLL_ERROR',
       severity: 'ERROR',
+      courseId,
       metadata: { error: err instanceof Error ? err.message : 'unknown error' },
     });
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
