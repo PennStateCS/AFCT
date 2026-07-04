@@ -188,7 +188,7 @@ describe('GET /api/solutions/[file]', () => {
     );
   });
 
-  it('does not log download when download param is absent', async () => {
+  it('logs an inline serve when the download param is absent', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN' } });
     prismaMock.problem.findFirst.mockResolvedValue({
       id: 'problem-1',
@@ -203,7 +203,15 @@ describe('GET /api/solutions/[file]', () => {
     });
 
     expect(res.status).toBe(200);
-    expect(activityLogMock).not.toHaveBeenCalled();
+    // Every successful solution serve is now audited, including inline views.
+    expect(activityLogMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        action: 'DOWNLOAD_SOLUTION_FILE',
+        metadata: expect.objectContaining({ mode: 'inline' }),
+      }),
+    );
   });
 
   it('uses fileName when originalFileName is null', async () => {
