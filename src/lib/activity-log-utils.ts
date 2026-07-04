@@ -252,57 +252,61 @@ export async function createEnhancedActivityLog(
   }
 
   if (includeDisplayMetadata) {
-    const [courseRecord, assignmentRecord, problemRecord, submissionRecord] = await Promise.all([
-      data.courseId
-        ? prisma.course.findUnique({
-            where: { id: data.courseId },
-            select: { name: true, code: true },
-          })
-        : Promise.resolve(null),
-      data.assignmentId
-        ? prisma.assignment.findUnique({
-            where: { id: data.assignmentId },
-            select: { title: true },
-          })
-        : Promise.resolve(null),
-      data.problemId
-        ? prisma.problem.findUnique({
-            where: { id: data.problemId },
-            select: { title: true },
-          })
-        : Promise.resolve(null),
-      data.submissionId
-        ? prisma.submission.findUnique({
-            where: { id: data.submissionId },
-            select: { fileName: true, originalFileName: true },
-          })
-        : Promise.resolve(null),
-    ]);
+    try {
+      const [courseRecord, assignmentRecord, problemRecord, submissionRecord] = await Promise.all([
+        data.courseId
+          ? prisma.course.findUnique({
+              where: { id: data.courseId },
+              select: { name: true, code: true },
+            })
+          : Promise.resolve(null),
+        data.assignmentId
+          ? prisma.assignment.findUnique({
+              where: { id: data.assignmentId },
+              select: { title: true },
+            })
+          : Promise.resolve(null),
+        data.problemId
+          ? prisma.problem.findUnique({
+              where: { id: data.problemId },
+              select: { title: true },
+            })
+          : Promise.resolve(null),
+        data.submissionId
+          ? prisma.submission.findUnique({
+              where: { id: data.submissionId },
+              select: { fileName: true, originalFileName: true },
+            })
+          : Promise.resolve(null),
+      ]);
 
-    if (courseRecord) {
-      if (courseRecord.name) {
-        baseMetadata.courseName = courseRecord.name;
+      if (courseRecord) {
+        if (courseRecord.name) {
+          baseMetadata.courseName = courseRecord.name;
+        }
+        if (courseRecord.code) {
+          baseMetadata.courseCode = courseRecord.code;
+        }
       }
-      if (courseRecord.code) {
-        baseMetadata.courseCode = courseRecord.code;
-      }
-    }
 
-    if (assignmentRecord?.title) {
-      baseMetadata.assignmentTitle = assignmentRecord.title;
-    }
-
-    if (problemRecord?.title) {
-      baseMetadata.problemTitle = problemRecord.title;
-    }
-
-    if (submissionRecord) {
-      if (submissionRecord.originalFileName) {
-        baseMetadata.submissionOriginalFileName = submissionRecord.originalFileName;
+      if (assignmentRecord?.title) {
+        baseMetadata.assignmentTitle = assignmentRecord.title;
       }
-      if (submissionRecord.fileName) {
-        baseMetadata.submissionFileName = submissionRecord.fileName;
+
+      if (problemRecord?.title) {
+        baseMetadata.problemTitle = problemRecord.title;
       }
+
+      if (submissionRecord) {
+        if (submissionRecord.originalFileName) {
+          baseMetadata.submissionOriginalFileName = submissionRecord.originalFileName;
+        }
+        if (submissionRecord.fileName) {
+          baseMetadata.submissionFileName = submissionRecord.fileName;
+        }
+      }
+    } catch {
+      // Best-effort enrichment; never let a lookup failure break logging.
     }
   }
 

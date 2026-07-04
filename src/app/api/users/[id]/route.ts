@@ -14,6 +14,7 @@ import { getSystemUploadLimit } from '@/lib/upload-limits';
 export async function PATCH(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   const userId = id;
+  let actorId: string | null = null;
 
   // Attempting to update user: userId
 
@@ -25,6 +26,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       console.warn('[PATCH] Unauthorized request');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    actorId = currentUser.id;
 
     const isAdminOnly = currentUser.role === 'ADMIN';
     const canEdit =
@@ -87,7 +89,14 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     // Retrieve current user record
     const userRecord = await prisma.user.findUnique({
       where: { id: userId },
-      select: { avatar: true },
+      select: {
+        avatar: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        inactive: true,
+        timezone: true,
+      },
     });
 
     let avatarFilename: string | null | undefined;
@@ -190,16 +199,30 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       },
     });
 
-    // Log activity
+    // Record exactly what changed (before → after). Role and active-status
+    // changes especially matter when an admin edits another user's account.
+    const AUDITED_USER_FIELDS = ['firstName', 'lastName', 'role', 'inactive', 'timezone'] as const;
+    const changes: Record<string, { from: string | boolean | null; to: string | boolean | null }> =
+      {};
+    for (const field of AUDITED_USER_FIELDS) {
+      const to = dataToUpdate[field];
+      if (to === undefined) continue; // not part of this update
+      const from = (userRecord?.[field] ?? null) as string | boolean | null;
+      const next = to as string | boolean | null;
+      if (from !== next) changes[field] = { from, to: next };
+    }
+
     await createEnhancedActivityLog(prisma, req, {
-      userId: currentUser.id,
+      userId: actorId,
       action: 'UPDATE_USER',
       severity: 'INFO',
       category: 'USER',
       metadata: {
-        userId: currentUser.id,
+        actorId,
         targetUserId: userId,
-        updatedFields: Object.keys(dataToUpdate),
+        changedFields: Object.keys(changes),
+        changes,
+        avatarChanged: dataToUpdate.avatar !== undefined,
       },
     });
 
@@ -208,7 +231,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
   } catch (error) {
     console.error('[PATCH] Error updating user:', error);
     await createEnhancedActivityLog(prisma, req, {
-      userId: null,
+      userId: actorId,
       action: 'USER_UPDATE_ERROR',
       severity: 'ERROR',
       metadata: { error: error instanceof Error ? error.message : 'unknown error' },
@@ -221,6 +244,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
 export async function DELETE(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   const userId = id;
+  let actorId: string | null = null;
 
   // Attempting to delete user
 
@@ -238,13 +262,13 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    actorId = currentUser.id;
 
     // Valid to delete
-    // Delete avatar file if exists
-    // Select user
+    // Capture the target's identity before the row is gone, for the audit + avatar cleanup.
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { avatar: true },
+      select: { avatar: true, email: true, firstName: true, lastName: true, role: true },
     });
 
     if (user?.avatar) {
@@ -263,15 +287,18 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
       where: { id: userId },
     });
 
-    // Log activity
+    // Log activity — record who was deleted, since the user row is now gone.
     await createEnhancedActivityLog(prisma, req, {
-      userId: currentUser.id,
+      userId: actorId,
       action: 'DELETE_USER',
       severity: 'INFO',
       category: 'USER',
       metadata: {
-        userId: currentUser.id,
+        actorId,
         deletedUserId: userId,
+        deletedUserEmail: user?.email ?? null,
+        deletedUserName: [user?.firstName, user?.lastName].filter(Boolean).join(' ') || null,
+        deletedUserRole: user?.role ?? null,
       },
     });
 
@@ -280,7 +307,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
   } catch (error) {
     console.error('[DELETE] Error deleting user:', error);
     await createEnhancedActivityLog(prisma, req, {
-      userId: null,
+      userId: actorId,
       action: 'USER_DELETE_ERROR',
       severity: 'ERROR',
       metadata: { error: error instanceof Error ? error.message : 'unknown error' },

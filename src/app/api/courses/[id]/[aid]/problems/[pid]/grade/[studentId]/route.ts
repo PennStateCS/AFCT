@@ -79,11 +79,13 @@ export async function POST(
     params: Promise<{ id: string; aid: string; pid: string; studentId: string }>;
   },
 ) {
+  let graderId: string | null = null;
   try {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    graderId = session.user.id;
 
     if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
       await createEnhancedActivityLog(prisma, req, {
@@ -127,6 +129,14 @@ export async function POST(
       }
     }
 
+    // Capture the prior grade so the audit records the before → after change.
+    const existing = await prisma.assignmentProblemGrade.findUnique({
+      where: {
+        assignmentId_problemId_studentId: { assignmentId, problemId, studentId },
+      },
+      select: { grade: true, feedback: true },
+    });
+
     if (grade === null || grade === undefined) {
       await prisma.assignmentProblemGrade.deleteMany({
         where: {
@@ -134,6 +144,16 @@ export async function POST(
           problemId,
           studentId,
         },
+      });
+      await createEnhancedActivityLog(prisma, req, {
+        userId: graderId,
+        action: 'PROBLEM_GRADE_CLEARED',
+        severity: 'INFO',
+        category: 'SUBMISSION',
+        courseId,
+        assignmentId,
+        problemId,
+        metadata: { studentId, graderId, previousGrade: existing?.grade ?? null },
       });
       return NextResponse.json({ grade: null, feedback: null });
     }
@@ -159,6 +179,24 @@ export async function POST(
       },
     });
 
+    await createEnhancedActivityLog(prisma, req, {
+      userId: graderId,
+      action: 'PROBLEM_GRADE_UPDATED',
+      severity: 'INFO',
+      category: 'SUBMISSION',
+      courseId,
+      assignmentId,
+      problemId,
+      metadata: {
+        studentId,
+        graderId,
+        previousGrade: existing?.grade ?? null,
+        grade,
+        maxPoints: assignmentProblem.maxPoints,
+        feedbackChanged: (existing?.feedback ?? null) !== feedback,
+      },
+    });
+
     return NextResponse.json({
       grade: saved.grade ?? null,
       feedback: saved.feedback ?? null,
@@ -167,7 +205,7 @@ export async function POST(
   } catch (error) {
     console.error('POST /api/courses/[id]/[aid]/problems/[pid]/grade/[studentId] error:', error);
     await createEnhancedActivityLog(prisma, req, {
-      userId: null,
+      userId: graderId,
       action: 'PROBLEM_GRADE_UPDATE_ERROR',
       severity: 'ERROR',
       metadata: { error: error instanceof Error ? error.message : 'unknown error' },

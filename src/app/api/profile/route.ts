@@ -31,99 +31,114 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const formData = await req.formData();
-  const firstName = (formData.get('firstName') as string)?.trim();
-  const lastName = (formData.get('lastName') as string)?.trim();
-  const avatar = formData.get('avatar') as File | null;
-  const deleteAvatar = formData.get('deleteAvatar') === 'true';
-  const timezoneRaw = (formData.get('timezone') as string | null)?.trim() || '';
-  const { maxBytes, maxMb } = await getSystemUploadLimit();
+  try {
+    const formData = await req.formData();
+    const firstName = (formData.get('firstName') as string)?.trim();
+    const lastName = (formData.get('lastName') as string)?.trim();
+    const avatar = formData.get('avatar') as File | null;
+    const deleteAvatar = formData.get('deleteAvatar') === 'true';
+    const timezoneRaw = (formData.get('timezone') as string | null)?.trim() || '';
+    const { maxBytes, maxMb } = await getSystemUploadLimit();
 
-  if (!firstName || !lastName) {
-    return NextResponse.json(
-      { error: 'First name and last name cannot be blank.' },
-      { status: 400 },
-    );
-  }
-
-  if (timezoneRaw && !COMMON_TIMEZONES.includes(timezoneRaw as (typeof COMMON_TIMEZONES)[number])) {
-    return NextResponse.json({ error: 'Invalid timezone.' }, { status: 400 });
-  }
-
-  if (!existsSync(uploadDir)) {
-    await mkdir(uploadDir, { recursive: true });
-  }
-
-  const currentUser = await prisma.user.findUnique({
-    where: { id: session.user.id },
-  });
-
-  if (!currentUser) {
-    return NextResponse.json({ error: 'User not found' }, { status: 404 });
-  }
-
-  let avatarFileName: string | null = currentUser.avatar || null;
-
-  if (avatar && avatar.size > 0) {
-    if (avatar.size > maxBytes) {
+    if (!firstName || !lastName) {
       return NextResponse.json(
-        { error: `File exceeds max upload size (${maxMb} MB).` },
-        { status: 413 },
+        { error: 'First name and last name cannot be blank.' },
+        { status: 400 },
       );
     }
-    // Save new avatar
-    const bytes = await avatar.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    const ext = path.extname(avatar.name) || '.png';
-    avatarFileName = `${currentUser.id}_${Date.now()}_${randomUUID()}${ext}`;
 
-    if (currentUser.avatar) {
-      await deleteFileIfExists(currentUser.avatar);
+    if (
+      timezoneRaw &&
+      !COMMON_TIMEZONES.includes(timezoneRaw as (typeof COMMON_TIMEZONES)[number])
+    ) {
+      return NextResponse.json({ error: 'Invalid timezone.' }, { status: 400 });
     }
 
-    await writeFile(path.join(uploadDir, avatarFileName), buffer);
-  }
+    if (!existsSync(uploadDir)) {
+      await mkdir(uploadDir, { recursive: true });
+    }
 
-  if (deleteAvatar && currentUser.avatar) {
-    await deleteFileIfExists(currentUser.avatar);
-    avatarFileName = null;
-  }
+    const currentUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+    });
 
-  const updatedUser = await prisma.user.update({
-    where: { id: session.user.id },
-    data: {
-      firstName,
-      lastName,
-      avatar: avatarFileName,
-      timezone: timezoneRaw || null,
-    },
-    select: {
-      id: true,
-      email: true,
-      firstName: true,
-      lastName: true,
-      avatar: true,
-      role: true,
-      timezone: true,
-    },
-  });
+    if (!currentUser) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
 
-  // Log profile update
-  await createEnhancedActivityLog(prisma, req, {
-    userId: session.user.id,
-    action: 'PROFILE_UPDATED',
-    severity: 'INFO',
-    category: 'USER',
-    metadata: {
+    let avatarFileName: string | null = currentUser.avatar || null;
+
+    if (avatar && avatar.size > 0) {
+      if (avatar.size > maxBytes) {
+        return NextResponse.json(
+          { error: `File exceeds max upload size (${maxMb} MB).` },
+          { status: 413 },
+        );
+      }
+      // Save new avatar
+      const bytes = await avatar.arrayBuffer();
+      const buffer = Buffer.from(bytes);
+      const ext = path.extname(avatar.name) || '.png';
+      avatarFileName = `${currentUser.id}_${Date.now()}_${randomUUID()}${ext}`;
+
+      if (currentUser.avatar) {
+        await deleteFileIfExists(currentUser.avatar);
+      }
+
+      await writeFile(path.join(uploadDir, avatarFileName), buffer);
+    }
+
+    if (deleteAvatar && currentUser.avatar) {
+      await deleteFileIfExists(currentUser.avatar);
+      avatarFileName = null;
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: session.user.id },
+      data: {
+        firstName,
+        lastName,
+        avatar: avatarFileName,
+        timezone: timezoneRaw || null,
+      },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        avatar: true,
+        role: true,
+        timezone: true,
+      },
+    });
+
+    // Log profile update
+    await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
-      userFirstName: firstName,
-      userLastName: lastName,
-      avatarUpdated: !!avatar,
-      avatarDeleted: deleteAvatar,
-    },
-  });
+      action: 'PROFILE_UPDATED',
+      severity: 'INFO',
+      category: 'USER',
+      metadata: {
+        userId: session.user.id,
+        userFirstName: firstName,
+        userLastName: lastName,
+        avatarUpdated: !!avatar,
+        avatarDeleted: deleteAvatar,
+      },
+    });
 
-  return NextResponse.json(updatedUser, { status: 200 });
+    return NextResponse.json(updatedUser, { status: 200 });
+  } catch (error) {
+    console.error('[PROFILE_UPDATE_ERROR]', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session.user.id,
+      action: 'PROFILE_UPDATE_ERROR',
+      severity: 'ERROR',
+      category: 'USER',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
+    return NextResponse.json({ error: 'Failed to update profile.' }, { status: 500 });
+  }
 }
 
 export async function GET() {
