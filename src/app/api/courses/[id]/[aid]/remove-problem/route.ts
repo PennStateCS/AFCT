@@ -41,32 +41,32 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
-  // Parse the problemId from the request body
-  const { problemId } = await req.json();
-
-  if (!problemId) {
-    return NextResponse.json({ error: 'Missing problemId.' }, { status: 400 });
-  }
-
-  // Validate that the assignment exists and belongs to the specified course
-  const assignment = await prisma.assignment.findFirst({
-    where: { id: assignmentId, courseId },
-  });
-
-  if (!assignment) {
-    return NextResponse.json({ error: 'Assignment not found.' }, { status: 404 });
-  }
-
-  // Validate that the problem belongs to the same course
-  const problem = await prisma.problem.findFirst({
-    where: { id: problemId, courseId },
-  });
-
-  if (!problem) {
-    return NextResponse.json({ error: 'Problem not found in this course.' }, { status: 404 });
-  }
-
   try {
+    // Parse the problemId from the request body
+    const { problemId } = await req.json();
+
+    if (!problemId) {
+      return NextResponse.json({ error: 'Missing problemId.' }, { status: 400 });
+    }
+
+    // Validate that the assignment exists and belongs to the specified course
+    const assignment = await prisma.assignment.findFirst({
+      where: { id: assignmentId, courseId },
+    });
+
+    if (!assignment) {
+      return NextResponse.json({ error: 'Assignment not found.' }, { status: 404 });
+    }
+
+    // Validate that the problem belongs to the same course
+    const problem = await prisma.problem.findFirst({
+      where: { id: problemId, courseId },
+    });
+
+    if (!problem) {
+      return NextResponse.json({ error: 'Problem not found in this course.' }, { status: 404 });
+    }
+
     // Delete the link between the assignment and the problem
     await prisma.assignmentProblem.deleteMany({
       where: {
