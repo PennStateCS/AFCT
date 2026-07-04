@@ -1,10 +1,12 @@
 import NextAuth from 'next-auth';
+import { headers } from 'next/headers';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
 import { Role } from '@prisma/client';
 import { inferSeverity } from '@/lib/activity-log-utils';
+import { getClientIpFromHeaders } from '@/lib/ip-utils';
 import {
   applyBotFriction,
   evaluateLoginRateLimit,
@@ -182,6 +184,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   events: {
     async signIn({ user, account }) {
+      const { ipAddress, userAgent } = await getRequestContext();
       try {
         const mustChangePassword = Boolean(
           (user as { mustChangePassword?: boolean } | undefined)?.mustChangePassword,
@@ -193,6 +196,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             action: 'LOGIN_SUCCESS',
             category: 'SYSTEM',
             severity: inferSeverity('LOGIN_SUCCESS'),
+            ipAddress,
+            userAgent,
             metadata: {
               email: user?.email ?? null,
               provider: account?.provider ?? null,
@@ -207,6 +212,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
     },
     async signOut(message) {
+      const { ipAddress, userAgent } = await getRequestContext();
       try {
         // JWT strategy: the signed-out user's token is provided.
         const token = (message as { token?: { id?: unknown } | null }).token;
@@ -217,6 +223,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             action: 'LOGOUT',
             category: 'SYSTEM',
             severity: inferSeverity('LOGOUT'),
+            ipAddress,
+            userAgent,
             metadata: {},
           },
         });
@@ -246,6 +254,23 @@ type SecurityEventAction =
   | 'LOGIN_CHALLENGE_SOLVED'
   | 'LOGIN_FAILED';
 
+/**
+ * Best-effort request context for the NextAuth events, which don't receive the
+ * request object. `next/headers` is available while an auth route handler is
+ * running; if it isn't (e.g. a programmatic sign-out), we log without it.
+ */
+const getRequestContext = async (): Promise<{
+  ipAddress: string | null;
+  userAgent: string | null;
+}> => {
+  try {
+    const h = await headers();
+    return { ipAddress: getClientIpFromHeaders(h), userAgent: h.get('user-agent') };
+  } catch {
+    return { ipAddress: null, userAgent: null };
+  }
+};
+
 const logSecurityEvent = async (
   action: SecurityEventAction,
   metadata: { ip?: string; identifier?: string; reason?: string },
@@ -258,6 +283,8 @@ const logSecurityEvent = async (
         action,
         category: 'SECURITY',
         severity: inferSeverity(action),
+        // Promote the known client IP into the column (not just metadata).
+        ipAddress: metadata.ip ?? null,
         metadata,
       },
     });

@@ -56,7 +56,7 @@ import {
 } from 'lucide-react';
 
 const menuButtonStyles =
-  'text-sidebar-foreground hover:bg-secondary/85 focus-visible:bg-secondary/85 active:bg-secondary data-[active=true]:bg-secondary data-[active=true]:text-secondary-foreground';
+  'text-sidebar-foreground hover:bg-secondary focus-visible:bg-secondary active:bg-secondary data-[active=true]:bg-secondary data-[active=true]:text-secondary-foreground';
 
 type Course = {
   id: string;
