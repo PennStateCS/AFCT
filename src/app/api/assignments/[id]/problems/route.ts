@@ -126,6 +126,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       await createEnhancedActivityLog(prisma, req, {
         userId,
         action: 'VIEW_ASSIGNMENT_PROBLEMS',
+        severity: 'INFO',
         category: 'ASSIGNMENT',
         assignmentId,
         courseId,

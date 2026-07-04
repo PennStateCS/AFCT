@@ -16,6 +16,7 @@
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { NextResponse } from 'next/server';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 type Role = 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT';
 
@@ -67,11 +68,23 @@ export async function POST(req: Request) {
   // Handle courses not published or archived
   if (!course.isPublished && (role == 'ADMIN' || role == 'FACULTY')) {
     // Notify admin or faculty that the course was not publihsed
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'COURSE_JOIN_DENIED',
+      severity: 'SECURITY',
+      metadata: { role: session?.user?.role ?? null },
+    });
     return NextResponse.json({ error: 'Course not published' }, { status: 403 });
   }
 
   if (course.isArchived && (role === 'ADMIN' || role == 'FACULTY')) {
     // Notify admin or faculty that the course is archived)
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'COURSE_JOIN_DENIED',
+      severity: 'SECURITY',
+      metadata: { role: session?.user?.role ?? null },
+    });
     return NextResponse.json({ error: 'Course archived' }, { status: 403 });
   }
 
@@ -116,13 +129,40 @@ export async function POST(req: Request) {
   }
 
   // Create roster entry
-  await prisma.roster.create({
-    data: {
-      courseId: course.id,
+  try {
+    await prisma.roster.create({
+      data: {
+        courseId: course.id,
+        userId,
+        role: role, // use user's global role as course role
+      },
+    });
+
+    await createEnhancedActivityLog(prisma, req, {
       userId,
-      role: role, // use user's global role as course role
-    },
-  });
+      action: 'COURSE_JOINED',
+      severity: 'INFO',
+      category: 'COURSE',
+      courseId: course.id,
+      metadata: {
+        userId,
+        courseId: course.id,
+        courseCode: course.code,
+        courseName: course.name,
+        role,
+      },
+    });
+  } catch (error) {
+    console.error('POST /api/courses/join error:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId,
+      action: 'COURSE_JOIN_ERROR',
+      severity: 'ERROR',
+      category: 'COURSE',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
+    return NextResponse.json({ error: 'Failed to join the course.' }, { status: 500 });
+  }
 
   let message = '';
   if (role === 'STUDENT') message = `You have successfully joined ${course.name} as a Student.`;

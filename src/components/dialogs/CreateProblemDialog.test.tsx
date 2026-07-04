@@ -49,7 +49,11 @@ describe('CreateProblemDialog', () => {
     const setOpen = vi.fn();
     const onCreated = vi.fn();
 
-    const file = new File(['test'], 'answer.jff', { type: 'text/plain' });
+    // Must be valid XML/JFLAP content; the dialog rejects non-XML files.
+    const fileContent = '<structure><type>FA</type></structure>';
+    const file = new File([fileContent], 'answer.jff', { type: 'text/plain' });
+    // jsdom's File doesn't implement text(); the dialog uses it to validate.
+    Object.defineProperty(file, 'text', { value: () => Promise.resolve(fileContent) });
 
     fetchMock.mockImplementation((url: string) => {
       if (url.includes('/api/system-settings/public')) {
@@ -85,7 +89,11 @@ describe('CreateProblemDialog', () => {
       await user.upload(fileInput, file);
     }
 
-    await user.click(screen.getByRole('button', { name: 'Create Problem' }));
+    // The file onChange validates asynchronously (reads the file text), so wait
+    // for the form to become valid before submitting.
+    const createButton = screen.getByRole('button', { name: 'Create Problem' });
+    await waitFor(() => expect(createButton).toBeEnabled());
+    await user.click(createButton);
 
     // Expect 1 call for problem creation (useMaxUploadSize is mocked and doesn't fetch)
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));

@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 export async function GET(req: Request, context: { params: Promise<{ id: string }> }) {
   // Extract the course ID from route parameters
@@ -14,6 +15,12 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
     const user = session?.user;
 
     if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'COURSE_STUDENTS_ACCESS_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 

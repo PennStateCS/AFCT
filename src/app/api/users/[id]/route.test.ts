@@ -725,7 +725,7 @@ describe('DELETE /api/users/[id]', () => {
     expect(unlinkMock).not.toHaveBeenCalled();
   });
 
-  it('deletes activity logs for user', async () => {
+  it('preserves the deleted user\'s activity logs (audit trail)', async () => {
     authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN' } });
     prismaMock.user.findUnique.mockResolvedValue({ avatar: null });
     prismaMock.user.delete.mockResolvedValue({
@@ -745,9 +745,10 @@ describe('DELETE /api/users/[id]', () => {
     const req = new NextRequest('http://localhost/api/users/u1', { method: 'DELETE' });
     await DELETE(req, { params: Promise.resolve({ id: 'u1' }) });
 
-    expect(prismaMock.activityLog.deleteMany).toHaveBeenCalledWith({
-      where: { userId: 'u1' },
-    });
+    // The user's logs are intentionally NOT wiped — onDelete: SetNull keeps the
+    // audit trail (userId nulled), so their history survives deletion.
+    expect(prismaMock.activityLog.deleteMany).not.toHaveBeenCalled();
+    expect(prismaMock.user.delete).toHaveBeenCalledWith({ where: { id: 'u1' } });
   });
 
   it('deletes user and logs activity', async () => {

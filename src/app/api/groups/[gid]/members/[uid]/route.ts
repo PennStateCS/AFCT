@@ -14,8 +14,15 @@ export async function DELETE(
 
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role))
+  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'GROUP_MEMBER_REMOVE_DENIED',
+      severity: 'SECURITY',
+      metadata: { role: session?.user?.role ?? null },
+    });
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
 
   try {
     const group = await prisma.group.findUnique({ where: { id: groupId } });
@@ -34,6 +41,7 @@ export async function DELETE(
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'REMOVE_GROUP_MEMBER',
+      severity: 'INFO',
       category: 'COURSE',
       metadata: { courseId, groupId, removedUserId: userId },
     });
@@ -41,6 +49,12 @@ export async function DELETE(
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('[GROUP_MEMBERS_DELETE_ERROR]', err);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'GROUP_MEMBER_REMOVE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

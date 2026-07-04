@@ -15,7 +15,11 @@ vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activity
 
 import { GET, POST, DELETE } from './route';
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  // clearAllMocks doesn't reset implementations, so drop any leaked mockRejectedValue.
+  activityLogMock.mockReset();
+});
 
 describe('GET /api/courses/[id]/[aid]/group-problems', () => {
   it('returns 403 when not authenticated', async () => {

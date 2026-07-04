@@ -21,6 +21,12 @@ export async function PATCH(
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'GROUP_UPDATE_DENIED',
+      severity: 'SECURITY',
+      metadata: { role: session?.user?.role ?? null },
+    });
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -49,6 +55,7 @@ export async function PATCH(
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'UPDATE_GROUP',
+      severity: 'INFO',
       category: 'COURSE',
       metadata: { courseId: id, groupId, name },
     });
@@ -56,6 +63,12 @@ export async function PATCH(
     return NextResponse.json(updated);
   } catch (err) {
     console.error('[GROUP_UPDATE_ERROR]', err);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'GROUP_UPDATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Failed to update group' }, { status: 500 });
   }
 }
@@ -73,6 +86,12 @@ export async function DELETE(
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'GROUP_DELETE_DENIED',
+      severity: 'SECURITY',
+      metadata: { role: session?.user?.role ?? null },
+    });
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -87,6 +106,7 @@ export async function DELETE(
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'DELETE_GROUP',
+      severity: 'INFO',
       category: 'COURSE',
       metadata: { courseId: id, groupId },
     });
@@ -94,6 +114,12 @@ export async function DELETE(
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('[GROUP_DELETE_ERROR]', err);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'GROUP_DELETE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Failed to delete group' }, { status: 500 });
   }
 }

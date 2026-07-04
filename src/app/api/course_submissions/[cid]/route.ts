@@ -15,6 +15,12 @@ export async function POST(req: Request, context: { params: Promise<{ cid: strin
     }
 
     if (!['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'COURSE_SUBMISSIONS_RERUN_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -43,6 +49,7 @@ export async function POST(req: Request, context: { params: Promise<{ cid: strin
         await createEnhancedActivityLog(prisma, req, {
             userId: user.id,
             action: 'SUBMISSION_RERUN',
+            severity: 'INFO',
             category: 'SUBMISSION',
             courseId: submission.courseId,
             assignmentId: submission.assignmentId,
@@ -62,6 +69,12 @@ export async function POST(req: Request, context: { params: Promise<{ cid: strin
     return NextResponse.json({ success: true, count: updated_count }, { status: 202 });
   } catch (error) {
     console.error('POST /api/submissions/[id]/rerun error:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: null,
+      action: 'COURSE_SUBMISSIONS_RERUN_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Failed to rerun submission' }, { status: 500 });
   }
 }

@@ -74,11 +74,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 // POST - Create a new comment for a specific problem
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  let actorId: string | null = null;
   try {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    actorId = session.user.id;
 
     const resolvedParams = await params;
     const problemId = resolvedParams.id;
@@ -120,6 +122,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
 
     if (!rosterEntry) {
+      await createEnhancedActivityLog(prisma, request, {
+        userId: session?.user?.id ?? null,
+        action: 'COMMENT_CREATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
     }
 
@@ -149,6 +157,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     await createEnhancedActivityLog(prisma, request, {
       userId: session.user.id,
       action: 'CREATE_COMMENT',
+      severity: 'INFO',
       category: 'ASSIGNMENT',
       courseId: assignment.course.id,
       assignmentId: assignment.id,
@@ -178,6 +187,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json(transformedComment, { status: 201 });
   } catch (error) {
     console.error('Error creating comment:', error);
+    await createEnhancedActivityLog(prisma, request, {
+      userId: actorId,
+      action: 'COMMENT_CREATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Failed to create comment' }, { status: 500 });
   }
 }
