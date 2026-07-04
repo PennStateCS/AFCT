@@ -5,12 +5,21 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 export async function POST(req: Request, context: { params: Promise<{ cid: string }> }) {
   const { cid } = await context.params;
+  let actorId: string | null = null;
 
   try {
     const session = await auth();
     const user = session?.user;
+    actorId = user?.id ?? null;
 
     if (!user?.id) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: null,
+        action: 'COURSE_SUBMISSIONS_RERUN_DENIED',
+        severity: 'SECURITY',
+        courseId: cid,
+        metadata: { role: null },
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -66,13 +75,25 @@ export async function POST(req: Request, context: { params: Promise<{ cid: strin
         updated_count += 1;
     }
 
+    // Batch-level summary so the whole-course rerun is recorded as one action
+    // (in addition to the per-submission events), capturing the intended scope.
+    await createEnhancedActivityLog(prisma, req, {
+      userId: user.id,
+      action: 'COURSE_SUBMISSIONS_RERUN',
+      severity: 'INFO',
+      category: 'SUBMISSION',
+      courseId: cid,
+      metadata: { userId: user.id, courseId: cid, count: updated_count },
+    });
+
     return NextResponse.json({ success: true, count: updated_count }, { status: 202 });
   } catch (error) {
-    console.error('POST /api/submissions/[id]/rerun error:', error);
+    console.error('POST /api/course_submissions/[cid] rerun error:', error);
     await createEnhancedActivityLog(prisma, req, {
-      userId: null,
+      userId: actorId,
       action: 'COURSE_SUBMISSIONS_RERUN_ERROR',
       severity: 'ERROR',
+      courseId: cid,
       metadata: { error: error instanceof Error ? error.message : 'unknown error' },
     });
     return NextResponse.json({ error: 'Failed to rerun submission' }, { status: 500 });

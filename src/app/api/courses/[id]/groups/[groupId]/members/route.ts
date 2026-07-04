@@ -107,10 +107,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 // PATCH: set group members in bulk (members: string[])
 export async function PATCH(req: NextRequest, context: { params: Promise<{ id: string; groupId: string }> }) {
   const { id, groupId } = await context.params;
+  let actorId: string | null = null;
 
   try {
     const session = await auth();
     const currentUser = session?.user;
+    actorId = currentUser?.id ?? null;
     if (!currentUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = (await req.json()) as { members?: unknown };
@@ -172,7 +174,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
   } catch (err) {
     console.error('PATCH /api/courses/[id]/groups/[groupId]/members error:', err);
     await createEnhancedActivityLog(prisma, req as unknown as Request, {
-      userId: null,
+      userId: actorId,
       action: 'GROUP_MEMBERS_UPDATE_ERROR',
       severity: 'ERROR',
       metadata: { error: err instanceof Error ? err.message : 'unknown error' },
