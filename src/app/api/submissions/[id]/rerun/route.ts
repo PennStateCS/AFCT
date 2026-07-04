@@ -6,10 +6,12 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 export async function POST(req: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
+  let actorId: string | null = null;
 
   try {
     const session = await auth();
     const user = session?.user;
+    actorId = user?.id ?? null;
 
     if (!user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -109,7 +111,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
   } catch (error) {
     console.error('POST /api/submissions/[id]/rerun error:', error);
     await createEnhancedActivityLog(prisma, req, {
-      userId: null,
+      userId: actorId,
       action: 'SUBMISSION_RERUN_ERROR',
       severity: 'ERROR',
       metadata: { error: error instanceof Error ? error.message : 'unknown error' },
