@@ -277,12 +277,9 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
       // Avatar file deleted
     }
 
-    // Delete from activity if exists
-    await prisma.activityLog.deleteMany({
-      where: { userId },
-    });
-
-    // Delete user from database
+    // Delete user from database. The user's activity logs are intentionally
+    // preserved for the audit trail — the schema's onDelete: SetNull nulls their
+    // userId, and each entry keeps the actor's name/email in metadata.
     await prisma.user.delete({
       where: { id: userId },
     });

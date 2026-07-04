@@ -41,12 +41,14 @@ async function generateUniqueCourseCode() {
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const resolved = await params;
   const courseId = resolved.id;
+  let actorId: string | null = null;
 
   try {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    actorId = session.user.id;
 
     // Only allow faculty/admin/ta to duplicate
     const role = session.user.role;
@@ -297,11 +299,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return newCourse;
     });
 
+    await createEnhancedActivityLog(prisma, req as unknown as Request, {
+      userId: actorId,
+      action: 'COURSE_DUPLICATED',
+      severity: 'INFO',
+      category: 'COURSE',
+      courseId: result.id,
+      metadata: {
+        actorId,
+        sourceCourseId: courseId,
+        newCourseId: result.id,
+        newCourseName: result.name,
+        newCourseCode: result.code,
+        copyMode: mode,
+        copyFaculty: !!copyFaculty,
+        copyTAs: !!copyTAs,
+      },
+    });
+
     return NextResponse.json({ id: result.id, message: 'Course duplicated' }, { status: 201 });
   } catch (err) {
     console.error('Duplicate course error:', err);
     await createEnhancedActivityLog(prisma, req as unknown as Request, {
-      userId: null,
+      userId: actorId,
       action: 'COURSE_DUPLICATE_ERROR',
       severity: 'ERROR',
       metadata: { error: err instanceof Error ? err.message : 'unknown error' },

@@ -12,12 +12,14 @@ import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 
 // PUT /api/problems/[id] - Update an existing problem
 export async function PUT(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+  let actorId: string | null = null;
   try {
     const { id: problemId } = await context.params;
 
     // Verify authenticated user
     const session = await auth();
     const user = session?.user;
+    actorId = user?.id ?? null;
 
     if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
       await createEnhancedActivityLog(prisma, req, {
@@ -146,7 +148,10 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
         userId: user.id,
         courseId: courseId,
         problemId: problemId,
+        problemTitle: updatedProblem.title,
         problemType: type,
+        maxPoints: updatedProblem.maxPoints,
+        autograderEnabled: updatedProblem.autograderEnabled,
         fileName,
         fileUpdated: !!file,
       },
@@ -156,7 +161,7 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
   } catch (err) {
     console.error('Problem update error:', err);
     await createEnhancedActivityLog(prisma, req, {
-      userId: null,
+      userId: actorId,
       action: 'PROBLEM_UPDATE_ERROR',
       severity: 'ERROR',
       metadata: { error: err instanceof Error ? err.message : 'unknown error' },
@@ -167,12 +172,14 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
 
 // DELETE /api/problems/[id] - Delete a problem
 export async function DELETE(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+  let actorId: string | null = null;
   try {
     const { id: problemId } = await context.params;
 
     // Verify authenticated user
     const session = await auth();
     const user = session?.user;
+    actorId = user?.id ?? null;
 
     if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
       await createEnhancedActivityLog(prisma, req, {
@@ -235,6 +242,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
         userId: user.id,
         courseId: existingProblem.courseId,
         problemId: problemId,
+        problemTitle: existingProblem.title,
         fileName: existingProblem.fileName || null,
       },
     });
@@ -243,7 +251,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
   } catch (err) {
     console.error('Problem deletion error:', err);
     await createEnhancedActivityLog(prisma, req, {
-      userId: null,
+      userId: actorId,
       action: 'PROBLEM_DELETE_ERROR',
       severity: 'ERROR',
       metadata: { error: err instanceof Error ? err.message : 'unknown error' },
