@@ -16,9 +16,44 @@ import { POST } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Default to a privileged (FACULTY) caller; denial tests override this.
+  authMock.mockResolvedValue({ user: { id: 'admin', role: 'FACULTY' } });
 });
 
 describe('POST /api/courses/[id]/enroll', () => {
+  it('returns 401 when unauthenticated', async () => {
+    authMock.mockResolvedValue(null);
+
+    const req = new Request('http://localhost/api/courses/c1/enroll', {
+      method: 'POST',
+      body: JSON.stringify({ userId: 'u1' }),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(401);
+    expect(prismaMock.roster.upsert).not.toHaveBeenCalled();
+  });
+
+  it('returns 403 and logs a denial when the caller is a student', async () => {
+    authMock.mockResolvedValue({ user: { id: 'stu', role: 'STUDENT' } });
+
+    const req = new Request('http://localhost/api/courses/c1/enroll', {
+      method: 'POST',
+      body: JSON.stringify({ userId: 'u1' }),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(403);
+    expect(prismaMock.roster.upsert).not.toHaveBeenCalled();
+    expect(activityLogMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ action: 'COURSE_ENROLL_DENIED', severity: 'SECURITY' }),
+    );
+  });
+
   it('returns 400 when userId missing', async () => {
     const req = new Request('http://localhost/api/courses/c1/enroll', {
       method: 'POST',
@@ -58,7 +93,7 @@ describe('POST /api/courses/[id]/enroll', () => {
 
   it('enrolls user and logs activity', async () => {
     prismaMock.user.findUnique.mockResolvedValue({ id: 'u1', role: 'STUDENT', inactive: false });
-    authMock.mockResolvedValue({ user: { id: 'admin' } });
+    authMock.mockResolvedValue({ user: { id: 'admin', role: 'FACULTY' } });
 
     const req = new Request('http://localhost/api/courses/c1/enroll', {
       method: 'POST',
@@ -74,7 +109,7 @@ describe('POST /api/courses/[id]/enroll', () => {
 
   it('maps FACULTY and ADMIN global roles to the FACULTY course role', async () => {
     prismaMock.user.findUnique.mockResolvedValue({ id: 'u1', role: 'ADMIN', inactive: false });
-    authMock.mockResolvedValue({ user: { id: 'admin' } });
+    authMock.mockResolvedValue({ user: { id: 'admin', role: 'FACULTY' } });
 
     const req = new Request('http://localhost/api/courses/c1/enroll', {
       method: 'POST',
@@ -94,7 +129,7 @@ describe('POST /api/courses/[id]/enroll', () => {
 
   it('maps the TA global role to the TA course role', async () => {
     prismaMock.user.findUnique.mockResolvedValue({ id: 'u1', role: 'TA', inactive: false });
-    authMock.mockResolvedValue({ user: { id: 'admin' } });
+    authMock.mockResolvedValue({ user: { id: 'admin', role: 'FACULTY' } });
 
     const req = new Request('http://localhost/api/courses/c1/enroll', {
       method: 'POST',
