@@ -84,7 +84,10 @@ export async function GET(req: Request) {
       severity: { severity: sortDir },
       category: { category: sortDir },
       action: { action: sortDir },
+      ipAddress: { ipAddress: sortDir },
       userId: { user: { lastName: sortDir } },
+      userLastName: { user: { lastName: sortDir } },
+      userFirstName: { user: { firstName: sortDir } },
     };
     const orderBy = ORDER_BY[sortBy] ?? { timestamp: 'desc' };
 
@@ -106,12 +109,18 @@ export async function GET(req: Request) {
           select: { id: true, firstName: true, lastName: true, email: true },
         })
       : [];
-    const lookup = Object.fromEntries(users.map((u) => [u.id, displayName(u)]));
+    const lookup = Object.fromEntries(users.map((u) => [u.id, u]));
 
-    const rows = logs.map((log) => ({
-      ...log,
-      userId: log.userId ? (lookup[log.userId] ?? log.userId) : log.userId,
-    }));
+    const rows = logs.map((log) => {
+      const u = log.userId ? lookup[log.userId] : null;
+      return {
+        ...log,
+        // Combined display name kept for the Full Log viewer / back-compat.
+        userId: u ? displayName(u) : log.userId,
+        userFirstName: u?.firstName ?? null,
+        userLastName: u?.lastName ?? null,
+      };
+    });
 
     return NextResponse.json({
       rows,

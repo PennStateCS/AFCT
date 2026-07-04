@@ -5,6 +5,7 @@ import type { OnChangeFn, PaginationState, SortingState } from '@tanstack/react-
 import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { CategoryBadge } from '@/components/ui/category-badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import {
   Select,
@@ -23,6 +24,8 @@ type LogRow = {
   id: string;
   timestamp: string;
   userId: string | null;
+  userFirstName: string | null;
+  userLastName: string | null;
   action: string;
   category: string | null;
   severity: Severity;
@@ -153,9 +156,38 @@ export default function SystemLoggingClient() {
         return <Badge variant={SEVERITY_VARIANT[s] ?? 'neutral'}>{s}</Badge>;
       },
     },
-    { accessorKey: 'userId', header: 'User' },
-    { accessorKey: 'category', header: 'Category' },
-    { accessorKey: 'action', header: 'Action' },
+    {
+      accessorKey: 'category',
+      header: 'Category',
+      cell: ({ getValue }: { getValue: () => unknown }) => (
+        <CategoryBadge category={getValue() as string | null} />
+      ),
+    },
+    {
+      accessorKey: 'action',
+      header: 'Action',
+      cell: ({ getValue }: { getValue: () => unknown }) =>
+        ((getValue() as string) || '').replace(/_/g, ' '),
+    },
+    {
+      accessorKey: 'userLastName',
+      header: 'Last Name',
+      cell: ({ getValue }: { getValue: () => unknown }) => (getValue() as string) || '—',
+    },
+    {
+      accessorKey: 'userFirstName',
+      header: 'First Name',
+      cell: ({ getValue }: { getValue: () => unknown }) => (getValue() as string) || '—',
+    },
+    {
+      accessorKey: 'ipAddress',
+      header: 'IP Address',
+      cell: ({ getValue }: { getValue: () => unknown }) => {
+        const ip = getValue() as string | null;
+        // Strip the IPv4-mapped IPv6 prefix for readability (e.g. ::ffff:1.2.3.4).
+        return ip ? ip.replace(/^::ffff:(?=\d{1,3}(?:\.\d{1,3}){3}$)/i, '') : '—';
+      },
+    },
     {
       id: 'viewer',
       header: 'Logs',

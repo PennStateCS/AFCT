@@ -22,7 +22,7 @@ export function LogViewerDialog({ data, open, onOpenChange, title }: { data: str
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="bg-card">
         <DialogHeader>
           <DialogTitle className="truncate">{title || 'System Log'}</DialogTitle>
         </DialogHeader>

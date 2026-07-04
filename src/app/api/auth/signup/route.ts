@@ -168,6 +168,8 @@ async function logSecurityEvent(
         action,
         category: 'SECURITY',
         severity: inferSeverity(action),
+        // Promote the known client IP into the column (not just metadata).
+        ipAddress: metadata.ip ?? null,
         metadata,
       },
     });
