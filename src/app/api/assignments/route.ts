@@ -19,9 +19,11 @@ async function resolveUserTimezone(userId?: string | null) {
 }
 
 export async function POST(req: NextRequest) {
+  let actorId: string | null = null;
   try {
     // Retrieve the current authenticated session
     const session = await auth();
+    actorId = session?.user?.id ?? null;
 
     // Ensure user is authenticated and has the correct role
     if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
@@ -116,7 +118,7 @@ export async function POST(req: NextRequest) {
     // Log error to the server console
     console.error('Assignment creation failed:', error);
     await createEnhancedActivityLog(prisma, req, {
-      userId: null,
+      userId: actorId,
       action: 'ASSIGNMENT_CREATE_ERROR',
       severity: 'ERROR',
       metadata: { error: error instanceof Error ? error.message : 'unknown error' },

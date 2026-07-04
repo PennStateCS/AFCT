@@ -52,9 +52,11 @@ const createCommentSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  let actorId: string | null = null;
   try {
     const session = await auth();
     const user = session?.user;
+    actorId = user?.id ?? null;
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -179,7 +181,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error creating comment:', error);
     await createEnhancedActivityLog(prisma, request, {
-      userId: null,
+      userId: actorId,
       action: 'COMMENT_CREATE_ERROR',
       severity: 'ERROR',
       metadata: { error: error instanceof Error ? error.message : 'unknown error' },
@@ -303,9 +305,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  let actorId: string | null = null;
   try {
     const session = await auth();
     const user = session?.user;
+    actorId = user?.id ?? null;
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -347,6 +351,8 @@ export async function DELETE(request: NextRequest) {
       }
     }
 
+    await prisma.comment.delete({ where: { id: commentId } });
+
     await createEnhancedActivityLog(prisma, request, {
       userId: user.id,
       action: 'DELETE_COMMENT',
@@ -368,12 +374,11 @@ export async function DELETE(request: NextRequest) {
       },
     });
 
-    await prisma.comment.delete({ where: { id: commentId } });
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting comment:', error);
     await createEnhancedActivityLog(prisma, request, {
-      userId: null,
+      userId: actorId,
       action: 'COMMENT_DELETE_ERROR',
       severity: 'ERROR',
       metadata: { error: error instanceof Error ? error.message : 'unknown error' },

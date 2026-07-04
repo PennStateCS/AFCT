@@ -285,9 +285,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         userId: session.user.id,
         courseId: updated.courseId,
         assignmentId: id,
-        updatedFields: Object.keys(data),
-        allowLateSubmissions,
-        lateCutoff: lateCutoff ? lateCutoff.toISOString() : null,
+        title: updated.title,
+        isPublished: updated.isPublished,
+        dueDate: updated.dueDate ? updated.dueDate.toISOString() : null,
+        allowLateSubmissions: updated.allowLateSubmissions,
+        lateCutoff: updated.lateCutoff ? updated.lateCutoff.toISOString() : null,
+        isGroup: updated.isGroup,
       },
     });
 
@@ -444,9 +447,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         userId: session.user.id,
         courseId: updated.courseId,
         assignmentId: id,
-        updatedFields: Object.keys(updateData),
-        allowLateSubmissions,
-        lateCutoff: lateCutoff ? lateCutoff.toISOString() : null,
+        changedFields: Object.keys(updateData),
+        title: updated.title,
+        isPublished: updated.isPublished,
+        dueDate: updated.dueDate ? updated.dueDate.toISOString() : null,
+        allowLateSubmissions: updated.allowLateSubmissions,
+        lateCutoff: updated.lateCutoff ? updated.lateCutoff.toISOString() : null,
+        isGroup: updated.isGroup,
       },
     });
 

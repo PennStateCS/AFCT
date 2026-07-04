@@ -74,11 +74,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 // POST - Create a new comment for a specific problem
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  let actorId: string | null = null;
   try {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    actorId = session.user.id;
 
     const resolvedParams = await params;
     const problemId = resolvedParams.id;
@@ -186,7 +188,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   } catch (error) {
     console.error('Error creating comment:', error);
     await createEnhancedActivityLog(prisma, request, {
-      userId: null,
+      userId: actorId,
       action: 'COMMENT_CREATE_ERROR',
       severity: 'ERROR',
       metadata: { error: error instanceof Error ? error.message : 'unknown error' },

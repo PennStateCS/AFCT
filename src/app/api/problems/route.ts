@@ -12,10 +12,12 @@ import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 
 // POST /api/problems - Create a new problem with file upload
 export async function POST(req: Request) {
+  let actorId: string | null = null;
   try {
     // Verify authenticated user
     const session = await auth();
     const user = session?.user;
+    actorId = user?.id ?? null;
 
     if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
       await createEnhancedActivityLog(prisma, req, {
@@ -118,7 +120,10 @@ export async function POST(req: Request) {
         userId: user.id,
         courseId: courseId,
         problemId: problem.id,
+        problemTitle: problem.title,
         problemType: type,
+        maxPoints: problem.maxPoints,
+        autograderEnabled: problem.autograderEnabled,
         fileName,
       },
     });
@@ -127,7 +132,7 @@ export async function POST(req: Request) {
   } catch (err) {
     console.error('Problem creation error:', err);
     await createEnhancedActivityLog(prisma, req, {
-      userId: null,
+      userId: actorId,
       action: 'PROBLEM_CREATE_ERROR',
       severity: 'ERROR',
       metadata: { error: err instanceof Error ? err.message : 'unknown error' },
