@@ -3,7 +3,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
-import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { createEnhancedActivityLog, inferSeverity } from '@/lib/activity-log-utils';
 import {
   applyBotFriction,
   evaluateSignupRateLimit,
@@ -127,6 +127,7 @@ export async function POST(req: Request) {
     await createEnhancedActivityLog(prisma, req, {
       userId: newUser.id,
       action: 'USER_SIGNUP',
+      severity: 'INFO',
       category: 'USER',
       metadata: {
         userId: newUser.id,
@@ -141,6 +142,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: 'User created', userId: newUser.id }, { status: 201 });
   } catch (err) {
     console.error('[SIGNUP_ERROR]', err);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: null,
+      action: 'SIGNUP_ERROR',
+      severity: 'ERROR',
+      category: 'USER',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -159,6 +167,9 @@ async function logSecurityEvent(
       data: {
         action,
         category: 'SECURITY',
+        severity: inferSeverity(action),
+        // Promote the known client IP into the column (not just metadata).
+        ipAddress: metadata.ip ?? null,
         metadata,
       },
     });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 export async function POST(req: NextRequest) {
 
@@ -27,6 +28,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ found: users, notFound }, { status: 200 });
   } catch (err) {
     console.error('lookup-users error', err);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: null,
+      action: 'COURSE_LOOKUP_USERS_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }

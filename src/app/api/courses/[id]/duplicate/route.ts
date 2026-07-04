@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
 import { toEmptyStringNotation } from '@/lib/empty-string-notation';
 import type { Prisma } from '@prisma/client';
@@ -40,16 +41,24 @@ async function generateUniqueCourseCode() {
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const resolved = await params;
   const courseId = resolved.id;
+  let actorId: string | null = null;
 
   try {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    actorId = session.user.id;
 
     // Only allow faculty/admin/ta to duplicate
     const role = session.user.role;
     if (!['FACULTY', 'ADMIN', 'TA'].includes(role)) {
+      await createEnhancedActivityLog(prisma, req as unknown as Request, {
+        userId: session?.user?.id ?? null,
+        action: 'COURSE_DUPLICATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -290,9 +299,33 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return newCourse;
     });
 
+    await createEnhancedActivityLog(prisma, req as unknown as Request, {
+      userId: actorId,
+      action: 'COURSE_DUPLICATED',
+      severity: 'INFO',
+      category: 'COURSE',
+      courseId: result.id,
+      metadata: {
+        actorId,
+        sourceCourseId: courseId,
+        newCourseId: result.id,
+        newCourseName: result.name,
+        newCourseCode: result.code,
+        copyMode: mode,
+        copyFaculty: !!copyFaculty,
+        copyTAs: !!copyTAs,
+      },
+    });
+
     return NextResponse.json({ id: result.id, message: 'Course duplicated' }, { status: 201 });
   } catch (err) {
     console.error('Duplicate course error:', err);
+    await createEnhancedActivityLog(prisma, req as unknown as Request, {
+      userId: actorId,
+      action: 'COURSE_DUPLICATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

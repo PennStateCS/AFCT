@@ -32,7 +32,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
     if (['ADMIN', 'FACULTY', 'TA'].includes(role)) allowed = true;
     else if (submission.studentId === session.user.id) allowed = true;
 
-    if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!allowed) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'SUBMISSION_FILE_DOWNLOAD_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const uploadsDir = path.join('/private', 'uploads', 'submissions');
     const filePath = path.join(uploadsDir, file);
@@ -45,6 +53,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'DOWNLOAD_SUBMISSION_FILE',
+      severity: 'INFO',
       category: 'SUBMISSION',
       assignmentId: submission.assignmentId,
       submissionId: submission.id,

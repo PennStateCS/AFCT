@@ -3,6 +3,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
@@ -193,7 +201,6 @@ export default function SystemSettingsClient() {
         if (res.ok) {
           const info = (await res.json()) as TlsInfo;
           setTls(info);
-          if (info.pendingCsr) setTlsMethod('csr');
         }
       } catch {
         // non-fatal; TLS card just shows unknown state
@@ -243,6 +250,7 @@ export default function SystemSettingsClient() {
       setCertFile(null);
       setKeyFile(null);
       setChainFile(null);
+      setTlsMethod(null);
       showToast.success('Certificate applied. It may take up to ~15 seconds to take effect.');
     } catch (err) {
       showToast.error(err instanceof Error ? err.message : 'Failed to apply certificate.');
@@ -330,6 +338,7 @@ export default function SystemSettingsClient() {
       setTls(data as TlsInfo);
       setSignedCertFile(null);
       setSignedChainFile(null);
+      setTlsMethod(null);
       showToast.success(
         'Signed certificate installed. It may take up to ~15 seconds to take effect.',
       );
@@ -349,6 +358,7 @@ export default function SystemSettingsClient() {
     try {
       const data = await tlsAction({ action: 'self-signed', ...csrFieldsPayload() });
       setTls(data as TlsInfo);
+      setTlsMethod(null);
       showToast.success('Self-signed certificate generated and applied for that hostname.');
     } catch (err) {
       showToast.error(err instanceof Error ? err.message : 'Failed to generate certificate.');
@@ -685,14 +695,25 @@ export default function SystemSettingsClient() {
             </TabsContent>
 
             <TabsContent value="captcha">
-            <div className="mb-4 flex flex-wrap items-center gap-2">
-              <p className="text-muted-foreground text-sm">
-                Optional bot protection, shown as a challenge after repeated failed logins.
-              </p>
-              <Badge variant={hcaptchaEnabled ? 'success' : 'warning'}>
-                {hcaptchaEnabled ? 'hCaptcha enabled' : 'hCaptcha disabled'}
-              </Badge>
+            <p className="text-muted-foreground mb-4 text-sm">
+              Optional bot protection, shown as a challenge after repeated failed logins.
+            </p>
+
+            {/* Current status */}
+            <div className="mb-5 space-y-2">
+              <div className="text-sm font-medium">Current status</div>
+              <div className="bg-muted/10 w-fit max-w-2xl space-y-2 rounded-md border p-3 text-sm">
+                <Badge variant={hcaptchaEnabled ? 'success' : 'warning'} className="w-fit">
+                  {hcaptchaEnabled ? 'Enabled' : 'Disabled'}
+                </Badge>
+                <p className="text-muted-foreground">
+                  {hcaptchaEnabled
+                    ? 'Bot protection is on. After repeated failed logins, users are shown an hCaptcha challenge.'
+                    : 'Bot protection is off. Add your hCaptcha keys below to turn it on.'}
+                </p>
+              </div>
             </div>
+
             <div className="max-w-md space-y-5">
               <InputGroup
                 label="hCaptcha site key"
@@ -748,29 +769,75 @@ export default function SystemSettingsClient() {
             </p>
 
             <div className="space-y-5">
-              {/* Status */}
-              <div className="bg-muted/30 rounded-md border p-3 text-sm">
-                {tls?.installed ? (
-                  <div className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="info">Custom certificate</Badge>
-                      {tls.selfSigned && <Badge variant="outline">Self-signed</Badge>}
-                      {tls.expired && <span className="font-medium text-red-600">Expired</span>}
-                    </div>
-                    {tls.subject && (
-                      <div className="text-muted-foreground break-all">Subject: {tls.subject}</div>
-                    )}
-                    {tls.validTo && (
-                      <div className="text-muted-foreground">Valid until: {tls.validTo}</div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-muted-foreground">
-                    Using the built-in self-signed certificate. Browsers will show a warning until a
-                    trusted certificate is installed.
-                  </div>
-                )}
+              {/* Current status */}
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Current certificate</div>
+                <div className="bg-muted/10 w-fit max-w-2xl space-y-2 rounded-md border p-3 text-sm">
+                  {tls?.installed ? (
+                    <>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {tls.expired ? (
+                          <Badge variant="warning">Expired</Badge>
+                        ) : tls.selfSigned ? (
+                          <Badge variant="warning">Self-signed certificate</Badge>
+                        ) : (
+                          <Badge variant="success">Trusted certificate</Badge>
+                        )}
+                      </div>
+                      {tls.subject && (
+                        <div className="text-foreground break-all">
+                          <span className="text-muted-foreground">Issued to: </span>
+                          {tls.subject}
+                        </div>
+                      )}
+                      {tls.validTo && (
+                        <div className="text-foreground">
+                          <span className="text-muted-foreground">Valid until: </span>
+                          {tls.validTo}
+                        </div>
+                      )}
+                      <p className="text-muted-foreground">
+                        {tls.expired
+                          ? 'This certificate has expired, so browsers will show a security warning until you install a valid one.'
+                          : tls.selfSigned
+                            ? 'This certificate isn’t issued by a trusted authority, so browsers will show a security warning.'
+                            : 'This certificate is trusted by browsers, so visitors won’t see a security warning.'}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <Badge variant="warning" className="w-fit">
+                        Self-signed (built-in)
+                      </Badge>
+                      <p className="text-foreground">
+                        The server is using its built-in self-signed certificate.
+                      </p>
+                      <p className="text-muted-foreground">
+                        The connection is still encrypted, but browsers will show a security warning
+                        until you install a trusted certificate below.
+                      </p>
+                    </>
+                  )}
+                </div>
               </div>
+
+              {/* A CSR was generated but its signed cert isn't installed yet. */}
+              {tls?.pendingCsr && (
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <Badge variant="warning">CSR pending</Badge>
+                  <span className="text-muted-foreground">
+                    A request is waiting for its signed certificate.
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setTlsMethod('csr')}
+                  >
+                    Finish CSR
+                  </Button>
+                </div>
+              )}
 
               {/* Method chooser */}
               <div className="space-y-2">
@@ -780,45 +847,39 @@ export default function SystemSettingsClient() {
                   role="group"
                   aria-label="Certificate setup method"
                 >
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={tlsMethod === 'csr' ? 'default' : 'outline'}
-                    aria-pressed={tlsMethod === 'csr'}
-                    onClick={() => setTlsMethod('csr')}
-                  >
-                    Generate CSR
+                  <Button type="button" size="sm" onClick={() => setTlsMethod('csr')}>
+                    Request a CA-signed certificate
                   </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={tlsMethod === 'self-signed' ? 'default' : 'outline'}
-                    aria-pressed={tlsMethod === 'self-signed'}
-                    onClick={() => setTlsMethod('self-signed')}
-                  >
-                    Self-signed for hostname
+                  <Button type="button" size="sm" onClick={() => setTlsMethod('self-signed')}>
+                    Create a self-signed certificate
                   </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={tlsMethod === 'upload' ? 'default' : 'outline'}
-                    aria-pressed={tlsMethod === 'upload'}
-                    onClick={() => setTlsMethod('upload')}
-                  >
-                    Upload certificate & key
+                  <Button type="button" size="sm" onClick={() => setTlsMethod('upload')}>
+                    Upload an existing certificate
                   </Button>
                 </div>
               </div>
 
-              {/* CSR / self-signed share the hostname form */}
-              {(tlsMethod === 'csr' || tlsMethod === 'self-signed') && (
-                <div className="bg-card space-y-3 rounded-md border p-4">
-                  <p className="text-muted-foreground text-xs">
-                    {tlsMethod === 'csr'
-                      ? 'Enter your hostname and generate a CSR to send to your certificate authority. The private key is created and kept on the server.'
-                      : 'Generate a self-signed certificate for this hostname — no certificate authority needed (browsers still warn unless trusted internally).'}
-                  </p>
-                  <div className="max-w-md space-y-5">
+              {/* Generate CSR / self-signed hostname form (modal) */}
+              <Dialog
+                open={tlsMethod === 'csr' || tlsMethod === 'self-signed'}
+                onOpenChange={(open) => {
+                  if (!open) setTlsMethod(null);
+                }}
+              >
+                <DialogContent className="bg-card sm:max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>
+                      {tlsMethod === 'csr'
+                        ? 'Request a CA-signed certificate'
+                        : 'Create a self-signed certificate'}
+                    </DialogTitle>
+                    <DialogDescription>
+                      {tlsMethod === 'csr'
+                        ? 'Enter your hostname and generate a CSR to send to your certificate authority. The private key is created and kept on the server.'
+                        : 'Generate a self-signed certificate for this hostname — no certificate authority needed (browsers still warn unless trusted internally).'}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-5">
                     <InputGroup
                       label="Hostname (Common Name)"
                       name="csrCommonName"
@@ -848,29 +909,14 @@ export default function SystemSettingsClient() {
                       description="Comma-separated extra DNS names or IPs."
                     />
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {tlsMethod === 'csr' ? (
-                      <Button type="button" onClick={generateCsr} disabled={tlsBusy || cnMissing}>
-                        {tlsBusy ? 'Working…' : 'Generate key & CSR'}
-                      </Button>
-                    ) : (
-                      <Button
-                        type="button"
-                        onClick={generateSelfSigned}
-                        disabled={tlsBusy || cnMissing}
-                      >
-                        {tlsBusy ? 'Working…' : 'Generate self-signed certificate'}
-                      </Button>
-                    )}
-                  </div>
 
                   {tlsMethod === 'csr' && tls?.pendingCsr && (
-                    <div className="bg-card space-y-3 rounded-md border p-3">
+                    <div className="bg-muted/30 space-y-3 rounded-md border p-3">
                       <p className="text-sm">
                         CSR generated (<span className="font-mono text-xs">afct.csr</span>). Upload
                         the signed certificate from your CA:
                       </p>
-                      <div className="max-w-md space-y-4">
+                      <div className="space-y-4">
                         <FileUploadInput
                           id="tls-signed-cert"
                           name="tls-signed-cert"
@@ -901,16 +947,48 @@ export default function SystemSettingsClient() {
                       </Button>
                     </div>
                   )}
-                </div>
-              )}
 
-              {/* Upload existing cert + key */}
-              {tlsMethod === 'upload' && (
-                <div className="bg-card space-y-3 rounded-md border p-4">
-                  <p className="text-muted-foreground text-xs">
-                    Upload a certificate and its matching private key (PEM).
-                  </p>
-                  <div className="max-w-md space-y-4">
+                  <DialogFooter>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setTlsMethod(null)}
+                      disabled={tlsBusy}
+                    >
+                      Cancel
+                    </Button>
+                    {tlsMethod === 'csr' ? (
+                      <Button type="button" onClick={generateCsr} disabled={tlsBusy || cnMissing}>
+                        {tlsBusy ? 'Working…' : 'Generate key & CSR'}
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        onClick={generateSelfSigned}
+                        disabled={tlsBusy || cnMissing}
+                      >
+                        {tlsBusy ? 'Working…' : 'Generate self-signed certificate'}
+                      </Button>
+                    )}
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              {/* Upload existing cert + key (modal) */}
+              <Dialog
+                open={tlsMethod === 'upload'}
+                onOpenChange={(open) => {
+                  if (!open) setTlsMethod(null);
+                }}
+              >
+                <DialogContent className="bg-card sm:max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Upload an existing certificate</DialogTitle>
+                    <DialogDescription>
+                      Upload a certificate and its matching private key (PEM).
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
                     <FileUploadInput
                       id="tls-cert"
                       name="tls-cert"
@@ -942,21 +1020,32 @@ export default function SystemSettingsClient() {
                       onChange={(f) => setChainFile(f ?? null)}
                     />
                   </div>
-                  <Button
-                    type="button"
-                    onClick={applyCert}
-                    disabled={tlsBusy || !certFile || !keyFile}
-                  >
-                    {tlsBusy ? 'Applying…' : 'Apply certificate'}
-                  </Button>
-                </div>
-              )}
+                  <DialogFooter>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setTlsMethod(null)}
+                      disabled={tlsBusy}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={applyCert}
+                      disabled={tlsBusy || !certFile || !keyFile}
+                    >
+                      {tlsBusy ? 'Applying…' : 'Apply certificate'}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
 
               {/* Footer note + reset */}
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-muted-foreground max-w-xl text-xs">
-                  Applied by the proxy within ~15 seconds. An invalid certificate is rejected and the
-                  self-signed certificate is kept, so HTTPS can’t go down.
+                  The new certificate takes effect within about 15 seconds. If the new certificate is
+                  invalid, it’s rejected and the current one is kept in place, so the site stays
+                  reachable.
                 </p>
                 {tls?.installed && (
                   <Button

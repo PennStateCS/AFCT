@@ -12,14 +12,22 @@ import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 
 // PUT /api/problems/[id] - Update an existing problem
 export async function PUT(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+  let actorId: string | null = null;
   try {
     const { id: problemId } = await context.params;
 
     // Verify authenticated user
     const session = await auth();
     const user = session?.user;
+    actorId = user?.id ?? null;
 
     if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'PROBLEM_UPDATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -72,6 +80,7 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
         await createEnhancedActivityLog(prisma, req, {
           userId: user.id,
           action: 'SUBMISSION_INVALID_FILE_STRUCTURE',
+          severity: 'WARNING',
           category: 'SUBMISSION',
           courseId,
           assignmentId,
@@ -131,6 +140,7 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
     await createEnhancedActivityLog(prisma, req, {
       userId: user.id,
       action: 'UPDATE_PROBLEM',
+      severity: 'INFO',
       category: 'PROBLEM',
       courseId,
       problemId,
@@ -138,7 +148,10 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
         userId: user.id,
         courseId: courseId,
         problemId: problemId,
+        problemTitle: updatedProblem.title,
         problemType: type,
+        maxPoints: updatedProblem.maxPoints,
+        autograderEnabled: updatedProblem.autograderEnabled,
         fileName,
         fileUpdated: !!file,
       },
@@ -147,20 +160,34 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
     return NextResponse.json(updatedProblem);
   } catch (err) {
     console.error('Problem update error:', err);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: actorId,
+      action: 'PROBLEM_UPDATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }
 
 // DELETE /api/problems/[id] - Delete a problem
 export async function DELETE(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+  let actorId: string | null = null;
   try {
     const { id: problemId } = await context.params;
 
     // Verify authenticated user
     const session = await auth();
     const user = session?.user;
+    actorId = user?.id ?? null;
 
     if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'PROBLEM_DELETE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -207,6 +234,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     await createEnhancedActivityLog(prisma, req, {
       userId: user.id,
       action: 'DELETE_PROBLEM',
+      severity: 'INFO',
       category: 'PROBLEM',
       courseId: existingProblem.courseId,
       problemId,
@@ -214,6 +242,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
         userId: user.id,
         courseId: existingProblem.courseId,
         problemId: problemId,
+        problemTitle: existingProblem.title,
         fileName: existingProblem.fileName || null,
       },
     });
@@ -221,6 +250,12 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('Problem deletion error:', err);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: actorId,
+      action: 'PROBLEM_DELETE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }

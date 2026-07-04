@@ -17,6 +17,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   // Only allow faculty/ta/admin to fetch groups
   if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'COURSE_GROUPS_VIEW_DENIED',
+      severity: 'SECURITY',
+      metadata: { role: session?.user?.role ?? null },
+    });
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -29,6 +35,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'VIEW_GROUPS',
+      severity: 'INFO',
       category: 'COURSE',
       metadata: { courseId: id },
     });
@@ -54,6 +61,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'GROUP_CREATE_DENIED',
+      severity: 'SECURITY',
+      metadata: { role: session?.user?.role ?? null },
+    });
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -70,12 +83,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         await createEnhancedActivityLog(prisma, req, {
           userId: session.user.id,
           action: 'VIEW_GROUPS',
+          severity: 'INFO',
           category: 'COURSE',
           metadata: { courseId: id },
         });
         return NextResponse.json(groups);
       } catch (err) {
         console.error('[COURSE_GROUPS_POST_LIST_ERROR]', err);
+        await createEnhancedActivityLog(prisma, req, {
+          userId: session?.user?.id ?? null,
+          action: 'GROUP_LIST_ERROR',
+          severity: 'ERROR',
+          metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+        });
         return NextResponse.json({ error: 'Failed to fetch groups' }, { status: 500 });
       }
     }
@@ -104,6 +124,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'CREATE_GROUP',
+      severity: 'INFO',
       category: 'COURSE',
       metadata: { courseId: id, groupId: group.id },
     });
@@ -111,6 +132,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json(group, { status: 201 });
   } catch (err) {
     console.error('[COURSE_GROUPS_POST_ERROR]', err);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'GROUP_CREATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

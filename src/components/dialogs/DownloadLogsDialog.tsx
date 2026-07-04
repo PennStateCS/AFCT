@@ -139,7 +139,6 @@ export function DownloadLogsDialog({
             begTime: raw.begTime === "" ? "1000-01-01T12:00" : raw.begTime,
             endTime: raw.endTime === "" ? "3000-01-01T12:00" : raw.endTime,
         };
-        console.log(payload);
 
         const res = await fetch('/api/logs/getData', {
             method: 'POST',
@@ -185,14 +184,14 @@ export function DownloadLogsDialog({
             open={open}
             onOpenChange={onOpenChange}
         >
-            <DialogContent className="bg-card">
+            <DialogContent className="bg-card sm:max-w-xl">
                 <DialogHeader>
                     {/* Title */}
                     <DialogTitle>Download Logs</DialogTitle>
                 </DialogHeader>
 
                 {/* Form */}
-                <form onSubmit={onSubmitWrapper} className="space-y-4">
+                <form onSubmit={onSubmitWrapper} className="min-w-0 space-y-4">
                     {/* Fields */}
                     <Controller
                         control={control}
@@ -238,6 +237,7 @@ export function DownloadLogsDialog({
                                 label="Start Date & Time"
                                 name="begTime"
                                 type="datetime-local"
+                                className="min-w-0"
                                 fieldProps={{
                                 ...field,
                                 value: field.value ?? '',
@@ -253,8 +253,9 @@ export function DownloadLogsDialog({
                         render={({ field }) => (
                             <InputGroup
                                 label="End Date & Time"
-                                name="endDate"
+                                name="endTime"
                                 type="datetime-local"
+                                className="min-w-0"
                                 fieldProps={{
                                     ...field,
                                     value: field.value,

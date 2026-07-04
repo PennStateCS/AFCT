@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 // GET: Fetch all published assignments for a course
 export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -14,6 +15,12 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
 
     // 1. Allow only ADMIN or FACULTY to toggle archive status
     if (!user || !['ADMIN', 'FACULTY'].includes(user.role)) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'COURSE_ASSIGNMENTS_ACCESS_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 

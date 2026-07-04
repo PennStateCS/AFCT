@@ -163,6 +163,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const session = await auth();
 
   if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'ASSIGNMENT_UPDATE_DENIED',
+      severity: 'SECURITY',
+      metadata: { role: session?.user?.role ?? null },
+    });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -183,6 +189,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }));
 
     if (hasSubmission) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'ASSIGNMENT_UPDATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json(
         { error: 'Assignment must not have any submissions' },
         { status: 403 },
@@ -190,21 +202,33 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     if (hasGrade) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'ASSIGNMENT_UPDATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Assignment must not have any grades' }, { status: 403 });
     }
   }
-  
+
   const result = await prisma.assignment.findFirst({
     where: { id },
 	select: { isGroup: true },
   });
-  
+
   const curGroup = result?.isGroup;
-  
+
   // Prevent changing the assignment's group mode if submissions exist
   if (data.isGroup !== undefined && data.isGroup !== curGroup) {
     const hasAnySubmission = (await prisma.submission.count({ where: { assignmentId: id } })) > 0;
     if (hasAnySubmission) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'ASSIGNMENT_UPDATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json(
         { error: 'Cannot change assignment group mode after submissions exist' },
         { status: 403 },
@@ -253,6 +277,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'UPDATE_ASSIGNMENT',
+      severity: 'INFO',
       category: 'ASSIGNMENT',
       courseId: updated.courseId,
       assignmentId: id,
@@ -260,15 +285,24 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         userId: session.user.id,
         courseId: updated.courseId,
         assignmentId: id,
-        updatedFields: Object.keys(data),
-        allowLateSubmissions,
-        lateCutoff: lateCutoff ? lateCutoff.toISOString() : null,
+        title: updated.title,
+        isPublished: updated.isPublished,
+        dueDate: updated.dueDate ? updated.dueDate.toISOString() : null,
+        allowLateSubmissions: updated.allowLateSubmissions,
+        lateCutoff: updated.lateCutoff ? updated.lateCutoff.toISOString() : null,
+        isGroup: updated.isGroup,
       },
     });
 
     return NextResponse.json(updated);
   } catch (error) {
     console.error('Assignment update failed:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'ASSIGNMENT_UPDATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Failed to update assignment' }, { status: 500 });
   }
 }
@@ -280,6 +314,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const session = await auth();
 
   if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'ASSIGNMENT_UPDATE_DENIED',
+      severity: 'SECURITY',
+      metadata: { role: session?.user?.role ?? null },
+    });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -300,6 +340,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }));
 
     if (hasSubmission) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'ASSIGNMENT_UPDATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json(
         { error: 'Assignment must not have any submissions' },
         { status: 403 },
@@ -307,6 +353,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     if (hasGrade) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'ASSIGNMENT_UPDATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Assignment must not have any grades' }, { status: 403 });
     }
   }
@@ -315,6 +367,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (data.isGroup !== undefined) {
     const hasAnySubmission = (await prisma.submission.count({ where: { assignmentId: id } })) > 0;
     if (hasAnySubmission) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'ASSIGNMENT_UPDATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json(
         { error: 'Cannot change assignment group mode after submissions exist' },
         { status: 403 },
@@ -381,6 +439,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'UPDATE_ASSIGNMENT',
+      severity: 'INFO',
       category: 'ASSIGNMENT',
       courseId: updated.courseId,
       assignmentId: id,
@@ -388,15 +447,25 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         userId: session.user.id,
         courseId: updated.courseId,
         assignmentId: id,
-        updatedFields: Object.keys(updateData),
-        allowLateSubmissions,
-        lateCutoff: lateCutoff ? lateCutoff.toISOString() : null,
+        changedFields: Object.keys(updateData),
+        title: updated.title,
+        isPublished: updated.isPublished,
+        dueDate: updated.dueDate ? updated.dueDate.toISOString() : null,
+        allowLateSubmissions: updated.allowLateSubmissions,
+        lateCutoff: updated.lateCutoff ? updated.lateCutoff.toISOString() : null,
+        isGroup: updated.isGroup,
       },
     });
 
     return NextResponse.json(updated);
   } catch (error) {
     console.error('Assignment partial update failed:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'ASSIGNMENT_UPDATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Failed to update assignment' }, { status: 500 });
   }
 }
@@ -406,6 +475,12 @@ export async function POST(req: NextRequest) {
   const session = await auth();
 
   if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'ASSIGNMENT_CREATE_DENIED',
+      severity: 'SECURITY',
+      metadata: { role: session?.user?.role ?? null },
+    });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -463,6 +538,7 @@ export async function POST(req: NextRequest) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'CREATE_ASSIGNMENT',
+      severity: 'INFO',
       category: 'ASSIGNMENT',
       courseId: created.courseId,
       assignmentId: created.id,
@@ -478,6 +554,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(created, { status: 201 });
   } catch (error) {
     console.error('Assignment creation failed:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'ASSIGNMENT_CREATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Failed to create assignment' }, { status: 500 });
   }
 }
@@ -489,6 +571,12 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const session = await auth();
 
   if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'ASSIGNMENT_DELETE_DENIED',
+      severity: 'SECURITY',
+      metadata: { role: session?.user?.role ?? null },
+    });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -527,6 +615,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       await createEnhancedActivityLog(prisma, req as Request, {
         userId: session.user.id,
         action: 'DELETE_ASSIGNMENT',
+        severity: 'INFO',
         category: 'ASSIGNMENT',
         courseId: deleted.courseId,
         assignmentId: id,
@@ -544,6 +633,12 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Assignment delete failed:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'ASSIGNMENT_DELETE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Failed to delete assignment' }, { status: 500 });
   }
 }

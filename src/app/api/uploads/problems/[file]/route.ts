@@ -33,7 +33,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
       if (roster) allowed = true;
     }
 
-    if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!allowed) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'PROBLEM_FILE_DOWNLOAD_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const uploadsDir = path.join('/private', 'uploads', 'problems');
     const filePath = path.join(uploadsDir, file);
@@ -46,6 +54,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'DOWNLOAD_PROBLEM_FILE',
+      severity: 'INFO',
       category: 'PROBLEM',
       courseId: problem.courseId,
       problemId: problem.id,

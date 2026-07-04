@@ -52,9 +52,11 @@ const createCommentSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  let actorId: string | null = null;
   try {
     const session = await auth();
     const user = session?.user;
+    actorId = user?.id ?? null;
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -85,6 +87,12 @@ export async function POST(request: NextRequest) {
           },
         });
       } else {
+        await createEnhancedActivityLog(prisma, request, {
+          userId: session?.user?.id ?? null,
+          action: 'COMMENT_CREATE_DENIED',
+          severity: 'SECURITY',
+          metadata: { role: session?.user?.role ?? null },
+        });
         return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
       }
     }
@@ -137,6 +145,7 @@ export async function POST(request: NextRequest) {
     await createEnhancedActivityLog(prisma, request, {
       userId: user.id,
       action: 'CREATE_COMMENT',
+      severity: 'INFO',
       category: 'ASSIGNMENT',
       courseId: assignment.courseId,
       assignmentId,
@@ -171,6 +180,12 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     console.error('Error creating comment:', error);
+    await createEnhancedActivityLog(prisma, request, {
+      userId: actorId,
+      action: 'COMMENT_CREATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: 'Invalid request data', details: error.issues },
@@ -217,6 +232,12 @@ export async function GET(request: NextRequest) {
         where: { courseId_userId: { courseId: assignment.courseId, userId: user.id } },
       });
       if (!rosterEntry) {
+        await createEnhancedActivityLog(prisma, request, {
+          userId: session?.user?.id ?? null,
+          action: 'COMMENT_VIEW_DENIED',
+          severity: 'SECURITY',
+          metadata: { role: session?.user?.role ?? null },
+        });
         return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
       }
     }
@@ -284,9 +305,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  let actorId: string | null = null;
   try {
     const session = await auth();
     const user = session?.user;
+    actorId = user?.id ?? null;
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -318,13 +341,22 @@ export async function DELETE(request: NextRequest) {
         },
       });
       if (!userRosterEntry || userRosterEntry.role === 'STUDENT') {
+        await createEnhancedActivityLog(prisma, request, {
+          userId: session?.user?.id ?? null,
+          action: 'COMMENT_DELETE_DENIED',
+          severity: 'SECURITY',
+          metadata: { role: session?.user?.role ?? null },
+        });
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
     }
 
+    await prisma.comment.delete({ where: { id: commentId } });
+
     await createEnhancedActivityLog(prisma, request, {
       userId: user.id,
       action: 'DELETE_COMMENT',
+      severity: 'INFO',
       category: 'ASSIGNMENT',
       courseId: comment.assignment.courseId,
       assignmentId: comment.assignmentId,
@@ -342,10 +374,15 @@ export async function DELETE(request: NextRequest) {
       },
     });
 
-    await prisma.comment.delete({ where: { id: commentId } });
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting comment:', error);
+    await createEnhancedActivityLog(prisma, request, {
+      userId: actorId,
+      action: 'COMMENT_DELETE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

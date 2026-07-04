@@ -71,6 +71,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
     await createEnhancedActivityLog(prisma, req, {
       userId: actingUser?.id,
       action: 'ENROLL_USER',
+      severity: 'INFO',
       category: 'COURSE',
       courseId,
       metadata: {
@@ -86,6 +87,12 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
   } catch (error) {
     // Catch and log any unexpected errors
     console.error('Enrollment error:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: null,
+      action: 'COURSE_ENROLL_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Failed to enroll user' }, { status: 500 });
   }
 }
