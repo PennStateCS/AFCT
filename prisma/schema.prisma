@@ -389,13 +389,14 @@ model ActivityLog {
   ipAddress String?
   userAgent String?
 
-  @@index([timestamp])
-  @@index([userId])
+  // Index strategy for a high-write, admin-read log table. Composites serve
+  // "filter by X, order by timestamp desc" in a single scan; single-column
+  // indexes that are the leftmost prefix of a composite are omitted to keep
+  // insert cost down (e.g. userId is covered by [userId, courseId]).
+  @@index([timestamp]) // default System Logs ordering
+  @@index([severity, timestamp]) // severity dropdown + timestamp sort
   @@index([action])
   @@index([category])
-  @@index([severity])
-  @@index([courseId])
-  @@index([assignmentId])
   @@index([problemId])
   @@index([submissionId])
   @@index([courseId, action])
