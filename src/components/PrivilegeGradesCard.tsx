@@ -162,8 +162,20 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
       link.click();
 
       showToast.success(`Grades exported for ${platform}`);
+
+      // Record the export in the audit log (best-effort; never block the download).
+      void fetch(`/api/courses/${courseId}/grades`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          platform,
+          wholeGradebook: selectedForExport.length === assignments.length,
+          assignmentCount: exportAssignments.length,
+          studentCount: students.length,
+        }),
+      }).catch(() => {});
     },
-    [students, assignments],
+    [students, assignments, courseId],
   );
 
   const [dialogOpen, setDialogOpen] = useState(false);

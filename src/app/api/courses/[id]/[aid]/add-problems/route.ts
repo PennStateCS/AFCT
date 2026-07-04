@@ -46,6 +46,12 @@ export async function POST(
     const user = session?.user;
 
     if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'ASSIGNMENT_ADD_PROBLEMS_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -195,6 +201,7 @@ export async function POST(
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,
         action: 'UPDATE_ASSIGNMENT_PROBLEMS',
+        severity: 'INFO',
         category: 'ASSIGNMENT',
         courseId,
         assignmentId,
@@ -234,6 +241,12 @@ export async function POST(
   } catch (err) {
     // Handle unexpected errors
     console.error('Failed to update assignment problems:', err);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: null,
+      action: 'ASSIGNMENT_ADD_PROBLEMS_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Failed to update assignment problems.' }, { status: 500 });
   }
 }

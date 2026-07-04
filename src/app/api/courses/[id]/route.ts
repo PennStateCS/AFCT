@@ -307,6 +307,12 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
 
   // Allow only ADMIN, FACULTY, or TA to edit courses
   if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'COURSE_UPDATE_DENIED',
+      severity: 'SECURITY',
+      metadata: { role: session?.user?.role ?? null },
+    });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -337,6 +343,12 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
   if (body.isArchived) {
     const { canArchive, reason } = await canArchiveCourse(prisma, id, body.startDate, body.endDate);
     if (!canArchive) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'COURSE_ARCHIVE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: reason }, { status: 403 });
     }
   }
@@ -345,6 +357,12 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
   if (!body.isPublished) {
     const { canUnpublish, reason } = await canUnpublishCourse(prisma, id);
     if (!canUnpublish) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'COURSE_PUBLISH_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: reason }, { status: 403 });
     }
   }
@@ -354,6 +372,10 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
   }
 
   try {
+    // Prior values are snapshotted inside the transaction (below) so the audit
+    // can record what actually changed.
+    let before: Record<string, unknown> | null = null;
+
     const instructorIds = Array.isArray(body.instructorIds) ? body.instructorIds : null;
     if (Array.isArray(instructorIds) && instructorIds.length === 0) {
       return NextResponse.json(
@@ -364,6 +386,23 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
 
     // Update the course and optionally sync faculty (ADMIN) roster entries
     const updatedCourse = await prisma.$transaction(async (tx) => {
+      before = await tx.course.findUnique({
+        where: { id },
+        select: {
+          name: true,
+          code: true,
+          semester: true,
+          credits: true,
+          isPublished: true,
+          isArchived: true,
+          emptyStringNotation: true,
+          startDate: true,
+          endDate: true,
+          registrationOpenAt: true,
+          registrationCloseAt: true,
+        },
+      });
+
       await tx.course.update({
         where: { id },
         data: {
@@ -530,16 +569,45 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
       ),
     );
 
+    // Record what actually changed (before → after). Publish/archive status
+    // changes especially matter for a course's lifecycle.
+    const AUDITED_COURSE_FIELDS = [
+      'name',
+      'code',
+      'semester',
+      'credits',
+      'isPublished',
+      'isArchived',
+      'emptyStringNotation',
+      'startDate',
+      'endDate',
+      'registrationOpenAt',
+      'registrationCloseAt',
+    ] as const;
+    const toComparable = (v: unknown): string | number | boolean | null =>
+      v instanceof Date ? v.toISOString() : ((v as string | number | boolean | null) ?? null);
+    const changes: Record<
+      string,
+      { from: string | number | boolean | null; to: string | number | boolean | null }
+    > = {};
+    for (const field of AUDITED_COURSE_FIELDS) {
+      const from = toComparable((before as Record<string, unknown> | null)?.[field]);
+      const to = toComparable((updatedCourse as Record<string, unknown>)[field]);
+      if (from !== to) changes[field] = { from, to };
+    }
+
     // Log the update action to ActivityLog
     await createEnhancedActivityLog(prisma, req, {
       userId: user.id,
       action: 'UPDATE_COURSE',
+      severity: 'INFO',
       category: 'COURSE',
       courseId: updatedCourse.id,
       metadata: {
-        userId: user.id,
+        actorId: user.id,
         courseId: updatedCourse.id,
-        updatedFields: Object.keys(body),
+        changedFields: Object.keys(changes),
+        changes,
       },
     });
 
@@ -584,6 +652,12 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
     });
   } catch (error) {
     console.error('PUT /api/courses/[id] error:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'COURSE_UPDATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Failed to update course' }, { status: 500 });
   }
 }
@@ -601,6 +675,12 @@ export async function DELETE(req: Request, context: { params: Promise<{ id: stri
   const user = session?.user;
 
   if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'COURSE_DELETE_DENIED',
+      severity: 'SECURITY',
+      metadata: { role: session?.user?.role ?? null },
+    });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -611,6 +691,12 @@ export async function DELETE(req: Request, context: { params: Promise<{ id: stri
   });
 
   if (courseIsArchived === null || courseIsArchived.isArchived === false) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'COURSE_DELETE_DENIED',
+      severity: 'SECURITY',
+      metadata: { role: session?.user?.role ?? null },
+    });
     return NextResponse.json({ error: 'Course must be archived' }, { status: 403 });
   }
 
@@ -625,16 +711,30 @@ export async function DELETE(req: Request, context: { params: Promise<{ id: stri
       },
     });
 
-    // Log the update action to ActivityLog
+    // Record which course was deleted. The course row is gone, so its id goes in
+    // metadata only (not the log's courseId FK, which would be nulled/rejected).
     await createEnhancedActivityLog(prisma, req, {
       userId: user.id,
       action: 'DELETE_COURSE',
+      severity: 'INFO',
       category: 'COURSE',
-      metadata: { courseName: deletedCourse.name },
+      metadata: {
+        actorId: user.id,
+        courseId: id,
+        courseName: deletedCourse.name,
+        courseCode: deletedCourse.code,
+        semester: deletedCourse.semester,
+      },
     });
     return NextResponse.json({ status: 204 });
   } catch (error) {
     console.error('DELETE /api/courses/[id] error:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'COURSE_DELETE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json({ error: error }, { status: 500 });
   }
 }

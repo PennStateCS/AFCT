@@ -19,6 +19,8 @@ import { PUT } from './route';
 describe('PUT /api/courses/[id]/[aid]/problems/[pid]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // clearAllMocks doesn't reset implementations, so drop any leaked mockRejectedValue.
+    activityLogMock.mockReset();
     authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
     prismaMock.assignmentProblem.findUnique.mockResolvedValue({
       assignment: { courseId: 'c1' },

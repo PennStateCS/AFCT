@@ -139,14 +139,22 @@ export async function GET() {
  * - facultyIds (optional)
  */
 export async function POST(req: Request) {
+  let actorId: string | null = null;
   try {
     // 1) Parse payload of information
     const json = await req.json();
 
     // 2) Ensure user is authorized to create courses
     const session = await auth();
+    actorId = session?.user?.id ?? null;
     const role = session?.user?.role;
     if (!role || !['ADMIN', 'TA', 'FACULTY'].includes(role)) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'COURSE_CREATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
     }
 
@@ -255,6 +263,7 @@ export async function POST(req: Request) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session.user.id,
         action: 'CREATE_COURSE',
+        severity: 'INFO',
         category: 'COURSE',
         courseId: created.course.id,
         metadata: {
@@ -298,6 +307,12 @@ export async function POST(req: Request) {
     if (resp.status === 400) return resp;
 
     console.error('Failed to create course:', err);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: actorId,
+      action: 'COURSE_CREATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }
 }

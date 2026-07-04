@@ -43,6 +43,14 @@ enum EmptyStringNotation {
   LAMBDA // λ
 }
 
+// Severity/level of an audit-log entry.
+enum LogSeverity {
+  INFO // routine, successful activity
+  WARNING // expected rejections / invalid input / non-fatal issues
+  ERROR // system or operational failures
+  SECURITY // auth failures and access-control denials
+}
+
 model User {
   id        String  @id @default(cuid())
   email     String  @unique
@@ -377,6 +385,7 @@ model ActivityLog {
 
   // Additional categorization
   category  String? // SYSTEM, COURSE, ASSIGNMENT, PROBLEM, SUBMISSION, USER
+  severity  LogSeverity @default(INFO)
   ipAddress String?
   userAgent String?
 
@@ -384,6 +393,7 @@ model ActivityLog {
   @@index([userId])
   @@index([action])
   @@index([category])
+  @@index([severity])
   @@index([courseId])
   @@index([assignmentId])
   @@index([problemId])

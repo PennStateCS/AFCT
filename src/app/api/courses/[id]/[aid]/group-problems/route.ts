@@ -9,7 +9,15 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   try {
     const session = await auth();
     const user = session?.user;
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    if (!user) {
+      await createEnhancedActivityLog(prisma, _ as Request, {
+        userId: session?.user?.id ?? null,
+        action: 'GROUP_PROBLEMS_ACCESS_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
 
     // Fetch groups for the course and their assignment problem mappings
     const groups = await prisma.group.findMany({ where: { courseId }, select: { id: true, name: true } });
@@ -30,6 +38,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       await createEnhancedActivityLog(prisma, _ as Request, {
         userId: user.id,
         action: 'VIEW_GROUP_PROBLEMS',
+        severity: 'INFO',
         category: 'ASSIGNMENT',
         courseId,
         assignmentId,
@@ -54,7 +63,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   try {
     const session = await auth();
     const user = session?.user;
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    if (!user) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'GROUP_PROBLEMS_ACCESS_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
 
     const body = await req.json().catch(() => ({}));
     if (body?.action !== 'list') {
@@ -77,6 +94,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       await createEnhancedActivityLog(prisma, req as Request, {
         userId: user.id,
         action: 'VIEW_GROUP_PROBLEMS',
+        severity: 'INFO',
         category: 'ASSIGNMENT',
         courseId,
         assignmentId,
@@ -89,6 +107,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ success: true, groups: result });
   } catch (err) {
     console.error('Failed to POST group-problems:', err);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: null,
+      action: 'GROUP_PROBLEMS_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Failed to fetch group problems' }, { status: 500 });
   }
 }
@@ -101,6 +125,12 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     const session = await auth();
     const user = session?.user;
     if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'GROUP_PROBLEMS_REMOVE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -147,6 +177,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
       await createEnhancedActivityLog(prisma, req as Request, {
         userId: user.id,
         action: 'REMOVE_GROUP_PROBLEMS',
+        severity: 'INFO',
         category: 'ASSIGNMENT',
         courseId,
         assignmentId,
@@ -160,6 +191,12 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('Failed to delete group problems:', err);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: null,
+      action: 'GROUP_PROBLEMS_REMOVE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Failed to delete group problems' }, { status: 500 });
   }
 }

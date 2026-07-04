@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 export async function GET(
   _req: Request,
@@ -16,6 +17,12 @@ export async function GET(
 
     const isStaff = ['ADMIN', 'FACULTY', 'TA'].includes(session.user.role);
     if (session.user.id !== studentId && !isStaff) {
+      await createEnhancedActivityLog(prisma, _req, {
+        userId: session?.user?.id ?? null,
+        action: 'PROBLEM_GRADES_ACCESS_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

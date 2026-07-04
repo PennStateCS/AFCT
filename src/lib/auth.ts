@@ -1,9 +1,12 @@
 import NextAuth from 'next-auth';
+import { headers } from 'next/headers';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
 import { Role } from '@prisma/client';
+import { inferSeverity } from '@/lib/activity-log-utils';
+import { getClientIpFromHeaders } from '@/lib/ip-utils';
 import {
   applyBotFriction,
   evaluateLoginRateLimit,
@@ -32,6 +35,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           | undefined;
 
         if (!emailInput || !credentials?.password) {
+          void logSecurityEvent('LOGIN_FAILED', {
+            ip: ipAddress,
+            identifier: emailInput,
+            reason: 'missing credentials',
+          });
           return null;
         }
 
@@ -76,12 +84,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         });
 
         if (!user) {
+          // No active account matches — unknown email or a disabled account.
+          void logSecurityEvent('LOGIN_FAILED', {
+            ip: ipAddress,
+            identifier: emailInput,
+            reason: 'unknown or inactive account',
+          });
           return null;
         }
 
         const valid = await bcrypt.compare(credentials.password as string, user.password);
 
         if (!valid) {
+          void logSecurityEvent(
+            'LOGIN_FAILED',
+            { ip: ipAddress, identifier: emailInput, reason: 'invalid password' },
+            user.id,
+          );
           return null;
         }
 
@@ -165,6 +184,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   events: {
     async signIn({ user, account }) {
+      const { ipAddress, userAgent } = await getRequestContext();
       try {
         const mustChangePassword = Boolean(
           (user as { mustChangePassword?: boolean } | undefined)?.mustChangePassword,
@@ -175,6 +195,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             userId: user?.id ?? undefined,
             action: 'LOGIN_SUCCESS',
             category: 'SYSTEM',
+            severity: inferSeverity('LOGIN_SUCCESS'),
+            ipAddress,
+            userAgent,
             metadata: {
               email: user?.email ?? null,
               provider: account?.provider ?? null,
@@ -186,6 +209,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       } catch (e) {
         // don't block sign-in on logging failure
         console.error('Failed to log signIn event:', e);
+      }
+    },
+    async signOut(message) {
+      const { ipAddress, userAgent } = await getRequestContext();
+      try {
+        // JWT strategy: the signed-out user's token is provided.
+        const token = (message as { token?: { id?: unknown } | null }).token;
+        const userId = typeof token?.id === 'string' ? token.id : null;
+        await prisma.activityLog.create({
+          data: {
+            userId,
+            action: 'LOGOUT',
+            category: 'SYSTEM',
+            severity: inferSeverity('LOGOUT'),
+            ipAddress,
+            userAgent,
+            metadata: {},
+          },
+        });
+      } catch (e) {
+        // don't block sign-out on logging failure
+        console.error('Failed to log signOut event:', e);
       }
     },
   },
@@ -206,17 +251,40 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 type SecurityEventAction =
   | 'LOGIN_RATE_LIMIT'
   | 'LOGIN_CHALLENGE_REQUIRED'
-  | 'LOGIN_CHALLENGE_SOLVED';
+  | 'LOGIN_CHALLENGE_SOLVED'
+  | 'LOGIN_FAILED';
+
+/**
+ * Best-effort request context for the NextAuth events, which don't receive the
+ * request object. `next/headers` is available while an auth route handler is
+ * running; if it isn't (e.g. a programmatic sign-out), we log without it.
+ */
+const getRequestContext = async (): Promise<{
+  ipAddress: string | null;
+  userAgent: string | null;
+}> => {
+  try {
+    const h = await headers();
+    return { ipAddress: getClientIpFromHeaders(h), userAgent: h.get('user-agent') };
+  } catch {
+    return { ipAddress: null, userAgent: null };
+  }
+};
 
 const logSecurityEvent = async (
   action: SecurityEventAction,
-  metadata: { ip?: string; identifier?: string },
+  metadata: { ip?: string; identifier?: string; reason?: string },
+  userId?: string | null,
 ) => {
   try {
     await prisma.activityLog.create({
       data: {
+        userId: userId ?? null,
         action,
         category: 'SECURITY',
+        severity: inferSeverity(action),
+        // Promote the known client IP into the column (not just metadata).
+        ipAddress: metadata.ip ?? null,
         metadata,
       },
     });

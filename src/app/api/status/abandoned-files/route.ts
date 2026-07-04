@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 const CATEGORY_FOLDERS: Record<string, string> = {
   solutions: 'solutions',
@@ -73,6 +74,12 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error('Delete abandoned file error:', err);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: null,
+      action: 'ABANDONED_FILES_DELETE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -12,12 +12,20 @@ import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 
 // POST /api/problems - Create a new problem with file upload
 export async function POST(req: Request) {
+  let actorId: string | null = null;
   try {
     // Verify authenticated user
     const session = await auth();
     const user = session?.user;
+    actorId = user?.id ?? null;
 
     if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'PROBLEM_CREATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -58,6 +66,7 @@ export async function POST(req: Request) {
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,
         action: 'SUBMISSION_INVALID_FILE_STRUCTURE',
+        severity: 'WARNING',
         category: 'SUBMISSION',
         courseId,
         assignmentId,
@@ -103,6 +112,7 @@ export async function POST(req: Request) {
     await createEnhancedActivityLog(prisma, req, {
       userId: user.id,
       action: 'CREATE_PROBLEM',
+      severity: 'INFO',
       category: 'PROBLEM',
       courseId,
       problemId: problem.id,
@@ -110,7 +120,10 @@ export async function POST(req: Request) {
         userId: user.id,
         courseId: courseId,
         problemId: problem.id,
+        problemTitle: problem.title,
         problemType: type,
+        maxPoints: problem.maxPoints,
+        autograderEnabled: problem.autograderEnabled,
         fileName,
       },
     });
@@ -118,6 +131,12 @@ export async function POST(req: Request) {
     return NextResponse.json(problem);
   } catch (err) {
     console.error('Problem creation error:', err);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: actorId,
+      action: 'PROBLEM_CREATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }

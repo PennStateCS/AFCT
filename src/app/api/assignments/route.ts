@@ -19,12 +19,20 @@ async function resolveUserTimezone(userId?: string | null) {
 }
 
 export async function POST(req: NextRequest) {
+  let actorId: string | null = null;
   try {
     // Retrieve the current authenticated session
     const session = await auth();
+    actorId = session?.user?.id ?? null;
 
     // Ensure user is authenticated and has the correct role
     if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'ASSIGNMENT_CREATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -86,6 +94,7 @@ export async function POST(req: NextRequest) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'CREATE_ASSIGNMENT',
+      severity: 'INFO',
       category: 'ASSIGNMENT',
       courseId: created.courseId,
       assignmentId: created.id,
@@ -108,6 +117,12 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     // Log error to the server console
     console.error('Assignment creation failed:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: actorId,
+      action: 'ASSIGNMENT_CREATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Failed to create assignment' }, { status: 500 });
   }
 }
