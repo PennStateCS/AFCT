@@ -8,12 +8,14 @@ export async function DELETE(
   context: { params: Promise<{ id: string; userId: string }> },
 ) {
   const { id: courseId, userId } = await context.params;
+  let actorId: string | null = null;
 
   try {
     const session = await auth();
     const currentUser = session?.user;
 
     if (!currentUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    actorId = currentUser.id;
 
     // Determine the current user's course role (if any)
     const currentRoster = await prisma.roster.findFirst({
@@ -147,7 +149,7 @@ export async function DELETE(
   } catch (err) {
     console.error('DELETE /api/courses/[id]/roster/[userId] error:', err);
     await createEnhancedActivityLog(prisma, req as unknown as Request, {
-      userId: null,
+      userId: actorId,
       action: 'ROSTER_REMOVE_ERROR',
       severity: 'ERROR',
       metadata: { error: err instanceof Error ? err.message : 'unknown error' },
@@ -212,11 +214,13 @@ export async function PATCH(
   context: { params: Promise<{ id: string; userId: string }> },
 ) {
   const { id: courseId, userId } = await context.params;
+  let actorId: string | null = null;
 
   try {
     const session = await auth();
     const currentUser = session?.user;
     if (!currentUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    actorId = currentUser.id;
 
     const body = await req.json();
     const newRole = body?.role;
@@ -270,14 +274,20 @@ export async function PATCH(
       severity: 'INFO',
       category: 'COURSE',
       courseId,
-      metadata: { userId: currentUser.id, courseId, targetUserId: userId, newRole },
+      metadata: {
+        userId: currentUser.id,
+        courseId,
+        targetUserId: userId,
+        previousRole: target.role,
+        newRole,
+      },
     });
 
     return NextResponse.json({ success: true, roster: updated });
   } catch (err) {
     console.error('PATCH /api/courses/[id]/roster/[userId] error:', err);
     await createEnhancedActivityLog(prisma, req as unknown as Request, {
-      userId: null,
+      userId: actorId,
       action: 'ROSTER_UPDATE_ERROR',
       severity: 'ERROR',
       metadata: { error: err instanceof Error ? err.message : 'unknown error' },
