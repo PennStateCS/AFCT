@@ -108,7 +108,7 @@ export async function DELETE(
       action: 'DELETE_GROUP',
       severity: 'INFO',
       category: 'COURSE',
-      metadata: { courseId: id, groupId },
+      metadata: { courseId: id, groupId, deletedGroupName: group.name },
     });
 
     return NextResponse.json({ success: true });

@@ -7,6 +7,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canUnpublishCourse } from '@/lib/course-status-checks';
 
 export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
+  let actorId: string | null = null;
   try {
     // Extract course ID from route params
     const { id: courseId } = await context.params;
@@ -22,6 +23,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     // Get authenticated user session
     const session = await auth();
     const user = session?.user;
+    actorId = user?.id ?? null;
 
     // Allow only ADMIN or FACULTY to toggle publish status
     if (!user || !['ADMIN', 'FACULTY'].includes(user.role)) {
@@ -81,7 +83,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
   } catch (error) {
     console.error('PATCH /api/courses/[id]/publish error:', error);
     await createEnhancedActivityLog(prisma, req, {
-      userId: null,
+      userId: actorId,
       action: 'COURSE_PUBLISH_ERROR',
       severity: 'ERROR',
       metadata: { error: error instanceof Error ? error.message : 'unknown error' },

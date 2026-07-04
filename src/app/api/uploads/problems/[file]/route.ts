@@ -7,13 +7,17 @@ import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 export async function GET(req: Request, { params }: { params: Promise<{ file: string }> }) {
+  let actorId: string | null = null;
+  let fileName: string | undefined;
   try {
     const { file } = await params;
+    fileName = file;
     if (!file || file.includes('..')) {
       return NextResponse.json({ error: 'Invalid file' }, { status: 400 });
     }
 
     const session = await auth();
+    actorId = session?.user?.id ?? null;
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -76,6 +80,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
     return new NextResponse(webStream as unknown as BodyInit, { status: 200, headers });
   } catch (err) {
     console.error('Error serving problem file:', err);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: actorId,
+      action: 'PROBLEM_FILE_DOWNLOAD_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error', fileName: fileName ?? null },
+    });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
