@@ -58,8 +58,11 @@ Thumbs.db
 *.tsbuildinfo
 next-env.d.ts
 
-# SSL keys (never commit these)
+# TLS keys/certs (never commit these — nginx generates its own at runtime)
 *.pem
+*.key
+*.crt
+docker/nginx/certs/
 
 # IDE settings
 .vscode/
