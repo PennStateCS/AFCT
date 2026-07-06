@@ -1,97 +1,106 @@
+# Development stack: the app with hot reload, an nginx TLS front, Postgres, and
+# Prisma Studio. `npm run docker:dev` brings it up.
+
+# Bound container log growth (json-file defaults to unlimited). Applied per service.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '5'
+
 services:
   app:
     build:
       context: .
       dockerfile: docker/Dockerfile.dev
-
     container_name: afct-dev
     restart: unless-stopped
+    logging: *default-logging
 
+    # Run as root so the source bind mount stays writable across host/container.
     user: '0:0'
-
-    ports:
-      - '3000:3000'
 
     environment:
       NODE_ENV: development
+      # Poll for file changes — native FS events don't cross the bind mount on
+      # Docker Desktop.
       CHOKIDAR_USEPOLLING: 'true'
       CHOKIDAR_INTERVAL: '1000'
       WATCHPACK_POLLING: 'true'
-
       DATABASE_URL: postgres://afct_user:afct_pass@postgres:5432/afct
-
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: afct_user
       DB_NAME: afct
-
       WAIT_FOR_DB: 'true'
       MIGRATE_ON_START: 'true'
       SEED_ON_START: 'true'
+
+    command: ['npm', 'run', 'dev']
 
     depends_on:
       postgres:
         condition: service_healthy
 
+    ports:
+      - '3000:3000'
+
     volumes:
-      # App source (hot reload)
+      # Source, for hot reload.
       - .:/app:cached
-
-      # Keep container-installed node_modules (avoid host override)
+      # Container-owned copies so the host doesn't shadow them.
       - afct-dev-node-modules:/app/node_modules
-
-      # Keep .next in container to avoid slow host I/O
       - afct-dev-next:/app/.next
-
-      # Public uploads managed by Docker (named volume)
+      # Uploads + admin TLS cert on named volumes.
       - afct-dev-uploads-data:/app/public/uploads
-
-      # Private uploads managed by Docker (named volume)
       - afct-dev-private-uploads:/private/uploads
-
-      # App-owned volume for the admin-uploaded TLS cert (nginx reads it)
       - afct-dev-tls-certs:/app/certs
-
-    command: ['npm', 'run', 'dev']
 
     healthcheck:
       disable: true
 
   nginx:
-    image: nginx:alpine
+    # Same custom image as prod. Config + entrypoint are bind-mounted below so
+    # they can be edited live; the mounts override the baked copies.
+    build:
+      context: ./docker/nginx
     container_name: afct-dev-nginx
     restart: unless-stopped
+    logging: *default-logging
 
-    ports:
-      - '8080:80' # HTTP redirect
-      - '8443:443' # HTTPS
     depends_on:
       app:
         condition: service_started
+
+    ports:
+      - '8080:80'
+      - '8443:443'
+
     volumes:
       - nginx_certs:/etc/nginx/certs
       - afct-dev-uploads-data:/usr/share/nginx/html/uploads
       - afct-dev-tls-certs:/etc/nginx/custom-certs:ro
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ./docker/nginx/entrypoint.sh:/entrypoint.sh:ro
-    entrypoint: ['/bin/sh', '/entrypoint.sh']
+
     healthcheck:
       disable: true
 
   postgres:
     image: postgres:15-alpine
     container_name: afct-dev-postgres
+    logging: *default-logging
 
     environment:
       POSTGRES_DB: afct
       POSTGRES_USER: afct_user
       POSTGRES_PASSWORD: afct_pass
 
-    volumes:
-      - postgres_dev_data:/var/lib/postgresql/data
-
     ports:
       - '5432:5432'
+
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
 
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U afct_user -d afct']
@@ -105,21 +114,27 @@ services:
       dockerfile: docker/Dockerfile.dev
     container_name: afct-prisma-studio
     restart: unless-stopped
-    ports:
-      - '5555:5555'
+    logging: *default-logging
+
     environment:
       DATABASE_URL: postgres://afct_user:afct_pass@postgres:5432/afct
-    volumes:
-      - .:/app:cached
-      - afct-dev-node-modules:/app/node_modules
+
     command: ['npx', 'prisma', 'studio', '--browser', 'none', '--hostname', '0.0.0.0']
+
     depends_on:
       postgres:
         condition: service_healthy
 
+    ports:
+      - '5555:5555'
+
+    volumes:
+      - .:/app:cached
+      - afct-dev-node-modules:/app/node_modules
+
 volumes:
-  nginx_certs:
   postgres_dev_data:
+  nginx_certs:
   afct-dev-node-modules:
   afct-dev-next:
   afct-dev-private-uploads:
