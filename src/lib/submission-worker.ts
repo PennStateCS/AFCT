@@ -393,6 +393,14 @@ async function evaluateSubmission(id: string) {
 }
 
 
+// Internal worker steps, exposed for unit tests only. Not part of the module's
+// public API — production code drives the queue via startSubmissionWorker().
+export const __test__ = {
+  evaluateSubmission,
+  runJavaEvaluator,
+  reapStuckSubmissions,
+};
+
 function getJavaRunnerCtor() {
   const maybeCtor =
     typeof JavaRunner === 'function'
