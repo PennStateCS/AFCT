@@ -1,5 +1,7 @@
 services:
   app:
+    # Auto-pinned to the exact published image digest by CI on each push to main
+    # (see .github/workflows/publish-ghcr.yml) so prod deploys are reproducible.
     image: ghcr.io/pennstatewilkes-barre/afct-dashboard:main
     container_name: afct-app
     restart: unless-stopped

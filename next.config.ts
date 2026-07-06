@@ -10,7 +10,7 @@ const nextConfig: NextConfig = {
     root: __dirname,
   },
   // Fix for CommonJS modules in ESM context
-  transpilePackages: ['jsonwebtoken', 'bcrypt'],
+  transpilePackages: ['bcrypt'],
 
   webpack: (config, { isServer, webpack }) => {
     // Fix CommonJS/ESM module issues
@@ -34,7 +34,6 @@ const nextConfig: NextConfig = {
     if (isServer) {
       config.externals = config.externals || [];
       config.externals.push({
-        jsonwebtoken: 'commonjs jsonwebtoken',
         bcrypt: 'commonjs bcrypt',
         crypto: 'commonjs crypto',
       });
