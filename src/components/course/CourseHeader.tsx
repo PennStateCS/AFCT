@@ -17,7 +17,7 @@ import {
   Inbox,
 } from 'lucide-react';
 import type { FullCourse } from '@/types/course';
-import { getInstructors, getStudentCount } from '@/lib/course-utils';
+import { getInstructors, getStudentCount, type EnrolledUser } from '@/lib/course-utils';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatDateTimeInTimeZone } from '@/lib/date';
 
@@ -123,7 +123,7 @@ export function CourseHeader({
   };
 
   const enrolled = course.enrolled ?? [];
-  const formatAllFacultyNames = (users: any[]) => {
+  const formatAllFacultyNames = (users: EnrolledUser[]) => {
     if (!Array.isArray(users) || users.length === 0) return 'None assigned';
     return users
       .map((u) => `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim())
@@ -131,10 +131,10 @@ export function CourseHeader({
       .join(', ');
   };
   const facultyNames = formatAllFacultyNames(
-    getInstructors(enrolled as any).filter((u: any) => u.role !== 'ADMIN'),
+    getInstructors(enrolled).filter((u) => u.role !== 'ADMIN'),
   );
 
-  const taList = (enrolled as any[]).filter((u: any) => u.courseRole === 'TA');
+  const taList = enrolled.filter((u) => u.courseRole === 'TA');
   const taNames =
     taList.length === 0
       ? 'None assigned'
@@ -156,7 +156,7 @@ export function CourseHeader({
   const metrics = (() => {
     const assignments = Array.isArray(course.assignments) ? course.assignments.length : 0;
     const problems = Array.isArray(course.problems) ? course.problems.length : 0;
-    const students = getStudentCount(enrolled as any[]);
+    const students = getStudentCount(enrolled);
 
     const submissions = Array.isArray(course.assignments)
       ? course.assignments.reduce(

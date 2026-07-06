@@ -102,6 +102,7 @@ export function EditAssignmentDialog({
       assignment.allowLateSubmissions,
       assignment.courseId,
       assignment.description,
+      assignment.isGroup,
       assignment.isPublished,
       assignment.title,
       assignmentDueDateString,

@@ -30,6 +30,12 @@ const eslintConfig = [
     files: ['**/*.test.ts', '**/*.test.tsx'],
     rules: {
       '@typescript-eslint/no-require-imports': 'off',
+      // Test doubles and partial mocks routinely need `any` to stub shapes the
+      // production types would otherwise force us to fully construct. Relax it
+      // for tests only; production code stays strict.
+      '@typescript-eslint/no-explicit-any': 'off',
+      // Inline mock components (e.g. vi.mock factories) don't need display names.
+      'react/display-name': 'off',
     },
   },
   {

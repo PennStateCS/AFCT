@@ -226,6 +226,9 @@ export default function AssignmentDashboardPage({
         }
       }
     },
+    // assignment?.id is intentionally excluded: including it changes this callback's
+    // identity after each fetch, retriggering the hydration effect below and looping.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [aid, id],
   );
 

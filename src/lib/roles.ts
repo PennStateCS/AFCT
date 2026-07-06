@@ -17,7 +17,7 @@ export const roleOrder: Record<string, number> = {
 };
 
 // SortingFn signature: (rowA, rowB, columnId)
-export function roleSortingFn<T = any>(rowA: Row<T>, rowB: Row<T>, columnId: string): number {
+export function roleSortingFn<T = unknown>(rowA: Row<T>, rowB: Row<T>, columnId: string): number {
   // Sort by role first
   const aRole = rowA.getValue(columnId) as string;
   const bRole = rowB.getValue(columnId) as string;
@@ -25,8 +25,8 @@ export function roleSortingFn<T = any>(rowA: Row<T>, rowB: Row<T>, columnId: str
   if (roleDiff !== 0) return roleDiff;
 
   // Sort people with the same role by their last name (case insensitive)
-  const aLast = (rowA.original as any).lastName?.toLowerCase?.() ?? '';
-  const bLast = (rowB.original as any).lastName?.toLowerCase?.() ?? '';
+  const aLast = (rowA.original as { lastName?: string }).lastName?.toLowerCase?.() ?? '';
+  const bLast = (rowB.original as { lastName?: string }).lastName?.toLowerCase?.() ?? '';
   if (aLast < bLast) return -1;
   if (aLast > bLast) return 1;
   return 0;

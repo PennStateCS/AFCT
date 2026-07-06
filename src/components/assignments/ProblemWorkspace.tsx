@@ -57,8 +57,8 @@ export type ProblemWorkspaceProps = {
   onDeleteComment?: (id: string) => void;
   isSaving?: boolean;
   deletingComments?: Record<string, boolean>;
-  onViewSubmission: (submission: any) => void;
-  onRerunSubmission?: (submission: any) => void;
+  onViewSubmission: (submission: ProblemSubmission) => void;
+  onRerunSubmission?: (submission: ProblemSubmission) => void;
   onRerunVisibleSubmissions?: (submissions: ProblemSubmission[]) => void;
   rerunning?: Record<string, boolean>;
   courseIsArchived: boolean;
