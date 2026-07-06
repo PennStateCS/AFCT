@@ -413,6 +413,11 @@ model SystemSettings {
   allowSignup     Boolean @default(true)
   sessionTimeoutMinutes Int @default(20)
 
+  // Login lockout policy (per-account): how many failed attempts before the
+  // account is temporarily locked, and for how long.
+  loginMaxAttempts    Int @default(10)
+  loginLockoutMinutes Int @default(45)
+
   // Submission queue tunables (time values stored in ms)
   submissionEvalTimeoutMs      Int @default(30000)
   submissionEvalMaxMemoryMb    Int @default(256)

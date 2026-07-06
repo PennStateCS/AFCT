@@ -14,6 +14,10 @@ import {
   clampSubmissionMaxConcurrent,
   clampSubmissionMaxAttempts,
   clampSubmissionAnalyzerLimit,
+  clampLoginMaxAttempts,
+  clampLoginLockoutMinutes,
+  DEFAULT_LOGIN_MAX_ATTEMPTS,
+  DEFAULT_LOGIN_LOCKOUT_MINUTES,
   DEFAULT_ALLOW_SIGNUP,
   DEFAULT_MAX_UPLOAD_SIZE_MB,
   DEFAULT_SESSION_TIMEOUT_MINUTES,
@@ -40,6 +44,8 @@ const AUDITED_FIELDS = [
   'submissionMaxConcurrent',
   'submissionMaxAttempts',
   'submissionAnalyzerLimit',
+  'loginMaxAttempts',
+  'loginLockoutMinutes',
   'hcaptchaSiteKey',
 ] as const;
 
@@ -95,6 +101,8 @@ export async function GET() {
       settings?.submissionMaxAttempts ?? DEFAULT_SUBMISSION_MAX_ATTEMPTS,
     submissionAnalyzerLimit:
       settings?.submissionAnalyzerLimit ?? DEFAULT_SUBMISSION_ANALYZER_LIMIT,
+    loginMaxAttempts: settings?.loginMaxAttempts ?? DEFAULT_LOGIN_MAX_ATTEMPTS,
+    loginLockoutMinutes: settings?.loginLockoutMinutes ?? DEFAULT_LOGIN_LOCKOUT_MINUTES,
     // Public site key is returned; the secret is never sent, only whether it's set.
     hcaptchaSiteKey: settings?.hcaptchaSiteKey ?? '',
     hcaptchaSecretConfigured: Boolean(settings?.hcaptchaSecretKey),
@@ -112,6 +120,8 @@ type SettingsBody = {
   submissionMaxConcurrent?: number;
   submissionMaxAttempts?: number;
   submissionAnalyzerLimit?: number;
+  loginMaxAttempts?: number;
+  loginLockoutMinutes?: number;
   hcaptchaSiteKey?: string;
   hcaptchaSecretKey?: string;
   hcaptchaSecretClear?: boolean;
@@ -171,6 +181,13 @@ export async function PUT(req: Request) {
   if (body.submissionAnalyzerLimit !== undefined)
     queueData.submissionAnalyzerLimit = clampSubmissionAnalyzerLimit(Number(body.submissionAnalyzerLimit));
 
+  // Login lockout policy — only persist the fields provided, clamped to safe bounds.
+  const loginData: Record<string, number> = {};
+  if (body.loginMaxAttempts !== undefined)
+    loginData.loginMaxAttempts = clampLoginMaxAttempts(Number(body.loginMaxAttempts));
+  if (body.loginLockoutMinutes !== undefined)
+    loginData.loginLockoutMinutes = clampLoginLockoutMinutes(Number(body.loginLockoutMinutes));
+
   // hCaptcha keys: site key set/clear when provided; secret only updated when a
   // non-empty value is sent, or explicitly cleared. Empty secret means "keep".
   const hcaptchaData: Record<string, string | null> = {};
@@ -193,6 +210,7 @@ export async function PUT(req: Request) {
     maxUploadSizeMb,
     sessionTimeoutMinutes,
     ...queueData,
+    ...loginData,
     ...hcaptchaData,
   };
   if (hasAllowSignup) updateData.allowSignup = body.allowSignup;
@@ -209,6 +227,7 @@ export async function PUT(req: Request) {
     maxUploadSizeMb,
     sessionTimeoutMinutes,
     ...queueData,
+    ...loginData,
     ...hcaptchaData,
   };
   if (hasAllowSignup) createData.allowSignup = body.allowSignup;
@@ -273,6 +292,8 @@ export async function PUT(req: Request) {
     submissionMaxConcurrent: settings.submissionMaxConcurrent,
     submissionMaxAttempts: settings.submissionMaxAttempts,
     submissionAnalyzerLimit: settings.submissionAnalyzerLimit,
+    loginMaxAttempts: settings.loginMaxAttempts,
+    loginLockoutMinutes: settings.loginLockoutMinutes,
     hcaptchaSiteKey: settings.hcaptchaSiteKey ?? '',
     hcaptchaSecretConfigured: Boolean(settings.hcaptchaSecretKey),
   });

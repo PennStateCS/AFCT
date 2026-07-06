@@ -1,3 +1,7 @@
+// Single source of truth for client IP extraction lives in ip-utils; re-export
+// it here so existing importers (auth, signup) keep working.
+export { getClientIp } from '@/lib/ip-utils';
+
 const buckets = new Map<string, RateLimiterBucket>();
 
 const randomBetween = (min: number, max: number) => Math.random() * (max - min) + min;
@@ -188,15 +192,23 @@ export const evaluateLoginRateLimit = (params: {
   ip?: string;
   identifier?: string;
   interactionMs?: number;
+  // Admin-configurable per-account lockout policy (System Settings). Overrides
+  // the built-in account defaults; the IP-based limits stay fixed.
+  accountLimit?: { maxAttempts?: number; blockDurationMs?: number };
 }): RateLimitDecision => {
   const configs = [
     { key: bucketKey('login:ip', params.ip), config: LOGIN_IP_CONFIG, reason: 'ip' as LimitReason },
   ];
 
   if (params.identifier) {
+    const accountConfig: BucketConfig = {
+      ...LOGIN_ACCOUNT_CONFIG,
+      maxAttempts: params.accountLimit?.maxAttempts ?? LOGIN_ACCOUNT_CONFIG.maxAttempts,
+      blockDurationMs: params.accountLimit?.blockDurationMs ?? LOGIN_ACCOUNT_CONFIG.blockDurationMs,
+    };
     configs.push({
       key: bucketKey('login:account', params.identifier),
-      config: LOGIN_ACCOUNT_CONFIG,
+      config: accountConfig,
       reason: 'account',
     });
   }
@@ -254,36 +266,6 @@ export const recordSignupSuccess = (params: { ip?: string; identifier?: string }
     keys.push(bucketKey('signup:identifier', params.identifier));
   }
   clearBucketsFor(keys);
-};
-
-export const getClientIp = (
-  source?:
-    | Request
-    | { headers?: Headers | HeadersInit | Record<string, string | string[]>; ip?: string | null }
-    | null,
-): string => {
-  if (!source) return 'unknown';
-
-  const headers: Headers | null =
-    source instanceof Request
-      ? source.headers
-      : source && 'headers' in source && source.headers
-        ? source.headers instanceof Headers
-          ? source.headers
-          : new Headers(source.headers as HeadersInit)
-        : null;
-
-  const fromHeader = headers?.get('x-forwarded-for') || headers?.get('x-real-ip');
-  if (fromHeader) {
-    const first = fromHeader.split(',')[0]?.trim();
-    if (first) return first;
-  }
-
-  if ('ip' in (source as any) && (source as any).ip) {
-    return String((source as any).ip);
-  }
-
-  return 'unknown';
 };
 
 export const formatRetryAfterSeconds = (ms: number) => Math.max(1, Math.ceil(ms / 1000)).toString();
