@@ -5,7 +5,7 @@ on:
     branches: ['main']
 
 permissions:
-  contents: read
+  contents: write # allow the auto-pin step to commit docker-compose.yml back
   packages: write
 
 jobs:
@@ -80,3 +80,30 @@ jobs:
           echo ""
           echo "Image ID:"
           echo "${{ steps.build.outputs.imageid || steps.retry.outputs.imageid }}"
+
+      # Pin docker-compose.yml to the exact digest just published, and commit it
+      # back to main. The push uses GITHUB_TOKEN, which does NOT re-trigger
+      # workflows (no loop); the `[skip ci]` marker is a further safeguard.
+      - name: Auto-pin prod compose to the published digest
+        if: success()
+        env:
+          DIGEST: ${{ steps.build.outputs.digest || steps.retry.outputs.digest }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DIGEST}" ]; then
+            echo "No digest available; skipping pin."
+            exit 0
+          fi
+          IMAGE="ghcr.io/pennstatewilkes-barre/afct-dashboard@${DIGEST}"
+          sed -i -E \
+            "s#^([[:space:]]*image:[[:space:]]*)ghcr\.io/pennstatewilkes-barre/afct-dashboard.*#\1${IMAGE}#" \
+            docker-compose.yml
+          if git diff --quiet -- docker-compose.yml; then
+            echo "docker-compose.yml already pinned to ${DIGEST}."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docker-compose.yml
+          git commit -m "chore(release): pin prod image to ${DIGEST} [skip ci]"
+          git push origin HEAD:${{ github.ref_name }}

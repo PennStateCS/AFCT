@@ -1,0 +1,36 @@
+name: Lint
+
+on:
+  push:
+    branches: ['main']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  eslint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # Lint doesn't need the generated Prisma client; skipping keeps CI fast and
+      # avoids the ERD generator's headless-browser toolchain.
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+        env:
+          SKIP_PRISMA_GENERATE: '1'
+
+      # Report-only for now: this surfaces ESLint findings in the job log without
+      # blocking merges while the existing lint debt is worked down. Once
+      # `npm run lint` is clean, remove `continue-on-error` to make it a hard gate.
+      - name: ESLint (report-only)
+        run: npm run lint
+        continue-on-error: true
