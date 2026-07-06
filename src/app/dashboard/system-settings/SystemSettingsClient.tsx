@@ -23,9 +23,13 @@ import {
   clampSubmissionMaxConcurrent,
   clampSubmissionMaxAttempts,
   clampSubmissionAnalyzerLimit,
+  clampLoginMaxAttempts,
+  clampLoginLockoutMinutes,
   DEFAULT_ALLOW_SIGNUP,
   DEFAULT_MAX_UPLOAD_SIZE_MB,
   DEFAULT_SESSION_TIMEOUT_MINUTES,
+  DEFAULT_LOGIN_MAX_ATTEMPTS,
+  DEFAULT_LOGIN_LOCKOUT_MINUTES,
   DEFAULT_SYSTEM_TIMEZONE,
   DEFAULT_SUBMISSION_EVAL_TIMEOUT_MS,
   DEFAULT_SUBMISSION_EVAL_MAX_MEMORY_MB,
@@ -47,6 +51,10 @@ import {
   MAX_SUBMISSION_MAX_ATTEMPTS,
   MIN_SUBMISSION_ANALYZER_LIMIT,
   MAX_SUBMISSION_ANALYZER_LIMIT,
+  MIN_LOGIN_MAX_ATTEMPTS,
+  MAX_LOGIN_MAX_ATTEMPTS,
+  MIN_LOGIN_LOCKOUT_MINUTES,
+  MAX_LOGIN_LOCKOUT_MINUTES,
 } from '@/lib/system-settings';
 import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
@@ -64,6 +72,8 @@ type SystemSettingsResponse = {
   submissionMaxConcurrent: number;
   submissionMaxAttempts: number;
   submissionAnalyzerLimit: number;
+  loginMaxAttempts: number;
+  loginLockoutMinutes: number;
   hcaptchaSiteKey: string;
   hcaptchaSecretConfigured: boolean;
 };
@@ -91,6 +101,8 @@ type FormSnapshot = {
   maxConcurrent: number | '';
   maxAttempts: number | '';
   analyzerLimit: number | '';
+  loginMaxAttempts: number | '';
+  loginLockoutMinutes: number | '';
   hcaptchaSiteKey: string;
 };
 
@@ -118,6 +130,10 @@ export default function SystemSettingsClient() {
   const [maxConcurrent, setMaxConcurrent] = useState<number | ''>('');
   const [maxAttempts, setMaxAttempts] = useState<number | ''>('');
   const [analyzerLimit, setAnalyzerLimit] = useState<number | ''>('');
+
+  // Login lockout policy (per-account).
+  const [loginMaxAttempts, setLoginMaxAttempts] = useState<number | ''>('');
+  const [loginLockoutMinutes, setLoginLockoutMinutes] = useState<number | ''>('');
 
   // hCaptcha keys. The secret is write-only: we only know whether one is set.
   const [hcaptchaSiteKey, setHcaptchaSiteKey] = useState('');
@@ -167,6 +183,8 @@ export default function SystemSettingsClient() {
           maxConcurrent: Number(data.submissionMaxConcurrent) || DEFAULT_SUBMISSION_MAX_CONCURRENT,
           maxAttempts: Number(data.submissionMaxAttempts) || DEFAULT_SUBMISSION_MAX_ATTEMPTS,
           analyzerLimit: Number(data.submissionAnalyzerLimit) || DEFAULT_SUBMISSION_ANALYZER_LIMIT,
+          loginMaxAttempts: Number(data.loginMaxAttempts) || DEFAULT_LOGIN_MAX_ATTEMPTS,
+          loginLockoutMinutes: Number(data.loginLockoutMinutes) || DEFAULT_LOGIN_LOCKOUT_MINUTES,
           hcaptchaSiteKey: data.hcaptchaSiteKey ?? '',
         };
 
@@ -180,6 +198,8 @@ export default function SystemSettingsClient() {
         setMaxConcurrent(norm.maxConcurrent);
         setMaxAttempts(norm.maxAttempts);
         setAnalyzerLimit(norm.analyzerLimit);
+        setLoginMaxAttempts(norm.loginMaxAttempts);
+        setLoginLockoutMinutes(norm.loginLockoutMinutes);
         setHcaptchaSiteKey(norm.hcaptchaSiteKey);
         setHcaptchaSecretConfigured(Boolean(data.hcaptchaSecretConfigured));
         setHcaptchaSecretKey('');
@@ -391,6 +411,8 @@ export default function SystemSettingsClient() {
     const concurrent = clampSubmissionMaxConcurrent(Number(maxConcurrent));
     const attempts = clampSubmissionMaxAttempts(Number(maxAttempts));
     const analyzer = clampSubmissionAnalyzerLimit(Number(analyzerLimit));
+    const loginAttempts = clampLoginMaxAttempts(Number(loginMaxAttempts));
+    const lockoutMinutes = clampLoginLockoutMinutes(Number(loginLockoutMinutes));
 
     setSaving(true);
     try {
@@ -408,6 +430,8 @@ export default function SystemSettingsClient() {
           submissionMaxConcurrent: concurrent,
           submissionMaxAttempts: attempts,
           submissionAnalyzerLimit: analyzer,
+          loginMaxAttempts: loginAttempts,
+          loginLockoutMinutes: lockoutMinutes,
           hcaptchaSiteKey: hcaptchaSiteKey.trim(),
           ...(hcaptchaSecretClear
             ? { hcaptchaSecretClear: true }
@@ -429,6 +453,8 @@ export default function SystemSettingsClient() {
       setMaxConcurrent(concurrent);
       setMaxAttempts(attempts);
       setAnalyzerLimit(analyzer);
+      setLoginMaxAttempts(loginAttempts);
+      setLoginLockoutMinutes(lockoutMinutes);
       setHcaptchaSiteKey(savedSiteKey);
       setHcaptchaSecretConfigured(
         hcaptchaSecretClear ? false : hcaptchaSecretKey.trim() ? true : hcaptchaSecretConfigured,
@@ -446,6 +472,8 @@ export default function SystemSettingsClient() {
         maxConcurrent: concurrent,
         maxAttempts: attempts,
         analyzerLimit: analyzer,
+        loginMaxAttempts: loginAttempts,
+        loginLockoutMinutes: lockoutMinutes,
         hcaptchaSiteKey: savedSiteKey,
       });
       showToast.success('System settings updated successfully.');
@@ -468,6 +496,8 @@ export default function SystemSettingsClient() {
     setMaxConcurrent(baseline.maxConcurrent);
     setMaxAttempts(baseline.maxAttempts);
     setAnalyzerLimit(baseline.analyzerLimit);
+    setLoginMaxAttempts(baseline.loginMaxAttempts);
+    setLoginLockoutMinutes(baseline.loginLockoutMinutes);
     setHcaptchaSiteKey(baseline.hcaptchaSiteKey);
     setHcaptchaSecretKey('');
     setHcaptchaSecretClear(false);
@@ -486,6 +516,8 @@ export default function SystemSettingsClient() {
     maxConcurrent,
     maxAttempts,
     analyzerLimit,
+    loginMaxAttempts,
+    loginLockoutMinutes,
     hcaptchaSiteKey,
   };
   const isDirty =
@@ -593,6 +625,32 @@ export default function SystemSettingsClient() {
                 setValue={(val) => setSessionTimeoutMinutes(val === '' ? '' : Number(val))}
                 disabled={disabled}
                 description={`Signs out after inactivity. ${MIN_SESSION_TIMEOUT_MINUTES}–${MAX_SESSION_TIMEOUT_MINUTES} min.`}
+              />
+              <InputGroup
+                label="Failed logins before lockout"
+                name="loginMaxAttempts"
+                type="number"
+                required
+                requiredMark
+                min={MIN_LOGIN_MAX_ATTEMPTS}
+                max={MAX_LOGIN_MAX_ATTEMPTS}
+                value={loginMaxAttempts === '' ? '' : String(loginMaxAttempts)}
+                setValue={(val) => setLoginMaxAttempts(val === '' ? '' : Number(val))}
+                disabled={disabled}
+                description={`Failed attempts on one account before it's temporarily locked. ${MIN_LOGIN_MAX_ATTEMPTS}–${MAX_LOGIN_MAX_ATTEMPTS}.`}
+              />
+              <InputGroup
+                label="Account lockout duration (minutes)"
+                name="loginLockoutMinutes"
+                type="number"
+                required
+                requiredMark
+                min={MIN_LOGIN_LOCKOUT_MINUTES}
+                max={MAX_LOGIN_LOCKOUT_MINUTES}
+                value={loginLockoutMinutes === '' ? '' : String(loginLockoutMinutes)}
+                setValue={(val) => setLoginLockoutMinutes(val === '' ? '' : Number(val))}
+                disabled={disabled}
+                description={`How long a locked account must wait. ${MIN_LOGIN_LOCKOUT_MINUTES}–${MAX_LOGIN_LOCKOUT_MINUTES} min.`}
               />
               <SwitchField
                 id="allow-signup"

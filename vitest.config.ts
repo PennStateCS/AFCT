@@ -20,7 +20,6 @@ export default defineConfig({
 
         'next.config.ts',
         'postcss.config.mjs',
-        'tailwind.config.js',
         'prisma.config.ts',
         'lib/**',
         'prisma/**',
