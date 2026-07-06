@@ -7,6 +7,15 @@ export const DEFAULT_SESSION_TIMEOUT_MINUTES = 20;
 export const MIN_SESSION_TIMEOUT_MINUTES = 5;
 export const MAX_SESSION_TIMEOUT_MINUTES = 1440;
 
+// Login lockout policy (per-account). Bounds keep it from being set so loose
+// that brute-force protection is effectively disabled.
+export const DEFAULT_LOGIN_MAX_ATTEMPTS = 10;
+export const MIN_LOGIN_MAX_ATTEMPTS = 3;
+export const MAX_LOGIN_MAX_ATTEMPTS = 50;
+export const DEFAULT_LOGIN_LOCKOUT_MINUTES = 45;
+export const MIN_LOGIN_LOCKOUT_MINUTES = 1;
+export const MAX_LOGIN_LOCKOUT_MINUTES = 1440;
+
 export function clampSessionTimeoutMinutes(value: number) {
   if (!Number.isFinite(value)) {
     return DEFAULT_SESSION_TIMEOUT_MINUTES;
@@ -77,3 +86,9 @@ export const clampSubmissionMaxAttempts = (v: number) =>
 
 export const clampSubmissionAnalyzerLimit = (v: number) =>
   clampInt(v, MIN_SUBMISSION_ANALYZER_LIMIT, MAX_SUBMISSION_ANALYZER_LIMIT, DEFAULT_SUBMISSION_ANALYZER_LIMIT);
+
+export const clampLoginMaxAttempts = (v: number) =>
+  clampInt(v, MIN_LOGIN_MAX_ATTEMPTS, MAX_LOGIN_MAX_ATTEMPTS, DEFAULT_LOGIN_MAX_ATTEMPTS);
+
+export const clampLoginLockoutMinutes = (v: number) =>
+  clampInt(v, MIN_LOGIN_LOCKOUT_MINUTES, MAX_LOGIN_LOCKOUT_MINUTES, DEFAULT_LOGIN_LOCKOUT_MINUTES);

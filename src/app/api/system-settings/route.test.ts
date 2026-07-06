@@ -57,6 +57,8 @@ describe('GET /api/system-settings', () => {
       submissionMaxConcurrent: 5,
       submissionMaxAttempts: 3,
       submissionAnalyzerLimit: 15,
+      loginMaxAttempts: 10,
+      loginLockoutMinutes: 45,
       hcaptchaSiteKey: '',
       hcaptchaSecretConfigured: false,
     });
@@ -93,6 +95,8 @@ describe('GET /api/system-settings', () => {
       submissionMaxConcurrent: 8,
       submissionMaxAttempts: 2,
       submissionAnalyzerLimit: 40,
+      loginMaxAttempts: 10,
+      loginLockoutMinutes: 45,
       hcaptchaSiteKey: '',
       hcaptchaSecretConfigured: false,
     });

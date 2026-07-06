@@ -14,6 +14,7 @@ import {
   recordLoginSuccess,
 } from '@/lib/security/rate-limiter';
 import { verifyCaptchaToken } from '@/lib/security/captcha';
+import { getLoginLockoutPolicy } from '@/lib/login-policy';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma) as any,
@@ -43,10 +44,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
+        const accountLimit = await getLoginLockoutPolicy();
         const rateDecision = evaluateLoginRateLimit({
           ip: ipAddress,
           identifier: emailInput,
           interactionMs: Number.isFinite(interactionMs) ? interactionMs : undefined,
+          accountLimit,
         });
 
         if (rateDecision.status === 'blocked') {
