@@ -59,6 +59,10 @@ describe('GET /api/system-settings', () => {
       submissionAnalyzerLimit: 15,
       loginMaxAttempts: 10,
       loginLockoutMinutes: 45,
+      backupEnabled: true,
+      backupHour: 2,
+      backupRetentionDays: 14,
+      activityLogRetentionDays: 365,
       hcaptchaSiteKey: '',
       hcaptchaSecretConfigured: false,
     });
@@ -97,6 +101,10 @@ describe('GET /api/system-settings', () => {
       submissionAnalyzerLimit: 40,
       loginMaxAttempts: 10,
       loginLockoutMinutes: 45,
+      backupEnabled: true,
+      backupHour: 2,
+      backupRetentionDays: 14,
+      activityLogRetentionDays: 365,
       hcaptchaSiteKey: '',
       hcaptchaSecretConfigured: false,
     });

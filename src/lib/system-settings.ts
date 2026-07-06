@@ -16,6 +16,22 @@ export const DEFAULT_LOGIN_LOCKOUT_MINUTES = 45;
 export const MIN_LOGIN_LOCKOUT_MINUTES = 1;
 export const MAX_LOGIN_LOCKOUT_MINUTES = 1440;
 
+// Database backups. backupHour is a 24-hour clock hour in server (UTC) time;
+// retention bounds keep dumps from being kept forever or pruned too aggressively.
+export const DEFAULT_BACKUP_ENABLED = true;
+export const DEFAULT_BACKUP_HOUR = 2;
+export const MIN_BACKUP_HOUR = 0;
+export const MAX_BACKUP_HOUR = 23;
+export const DEFAULT_BACKUP_RETENTION_DAYS = 14;
+export const MIN_BACKUP_RETENTION_DAYS = 1;
+export const MAX_BACKUP_RETENTION_DAYS = 365;
+
+// Audit-log retention. Kept from getting so short that the trail is useless, or
+// so long the table grows without bound.
+export const DEFAULT_ACTIVITY_LOG_RETENTION_DAYS = 365;
+export const MIN_ACTIVITY_LOG_RETENTION_DAYS = 30;
+export const MAX_ACTIVITY_LOG_RETENTION_DAYS = 3650;
+
 export function clampSessionTimeoutMinutes(value: number) {
   if (!Number.isFinite(value)) {
     return DEFAULT_SESSION_TIMEOUT_MINUTES;
@@ -92,3 +108,17 @@ export const clampLoginMaxAttempts = (v: number) =>
 
 export const clampLoginLockoutMinutes = (v: number) =>
   clampInt(v, MIN_LOGIN_LOCKOUT_MINUTES, MAX_LOGIN_LOCKOUT_MINUTES, DEFAULT_LOGIN_LOCKOUT_MINUTES);
+
+export const clampBackupHour = (v: number) =>
+  clampInt(v, MIN_BACKUP_HOUR, MAX_BACKUP_HOUR, DEFAULT_BACKUP_HOUR);
+
+export const clampBackupRetentionDays = (v: number) =>
+  clampInt(v, MIN_BACKUP_RETENTION_DAYS, MAX_BACKUP_RETENTION_DAYS, DEFAULT_BACKUP_RETENTION_DAYS);
+
+export const clampActivityLogRetentionDays = (v: number) =>
+  clampInt(
+    v,
+    MIN_ACTIVITY_LOG_RETENTION_DAYS,
+    MAX_ACTIVITY_LOG_RETENTION_DAYS,
+    DEFAULT_ACTIVITY_LOG_RETENTION_DAYS,
+  );
