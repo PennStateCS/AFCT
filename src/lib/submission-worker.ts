@@ -399,6 +399,7 @@ export const __test__ = {
   evaluateSubmission,
   runJavaEvaluator,
   reapStuckSubmissions,
+  runWorkerLoop,
 };
 
 function getJavaRunnerCtor() {

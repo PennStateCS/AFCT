@@ -36,7 +36,7 @@ vi.mock('os', () => ({ default: { platform: platformMock }, platform: platformMo
 
 import { __test__ } from '@/lib/submission-worker';
 
-const { evaluateSubmission, runJavaEvaluator, reapStuckSubmissions } = __test__;
+const { evaluateSubmission, runJavaEvaluator, reapStuckSubmissions, runWorkerLoop } = __test__;
 
 const CONFIG = { timeoutMs: 5_000, maxMemoryMb: 256, analyzerLimit: 100 };
 
@@ -248,6 +248,74 @@ describe('evaluateSubmission', () => {
       expect.objectContaining({ data: expect.objectContaining({ status: 'FAILED' }) }),
     );
     expect(loggedActions()).toContain('SUBMISSION_FAILED_PERMANENTLY');
+  });
+});
+
+describe('runWorkerLoop — claiming and prioritization', () => {
+  beforeEach(() => {
+    // The loop reschedules itself via setTimeout; keep the clock under control.
+    vi.useFakeTimers();
+    prismaMock.submission.findMany.mockResolvedValue([]); // no in-flight students
+  });
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  });
+
+  it('idles without claiming anything when the queue is empty', async () => {
+    prismaMock.submission.findFirst.mockResolvedValue(null);
+    await runWorkerLoop();
+    expect(prismaMock.submission.updateMany).not.toHaveBeenCalled();
+    expect(prismaMock.submission.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('claims a pending submission then evaluates it', async () => {
+    prismaMock.submission.findFirst.mockResolvedValue({ id: 'sub-1', attempts: 0 });
+    prismaMock.submission.updateMany.mockResolvedValue({ count: 1 }); // claim wins
+    prismaMock.submission.findUnique.mockResolvedValue(makeSubmission());
+
+    await runWorkerLoop();
+
+    // The claim flips the row to PROCESSING and bumps attempts...
+    expect(prismaMock.submission.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: 'PROCESSING', attempts: { increment: 1 } } }),
+    );
+    // ...and evaluation runs (findUnique is only reached inside evaluateSubmission).
+    expect(prismaMock.submission.findUnique).toHaveBeenCalled();
+  });
+
+  it('backs off without evaluating when another worker wins the claim', async () => {
+    prismaMock.submission.findFirst.mockResolvedValue({ id: 'sub-1', attempts: 0 });
+    prismaMock.submission.updateMany.mockResolvedValue({ count: 0 }); // lost the race
+
+    await runWorkerLoop();
+
+    expect(prismaMock.submission.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('poison-pills a submission that exceeded the attempt budget', async () => {
+    prismaMock.submission.findFirst.mockResolvedValue({ id: 'sub-1', attempts: 3 });
+    prismaMock.submission.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.submission.findUnique.mockResolvedValue({
+      id: 'sub-1',
+      studentId: 'stu-1',
+      courseId: 'c-1',
+      assignmentId: 'a-1',
+      problemId: 'p-1',
+    });
+
+    await runWorkerLoop();
+
+    expect(prismaMock.submission.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'FAILED' }) }),
+    );
+    expect(loggedActions()).toContain('SUBMISSION_FAILED_PERMANENTLY');
+  });
+
+  it('logs a queue error when the loop query throws', async () => {
+    prismaMock.submission.findMany.mockRejectedValue(new Error('db down'));
+    await runWorkerLoop();
+    expect(loggedActions()).toContain('SUBMISSION_QUEUE_ERROR');
   });
 });
 
