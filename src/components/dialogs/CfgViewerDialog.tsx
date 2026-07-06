@@ -27,7 +27,7 @@ function parseCfg(xmlText: string){
     throw new Error(`${rawType} not context free grammar`);
   }
 
-  let productions = doc.querySelectorAll('production');
+  const productions = doc.querySelectorAll('production');
   const left: string[] = [];
   const right: string[] = [];
   productions.forEach(node => {
@@ -63,7 +63,7 @@ export function CfgViewerDialog({ src, open, onOpenChange, title }: { src: strin
 	load();
   }, [src, open]);
   if (!data) return null;
-  let parsed = parseCfg(data);
+  const parsed = parseCfg(data);
   return (
     <div className="p-8">
 
