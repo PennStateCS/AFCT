@@ -514,7 +514,15 @@ export default function SystemStatusClient() {
       sessions24h: status.sessionSummary?.total24h,
       latencyMs: status.metrics?.latencyMs,
     };
-  }, [status, sStats?.cpuProcessPct, sStats?.memProcessPctOfSystem, dbSizeBytes, dbTables]);
+  }, [
+    status,
+    sStats?.cpuProcessPct,
+    sStats?.memProcessPctOfSystem,
+    sStats?.diskIo?.readBytesPerSec,
+    sStats?.diskIo?.writeBytesPerSec,
+    dbSizeBytes,
+    dbTables,
+  ]);
 
   // Trends (keep 24h, window selectable)
   const { windowHours, setHours, trends } = useTrends(sample, 24);

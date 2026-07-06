@@ -8,6 +8,18 @@ import { canArchiveCourse, canUnpublishCourse } from '@/lib/course-status-checks
 import { toDateTimeInTimezone } from '@/lib/date-utils';
 import { toEmptyStringNotation } from '@/lib/empty-string-notation';
 
+// A prisma delegate whose aggregate methods are treated as optional, so the code
+// can fall back to count() when a partial test mock doesn't implement them.
+type CountRow = {
+  studentId?: string | null;
+  assignmentId?: string | null;
+  _count?: { _all?: number } | null;
+};
+type OptionalCountDelegate = {
+  groupBy?: (args: unknown) => Promise<CountRow[]>;
+  findMany?: (args: unknown) => Promise<CountRow[]>;
+};
+
 // GET: Fetch a course by ID with view-based metadata
 export async function GET(req: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
@@ -75,12 +87,28 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
-    const rosterRows = ((course as any).roster ?? []) as Array<{
-      role: string;
-      user: Record<string, unknown>;
-    }>;
-    const assignmentRows = ((course as any).assignments ?? []) as Array<any>;
-    const problemRows = ((course as any).problems ?? []) as Array<Record<string, unknown>>;
+    // The findUnique uses conditional includes, so widen to the relations and
+    // _count that may be present for the requested view.
+    type AssignmentRow = Record<string, unknown> & {
+      id: string;
+      problems?: Array<{ maxPoints?: number | null }>;
+      _count?: { problems?: number };
+    };
+    const courseData = course as unknown as Omit<
+      typeof course,
+      'roster' | 'assignments' | 'problems' | '_count'
+    > & {
+      roster?: Array<{ role: string; user: Record<string, unknown> }>;
+      assignments?: AssignmentRow[];
+      problems?: Array<Record<string, unknown>>;
+      _count?: { assignments?: number; problems?: number; roster?: number };
+    };
+    const submissionDelegate = prisma.submission as unknown as OptionalCountDelegate;
+    const commentDelegate = prisma.comment as unknown as OptionalCountDelegate;
+
+    const rosterRows = courseData.roster ?? [];
+    const assignmentRows = courseData.assignments ?? [];
+    const problemRows = courseData.problems ?? [];
 
     const assignmentIds = includeAssignments ? assignmentRows.map((a) => String(a.id)) : [];
 
@@ -92,16 +120,16 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
 
       const studentSubmissionRows =
         assignmentIds.length > 0 && studentIds.length > 0
-          ? (prisma.submission as any).groupBy
-            ? await (prisma.submission as any).groupBy({
+          ? submissionDelegate.groupBy
+            ? await submissionDelegate.groupBy({
                 by: ['studentId'],
                 where: {
                   studentId: { in: studentIds },
                   assignmentId: { in: assignmentIds },
                 },
               })
-            : (prisma.submission as any).findMany
-              ? await (prisma.submission as any).findMany({
+            : submissionDelegate.findMany
+              ? await submissionDelegate.findMany({
                   where: {
                     studentId: { in: studentIds },
                     assignmentId: { in: assignmentIds },
@@ -122,7 +150,7 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
                 ).then((rows) => rows.filter((row): row is { studentId: string } => !!row))
           : [];
       const studentsWithSubmissions = new Set(
-        studentSubmissionRows.map((row: { studentId: string }) => row.studentId),
+        studentSubmissionRows.map((row: CountRow) => String(row.studentId)),
       );
 
       enrolled = rosterRows.map((r) => ({
@@ -137,14 +165,14 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
     if (includeAssignments) {
       const submissionCounts =
         assignmentIds.length > 0
-          ? (prisma.submission as any).groupBy
-            ? await (prisma.submission as any).groupBy({
+          ? submissionDelegate.groupBy
+            ? await submissionDelegate.groupBy({
                 by: ['assignmentId'],
                 where: { assignmentId: { in: assignmentIds } },
                 _count: { _all: true },
               })
-            : (prisma.submission as any).findMany
-              ? await (prisma.submission as any).findMany({
+            : submissionDelegate.findMany
+              ? await submissionDelegate.findMany({
                   where: { assignmentId: { in: assignmentIds } },
                   select: { assignmentId: true },
                 })
@@ -157,14 +185,14 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
           : [];
       const commentCounts =
         assignmentIds.length > 0
-          ? (prisma.comment as any).groupBy
-            ? await (prisma.comment as any).groupBy({
+          ? commentDelegate.groupBy
+            ? await commentDelegate.groupBy({
                 by: ['assignmentId'],
                 where: { assignmentId: { in: assignmentIds } },
                 _count: { _all: true },
               })
-            : (prisma.comment as any).findMany
-              ? await (prisma.comment as any).findMany({
+            : commentDelegate.findMany
+              ? await commentDelegate.findMany({
                   where: { assignmentId: { in: assignmentIds } },
                   select: { assignmentId: true },
                 })
@@ -177,21 +205,21 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
           : [];
 
       const submissionCountMap = new Map<string, number>();
-      submissionCounts.forEach((row: any) => {
+      submissionCounts.forEach((row: CountRow) => {
         const key = String(row.assignmentId);
         const increment = row?._count?._all ?? 1;
         submissionCountMap.set(key, (submissionCountMap.get(key) ?? 0) + increment);
       });
 
       const commentCountMap = new Map<string, number>();
-      commentCounts.forEach((row: any) => {
+      commentCounts.forEach((row: CountRow) => {
         const key = String(row.assignmentId);
         const increment = row?._count?._all ?? 1;
         commentCountMap.set(key, (commentCountMap.get(key) ?? 0) + increment);
       });
 
       assignmentsWithProblemCount = assignmentRows.map((assignment) => {
-        const totalProblemPoints = (assignment.problems ?? []).reduce((sum: number, ap: any) => {
+        const totalProblemPoints = (assignment.problems ?? []).reduce((sum: number, ap) => {
           const value = typeof ap.maxPoints === 'number' ? ap.maxPoints : 0;
           return sum + (Number.isFinite(value) ? value : 0);
         }, 0);
@@ -270,18 +298,9 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
       enrolled: includeRoster ? enrolled : [],
       problems: includeProblems ? problemsWithLink : [],
       assignments: includeAssignments ? assignmentsWithProblemCount : [],
-      assignmentTotal:
-        typeof (course as any)._count?.assignments === 'number'
-          ? (course as any)._count.assignments
-          : assignmentRows.length,
-      problemTotal:
-        typeof (course as any)._count?.problems === 'number'
-          ? (course as any)._count.problems
-          : problemRows.length,
-      rosterTotal:
-        typeof (course as any)._count?.roster === 'number'
-          ? (course as any)._count.roster
-          : rosterRows.length,
+      assignmentTotal: courseData._count?.assignments ?? assignmentRows.length,
+      problemTotal: courseData._count?.problems ?? problemRows.length,
+      rosterTotal: courseData._count?.roster ?? rosterRows.length,
       viewerRole,
       viewerDefaultRole,
     };

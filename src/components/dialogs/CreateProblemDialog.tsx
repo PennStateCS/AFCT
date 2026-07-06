@@ -160,8 +160,8 @@ export function CreateProblemDialog({
                 } else {
                   setGroups([]);
                 }
-              } catch (err: any) {
-                if (err?.name === 'AbortError') return;
+              } catch (err) {
+                if ((err as { name?: string } | null)?.name === 'AbortError') return;
                 console.error('Failed to load groups:', err);
                 setGroups([]);
               } finally {
@@ -175,8 +175,8 @@ export function CreateProblemDialog({
           setAssignmentIsGroup(false);
           setGroups([]);
         }
-      } catch (err: any) {
-        if (err?.name === 'AbortError') return;
+      } catch (err) {
+        if ((err as { name?: string } | null)?.name === 'AbortError') return;
         console.error('Failed to load assignment info:', err);
         setAssignmentIsGroup(false);
         setGroups([]);
@@ -269,7 +269,9 @@ export function CreateProblemDialog({
         // the created problem to that assignment (group assignment support is based on assignment.groupId)
         if (created?.id && assignmentId) {
           try {
-            const payload: any = { problemIds: [created.id] };
+            const payload: { problemIds: string[]; groupId?: string } = {
+              problemIds: [created.id],
+            };
             // If the assignment supports group assignments and a specific group
             // was chosen (not 'ALL'), include the groupId. If 'ALL' is chosen,
             // omit groupId to assign to all students.

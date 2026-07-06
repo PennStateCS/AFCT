@@ -28,9 +28,8 @@ jobs:
         env:
           SKIP_PRISMA_GENERATE: '1'
 
-      # Report-only for now: this surfaces ESLint findings in the job log without
-      # blocking merges while the existing lint debt is worked down. Once
-      # `npm run lint` is clean, remove `continue-on-error` to make it a hard gate.
-      - name: ESLint (report-only)
-        run: npm run lint
-        continue-on-error: true
+      # Hard gate: the codebase is lint-clean (0 errors, 0 warnings). `--max-warnings=0`
+      # makes any new finding — warning or error — fail the job and block the merge.
+      # (`npm run lint` stays warning-tolerant for local dev.)
+      - name: ESLint
+        run: npm run lint -- --max-warnings=0

@@ -381,8 +381,11 @@ export default function StudentAssignmentPage({
                 onDeleteComment={(commentId: string) => handleDeleteComment(commentId)}
                 isSaving={selectedProblem ? submittingComment[selectedProblem.problem.id] : false}
                 deletingComments={{}}
-                onViewSubmission={(submission: StudentProblemSubmission) =>
-                  setOpenDialog({ open: true, submission })
+                onViewSubmission={(submission) =>
+                  setOpenDialog({
+                    open: true,
+                    submission: submission as unknown as StudentProblemSubmission,
+                  })
                 }
                 courseIsArchived={courseIsArchived}
                 currentGrade={selectedProblemGrade}

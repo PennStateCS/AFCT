@@ -145,7 +145,10 @@ export default function CalendarClient({
   };
 
   // Helper to get a YYYY-MM-DD key in the user's timezone
-  const localDateKey = (date: Date | string) => getDateKeyInTimeZone(date, timezone);
+  const localDateKey = useCallback(
+    (date: Date | string) => getDateKeyInTimeZone(date, timezone),
+    [timezone],
+  );
 
   // Group assignments by date string (YYYY-MM-DD) using local dates.
   const assignmentsByDate = useMemo(() => {
@@ -156,7 +159,7 @@ export default function CalendarClient({
       grouped[dateStr].push(a);
     });
     return grouped;
-  }, [assignments, timezone]);
+  }, [assignments, localDateKey]);
 
   // Navigate to a different day in the dialog (previous/next)
   const navigateDay = (date: Date) => {
@@ -263,7 +266,10 @@ export default function CalendarClient({
                     today: 'rounded-none bg-transparent text-inherit',
                   }}
                   components={{
-                    DayButton: (props: any) => {
+                    DayButton: (props: {
+                      day: { date: Date };
+                      onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
+                    }) => {
                       const dateStr = localDateKey(props.day.date);
                       const dayAssignments = (assignmentsByDate[dateStr] || [])
                         .slice()
@@ -309,7 +315,7 @@ export default function CalendarClient({
                           aria-label={`${formattedDayLabel}${isToday ? ', today' : ''}. ${dayAssignments.length} assignment${dayAssignments.length === 1 ? '' : 's'}. Press Enter to open assignments for this day.`}
                           onClick={(e) => {
                             openCurrentDay();
-                            props.onClick?.(e as any);
+                            props.onClick?.(e as unknown as React.MouseEvent<HTMLButtonElement>);
                           }}
                           onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
                             // Do not hijack keyboard events from nested interactive elements (e.g., assignment links).
@@ -318,7 +324,7 @@ export default function CalendarClient({
                             if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
                               e.preventDefault();
                               openCurrentDay();
-                              props.onClick?.(e as any);
+                              props.onClick?.(e as unknown as React.MouseEvent<HTMLButtonElement>);
                             }
                           }}
                           className={cn(

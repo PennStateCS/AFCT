@@ -86,6 +86,9 @@ export function SearchableMultiSelect({
       ) : null}
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger asChild>
+          {/* This trigger is a combobox-style validation control; aria-invalid is
+              intentionally exposed for AT even though the implicit button role flags it. */}
+          {/* eslint-disable-next-line jsx-a11y/role-supports-aria-props */}
           <button
             type="button"
             id={triggerId}

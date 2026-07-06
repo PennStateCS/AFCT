@@ -16,6 +16,14 @@ import ManageGroupMembersDialog from '@/components/dialogs/ManageGroupDialog';
 import RandomGroupsDialog from '@/components/dialogs/RandomGroupsDialog';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
+type CourseStudent = {
+  id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+  avatar?: string | null;
+};
+
 export function GroupsCard({
   courseId,
   courseIsArchived,
@@ -26,7 +34,7 @@ export function GroupsCard({
   const { timezone } = useEffectiveTimezone();
   const [loading, setLoading] = useState(true);
   const [groups, setGroups] = useState<Group[]>([]);
-  const [students, setStudents] = useState<any[]>([]);
+  const [students, setStudents] = useState<CourseStudent[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [randomOpen, setRandomOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -98,14 +106,14 @@ export function GroupsCard({
     }
   };
 
-  const columns = useMemo<ColumnDef<Group, any>[]>(
+  const columns = useMemo<ColumnDef<Group>[]>(
     () => [
       { accessorKey: 'name', header: 'Name', meta: { priority: 1 } },
       {
         accessorKey: 'createdAt',
         header: 'Created At',
         meta: { priority: 3 },
-        cell: ({ row }) => formatDateTimeInTimeZone((row.original as any).createdAt, timezone),
+        cell: ({ row }) => formatDateTimeInTimeZone(row.original.createdAt, timezone),
       },
 
       {
