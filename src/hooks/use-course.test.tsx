@@ -99,6 +99,37 @@ describe('useCourseData', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1?view=assignments');
     expect(result.current.loadedSections.assignments).toBe(true);
   });
+
+  it('lazily loads the roster tab', async () => {
+    const initialCourse = { id: 'c1', name: 'X', assignments: [{}], problems: [], enrolled: [] } as never;
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ enrolled: [{ id: 'u1' }] }) });
+    const { result } = renderHook(() => useCourseData('c1', { initialCourse }));
+    await act(async () => {
+      await result.current.loadTabData('roster');
+    });
+    expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1?view=roster');
+    expect(result.current.loadedSections.roster).toBe(true);
+  });
+
+  it('fetches the full view (not summary) for a student on mount', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 'c1', name: 'X', enrolled: [], assignments: [], problems: [] }),
+    });
+    renderHook(() => useCourseData('c1', { isStudent: true }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1?view=full'));
+  });
+
+  it('does not lazily load tabs for a student (they already have full data)', async () => {
+    const initialCourse = { id: 'c1', name: 'X', assignments: [{}], problems: [], enrolled: [] } as never;
+    const { result } = renderHook(() =>
+      useCourseData('c1', { initialCourse, isStudent: true }),
+    );
+    await act(async () => {
+      await result.current.loadTabData('assignments');
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('useEnrollment', () => {

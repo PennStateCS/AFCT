@@ -76,6 +76,101 @@ describe('useCourseHandlers — course save', () => {
   });
 });
 
+describe('useCourseHandlers — optimistic state updates', () => {
+  it('applies an assignment save to course state', async () => {
+    const setCourse = vi.fn();
+    const { result } = renderHook(() => useCourseHandlers(course, setCourse));
+    await act(async () => {
+      await result.current.handleAssignmentSave({ id: 'a1' } as never);
+    });
+    expect(utils.updateCourseAfterAssignmentSave).toHaveBeenCalled();
+    expect(setCourse).toHaveBeenCalled();
+    expect(toastMock.success).toHaveBeenCalledWith('Assignment updated!');
+  });
+
+  it('applies an assignment creation to course state', () => {
+    const setCourse = vi.fn();
+    const { result } = renderHook(() => useCourseHandlers(course, setCourse));
+    act(() => result.current.handleAssignmentCreate({ id: 'a2' } as never));
+    expect(utils.updateCourseAfterAssignmentCreate).toHaveBeenCalled();
+    expect(toastMock.success).toHaveBeenCalledWith('Assignment created!');
+  });
+
+  it('applies a problem creation to course state', () => {
+    const setCourse = vi.fn();
+    const { result } = renderHook(() => useCourseHandlers(course, setCourse));
+    act(() => result.current.handleProblemCreated({ id: 'p1' } as never));
+    expect(utils.updateCourseAfterProblemCreate).toHaveBeenCalled();
+    expect(toastMock.success).toHaveBeenCalledWith('Problem created!');
+  });
+
+  it('ignores a problem creation with no problem payload', () => {
+    const setCourse = vi.fn();
+    const { result } = renderHook(() => useCourseHandlers(course, setCourse));
+    act(() => result.current.handleProblemCreated(undefined));
+    expect(utils.updateCourseAfterProblemCreate).not.toHaveBeenCalled();
+    expect(setCourse).not.toHaveBeenCalled();
+  });
+
+  it('applies a problem save to course state', () => {
+    const setCourse = vi.fn();
+    const { result } = renderHook(() => useCourseHandlers(course, setCourse));
+    act(() => result.current.handleProblemSaved({ id: 'p1' } as never));
+    expect(utils.updateCourseAfterProblemSave).toHaveBeenCalled();
+    expect(toastMock.success).toHaveBeenCalledWith('Problem updated!');
+  });
+
+  it('is a no-op for edit/delete click handlers except returning their argument', () => {
+    const { result } = renderHook(() => useCourseHandlers(course, vi.fn()));
+    expect(result.current.handleAssignmentEditClick({ id: 'a1' } as never)).toEqual({ id: 'a1' });
+    expect(result.current.handleAssignmentDeleteClick('a1')).toBe('a1');
+    expect(result.current.handleProblemEditClick({ id: 'p1' } as never)).toEqual({ id: 'p1' });
+    expect(result.current.handleProblemDeleteClick('p1')).toBe('p1');
+  });
+});
+
+describe('useCourseHandlers — course publish/archive toggles', () => {
+  it('publishes the course and confirms', async () => {
+    utils.updateCoursePublishStatus.mockResolvedValue({ isPublished: true });
+    const setCourse = vi.fn();
+    const { result } = renderHook(() => useCourseHandlers(course, setCourse));
+    await act(async () => {
+      await result.current.handleCoursePublishToggle(true);
+    });
+    expect(utils.updateCoursePublishStatus).toHaveBeenCalledWith('c1', true);
+    expect(toastMock.success).toHaveBeenCalledWith('Course published');
+  });
+
+  it('toasts when publishing fails', async () => {
+    utils.updateCoursePublishStatus.mockRejectedValue(new Error('nope'));
+    const { result } = renderHook(() => useCourseHandlers(course, vi.fn()));
+    await act(async () => {
+      await result.current.handleCoursePublishToggle(true);
+    });
+    expect(toastMock.error).toHaveBeenCalled();
+  });
+
+  it('archives the course and confirms', async () => {
+    utils.updateCourseArchiveStatus.mockResolvedValue({ isArchived: true });
+    const setCourse = vi.fn();
+    const { result } = renderHook(() => useCourseHandlers(course, setCourse));
+    await act(async () => {
+      await result.current.handleCourseArchiveToggle(true);
+    });
+    expect(utils.updateCourseArchiveStatus).toHaveBeenCalled();
+    expect(toastMock.success).toHaveBeenCalledWith('Course archived');
+  });
+
+  it('toasts when archiving fails', async () => {
+    utils.updateCourseArchiveStatus.mockRejectedValue(new Error('nope'));
+    const { result } = renderHook(() => useCourseHandlers(course, vi.fn()));
+    await act(async () => {
+      await result.current.handleCourseArchiveToggle(true);
+    });
+    expect(toastMock.error).toHaveBeenCalled();
+  });
+});
+
 describe('useCourseHandlers — delete', () => {
   it('deletes a problem and confirms', async () => {
     utils.deleteItem.mockResolvedValue(undefined);
