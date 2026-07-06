@@ -63,8 +63,8 @@ RUN npx prisma generate
 RUN java -version || true
 
 # Entrypoint
-COPY --chown=node:node entrypoint.sh ./entrypoint.sh
-RUN chmod +x ./entrypoint.sh
+COPY --chown=node:node docker/entrypoint.sh ./docker/entrypoint.sh
+RUN chmod +x ./docker/entrypoint.sh
 
 # Switch to non-root user
 USER node
@@ -72,5 +72,5 @@ USER node
 EXPOSE 3000
 EXPOSE 5555
 
-ENTRYPOINT ["/usr/bin/tini","-g","--","/bin/sh","./entrypoint.sh"]
+ENTRYPOINT ["/usr/bin/tini","-g","--","/bin/sh","./docker/entrypoint.sh"]
 # CMD supplied by docker-compose

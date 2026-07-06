@@ -107,8 +107,8 @@ RUN mkdir -p /app/bin && chmod -R 755 /app/bin
 EXPOSE 5555
 
 # Copy entrypoint script into runtime image and ensure it is executable
-COPY --from=builder /app/entrypoint.sh ./entrypoint.sh
-RUN chmod +x ./entrypoint.sh
+COPY --from=builder /app/docker/entrypoint.sh ./docker/entrypoint.sh
+RUN chmod +x ./docker/entrypoint.sh
 
 # Private upload directories
 RUN mkdir -p /private/uploads/pfps \
@@ -135,5 +135,5 @@ USER node
 
 EXPOSE 3000
 
-ENTRYPOINT ["/usr/bin/tini","-g","--","/bin/sh","./entrypoint.sh"]
+ENTRYPOINT ["/usr/bin/tini","-g","--","/bin/sh","./docker/entrypoint.sh"]
 CMD ["npm", "start"]
