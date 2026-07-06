@@ -123,7 +123,7 @@ export default function ProblemWorkspace({
   commentsLoading = false,
 }: ProblemWorkspaceProps) {
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
-  const [isRunning, setIsRunning] = useState(false);
+  const [isRunning, _setIsRunning] = useState(false);
   const [activeFeedback, setActiveFeedback] = useState<string | null>(null);
   const [activeFilters, setActiveFilters] = useState<Set<SubmissionStatusFilter>>(new Set());
 

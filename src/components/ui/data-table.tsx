@@ -351,7 +351,7 @@ export function DataTable<TData, TValue>({
       <div className="overflow-x-auto rounded-md border">
         <Table className="w-full" role="table" aria-label={tableLabel} aria-busy={loading}>
           <TableHeader role="rowgroup">
-            {table.getHeaderGroups().map((headerGroup, hgIndex) => (
+            {table.getHeaderGroups().map((headerGroup) => (
               <TableRow
                 key={headerGroup.id}
                 className={loading ? 'hover:bg-transparent' : undefined}

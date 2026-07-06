@@ -38,8 +38,10 @@ export default function CalendarClient({
   const [selected, setSelected] = useState<Date | undefined>(undefined);
   const [loading, setLoading] = useState(!Array.isArray(initialAssignments));
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [visibleStart, setVisibleStart] = useState<Date | null>(null);
-  const [visibleEnd, setVisibleEnd] = useState<Date | null>(null);
+  // The visible range is updated via these setters (in fetchForMonth); the values
+  // themselves aren't read, so the value bindings are intentionally omitted.
+  const [, setVisibleStart] = useState<Date | null>(null);
+  const [, setVisibleEnd] = useState<Date | null>(null);
   const [currentMonth, setCurrentMonth] = useState(
     initialMonth ? new Date(initialMonth) : new Date(),
   );

@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible';
 import { ChevronDown, ChevronRight, Loader2, Table } from 'lucide-react';
-import { formatDateInTimeZone, formatTimeInTimeZone } from '@/lib/date';
+import { formatDateInTimeZone } from '@/lib/date';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
 type StudentGradesResponse = {
