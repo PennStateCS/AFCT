@@ -40,7 +40,7 @@ type CreateUserDialogProps = {
 export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogProps) {
   const { timezone } = useEffectiveTimezone();
   const defaults: CreateUserRaw = useMemo(() => {
-    const defaultRole = roleOptions.includes('STUDENT' as any)
+    const defaultRole = (roleOptions as readonly string[]).includes('STUDENT')
       ? 'STUDENT'
       : (roleOptions[0] ?? 'STUDENT');
     return {
@@ -52,7 +52,7 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
       role: defaultRole as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT',
       timezone,
     };
-  }, [roleOptions, timezone]);
+  }, [timezone]);
 
   const {
     control,

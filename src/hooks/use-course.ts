@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { showToast } from '@/lib/toast';
 import { FullCourse, DeleteTarget, EnrollableUser, TabType } from '@/types/course';
-import { getEnrolledIds } from '@/lib/course-utils';
+import { getEnrolledIds, type EnrolledUser } from '@/lib/course-utils';
 import { Assignment, Problem, User } from '@prisma/client';
 
 type CourseSectionView = 'summary' | 'full' | 'assignments' | 'problems' | 'roster';
@@ -264,7 +264,7 @@ export function useEnrollment(course: FullCourse | null) {
       const users: User[] = await res.json();
 
       if (course) {
-        const inCourseIds = new Set(getEnrolledIds(course.enrolled as any[]));
+        const inCourseIds = new Set(getEnrolledIds(course.enrolled as EnrolledUser[]));
         const available = users.filter((u) => !inCourseIds.has(u.id));
         setAllUsers(available);
         return available;

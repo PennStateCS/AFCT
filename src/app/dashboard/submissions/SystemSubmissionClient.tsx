@@ -392,7 +392,7 @@ export default function SystemSubmissionClient() {
 
   const handleRerunSubmission = async (submission: SubmissionItem) => {
     await rerunSubmission({
-      submission: submission as any,
+      submission: submission as unknown as Parameters<typeof rerunSubmission>[0]['submission'],
       setRerunning,
       fetchReviewData,
     });

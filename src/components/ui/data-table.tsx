@@ -172,6 +172,9 @@ export function DataTable<TData, TValue>({
     } catch {
       // localStorage may not be available in all environments
     }
+    // defaultColumnVisibility is only the hydration baseline; re-running when its
+    // object identity changes on a parent re-render would clobber user column choices.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey]);
 
   useEffect(() => {

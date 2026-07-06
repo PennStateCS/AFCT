@@ -108,7 +108,9 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     // For group assignments: include problems that are unassigned (apply to everyone)
     // or explicitly mapped to the user's group. For non-group assignments return all.
     const visible = assignmentProblems.filter((ap) => {
-      const mapped = (ap.problem as any).groupAssignmentProblems ?? [];
+      const mapped =
+        (ap.problem as { groupAssignmentProblems?: { groupId: string }[] })
+          .groupAssignmentProblems ?? [];
       if (!assignment.isGroup) return true; // assignment-level problems when not group-mode
       if (mapped.length === 0) return true; // unassigned -> visible to everyone
       if (!userGroupId) return false; // user has no group -> can't see group-only problems
@@ -118,7 +120,11 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     const problems: ProblemWithSolved[] = visible.map((ap) => ({
       ...ap.problem,
       solved: ap.submissions.length > 0,
-      grade: (ap as any).AssignmentProblemGrade?.grade ?? (ap as any).grades?.[0]?.grade ?? null,
+      grade:
+        (ap as { AssignmentProblemGrade?: { grade?: number | null } }).AssignmentProblemGrade
+          ?.grade ??
+        (ap as { grades?: { grade?: number | null }[] }).grades?.[0]?.grade ??
+        null,
     }));
 
     // ---- Activity log ----

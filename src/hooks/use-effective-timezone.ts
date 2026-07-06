@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from 'react';
 
+const CACHE_KEY = 'afct:effective-timezone';
+const CACHE_TTL_MS = 5 * 60 * 1000;
+
 export function useEffectiveTimezone() {
   const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   const [timezone, setTimezone] = useState(browserTz);
   const [loading, setLoading] = useState(true);
-
-  const cacheKey = 'afct:effective-timezone';
-  const cacheTtlMs = 5 * 60 * 1000;
 
   useEffect(() => {
     let cancelled = false;
@@ -16,10 +16,10 @@ export function useEffectiveTimezone() {
     const loadTimezone = async () => {
       try {
         if (typeof window !== 'undefined') {
-          const cached = window.sessionStorage.getItem(cacheKey);
+          const cached = window.sessionStorage.getItem(CACHE_KEY);
           if (cached) {
             const parsed = JSON.parse(cached) as { tz: string; ts: number };
-            if (parsed?.tz && Date.now() - parsed.ts < cacheTtlMs) {
+            if (parsed?.tz && Date.now() - parsed.ts < CACHE_TTL_MS) {
               if (!cancelled) setTimezone(parsed.tz);
               if (!cancelled) setLoading(false);
               return;
@@ -47,7 +47,7 @@ export function useEffectiveTimezone() {
         const nextTz = userTz || serverTz || browserTz || 'UTC';
         if (!cancelled) setTimezone(nextTz);
         if (typeof window !== 'undefined') {
-          window.sessionStorage.setItem(cacheKey, JSON.stringify({ tz: nextTz, ts: Date.now() }));
+          window.sessionStorage.setItem(CACHE_KEY, JSON.stringify({ tz: nextTz, ts: Date.now() }));
         }
       } catch {
         if (!cancelled) setTimezone(browserTz || 'UTC');
@@ -60,7 +60,7 @@ export function useEffectiveTimezone() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [browserTz]);
 
   return { timezone, loading };
 }

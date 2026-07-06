@@ -21,7 +21,10 @@ export default defineConfig({
         'next.config.ts',
         'postcss.config.mjs',
         'prisma.config.ts',
-        'lib/**',
+        // Root-level lib holds the vendored java-runner.js (not TS, not unit-tested).
+        // Scope this to root lib only — the previous 'lib/**' also excluded src/lib,
+        // hiding the app's core logic (auth, security, submission worker) from coverage.
+        'lib/*.js',
         'prisma/**',
 
         'src/env.mjs',

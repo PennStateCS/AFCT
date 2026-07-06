@@ -47,7 +47,6 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     let firstName: string | undefined;
     let lastName: string | undefined;
     let rawRole: string | undefined;
-    let role: Role | undefined;
     let inactive: boolean | undefined;
     let avatarFile: File | null = null;
     let deleteAvatar = false;
@@ -84,7 +83,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     }
 
     // Parse/validate role using shared helper
-    role = parseRole(rawRole);
+    const role = parseRole(rawRole);
 
     // Retrieve current user record
     const userRecord = await prisma.user.findUnique({
