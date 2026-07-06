@@ -27,7 +27,7 @@ npm-debug.log
 README.md
 
 # Docker / Compose (not needed in build context)
-Dockerfile*
+**/Dockerfile*
 docker-compose*.yml
 .dockerignore
 
