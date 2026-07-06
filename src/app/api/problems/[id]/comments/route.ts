@@ -4,7 +4,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { prisma } from '@/lib/prisma';
 
 // GET - Fetch comments for a specific problem
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params: _params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth();
     if (!session?.user?.id) {

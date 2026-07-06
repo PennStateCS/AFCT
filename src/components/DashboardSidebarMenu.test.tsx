@@ -34,6 +34,8 @@ vi.mock('next/link', () => {
 
 vi.mock('swr', () => ({
   __esModule: true,
+  // useSWRMock is a test mock, not a React hook — the rules-of-hooks match here is a false positive.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   default: (key: string, fetcher: unknown, options: unknown) => useSWRMock(key, fetcher, options),
 }));
 

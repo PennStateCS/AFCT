@@ -17,7 +17,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { Course } from '@prisma/client';
 import { EditCourseDialog } from '@/components/dialogs/EditCourseDialog';
-import { getInstructors, formatInstructorNames } from '@/lib/course-utils';
+import { getInstructors } from '@/lib/course-utils';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { formatDateTimeInTimeZone } from '@/lib/date';
 

@@ -45,7 +45,7 @@ export default function StudentAssignmentPage({
   const [loading, setLoading] = useState(!initialAssignment);
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
   const [commentsLoading, setCommentsLoading] = useState(false);
-  const [submissionCount, setSubmissionCount] = useState(0);
+  const [, setSubmissionCount] = useState(0);
   const [submissions, setSubmissions] = useState<Record<string, StudentProblemSubmission[]>>({});
   const [comments, setComments] = useState<Record<string, StudentProblemComment[]>>({});
   const [newComment, setNewComment] = useState<Record<string, string>>({});

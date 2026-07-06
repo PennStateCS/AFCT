@@ -180,22 +180,12 @@ const formatMs = (ms?: number | null) =>
   typeof ms === 'number' && Number.isFinite(ms) ? `${ms} ms` : '—';
 const formatRate = (pct?: number | null) =>
   typeof pct === 'number' && Number.isFinite(pct) ? `${pct.toFixed(1)}%` : '—';
-const formatLoad = (arr?: number[] | null) => {
-  if (!Array.isArray(arr) || arr.length === 0) return '—';
-  return arr.map((n) => n.toFixed(2)).join(' / ');
-};
 const formatDbVersion = (v?: string | null) => {
   if (!v) return '—';
   const pg = v.match(/(PostgreSQL\s+\d+(?:\.\d+)?)/i)?.[1];
   const bits = v.match(/(\d+-bit)/i)?.[1];
   if (pg) return [pg, bits].filter(Boolean).join(' ');
   return v.split(',')[0]?.trim() || v;
-};
-const formatBytesPerSec = (b?: number | null) =>
-  typeof b === 'number' && Number.isFinite(b) ? `${formatBytes(b)}/s` : '—';
-const formatHash = (v?: string | null) => {
-  if (!v) return '—';
-  return v.length > 12 ? v.slice(0, 12) : v;
 };
 const toTitleCase = (s?: string | null) =>
   s ? s.replace(/\w\S*/g, (w) => w[0].toUpperCase() + w.slice(1).toLowerCase()) : '—';
