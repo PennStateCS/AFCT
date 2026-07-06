@@ -16,8 +16,15 @@ import {
   clampSubmissionAnalyzerLimit,
   clampLoginMaxAttempts,
   clampLoginLockoutMinutes,
+  clampBackupHour,
+  clampBackupRetentionDays,
+  clampActivityLogRetentionDays,
   DEFAULT_LOGIN_MAX_ATTEMPTS,
   DEFAULT_LOGIN_LOCKOUT_MINUTES,
+  DEFAULT_BACKUP_ENABLED,
+  DEFAULT_BACKUP_HOUR,
+  DEFAULT_BACKUP_RETENTION_DAYS,
+  DEFAULT_ACTIVITY_LOG_RETENTION_DAYS,
   DEFAULT_ALLOW_SIGNUP,
   DEFAULT_MAX_UPLOAD_SIZE_MB,
   DEFAULT_SESSION_TIMEOUT_MINUTES,
@@ -46,6 +53,10 @@ const AUDITED_FIELDS = [
   'submissionAnalyzerLimit',
   'loginMaxAttempts',
   'loginLockoutMinutes',
+  'backupEnabled',
+  'backupHour',
+  'backupRetentionDays',
+  'activityLogRetentionDays',
   'hcaptchaSiteKey',
 ] as const;
 
@@ -103,6 +114,11 @@ export async function GET() {
       settings?.submissionAnalyzerLimit ?? DEFAULT_SUBMISSION_ANALYZER_LIMIT,
     loginMaxAttempts: settings?.loginMaxAttempts ?? DEFAULT_LOGIN_MAX_ATTEMPTS,
     loginLockoutMinutes: settings?.loginLockoutMinutes ?? DEFAULT_LOGIN_LOCKOUT_MINUTES,
+    backupEnabled: settings?.backupEnabled ?? DEFAULT_BACKUP_ENABLED,
+    backupHour: settings?.backupHour ?? DEFAULT_BACKUP_HOUR,
+    backupRetentionDays: settings?.backupRetentionDays ?? DEFAULT_BACKUP_RETENTION_DAYS,
+    activityLogRetentionDays:
+      settings?.activityLogRetentionDays ?? DEFAULT_ACTIVITY_LOG_RETENTION_DAYS,
     // Public site key is returned; the secret is never sent, only whether it's set.
     hcaptchaSiteKey: settings?.hcaptchaSiteKey ?? '',
     hcaptchaSecretConfigured: Boolean(settings?.hcaptchaSecretKey),
@@ -122,6 +138,10 @@ type SettingsBody = {
   submissionAnalyzerLimit?: number;
   loginMaxAttempts?: number;
   loginLockoutMinutes?: number;
+  backupEnabled?: boolean;
+  backupHour?: number;
+  backupRetentionDays?: number;
+  activityLogRetentionDays?: number;
   hcaptchaSiteKey?: string;
   hcaptchaSecretKey?: string;
   hcaptchaSecretClear?: boolean;
@@ -188,6 +208,18 @@ export async function PUT(req: Request) {
   if (body.loginLockoutMinutes !== undefined)
     loginData.loginLockoutMinutes = clampLoginLockoutMinutes(Number(body.loginLockoutMinutes));
 
+  // Backup schedule — only persist provided fields, clamped to safe bounds.
+  const backupData: Record<string, number | boolean> = {};
+  if (typeof body.backupEnabled === 'boolean') backupData.backupEnabled = body.backupEnabled;
+  if (body.backupHour !== undefined)
+    backupData.backupHour = clampBackupHour(Number(body.backupHour));
+  if (body.backupRetentionDays !== undefined)
+    backupData.backupRetentionDays = clampBackupRetentionDays(Number(body.backupRetentionDays));
+  if (body.activityLogRetentionDays !== undefined)
+    backupData.activityLogRetentionDays = clampActivityLogRetentionDays(
+      Number(body.activityLogRetentionDays),
+    );
+
   // hCaptcha keys: site key set/clear when provided; secret only updated when a
   // non-empty value is sent, or explicitly cleared. Empty secret means "keep".
   const hcaptchaData: Record<string, string | null> = {};
@@ -211,6 +243,7 @@ export async function PUT(req: Request) {
     sessionTimeoutMinutes,
     ...queueData,
     ...loginData,
+    ...backupData,
     ...hcaptchaData,
   };
   if (hasAllowSignup) updateData.allowSignup = body.allowSignup;
@@ -228,6 +261,7 @@ export async function PUT(req: Request) {
     sessionTimeoutMinutes,
     ...queueData,
     ...loginData,
+    ...backupData,
     ...hcaptchaData,
   };
   if (hasAllowSignup) createData.allowSignup = body.allowSignup;
@@ -294,6 +328,10 @@ export async function PUT(req: Request) {
     submissionAnalyzerLimit: settings.submissionAnalyzerLimit,
     loginMaxAttempts: settings.loginMaxAttempts,
     loginLockoutMinutes: settings.loginLockoutMinutes,
+    backupEnabled: settings.backupEnabled,
+    backupHour: settings.backupHour,
+    backupRetentionDays: settings.backupRetentionDays,
+    activityLogRetentionDays: settings.activityLogRetentionDays,
     hcaptchaSiteKey: settings.hcaptchaSiteKey ?? '',
     hcaptchaSecretConfigured: Boolean(settings.hcaptchaSecretKey),
   });

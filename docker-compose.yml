@@ -53,6 +53,11 @@ services:
       - private_uploads:/private/uploads
       # App writes the admin TLS cert here; nginx reads it (below).
       - tls_certs:/app/certs
+      # Backups: read-only for listing/downloading. The app can request a backup
+      # only by dropping a flag in the separate (writable) trigger volume, so it
+      # can never modify or delete actual backups.
+      - db_backups:/backups:ro
+      - backup_triggers:/backup-triggers
 
     healthcheck:
       # Lightweight endpoint (static 200 JSON, no DB work) rather than rendering
@@ -93,8 +98,18 @@ services:
       # Admin TLS cert written by the app; nginx reads it (see entrypoint.sh).
       - tls_certs:/etc/nginx/custom-certs:ro
 
+    healthcheck:
+      # A 301 from the HTTP→HTTPS redirect means nginx is serving (curl -f only
+      # fails on >=400), so this confirms liveness without needing a valid cert.
+      test: ['CMD-SHELL', 'curl -fsS -o /dev/null http://localhost/ || exit 1']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
   postgres:
-    image: postgres:15-alpine
+    # Digest-pinned (tag kept for readability). Bump deliberately.
+    image: postgres:15-alpine@sha256:cd17e2ac98240fce1541ad2a803b34009b4eea5aec8a832363cdc7eca62e722e
     container_name: afct-postgres
     restart: unless-stopped
     logging: *default-logging
@@ -134,9 +149,50 @@ services:
       retries: 5
       start_period: 30s
 
+  db-backup:
+    # Same Postgres image so pg_dump matches the server version exactly. Runs a
+    # daily backup to the db_backups volume — a matched pair of the database dump
+    # and a tarball of the upload volumes (DB rows reference files by name, so both
+    # are needed for a coherent restore). The schedule (on/off, hour, retention)
+    # comes from System Settings — see backup.sh. Copy the db_backups volume
+    # off-host regularly: it protects against bad data/migrations, but not host loss.
+    image: postgres:15-alpine@sha256:cd17e2ac98240fce1541ad2a803b34009b4eea5aec8a832363cdc7eca62e722e
+    container_name: afct-db-backup
+    restart: unless-stopped
+    logging: *default-logging
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    # POSTGRES_PASSWORD comes from .env.production (backup.sh maps it to PGPASSWORD).
+    env_file:
+      - .env.production
+    environment:
+      PGHOST: postgres
+      PGUSER: afct_user
+      PGDATABASE: afct
+      # Fallbacks used only if the settings row can't be read; the live values come
+      # from System Settings (backupEnabled / backupHour / backupRetentionDays).
+      BACKUP_ENABLED: 'true'
+      BACKUP_HOUR: '2'
+      BACKUP_RETENTION_DAYS: '14'
+
+    entrypoint: ['/bin/sh', '/backup.sh']
+    volumes:
+      - ./docker/backup/backup.sh:/backup.sh:ro
+      - db_backups:/backups
+      # Upload volumes, read-only, snapshotted alongside the DB dump.
+      - private_uploads:/snapshot/private-uploads:ro
+      - uploads_data:/snapshot/public-uploads:ro
+      # Watches here for the app's "back up now" flag.
+      - backup_triggers:/backup-triggers
+
 volumes:
   postgres_data:
   uploads_data:
   private_uploads:
   nginx_certs:
   tls_certs:
+  db_backups:
+  backup_triggers:
