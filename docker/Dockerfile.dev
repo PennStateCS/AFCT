@@ -3,20 +3,22 @@
 # Single stage. The app source is bind-mounted at runtime (see docker-compose.dev),
 # so this image only provides the toolchain, installed deps, and Java runtime that
 # hot reload needs. Also used by the prisma-studio service.
-FROM node:20-bookworm-slim
+# Base images are pinned by digest (tag kept for readability). Bump deliberately.
+FROM node:20-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0
 WORKDIR /app
 
 # python3/make/g++ build native modules (bcrypt); postgres-client + netcat back
 # the DB wait in the entrypoint; tini is PID 1; curl is handy for debugging.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 make g++ git tini netcat-openbsd postgresql-client openssl ca-certificates curl \
-    && rm -rf /var/lib/apt/lists/*
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+    python3 make g++ git tini netcat-openbsd postgresql-client openssl ca-certificates curl
 
 # Java 21 runtime, copied from the official image (pinned, no network fetch).
 # Runs jars/afct-evaluator.jar when grading submissions.
 ENV JAVA_HOME=/opt/java/openjdk
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
-COPY --from=eclipse-temurin:21-jre /opt/java/openjdk /opt/java/openjdk
+COPY --from=eclipse-temurin:21-jre@sha256:d2b9f8f12212cadcfdf889461531784e8fd097feade954d65b31ee7a71c473ec /opt/java/openjdk /opt/java/openjdk
 
 ENV NODE_ENV=development
 ENV DISABLE_ERD=true
@@ -29,9 +31,11 @@ RUN mkdir -p /private/uploads/pfps /private/uploads/problems \
              /private/uploads/solutions /private/uploads/submissions && \
     chmod -R 775 /private/uploads
 
-# Install deps first so source edits don't re-run npm ci.
+# Install deps first so source edits don't re-run npm ci. Skip the postinstall
+# `prisma generate` here — the schema isn't copied yet; the client is generated
+# below, after the source is in place.
 COPY --chown=node:node package.json package-lock.json ./
-RUN npm ci --prefer-offline --no-audit --progress=false
+RUN SKIP_PRISMA_GENERATE=1 npm ci --legacy-peer-deps --prefer-offline --no-audit --progress=false
 
 # Evaluator JAR + the cfganalyzer binary it shells out to.
 COPY --chown=node:node jars /app/jars

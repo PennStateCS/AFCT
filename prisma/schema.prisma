@@ -418,6 +418,15 @@ model SystemSettings {
   loginMaxAttempts    Int @default(10)
   loginLockoutMinutes Int @default(45)
 
+  // Database backups (run by the db-backup container). backupHour is the
+  // server-time (UTC) hour to run the daily dump; retention is days of dumps kept.
+  backupEnabled       Boolean @default(true)
+  backupHour          Int     @default(2)
+  backupRetentionDays Int     @default(14)
+
+  // How long to keep audit-log rows before the pruner deletes them.
+  activityLogRetentionDays Int @default(365)
+
   // Submission queue tunables (time values stored in ms)
   submissionEvalTimeoutMs      Int @default(30000)
   submissionEvalMaxMemoryMb    Int @default(256)

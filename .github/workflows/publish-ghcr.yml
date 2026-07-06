@@ -81,6 +81,18 @@ jobs:
           echo "Image ID:"
           echo "${{ steps.build.outputs.imageid || steps.retry.outputs.imageid }}"
 
+      # Scan the published image for known CVEs. Report-only for now (exit-code 0);
+      # flip exit-code to '1' to make CRITICAL/HIGH block a release.
+      - name: Scan image for vulnerabilities (Trivy)
+        if: success()
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: ghcr.io/pennstatewilkes-barre/afct-dashboard@${{ steps.build.outputs.digest || steps.retry.outputs.digest }}
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '0'
+
       # Pin docker-compose.yml to the exact digest just published, and commit it
       # back to main. The push uses GITHUB_TOKEN, which does NOT re-trigger
       # workflows (no loop); the `[skip ci]` marker is a further safeguard.

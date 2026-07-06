@@ -55,6 +55,9 @@ services:
       - afct-dev-uploads-data:/app/public/uploads
       - afct-dev-private-uploads:/private/uploads
       - afct-dev-tls-certs:/app/certs
+      # Backups: read-only for listing/downloading; requests go via the trigger volume.
+      - afct-dev-db-backups:/backups:ro
+      - afct-dev-backup-triggers:/backup-triggers
 
     healthcheck:
       disable: true
@@ -87,7 +90,8 @@ services:
       disable: true
 
   postgres:
-    image: postgres:15-alpine
+    # Digest-pinned (tag kept for readability). Bump deliberately.
+    image: postgres:15-alpine@sha256:cd17e2ac98240fce1541ad2a803b34009b4eea5aec8a832363cdc7eca62e722e
     container_name: afct-dev-postgres
     logging: *default-logging
 
@@ -107,6 +111,35 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  db-backup:
+    # Mirrors the prod backup service so backups work in dev too — daily schedule
+    # from System Settings plus the on-demand "back up now" trigger.
+    image: postgres:15-alpine@sha256:cd17e2ac98240fce1541ad2a803b34009b4eea5aec8a832363cdc7eca62e722e
+    container_name: afct-dev-db-backup
+    restart: unless-stopped
+    logging: *default-logging
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    environment:
+      PGHOST: postgres
+      PGUSER: afct_user
+      PGDATABASE: afct
+      POSTGRES_PASSWORD: afct_pass
+      BACKUP_ENABLED: 'true'
+      BACKUP_HOUR: '2'
+      BACKUP_RETENTION_DAYS: '14'
+
+    entrypoint: ['/bin/sh', '/backup.sh']
+    volumes:
+      - ./docker/backup/backup.sh:/backup.sh:ro
+      - afct-dev-db-backups:/backups
+      - afct-dev-private-uploads:/snapshot/private-uploads:ro
+      - afct-dev-uploads-data:/snapshot/public-uploads:ro
+      - afct-dev-backup-triggers:/backup-triggers
 
   prisma-studio:
     build:
@@ -140,3 +173,5 @@ volumes:
   afct-dev-private-uploads:
   afct-dev-uploads-data:
   afct-dev-tls-certs:
+  afct-dev-db-backups:
+  afct-dev-backup-triggers:
