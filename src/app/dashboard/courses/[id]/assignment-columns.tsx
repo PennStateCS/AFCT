@@ -19,6 +19,34 @@ import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 
+// Lazily fetches the assignment's max points when the row doesn't already have it.
+function MaxPointsCell({
+  assignmentId,
+  maxPoints,
+}: {
+  assignmentId: string;
+  maxPoints: number | null;
+}) {
+  const [pts, setPts] = useState<number | null>(maxPoints ?? null);
+
+  useEffect(() => {
+    if (pts === null) {
+      (async () => {
+        try {
+          const res = await fetch(`/api/assignments/${assignmentId}`);
+          if (!res.ok) return;
+          const json = await res.json();
+          setPts(json.maxPoints ?? 0);
+        } catch {
+          setPts(0);
+        }
+      })();
+    }
+  }, [assignmentId, pts]);
+
+  return <div>{pts !== null ? pts : '...'}</div>;
+}
+
 // Component for the publish switch with confirmation dialog
 function PublishSwitchCell({
   assignment,
@@ -103,28 +131,9 @@ export function useAssignmentColumns(
       accessorKey: 'maxPoints',
       header: () => 'Points',
       meta: { priority: 2 },
-      cell: ({ row }) => {
-        const [pts, setPts] = useState<number | null>(
-          row.original.maxPoints ?? null,
-        );
-
-        useEffect(() => {
-          if (pts === null) {
-            (async () => {
-              try {
-                const res = await fetch(`/api/assignments/${row.original.id}`);
-                if (!res.ok) return;
-                const json = await res.json();
-                setPts(json.maxPoints ?? 0);
-              } catch {
-                setPts(0);
-              }
-            })();
-          }
-        }, [row.original.id, pts]);
-
-        return <div>{pts !== null ? pts : '...'}</div>;
-      },
+      cell: ({ row }) => (
+        <MaxPointsCell assignmentId={row.original.id} maxPoints={row.original.maxPoints ?? null} />
+      ),
     },
     {
       id: 'problemCount',

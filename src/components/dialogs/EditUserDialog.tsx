@@ -60,7 +60,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
     watch,
     setValue,
     getValues,
-    formState: { errors, isSubmitting, isValid, isDirty },
+    formState: { errors, isSubmitting, isValid },
   } = useForm<UpdateUserRaw>({
     resolver: zodResolver(UpdateUserSchema),
     defaultValues: defaults,

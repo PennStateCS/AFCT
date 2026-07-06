@@ -1,13 +1,9 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StudentGradesCard } from '@/components/StudentGradesCard';
 import { StudentAssignmentCard } from '@/components/StudentAssignmentCard';
 import { FullCourse, TabType } from '@/types/course';
-import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { formatDateInTimeZone, formatTimeInTimeZone } from '@/lib/date';
 import { BookOpen, Table } from 'lucide-react';
 
 interface StudentCourseViewProps {
@@ -17,11 +13,6 @@ interface StudentCourseViewProps {
 }
 
 export function StudentCourseView({ course, tab, onTabChange }: StudentCourseViewProps) {
-  const router = useRouter();
-  const { timezone } = useEffectiveTimezone();
-  const limitText = (value: string, max = 140) =>
-    value.length > max ? `${value.slice(0, max - 1)}…` : value;
-
   return (
     <Tabs defaultValue="assignments" value={tab} onValueChange={onTabChange}>
       <TabsList

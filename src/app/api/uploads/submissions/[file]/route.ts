@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import path from 'path';
 import fs from 'fs';
-import stream from 'stream';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';

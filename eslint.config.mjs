@@ -23,6 +23,28 @@ const eslintConfig = [
     ],
   },
   ...compat.extends('next/core-web-vitals', 'next/typescript'),
+  {
+    // require() is idiomatic (and hoisting-safe) inside vitest `vi.mock` factories,
+    // which are hoisted above the file's imports. Enforce ESM imports only in
+    // non-test code.
+    files: ['**/*.test.ts', '**/*.test.tsx'],
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
+  {
+    rules: {
+      // Honor the conventional `_` prefix for intentionally-unused identifiers.
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
+    },
+  },
 ];
 
 export default eslintConfig;

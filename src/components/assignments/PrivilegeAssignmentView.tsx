@@ -366,9 +366,7 @@ export default function AssignmentDashboardPage({
     setEditProblemDialogOpen(true);
   };
 
-  if (loading) return <LoadingSpinner label="Loading" />;
-  if (!assignment) return <div className="p-6 text-red-500">Assignment not found.</div>;
-
+  // All hooks must run before any early return so their call order is stable.
   const groupNamesByProblemId = useMemo(() => {
     const namesById = new Map(groups.map((group) => [group.id, group.name]));
     const map: Record<string, string[]> = {};
@@ -385,20 +383,20 @@ export default function AssignmentDashboardPage({
 
   const problemTableData = useMemo(
     () =>
-      (assignment.problems ?? []).map((ap) => ({
+      (assignment?.problems ?? []).map((ap) => ({
         ...ap.problem,
         description: ap.problem.description ?? null,
         assignmentMaxPoints: ap.maxPoints,
         assignmentMaxSubmissions: ap.maxSubmissions,
         assignmentAutograderEnabled: ap.autograderEnabled,
       })),
-    [assignment.problems],
+    [assignment?.problems],
   );
 
 
   const submissionTabProblems = useMemo(
     () =>
-      (assignment.problems ?? []).map((ap) => ({
+      (assignment?.problems ?? []).map((ap) => ({
         id: ap.problem.id,
         title: ap.problem.title,
         description: ap.problem.description ?? undefined,
@@ -411,25 +409,22 @@ export default function AssignmentDashboardPage({
         maxSubmissions: ap.maxSubmissions,
         autograderEnabled: ap.autograderEnabled,
       })),
-    [assignment.problems],
+    [assignment?.problems],
   );
 
 
   const usedProblems = useMemo(
     () =>
-      (assignment.problems ?? []).map((ap) => ({
+      (assignment?.problems ?? []).map((ap) => ({
         ...ap.problem,
         description: ap.problem.description ?? undefined,
         type: typeof ap.problem.type === 'string' ? ap.problem.type : undefined,
       })),
-    [assignment.problems],
+    [assignment?.problems],
   );
 
-
-  const estimatedProblemPoints = Math.max(
-    1,
-    Math.round((assignment.maxPoints || 100) / Math.max((assignment.problems?.length ?? 1), 1)),
-  );
+  if (loading) return <LoadingSpinner label="Loading" />;
+  if (!assignment) return <div className="p-6 text-red-500">Assignment not found.</div>;
 
 
   const assignmentProblemForDialog = problemToEdit

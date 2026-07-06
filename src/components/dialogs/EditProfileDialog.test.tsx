@@ -67,7 +67,7 @@ describe('EditProfileDialog', () => {
     const setOpen = vi.fn();
     const onSave = vi.fn().mockResolvedValue(undefined);
 
-    fetchMock.mockImplementation((url: string) => {
+    fetchMock.mockImplementation((_url: string) => {
       return Promise.resolve({
         ok: true,
         json: async () => ({

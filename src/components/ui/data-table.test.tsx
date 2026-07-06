@@ -2,7 +2,7 @@
 
 import React from 'react';
 import '@/components/ui/data-table';
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ColumnDef } from '@tanstack/react-table';

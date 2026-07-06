@@ -21,9 +21,6 @@ import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import { Check, ChevronDown, Search as SearchIcon } from 'lucide-react';
 
@@ -104,7 +101,6 @@ export function CreateProblemDialog({
   });
 
   const type = watch('type');
-  const isUnlimitedSubmissions = watch('isUnlimitedSubmissions');
   const isUnlimitedStates = watch('isUnlimitedStates');
   const file = watch('file');
 
@@ -122,24 +118,10 @@ export function CreateProblemDialog({
 
   // Internal visibility state: only show dialog after groups are loaded (if needed)
   const [internalOpen, setInternalOpen] = useState(false);
-  const [initializing, setInitializing] = useState(false);
+  const [, setInitializing] = useState(false);
 
   const { maxMb, loading: loadingMaxSize } = useMaxUploadSize();
 
-  const fileErrorMessage = (() => {
-    const e = errors.file;
-    if (!e) return '';
-    if (typeof e === 'string') return e;
-    if (typeof e === 'object' && e !== null) {
-      const m = (e as { message?: unknown }).message;
-      if (typeof m === 'string') return m;
-    }
-    try {
-      return JSON.stringify(e);
-    } catch {
-      return String(e);
-    }
-  })();
 
   useEffect(() => {
     let aborted = false;

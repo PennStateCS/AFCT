@@ -516,23 +516,6 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
       return refreshed;
     });
 
-    // Group roster users by role (include ADMIN alongside FACULTY)
-    const instructors = updatedCourse.roster
-      .filter((r: (typeof updatedCourse.roster)[number]) => (r.role as string) === 'ADMIN')
-      .map((r: (typeof updatedCourse.roster)[number]) => ({ ...r.user, role: r.role }));
-    const faculty = updatedCourse.roster
-      .filter(
-        (r: (typeof updatedCourse.roster)[number]) =>
-          (r.role as string) === 'FACULTY' || (r.role as string) === 'ADMIN',
-      )
-      .map((r: (typeof updatedCourse.roster)[number]) => ({ ...r.user, role: r.role }));
-    const tas = updatedCourse.roster
-      .filter((r: (typeof updatedCourse.roster)[number]) => r.role === 'TA')
-      .map((r: (typeof updatedCourse.roster)[number]) => ({ ...r.user, role: r.role }));
-    const students = updatedCourse.roster
-      .filter((r: (typeof updatedCourse.roster)[number]) => r.role === 'STUDENT')
-      .map((r: (typeof updatedCourse.roster)[number]) => ({ ...r.user, role: r.role }));
-
     // Attach problem counts to assignments
     const assignmentsWithProblemCount = await Promise.all(
       updatedCourse.assignments.map(
@@ -700,7 +683,7 @@ export async function DELETE(req: Request, context: { params: Promise<{ id: stri
     return NextResponse.json({ error: 'Course must be archived' }, { status: 403 });
   }
 
-  const body = await req.json();
+  await req.json();
 
   try {
     // Deleting course code
