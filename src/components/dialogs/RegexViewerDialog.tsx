@@ -27,7 +27,7 @@ function parseRegex(xmlText: string){
     throw new Error(`${rawType} not regular expression`);
   }
 
-  let expression = doc.querySelector('expression')?.textContent ?? '';
+  const expression = doc.querySelector('expression')?.textContent ?? '';
   return { type: type, expression: expression }; 
 }
 
@@ -54,7 +54,7 @@ export function RegexViewerDialog({ src, open, onOpenChange, title }: { src: str
 	load();
   }, [src, open]);
   if (!data) return null;
-  let parsed = parseRegex(data);
+  const parsed = parseRegex(data);
   return (
     <div className="p-8">
 
