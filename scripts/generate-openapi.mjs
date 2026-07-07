@@ -130,6 +130,17 @@ function tagFor(apiPath) {
   return seg.replace(/[{}]/g, '');
 }
 
+// Point any error response (>= 400) that doesn't already describe a body at the
+// shared Error schema, so every 4xx/5xx documents the same { error | message } shape.
+function attachErrorResponses(op) {
+  if (!op.responses) return;
+  for (const [code, resp] of Object.entries(op.responses)) {
+    if (Number(code) >= 400 && resp && typeof resp === 'object' && !resp.$ref && !resp.content) {
+      resp.content = { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } };
+    }
+  }
+}
+
 function buildSpec(routes) {
   const paths = {};
   const tags = new Set();
@@ -169,6 +180,9 @@ function buildSpec(routes) {
         tags: [tag],
         summary: description || `${method} ${apiPath}`,
         description: [description, authNote].filter(Boolean).join('\n\n'),
+        // Machine-readable auth: an authenticated route needs the session cookie;
+        // a public one advertises no requirement. An @openapi block can override.
+        security: authed ? [{ cookieAuth: [] }] : [],
         ...(params.length ? { parameters: params } : {}),
         // Only fall back to a placeholder response when the @openapi block doesn't
         // declare its own — otherwise the placeholder lingers alongside real ones.
@@ -177,6 +191,7 @@ function buildSpec(routes) {
       const op = operation ? deepMerge(skeleton, operation) : skeleton;
       // Always append the source link, even when @openapi overrides the description.
       op.description = [op.description, `[View source](${source})`].filter(Boolean).join('\n\n');
+      attachErrorResponses(op);
       paths[apiPath][method.toLowerCase()] = op;
     }
   }
@@ -194,6 +209,32 @@ function buildSpec(routes) {
     servers: [{ url: '/', description: 'Same-origin (relative to the deployed app)' }],
     tags: [...tags].sort().map((name) => ({ name })),
     paths,
+    components: {
+      securitySchemes: {
+        // NextAuth stores the session in a cookie; the Secure-prefixed variant is
+        // used over HTTPS. Operations that require a session reference this scheme.
+        cookieAuth: {
+          type: 'apiKey',
+          in: 'cookie',
+          name: 'next-auth.session-token',
+          description:
+            'NextAuth session cookie (`__Secure-next-auth.session-token` over HTTPS). ' +
+            'Role requirements, where they apply, are noted in each operation description.',
+        },
+      },
+      schemas: {
+        // Shared error body. Handlers return one of these string fields; error
+        // responses (4xx/5xx) reference this schema.
+        Error: {
+          type: 'object',
+          description: 'Error response. Handlers return `error` or `message` with a human-readable reason.',
+          properties: {
+            error: { type: 'string' },
+            message: { type: 'string' },
+          },
+        },
+      },
+    },
   };
   return { spec, stats };
 }
