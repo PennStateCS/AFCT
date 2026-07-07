@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 import {
   Calendar,
@@ -403,7 +404,16 @@ export default function DashboardSidebarMenu() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <SidebarMenuButton className="hover:bg-secondary data-[state=open]:bg-secondary/70 data-[state=open]:text-secondary-foreground h-14 bg-[#525252] px-3 py-3 transition-colors">
-                  <UserRound /> {user.name}
+                  <Avatar className="h-8 w-8 shrink-0">
+                    <AvatarImage
+                      src={user.avatar ? `/api/uploads/pfps/${user.avatar}` : undefined}
+                      alt={user.name}
+                    />
+                    <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
+                      {user.initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  {user.name}
                   <ChevronUp className="ml-auto" />
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
