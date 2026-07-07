@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
@@ -89,14 +89,14 @@ export default function LoginPage() {
     Math.max(0, Math.round(getMonotonicNow() - interactionStartRef.current));
   const shouldRenderCaptcha = Boolean(captchaVisible && captchaSiteKey);
 
-  const requestCaptchaIfAvailable = () => {
+  const requestCaptchaIfAvailable = useCallback(() => {
     if (!captchaSiteKey) {
       showToast.error('Security challenge unavailable. Please contact support.');
       return;
     }
     setCaptchaVisible(true);
     setCaptchaToken(null);
-  };
+  }, [captchaSiteKey]);
 
   const handleCaptchaVerify = (token: string) => setCaptchaToken(token);
   const handleCaptchaReset = () => setCaptchaToken(null);
@@ -154,7 +154,7 @@ export default function LoginPage() {
     }
 
     showToast.error('Invalid email or password.');
-  }, [searchParams]);
+  }, [searchParams, requestCaptchaIfAvailable]);
 
   // Basic credential flow with minimal client-side validation before delegating to NextAuth.
   const handleLogin = async (e: React.FormEvent) => {

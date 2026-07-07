@@ -38,7 +38,6 @@ export function getUserColumns(
       meta: { priority: 4 },
       cell: ({ row }) => {
         const user = row.original;
-        const initials = `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase();
         return (
           <Avatar className="h-12 w-12">
             <AvatarImage
@@ -167,7 +166,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
       showToast.success('User deleted successfully.');
       setConfirmOpen(false);
       onUserUpdate();
-    } catch (err) {
+    } catch {
       showToast.error('Unexpected Error: Failed to delete user');
     }
   }

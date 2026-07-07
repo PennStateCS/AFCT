@@ -43,7 +43,7 @@ export async function POST(req: Request, context: { params: Promise<{ cid: strin
       },
     });
 
-    var updated_count: number  = 0;
+    let updated_count: number  = 0;
     for(const submission of submissions) {
         await prisma.submission.update({
             where: { id: submission.id },

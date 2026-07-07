@@ -1,1 +1,3 @@
-entrypoint.sh eol=lf
+# Shell scripts must stay LF so they run correctly inside Linux containers,
+# even when checked out on Windows.
+*.sh text eol=lf

@@ -360,7 +360,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 5. Store the submission
-    let submission = await prisma.submission.create({
+    const submission = await prisma.submission.create({
       data: {
         courseId: assignment.courseId,
         assignmentId,

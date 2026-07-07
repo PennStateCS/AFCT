@@ -49,8 +49,12 @@ type Props = {
 };
 
 // Helpers
-const hasSubmissions = (obj: any): obj is { submissions: Submission[] } => {
-  return obj && typeof obj === 'object' && Array.isArray(obj.submissions);
+const hasSubmissions = (obj: unknown): obj is { submissions: Submission[] } => {
+  return (
+    !!obj &&
+    typeof obj === 'object' &&
+    Array.isArray((obj as { submissions?: unknown }).submissions)
+  );
 };
 
 const extractSubs = (raw?: SubmissionData): Submission[] => {
@@ -819,7 +823,9 @@ export default function AssignmentSubmissions({
                         isSaving={selectedProblem ? savingComments[selectedProblem.id] : false}
                         deletingComments={deletingComments}
                         onViewSubmission={(submission: ProblemSubmission) => setOpenDialog({ open: true, submission })}
-                        onRerunSubmission={handleRerunSubmission}
+                        onRerunSubmission={(submission) =>
+                          handleRerunSubmission(submission as unknown as Submission)
+                        }
                         onRerunVisibleSubmissions={handleRerunVisibleSubmissions}
                         rerunning={rerunning}
                         courseIsArchived={courseIsArchived}

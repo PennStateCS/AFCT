@@ -57,8 +57,8 @@ export type ProblemWorkspaceProps = {
   onDeleteComment?: (id: string) => void;
   isSaving?: boolean;
   deletingComments?: Record<string, boolean>;
-  onViewSubmission: (submission: any) => void;
-  onRerunSubmission?: (submission: any) => void;
+  onViewSubmission: (submission: ProblemSubmission) => void;
+  onRerunSubmission?: (submission: ProblemSubmission) => void;
   onRerunVisibleSubmissions?: (submissions: ProblemSubmission[]) => void;
   rerunning?: Record<string, boolean>;
   courseIsArchived: boolean;
@@ -123,7 +123,7 @@ export default function ProblemWorkspace({
   commentsLoading = false,
 }: ProblemWorkspaceProps) {
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
-  const [isRunning, setIsRunning] = useState(false);
+  const [isRunning, _setIsRunning] = useState(false);
   const [activeFeedback, setActiveFeedback] = useState<string | null>(null);
   const [activeFilters, setActiveFilters] = useState<Set<SubmissionStatusFilter>>(new Set());
 

@@ -389,13 +389,14 @@ model ActivityLog {
   ipAddress String?
   userAgent String?
 
-  @@index([timestamp])
-  @@index([userId])
+  // Index strategy for a high-write, admin-read log table. Composites serve
+  // "filter by X, order by timestamp desc" in a single scan; single-column
+  // indexes that are the leftmost prefix of a composite are omitted to keep
+  // insert cost down (e.g. userId is covered by [userId, courseId]).
+  @@index([timestamp]) // default System Logs ordering
+  @@index([severity, timestamp]) // severity dropdown + timestamp sort
   @@index([action])
   @@index([category])
-  @@index([severity])
-  @@index([courseId])
-  @@index([assignmentId])
   @@index([problemId])
   @@index([submissionId])
   @@index([courseId, action])
@@ -411,6 +412,20 @@ model SystemSettings {
   maxUploadSizeMb Int    @default(25)
   allowSignup     Boolean @default(true)
   sessionTimeoutMinutes Int @default(20)
+
+  // Login lockout policy (per-account): how many failed attempts before the
+  // account is temporarily locked, and for how long.
+  loginMaxAttempts    Int @default(10)
+  loginLockoutMinutes Int @default(45)
+
+  // Database backups (run by the db-backup container). backupHour is the
+  // server-time (UTC) hour to run the daily dump; retention is days of dumps kept.
+  backupEnabled       Boolean @default(true)
+  backupHour          Int     @default(2)
+  backupRetentionDays Int     @default(14)
+
+  // How long to keep audit-log rows before the pruner deletes them.
+  activityLogRetentionDays Int @default(365)
 
   // Submission queue tunables (time values stored in ms)
   submissionEvalTimeoutMs      Int @default(30000)

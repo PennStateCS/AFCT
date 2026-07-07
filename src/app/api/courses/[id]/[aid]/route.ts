@@ -133,7 +133,6 @@ export async function GET(req: Request, context: { params: Promise<{ id: string;
     const roster = assignment.course.roster || [];
 
     // Remove joined fields to avoid duplication in the response
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { problems: _problems, course, ...assignmentData } = assignment;
 
     // Return structured assignment matching the frontend's expected format
