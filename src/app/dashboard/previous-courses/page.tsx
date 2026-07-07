@@ -51,7 +51,6 @@ export default async function AllCoursesPage() {
                   id: true,
                   firstName: true,
                   lastName: true,
-                  role: true,
                   email: true,
                   avatar: true,
                 },
@@ -77,7 +76,11 @@ export default async function AllCoursesPage() {
 
   return (
     <div className="h-full w-full flex-col lg:flex-row">
-      <DashboardClient sessionUser={session.user} courses={courses} title={'Previous Courses'} />
+      <DashboardClient
+        sessionUser={{ id, role: session.user.isAdmin ? 'ADMIN' : 'STUDENT' }}
+        courses={courses}
+        title={'Previous Courses'}
+      />
     </div>
   );
 }

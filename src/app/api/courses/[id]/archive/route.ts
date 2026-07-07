@@ -3,9 +3,11 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canArchiveCourse } from '@/lib/course-status-checks';
+import { canManageCourse, COURSE_FACULTY_ROLES } from '@/lib/permissions';
 
 /**
- * Toggles a course's archived state. ADMIN/FACULTY only. Archiving runs a safety
+ * Toggles a course's archived state. Course faculty or a system admin (TAs
+ * excluded). Archiving runs a safety
  * check (canArchiveCourse) using the course's stored dates rather than any client
  * value, to avoid timezone drift deciding whether a course has really ended.
  * @openapi
@@ -25,7 +27,7 @@ import { canArchiveCourse } from '@/lib/course-status-checks';
  *   200:
  *     description: The updated course (id, name, code, isArchived, updatedAt).
  *   400: { description: isArchived must be a boolean. }
- *   403: { description: "Not staff, or archiving is blocked by the safety check." }
+ *   403: { description: "Not course faculty or a system admin (TAs excluded), or archiving is blocked by the safety check." }
  *   404: { description: Course not found. }
  *   500: { description: Server error. }
  */
@@ -43,12 +45,12 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     const user = session?.user;
     actorId = user?.id ?? null;
 
-    if (!user || !['ADMIN', 'FACULTY'].includes(user.role)) {
+    if (!user || !(await canManageCourse(user, courseId, COURSE_FACULTY_ROLES))) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'COURSE_ARCHIVE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
@@ -74,7 +76,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
           userId: session?.user?.id ?? null,
           action: 'COURSE_ARCHIVE_DENIED',
           severity: 'SECURITY',
-          metadata: { role: session?.user?.role ?? null },
+          metadata: {},
         });
         return NextResponse.json({ error: reason }, { status: 403 });
       }

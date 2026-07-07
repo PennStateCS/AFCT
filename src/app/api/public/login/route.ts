@@ -36,7 +36,6 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
  *                 email: { type: string }
  *                 firstName: { type: string }
  *                 lastName: { type: string }
- *                 role: { type: string }
  *   400: { description: Email or password missing. }
  *   401: { description: "Invalid credentials, or the account is inactive." }
  *   500: { description: Server error. }
@@ -106,7 +105,6 @@ export async function POST(req: NextRequest) {
       metadata: {
         userId: user.id,
         email: user.email,
-        role: user.role,
       },
     });
 
@@ -117,7 +115,6 @@ export async function POST(req: NextRequest) {
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
-          role: user.role,
         },
       },
       { status: 200 },

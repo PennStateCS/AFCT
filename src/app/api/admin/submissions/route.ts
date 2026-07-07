@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { isAdmin } from '@/lib/permissions';
 
 /**
  * Returns every submission across a set of problems, flattened for the admin
  * grading view — student, course, assignment/problem titles, status, and the
- * recorded grade (joined from AssignmentProblemGrade). Restricted to ADMIN/FACULTY.
+ * recorded grade (joined from AssignmentProblemGrade). System administrators only.
  * Takes the problem ids in the body rather than the query string since the list
  * can be long.
  * @openapi
@@ -28,7 +29,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
  *         schema: { type: array, items: { type: object } }
  *   400: { description: problemIds missing or empty. }
  *   401: { description: Not signed in. }
- *   403: { description: Caller is not an admin or faculty user. }
+ *   403: { description: Caller is not a system administrator. }
  *   500: { description: Server error. }
  */
 export async function POST(req: NextRequest) {
@@ -38,12 +39,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (session.user.role !== 'ADMIN' && session.user.role !== 'FACULTY') {
+    if (!isAdmin(session?.user)) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'ADMIN_SUBMISSIONS_ACCESS_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

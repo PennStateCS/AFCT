@@ -53,7 +53,7 @@ describe('DELETE /api/status/abandoned-files', () => {
   });
 
   it('returns 400 for invalid request', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
 
     const req = new Request('http://localhost/api/status/abandoned-files', {
       method: 'DELETE',
@@ -66,7 +66,7 @@ describe('DELETE /api/status/abandoned-files', () => {
   });
 
   it('returns 409 when file is still referenced', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.problem.findFirst.mockResolvedValue({ id: 'p1' });
 
     const req = new Request('http://localhost/api/status/abandoned-files', {
@@ -80,7 +80,7 @@ describe('DELETE /api/status/abandoned-files', () => {
   });
 
   it('returns 404 when file not found on disk', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.problem.findFirst.mockResolvedValue(null);
     fsExistsSyncMock.mockReturnValue(false);
 
@@ -95,7 +95,7 @@ describe('DELETE /api/status/abandoned-files', () => {
   });
 
   it('deletes file when unreferenced and present', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.problem.findFirst.mockResolvedValue(null);
     fsExistsSyncMock.mockReturnValue(true);
 
@@ -111,7 +111,7 @@ describe('DELETE /api/status/abandoned-files', () => {
   });
 
   it('checks submissions category for references', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.submission.findFirst.mockResolvedValue({ id: 's1' });
 
     const req = new Request('http://localhost/api/status/abandoned-files', {
@@ -128,7 +128,7 @@ describe('DELETE /api/status/abandoned-files', () => {
   });
 
   it('checks pfps category for references', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findFirst.mockResolvedValue({ id: 'u1' });
 
     const req = new Request('http://localhost/api/status/abandoned-files', {
@@ -145,7 +145,7 @@ describe('DELETE /api/status/abandoned-files', () => {
   });
 
   it('deletes unreferenced submission file', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.submission.findFirst.mockResolvedValue(null);
     fsExistsSyncMock.mockReturnValue(true);
 
@@ -161,7 +161,7 @@ describe('DELETE /api/status/abandoned-files', () => {
   });
 
   it('deletes unreferenced pfp file', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findFirst.mockResolvedValue(null);
     fsExistsSyncMock.mockReturnValue(true);
 
@@ -177,7 +177,7 @@ describe('DELETE /api/status/abandoned-files', () => {
   });
 
   it('returns 500 on unexpected errors', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.problem.findFirst.mockRejectedValue(new Error('Database error'));
 
     const req = new Request('http://localhost/api/status/abandoned-files', {

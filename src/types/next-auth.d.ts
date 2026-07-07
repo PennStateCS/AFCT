@@ -1,4 +1,3 @@
-import { Role } from '@prisma/client';
 import type { DefaultSession, DefaultUser } from 'next-auth';
 
 declare module 'next-auth' {
@@ -6,7 +5,7 @@ declare module 'next-auth' {
     user: {
       id: string;
       email: string;
-      role: Role;
+      isAdmin: boolean;
       firstName?: string;
       lastName?: string;
       avatar?: string;
@@ -25,7 +24,7 @@ declare module 'next-auth' {
   interface User extends DefaultUser {
     id: string;
     email: string;
-    role: Role;
+    isAdmin: boolean;
     firstName?: string;
     lastName?: string;
     avatar?: string;
@@ -40,7 +39,7 @@ declare module 'next-auth/jwt' {
   interface JWT {
     id: string;
     email: string;
-    role: Role;
+    isAdmin: boolean;
     firstName?: string;
     lastName?: string;
     avatar?: string;
@@ -58,12 +57,7 @@ declare module 'next-auth/jwt' {
 export type SessionUser = Session['user'];
 
 /** Minimal authenticated identity, often passed in props */
-export type AuthIdentity = Pick<SessionUser, 'id' | 'role' | 'email'>;
-
-/** Utility type for checking role-based access */
-export type AdminOnly = Extract<Role, 'ADMIN'>;
-export type StaffRole = Extract<Role, 'ADMIN' | 'FACULTY' | 'TA'>;
-export type StudentRole = Extract<Role, 'STUDENT'>;
+export type AuthIdentity = Pick<SessionUser, 'id' | 'email'>;
 
 /** Represents request metadata often logged in activity logs */
 export type RequestMetadata = {

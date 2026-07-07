@@ -1,19 +1,14 @@
-import type { Role } from '@prisma/client';
-import { RoleEnum } from '@/schemas/user';
 import { CourseRole } from '@prisma/client';
 import { CourseRoleEnum } from '@/schemas/user';
 import type { Row } from '@tanstack/react-table';
 
-// List of valid roles derived from the Zod enum in one place
-export const roleOptions: Role[] = RoleEnum.options as Role[];
 export const courseRoleOptions: CourseRole[] = CourseRoleEnum.options as CourseRole[];
 
-// Role ordering used for sorting tables
+// Role ordering used for sorting roster tables by course role.
 export const roleOrder: Record<string, number> = {
-  ADMIN: 1,
-  FACULTY: 2,
-  TA: 3,
-  STUDENT: 4,
+  FACULTY: 1,
+  TA: 2,
+  STUDENT: 3,
 };
 
 // SortingFn signature: (rowA, rowB, columnId)
@@ -30,24 +25,6 @@ export function roleSortingFn<T = unknown>(rowA: Row<T>, rowB: Row<T>, columnId:
   if (aLast < bLast) return -1;
   if (aLast > bLast) return 1;
   return 0;
-}
-
-// Parse/validate a raw role value and return a Prisma Role or undefined
-export function parseRole(raw: unknown): Role | undefined {
-  if (typeof raw !== 'string') return undefined;
-  if (roleOptions.includes(raw as Role)) return raw as Role;
-  return undefined;
-}
-
-// Human-friendly formatter for display in UI
-export function formatRole(role?: Role | null): string {
-  if (!role) return '';
-  if (role === 'TA') return 'TA';
-  return role.charAt(0) + role.slice(1).toLowerCase();
-}
-
-export function isValidRole(raw: unknown): raw is Role {
-  return typeof raw === 'string' && roleOptions.includes(raw as Role);
 }
 
 // --- Course roles (per-course role enum) ---

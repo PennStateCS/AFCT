@@ -22,7 +22,6 @@ import {
   Plus,
 } from 'lucide-react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -87,7 +86,6 @@ export default function AssignmentDashboardPage({
       assignmentSelect: initialAssignment?.id || '',
     },
   });
-  const { data: session } = useSession();
   const { timezone } = useEffectiveTimezone();
   const { id, aid } = useParams<{ id: string; aid: string }>();
   const epsSymbol = useEmptyStringSymbol(id);
@@ -117,7 +115,9 @@ export default function AssignmentDashboardPage({
   const [descOpen, setDescOpen] = useState(false);
   const [descText, setDescText] = useState<string | null>(null);
   const courseIsArchived = assignment?.course?.isArchived ?? false;
-  const canManageProblems = ['ADMIN', 'FACULTY', 'TA'].includes(session?.user?.role ?? '');
+  // This privileged view is only rendered for course staff (admin or the course's
+  // FACULTY/TA), so anyone who reaches it may manage problems.
+  const canManageProblems = true;
 
   // JFLAP viewer dialog state
   const [viewerOpen, setViewerOpen] = useState(false);

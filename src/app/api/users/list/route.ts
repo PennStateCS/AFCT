@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { getUsersList } from '@/lib/users-list';
+import { isAdmin } from '@/lib/permissions';
 
 /**
  * Lightweight user list used to refresh the users table without the audit-logging
@@ -22,7 +23,7 @@ import { getUsersList } from '@/lib/users-list';
 export async function GET(req: Request) {
   try {
     const session = await auth();
-    if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+    if (!isAdmin(session?.user)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 

@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
 /**
- * Lists a group's members (with user profiles) by the group's global id. Staff
- * only (ADMIN/FACULTY/TA).
+ * Lists a group's members (with user profiles) by the group's global id. Course
+ * staff (faculty or TAs) or a system admin.
  * @openapi
  * summary: List group members by group id
  * parameters:
@@ -18,7 +19,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
  *         schema: { type: object, properties: { members: { type: array, items: { type: object } } } }
  *   400: { description: Missing group id. }
  *   401: { description: Not signed in. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Not course staff or a system admin. }
  *   404: { description: Group not found. }
  *   500: { description: Server error. }
  */
@@ -32,21 +33,22 @@ export async function GET(
 
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
-    await createEnhancedActivityLog(prisma, req, {
-      userId: session?.user?.id ?? null,
-      action: 'GROUP_MEMBERS_VIEW_DENIED',
-      severity: 'SECURITY',
-      metadata: { role: session?.user?.role ?? null },
-    });
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
 
   try {
     const group = await prisma.group.findUnique({ where: { id: groupId } });
     if (!group) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
     if (providedCourseId && group.courseId !== providedCourseId)
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+
+    if (!(await canManageCourse(session.user, group.courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'GROUP_MEMBERS_VIEW_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const members = await prisma.groupRoster.findMany({
       where: { groupId },
@@ -75,9 +77,9 @@ export async function GET(
 }
 
 /**
- * Adds a member to a group by the group's global id. Staff only. Accepts either a
- * `userId` or an `email` to identify the user, who must be enrolled in the group's
- * course and not already a member.
+ * Adds a member to a group by the group's global id. Course staff (faculty or TAs)
+ * or a system admin. Accepts either a `userId` or an `email` to identify the user,
+ * who must be enrolled in the group's course and not already a member.
  * @openapi
  * summary: Add a group member by group id
  * parameters:
@@ -94,7 +96,7 @@ export async function GET(
  * responses:
  *   201: { description: Member added. }
  *   401: { description: Not signed in. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Not course staff or a system admin. }
  *   404: { description: Group or user not found. }
  *   409: { description: User is already in the group. }
  *   422: { description: User is not enrolled in the course. }
@@ -110,15 +112,6 @@ export async function POST(
 
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
-    await createEnhancedActivityLog(prisma, req, {
-      userId: session?.user?.id ?? null,
-      action: 'GROUP_MEMBER_ADD_DENIED',
-      severity: 'SECURITY',
-      metadata: { role: session?.user?.role ?? null },
-    });
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
 
   try {
     const group = await prisma.group.findUnique({ where: { id: groupId } });
@@ -126,6 +119,16 @@ export async function POST(
     if (providedCourseId && group.courseId !== providedCourseId)
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
     const courseId = group.courseId;
+
+    if (!(await canManageCourse(session.user, courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'GROUP_MEMBER_ADD_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const body = await req.json().catch(() => ({}));
     const userId = body?.userId ?? null;

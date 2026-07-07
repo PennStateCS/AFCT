@@ -53,8 +53,8 @@ describe('POST /api/admin/submissions', () => {
     expect(res.status).toBe(401);
   });
 
-  it('returns 403 when the user is not admin or faculty', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+  it('returns 403 when the user is not admin', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
 
     const res = await POST(makeRequest({ problemIds: ['p1'] }));
 
@@ -62,7 +62,7 @@ describe('POST /api/admin/submissions', () => {
   });
 
   it('returns 400 when problemIds are missing', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
 
     const res = await POST(makeRequest({}));
 
@@ -71,7 +71,7 @@ describe('POST /api/admin/submissions', () => {
   });
 
   it('returns formatted submissions with merged grades', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'FACULTY' } });
+    authMock.mockResolvedValue({ user: { id: 'admin-1', isAdmin: true } });
     prismaMock.submission.findMany.mockResolvedValue([submissionRow]);
     prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([
       { studentId: 'u1', assignmentId: 'a1', problemId: 'p1', grade: 8 },
@@ -99,7 +99,7 @@ describe('POST /api/admin/submissions', () => {
   });
 
   it('defaults grade to null when no grade row exists', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin-1', isAdmin: true } });
     prismaMock.submission.findMany.mockResolvedValue([submissionRow]);
     prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
 
@@ -111,7 +111,7 @@ describe('POST /api/admin/submissions', () => {
   });
 
   it('returns 500 when the query fails', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin-1', isAdmin: true } });
     prismaMock.submission.findMany.mockRejectedValue(new Error('db down'));
 
     const res = await POST(makeRequest({ problemIds: ['p1'] }));

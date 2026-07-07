@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { isAdmin } from '@/lib/permissions';
 import type { Prisma } from '@prisma/client';
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -47,13 +48,13 @@ function displayName(u: {
  *             page: { type: integer }
  *             pageSize: { type: integer }
  *             totalPages: { type: integer }
- *   403: { description: Caller is not an admin or faculty user. }
+ *   403: { description: Caller is not a system administrator. }
  *   500: { description: Query failed. }
  */
 export async function GET(req: Request) {
   try {
     const session = await auth();
-    if (!session || !['ADMIN', 'FACULTY'].includes(session.user.role)) {
+    if (!isAdmin(session?.user)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 

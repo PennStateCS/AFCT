@@ -2,10 +2,12 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canAccessCourse, canManageCourse } from '@/lib/permissions';
 
 /**
  * Returns each course group alongside the problem ids mapped to it for this
- * assignment (the group→problem assignment matrix). Requires a signed-in user.
+ * assignment (the group→problem assignment matrix). Any enrolled member of the
+ * course (any role) or a system admin.
  * @openapi
  * summary: Get group→problem mappings for an assignment
  * parameters:
@@ -21,7 +23,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
  *           properties:
  *             success: { type: boolean }
  *             groups: { type: array, items: { type: object } }
- *   403: { description: Not signed in. }
+ *   403: { description: Not an enrolled member of the course and not a system admin. }
  *   500: { description: Server error. }
  */
 export async function GET(_: Request, { params }: { params: Promise<{ id: string; aid: string }> }) {
@@ -30,12 +32,12 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   try {
     const session = await auth();
     const user = session?.user;
-    if (!user) {
+    if (!user || !(await canAccessCourse(user, courseId))) {
       await createEnhancedActivityLog(prisma, _ as Request, {
         userId: session?.user?.id ?? null,
         action: 'GROUP_PROBLEMS_ACCESS_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
@@ -78,8 +80,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 
 /**
  * Same group→problem mapping data as GET, exposed over POST so clients can request
- * it without a GET's AbortController plumbing. Requires `{ action: 'list' }` and a
- * signed-in user.
+ * it without a GET's AbortController plumbing. Requires `{ action: 'list' }`. Any
+ * enrolled member of the course (any role) or a system admin.
  * @openapi
  * summary: Get group→problem mappings (via POST)
  * parameters:
@@ -93,7 +95,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
  * responses:
  *   200: { description: Groups with their mapped problemIds. }
  *   400: { description: Unsupported action. }
- *   403: { description: Not signed in. }
+ *   403: { description: Not an enrolled member of the course and not a system admin. }
  *   500: { description: Server error. }
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string; aid: string }> }) {
@@ -102,12 +104,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   try {
     const session = await auth();
     const user = session?.user;
-    if (!user) {
+    if (!user || !(await canAccessCourse(user, courseId))) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'GROUP_PROBLEMS_ACCESS_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
@@ -157,8 +159,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 }
 
 /**
- * Removes group→problem mappings for an assignment. Staff only (ADMIN/FACULTY/TA).
- * A `groupId` is required — pass a specific group id, or "ALL" to clear the given
+ * Removes group→problem mappings for an assignment. Course staff (faculty or TAs) or
+ * a system admin. A `groupId` is required — pass a specific group id, or "ALL" to clear the given
  * problems from every group. The problems themselves stay on the assignment.
  * @openapi
  * summary: Remove group→problem mappings
@@ -178,7 +180,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
  * responses:
  *   200: { description: Mappings removed. }
  *   400: { description: "Empty body, no problemIds, invalid group, or missing groupId." }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Caller is not course staff (faculty or TA) or a system admin. }
  *   500: { description: Server error. }
  */
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string; aid: string }> }) {
@@ -187,12 +189,12 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   try {
     const session = await auth();
     const user = session?.user;
-    if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    if (!user || !(await canManageCourse(user, courseId))) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'GROUP_PROBLEMS_REMOVE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }

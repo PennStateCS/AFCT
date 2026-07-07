@@ -9,6 +9,7 @@ const prismaMock = vi.hoisted(() => ({
   submission: { findUnique: vi.fn(), update: vi.fn() },
   assignment: { findUnique: vi.fn() },
   assignmentProblem: { findUnique: vi.fn() },
+  roster: { findFirst: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -25,6 +26,7 @@ const makeRequest = () =>
 
 const submissionRecord = {
   id: 's1',
+  courseId: 'c1',
   assignmentId: 'a1',
   problemId: 'p1',
   studentId: 'u2',
@@ -34,6 +36,7 @@ const submissionRecord = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  prismaMock.roster.findFirst.mockResolvedValue(null);
 });
 
 describe('POST /api/submissions/[id]/rerun', () => {
@@ -48,6 +51,7 @@ describe('POST /api/submissions/[id]/rerun', () => {
 
   it('returns 403 when the user role is not allowed', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.submission.findUnique.mockResolvedValue(submissionRecord);
 
     const res = await POST(makeRequest(), { params: Promise.resolve({ id: 's1' }) });
 
@@ -56,7 +60,7 @@ describe('POST /api/submissions/[id]/rerun', () => {
   });
 
   it('returns 404 when the submission does not exist', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.submission.findUnique.mockResolvedValue(null);
 
     const res = await POST(makeRequest(), { params: Promise.resolve({ id: 's1' }) });
@@ -65,7 +69,7 @@ describe('POST /api/submissions/[id]/rerun', () => {
   });
 
   it('returns 400 when the submission has no file', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.submission.findUnique.mockResolvedValue({ ...submissionRecord, fileName: null });
 
     const res = await POST(makeRequest(), { params: Promise.resolve({ id: 's1' }) });
@@ -76,6 +80,7 @@ describe('POST /api/submissions/[id]/rerun', () => {
 
   it('returns 400 when the problem is not linked to the assignment', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.submission.findUnique.mockResolvedValue(submissionRecord);
     prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
     prismaMock.assignmentProblem.findUnique.mockResolvedValue(null);
@@ -87,7 +92,7 @@ describe('POST /api/submissions/[id]/rerun', () => {
   });
 
   it('queues the submission and returns 202', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.submission.findUnique.mockResolvedValue(submissionRecord);
     prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
     prismaMock.assignmentProblem.findUnique.mockResolvedValue({
@@ -124,7 +129,7 @@ describe('POST /api/submissions/[id]/rerun', () => {
   });
 
   it('returns 500 when resetting the submission fails', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.submission.findUnique.mockResolvedValue(submissionRecord);
     prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
     prismaMock.assignmentProblem.findUnique.mockResolvedValue({

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 import { z } from 'zod';
 
 // Types
@@ -33,7 +34,7 @@ type ProblemSettingsInput = z.infer<typeof ProblemSettingsSchema>;
 
 /**
  * Attaches problems to an assignment with per-problem settings (points, submission
- * cap, autograder). Staff only (ADMIN/FACULTY/TA). Adds only problems not already
+ * cap, autograder). Course staff (faculty or TAs) or a system admin. Adds only problems not already
  * linked — existing links, especially those with submissions, are preserved and
  * reported back. For group assignments, an optional `groupId` (or "ALL") maps the
  * given problems to specific groups, even ones already on the assignment. Only
@@ -65,7 +66,7 @@ type ProblemSettingsInput = z.infer<typeof ProblemSettingsSchema>;
  * responses:
  *   200: { description: The assignment's problem list plus a summary of what changed. }
  *   400: { description: Empty/invalid body or invalid problemSettings. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Caller is not course staff (faculty or TA) or a system admin. }
  *   500: { description: Server error. }
  */
 export async function POST(
@@ -79,12 +80,12 @@ export async function POST(
     const session = await auth();
     const user = session?.user;
 
-    if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    if (!user || !(await canManageCourse(user, courseId))) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'ASSIGNMENT_ADD_PROBLEMS_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }

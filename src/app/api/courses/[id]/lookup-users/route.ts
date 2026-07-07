@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
       where: {
         OR: emails.map((e: string) => ({ email: { equals: e, mode: 'insensitive' } })),
       },
-      select: { id: true, firstName: true, lastName: true, email: true, role: true },
+      select: { id: true, firstName: true, lastName: true, email: true },
     });
 
     const foundEmails = new Set(users.map((u: (typeof users)[number]) => u.email.toLowerCase()));

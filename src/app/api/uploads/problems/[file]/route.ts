@@ -5,10 +5,11 @@ import stream from 'stream';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canAccessCourse } from '@/lib/permissions';
 
 /**
- * Serves a problem's attached file, inline. Staff (ADMIN/FACULTY/TA) may fetch any;
- * other users must be enrolled in the problem's course. The download is audited, and
+ * Serves a problem's attached file, inline. Any enrolled member of the problem's
+ * course (any role) or a system admin may fetch it. The download is audited, and
  * traversal filenames are rejected.
  * @openapi
  * summary: Get a problem file
@@ -22,7 +23,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
  *         schema: { type: string, format: binary }
  *   400: { description: Invalid filename. }
  *   401: { description: Not signed in. }
- *   403: { description: Not enrolled in the problem's course (and not staff). }
+ *   403: { description: Not an enrolled member of the problem's course or a system admin. }
  *   404: { description: File not found. }
  *   500: { description: Server error. }
  */
@@ -47,22 +48,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
 
-    const role = session.user.role;
-    let allowed = false;
-    if (['ADMIN', 'FACULTY', 'TA'].includes(role)) allowed = true;
-    else {
-      const roster = await prisma.roster.findFirst({
-        where: { courseId: problem.courseId, userId: session.user.id },
-      });
-      if (roster) allowed = true;
-    }
+    // Any member of the problem's course (student, TA, faculty) may fetch it, as
+    // may a global admin. canAccessCourse covers roster membership + admin.
+    const allowed = await canAccessCourse(session.user, problem.courseId);
 
     if (!allowed) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'PROBLEM_FILE_DOWNLOAD_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

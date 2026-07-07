@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const prismaMock = vi.hoisted(() => ({
   roster: {
     findMany: vi.fn(),
+    findFirst: vi.fn(),
   },
 }));
 
@@ -15,6 +16,8 @@ import { GET } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Default: caller not enrolled (denied); authorized tests grant a course role.
+  prismaMock.roster.findFirst.mockResolvedValue(null);
 });
 
 describe('GET /api/courses/[id]/students', () => {
@@ -29,7 +32,7 @@ describe('GET /api/courses/[id]/students', () => {
   });
 
   it('returns only students', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.roster.findMany.mockResolvedValue([
       {
         role: 'STUDENT',

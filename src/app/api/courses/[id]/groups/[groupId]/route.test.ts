@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 
 const prismaMock = vi.hoisted(() => ({
   group: { findUnique: vi.fn(), update: vi.fn(), delete: vi.fn() },
+  roster: { findFirst: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -14,7 +15,10 @@ vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activity
 
 import { OPTIONS, PATCH, DELETE } from './route';
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  prismaMock.roster.findFirst.mockResolvedValue(null);
+});
 
 describe('OPTIONS /api/courses/[id]/groups/[groupId]', () => {
   it('returns 204 for preflight', async () => {
@@ -52,6 +56,7 @@ describe('PATCH /api/courses/[id]/groups/[groupId]', () => {
 
   it('returns 400 when missing params', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
 
     const res = await PATCH(new NextRequest('http://localhost/api/courses//groups//'), {
       params: { id: '', groupId: '' },
@@ -61,6 +66,7 @@ describe('PATCH /api/courses/[id]/groups/[groupId]', () => {
 
   it('returns 422 when name missing', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
 
     const res = await PATCH(
       new NextRequest('http://localhost/api/courses/c1/groups/g1', {
@@ -74,6 +80,7 @@ describe('PATCH /api/courses/[id]/groups/[groupId]', () => {
 
   it('updates group and logs', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.group.findUnique.mockResolvedValue({ id: 'g1', courseId: 'c1' });
     prismaMock.group.findUnique.mockResolvedValueOnce({ id: 'g1', courseId: 'c1' });
     prismaMock.group.findUnique.mockResolvedValueOnce(null);
@@ -94,6 +101,7 @@ describe('PATCH /api/courses/[id]/groups/[groupId]', () => {
 
   it('returns 404 when group does not belong to course', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.group.findUnique.mockResolvedValue({ id: 'g1', courseId: 'other' });
 
     const res = await PATCH(
@@ -108,6 +116,7 @@ describe('PATCH /api/courses/[id]/groups/[groupId]', () => {
 
   it('returns 409 when group name already exists in course', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.group.findUnique.mockResolvedValueOnce({ id: 'g1', courseId: 'c1' });
     prismaMock.group.findUnique.mockResolvedValueOnce({ id: 'g2', courseId: 'c1', name: 'New' });
 
@@ -123,6 +132,7 @@ describe('PATCH /api/courses/[id]/groups/[groupId]', () => {
 
   it('returns 500 when update fails unexpectedly', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.group.findUnique.mockResolvedValueOnce({ id: 'g1', courseId: 'c1' });
     prismaMock.group.findUnique.mockResolvedValueOnce(null);
     prismaMock.group.update.mockRejectedValue(new Error('update failed'));
@@ -141,6 +151,7 @@ describe('PATCH /api/courses/[id]/groups/[groupId]', () => {
 describe('DELETE /api/courses/[id]/groups/[groupId]', () => {
   it('returns 400 when missing params', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
 
     const res = await DELETE(new NextRequest('http://localhost/api/courses//groups//'), {
       params: { id: '', groupId: '' },
@@ -168,6 +179,7 @@ describe('DELETE /api/courses/[id]/groups/[groupId]', () => {
 
   it('deletes group and logs', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.group.findUnique.mockResolvedValue({ id: 'g1', courseId: 'c1' });
     prismaMock.group.delete.mockResolvedValue({ id: 'g1' });
 
@@ -182,6 +194,7 @@ describe('DELETE /api/courses/[id]/groups/[groupId]', () => {
 
   it('returns 404 when group does not belong to course', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.group.findUnique.mockResolvedValue({ id: 'g1', courseId: 'other' });
 
     const res = await DELETE(new NextRequest('http://localhost/api/courses/c1/groups/g1'), {
@@ -192,6 +205,7 @@ describe('DELETE /api/courses/[id]/groups/[groupId]', () => {
 
   it('returns 500 when delete throws', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.group.findUnique.mockResolvedValue({ id: 'g1', courseId: 'c1' });
     prismaMock.group.delete.mockRejectedValue(new Error('delete failed'));
 

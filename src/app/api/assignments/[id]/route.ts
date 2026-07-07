@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canAccessCourse, canManageCourse } from '@/lib/permissions';
 import { toDateTimeInTimezone, toEndOfDayInTimezone } from '@/lib/date-utils';
 
 async function resolveUserTimezone(userId?: string | null) {
@@ -118,37 +119,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 
-    // Check permissions - students can only see published assignments in courses they're enrolled in
-    if (session.user.role === 'STUDENT') {
-      // Check if assignment is published
-      if (!assignment.isPublished) {
-        return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
-      }
-
-      // Check if student is enrolled in the course
-      const enrollment = await prisma.roster.findFirst({
-        where: {
-          courseId: assignment.courseId,
-          userId: session.user.id,
-          role: 'STUDENT', // Use CourseRole enum value
-        },
-      });
-
-      if (!enrollment) {
-        return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
-      }
-    }
-    // For non-students (FACULTY/TA), check if they have access to the course
-    else if (!['ADMIN'].includes(session.user.role)) {
-      const hasAccess = await prisma.roster.findFirst({
-        where: {
-          courseId: assignment.courseId,
-          userId: session.user.id,
-          role: { in: ['FACULTY', 'TA'] },
-        },
-      });
-
-      if (!hasAccess && session.user.role !== 'ADMIN') {
+    // Staff/admin see anything; otherwise the assignment must be published AND the
+    // caller enrolled in the course. Everything else is masked as 404.
+    if (!(await canManageCourse(session.user, assignment.courseId))) {
+      if (!assignment.isPublished || !(await canAccessCourse(session.user, assignment.courseId))) {
         return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
       }
     }
@@ -169,7 +143,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 /**
- * Full update of an assignment. Staff only (ADMIN/FACULTY/TA). Guards protect data
+ * Full update of an assignment. Course staff (faculty or TAs) or a system admin.
+ * Guards protect data
  * integrity: an assignment can't be unpublished once it has submissions or grades,
  * and its group mode can't change after any submission exists. Late-submission
  * rules are validated the same way as on create.
@@ -194,7 +169,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
  * responses:
  *   200: { description: The updated assignment. }
  *   400: { description: Inconsistent late-submission window. }
- *   403: { description: "Not staff, or a state guard blocked the change." }
+ *   401: { description: Not signed in. }
+ *   403: { description: "Not course staff or a system admin, or a state guard blocked the change." }
  *   404: { description: Assignment not found. }
  *   500: { description: Server error. }
  */
@@ -203,12 +179,23 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const session = await auth();
 
-  if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const assignmentForAuth = await prisma.assignment.findUnique({
+    where: { id },
+    select: { courseId: true },
+  });
+  if (!assignmentForAuth) {
+    return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+  }
+  if (!(await canManageCourse(session.user, assignmentForAuth.courseId))) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session?.user?.id ?? null,
       action: 'ASSIGNMENT_UPDATE_DENIED',
       severity: 'SECURITY',
-      metadata: { role: session?.user?.role ?? null },
+      metadata: {},
     });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
@@ -234,7 +221,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         userId: session?.user?.id ?? null,
         action: 'ASSIGNMENT_UPDATE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json(
         { error: 'Assignment must not have any submissions' },
@@ -247,7 +234,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         userId: session?.user?.id ?? null,
         action: 'ASSIGNMENT_UPDATE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Assignment must not have any grades' }, { status: 403 });
     }
@@ -268,7 +255,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         userId: session?.user?.id ?? null,
         action: 'ASSIGNMENT_UPDATE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json(
         { error: 'Cannot change assignment group mode after submissions exist' },
@@ -350,8 +337,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
 /**
  * Partial update of an assignment — only the fields present in the body are
- * changed. Staff only (ADMIN/FACULTY/TA), with the same unpublish/group-mode guards
- * and late-window validation as the full update.
+ * changed. Course staff (faculty or TAs) or a system admin, with the same
+ * unpublish/group-mode guards and late-window validation as the full update.
  * @openapi
  * summary: Update an assignment (partial)
  * parameters:
@@ -373,7 +360,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
  * responses:
  *   200: { description: The updated assignment. }
  *   400: { description: Inconsistent late-submission window. }
- *   403: { description: "Not staff, or a state guard blocked the change." }
+ *   401: { description: Not signed in. }
+ *   403: { description: "Not course staff or a system admin, or a state guard blocked the change." }
  *   404: { description: Assignment not found. }
  *   500: { description: Server error. }
  */
@@ -382,12 +370,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const session = await auth();
 
-  if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const assignmentForAuth = await prisma.assignment.findUnique({
+    where: { id },
+    select: { courseId: true },
+  });
+  if (!assignmentForAuth) {
+    return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+  }
+  if (!(await canManageCourse(session.user, assignmentForAuth.courseId))) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session?.user?.id ?? null,
       action: 'ASSIGNMENT_UPDATE_DENIED',
       severity: 'SECURITY',
-      metadata: { role: session?.user?.role ?? null },
+      metadata: {},
     });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
@@ -413,7 +412,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         userId: session?.user?.id ?? null,
         action: 'ASSIGNMENT_UPDATE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json(
         { error: 'Assignment must not have any submissions' },
@@ -426,7 +425,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         userId: session?.user?.id ?? null,
         action: 'ASSIGNMENT_UPDATE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Assignment must not have any grades' }, { status: 403 });
     }
@@ -440,7 +439,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         userId: session?.user?.id ?? null,
         action: 'ASSIGNMENT_UPDATE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json(
         { error: 'Cannot change assignment group mode after submissions exist' },
@@ -540,7 +539,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 /**
- * Creates an assignment. Staff only (ADMIN/FACULTY/TA). Note: this handler ignores
+ * Creates an assignment. Course staff (faculty or TAs) or a system admin, checked
+ * against the body's courseId. Note: this handler ignores
  * the `[id]` path segment and takes the course from the body — it mirrors
  * POST /api/assignments and exists for clients that post to this path. (One
  * difference: late submissions default to on here.)
@@ -567,20 +567,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
  * responses:
  *   201: { description: The created assignment. }
  *   400: { description: "Missing fields, or an inconsistent late-submission window." }
- *   403: { description: Caller lacks a staff role. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Not course staff or a system admin. }
  *   500: { description: Server error. }
  */
 export async function POST(req: NextRequest) {
   const session = await auth();
 
-  if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
-    await createEnhancedActivityLog(prisma, req, {
-      userId: session?.user?.id ?? null,
-      action: 'ASSIGNMENT_CREATE_DENIED',
-      severity: 'SECURITY',
-      metadata: { role: session?.user?.role ?? null },
-    });
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
@@ -589,6 +584,16 @@ export async function POST(req: NextRequest) {
 
     if (!data.title || !data.courseId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    if (!(await canManageCourse(session.user, data.courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'ASSIGNMENT_CREATE_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     const allowLateSubmissions =
@@ -665,8 +670,8 @@ export async function POST(req: NextRequest) {
 
 /**
  * Deletes an assignment, but only when it's safe: no submissions and no comments.
- * Its problem links are cleared first, then the assignment is removed. Staff only
- * (ADMIN/FACULTY/TA).
+ * Its problem links are cleared first, then the assignment is removed. Course staff
+ * (faculty or TAs) or a system admin.
  * @openapi
  * summary: Delete an assignment
  * parameters:
@@ -674,7 +679,8 @@ export async function POST(req: NextRequest) {
  * responses:
  *   200: { description: Assignment deleted. }
  *   400: { description: Submissions or comments exist. }
- *   403: { description: Caller lacks a staff role. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Not course staff or a system admin. }
  *   404: { description: Assignment not found. }
  *   500: { description: Server error. }
  */
@@ -683,12 +689,23 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   const session = await auth();
 
-  if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const assignmentForAuth = await prisma.assignment.findUnique({
+    where: { id },
+    select: { courseId: true },
+  });
+  if (!assignmentForAuth) {
+    return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+  }
+  if (!(await canManageCourse(session.user, assignmentForAuth.courseId))) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session?.user?.id ?? null,
       action: 'ASSIGNMENT_DELETE_DENIED',
       severity: 'SECURITY',
-      metadata: { role: session?.user?.role ?? null },
+      metadata: {},
     });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }

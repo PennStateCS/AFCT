@@ -69,13 +69,13 @@ export const maybeBootstrapAdmin = async (
 
   await prisma.user.upsert({
     where: { email: adminEmail },
-    update: { role: 'ADMIN' },
+    update: { isAdmin: true },
     create: {
       email: adminEmail,
       firstName: adminFirstName,
       lastName: adminLastName,
       password: hashedPassword,
-      role: 'ADMIN',
+      isAdmin: true,
     },
   });
 
@@ -117,7 +117,7 @@ export const assignCourseRosters = async (
   for (const course of courses) {
     const instructor = pickRandom(facultyUsers);
     if (instructor) {
-      await upsertRoster(prisma, course.id, instructor.id, 'INSTRUCTOR' as CourseRole);
+      await upsertRoster(prisma, course.id, instructor.id, 'FACULTY' as CourseRole);
     }
 
     if (course.assignTa && taUsers.length > 0) {
@@ -201,10 +201,11 @@ export const getTermSequence = (currentTerm: Term, currentYear: number) => {
  */
 export const logSeedCounts = async (prisma: PrismaClient) => {
   const userCount = await prisma.user.count();
-  const adminCount = await prisma.user.count({ where: { role: 'ADMIN' } });
-  const facultyCount = await prisma.user.count({ where: { role: 'FACULTY' } });
-  const taCount = await prisma.user.count({ where: { role: 'TA' } });
-  const studentCount = await prisma.user.count({ where: { role: 'STUDENT' } });
+  const adminCount = await prisma.user.count({ where: { isAdmin: true } });
+  // Faculty/TA/student are now per-course roles, so count roster rows by role.
+  const facultyCount = await prisma.roster.count({ where: { role: 'FACULTY' } });
+  const taCount = await prisma.roster.count({ where: { role: 'TA' } });
+  const studentCount = await prisma.roster.count({ where: { role: 'STUDENT' } });
   const courseCount = await prisma.course.count();
   const problemCount = await prisma.problem.count();
   const assignmentCount = await prisma.assignment.count();

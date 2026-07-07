@@ -2,11 +2,12 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
 /**
  * Per-student completion summary for one assignment: maps each student to whether
  * every problem in the assignment has been graded (used to flag fully-graded
- * students in the grading UI). Staff only (ADMIN/FACULTY/TA).
+ * students in the grading UI). Course staff (faculty or TAs) or a system admin.
  * @openapi
  * summary: Get an assignment's grading-completion summary
  * parameters:
@@ -19,7 +20,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
  *       application/json:
  *         schema: { type: object, additionalProperties: { type: boolean } }
  *   401: { description: Not signed in. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Caller is not course staff (faculty or TA) or a system admin. }
  *   404: { description: Assignment not found in this course. }
  *   500: { description: Server error. }
  */
@@ -34,13 +35,12 @@ export async function GET(
     }
 
     const { id: courseId, aid: assignmentId } = await params;
-    const isStaff = ['ADMIN', 'FACULTY', 'TA'].includes(session.user.role);
-    if (!isStaff) {
+    if (!(await canManageCourse(session.user, courseId))) {
       await createEnhancedActivityLog(prisma, _req, {
         userId: session?.user?.id ?? null,
         action: 'PROBLEM_GRADES_SUMMARY_ACCESS_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

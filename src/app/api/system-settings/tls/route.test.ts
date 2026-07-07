@@ -20,7 +20,7 @@ vi.mock('@/lib/tls-cert', () => ({ ...tls, CertValidationError }));
 
 import { GET, POST, DELETE } from './route';
 
-const admin = { user: { id: 'a1', role: 'ADMIN' } };
+const admin = { user: { id: 'a1', role: 'ADMIN', isAdmin: true } };
 
 const post = (body: unknown) =>
   new Request('http://localhost/api/system-settings/tls', {

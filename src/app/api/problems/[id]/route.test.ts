@@ -7,6 +7,9 @@ const prismaMock = vi.hoisted(() => ({
     update: vi.fn(),
     delete: vi.fn(),
   },
+  roster: {
+    findFirst: vi.fn(),
+  },
   assignmentProblem: {
     findFirst: vi.fn(),
   },
@@ -51,6 +54,7 @@ import { PUT, DELETE } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  prismaMock.roster.findFirst.mockResolvedValue(null);
   uploadLimitMock.mockResolvedValue({ maxBytes: 5 * 1024 * 1024, maxMb: 5 });
 });
 
@@ -96,7 +100,8 @@ describe('PUT /api/problems/[id]', () => {
 
   it('returns 400 when required fields missing', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', role: 'FACULTY' } });
-    prismaMock.problem.findUnique.mockResolvedValue({ id: 'problem-1' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.problem.findUnique.mockResolvedValue({ id: 'problem-1', courseId: 'course-1' });
 
     const formData = new FormData();
     formData.set('description', 'Desc');
@@ -115,8 +120,10 @@ describe('PUT /api/problems/[id]', () => {
 
   it('updates a problem and logs activity', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.problem.findUnique.mockResolvedValue({
       id: 'problem-1',
+      courseId: 'course-1',
       fileName: 'file-1',
       originalFileName: 'orig.jff',
     });
@@ -156,8 +163,10 @@ describe('PUT /api/problems/[id]', () => {
 
   it('returns 413 when uploaded file exceeds configured limit', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.problem.findUnique.mockResolvedValue({
       id: 'problem-1',
+      courseId: 'course-1',
       fileName: 'file-1',
       originalFileName: 'orig.jff',
     });
@@ -183,8 +192,10 @@ describe('PUT /api/problems/[id]', () => {
 
   it('updates file and continues when old file deletion fails', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.problem.findUnique.mockResolvedValue({
       id: 'problem-1',
+      courseId: 'course-1',
       fileName: 'old-file.jff',
       originalFileName: 'old-file.jff',
     });
@@ -235,7 +246,8 @@ describe('PUT /api/problems/[id]', () => {
 
   it('returns 500 when problem update throws', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', role: 'FACULTY' } });
-    prismaMock.problem.findUnique.mockResolvedValue({ id: 'problem-1', fileName: null });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.problem.findUnique.mockResolvedValue({ id: 'problem-1', courseId: 'course-1', fileName: null });
     prismaMock.problem.update.mockRejectedValue(new Error('db failed'));
 
     const formData = new FormData();
@@ -281,6 +293,7 @@ describe('DELETE /api/problems/[id]', () => {
 
   it('returns 400 when problem is linked to an assignment', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.problem.findUnique.mockResolvedValue({ id: 'problem-1', courseId: 'course-1' });
     prismaMock.assignmentProblem.findFirst.mockResolvedValue({ id: 'link-1' });
 
@@ -294,6 +307,7 @@ describe('DELETE /api/problems/[id]', () => {
 
   it('deletes a problem and logs activity', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.problem.findUnique.mockResolvedValue({
       id: 'problem-1',
       courseId: 'course-1',
@@ -316,6 +330,7 @@ describe('DELETE /api/problems/[id]', () => {
 
   it('continues deleting when problem file unlink fails', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.problem.findUnique.mockResolvedValue({
       id: 'problem-1',
       courseId: 'course-1',

@@ -28,27 +28,27 @@ describe('POST /api/logs/getData', () => {
   });
 
   it('returns 400 for invalid JSON', async () => {
-    authMock.mockResolvedValue({ user: { id: 'a1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'a1', role: 'ADMIN', isAdmin: true } });
     const res = await POST(post('not-json', true));
     expect(res.status).toBe(400);
   });
 
   it('returns 400 when the schema rejects the body (no fields chosen)', async () => {
-    authMock.mockResolvedValue({ user: { id: 'a1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'a1', role: 'ADMIN', isAdmin: true } });
     const res = await POST(post({ cols: [], begTime: '', endTime: '' }));
     expect(res.status).toBe(400);
     expect(prismaMock.activityLog.findMany).not.toHaveBeenCalled();
   });
 
   it('returns 400 when no requested field is exportable', async () => {
-    authMock.mockResolvedValue({ user: { id: 'a1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'a1', role: 'ADMIN', isAdmin: true } });
     const res = await POST(post({ cols: ['evil', '__proto__'], begTime: '', endTime: '' }));
     expect(res.status).toBe(400);
     expect(prismaMock.activityLog.findMany).not.toHaveBeenCalled();
   });
 
   it('selects only exportable columns and applies the time range', async () => {
-    authMock.mockResolvedValue({ user: { id: 'a1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'a1', role: 'ADMIN', isAdmin: true } });
     prismaMock.activityLog.findMany.mockResolvedValue([{ id: 'log1', action: 'A' }]);
 
     const res = await POST(
@@ -71,7 +71,7 @@ describe('POST /api/logs/getData', () => {
   });
 
   it('omits the time filter when the bounds are unparseable', async () => {
-    authMock.mockResolvedValue({ user: { id: 'a1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'a1', role: 'ADMIN', isAdmin: true } });
     prismaMock.activityLog.findMany.mockResolvedValue([]);
 
     await POST(post({ cols: ['id'], begTime: 'nonsense', endTime: 'nonsense' }));
@@ -81,7 +81,7 @@ describe('POST /api/logs/getData', () => {
   });
 
   it('returns 500 when the query fails', async () => {
-    authMock.mockResolvedValue({ user: { id: 'a1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'a1', role: 'ADMIN', isAdmin: true } });
     prismaMock.activityLog.findMany.mockRejectedValue(new Error('db down'));
 
     const res = await POST(post({ cols: ['id'], begTime: '', endTime: '' }));

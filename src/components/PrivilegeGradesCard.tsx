@@ -50,7 +50,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const inFlightRef = useRef(false);
   const lastFetchAtRef = useRef(0);
-  const canExport = !!session?.user && ['ADMIN', 'FACULTY', 'TA'].includes(session.user.role);
+  const canExport = Boolean(session?.user?.isAdmin);
 
   const fetchGrades = useCallback(async () => {
     if (inFlightRef.current) return;

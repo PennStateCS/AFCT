@@ -4,11 +4,12 @@ import path from 'path';
 import { promises as fs } from 'fs';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
 /**
  * Deletes a problem within a course, unconditionally cascading its submissions and
- * assignment links first, then removing the solution file. Staff only
- * (ADMIN/FACULTY/TA). The problem must belong to the course in the path. Unlike
+ * assignment links first, then removing the solution file. Course staff (faculty or
+ * TAs) or a system admin. The problem must belong to the course in the path. Unlike
  * DELETE /api/problems/[id], this does not refuse when the problem is used by an
  * assignment — it removes those links.
  * @openapi
@@ -18,7 +19,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
  *   - { name: pid, in: path, required: true, schema: { type: string } }
  * responses:
  *   200: { description: Problem deleted. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Caller is not course staff (faculty or TA) or a system admin. }
  *   404: { description: Problem not found in this course. }
  *   500: { description: Server error. }
  */
@@ -32,12 +33,12 @@ export async function DELETE(
     const session = await auth();
     const user = session?.user;
 
-    if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    if (!user || !(await canManageCourse(user, courseId))) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'PROBLEM_DELETE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }

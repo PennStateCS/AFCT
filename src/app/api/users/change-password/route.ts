@@ -33,7 +33,6 @@ import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy
  *             message: { type: string }
  *   400: { description: "Missing fields, weak password, wrong current password, or reused password." }
  *   401: { description: Not signed in. }
- *   403: { description: Session role is not permitted to change passwords. }
  *   404: { description: User record not found. }
  *   500: { description: Server error. }
  */
@@ -42,28 +41,13 @@ export async function POST(req: NextRequest) {
   try {
     const session = await auth();
 
-    if (!session?.user?.id || !session.user.role) {
+    if (!session?.user?.id) {
       console.warn('[CHANGE_PASSWORD] Unauthorized access attempt');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const userId = session.user.id;
     actorId = userId;
-    const userRole = session.user.role;
-
-    // Every real role may change its own password; the guard mainly rejects
-    // sessions carrying an unexpected role value.
-    const ALLOWED_ROLES = ['STUDENT', 'TA', 'FACULTY', 'ADMIN'];
-    if (!ALLOWED_ROLES.includes(userRole)) {
-      console.warn(`[CHANGE_PASSWORD] Forbidden role: ${userRole}`);
-      await createEnhancedActivityLog(prisma, req, {
-        userId: session?.user?.id ?? null,
-        action: 'CHANGE_PASSWORD_DENIED',
-        severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
-      });
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
 
     const { oldPassword, newPassword } = await req.json();
 
@@ -124,7 +108,6 @@ export async function POST(req: NextRequest) {
       category: 'USER',
       metadata: {
         userId,
-        role: userRole,
         wasTemporaryPassword: Boolean(user.temporaryPassword),
         clearedTemporaryPassword: Boolean(user.temporaryPassword),
       },

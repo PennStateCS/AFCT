@@ -3,15 +3,17 @@ import { prisma } from '@/lib/prisma';
 import fs from 'fs';
 import path from 'path';
 import { auth } from '@/lib/auth';
+import { canManageCourse } from '@/lib/permissions';
 import { ProblemType } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 
 /**
- * Updates a problem (multipart/form-data). Staff only (ADMIN/FACULTY/TA). Sending a
- * new file replaces the stored solution — it's structure-validated and size-checked
- * first, and the previous file is removed. Omitting the file keeps the current one.
+ * Updates a problem (multipart/form-data). Course staff (faculty or TAs) or a system
+ * admin. Sending a new file replaces the stored solution — it's structure-validated
+ * and size-checked first, and the previous file is removed. Omitting the file keeps
+ * the current one.
  * @openapi
  * summary: Update a problem
  * parameters:
@@ -37,7 +39,7 @@ import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
  * responses:
  *   200: { description: The updated problem. }
  *   400: { description: Missing fields or the new file failed structure validation. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Caller is not course staff or a system admin. }
  *   404: { description: Problem not found. }
  *   413: { description: File exceeds the system upload limit. }
  *   500: { description: Server error. }
@@ -52,12 +54,12 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
     const user = session?.user;
     actorId = user?.id ?? null;
 
-    if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    if (!user) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'PROBLEM_UPDATE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
@@ -69,6 +71,16 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
 
     if (!existingProblem) {
       return NextResponse.json({ error: 'Problem not found' }, { status: 404 });
+    }
+
+    if (!(await canManageCourse(user, existingProblem.courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'PROBLEM_UPDATE_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     // Parse multipart form data
@@ -202,9 +214,9 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
 }
 
 /**
- * Deletes a problem and its solution file. Staff only (ADMIN/FACULTY/TA). Refused
- * while the problem is still attached to any assignment; otherwise its submissions
- * are removed first, then the record and file.
+ * Deletes a problem and its solution file. Course staff (faculty or TAs) or a system
+ * admin. Refused while the problem is still attached to any assignment; otherwise its
+ * submissions are removed first, then the record and file.
  * @openapi
  * summary: Delete a problem
  * parameters:
@@ -212,7 +224,7 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
  * responses:
  *   200: { description: Problem deleted. }
  *   400: { description: Problem is still linked to an assignment. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Caller is not course staff or a system admin. }
  *   404: { description: Problem not found. }
  *   500: { description: Server error. }
  */
@@ -226,12 +238,12 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     const user = session?.user;
     actorId = user?.id ?? null;
 
-    if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    if (!user) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'PROBLEM_DELETE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
@@ -243,6 +255,16 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
 
     if (!existingProblem) {
       return NextResponse.json({ error: 'Problem not found' }, { status: 404 });
+    }
+
+    if (!(await canManageCourse(user, existingProblem.courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'PROBLEM_DELETE_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     // Prevent deletion if the problem is linked to any assignment

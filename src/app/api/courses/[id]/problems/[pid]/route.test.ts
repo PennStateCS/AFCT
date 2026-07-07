@@ -11,6 +11,7 @@ const prismaMock = vi.hoisted(() => ({
   assignmentProblem: {
     deleteMany: vi.fn(),
   },
+  roster: { findFirst: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -42,6 +43,7 @@ import { DELETE } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  prismaMock.roster.findFirst.mockResolvedValue(null);
 });
 
 describe('DELETE /api/courses/[id]/problems/[pid]', () => {
@@ -55,7 +57,7 @@ describe('DELETE /api/courses/[id]/problems/[pid]', () => {
   });
 
   it('returns 404 when problem not found', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.problem.findFirst.mockResolvedValue(null);
 
     const req = new Request('http://localhost/api/courses/c1/problems/p1', { method: 'DELETE' });
@@ -65,7 +67,7 @@ describe('DELETE /api/courses/[id]/problems/[pid]', () => {
   });
 
   it('deletes problem and logs activity', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.problem.findFirst.mockResolvedValue({
       id: 'p1',
       title: 'Problem',
@@ -87,6 +89,7 @@ describe('DELETE /api/courses/[id]/problems/[pid]', () => {
 
   it('skips file deletion when the problem has no file', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.problem.findFirst.mockResolvedValue({ id: 'p1', title: 'Problem', fileName: null });
 
     const req = new Request('http://localhost/api/courses/c1/problems/p1', { method: 'DELETE' });
@@ -97,7 +100,7 @@ describe('DELETE /api/courses/[id]/problems/[pid]', () => {
   });
 
   it('ignores a missing solution file (ENOENT) and still succeeds', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.problem.findFirst.mockResolvedValue({
       id: 'p1',
       title: 'Problem',
@@ -113,7 +116,7 @@ describe('DELETE /api/courses/[id]/problems/[pid]', () => {
   });
 
   it('logs but tolerates a non-ENOENT file deletion error', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.problem.findFirst.mockResolvedValue({
       id: 'p1',
       title: 'Problem',
@@ -128,7 +131,7 @@ describe('DELETE /api/courses/[id]/problems/[pid]', () => {
   });
 
   it('returns 500 when a delete operation fails', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.problem.findFirst.mockResolvedValue({
       id: 'p1',
       title: 'Problem',

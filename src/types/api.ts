@@ -15,9 +15,9 @@ export interface paths {
         put?: never;
         /**
          * Reset a user's password (admin)
-         * @description Sets another user's password on their behalf (an admin-initiated reset).  Restricted to ADMIN/FACULTY; the new password still has to meet the strength  policy. Pass `isTemporary` to force a change at next login. The plaintext  password is never logged — only who reset whom.
+         * @description Sets another user's password on their behalf (an admin-initiated reset).  System administrators only; the new password still has to meet the strength  policy. Pass `isTemporary` to force a change at next login. The plaintext  password is never logged — only who reset whom.
          *
-         *     **Auth:** requires ADMIN / FACULTY
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/reset-password/route.ts)
          */
@@ -39,9 +39,9 @@ export interface paths {
         put?: never;
         /**
          * List submissions for problems (admin)
-         * @description Returns every submission across a set of problems, flattened for the admin  grading view — student, course, assignment/problem titles, status, and the  recorded grade (joined from AssignmentProblemGrade). Restricted to ADMIN/FACULTY.  Takes the problem ids in the body rather than the query string since the list  can be long.
+         * @description Returns every submission across a set of problems, flattened for the admin  grading view — student, course, assignment/problem titles, status, and the  recorded grade (joined from AssignmentProblemGrade). System administrators only.  Takes the problem ids in the body rather than the query string since the list  can be long.
          *
-         *     **Auth:** requires ADMIN / FACULTY
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/submissions/route.ts)
          */
@@ -61,9 +61,9 @@ export interface paths {
         };
         /**
          * List an assignment's problems
-         * @description Lists an assignment's problems, tagged with whether the caller has solved each  (a correct submission) and their grade. For group assignments, visibility follows  the caller's group — unassigned problems show to everyone, group-mapped ones only  to that group's members. Currently restricted to ADMIN/FACULTY.
+         * @description Lists an assignment's problems, tagged with whether the caller has solved each  (a correct submission) and their grade. For group assignments, visibility follows  the caller's group — unassigned problems show to everyone, group-mapped ones only  to that group's members. Course faculty or a system admin (TAs excluded).
          *
-         *     **Auth:** requires ADMIN / FACULTY
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/assignments/[id]/problems/route.ts)
          */
@@ -87,34 +87,34 @@ export interface paths {
          * Get an assignment
          * @description Fetches one assignment with its course and problems, plus a derived `maxPoints`  total. Visibility is role-aware: students only see published assignments in  courses they're enrolled in, faculty/TA need access to the course, and admins see  anything. Anything the caller may not see is masked as a 404.
          *
-         *     **Auth:** requires STUDENT / ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/assignments/[id]/route.ts)
          */
         get: operations["getAssignmentsById"];
         /**
          * Update an assignment (full)
-         * @description Full update of an assignment. Staff only (ADMIN/FACULTY/TA). Guards protect data  integrity: an assignment can't be unpublished once it has submissions or grades,  and its group mode can't change after any submission exists. Late-submission  rules are validated the same way as on create.
+         * @description Full update of an assignment. Course staff (faculty or TAs) or a system admin.  Guards protect data  integrity: an assignment can't be unpublished once it has submissions or grades,  and its group mode can't change after any submission exists. Late-submission  rules are validated the same way as on create.
          *
-         *     **Auth:** requires STUDENT / ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/assignments/[id]/route.ts)
          */
         put: operations["putAssignmentsById"];
         /**
          * Create an assignment (alias)
-         * @description Creates an assignment. Staff only (ADMIN/FACULTY/TA). Note: this handler ignores  the `[id]` path segment and takes the course from the body — it mirrors  POST /api/assignments and exists for clients that post to this path. (One  difference: late submissions default to on here.)
+         * @description Creates an assignment. Course staff (faculty or TAs) or a system admin, checked  against the body's courseId. Note: this handler ignores  the `[id]` path segment and takes the course from the body — it mirrors  POST /api/assignments and exists for clients that post to this path. (One  difference: late submissions default to on here.)
          *
-         *     **Auth:** requires STUDENT / ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/assignments/[id]/route.ts)
          */
         post: operations["postAssignmentsById"];
         /**
          * Delete an assignment
-         * @description Deletes an assignment, but only when it's safe: no submissions and no comments.  Its problem links are cleared first, then the assignment is removed. Staff only  (ADMIN/FACULTY/TA).
+         * @description Deletes an assignment, but only when it's safe: no submissions and no comments.  Its problem links are cleared first, then the assignment is removed. Course staff  (faculty or TAs) or a system admin.
          *
-         *     **Auth:** requires STUDENT / ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/assignments/[id]/route.ts)
          */
@@ -123,9 +123,9 @@ export interface paths {
         head?: never;
         /**
          * Update an assignment (partial)
-         * @description Partial update of an assignment — only the fields present in the body are  changed. Staff only (ADMIN/FACULTY/TA), with the same unpublish/group-mode guards  and late-window validation as the full update.
+         * @description Partial update of an assignment — only the fields present in the body are  changed. Course staff (faculty or TAs) or a system admin, with the same  unpublish/group-mode guards and late-window validation as the full update.
          *
-         *     **Auth:** requires STUDENT / ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/assignments/[id]/route.ts)
          */
@@ -143,7 +143,7 @@ export interface paths {
          * Get my context for an assignment
          * @description Everything the caller needs to see their own work on an assignment, grouped by  problem: their submissions, the comments addressed to them, and their per-problem  and overall grades. Requires enrollment in the course; students can't see it  until the assignment is published. Scoped entirely to the caller's own data.
          *
-         *     **Auth:** requires STUDENT
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/assignments/[id]/student-context/route.ts)
          */
@@ -191,9 +191,9 @@ export interface paths {
         put?: never;
         /**
          * Create an assignment
-         * @description Creates an assignment in a course. Staff only (ADMIN/FACULTY/TA). The due date is  interpreted as end-of-day in the actor's timezone. Late submissions and their  cutoff must agree — a cutoff is required when late is on, forbidden when off, and  must fall on or after the due date.
+         * @description Creates an assignment in a course. Course staff (faculty or TAs) or a system  admin, checked against the body's courseId. The due date is  interpreted as end-of-day in the actor's timezone. Late submissions and their  cutoff must agree — a cutoff is required when late is on, forbidden when off, and  must fall on or after the due date.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/assignments/route.ts)
          */
@@ -237,7 +237,7 @@ export interface paths {
         put?: never;
         /**
          * Register a new account
-         * @description Self-service account registration. New accounts are always created as STUDENT —  elevated roles are assigned later through the staff-only user-management routes.  Gated by the `allowSignup` system setting, and protected by a tiered rate  limiter: repeated attempts escalate from silent friction, to a captcha challenge  (428), to an outright block (429). The password must satisfy the strength policy.
+         * @description Self-service account registration. New accounts are created with no elevated  privileges; access is granted later through the staff-only user-management routes.  Gated by the `allowSignup` system setting, and protected by a tiered rate  limiter: repeated attempts escalate from silent friction, to a captcha challenge  (428), to an outright block (429). The password must satisfy the strength policy.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/auth/signup/route.ts)
          */
@@ -257,9 +257,9 @@ export interface paths {
         };
         /**
          * List comments
-         * @description Lists comments for an assignment problem, or for a whole assignment when  `scope=assignment`. Enrolled users (and admins) may read; an optional `studentId`  narrows to a single student's thread.
+         * @description Lists comments for an assignment problem, or for a whole assignment when  `scope=assignment`. Any enrolled member of the course (any role) or a system admin  may read; an optional `studentId` narrows to a single student's thread.
          *
-         *     **Auth:** requires ADMIN / FACULTY / STUDENT
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/comments/route.ts)
          */
@@ -267,18 +267,18 @@ export interface paths {
         put?: never;
         /**
          * Create a comment
-         * @description Creates a comment on an assignment problem, optionally scoped to a particular  student's thread (`studentId`). The author must be enrolled in the course; an  ADMIN who isn't is auto-added as an instructor. Both the problem and any named  student must belong to the course.
+         * @description Creates a comment on an assignment problem, optionally scoped to a particular  student's thread (`studentId`). The author must be an enrolled member of the course  (any role) or a system admin; a system admin who isn't on the roster is auto-added  as FACULTY. Both the problem and any named student must belong to the course.
          *
-         *     **Auth:** requires ADMIN / FACULTY / STUDENT
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/comments/route.ts)
          */
         post: operations["postComments"];
         /**
          * Delete a comment
-         * @description Deletes a comment by id. The comment's author may delete their own; otherwise  only ADMIN/FACULTY, or a non-student course member, may remove it.
+         * @description Deletes a comment by id. The comment's author may delete their own; otherwise  only course staff (faculty or TAs) or a system admin may remove it.
          *
-         *     **Auth:** requires ADMIN / FACULTY / STUDENT
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/comments/route.ts)
          */
@@ -299,9 +299,9 @@ export interface paths {
         put?: never;
         /**
          * Rerun all submissions in a course
-         * @description Re-queues every submission in a course, resetting each to PENDING and clearing its  feedback/result — the bulk counterpart to the single-submission rerun. Staff only  (ADMIN/FACULTY/TA). Logs each submission plus one batch-summary event, and returns  the count re-queued.
+         * @description Re-queues every submission in a course, resetting each to PENDING and clearing its  feedback/result — the bulk counterpart to the single-submission rerun. Course staff  (faculty or TAs) or a system admin. Logs each submission plus one batch-summary  event, and returns the count re-queued.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/course_submissions/[cid]/route.ts)
          */
@@ -323,9 +323,9 @@ export interface paths {
         put?: never;
         /**
          * Add problems to an assignment
-         * @description Attaches problems to an assignment with per-problem settings (points, submission  cap, autograder). Staff only (ADMIN/FACULTY/TA). Adds only problems not already  linked — existing links, especially those with submissions, are preserved and  reported back. For group assignments, an optional `groupId` (or "ALL") maps the  given problems to specific groups, even ones already on the assignment. Only  problems belonging to this course are accepted.
+         * @description Attaches problems to an assignment with per-problem settings (points, submission  cap, autograder). Course staff (faculty or TAs) or a system admin. Adds only problems not already  linked — existing links, especially those with submissions, are preserved and  reported back. For group assignments, an optional `groupId` (or "ALL") maps the  given problems to specific groups, even ones already on the assignment. Only  problems belonging to this course are accepted.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/add-problems/route.ts)
          */
@@ -345,9 +345,9 @@ export interface paths {
         };
         /**
          * Get group→problem mappings for an assignment
-         * @description Returns each course group alongside the problem ids mapped to it for this  assignment (the group→problem assignment matrix). Requires a signed-in user.
+         * @description Returns each course group alongside the problem ids mapped to it for this  assignment (the group→problem assignment matrix). Any enrolled member of the  course (any role) or a system admin.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/group-problems/route.ts)
          */
@@ -355,18 +355,18 @@ export interface paths {
         put?: never;
         /**
          * Get group→problem mappings (via POST)
-         * @description Same group→problem mapping data as GET, exposed over POST so clients can request  it without a GET's AbortController plumbing. Requires `{ action: 'list' }` and a  signed-in user.
+         * @description Same group→problem mapping data as GET, exposed over POST so clients can request  it without a GET's AbortController plumbing. Requires `{ action: 'list' }`. Any  enrolled member of the course (any role) or a system admin.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/group-problems/route.ts)
          */
         post: operations["postCoursesByIdByAidGroupProblems"];
         /**
          * Remove group→problem mappings
-         * @description Removes group→problem mappings for an assignment. Staff only (ADMIN/FACULTY/TA).  A `groupId` is required — pass a specific group id, or "ALL" to clear the given  problems from every group. The problems themselves stay on the assignment.
+         * @description Removes group→problem mappings for an assignment. Course staff (faculty or TAs) or  a system admin. A `groupId` is required — pass a specific group id, or "ALL" to clear the given  problems from every group. The problems themselves stay on the assignment.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/group-problems/route.ts)
          */
@@ -387,7 +387,7 @@ export interface paths {
          * Get a student's problem grades for an assignment
          * @description Returns a student's per-problem grades and feedback for one assignment, keyed by  problem id. A student may read their own; staff may read anyone's. Responds 204  when nothing has been graded yet.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/problem-grades/[studentId]/route.ts)
          */
@@ -409,9 +409,9 @@ export interface paths {
         };
         /**
          * Get an assignment's grading-completion summary
-         * @description Per-student completion summary for one assignment: maps each student to whether  every problem in the assignment has been graded (used to flag fully-graded  students in the grading UI). Staff only (ADMIN/FACULTY/TA).
+         * @description Per-student completion summary for one assignment: maps each student to whether  every problem in the assignment has been graded (used to flag fully-graded  students in the grading UI). Course staff (faculty or TAs) or a system admin.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/problem-grades/summary/route.ts)
          */
@@ -433,9 +433,9 @@ export interface paths {
         };
         /**
          * Get a single problem grade
-         * @description Reads one student's grade and feedback for a specific problem within an  assignment. A student may read their own; staff may read anyone's. Returns nulls  (not 404) when the problem exists but hasn't been graded.
+         * @description Reads one student's grade and feedback for a specific problem within an  assignment. The student themselves, course staff, or a system admin. Returns nulls  (not 404) when the problem exists but hasn't been graded.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]/route.ts)
          */
@@ -443,9 +443,9 @@ export interface paths {
         put?: never;
         /**
          * Set or clear a problem grade
-         * @description Sets or clears a student's grade (and optional feedback) for one problem. Staff  only (ADMIN/FACULTY/TA). A numeric grade must be within [0, maxPoints]; sending  a null grade deletes the record. Every change is audited with the previous value.
+         * @description Sets or clears a student's grade (and optional feedback) for one problem. Course  staff (faculty or TAs) or a system admin. A numeric grade must be within [0, maxPoints]; sending  a null grade deletes the record. Every change is audited with the previous value.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]/route.ts)
          */
@@ -466,9 +466,9 @@ export interface paths {
         get?: never;
         /**
          * Update an assignment problem's settings
-         * @description Updates the per-assignment settings for one problem: its point value, submission  cap, and whether the autograder runs. Staff only (ADMIN/FACULTY/TA). The problem  must already be linked to the assignment, and the assignment must belong to the  course in the path.
+         * @description Updates the per-assignment settings for one problem: its point value, submission  cap, and whether the autograder runs. Course staff (faculty or TAs) or a system  admin. The problem  must already be linked to the assignment, and the assignment must belong to the  course in the path.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/problems/[pid]/route.ts)
          */
@@ -491,9 +491,9 @@ export interface paths {
         put?: never;
         /**
          * Remove a problem from an assignment
-         * @description Detaches a problem from an assignment (and clears any group→problem mappings for  it), leaving the problem itself intact in the course. Staff only  (ADMIN/FACULTY/TA). Both the assignment and the problem must belong to the course  in the path. Uses POST rather than DELETE because the problem id travels in the body.
+         * @description Detaches a problem from an assignment (and clears any group→problem mappings for  it), leaving the problem itself intact in the course. Course staff (faculty or  TAs) or a system admin. Both the assignment and the problem must belong to the course  in the path. Uses POST rather than DELETE because the problem id travels in the body.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/remove-problem/route.ts)
          */
@@ -513,9 +513,9 @@ export interface paths {
         };
         /**
          * Get a student's review data for an assignment
-         * @description Assembles the grading/review view for one student on one assignment: their  submissions (grouped by problem, with evaluation output), the comments about  them, and their per-problem grades. Falls back gracefully if the optional  `evaluationRaw` column is absent.   Access: staff (ADMIN/FACULTY/TA) may read any student's data; a non-staff user  may read only their own (`studentId` must be their id). Course membership is also  required, except for global admins.
+         * @description Assembles the grading/review view for one student on one assignment: their  submissions (grouped by problem, with evaluation output), the comments about  them, and their per-problem grades. Falls back gracefully if the optional  `evaluationRaw` column is absent.   Access: the student themselves, course staff, or a system admin (`studentId` must  be the caller's id unless they are course staff or a system admin). Course  membership is also required, except for global admins.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/review-data/[studentId]/route.ts)
          */
@@ -537,7 +537,7 @@ export interface paths {
         };
         /**
          * Get a course assignment
-         * @description Returns the assignment with its problems and, in the full view, the course roster. Requires a session; non-staff callers must be enrolled in the course.
+         * @description Returns the assignment with its problems and, in the full view, the course roster. Requires a session; the caller must be an enrolled member of the course (any role) or a system admin.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/route.ts)
          */
@@ -559,9 +559,9 @@ export interface paths {
         };
         /**
          * Get a student's submissions for an assignment
-         * @description Returns a student's submissions for an assignment, grouped by problem and each  annotated with that problem's metadata (falls back gracefully if the optional  `evaluationRaw` column is absent). The `[sid]` segment is the student id.   Access: staff (ADMIN/FACULTY/TA) may view any student's submissions; a non-staff  user may view only their own (`sid` must be their id). Course membership is also  required, except for global admins.
+         * @description Returns a student's submissions for an assignment, grouped by problem and each  annotated with that problem's metadata (falls back gracefully if the optional  `evaluationRaw` column is absent). The `[sid]` segment is the student id.   Access: the student themselves, course staff, or a system admin (`sid` must be the  caller's id unless they are course staff or a system admin). Course membership is  also required, except for global admins.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/submissions/[sid]/route.ts)
          */
@@ -583,9 +583,9 @@ export interface paths {
         };
         /**
          * Get a course's activity feed
-         * @description Returns a paginated activity feed for one course — logs tied directly to the  course plus its assignments, problems, submissions, and recent logins by course  members. Staff (ADMIN/FACULTY/TA) may view any course; everyone else must be on  the roster.
+         * @description Returns a paginated activity feed for one course — logs tied directly to the  course plus its assignments, problems, submissions, and recent logins by course  members. Any enrolled member of the course (any role) or a system admin.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/activity/route.ts)
          */
@@ -613,9 +613,9 @@ export interface paths {
         head?: never;
         /**
          * Archive or unarchive a course
-         * @description Toggles a course's archived state. ADMIN/FACULTY only. Archiving runs a safety  check (canArchiveCourse) using the course's stored dates rather than any client  value, to avoid timezone drift deciding whether a course has really ended.
+         * @description Toggles a course's archived state. Course faculty or a system admin (TAs  excluded). Archiving runs a safety  check (canArchiveCourse) using the course's stored dates rather than any client  value, to avoid timezone drift deciding whether a course has really ended.
          *
-         *     **Auth:** requires ADMIN / FACULTY
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/archive/route.ts)
          */
@@ -631,9 +631,9 @@ export interface paths {
         };
         /**
          * List a course's published assignments
-         * @description Lists a course's published assignments with each one's total and max grade  (summed across its problems). Restricted to ADMIN/FACULTY.
+         * @description Lists a course's published assignments with each one's total and max grade  (summed across its problems). Course faculty or a system admin (TAs excluded).
          *
-         *     **Auth:** requires ADMIN / FACULTY
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/route.ts)
          */
@@ -657,9 +657,9 @@ export interface paths {
         put?: never;
         /**
          * Bulk-enroll students
-         * @description Enrolls many users as STUDENT in one transaction (the roster's bulk-add flow).  Staff only (ADMIN/FACULTY/TA). Existing roster entries are reset to STUDENT  rather than duplicated, so it's safe to re-run. Unlike single enroll, every user  is added as a student regardless of their global role.
+         * @description Enrolls many users as STUDENT in one transaction (the roster's bulk-add flow).  Course staff (faculty or TAs) or a system admin. Existing roster entries are  reset to STUDENT rather than duplicated, so it's safe to re-run. Every user is  added as a STUDENT regardless of any other role.
          *
-         *     **Auth:** requires FACULTY / ADMIN / TA / STUDENT
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/bulk-enroll/route.ts)
          */
@@ -681,7 +681,7 @@ export interface paths {
         put?: never;
         /**
          * Duplicate a course
-         * @description Creates a new course modeled on an existing one, in a single transaction. The  caller becomes faculty on the copy; faculty/TA rosters are copied only when  asked. `copyMode` (or the legacy copyAssignments/copyProblems booleans) selects  what carries over: assignments only, problems only, or assignments with their  problems. The copy always starts unpublished with a fresh registration code.  FACULTY/ADMIN/TA only. Dates are interpreted in the actor's timezone.
+         * @description Creates a new course modeled on an existing one, in a single transaction. The  caller becomes faculty on the copy; faculty/TA rosters are copied only when  asked. `copyMode` (or the legacy copyAssignments/copyProblems booleans) selects  what carries over: assignments only, problems only, or assignments with their  problems. The copy always starts unpublished with a fresh registration code.  System administrators only. Dates are interpreted in the actor's timezone.
          *
          *     **Auth:** requires FACULTY / ADMIN / TA
          *
@@ -705,9 +705,9 @@ export interface paths {
         put?: never;
         /**
          * Enroll a user in a course
-         * @description Adds (or re-roles) a single user on a course roster. Staff only  (ADMIN/FACULTY/TA). The course role is derived from the target's global role —  admins/faculty become FACULTY, TAs stay TA, everyone else STUDENT — so callers  don't pick the role directly. Upserts, so re-enrolling just refreshes the role.
+         * @description Adds (or re-roles) a single user on a course roster. Course staff (faculty or  TAs) or a system admin. The user is always added as a STUDENT — callers don't  pick the role directly. Upserts, so re-enrolling just resets the role to STUDENT.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA / STUDENT
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/enroll/route.ts)
          */
@@ -727,9 +727,9 @@ export interface paths {
         };
         /**
          * Get the course grade matrix
-         * @description Returns the full gradebook matrix for a course: students × assignments with each  cell holding the student's summed assignment grade (problem grades collapsed  into one total). Staff only (ADMIN/FACULTY/TA).
+         * @description Returns the full gradebook matrix for a course: students × assignments with each  cell holding the student's summed assignment grade (problem grades collapsed  into one total). Course staff (faculty or TAs) or a system admin.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA / STUDENT
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/grades/route.ts)
          */
@@ -737,9 +737,9 @@ export interface paths {
         put?: never;
         /**
          * Log a gradebook export
-         * @description Records a gradebook export in the audit log. The CSV itself is built and  downloaded client-side, so this endpoint just captures that an export happened  (and a little about its scope). Staff only (ADMIN/FACULTY/TA).
+         * @description Records a gradebook export in the audit log. The CSV itself is built and  downloaded client-side, so this endpoint just captures that an export happened  (and a little about its scope). Course staff (faculty or TAs) or a system admin.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA / STUDENT
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/grades/route.ts)
          */
@@ -762,9 +762,9 @@ export interface paths {
         post?: never;
         /**
          * Remove a group member
-         * @description Removes one member from a group. Staff only (ADMIN/FACULTY/TA). The group must  belong to the course in the path and the membership must exist.
+         * @description Removes one member from a group. Course staff (faculty or TAs) or a system admin.  The group must belong to the course in the path and the membership must exist.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/groups/[groupId]/members/[userId]/route.ts)
          */
@@ -783,9 +783,9 @@ export interface paths {
         };
         /**
          * List group members
-         * @description Lists a group's members, oldest first. Staff only (ADMIN/FACULTY/TA). The group  must belong to the course in the path.
+         * @description Lists a group's members, oldest first. Course staff (faculty or TAs) or a system  admin. The group must belong to the course in the path.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/groups/[groupId]/members/route.ts)
          */
@@ -793,9 +793,9 @@ export interface paths {
         put?: never;
         /**
          * Add a group member
-         * @description Adds one user to a group. Staff only. The user must already be enrolled in the  course; the upsert makes re-adding a no-op.
+         * @description Adds one user to a group. Course staff (faculty or TAs) or a system admin. The  user must already be enrolled in the course; the upsert makes re-adding a no-op.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/groups/[groupId]/members/route.ts)
          */
@@ -805,9 +805,9 @@ export interface paths {
         head?: never;
         /**
          * Set group members in bulk
-         * @description Replaces a group's membership with the given set of users in one call, computing  the adds and removes. Permitted for global admins or course staff. Every user  must be enrolled in the course, or the whole update is rejected.
+         * @description Replaces a group's membership with the given set of users in one call, computing  the adds and removes. Course staff (faculty or TAs) or a system admin. Every user  must be enrolled in the course, or the whole update is rejected.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/groups/[groupId]/members/route.ts)
          */
@@ -826,9 +826,9 @@ export interface paths {
         post?: never;
         /**
          * Delete a group
-         * @description Deletes a group; its membership rows cascade away with it. Staff only. The group  must belong to the course in the path.
+         * @description Deletes a group; its membership rows cascade away with it. Course staff (faculty  or TAs) or a system admin. The group must belong to the course in the path.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/groups/[groupId]/route.ts)
          */
@@ -837,7 +837,7 @@ export interface paths {
          * CORS preflight
          * @description CORS preflight handler.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/groups/[groupId]/route.ts)
          */
@@ -845,9 +845,9 @@ export interface paths {
         head?: never;
         /**
          * Rename a group
-         * @description Renames a group. Staff only (ADMIN/FACULTY/TA). The group must belong to the  course in the path, and the new name must be unique within that course.
+         * @description Renames a group. Course staff (faculty or TAs) or a system admin. The group must  belong to the course in the path, and the new name must be unique within that course.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/groups/[groupId]/route.ts)
          */
@@ -863,9 +863,9 @@ export interface paths {
         };
         /**
          * List course groups
-         * @description Lists a course's groups, alphabetically. Staff only (ADMIN/FACULTY/TA).
+         * @description Lists a course's groups, alphabetically. Course staff (faculty or TAs) or a  system admin.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/groups/route.ts)
          */
@@ -873,9 +873,9 @@ export interface paths {
         put?: never;
         /**
          * Create a course group (or list via body)
-         * @description Creates a group in the course. Staff only (ADMIN/FACULTY/TA). Also doubles as a  "list" endpoint: a body of `{ action: 'list' }` returns the groups instead of  creating one — a workaround so the client can list without needing a GET's  AbortController plumbing. Group names are unique per course.
+         * @description Creates a group in the course. Course staff (faculty or TAs) or a system admin.  Also doubles as a  "list" endpoint: a body of `{ action: 'list' }` returns the groups instead of  creating one — a workaround so the client can list without needing a GET's  AbortController plumbing. Group names are unique per course.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/groups/route.ts)
          */
@@ -922,9 +922,9 @@ export interface paths {
         post?: never;
         /**
          * Delete a course problem
-         * @description Deletes a problem within a course, unconditionally cascading its submissions and  assignment links first, then removing the solution file. Staff only  (ADMIN/FACULTY/TA). The problem must belong to the course in the path. Unlike  DELETE /api/problems/[id], this does not refuse when the problem is used by an  assignment — it removes those links.
+         * @description Deletes a problem within a course, unconditionally cascading its submissions and  assignment links first, then removing the solution file. Course staff (faculty or  TAs) or a system admin. The problem must belong to the course in the path. Unlike  DELETE /api/problems/[id], this does not refuse when the problem is used by an  assignment — it removes those links.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/problems/[pid]/route.ts)
          */
@@ -943,9 +943,9 @@ export interface paths {
         };
         /**
          * List a course's problems
-         * @description Lists all problems in a course, newest first. Staff only (ADMIN/FACULTY/TA) — the  rows include stored solution filenames, which students must not see. The solution  files themselves are served by a separate, access-controlled route.
+         * @description Lists all problems in a course, newest first. Course staff (faculty or TAs) or a  system admin — the rows include stored solution filenames, which students must not  see. The solution  files themselves are served by a separate, access-controlled route.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/problems/route.ts)
          */
@@ -953,9 +953,9 @@ export interface paths {
         put?: never;
         /**
          * Create a problem in a course
-         * @description Creates a problem in a course from an uploaded solution file. Staff only  (ADMIN/FACULTY/TA). The file is size-checked and stored under a generated name;  `maxStates` applies to FA/PDA and `isDeterministic` to FA. (Sibling of  POST /api/problems, scoped to the course in the path.)
+         * @description Creates a problem in a course from an uploaded solution file. Course staff  (faculty or TAs) or a system admin. The file is size-checked and stored under a generated name;  `maxStates` applies to FA/PDA and `isDeterministic` to FA. (Sibling of  POST /api/problems, scoped to the course in the path.)
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/problems/route.ts)
          */
@@ -981,9 +981,9 @@ export interface paths {
         head?: never;
         /**
          * Publish or unpublish a course
-         * @description Toggles a course's published state. ADMIN/FACULTY only. Unpublishing runs a  safety check (canUnpublishCourse) that refuses if students would lose access to  work already in progress.
+         * @description Toggles a course's published state. Course faculty or a system admin (TAs  excluded). Unpublishing runs a  safety check (canUnpublishCourse) that refuses if students would lose access to  work already in progress.
          *
-         *     **Auth:** requires ADMIN / FACULTY
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/publish/route.ts)
          */
@@ -999,9 +999,9 @@ export interface paths {
         };
         /**
          * Get a roster entry
-         * @description Returns one roster entry (with the user's profile) plus the viewer's own course  and global roles, so the UI can decide which actions to offer. Any signed-in  user may call it; `userId` may be the literal "me" to target the caller.
+         * @description Returns one roster entry (with the user's profile) plus the viewer's own course  role and an `viewerIsAdmin` flag, so the UI can decide which actions to offer.  Any signed-in user may call it; `userId` may be the literal "me" to target the  caller.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA / STUDENT
+         *     **Auth:** requires FACULTY / TA / STUDENT
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/roster/[userId]/route.ts)
          */
@@ -1010,9 +1010,9 @@ export interface paths {
         post?: never;
         /**
          * Remove a user from a course
-         * @description Removes a user from a course roster. Permission is tiered: global admins and  course instructors/faculty may remove people, but TAs and students may not, and  no one may remove a peer at instructor/faculty level. Two safety rules block the  removal outright — the user must have no submissions in the course, and a course  can't lose its last faculty member.
+         * @description Removes a user from a course roster. Permission is tiered: global admins and  course faculty may remove people, but TAs and students may not, and a faculty  member may not remove another faculty member. Two safety rules block the removal  outright — the user must have no submissions in the course, and a course can't  lose its last faculty member.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA / STUDENT
+         *     **Auth:** requires FACULTY / TA / STUDENT
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/roster/[userId]/route.ts)
          */
@@ -1021,9 +1021,9 @@ export interface paths {
         head?: never;
         /**
          * Change a user's course role
-         * @description Changes a user's course role. Only a global admin or the course's instructor may  do this. The last instructor can't be demoted, keeping every course with someone  in charge.
+         * @description Changes a user's course role. Only a global admin or a course faculty member may  do this. The last faculty member can't be demoted, keeping every course with  someone in charge.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA / STUDENT
+         *     **Auth:** requires FACULTY / TA / STUDENT
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/roster/[userId]/route.ts)
          */
@@ -1039,18 +1039,18 @@ export interface paths {
         };
         /**
          * Get a course
-         * @description Fetches one course with derived metadata, shaped by the `view` query param to  keep payloads lean (full/summary/roster/assignments/problems). Assignments come  back with derived point totals and submission/comment counts; problems are  tagged with whether an assignment uses them; the roster is flattened into a  single `enrolled` array, and the caller's own course role is included. Access is  restricted: staff (ADMIN/FACULTY/TA) may view any course; everyone else must be  enrolled in it.
+         * @description Fetches one course with derived metadata, shaped by the `view` query param to  keep payloads lean (full/summary/roster/assignments/problems). Assignments come  back with derived point totals and submission/comment counts; problems are  tagged with whether an assignment uses them; the roster is flattened into a  single `enrolled` array, and the caller's own course role is included. Access is  restricted: any enrolled member of the course (any role) or a system admin.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA / STUDENT
+         *     **Auth:** requires STUDENT / FACULTY
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/route.ts)
          */
         get: operations["getCoursesById"];
         /**
          * Update a course
-         * @description Updates a course's details and, when `instructorIds` is supplied, reconciles its  faculty roster (adds, promotes, or removes to match the desired set). Runs the  same archive/unpublish safety checks as the dedicated toggles, requires a  registration window, and records a before→after diff of changed fields.  ADMIN/FACULTY/TA only.
+         * @description Updates a course's details and, when `instructorIds` is supplied, reconciles its  faculty roster (adds, promotes, or removes to match the desired set). Runs the  same archive/unpublish safety checks as the dedicated toggles, requires a  registration window, and records a before→after diff of changed fields.  Course staff (faculty or TAs) or a system admin.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA / STUDENT
+         *     **Auth:** requires STUDENT / FACULTY
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/route.ts)
          */
@@ -1058,9 +1058,9 @@ export interface paths {
         post?: never;
         /**
          * Delete a course
-         * @description Permanently deletes a course. ADMIN/FACULTY/TA only, and the course must already  be archived — a guard against deleting a live course. The archived requirement  is enforced both up front and again in the delete's `where` clause.
+         * @description Permanently deletes a course. Course staff (faculty or TAs) or a system admin,  and the course must already  be archived — a guard against deleting a live course. The archived requirement  is enforced both up front and again in the delete's `where` clause.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA / STUDENT
+         *     **Auth:** requires STUDENT / FACULTY
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/route.ts)
          */
@@ -1081,7 +1081,7 @@ export interface paths {
          * Get my grades for a course
          * @description Returns the signed-in student's own grade breakdown for a course — published  assignments, their problems, and per-problem grade, latest submission status,  and attempt count. Available to enrolled members (viewing their own data) and  to staff.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/student-grades/route.ts)
          */
@@ -1103,9 +1103,9 @@ export interface paths {
         };
         /**
          * List a course's students
-         * @description Returns just the STUDENT members of a course (user profiles). Staff only  (ADMIN/FACULTY/TA).
+         * @description Returns just the STUDENT members of a course (user profiles). Course staff  (faculty or TAs) or a system admin.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA / STUDENT
+         *     **Auth:** requires STUDENT
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/students/route.ts)
          */
@@ -1129,9 +1129,9 @@ export interface paths {
         put?: never;
         /**
          * Join a course by registration code
-         * @description Enrolls the signed-in user in a course via its 6-character registration code,  assigning them their global role as the course role. Students never learn that  an unpublished/archived course exists (masked as 404); faculty/admin get an  explicit 403. Admins can't self-enroll, and the registration window must be open.
+         * @description Enrolls the signed-in user in a course via its 6-character registration code,  as a STUDENT. Users never learn that an unpublished/archived course exists  (masked as 404). Global admins can't self-enroll, and the registration window  must be open.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA / STUDENT
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/join/route.ts)
          */
@@ -1177,7 +1177,7 @@ export interface paths {
          * List courses for navigation
          * @description Compact course list for the sidebar navigation — only the caller's enrolled  courses, and for students only the published ones. Returns just the fields the  nav needs (id, name, code, publish/archive flags).
          *
-         *     **Auth:** requires STUDENT
+         *     **Auth:** requires FACULTY / TA
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/nav/route.ts)
          */
@@ -1207,9 +1207,9 @@ export interface paths {
         put?: never;
         /**
          * Create a course
-         * @description Creates a course (with a generated registration code) and seeds its faculty  roster, all in one transaction. Admin/TA/Faculty only. Datetime-local strings  are interpreted in the actor's effective timezone before being stored as UTC.
+         * @description Creates a course (with a generated registration code) and seeds its faculty  roster, all in one transaction. System administrators only. Datetime-local  strings are interpreted in the actor's effective timezone before being stored  as UTC.
          *
-         *     **Auth:** requires ADMIN / TA / FACULTY
+         *     **Auth:** requires FACULTY
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/route.ts)
          */
@@ -1280,9 +1280,9 @@ export interface paths {
         post?: never;
         /**
          * Remove a group member by ids
-         * @description Removes a user from a group, addressed by the group's and user's global ids.  Staff only (ADMIN/FACULTY/TA).
+         * @description Removes a user from a group, addressed by the group's and user's global ids.  Course staff (faculty or TAs) or a system admin.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/groups/[gid]/members/[uid]/route.ts)
          */
@@ -1301,9 +1301,9 @@ export interface paths {
         };
         /**
          * List group members by group id
-         * @description Lists a group's members (with user profiles) by the group's global id. Staff  only (ADMIN/FACULTY/TA).
+         * @description Lists a group's members (with user profiles) by the group's global id. Course  staff (faculty or TAs) or a system admin.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/groups/[gid]/members/route.ts)
          */
@@ -1311,9 +1311,9 @@ export interface paths {
         put?: never;
         /**
          * Add a group member by group id
-         * @description Adds a member to a group by the group's global id. Staff only. Accepts either a  `userId` or an `email` to identify the user, who must be enrolled in the group's  course and not already a member.
+         * @description Adds a member to a group by the group's global id. Course staff (faculty or TAs)  or a system admin. Accepts either a `userId` or an `email` to identify the user,  who must be enrolled in the group's course and not already a member.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/groups/[gid]/members/route.ts)
          */
@@ -1336,9 +1336,9 @@ export interface paths {
         post?: never;
         /**
          * Delete a group by id
-         * @description Deletes a group by its global id; membership rows cascade. Staff only.
+         * @description Deletes a group by its global id; membership rows cascade. Course staff (faculty  or TAs) or a system admin.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/groups/[gid]/route.ts)
          */
@@ -1347,9 +1347,9 @@ export interface paths {
         head?: never;
         /**
          * Rename a group by id
-         * @description Renames a group by its global id (the course-agnostic variant of the course-  scoped route). Staff only. Names remain unique within the group's course.
+         * @description Renames a group by its global id (the course-agnostic variant of the course-  scoped route). Course staff (faculty or TAs) or a system admin. Names remain  unique within the group's course.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/groups/[gid]/route.ts)
          */
@@ -1389,7 +1389,7 @@ export interface paths {
          * List activity (audit) logs
          * @description A single page of activity (audit) logs, newest first, with `userId` resolved to  the author's display name. Search, severity filter, and sort all run server-side.
          *
-         *     **Auth:** requires ADMIN / FACULTY
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/logging/route.ts)
          */
@@ -1413,9 +1413,9 @@ export interface paths {
         put?: never;
         /**
          * Export activity logs
-         * @description Returns the selected activity-log columns within a time range, for CSV export.  Admin/Faculty only. Column names are validated against the exportable allow-list  before reaching the Prisma select (guards field injection), and the result is  capped at MAX_EXPORT_ROWS so one export can't page the whole table into memory.
+         * @description Returns the selected activity-log columns within a time range, for CSV export.  System administrators only. Column names are validated against the exportable allow-list  before reaching the Prisma select (guards field injection), and the result is  capped at MAX_EXPORT_ROWS so one export can't page the whole table into memory.
          *
-         *     **Auth:** requires ADMIN / FACULTY
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/logs/getData/route.ts)
          */
@@ -1435,9 +1435,9 @@ export interface paths {
         };
         /**
          * List exportable log fields
-         * @description Lists the activity-log columns that may be included in a CSV export; drives the  Download dialog's field picker. Admin/Faculty only.
+         * @description Lists the activity-log columns that may be included in a CSV export; drives the  Download dialog's field picker. System administrators only.
          *
-         *     **Auth:** requires ADMIN / FACULTY
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/logs/getFields/route.ts)
          */
@@ -1492,9 +1492,9 @@ export interface paths {
         get?: never;
         /**
          * Update a problem
-         * @description Updates a problem (multipart/form-data). Staff only (ADMIN/FACULTY/TA). Sending a  new file replaces the stored solution — it's structure-validated and size-checked  first, and the previous file is removed. Omitting the file keeps the current one.
+         * @description Updates a problem (multipart/form-data). Course staff (faculty or TAs) or a system  admin. Sending a new file replaces the stored solution — it's structure-validated  and size-checked first, and the previous file is removed. Omitting the file keeps  the current one.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/problems/[id]/route.ts)
          */
@@ -1502,9 +1502,9 @@ export interface paths {
         post?: never;
         /**
          * Delete a problem
-         * @description Deletes a problem and its solution file. Staff only (ADMIN/FACULTY/TA). Refused  while the problem is still attached to any assignment; otherwise its submissions  are removed first, then the record and file.
+         * @description Deletes a problem and its solution file. Course staff (faculty or TAs) or a system  admin. Refused while the problem is still attached to any assignment; otherwise its  submissions are removed first, then the record and file.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/problems/[id]/route.ts)
          */
@@ -1523,9 +1523,9 @@ export interface paths {
         };
         /**
          * List a user's submissions for a problem
-         * @description Lists a user's submissions for one problem, newest first. Callers see their own  by default; staff (FACULTY/TA/ADMIN) may pass `?userId=` to view another user's.
+         * @description Lists a user's submissions for one problem, newest first. Callers see their own  by default; course staff (faculty or TAs) or a system admin may pass `?userId=`  to view another user's.
          *
-         *     **Auth:** requires FACULTY / ADMIN / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/problems/[id]/submissions/route.ts)
          */
@@ -1549,9 +1549,9 @@ export interface paths {
         put?: never;
         /**
          * Create a problem
-         * @description Creates a problem from an uploaded solution file (multipart/form-data). Staff  only (ADMIN/FACULTY/TA). The file's XML structure is validated against the  problem type before it's written to disk, and it's size-checked against the  system upload limit. `maxStates` applies to FA/PDA and `isDeterministic` to FA.
+         * @description Creates a problem from an uploaded solution file (multipart/form-data). Course  staff (faculty or TAs) or a system admin. The file's XML structure is validated  against the problem type before it's written to disk, and it's size-checked against  the system upload limit. `maxStates` applies to FA/PDA and `isDeterministic` to FA.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/problems/route.ts)
          */
@@ -1649,9 +1649,9 @@ export interface paths {
         };
         /**
          * Get a solution file
-         * @description Serves a problem's solution file — the most sensitive protected material, so  access is limited to staff (ADMIN/FACULTY/TA) and every successful serve is  audited (both inline and `?download=1`). Traversal filenames are rejected.
+         * @description Serves a problem's solution file — the most sensitive protected material, so  access is limited to course staff (faculty or TAs) or a system admin, and every  successful serve is audited (both inline and `?download=1`). Traversal filenames  are rejected.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/solutions/[file]/route.ts)
          */
@@ -1676,9 +1676,9 @@ export interface paths {
         post?: never;
         /**
          * Delete an orphaned upload
-         * @description Deletes a single orphaned upload — a file on disk that no DB row references  (see the abandoned-file report on the status dashboard). Restricted to staff  (ADMIN/FACULTY/TA). Guards on every axis: the category must be known, the name  must be separator-free, the file must still be unreferenced, and the resolved  path must stay inside its category folder.
+         * @description Deletes a single orphaned upload — a file on disk that no DB row references  (see the abandoned-file report on the status dashboard). System administrators  only. Guards on every axis: the category must be known, the name  must be separator-free, the file must still be unreferenced, and the resolved  path must stay inside its category folder.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/status/abandoned-files/route.ts)
          */
@@ -1697,7 +1697,7 @@ export interface paths {
         };
         /**
          * Operational status snapshot
-         * @description Aggregated health and diagnostics for the status dashboard (Admin/Faculty only). Returns host metrics, DB engine stats, masked env keys, active-session and error-rate summaries, and abandoned-file counts. Fields are best-effort — any probe that fails is simply omitted.
+         * @description Aggregated health and diagnostics for the status dashboard (system administrators only). Returns host metrics, DB engine stats, masked env keys, active-session and error-rate summaries, and abandoned-file counts. Fields are best-effort — any probe that fails is simply omitted.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/status/route.ts)
          */
@@ -1721,9 +1721,9 @@ export interface paths {
         put?: never;
         /**
          * Rerun a submission
-         * @description Re-queues one submission for evaluation, resetting it to PENDING and clearing its  prior feedback/result. Staff only (ADMIN/FACULTY/TA). The submission must have a  stored file and its problem must still be linked to the assignment.
+         * @description Re-queues one submission for evaluation, resetting it to PENDING and clearing its  prior feedback/result. Course staff (faculty or TAs) or a system admin. The  submission must have a stored file and its problem must still be linked to the  assignment.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/submissions/[id]/rerun/route.ts)
          */
@@ -1747,7 +1747,7 @@ export interface paths {
          * Submit a solution
          * @description Submits a student's solution file for one assignment problem (multipart/form-data)  and queues it for evaluation. Requires a signed-in user who is enrolled in the  course (admins may submit anywhere). The problem must be linked to the assignment;  the authoritative course comes from the assignment, not the client. Enforces a  resubmit cooldown (429), the assignment's late/late-cutoff policy (403), an upload  size limit (413), and XML structure validation. On success the submission is  stored PENDING and returned with 202.
          *
-         *     **Auth:** requires ADMIN
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/submissions/route.ts)
          */
@@ -1767,9 +1767,9 @@ export interface paths {
         };
         /**
          * Download a backup file
-         * @description Streams a single backup file to the caller as an attachment. Admin/Faculty only.  A database dump contains the entire database (password hashes and all PII), so  the download is always recorded as a SECURITY audit event. The filename is  checked against a strict allow-list and the resolved path must stay inside the  backup directory — two independent guards against path traversal.
+         * @description Streams a single backup file to the caller as an attachment. System administrators only.  A database dump contains the entire database (password hashes and all PII), so  the download is always recorded as a SECURITY audit event. The filename is  checked against a strict allow-list and the resolved path must stay inside the  backup directory — two independent guards against path traversal.
          *
-         *     **Auth:** requires ADMIN / FACULTY
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/system-settings/backups/download/route.ts)
          */
@@ -1791,9 +1791,9 @@ export interface paths {
         };
         /**
          * List backups
-         * @description Lists available backups, newest first, each pairing a database dump with its  matching upload-files archive. Admin/Faculty only.
+         * @description Lists available backups, newest first, each pairing a database dump with its  matching upload-files archive. System administrators only.
          *
-         *     **Auth:** requires ADMIN / FACULTY
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/system-settings/backups/route.ts)
          */
@@ -1801,9 +1801,9 @@ export interface paths {
         put?: never;
         /**
          * Trigger a backup now
-         * @description Requests an on-demand backup by dropping a trigger file the db-backup container  polls for. Admin/Faculty only. Returns 202 (accepted) — the backup runs  asynchronously in that container, not in this request.
+         * @description Requests an on-demand backup by dropping a trigger file the db-backup container  polls for. System administrators only. Returns 202 (accepted) — the backup runs  asynchronously in that container, not in this request.
          *
-         *     **Auth:** requires ADMIN / FACULTY
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/system-settings/backups/route.ts)
          */
@@ -1845,18 +1845,18 @@ export interface paths {
         };
         /**
          * Get system settings
-         * @description Returns the singleton system settings, falling back to defaults for any unset  field. The hCaptcha secret is never returned — only `hcaptchaSecretConfigured`  reports whether one is stored. Admin/Faculty only.
+         * @description Returns the singleton system settings, falling back to defaults for any unset  field. The hCaptcha secret is never returned — only `hcaptchaSecretConfigured`  reports whether one is stored. System administrators only.
          *
-         *     **Auth:** requires ADMIN / FACULTY
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/system-settings/route.ts)
          */
         get: operations["getSystemSettings"];
         /**
          * Update system settings
-         * @description Updates the singleton system settings (upsert). Every field is optional, so a  partial payload only touches the fields it includes; numeric fields are clamped  to safe bounds and an invalid timezone is rejected. The hCaptcha secret is  write-only: send a non-empty `hcaptchaSecretKey` to set it, or  `hcaptchaSecretClear: true` to remove it. Changes are audited (never the secret  value). Admin/Faculty only.
+         * @description Updates the singleton system settings (upsert). Every field is optional, so a  partial payload only touches the fields it includes; numeric fields are clamped  to safe bounds and an invalid timezone is rejected. The hCaptcha secret is  write-only: send a non-empty `hcaptchaSecretKey` to set it, or  `hcaptchaSecretClear: true` to remove it. Changes are audited (never the secret  value). System administrators only.
          *
-         *     **Auth:** requires ADMIN / FACULTY
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/system-settings/route.ts)
          */
@@ -1879,7 +1879,7 @@ export interface paths {
          * Get TLS certificate status
          * @description Returns metadata about the currently installed TLS certificate and whether a  CSR is awaiting a signed cert. Admin only. Never returns key or PEM material.
          *
-         *     **Auth:** requires ADMIN
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/system-settings/tls/route.ts)
          */
@@ -1889,7 +1889,7 @@ export interface paths {
          * Install or generate a TLS certificate
          * @description Performs a certificate operation, chosen by the `action` field. Admin only;  unauthorized-but-authenticated attempts are recorded as a security event. Cert  bodies and keys are accepted in the request but never echoed back or logged.
          *
-         *     **Auth:** requires ADMIN
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/system-settings/tls/route.ts)
          */
@@ -1898,7 +1898,7 @@ export interface paths {
          * Reset TLS to a self-signed certificate
          * @description Removes the installed certificate and reverts to a self-signed one. Admin only.
          *
-         *     **Auth:** requires ADMIN
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/system-settings/tls/route.ts)
          */
@@ -1941,9 +1941,9 @@ export interface paths {
         };
         /**
          * Get a problem file
-         * @description Serves a problem's attached file, inline. Staff (ADMIN/FACULTY/TA) may fetch any;  other users must be enrolled in the problem's course. The download is audited, and  traversal filenames are rejected.
+         * @description Serves a problem's attached file, inline. Any enrolled member of the problem's  course (any role) or a system admin may fetch it. The download is audited, and  traversal filenames are rejected.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/uploads/problems/[file]/route.ts)
          */
@@ -1965,9 +1965,9 @@ export interface paths {
         };
         /**
          * Get a submission file
-         * @description Serves a submission's uploaded file as a download. Restricted to the submitting  student and to staff (ADMIN/FACULTY/TA). The download is audited, and traversal  filenames are rejected.
+         * @description Serves a submission's uploaded file as a download. Restricted to the submitting  student, course staff (faculty or TAs), or a system admin. The download is audited,  and traversal filenames are rejected.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/uploads/submissions/[file]/route.ts)
          */
@@ -2004,9 +2004,9 @@ export interface paths {
         post: operations["postUsersById"];
         /**
          * Delete a user
-         * @description Deletes a user. Restricted to ADMIN/FACULTY/TA. The user's activity logs are  deliberately preserved (schema `onDelete: SetNull` nulls their userId; each  entry keeps the actor's name/email in metadata), and their avatar file is  cleaned up. The deleted identity is captured for the audit entry before removal.
+         * @description Deletes a user. System administrators only. The user's activity logs are  deliberately preserved (schema `onDelete: SetNull` nulls their userId; each  entry keeps the actor's name/email in metadata), and their avatar file is  cleaned up. The deleted identity is captured for the audit entry before removal.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/users/[id]/route.ts)
          */
@@ -2015,9 +2015,9 @@ export interface paths {
         head?: never;
         /**
          * Update a user
-         * @description Updates a user: names, role, active status, timezone, and avatar. Accepts either  JSON or multipart/form-data (the latter carries the avatar file). A user may  edit themselves; ADMIN/FACULTY/TA may edit others. Deactivation is blocked while  the user is still on a published, unarchived course. Field-level changes are  recorded (before → after) in the audit log.
+         * @description Updates a user: names, admin flag, active status, timezone, and avatar. Accepts  either JSON or multipart/form-data (the latter carries the avatar file). A user  may edit themselves; only admins may edit others or change the admin flag.  Deactivation is blocked while the user is still on a published, unarchived  course. Field-level changes are recorded (before → after) in the audit log.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/users/[id]/route.ts)
          */
@@ -2035,9 +2035,9 @@ export interface paths {
         put?: never;
         /**
          * Bulk-create users
-         * @description Bulk-creates student accounts from parsed spreadsheet rows (the CSV import flow).  Restricted to ADMIN/FACULTY/TA. Each row is validated independently — a bad row  is collected in `failed` with a reason rather than aborting the batch — so the  response always reports per-row created/failed outcomes. Duplicate emails are  caught both within the batch and against existing users. All accounts are created  as STUDENT; `temporaryPasswords` forces a reset at first login.
+         * @description Bulk-creates user accounts from parsed spreadsheet rows (the CSV import flow).  System administrators only. Accounts are created with no global role. Each row  is validated independently — a bad row  is collected in `failed` with a reason rather than aborting the batch — so the  response always reports per-row created/failed outcomes. Duplicate emails are  caught both within the batch and against existing users. `temporaryPasswords`  forces a reset at first login.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA / STUDENT
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/users/bulk/route.ts)
          */
@@ -2083,7 +2083,7 @@ export interface paths {
          * List users (lightweight)
          * @description Lightweight user list used to refresh the users table without the audit-logging  side effect of the main `/api/users` GET. Same staff-role restriction and role  filter, but read-only.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/users/list/route.ts)
          */
@@ -2105,9 +2105,9 @@ export interface paths {
         };
         /**
          * List users
-         * @description Lists users for the staff-facing users table, optionally filtered to one role.  Restricted to ADMIN/FACULTY/TA; the access itself is audited.
+         * @description Lists users for the admin-facing users table. System administrators only; the  access itself is audited.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/users/route.ts)
          */
@@ -2115,9 +2115,9 @@ export interface paths {
         put?: never;
         /**
          * Create a user
-         * @description Creates a single user directly (staff-provisioned account), unlike self-service  signup. Restricted to ADMIN/FACULTY/TA. Validates email, password strength, and  timezone, and rejects a duplicate email. Unlike signup, the role here comes from  a trusted staff caller.
+         * @description Creates a single user directly (admin-provisioned account), unlike self-service  signup. System administrators only. Validates email, password strength, and  timezone, and rejects a duplicate email. The account is created with no global  role; admin rights are granted separately via the isAdmin flag.
          *
-         *     **Auth:** requires ADMIN / FACULTY / TA
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/users/route.ts)
          */
@@ -2186,7 +2186,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller is not an admin or faculty user. */
+            /** @description Caller is not a system administrator. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2248,7 +2248,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller is not an admin or faculty user. */
+            /** @description Caller is not a system administrator. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2298,7 +2298,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not signed in, or not an admin/faculty user. */
+            /** @description Not signed in, or not course faculty / a system admin (TAs excluded). */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -2413,7 +2413,16 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not staff, or a state guard blocked the change. */
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff or a system admin, or a state guard blocked the change. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2483,7 +2492,16 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2530,7 +2548,16 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2598,7 +2625,16 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not staff, or a state guard blocked the change. */
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff or a system admin, or a state guard blocked the change. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2779,7 +2815,16 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2967,7 +3012,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller is not enrolled in the course. */
+            /** @description Caller is not an enrolled member of the course or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3040,7 +3085,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Author is not enrolled in the course. */
+            /** @description Author is not an enrolled member of the course or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3167,7 +3212,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Caller is not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3230,7 +3275,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Caller is not course staff (faculty or TA) or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3274,7 +3319,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Not signed in. */
+            /** @description Not an enrolled member of the course and not a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3329,7 +3374,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not signed in. */
+            /** @description Not an enrolled member of the course and not a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3385,7 +3430,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Caller is not course staff (faculty or TA) or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3504,7 +3549,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Caller is not course staff (faculty or TA) or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3563,7 +3608,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not the student in question and not staff. */
+            /** @description Not the student themselves, course staff, or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3639,7 +3684,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Caller is not course staff (faculty or TA) or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3706,7 +3751,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Caller is not course staff (faculty or TA) or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3769,7 +3814,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Caller is not course staff (faculty or TA) or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3833,7 +3878,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not staff and requesting another student's data, or not enrolled. */
+            /** @description Requesting another student's data without being course staff or a system admin, or not an enrolled member of the course. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3893,7 +3938,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not staff and not enrolled in the course. */
+            /** @description Not an enrolled member of the course and not a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3954,7 +3999,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not staff and requesting another student's submissions, or not enrolled. */
+            /** @description Requesting another student's submissions without being course staff or a system admin, or not an enrolled member of the course. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4019,7 +4064,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not enrolled and not staff. */
+            /** @description Not enrolled in the course and not a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4081,7 +4126,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not staff, or archiving is blocked by the safety check. */
+            /** @description Not course faculty or a system admin (TAs excluded), or archiving is blocked by the safety check. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4139,7 +4184,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller is not an admin or faculty user. */
+            /** @description Caller is not course faculty or a system admin (TAs excluded). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4215,7 +4260,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Not course staff (faculty or TAs) or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4300,7 +4345,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller may not duplicate courses. */
+            /** @description System administrators only (logged as a security event). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4366,7 +4411,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Not course staff (faculty or TAs) or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4428,7 +4473,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Not course staff (faculty or TAs) or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4485,7 +4530,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Not course staff (faculty or TAs) or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4534,7 +4579,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4595,7 +4640,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4658,7 +4703,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4737,7 +4782,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not a global admin or course staff. */
+            /** @description Not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4803,7 +4848,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4887,7 +4932,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4963,7 +5008,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5029,7 +5074,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5144,7 +5189,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Caller is not course staff (faculty or TA) or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5193,7 +5238,7 @@ export interface operations {
                     "application/json": Record<string, never>[];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Caller is not course staff (faculty or TA) or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5258,7 +5303,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Caller is not course staff (faculty or TA) or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5329,7 +5374,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not staff, or unpublishing is blocked by the safety check. */
+            /** @description Not course faculty or a system admin (TAs excluded), or unpublishing is blocked by the safety check. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5362,7 +5407,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The roster entry and the viewer's roles. */
+            /** @description The roster entry, the viewer's course role, and viewerIsAdmin. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -5474,7 +5519,7 @@ export interface operations {
             content: {
                 "application/json": {
                     /** @enum {string} */
-                    role: "INSTRUCTOR" | "FACULTY" | "TA" | "STUDENT";
+                    role: "FACULTY" | "TA" | "STUDENT";
                 };
             };
         };
@@ -5486,7 +5531,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid role, or demoting the only instructor. */
+            /** @description Invalid role, or demoting the only faculty member. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -5504,7 +5549,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller is not an admin or the course instructor. */
+            /** @description Caller is not a system admin or a course faculty member. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5572,7 +5617,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not staff and not enrolled in the course. */
+            /** @description Not enrolled in the course and not a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5646,7 +5691,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not staff, or an archive/unpublish safety check failed. */
+            /** @description Not course staff (faculty or TAs) or a system admin, or an archive/unpublish safety check failed. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5684,7 +5729,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Not staff, or the course is not archived. */
+            /** @description Not course staff (faculty or TAs) or a system admin, or the course is not archived. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5784,7 +5829,7 @@ export interface operations {
                     "application/json": Record<string, never>[];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Not course staff (faculty or TAs) or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5845,16 +5890,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Course unpublished or archived (faculty/admin only). */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Course not found (also returned to students for hidden courses). */
+            /** @description Course not found (also returned for unpublished/archived courses). */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6025,7 +6061,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller may not create courses (logged as a security event). */
+            /** @description System administrators only (logged as a security event). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6177,7 +6213,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6246,7 +6282,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6311,7 +6347,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6394,7 +6430,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6465,7 +6501,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6571,7 +6607,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Caller is not an admin or faculty user. */
+            /** @description Caller is not a system administrator. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6629,7 +6665,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller is not an admin or faculty user. */
+            /** @description Caller is not a system administrator. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6667,7 +6703,7 @@ export interface operations {
                     "application/json": string[];
                 };
             };
-            /** @description Caller is not an admin or faculty user. */
+            /** @description Caller is not a system administrator. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6852,7 +6888,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Caller is not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6917,7 +6953,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Caller is not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6949,7 +6985,7 @@ export interface operations {
     getProblemsByIdSubmissions: {
         parameters: {
             query?: {
-                /** @description Whose submissions to fetch; staff only for others, defaults to the caller */
+                /** @description Whose submissions to fetch; only course staff or a system admin may fetch another user's, defaults to the caller */
                 userId?: string;
             };
             header?: never;
@@ -6979,8 +7015,17 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Requesting another user's submissions without a staff role. */
+            /** @description Requesting another user's submissions without being course staff or a system admin. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Problem not found (when fetching another user's submissions). */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7051,7 +7096,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Caller is not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7101,7 +7146,6 @@ export interface operations {
                         firstName?: string;
                         lastName?: string;
                         avatar?: string | null;
-                        role?: string;
                         timezone?: string | null;
                     };
                 };
@@ -7157,7 +7201,6 @@ export interface operations {
                         firstName?: string;
                         lastName?: string;
                         avatar?: string | null;
-                        role?: string;
                         timezone?: string | null;
                     };
                 };
@@ -7237,7 +7280,6 @@ export interface operations {
                             email?: string;
                             firstName?: string;
                             lastName?: string;
-                            role?: string;
                         };
                     };
                 };
@@ -7352,7 +7394,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Caller is not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7419,7 +7461,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not signed in, or lacking staff role. */
+            /** @description Not signed in, or not a system administrator. */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -7489,7 +7531,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Caller is not an admin or faculty user. */
+            /** @description Caller is not a system administrator. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7537,7 +7579,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Caller is not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7691,7 +7733,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller is not an admin or faculty user. */
+            /** @description Caller is not a system administrator. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7731,7 +7773,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Caller is not an admin or faculty user. */
+            /** @description Caller is not a system administrator. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7762,7 +7804,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Caller is not an admin or faculty user. */
+            /** @description Caller is not a system administrator. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7846,7 +7888,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Caller is not an admin or faculty user. */
+            /** @description Caller is not a system administrator. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7908,7 +7950,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller is not an admin or faculty user (attempt is audited). */
+            /** @description Caller is not a system administrator (attempt is audited). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -8151,7 +8193,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not enrolled in the problem's course (and not staff). */
+            /** @description Not an enrolled member of the problem's course or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -8218,7 +8260,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not the submitting student and not staff. */
+            /** @description Not the submitting student, course staff, or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -8314,7 +8356,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description System administrators only (also returned when not signed in). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -8348,15 +8390,14 @@ export interface operations {
                 "application/json": {
                     firstName?: string;
                     lastName?: string;
-                    /** @enum {string} */
-                    role?: "STUDENT" | "TA" | "FACULTY" | "ADMIN";
+                    /** @description Global admin flag (only writable by admins) */
+                    isAdmin?: boolean;
                     inactive?: boolean;
                     timezone?: string;
                 };
                 "multipart/form-data": {
                     firstName?: string;
                     lastName?: string;
-                    role?: string;
                     /** @enum {string} */
                     inactive?: "true" | "false";
                     timezone?: string;
@@ -8472,7 +8513,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description System administrators only. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -8532,15 +8573,6 @@ export interface operations {
             };
             /** @description Not signed in. */
             401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Session role is not permitted to change passwords. */
-            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8611,17 +8643,14 @@ export interface operations {
     };
     getUsers: {
         parameters: {
-            query?: {
-                /** @description Filter to a single role */
-                role?: "STUDENT" | "TA" | "FACULTY" | "ADMIN";
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Users (optionally filtered by role). */
+            /** @description Users. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -8630,7 +8659,7 @@ export interface operations {
                     "application/json": Record<string, never>[];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description System administrators only. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -8665,8 +8694,6 @@ export interface operations {
                     lastName: string;
                     /** @description Must meet the strength policy */
                     password: string;
-                    /** @enum {string} */
-                    role: "STUDENT" | "TA" | "FACULTY" | "ADMIN";
                     /** @description Defaults to the system timezone */
                     timezone?: string;
                 };
@@ -8689,7 +8716,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description System administrators only. */
             403: {
                 headers: {
                     [name: string]: unknown;
