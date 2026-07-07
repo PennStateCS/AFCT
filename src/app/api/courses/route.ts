@@ -145,8 +145,9 @@ export async function GET() {
 // ----------------------------------------
 /**
  * Creates a course (with a generated registration code) and seeds its faculty
- * roster, all in one transaction. Admin/TA/Faculty only. Datetime-local strings
- * are interpreted in the actor's effective timezone before being stored as UTC.
+ * roster, all in one transaction. System administrators only. Datetime-local
+ * strings are interpreted in the actor's effective timezone before being stored
+ * as UTC.
  * @openapi
  * summary: Create a course
  * requestBody:
@@ -173,7 +174,7 @@ export async function GET() {
  *   201:
  *     description: Course created; returns the course with its `enrolled` roster.
  *   400: { description: "Missing registration window, or Zod validation failed." }
- *   403: { description: Caller may not create courses (logged as a security event). }
+ *   403: { description: System administrators only (logged as a security event). }
  *   409: { description: A course with that code and semester already exists. }
  *   500: { description: Server error. }
  */

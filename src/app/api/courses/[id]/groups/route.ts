@@ -5,7 +5,8 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canManageCourse } from '@/lib/permissions';
 
 /**
- * Lists a course's groups, alphabetically. Staff only (ADMIN/FACULTY/TA).
+ * Lists a course's groups, alphabetically. Course staff (faculty or TAs) or a
+ * system admin.
  * @openapi
  * summary: List course groups
  * parameters:
@@ -17,7 +18,7 @@ import { canManageCourse } from '@/lib/permissions';
  *       application/json:
  *         schema: { type: array, items: { type: object } }
  *   401: { description: Not signed in. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Not course staff or a system admin. }
  *   500: { description: Server error. }
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -65,7 +66,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 /**
- * Creates a group in the course. Staff only (ADMIN/FACULTY/TA). Also doubles as a
+ * Creates a group in the course. Course staff (faculty or TAs) or a system admin.
+ * Also doubles as a
  * "list" endpoint: a body of `{ action: 'list' }` returns the groups instead of
  * creating one — a workaround so the client can list without needing a GET's
  * AbortController plumbing. Group names are unique per course.
@@ -86,7 +88,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
  *   200: { description: The group list (when action is "list"). }
  *   201: { description: The created group. }
  *   401: { description: Not signed in. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Not course staff or a system admin. }
  *   404: { description: Course not found. }
  *   409: { description: A group with that name already exists in the course. }
  *   422: { description: Missing group name. }

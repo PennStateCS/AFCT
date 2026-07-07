@@ -29,8 +29,9 @@ type CreatedRow = {
 };
 
 /**
- * Bulk-creates student accounts from parsed spreadsheet rows (the CSV import flow).
- * Restricted to ADMIN/FACULTY/TA. Each row is validated independently — a bad row
+ * Bulk-creates user accounts from parsed spreadsheet rows (the CSV import flow).
+ * System administrators only. Accounts are created with no global role. Each row
+ * is validated independently — a bad row
  * is collected in `failed` with a reason rather than aborting the batch — so the
  * response always reports per-row created/failed outcomes. Duplicate emails are
  * caught both within the batch and against existing users. `temporaryPasswords`
@@ -73,7 +74,7 @@ type CreatedRow = {
  *             created: { type: array, items: { type: object } }
  *             failed: { type: array, items: { type: object } }
  *   400: { description: No rows provided. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: System administrators only. }
  *   500: { description: Server error. }
  */
 export async function POST(req: Request) {

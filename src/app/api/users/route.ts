@@ -19,17 +19,17 @@ const isStrongPassword = (pw: string) =>
   /[^A-Za-z0-9]/.test(pw);
 
 /**
- * Lists users for the staff-facing users table, optionally filtered to one role.
- * Restricted to ADMIN/FACULTY/TA; the access itself is audited.
+ * Lists users for the admin-facing users table. System administrators only; the
+ * access itself is audited.
  * @openapi
  * summary: List users
  * responses:
  *   200:
- *     description: Users (optionally filtered by role).
+ *     description: Users.
  *     content:
  *       application/json:
  *         schema: { type: array, items: { type: object } }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: System administrators only. }
  *   500: { description: Server error. }
  */
 export async function GET(req: Request) {
@@ -60,9 +60,10 @@ export async function GET(req: Request) {
 }
 
 /**
- * Creates a single user directly (staff-provisioned account), unlike self-service
- * signup. Restricted to ADMIN/FACULTY/TA. Validates email, password strength, and
- * timezone, and rejects a duplicate email.
+ * Creates a single user directly (admin-provisioned account), unlike self-service
+ * signup. System administrators only. Validates email, password strength, and
+ * timezone, and rejects a duplicate email. The account is created with no global
+ * role; admin rights are granted separately via the isAdmin flag.
  * @openapi
  * summary: Create a user
  * requestBody:
@@ -82,7 +83,7 @@ export async function GET(req: Request) {
  *   201:
  *     description: The created user.
  *   400: { description: "Missing fields, invalid email, weak password, or invalid timezone." }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: System administrators only. }
  *   409: { description: Email already in use. }
  *   500: { description: Server error. }
  */

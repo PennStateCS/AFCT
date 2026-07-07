@@ -8,7 +8,7 @@ import { listBackups, BACKUP_TRIGGER_DIR, BACKUP_TRIGGER_FILE } from '@/lib/back
 
 /**
  * Lists available backups, newest first, each pairing a database dump with its
- * matching upload-files archive. Admin/Faculty only.
+ * matching upload-files archive. System administrators only.
  * @openapi
  * summary: List backups
  * responses:
@@ -20,7 +20,7 @@ import { listBackups, BACKUP_TRIGGER_DIR, BACKUP_TRIGGER_FILE } from '@/lib/back
  *           type: object
  *           properties:
  *             backups: { type: array, items: { type: object } }
- *   403: { description: Caller is not an admin or faculty user. }
+ *   403: { description: Caller is not a system administrator. }
  */
 export async function GET() {
   const session = await auth();
@@ -32,7 +32,7 @@ export async function GET() {
 
 /**
  * Requests an on-demand backup by dropping a trigger file the db-backup container
- * polls for. Admin/Faculty only. Returns 202 (accepted) — the backup runs
+ * polls for. System administrators only. Returns 202 (accepted) — the backup runs
  * asynchronously in that container, not in this request.
  * @openapi
  * summary: Trigger a backup now
@@ -42,7 +42,7 @@ export async function GET() {
  *     content:
  *       application/json:
  *         schema: { type: object, properties: { ok: { type: boolean } } }
- *   403: { description: Caller is not an admin or faculty user. }
+ *   403: { description: Caller is not a system administrator. }
  *   503: { description: The backup service (trigger volume) is not mounted. }
  */
 export async function POST(req: Request) {

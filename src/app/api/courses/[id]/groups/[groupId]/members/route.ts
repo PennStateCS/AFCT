@@ -5,8 +5,8 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canManageCourse } from '@/lib/permissions';
 
 /**
- * Lists a group's members, oldest first. Staff only (ADMIN/FACULTY/TA). The group
- * must belong to the course in the path.
+ * Lists a group's members, oldest first. Course staff (faculty or TAs) or a system
+ * admin. The group must belong to the course in the path.
  * @openapi
  * summary: List group members
  * parameters:
@@ -19,7 +19,7 @@ import { canManageCourse } from '@/lib/permissions';
  *       application/json:
  *         schema: { type: object, properties: { members: { type: array, items: { type: object } } } }
  *   401: { description: Not signed in. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Not course staff or a system admin. }
  *   404: { description: Group not found in this course. }
  *   500: { description: Server error. }
  */
@@ -64,8 +64,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 /**
- * Adds one user to a group. Staff only. The user must already be enrolled in the
- * course; the upsert makes re-adding a no-op.
+ * Adds one user to a group. Course staff (faculty or TAs) or a system admin. The
+ * user must already be enrolled in the course; the upsert makes re-adding a no-op.
  * @openapi
  * summary: Add a group member
  * parameters:
@@ -79,7 +79,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
  * responses:
  *   201: { description: Member added. }
  *   401: { description: Not signed in. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Not course staff or a system admin. }
  *   404: { description: Group not found in this course. }
  *   422: { description: "Missing userId, or the user isn't enrolled in the course." }
  *   500: { description: Server error. }
@@ -145,7 +145,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
 /**
  * Replaces a group's membership with the given set of users in one call, computing
- * the adds and removes. Permitted for global admins or course staff. Every user
+ * the adds and removes. Course staff (faculty or TAs) or a system admin. Every user
  * must be enrolled in the course, or the whole update is rejected.
  * @openapi
  * summary: Set group members in bulk
@@ -173,7 +173,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
  *             added: { type: array, items: { type: string } }
  *             removed: { type: array, items: { type: string } }
  *   401: { description: Not signed in. }
- *   403: { description: Not a global admin or course staff. }
+ *   403: { description: Not course staff or a system admin. }
  *   404: { description: Group not found in this course. }
  *   422: { description: "Missing members array, or some users aren't enrolled." }
  *   500: { description: Server error. }
@@ -192,7 +192,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     const members = Array.isArray(body?.members) ? (body.members as unknown[]).map(String) : null;
     if (!members) return NextResponse.json({ error: 'Missing members array' }, { status: 422 });
 
-    // Check permissions: site admin or course staff (ADMIN/FACULTY/TA) in the course
+    // Check permissions: system admin or course staff (faculty/TA) in the course
     if (!(await canManageCourse(currentUser, id))) {
       await createEnhancedActivityLog(prisma, req as unknown as Request, {
         userId: currentUser?.id ?? null,

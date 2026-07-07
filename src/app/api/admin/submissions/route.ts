@@ -7,7 +7,7 @@ import { isAdmin } from '@/lib/permissions';
 /**
  * Returns every submission across a set of problems, flattened for the admin
  * grading view — student, course, assignment/problem titles, status, and the
- * recorded grade (joined from AssignmentProblemGrade). Restricted to ADMIN/FACULTY.
+ * recorded grade (joined from AssignmentProblemGrade). System administrators only.
  * Takes the problem ids in the body rather than the query string since the list
  * can be long.
  * @openapi
@@ -29,7 +29,7 @@ import { isAdmin } from '@/lib/permissions';
  *         schema: { type: array, items: { type: object } }
  *   400: { description: problemIds missing or empty. }
  *   401: { description: Not signed in. }
- *   403: { description: Caller is not an admin or faculty user. }
+ *   403: { description: Caller is not a system administrator. }
  *   500: { description: Server error. }
  */
 export async function POST(req: NextRequest) {

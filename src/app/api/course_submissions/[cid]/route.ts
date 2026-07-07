@@ -6,9 +6,9 @@ import { canManageCourse } from '@/lib/permissions';
 
 /**
  * Re-queues every submission in a course, resetting each to PENDING and clearing its
- * feedback/result — the bulk counterpart to the single-submission rerun. Staff only
- * (ADMIN/FACULTY/TA). Logs each submission plus one batch-summary event, and returns
- * the count re-queued.
+ * feedback/result — the bulk counterpart to the single-submission rerun. Course staff
+ * (faculty or TAs) or a system admin. Logs each submission plus one batch-summary
+ * event, and returns the count re-queued.
  * @openapi
  * summary: Rerun all submissions in a course
  * parameters:
@@ -20,7 +20,7 @@ import { canManageCourse } from '@/lib/permissions';
  *       application/json:
  *         schema: { type: object, properties: { success: { type: boolean }, count: { type: integer } } }
  *   401: { description: Not signed in. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Caller is not course staff or a system admin. }
  *   500: { description: Server error. }
  */
 export async function POST(req: Request, context: { params: Promise<{ cid: string }> }) {

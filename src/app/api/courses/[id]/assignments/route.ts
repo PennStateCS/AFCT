@@ -6,7 +6,7 @@ import { canManageCourse, COURSE_FACULTY_ROLES } from '@/lib/permissions';
 
 /**
  * Lists a course's published assignments with each one's total and max grade
- * (summed across its problems). Restricted to ADMIN/FACULTY.
+ * (summed across its problems). Course faculty or a system admin (TAs excluded).
  * @openapi
  * summary: List a course's published assignments
  * parameters:
@@ -18,7 +18,7 @@ import { canManageCourse, COURSE_FACULTY_ROLES } from '@/lib/permissions';
  *       application/json:
  *         schema: { type: array, items: { type: object } }
  *   400: { description: Missing course id. }
- *   403: { description: Caller is not an admin or faculty user. }
+ *   403: { description: Caller is not course faculty or a system admin (TAs excluded). }
  *   404: { description: Course not found. }
  *   500: { description: Server error. }
  */

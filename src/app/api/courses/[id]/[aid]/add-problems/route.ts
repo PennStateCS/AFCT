@@ -34,7 +34,7 @@ type ProblemSettingsInput = z.infer<typeof ProblemSettingsSchema>;
 
 /**
  * Attaches problems to an assignment with per-problem settings (points, submission
- * cap, autograder). Staff only (ADMIN/FACULTY/TA). Adds only problems not already
+ * cap, autograder). Course staff (faculty or TAs) or a system admin. Adds only problems not already
  * linked — existing links, especially those with submissions, are preserved and
  * reported back. For group assignments, an optional `groupId` (or "ALL") maps the
  * given problems to specific groups, even ones already on the assignment. Only
@@ -66,7 +66,7 @@ type ProblemSettingsInput = z.infer<typeof ProblemSettingsSchema>;
  * responses:
  *   200: { description: The assignment's problem list plus a summary of what changed. }
  *   400: { description: Empty/invalid body or invalid problemSettings. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Caller is not course staff (faculty or TA) or a system admin. }
  *   500: { description: Server error. }
  */
 export async function POST(

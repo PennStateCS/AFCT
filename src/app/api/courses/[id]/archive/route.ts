@@ -6,7 +6,8 @@ import { canArchiveCourse } from '@/lib/course-status-checks';
 import { canManageCourse, COURSE_FACULTY_ROLES } from '@/lib/permissions';
 
 /**
- * Toggles a course's archived state. ADMIN/FACULTY only. Archiving runs a safety
+ * Toggles a course's archived state. Course faculty or a system admin (TAs
+ * excluded). Archiving runs a safety
  * check (canArchiveCourse) using the course's stored dates rather than any client
  * value, to avoid timezone drift deciding whether a course has really ended.
  * @openapi
@@ -26,7 +27,7 @@ import { canManageCourse, COURSE_FACULTY_ROLES } from '@/lib/permissions';
  *   200:
  *     description: The updated course (id, name, code, isArchived, updatedAt).
  *   400: { description: isArchived must be a boolean. }
- *   403: { description: "Not staff, or archiving is blocked by the safety check." }
+ *   403: { description: "Not course faculty or a system admin (TAs excluded), or archiving is blocked by the safety check." }
  *   404: { description: Course not found. }
  *   500: { description: Server error. }
  */

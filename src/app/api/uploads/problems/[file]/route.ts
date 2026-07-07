@@ -8,8 +8,8 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canAccessCourse } from '@/lib/permissions';
 
 /**
- * Serves a problem's attached file, inline. Staff (ADMIN/FACULTY/TA) may fetch any;
- * other users must be enrolled in the problem's course. The download is audited, and
+ * Serves a problem's attached file, inline. Any enrolled member of the problem's
+ * course (any role) or a system admin may fetch it. The download is audited, and
  * traversal filenames are rejected.
  * @openapi
  * summary: Get a problem file
@@ -23,7 +23,7 @@ import { canAccessCourse } from '@/lib/permissions';
  *         schema: { type: string, format: binary }
  *   400: { description: Invalid filename. }
  *   401: { description: Not signed in. }
- *   403: { description: Not enrolled in the problem's course (and not staff). }
+ *   403: { description: Not an enrolled member of the problem's course or a system admin. }
  *   404: { description: File not found. }
  *   500: { description: Server error. }
  */

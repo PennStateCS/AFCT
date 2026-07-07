@@ -7,9 +7,9 @@ import type { Prisma } from '@prisma/client';
 
 /**
  * Enrolls many users as STUDENT in one transaction (the roster's bulk-add flow).
- * Staff only (ADMIN/FACULTY/TA). Existing roster entries are reset to STUDENT
- * rather than duplicated, so it's safe to re-run. Unlike single enroll, every user
- * is added as a student regardless of their global role.
+ * Course staff (faculty or TAs) or a system admin. Existing roster entries are
+ * reset to STUDENT rather than duplicated, so it's safe to re-run. Every user is
+ * added as a STUDENT regardless of any other role.
  * @openapi
  * summary: Bulk-enroll students
  * parameters:
@@ -31,7 +31,7 @@ import type { Prisma } from '@prisma/client';
  *         schema: { type: object, properties: { success: { type: boolean }, enrolled: { type: integer } } }
  *   400: { description: No users provided. }
  *   401: { description: Not signed in. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Not course staff (faculty or TAs) or a system admin. }
  *   500: { description: Server error. }
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

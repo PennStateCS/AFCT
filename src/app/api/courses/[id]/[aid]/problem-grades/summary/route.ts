@@ -7,7 +7,7 @@ import { canManageCourse } from '@/lib/permissions';
 /**
  * Per-student completion summary for one assignment: maps each student to whether
  * every problem in the assignment has been graded (used to flag fully-graded
- * students in the grading UI). Staff only (ADMIN/FACULTY/TA).
+ * students in the grading UI). Course staff (faculty or TAs) or a system admin.
  * @openapi
  * summary: Get an assignment's grading-completion summary
  * parameters:
@@ -20,7 +20,7 @@ import { canManageCourse } from '@/lib/permissions';
  *       application/json:
  *         schema: { type: object, additionalProperties: { type: boolean } }
  *   401: { description: Not signed in. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Caller is not course staff (faculty or TA) or a system admin. }
  *   404: { description: Assignment not found in this course. }
  *   500: { description: Server error. }
  */
