@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server';
 const prismaMock = vi.hoisted(() => ({
   group: { findUnique: vi.fn() },
   groupRoster: { findUnique: vi.fn(), deleteMany: vi.fn() },
+  roster: { findFirst: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -15,7 +16,10 @@ vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activity
 
 import { DELETE } from './route';
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  prismaMock.roster.findFirst.mockResolvedValue(null);
+});
 
 describe('DELETE /api/courses/[id]/groups/[groupId]/members/[userId]', () => {
   it('returns 400 when missing params', async () => {
@@ -29,6 +33,7 @@ describe('DELETE /api/courses/[id]/groups/[groupId]/members/[userId]', () => {
 
   it('returns 404 when membership not found', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.group.findUnique.mockResolvedValue({ id: 'g1', courseId: 'c1' });
     prismaMock.groupRoster.findUnique.mockResolvedValue(null);
 
@@ -63,6 +68,7 @@ describe('DELETE /api/courses/[id]/groups/[groupId]/members/[userId]', () => {
 
   it('returns 404 when group is not in provided course', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.group.findUnique.mockResolvedValue({ id: 'g1', courseId: 'other-course' });
 
     const res = await DELETE(
@@ -75,6 +81,7 @@ describe('DELETE /api/courses/[id]/groups/[groupId]/members/[userId]', () => {
 
   it('returns 500 when delete throws', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.group.findUnique.mockResolvedValue({ id: 'g1', courseId: 'c1' });
     prismaMock.groupRoster.findUnique.mockResolvedValue({ id: 'r1' });
     prismaMock.groupRoster.deleteMany.mockRejectedValue(new Error('db failed'));
@@ -89,6 +96,7 @@ describe('DELETE /api/courses/[id]/groups/[groupId]/members/[userId]', () => {
 
   it('deletes membership and logs', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.group.findUnique.mockResolvedValue({ id: 'g1', courseId: 'c1' });
     prismaMock.groupRoster.findUnique.mockResolvedValue({ id: 'r1' });
     prismaMock.groupRoster.deleteMany.mockResolvedValue({ count: 1 } as any);

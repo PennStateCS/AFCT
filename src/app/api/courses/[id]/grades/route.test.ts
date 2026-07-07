@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const prismaMock = vi.hoisted(() => ({
-  roster: { findMany: vi.fn() },
+  roster: { findMany: vi.fn(), findFirst: vi.fn() },
   user: { findMany: vi.fn() },
   assignment: { findMany: vi.fn() },
   assignmentProblemGrade: { groupBy: vi.fn() },
@@ -17,6 +17,7 @@ import { GET } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  prismaMock.roster.findFirst.mockResolvedValue(null);
 });
 
 describe('GET /api/courses/[id]/grades', () => {
@@ -48,6 +49,7 @@ describe('GET /api/courses/[id]/grades', () => {
 
   it('returns grade matrix for staff', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.roster.findMany.mockResolvedValue([{ userId: 's1', role: 'STUDENT' }]);
     prismaMock.user.findMany.mockResolvedValue([
       { id: 's1', firstName: 'A', lastName: 'B', email: 's1@example.com', avatar: null },
@@ -75,6 +77,7 @@ describe('GET /api/courses/[id]/grades', () => {
 
   it('fills nulls when no gradeRows exist', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.roster.findMany.mockResolvedValue([
       { userId: 's1', role: 'STUDENT' },
       { userId: 's2', role: 'STUDENT' },
@@ -102,6 +105,7 @@ describe('GET /api/courses/[id]/grades', () => {
 
   it('returns empty grade matrix without groupBy when no assignments exist', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.roster.findMany.mockResolvedValue([{ userId: 's1', role: 'STUDENT' }]);
     prismaMock.user.findMany.mockResolvedValue([
       { id: 's1', firstName: 'A', lastName: 'B', email: 's1@example.com', avatar: null },
@@ -120,7 +124,7 @@ describe('GET /api/courses/[id]/grades', () => {
   });
 
   it('returns an empty matrix and skips the user lookup when the roster is empty', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.roster.findMany.mockResolvedValue([]);
     prismaMock.assignment.findMany.mockResolvedValue([
       { id: 'a1', title: 'A1', dueDate: '2025-01-01', problems: [{ maxPoints: 10 }] },
@@ -139,6 +143,7 @@ describe('GET /api/courses/[id]/grades', () => {
 
   it('coerces null summed grades to 0 and ignores rows for unknown students', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.roster.findMany.mockResolvedValue([{ userId: 's1', role: 'STUDENT' }]);
     prismaMock.user.findMany.mockResolvedValue([
       { id: 's1', firstName: 'A', lastName: 'B', email: 's1@example.com', avatar: null },
@@ -162,6 +167,7 @@ describe('GET /api/courses/[id]/grades', () => {
   it('returns 500 when a query fails', async () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.roster.findMany.mockRejectedValue(new Error('db down'));
 
     const req = new NextRequest('http://localhost/api/courses/c1/grades');

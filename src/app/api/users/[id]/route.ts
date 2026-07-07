@@ -5,6 +5,7 @@ import { writeFile, unlink } from 'fs/promises';
 import path from 'path';
 import { Role } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { isAdmin } from '@/lib/permissions';
 import { parseRole } from '@/lib/roles';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
@@ -60,15 +61,14 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     const session = await auth();
     const currentUser = session?.user;
 
-    if (!currentUser || !currentUser.id || !currentUser.role) {
+    if (!currentUser || !currentUser.id) {
       console.warn('[PATCH] Unauthorized request');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     actorId = currentUser.id;
 
-    const isAdminOnly = currentUser.role === 'ADMIN';
-    const canEdit =
-      isAdminOnly || currentUser.id === userId || ['FACULTY', 'TA'].includes(currentUser.role);
+    // A user may edit their own account; otherwise only admins may edit others.
+    const canEdit = isAdmin(currentUser) || currentUser.id === userId;
     if (!canEdit) {
       console.warn(`[PATCH] Forbidden: ${currentUser.id} tried to update user ${userId}`);
       await createEnhancedActivityLog(prisma, req, {
@@ -207,7 +207,8 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       firstName: firstName ?? undefined,
       lastName: lastName ?? undefined,
       avatar: avatarFilename !== undefined ? avatarFilename : undefined,
-      role: role,
+      // Only admins may change a user's role; self-editors cannot escalate.
+      role: isAdmin(currentUser) ? role : undefined,
       inactive: inactive,
       timezone: timezoneRaw ? timezoneRaw : undefined,
     };
@@ -294,7 +295,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     const session = await auth();
     const currentUser = session?.user;
 
-    if (!currentUser || !['ADMIN', 'FACULTY', 'TA'].includes(currentUser.role)) {
+    if (!currentUser || !isAdmin(currentUser)) {
       console.warn(`[DELETE] Forbidden: ${currentUser?.id} tried to delete user ${userId}`);
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,

@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { RoleEnum, CourseRoleEnum } from '@/schemas/user';
+import { canAccessCourse } from '@/lib/permissions';
 
 // ---- Types ----
 interface CommentUser {
@@ -277,19 +278,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Verify caller access: enrolled users can read; global admins can always read.
-    if (user.role !== 'ADMIN') {
-      const rosterEntry = await prisma.roster.findUnique({
-        where: { courseId_userId: { courseId: assignment.courseId, userId: user.id } },
+    if (!(await canAccessCourse(user, assignment.courseId))) {
+      await createEnhancedActivityLog(prisma, request, {
+        userId: session?.user?.id ?? null,
+        action: 'COMMENT_VIEW_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
       });
-      if (!rosterEntry) {
-        await createEnhancedActivityLog(prisma, request, {
-          userId: session?.user?.id ?? null,
-          action: 'COMMENT_VIEW_DENIED',
-          severity: 'SECURITY',
-          metadata: { role: session?.user?.role ?? null },
-        });
-        return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
-      }
+      return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
     }
 
     // If studentId present, restrict to comments about that student OR authored by that student

@@ -14,7 +14,8 @@ import { GET } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+  prismaMock.roster.findFirst.mockResolvedValue(null);
+  authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
 });
 
 describe('GET /api/courses/[id]/[aid]', () => {
@@ -41,7 +42,7 @@ describe('GET /api/courses/[id]/[aid]', () => {
 
   it('allows an enrolled student', async () => {
     authMock.mockResolvedValue({ user: { id: 'stu-1', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
     prismaMock.assignment.findFirst.mockResolvedValue({
       id: 'a1',
       title: 'Assignment',

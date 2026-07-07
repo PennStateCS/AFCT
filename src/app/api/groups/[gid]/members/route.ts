@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
 /**
  * Lists a group's members (with user profiles) by the group's global id. Staff
@@ -32,21 +33,22 @@ export async function GET(
 
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
-    await createEnhancedActivityLog(prisma, req, {
-      userId: session?.user?.id ?? null,
-      action: 'GROUP_MEMBERS_VIEW_DENIED',
-      severity: 'SECURITY',
-      metadata: { role: session?.user?.role ?? null },
-    });
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
 
   try {
     const group = await prisma.group.findUnique({ where: { id: groupId } });
     if (!group) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
     if (providedCourseId && group.courseId !== providedCourseId)
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+
+    if (!(await canManageCourse(session.user, group.courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'GROUP_MEMBERS_VIEW_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const members = await prisma.groupRoster.findMany({
       where: { groupId },
@@ -110,15 +112,6 @@ export async function POST(
 
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
-    await createEnhancedActivityLog(prisma, req, {
-      userId: session?.user?.id ?? null,
-      action: 'GROUP_MEMBER_ADD_DENIED',
-      severity: 'SECURITY',
-      metadata: { role: session?.user?.role ?? null },
-    });
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
 
   try {
     const group = await prisma.group.findUnique({ where: { id: groupId } });
@@ -126,6 +119,16 @@ export async function POST(
     if (providedCourseId && group.courseId !== providedCourseId)
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
     const courseId = group.courseId;
+
+    if (!(await canManageCourse(session.user, courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'GROUP_MEMBER_ADD_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const body = await req.json().catch(() => ({}));
     const userId = body?.userId ?? null;

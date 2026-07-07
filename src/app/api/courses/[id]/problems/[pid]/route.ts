@@ -4,6 +4,7 @@ import path from 'path';
 import { promises as fs } from 'fs';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
 /**
  * Deletes a problem within a course, unconditionally cascading its submissions and
@@ -32,7 +33,7 @@ export async function DELETE(
     const session = await auth();
     const user = session?.user;
 
-    if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    if (!user || !(await canManageCourse(user, courseId))) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'PROBLEM_DELETE_DENIED',

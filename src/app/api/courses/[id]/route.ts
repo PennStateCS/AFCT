@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canArchiveCourse, canUnpublishCourse } from '@/lib/course-status-checks';
+import { canAccessCourse, canManageCourse } from '@/lib/permissions';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
 import { toEmptyStringNotation } from '@/lib/empty-string-notation';
 
@@ -116,12 +117,11 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
 
     // Access: staff may view any course; everyone else must be enrolled in it.
     // This roster lookup is reused below to report the viewer's course role.
-    const isStaff = ['ADMIN', 'FACULTY', 'TA'].includes(session.user.role);
     const viewerRoster = await prisma.roster.findFirst({
       where: { courseId: course.id, userId: session.user.id },
       select: { role: true },
     });
-    if (!isStaff && !viewerRoster) {
+    if (!(await canAccessCourse(session.user, course.id))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -388,7 +388,7 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
   const session = await auth();
   const user = session?.user;
 
-  if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+  if (!user || !(await canManageCourse(user, id))) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session?.user?.id ?? null,
       action: 'COURSE_UPDATE_DENIED',
@@ -751,7 +751,7 @@ export async function DELETE(req: Request, context: { params: Promise<{ id: stri
   const session = await auth();
   const user = session?.user;
 
-  if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+  if (!user || !(await canManageCourse(user, id))) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session?.user?.id ?? null,
       action: 'COURSE_DELETE_DENIED',

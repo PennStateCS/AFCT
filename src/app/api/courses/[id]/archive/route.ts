@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canArchiveCourse } from '@/lib/course-status-checks';
+import { canManageCourse, COURSE_FACULTY_ROLES } from '@/lib/permissions';
 
 /**
  * Toggles a course's archived state. ADMIN/FACULTY only. Archiving runs a safety
@@ -43,7 +44,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     const user = session?.user;
     actorId = user?.id ?? null;
 
-    if (!user || !['ADMIN', 'FACULTY'].includes(user.role)) {
+    if (!user || !(await canManageCourse(user, courseId, COURSE_FACULTY_ROLES))) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'COURSE_ARCHIVE_DENIED',

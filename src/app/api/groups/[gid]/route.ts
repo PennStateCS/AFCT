@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { UpdateGroupSchema } from '@/schemas/group';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
 /**
  * Renames a group by its global id (the course-agnostic variant of the course-
@@ -40,16 +41,6 @@ export async function PATCH(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
-    await createEnhancedActivityLog(prisma, req, {
-      userId: session?.user?.id ?? null,
-      action: 'GROUP_UPDATE_DENIED',
-      severity: 'SECURITY',
-      metadata: { role: session?.user?.role ?? null },
-    });
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
   try {
     const body = await req.json();
     const parsed = UpdateGroupSchema.safeParse(body);
@@ -66,6 +57,16 @@ export async function PATCH(
     if (providedCourseId && group.courseId !== providedCourseId)
       return NextResponse.json({ error: 'Group does not belong to this course' }, { status: 400 });
     const courseId = group.courseId;
+
+    if (!(await canManageCourse(session.user, courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'GROUP_UPDATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     // check unique constraint
     const exists = await prisma.group.findUnique({ where: { courseId_name: { courseId, name } } });
@@ -127,22 +128,22 @@ export async function DELETE(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
-    await createEnhancedActivityLog(prisma, req, {
-      userId: session?.user?.id ?? null,
-      action: 'GROUP_DELETE_DENIED',
-      severity: 'SECURITY',
-      metadata: { role: session?.user?.role ?? null },
-    });
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
   try {
     const group = await prisma.group.findUnique({ where: { id: gid } });
     if (!group) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
     if (providedCourseId && group.courseId !== providedCourseId)
       return NextResponse.json({ error: 'Group does not belong to this course' }, { status: 400 });
     const courseId = group.courseId;
+
+    if (!(await canManageCourse(session.user, courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'GROUP_DELETE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     await prisma.group.delete({ where: { id: gid } });
 

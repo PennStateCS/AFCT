@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import fs from 'fs';
 import path from 'path';
 import { auth } from '@/lib/auth';
+import { canManageCourse } from '@/lib/permissions';
 import { ProblemType } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
@@ -52,7 +53,7 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
     const user = session?.user;
     actorId = user?.id ?? null;
 
-    if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    if (!user) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'PROBLEM_UPDATE_DENIED',
@@ -69,6 +70,16 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
 
     if (!existingProblem) {
       return NextResponse.json({ error: 'Problem not found' }, { status: 404 });
+    }
+
+    if (!(await canManageCourse(user, existingProblem.courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'PROBLEM_UPDATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     // Parse multipart form data
@@ -226,7 +237,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     const user = session?.user;
     actorId = user?.id ?? null;
 
-    if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    if (!user) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'PROBLEM_DELETE_DENIED',
@@ -243,6 +254,16 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
 
     if (!existingProblem) {
       return NextResponse.json({ error: 'Problem not found' }, { status: 404 });
+    }
+
+    if (!(await canManageCourse(user, existingProblem.courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'PROBLEM_DELETE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     // Prevent deletion if the problem is linked to any assignment

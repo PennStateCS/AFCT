@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canAccessCourse, canManageCourse } from '@/lib/permissions';
 import { toDateTimeInTimezone, toEndOfDayInTimezone } from '@/lib/date-utils';
 
 async function resolveUserTimezone(userId?: string | null) {
@@ -118,37 +119,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 
-    // Check permissions - students can only see published assignments in courses they're enrolled in
-    if (session.user.role === 'STUDENT') {
-      // Check if assignment is published
-      if (!assignment.isPublished) {
-        return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
-      }
-
-      // Check if student is enrolled in the course
-      const enrollment = await prisma.roster.findFirst({
-        where: {
-          courseId: assignment.courseId,
-          userId: session.user.id,
-          role: 'STUDENT', // Use CourseRole enum value
-        },
-      });
-
-      if (!enrollment) {
-        return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
-      }
-    }
-    // For non-students (FACULTY/TA), check if they have access to the course
-    else if (!['ADMIN'].includes(session.user.role)) {
-      const hasAccess = await prisma.roster.findFirst({
-        where: {
-          courseId: assignment.courseId,
-          userId: session.user.id,
-          role: { in: ['FACULTY', 'TA'] },
-        },
-      });
-
-      if (!hasAccess && session.user.role !== 'ADMIN') {
+    // Staff/admin see anything; otherwise the assignment must be published AND the
+    // caller enrolled in the course. Everything else is masked as 404.
+    if (!(await canManageCourse(session.user, assignment.courseId))) {
+      if (!assignment.isPublished || !(await canAccessCourse(session.user, assignment.courseId))) {
         return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
       }
     }
@@ -203,7 +177,18 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const session = await auth();
 
-  if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const assignmentForAuth = await prisma.assignment.findUnique({
+    where: { id },
+    select: { courseId: true },
+  });
+  if (!assignmentForAuth) {
+    return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+  }
+  if (!(await canManageCourse(session.user, assignmentForAuth.courseId))) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session?.user?.id ?? null,
       action: 'ASSIGNMENT_UPDATE_DENIED',
@@ -382,7 +367,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const session = await auth();
 
-  if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const assignmentForAuth = await prisma.assignment.findUnique({
+    where: { id },
+    select: { courseId: true },
+  });
+  if (!assignmentForAuth) {
+    return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+  }
+  if (!(await canManageCourse(session.user, assignmentForAuth.courseId))) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session?.user?.id ?? null,
       action: 'ASSIGNMENT_UPDATE_DENIED',
@@ -573,14 +569,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 export async function POST(req: NextRequest) {
   const session = await auth();
 
-  if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
-    await createEnhancedActivityLog(prisma, req, {
-      userId: session?.user?.id ?? null,
-      action: 'ASSIGNMENT_CREATE_DENIED',
-      severity: 'SECURITY',
-      metadata: { role: session?.user?.role ?? null },
-    });
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
@@ -589,6 +579,16 @@ export async function POST(req: NextRequest) {
 
     if (!data.title || !data.courseId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    if (!(await canManageCourse(session.user, data.courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'ASSIGNMENT_CREATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     const allowLateSubmissions =
@@ -683,7 +683,18 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   const session = await auth();
 
-  if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const assignmentForAuth = await prisma.assignment.findUnique({
+    where: { id },
+    select: { courseId: true },
+  });
+  if (!assignmentForAuth) {
+    return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+  }
+  if (!(await canManageCourse(session.user, assignmentForAuth.courseId))) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session?.user?.id ?? null,
       action: 'ASSIGNMENT_DELETE_DENIED',

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
 /**
  * Removes a user from a group, addressed by the group's and user's global ids.
@@ -29,15 +30,6 @@ export async function DELETE(
 
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
-    await createEnhancedActivityLog(prisma, req, {
-      userId: session?.user?.id ?? null,
-      action: 'GROUP_MEMBER_REMOVE_DENIED',
-      severity: 'SECURITY',
-      metadata: { role: session?.user?.role ?? null },
-    });
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
 
   try {
     const group = await prisma.group.findUnique({ where: { id: groupId } });
@@ -45,6 +37,16 @@ export async function DELETE(
     if (providedCourseId && group.courseId !== providedCourseId)
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
     const courseId = group.courseId;
+
+    if (!(await canManageCourse(session.user, courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'GROUP_MEMBER_REMOVE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const entry = await prisma.groupRoster.findUnique({
       where: { groupId_userId: { groupId, userId } },

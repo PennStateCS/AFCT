@@ -9,6 +9,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { getQueueSettings } from '@/lib/eval-config';
 import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
+import { canAccessCourse } from '@/lib/permissions';
 
 /**
  * Submits a student's solution file for one assignment problem (multipart/form-data)
@@ -167,32 +168,25 @@ export async function POST(req: NextRequest) {
 
   // Authorization: admins may submit to any course; everyone else (students,
   // faculty, TAs) must be on the course roster (enrolled or assigned).
-  if (session.user.role !== 'ADMIN' && prisma.roster?.findFirst) {
-    const rosterEntry = await prisma.roster.findFirst({
-      where: { courseId, userId: session.user.id },
-      select: { id: true },
-    });
-
-    if (!rosterEntry) {
-      await createEnhancedActivityLog(prisma, req, {
+  if (!(await canAccessCourse(session.user, courseId))) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session.user.id,
+      action: 'SUBMISSION_FORBIDDEN',
+      severity: 'SECURITY',
+      category: 'SUBMISSION',
+      courseId,
+      assignmentId,
+      problemId,
+      metadata: {
         userId: session.user.id,
-        action: 'SUBMISSION_FORBIDDEN',
-        severity: 'SECURITY',
-        category: 'SUBMISSION',
         courseId,
         assignmentId,
         problemId,
-        metadata: {
-          userId: session.user.id,
-          courseId,
-          assignmentId,
-          problemId,
-          role: session.user.role,
-          error: 'User is not enrolled in or assigned to this course.',
-        },
-      });
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+        role: session.user.role,
+        error: 'User is not enrolled in or assigned to this course.',
+      },
+    });
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   // Rate limit: enforce a short cooldown between submissions to the same problem

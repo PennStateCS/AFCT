@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
 /**
  * Per-student completion summary for one assignment: maps each student to whether
@@ -34,8 +35,7 @@ export async function GET(
     }
 
     const { id: courseId, aid: assignmentId } = await params;
-    const isStaff = ['ADMIN', 'FACULTY', 'TA'].includes(session.user.role);
-    if (!isStaff) {
+    if (!(await canManageCourse(session.user, courseId))) {
       await createEnhancedActivityLog(prisma, _req, {
         userId: session?.user?.id ?? null,
         action: 'PROBLEM_GRADES_SUMMARY_ACCESS_DENIED',

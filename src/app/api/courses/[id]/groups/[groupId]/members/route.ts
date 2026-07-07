@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
 /**
  * Lists a group's members, oldest first. Staff only (ADMIN/FACULTY/TA). The group
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+  if (!(await canManageCourse(session.user, id))) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session?.user?.id ?? null,
       action: 'GROUP_MEMBERS_VIEW_DENIED',
@@ -91,7 +92,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+  if (!(await canManageCourse(session.user, id))) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session?.user?.id ?? null,
       action: 'GROUP_MEMBER_ADD_DENIED',
@@ -192,9 +193,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     if (!members) return NextResponse.json({ error: 'Missing members array' }, { status: 422 });
 
     // Check permissions: site admin or course staff (ADMIN/FACULTY/TA) in the course
-    const currentRoster = await prisma.roster.findFirst({ where: { courseId: id, userId: currentUser.id } });
-    const isAllowed = currentUser.role === 'ADMIN' || ['ADMIN', 'FACULTY', 'TA'].includes(currentRoster?.role ?? '');
-    if (!isAllowed) {
+    if (!(await canManageCourse(currentUser, id))) {
       await createEnhancedActivityLog(prisma, req as unknown as Request, {
         userId: currentUser?.id ?? null,
         action: 'GROUP_MEMBERS_UPDATE_DENIED',

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const prismaMock = vi.hoisted(() => ({
-  roster: { findUnique: vi.fn() },
+  roster: { findUnique: vi.fn(), findFirst: vi.fn() },
   assignment: { findMany: vi.fn() },
   assignmentProblem: { findMany: vi.fn() },
   assignmentProblemGrade: { findMany: vi.fn() },
@@ -49,6 +49,7 @@ const seedGradeData = () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  prismaMock.roster.findFirst.mockResolvedValue(null);
 });
 
 describe('GET /api/courses/[id]/student-grades', () => {
@@ -80,6 +81,7 @@ describe('GET /api/courses/[id]/student-grades', () => {
   it('applies default values when a problem has no submissions or grades', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
     prismaMock.roster.findUnique.mockResolvedValue({ id: 'r1' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
     prismaMock.assignment.findMany.mockResolvedValue([
       { id: 'a1', title: 'Assignment 1', description: null, dueDate: null },
     ]);
@@ -110,6 +112,7 @@ describe('GET /api/courses/[id]/student-grades', () => {
   it('returns assignment grade payload for an enrolled student', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
     prismaMock.roster.findUnique.mockResolvedValue({ id: 'r1' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
     seedGradeData();
 
     const res = await GET(makeRequest(), params());
@@ -134,8 +137,9 @@ describe('GET /api/courses/[id]/student-grades', () => {
   });
 
   it('allows staff to view grades without course membership', async () => {
-    authMock.mockResolvedValue({ user: { id: 'staff-1', role: 'FACULTY' } });
+    authMock.mockResolvedValue({ user: { id: 'staff-1', role: 'FACULTY', isAdmin: true } });
     prismaMock.roster.findUnique.mockResolvedValue(null);
+    prismaMock.roster.findFirst.mockResolvedValue(null);
     seedGradeData();
 
     const res = await GET(makeRequest(), params());
@@ -144,7 +148,7 @@ describe('GET /api/courses/[id]/student-grades', () => {
   });
 
   it('returns 500 when the query fails', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.roster.findUnique.mockResolvedValue({ id: 'r1' });
     prismaMock.assignment.findMany.mockRejectedValue(new Error('db down'));
 

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { ProblemTypeEnum } from '@/schemas/problem';
 import { RoleEnum } from '@/schemas/user';
+import { canAccessCourse } from '@/lib/permissions';
 import { z } from 'zod';
 
 // Types
@@ -74,15 +75,8 @@ export async function GET(req: Request, context: { params: Promise<{ id: string;
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     // Access: staff may view any assignment; everyone else must be enrolled.
-    const isStaff = ['ADMIN', 'FACULTY', 'TA'].includes(session.user.role);
-    if (!isStaff) {
-      const enrolled = await prisma.roster.findFirst({
-        where: { courseId, userId: session.user.id },
-        select: { id: true },
-      });
-      if (!enrolled) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
+    if (!(await canAccessCourse(session.user, courseId))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const assignment = (await prisma.assignment.findFirst({

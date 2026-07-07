@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { isAdmin } from '@/lib/permissions';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 const CATEGORY_FOLDERS: Record<string, string> = {
@@ -55,8 +56,7 @@ export async function DELETE(req: Request) {
   try {
     const session = await auth();
     actorId = session?.user?.id ?? null;
-    const role = session?.user?.role;
-    if (!session?.user?.id || !role || !['ADMIN', 'FACULTY', 'TA'].includes(role)) {
+    if (!isAdmin(session?.user)) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'ABANDONED_FILES_DELETE_DENIED',

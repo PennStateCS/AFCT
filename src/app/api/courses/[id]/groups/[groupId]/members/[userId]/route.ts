@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
 /**
  * Removes one member from a group. Staff only (ADMIN/FACULTY/TA). The group must
@@ -27,7 +28,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+  if (!(await canManageCourse(session.user, id))) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session?.user?.id ?? null,
       action: 'GROUP_MEMBER_REMOVE_DENIED',
