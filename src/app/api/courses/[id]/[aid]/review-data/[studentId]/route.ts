@@ -46,9 +46,9 @@ const submissionSelectWithoutEvaluation = {
  * them, and their per-problem grades. Falls back gracefully if the optional
  * `evaluationRaw` column is absent.
  *
- * Access: admins, or any user enrolled in the course. NOTE: enrollment is the only
- * gate — it does not restrict `studentId` to the caller, so any course member can
- * read another member's review data.
+ * Access: staff (ADMIN/FACULTY/TA) may read any student's data; a non-staff user
+ * may read only their own (`studentId` must be their id). Course membership is also
+ * required, except for global admins.
  * @openapi
  * summary: Get a student's review data for an assignment
  * parameters:
@@ -67,7 +67,7 @@ const submissionSelectWithoutEvaluation = {
  *             comments: { type: array, items: { type: object } }
  *             problemGrades: { type: object }
  *   401: { description: Not signed in. }
- *   403: { description: Not enrolled in the course (and not admin). }
+ *   403: { description: Not staff and requesting another student's data, or not enrolled. }
  *   404: { description: Assignment not found for this course. }
  *   500: { description: Server error. }
  */
@@ -94,6 +94,19 @@ export async function GET(
       return NextResponse.json({ error: 'Assignment not found for this course' }, { status: 404 });
     }
 
+    // Students may only read their own review data; staff may read anyone's.
+    const isStaff = ['ADMIN', 'FACULTY', 'TA'].includes(user.role);
+    if (!isStaff && user.id !== studentId) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'REVIEW_DATA_ACCESS_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // Course-membership requirement (global admins excepted), as before.
     if (user.role !== 'ADMIN') {
       const rosterEntry = await prisma.roster.findFirst({
         where: { courseId, userId: user.id },

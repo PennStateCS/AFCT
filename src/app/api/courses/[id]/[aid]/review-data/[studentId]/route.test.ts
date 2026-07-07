@@ -63,6 +63,22 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
     expect(res.status).toBe(403);
   });
 
+  it('returns 403 when a student requests another student’s review data', async () => {
+    authMock.mockResolvedValue({ user: { id: 'student-2', role: 'STUDENT' } });
+
+    const res = await GET(new Request('http://localhost'), { params: Promise.resolve(params) });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('allows a student to view their own review data', async () => {
+    authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
+
+    const res = await GET(new Request('http://localhost'), { params: Promise.resolve(params) });
+
+    expect(res.status).toBe(200);
+  });
+
   it('returns 404 when assignment is not found in the course', async () => {
     prismaMock.assignment.findFirst.mockResolvedValue(null);
 
