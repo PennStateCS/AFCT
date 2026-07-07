@@ -5,10 +5,9 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canManageCourse } from '@/lib/permissions';
 
 /**
- * Adds (or re-roles) a single user on a course roster. Staff only
- * (ADMIN/FACULTY/TA). The course role is derived from the target's global role —
- * admins/faculty become FACULTY, TAs stay TA, everyone else STUDENT — so callers
- * don't pick the role directly. Upserts, so re-enrolling just refreshes the role.
+ * Adds (or re-roles) a single user on a course roster. Course staff (faculty or
+ * TAs) or a system admin. The user is always added as a STUDENT — callers don't
+ * pick the role directly. Upserts, so re-enrolling just resets the role to STUDENT.
  * @openapi
  * summary: Enroll a user in a course
  * parameters:
@@ -30,7 +29,7 @@ import { canManageCourse } from '@/lib/permissions';
  *         schema: { type: object, properties: { success: { type: boolean } } }
  *   400: { description: Missing userId. }
  *   401: { description: "Not signed in, or the target user is inactive." }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Not course staff (faculty or TAs) or a system admin. }
  *   404: { description: Target user not found. }
  *   500: { description: Server error. }
  */

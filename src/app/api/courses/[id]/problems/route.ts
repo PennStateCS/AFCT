@@ -23,8 +23,8 @@ async function ensureDirExists(dir: string) {
 const uploadDir = path.join('/private', 'uploads', 'solutions');
 
 /**
- * Creates a problem in a course from an uploaded solution file. Staff only
- * (ADMIN/FACULTY/TA). The file is size-checked and stored under a generated name;
+ * Creates a problem in a course from an uploaded solution file. Course staff
+ * (faculty or TAs) or a system admin. The file is size-checked and stored under a generated name;
  * `maxStates` applies to FA/PDA and `isDeterministic` to FA. (Sibling of
  * POST /api/problems, scoped to the course in the path.)
  * @openapi
@@ -48,7 +48,7 @@ const uploadDir = path.join('/private', 'uploads', 'solutions');
  * responses:
  *   201: { description: The created problem. }
  *   400: { description: Missing fields or file. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Caller is not course staff (faculty or TA) or a system admin. }
  *   404: { description: Course not found. }
  *   413: { description: File exceeds the system upload limit. }
  *   500: { description: Server error. }
@@ -158,8 +158,9 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
 }
 
 /**
- * Lists all problems in a course, newest first. Staff only (ADMIN/FACULTY/TA) — the
- * rows include stored solution filenames, which students must not see. The solution
+ * Lists all problems in a course, newest first. Course staff (faculty or TAs) or a
+ * system admin — the rows include stored solution filenames, which students must not
+ * see. The solution
  * files themselves are served by a separate, access-controlled route.
  * @openapi
  * summary: List a course's problems
@@ -171,7 +172,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
  *     content:
  *       application/json:
  *         schema: { type: array, items: { type: object } }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Caller is not course staff (faculty or TA) or a system admin. }
  *   500: { description: Server error. }
  */
 export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {

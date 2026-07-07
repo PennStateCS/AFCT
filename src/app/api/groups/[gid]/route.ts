@@ -7,7 +7,8 @@ import { canManageCourse } from '@/lib/permissions';
 
 /**
  * Renames a group by its global id (the course-agnostic variant of the course-
- * scoped route). Staff only. Names remain unique within the group's course.
+ * scoped route). Course staff (faculty or TAs) or a system admin. Names remain
+ * unique within the group's course.
  * @openapi
  * summary: Rename a group by id
  * parameters:
@@ -21,7 +22,7 @@ import { canManageCourse } from '@/lib/permissions';
  *   200: { description: The updated group. }
  *   400: { description: Validation failed. }
  *   401: { description: Not signed in. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Not course staff or a system admin. }
  *   404: { description: Group not found. }
  *   409: { description: Name already used in the course. }
  *   500: { description: Server error. }
@@ -100,7 +101,8 @@ export async function PATCH(
 }
 
 /**
- * Deletes a group by its global id; membership rows cascade. Staff only.
+ * Deletes a group by its global id; membership rows cascade. Course staff (faculty
+ * or TAs) or a system admin.
  * @openapi
  * summary: Delete a group by id
  * parameters:
@@ -109,7 +111,7 @@ export async function PATCH(
  *   200: { description: Group deleted. }
  *   400: { description: Missing group id. }
  *   401: { description: Not signed in. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Not course staff or a system admin. }
  *   404: { description: Group not found. }
  *   500: { description: Server error. }
  */

@@ -43,9 +43,9 @@ const submissionSelectWithoutEvaluation = {
  * annotated with that problem's metadata (falls back gracefully if the optional
  * `evaluationRaw` column is absent). The `[sid]` segment is the student id.
  *
- * Access: staff (ADMIN/FACULTY/TA) may view any student's submissions; a non-staff
- * user may view only their own (`sid` must be their id). Course membership is also
- * required, except for global admins.
+ * Access: the student themselves, course staff, or a system admin (`sid` must be the
+ * caller's id unless they are course staff or a system admin). Course membership is
+ * also required, except for global admins.
  * @openapi
  * summary: Get a student's submissions for an assignment
  * parameters:
@@ -59,7 +59,7 @@ const submissionSelectWithoutEvaluation = {
  *       application/json:
  *         schema: { type: object }
  *   401: { description: Not signed in. }
- *   403: { description: "Not staff and requesting another student's submissions, or not enrolled." }
+ *   403: { description: "Requesting another student's submissions without being course staff or a system admin, or not an enrolled member of the course." }
  *   404: { description: "Assignment not found, or it has no linked problems." }
  *   500: { description: Server error. }
  */

@@ -91,7 +91,7 @@ async function safeAuditLog(req: Request, data: EnhancedActivityLogData): Promis
 /**
  * Returns the singleton system settings, falling back to defaults for any unset
  * field. The hCaptcha secret is never returned — only `hcaptchaSecretConfigured`
- * reports whether one is stored. Admin/Faculty only.
+ * reports whether one is stored. System administrators only.
  * @openapi
  * summary: Get system settings
  * responses:
@@ -120,7 +120,7 @@ async function safeAuditLog(req: Request, data: EnhancedActivityLogData): Promis
  *             activityLogRetentionDays: { type: integer }
  *             hcaptchaSiteKey: { type: string }
  *             hcaptchaSecretConfigured: { type: boolean, description: Whether a secret is stored; the value is never returned }
- *   403: { description: Caller is not an admin or faculty user. }
+ *   403: { description: Caller is not a system administrator. }
  */
 export async function GET() {
   const session = await auth();
@@ -187,7 +187,7 @@ type SettingsBody = {
  * to safe bounds and an invalid timezone is rejected. The hCaptcha secret is
  * write-only: send a non-empty `hcaptchaSecretKey` to set it, or
  * `hcaptchaSecretClear: true` to remove it. Changes are audited (never the secret
- * value). Admin/Faculty only.
+ * value). System administrators only.
  * @openapi
  * summary: Update system settings
  * requestBody:
@@ -219,7 +219,7 @@ type SettingsBody = {
  * responses:
  *   200: { description: The updated settings (same shape as GET). }
  *   400: { description: Invalid JSON body or invalid timezone. }
- *   403: { description: Caller is not an admin or faculty user (attempt is audited). }
+ *   403: { description: Caller is not a system administrator (attempt is audited). }
  *   500: { description: Failed to persist the update. }
  */
 export async function PUT(req: Request) {

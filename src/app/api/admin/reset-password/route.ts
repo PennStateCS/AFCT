@@ -8,7 +8,7 @@ import { isAdmin } from '@/lib/permissions';
 
 /**
  * Sets another user's password on their behalf (an admin-initiated reset).
- * Restricted to ADMIN/FACULTY; the new password still has to meet the strength
+ * System administrators only; the new password still has to meet the strength
  * policy. Pass `isTemporary` to force a change at next login. The plaintext
  * password is never logged — only who reset whom.
  * @openapi
@@ -31,7 +31,7 @@ import { isAdmin } from '@/lib/permissions';
  *       application/json:
  *         schema: { type: object, properties: { success: { type: boolean } } }
  *   400: { description: Missing fields or weak password. }
- *   403: { description: Caller is not an admin or faculty user. }
+ *   403: { description: Caller is not a system administrator. }
  *   500: { description: Reset failed. }
  */
 export async function POST(req: Request) {

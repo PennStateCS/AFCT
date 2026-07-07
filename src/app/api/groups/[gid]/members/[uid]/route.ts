@@ -6,7 +6,7 @@ import { canManageCourse } from '@/lib/permissions';
 
 /**
  * Removes a user from a group, addressed by the group's and user's global ids.
- * Staff only (ADMIN/FACULTY/TA).
+ * Course staff (faculty or TAs) or a system admin.
  * @openapi
  * summary: Remove a group member by ids
  * parameters:
@@ -16,7 +16,7 @@ import { canManageCourse } from '@/lib/permissions';
  *   200: { description: Member removed. }
  *   400: { description: Missing ids. }
  *   401: { description: Not signed in. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Not course staff or a system admin. }
  *   404: { description: Group or membership not found. }
  *   500: { description: Server error. }
  */

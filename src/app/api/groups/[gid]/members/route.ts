@@ -5,8 +5,8 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canManageCourse } from '@/lib/permissions';
 
 /**
- * Lists a group's members (with user profiles) by the group's global id. Staff
- * only (ADMIN/FACULTY/TA).
+ * Lists a group's members (with user profiles) by the group's global id. Course
+ * staff (faculty or TAs) or a system admin.
  * @openapi
  * summary: List group members by group id
  * parameters:
@@ -19,7 +19,7 @@ import { canManageCourse } from '@/lib/permissions';
  *         schema: { type: object, properties: { members: { type: array, items: { type: object } } } }
  *   400: { description: Missing group id. }
  *   401: { description: Not signed in. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Not course staff or a system admin. }
  *   404: { description: Group not found. }
  *   500: { description: Server error. }
  */
@@ -77,9 +77,9 @@ export async function GET(
 }
 
 /**
- * Adds a member to a group by the group's global id. Staff only. Accepts either a
- * `userId` or an `email` to identify the user, who must be enrolled in the group's
- * course and not already a member.
+ * Adds a member to a group by the group's global id. Course staff (faculty or TAs)
+ * or a system admin. Accepts either a `userId` or an `email` to identify the user,
+ * who must be enrolled in the group's course and not already a member.
  * @openapi
  * summary: Add a group member by group id
  * parameters:
@@ -96,7 +96,7 @@ export async function GET(
  * responses:
  *   201: { description: Member added. }
  *   401: { description: Not signed in. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Not course staff or a system admin. }
  *   404: { description: Group or user not found. }
  *   409: { description: User is already in the group. }
  *   422: { description: User is not enrolled in the course. }

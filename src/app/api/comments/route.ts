@@ -53,9 +53,9 @@ const createCommentSchema = z.object({
 
 /**
  * Creates a comment on an assignment problem, optionally scoped to a particular
- * student's thread (`studentId`). The author must be enrolled in the course; an
- * ADMIN who isn't is auto-added as an instructor. Both the problem and any named
- * student must belong to the course.
+ * student's thread (`studentId`). The author must be an enrolled member of the course
+ * (any role) or a system admin; a system admin who isn't on the roster is auto-added
+ * as FACULTY. Both the problem and any named student must belong to the course.
  * @openapi
  * summary: Create a comment
  * requestBody:
@@ -74,7 +74,7 @@ const createCommentSchema = z.object({
  *   201: { description: The created comment with its author. }
  *   400: { description: Validation failed. }
  *   401: { description: Not signed in. }
- *   403: { description: Author is not enrolled in the course. }
+ *   403: { description: Author is not an enrolled member of the course or a system admin. }
  *   404: { description: "Assignment, problem, or named student not found." }
  *   500: { description: Server error. }
  */
@@ -225,8 +225,8 @@ export async function POST(request: NextRequest) {
 
 /**
  * Lists comments for an assignment problem, or for a whole assignment when
- * `scope=assignment`. Enrolled users (and admins) may read; an optional `studentId`
- * narrows to a single student's thread.
+ * `scope=assignment`. Any enrolled member of the course (any role) or a system admin
+ * may read; an optional `studentId` narrows to a single student's thread.
  * @openapi
  * summary: List comments
  * parameters:
@@ -242,7 +242,7 @@ export async function POST(request: NextRequest) {
  *         schema: { type: array, items: { type: object } }
  *   400: { description: Missing assignmentId (or problemId when not in assignment scope). }
  *   401: { description: Not signed in. }
- *   403: { description: Caller is not enrolled in the course. }
+ *   403: { description: Caller is not an enrolled member of the course or a system admin. }
  *   404: { description: Assignment not found. }
  *   500: { description: Server error. }
  */
@@ -350,7 +350,7 @@ export async function GET(request: NextRequest) {
 
 /**
  * Deletes a comment by id. The comment's author may delete their own; otherwise
- * only ADMIN/FACULTY, or a non-student course member, may remove it.
+ * only course staff (faculty or TAs) or a system admin may remove it.
  * @openapi
  * summary: Delete a comment
  * parameters:

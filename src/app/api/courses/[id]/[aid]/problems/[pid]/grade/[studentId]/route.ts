@@ -6,7 +6,7 @@ import { canManageCourse } from '@/lib/permissions';
 
 /**
  * Reads one student's grade and feedback for a specific problem within an
- * assignment. A student may read their own; staff may read anyone's. Returns nulls
+ * assignment. The student themselves, course staff, or a system admin. Returns nulls
  * (not 404) when the problem exists but hasn't been graded.
  * @openapi
  * summary: Get a single problem grade
@@ -19,7 +19,7 @@ import { canManageCourse } from '@/lib/permissions';
  *   200:
  *     description: The grade, feedback, and updatedAt (grade/feedback null if ungraded).
  *   401: { description: Not signed in. }
- *   403: { description: Not the student in question and not staff. }
+ *   403: { description: "Not the student themselves, course staff, or a system admin." }
  *   404: { description: Problem not found in this assignment/course. }
  *   500: { description: Server error. }
  */
@@ -91,8 +91,8 @@ export async function GET(
 }
 
 /**
- * Sets or clears a student's grade (and optional feedback) for one problem. Staff
- * only (ADMIN/FACULTY/TA). A numeric grade must be within [0, maxPoints]; sending
+ * Sets or clears a student's grade (and optional feedback) for one problem. Course
+ * staff (faculty or TAs) or a system admin. A numeric grade must be within [0, maxPoints]; sending
  * a null grade deletes the record. Every change is audited with the previous value.
  * @openapi
  * summary: Set or clear a problem grade
@@ -114,7 +114,7 @@ export async function GET(
  *   200: { description: The saved (or cleared) grade and feedback. }
  *   400: { description: "Grade not a number/null, or out of range." }
  *   401: { description: Not signed in. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Caller is not course staff (faculty or TA) or a system admin. }
  *   404: { description: Problem not found in this assignment/course. }
  *   500: { description: Server error. }
  */

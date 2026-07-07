@@ -270,7 +270,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
 }
 
 /**
- * Deletes a user. Restricted to ADMIN/FACULTY/TA. The user's activity logs are
+ * Deletes a user. System administrators only. The user's activity logs are
  * deliberately preserved (schema `onDelete: SetNull` nulls their userId; each
  * entry keeps the actor's name/email in metadata), and their avatar file is
  * cleaned up. The deleted identity is captured for the audit entry before removal.
@@ -284,7 +284,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
  *     content:
  *       application/json:
  *         schema: { type: object, properties: { success: { type: boolean }, message: { type: string } } }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: System administrators only (also returned when not signed in). }
  *   500: { description: Server error. }
  */
 export async function DELETE(req: NextRequest, context: { params: Promise<{ id: string }> }) {

@@ -18,7 +18,8 @@ async function resolveUserTimezone(userId?: string | null) {
 }
 
 /**
- * Creates an assignment in a course. Staff only (ADMIN/FACULTY/TA). The due date is
+ * Creates an assignment in a course. Course staff (faculty or TAs) or a system
+ * admin, checked against the body's courseId. The due date is
  * interpreted as end-of-day in the actor's timezone. Late submissions and their
  * cutoff must agree — a cutoff is required when late is on, forbidden when off, and
  * must fall on or after the due date.
@@ -42,8 +43,9 @@ async function resolveUserTimezone(userId?: string | null) {
  *           isGroup: { type: boolean }
  * responses:
  *   201: { description: The created assignment. }
+ *   401: { description: Not signed in. }
  *   400: { description: "Missing fields, or an inconsistent late-submission window." }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Not course staff or a system admin. }
  *   500: { description: Server error. }
  */
 export async function POST(req: NextRequest) {

@@ -48,7 +48,7 @@ function displayName(u: {
  *             page: { type: integer }
  *             pageSize: { type: integer }
  *             totalPages: { type: integer }
- *   403: { description: Caller is not an admin or faculty user. }
+ *   403: { description: Caller is not a system administrator. }
  *   500: { description: Query failed. }
  */
 export async function GET(req: Request) {

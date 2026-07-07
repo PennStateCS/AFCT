@@ -25,8 +25,7 @@ type OptionalCountDelegate = {
  * back with derived point totals and submission/comment counts; problems are
  * tagged with whether an assignment uses them; the roster is flattened into a
  * single `enrolled` array, and the caller's own course role is included. Access is
- * restricted: staff (ADMIN/FACULTY/TA) may view any course; everyone else must be
- * enrolled in it.
+ * restricted: any enrolled member of the course (any role) or a system admin.
  * @openapi
  * summary: Get a course
  * parameters:
@@ -40,7 +39,7 @@ type OptionalCountDelegate = {
  *     description: The course with metadata for the requested view.
  *   400: { description: Missing course id. }
  *   401: { description: Not signed in. }
- *   403: { description: Not staff and not enrolled in the course. }
+ *   403: { description: Not enrolled in the course and not a system admin. }
  *   404: { description: Course not found. }
  *   500: { description: Server error. }
  */
@@ -345,7 +344,7 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
  * faculty roster (adds, promotes, or removes to match the desired set). Runs the
  * same archive/unpublish safety checks as the dedicated toggles, requires a
  * registration window, and records a before→after diff of changed fields.
- * ADMIN/FACULTY/TA only.
+ * Course staff (faculty or TAs) or a system admin.
  * @openapi
  * summary: Update a course
  * parameters:
@@ -374,7 +373,7 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
  *   200:
  *     description: The updated course with roster and assignments.
  *   400: { description: "Missing id, invalid isArchived, empty instructor list, or missing registration window." }
- *   403: { description: "Not staff, or an archive/unpublish safety check failed." }
+ *   403: { description: "Not course staff (faculty or TAs) or a system admin, or an archive/unpublish safety check failed." }
  *   500: { description: Server error. }
  */
 export async function PUT(req: Request, context: { params: Promise<{ id: string }> }) {
@@ -726,7 +725,8 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
 }
 
 /**
- * Permanently deletes a course. ADMIN/FACULTY/TA only, and the course must already
+ * Permanently deletes a course. Course staff (faculty or TAs) or a system admin,
+ * and the course must already
  * be archived — a guard against deleting a live course. The archived requirement
  * is enforced both up front and again in the delete's `where` clause.
  * @openapi
@@ -736,7 +736,7 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
  * responses:
  *   200:
  *     description: Course deleted.
- *   403: { description: "Not staff, or the course is not archived." }
+ *   403: { description: "Not course staff (faculty or TAs) or a system admin, or the course is not archived." }
  *   500: { description: Server error. }
  */
 export async function DELETE(req: Request, context: { params: Promise<{ id: string }> }) {
