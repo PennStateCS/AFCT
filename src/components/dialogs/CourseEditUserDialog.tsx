@@ -19,13 +19,26 @@ import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { courseRoleOptions, formatCourseRole } from '@/lib/roles';
 import SelectField from '@/components/ui/SelectField';
 
+type CourseRosterEntry = {
+  role?: string | null;
+  hasSubmissions?: boolean;
+  user: {
+    id: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    email?: string | null;
+    avatar?: string | null;
+    role?: string | null;
+  };
+};
+
 type Props = {
   open: boolean;
   setOpen: (v: boolean) => void;
   courseId: string;
   userId: string;
   onSaved?: () => void;
-  initialRoster?: any | null;
+  initialRoster?: CourseRosterEntry | null;
   initialViewerCourseRole?: string | null;
   initialViewerDefaultRole?: string | null;
 };
@@ -42,13 +55,13 @@ export default function CourseEditUserDialog({
 }: Props) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [roster, setRoster] = useState<any | null>(null);
+  const [roster, setRoster] = useState<CourseRosterEntry | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [viewerCourseRole, setViewerCourseRole] = useState<string | null>(null);
   const [viewerDefaultRole, setViewerDefaultRole] = useState<string | null>(null);
 
   // Keep an immutable copy of the originally loaded roster entry so we can compute isDirty
-  const originalRosterRef = useRef<any | null>(null);
+  const originalRosterRef = useRef<CourseRosterEntry | null>(null);
 
   const isDirty = useMemo(() => {
     if (!roster || !originalRosterRef.current) return false;
@@ -200,7 +213,11 @@ export default function CourseEditUserDialog({
                     alt="User Avatar"
                   />
                   <AvatarFallback className="bg-secondary text-secondary-foreground">
-                    {getInitials(roster.user.firstName, roster.user.lastName, roster.user.email)}
+                    {getInitials(
+                      roster.user.firstName,
+                      roster.user.lastName,
+                      roster.user.email ?? undefined,
+                    )}
                   </AvatarFallback>
                 </Avatar>
 
@@ -255,7 +272,7 @@ export default function CourseEditUserDialog({
               <SelectField
                 label="Course Role"
                 name="courseRole"
-                value={roster.role}
+                value={roster.role ?? undefined}
                 onValueChange={(v) => setRoster({ ...roster, role: v })}
                 placeholder="Select role"
                 options={courseRoleOptions.map((r) => ({

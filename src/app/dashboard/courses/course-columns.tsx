@@ -17,7 +17,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { Course } from '@prisma/client';
 import { EditCourseDialog } from '@/components/dialogs/EditCourseDialog';
-import { getInstructors, formatInstructorNames } from '@/lib/course-utils';
+import { getInstructors, type EnrolledUser } from '@/lib/course-utils';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { formatDateTimeInTimeZone } from '@/lib/date';
 
@@ -170,7 +170,7 @@ export const columns = (
   {
     id: 'instructor',
     accessorFn: (row) =>
-      getInstructors(row.enrolled as any[])
+      getInstructors(row.enrolled as EnrolledUser[])
         .filter((f) => f.role !== 'ADMIN')
         .map((f) => `${f.firstName ?? ''} ${f.lastName ?? ''}`.trim())
         .filter(Boolean)
@@ -179,7 +179,7 @@ export const columns = (
     enableSorting: true,
     header: 'Faculty',
     cell: ({ row }) => {
-      const instructors = getInstructors(row.original.enrolled as any[]);
+      const instructors = getInstructors(row.original.enrolled as EnrolledUser[]);
       const faculty = (instructors || []).filter((f) => f.role !== 'ADMIN');
       if (faculty.length === 0) {
         return <span className="text-muted-foreground italic">None</span>;
@@ -232,8 +232,8 @@ function CourseActionsCell({
       showToast.success('Course successfully deleted');
       setConfirmOpen(false);
       if (onCourseDeleted) onCourseDeleted();
-    } catch (e: any) {
-      const msg = e?.message || 'Network error';
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Network error';
       showToast.error(msg);
     } finally {
       setEditOpen(false);

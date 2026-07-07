@@ -1,6 +1,6 @@
 'use client';
 
-import { Download, Package, Eye } from 'lucide-react';
+import { Eye } from 'lucide-react';
 import { useState } from 'react';
 import JffViewerDialog from './JffViewerDialog';
 import { Badge } from './ui/badge';

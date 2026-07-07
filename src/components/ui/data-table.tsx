@@ -172,6 +172,9 @@ export function DataTable<TData, TValue>({
     } catch {
       // localStorage may not be available in all environments
     }
+    // defaultColumnVisibility is only the hydration baseline; re-running when its
+    // object identity changes on a parent re-render would clobber user column choices.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey]);
 
   useEffect(() => {
@@ -351,7 +354,7 @@ export function DataTable<TData, TValue>({
       <div className="overflow-x-auto rounded-md border">
         <Table className="w-full" role="table" aria-label={tableLabel} aria-busy={loading}>
           <TableHeader role="rowgroup">
-            {table.getHeaderGroups().map((headerGroup, hgIndex) => (
+            {table.getHeaderGroups().map((headerGroup) => (
               <TableRow
                 key={headerGroup.id}
                 className={loading ? 'hover:bg-transparent' : undefined}

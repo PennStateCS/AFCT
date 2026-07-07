@@ -60,11 +60,13 @@ export function getClientIpFromHeaders(headers: HeaderGetter): string {
 }
 
 /**
- * Extracts the client IP address from various headers and fallbacks
- * Works with both NextRequest and standard Request types
+ * Extracts the client IP address from various headers and fallbacks.
+ * Works with NextRequest, standard Request, or a null/undefined source
+ * (e.g. an auth callback with no request), in which case the header-less
+ * fallbacks apply.
  */
-export function getClientIp(req: NextRequest | Request): string {
-  return getClientIpFromHeaders(req.headers);
+export function getClientIp(req?: NextRequest | Request | null): string {
+  return getClientIpFromHeaders(req?.headers ?? new Headers());
 }
 
 /**

@@ -40,13 +40,15 @@ export function SearchableMultiSelect({
   searchPlaceholder = 'Search...',
   emptyStateText = 'No results found.',
   error,
-  isValid,
   id,
   disabled,
 }: SearchableMultiSelectProps) {
   const [search, setSearch] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
-  const triggerId = id ?? useId();
+  // Call useId() unconditionally (hooks must run in the same order every render);
+  // fall back to it only when no explicit id was provided.
+  const generatedId = useId();
+  const triggerId = id ?? generatedId;
 
   const filteredItems = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -84,6 +86,9 @@ export function SearchableMultiSelect({
       ) : null}
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger asChild>
+          {/* This trigger is a combobox-style validation control; aria-invalid is
+              intentionally exposed for AT even though the implicit button role flags it. */}
+          {/* eslint-disable-next-line jsx-a11y/role-supports-aria-props */}
           <button
             type="button"
             id={triggerId}

@@ -19,6 +19,30 @@ import {
 // real request, so hand it a stand-in; IP and UA simply come back empty.
 const WORKER_REQUEST = new Request('http://submission-worker.local');
 
+// The submission shape the evaluator works with: the scalar row plus the
+// assignment problem's metadata. Declared once so the worker functions share
+// the exact type (and the same DB include).
+const submissionEvalInclude = {
+  assignmentProblem: {
+    select: {
+      problem: {
+        select: {
+          fileName: true,
+          type: true,
+          maxStates: true,
+          isDeterministic: true,
+        },
+      },
+      assignmentId: true,
+      problemId: true,
+      maxPoints: true,
+      autograderEnabled: true,
+    },
+  },
+} satisfies Prisma.SubmissionInclude;
+
+type WorkerSubmission = Prisma.SubmissionGetPayload<{ include: typeof submissionEvalInclude }>;
+
 let workerStarted = false;
 
 // Concurrency is the number of live worker loops (each handles one submission at
@@ -42,10 +66,13 @@ interface SubmissionEvaluationResult {
 }
 
 async function logSubmissionActivity(
-  submission: any,
+  submission: Pick<
+    WorkerSubmission,
+    'id' | 'studentId' | 'courseId' | 'assignmentId' | 'problemId'
+  >,
   action: string,
   severity: LogSeverity,
-  metadata: any,
+  metadata: Record<string, string | number | boolean | null>,
 ) {
   // Write straight to the DB — we're in the same process, so there's no reason
   // to go back out over HTTP. Only scalar ids are pulled off the submission;
@@ -263,32 +290,15 @@ async function runWorkerLoop() {
 
 
 async function evaluateSubmission(id: string) {
-  let submission: any | null = null;
+  let submission: WorkerSubmission | null = null;
 
   try {
     submission = await prisma.submission.findUnique({
       where: { id },
-      include: {
-        assignmentProblem: {
-          select: {
-            problem: {
-              select: {
-                fileName: true,
-                type: true,
-                maxStates: true,
-                isDeterministic: true,
-              }
-            },
-            assignmentId: true,
-            problemId: true,
-            maxPoints: true,
-            autograderEnabled: true,
-          },
-        },
-        // Intentionally no `student: true` — the worker only needs the scalar
-        // studentId (already on the row), and including the User pulls its
-        // password hash into memory and into logs.
-      },
+      // Intentionally no `student: true` — the worker only needs the scalar
+      // studentId (already on the row), and including the User pulls its
+      // password hash into memory and into logs.
+      include: submissionEvalInclude,
     });
 
     if (!submission) {
@@ -339,7 +349,7 @@ async function evaluateSubmission(id: string) {
         studentId: submission.studentId,
         grade: earnedPoints,
         maxPoints: submission.assignmentProblem.maxPoints,
-        correct: evaluation.correct,
+        correct: evaluation.correct ?? null,
       });
 
       console.log(
@@ -382,6 +392,15 @@ async function evaluateSubmission(id: string) {
   }
 }
 
+
+// Internal worker steps, exposed for unit tests only. Not part of the module's
+// public API — production code drives the queue via startSubmissionWorker().
+export const __test__ = {
+  evaluateSubmission,
+  runJavaEvaluator,
+  reapStuckSubmissions,
+  runWorkerLoop,
+};
 
 function getJavaRunnerCtor() {
   const maybeCtor =
@@ -437,7 +456,7 @@ function createJavaRunner(jarPath: string) {
 
 
 async function runJavaEvaluator(
-  submission: any,
+  submission: WorkerSubmission,
   config: EvaluatorConfig,
 ): Promise<SubmissionEvaluationResult> {
   let feedback: string | null = null;

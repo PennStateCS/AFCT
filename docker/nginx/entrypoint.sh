@@ -1,10 +1,12 @@
 #!/bin/sh
+# Picks the TLS cert nginx serves and keeps it current.
+#
+# nginx serves whatever is in ACTIVE_*. We prefer an admin-uploaded cert (mounted
+# read-only from the app) but always fall back to a self-signed one so HTTPS can
+# never be fully down. A background poll picks up cert changes and hot-reloads.
 set -eu
 
-# nginx serves from ACTIVE_*; we choose between an admin-uploaded custom cert
-# (mounted read-only from the app's volume) and an auto-generated self-signed
-# cert. A short poll picks up cert changes from the app and hot-reloads. The
-# self-signed cert is always the safe fallback so HTTPS can never be fully down.
+log() { echo "[nginx] $*"; }
 
 ACTIVE_DIR="/etc/nginx/certs"
 ACTIVE_CRT="${ACTIVE_DIR}/server.crt"
@@ -21,17 +23,35 @@ SSL_DAYS="${SSL_DAYS:-3650}"
 SSL_SUBJECT="${SSL_SUBJECT:-/C=US/ST=State/L=City/O=AFCT/OU=Dev/CN=localhost}"
 CERT_POLL_SECONDS="${CERT_POLL_SECONDS:-15}"
 
-# nginx:alpine ships without openssl
+# default.conf `include`s this file; write_hsts fills it based on the active cert.
+HSTS_CONF="/etc/nginx/hsts.conf"
+HSTS_HEADER='add_header Strict-Transport-Security "max-age=31536000" always;'
+
+# HSTS is only safe with a real cert: once a browser sees it, it won't let the
+# user click through a self-signed warning for a year. So on=real, off=self-signed.
+write_hsts() {
+  if [ "$1" = "on" ]; then
+    printf '%s\n' "$HSTS_HEADER" > "$HSTS_CONF"
+  else
+    : > "$HSTS_CONF"
+  fi
+}
+
+# openssl is baked into our image; this only matters if run on a stock nginx.
 if ! command -v openssl >/dev/null 2>&1; then
-  echo "[nginx] Installing openssl..."
+  log "installing openssl"
   apk add --no-cache openssl >/dev/null
 fi
 
 mkdir -p "$ACTIVE_DIR"
 
+# The include must exist before any `nginx -t`, or config validation fails.
+write_hsts off
+
+# Generate the self-signed fallback once.
 ensure_self_signed() {
   if [ ! -f "$SELF_CRT" ] || [ ! -f "$SELF_KEY" ]; then
-    echo "[nginx] Generating self-signed certificate..."
+    log "generating self-signed certificate"
     openssl req -x509 -nodes -newkey rsa:2048 \
       -keyout "$SELF_KEY" -out "$SELF_CRT" \
       -days "$SSL_DAYS" -subj "$SSL_SUBJECT" >/dev/null 2>&1
@@ -43,9 +63,10 @@ use_self_signed() {
   cp "$SELF_CRT" "$ACTIVE_CRT"
   cp "$SELF_KEY" "$ACTIVE_KEY"
   chmod 600 "$ACTIVE_KEY"
+  write_hsts off
 }
 
-# Prefer the custom cert if present AND nginx accepts it; otherwise self-signed.
+# Use the admin cert only if present and nginx accepts it; otherwise self-signed.
 apply_certs() {
   ensure_self_signed
   if [ -f "$CUSTOM_CRT" ] && [ -f "$CUSTOM_KEY" ]; then
@@ -53,33 +74,34 @@ apply_certs() {
     cp "$CUSTOM_KEY" "$ACTIVE_KEY"
     chmod 600 "$ACTIVE_KEY"
     if nginx -t >/dev/null 2>&1; then
-      echo "[nginx] Using custom TLS certificate"
+      write_hsts on
+      log "using custom TLS certificate"
       return 0
     fi
-    echo "[nginx] Custom certificate rejected by nginx -t; falling back to self-signed"
+    log "custom certificate rejected by nginx -t; falling back to self-signed"
   fi
   use_self_signed
-  echo "[nginx] Using self-signed TLS certificate"
+  log "using self-signed TLS certificate"
 }
 
-# Hash of the custom cert+key so we can detect changes, including removal.
+# Hash the custom cert+key so we can detect any change, including removal.
 fingerprint() {
   cat "$CUSTOM_CRT" "$CUSTOM_KEY" 2>/dev/null | sha256sum 2>/dev/null || echo "none"
 }
 
-# Guarantee a valid active cert before nginx starts.
+# Guarantee a valid cert before nginx starts.
 ensure_self_signed
 apply_certs || use_self_signed
 
-# Poll for cert changes and hot-reload. Polling (not inotify) so it works across
-# containers on Docker Desktop for Windows/Mac too.
+# Watch for cert changes and hot-reload. Polling (not inotify) works across the
+# volume on Docker Desktop for Windows/Mac.
 (
   last="$(fingerprint)"
   while true; do
     sleep "$CERT_POLL_SECONDS"
     cur="$(fingerprint)"
     if [ "$cur" != "$last" ]; then
-      echo "[nginx] TLS certificate change detected; reloading"
+      log "certificate change detected; reloading"
       apply_certs || use_self_signed
       nginx -s reload >/dev/null 2>&1 || true
       last="$cur"
@@ -87,5 +109,5 @@ apply_certs || use_self_signed
   done
 ) &
 
-echo "[nginx] Starting nginx..."
+log "starting nginx"
 exec nginx -g "daemon off;"

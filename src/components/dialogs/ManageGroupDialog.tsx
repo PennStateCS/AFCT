@@ -12,24 +12,25 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import InputGroup from '@/components/ui/InputGroup';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/RoleBadge';
 import { showToast } from '@/lib/toast';
+
+type RawStudent = {
+  id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+  avatar?: string | null;
+};
 
 type Member = {
   id: string;
   userId: string;
   addedAt: string;
-  user: {
-    id: string;
-    firstName?: string | null;
-    lastName?: string | null;
-    email?: string | null;
-    avatar?: string | null;
-  };
+  user: RawStudent;
 };
 
-export default function ManageGroupMembersDialog({ open, setOpen, courseId, group, onChanged, initialStudents }: { open: boolean; setOpen: (v: boolean) => void; courseId: string; group: { id: string; name: string } | null; onChanged?: () => void; initialStudents?: any[]; }) {
+export default function ManageGroupMembersDialog({ open, setOpen, courseId, group, onChanged, initialStudents }: { open: boolean; setOpen: (v: boolean) => void; courseId: string; group: { id: string; name: string } | null; onChanged?: () => void; initialStudents?: RawStudent[]; }) {
   const [loading, setLoading] = useState(false);
   const [students, setStudents] = useState<Member[]>([]);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
@@ -59,7 +60,7 @@ export default function ManageGroupMembersDialog({ open, setOpen, courseId, grou
       let studs: Member[] = [];
 
       if (initialStudents && initialStudents.length > 0) {
-        studs = initialStudents.map((u: any) => ({
+        studs = initialStudents.map((u: RawStudent) => ({
           id: u.id,
           userId: u.id,
           addedAt: '',
@@ -69,7 +70,7 @@ export default function ManageGroupMembersDialog({ open, setOpen, courseId, grou
         const studentsRes = await fetch(`/api/courses/${courseId}/students`);
         if (!studentsRes.ok) throw new Error((await studentsRes.json())?.error || 'Failed to load students');
         const studentsBody = await studentsRes.json();
-        studs = studentsBody.map((u: any) => ({
+        studs = (studentsBody as RawStudent[]).map((u) => ({
           id: u.id,
           userId: u.id,
           addedAt: '',
@@ -83,7 +84,9 @@ export default function ManageGroupMembersDialog({ open, setOpen, courseId, grou
 
       setStudents(studs);
 
-      const memberIds = new Set<string>((membersBody.members ?? []).map((m: any) => m.userId));
+      const memberIds = new Set<string>(
+        (membersBody.members ?? []).map((m: { userId: string }) => m.userId),
+      );
       const sel: Record<string, boolean> = {};
       studs.forEach((s) => { sel[s.userId] = memberIds.has(s.userId); });
       setSelected(sel);
@@ -150,7 +153,7 @@ export default function ManageGroupMembersDialog({ open, setOpen, courseId, grou
       }
 
       // Run adds and removes in parallel
-      const ops: Promise<any>[] = [];
+      const ops: Promise<Response>[] = [];
       for (const uid of toAdd) {
         ops.push(fetch(`/api/courses/${courseId}/groups/${group.id}/members`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: uid }) }));
       }

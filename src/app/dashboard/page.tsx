@@ -22,7 +22,7 @@ export default async function DashboardPage() {
   }
 
   // Get user's id
-  const { id, role } = session.user;
+  const { id } = session.user;
 
   // Get all courses for the user via roster entries
   const rosterEntries = await prisma.roster.findMany({

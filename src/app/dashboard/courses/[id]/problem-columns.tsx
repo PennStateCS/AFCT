@@ -5,7 +5,6 @@ import { ColumnDef } from '@tanstack/react-table';
 import type { Problem } from '@prisma/client';
 import { useState } from 'react';
 import { ChevronDown, Pencil, Trash2, FileText, Eye } from 'lucide-react';
-import { Badge } from '@/components/ui/RoleBadge';
 import { Badge as StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import JffViewerDialog from '@/components/JffViewerDialog';

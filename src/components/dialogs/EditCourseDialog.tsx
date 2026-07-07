@@ -94,7 +94,7 @@ export function EditCourseDialog({
     handleSubmit,
     reset,
     watch,
-    formState: { isDirty, isValid, errors, isSubmitting },
+    formState: { isValid, errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(CourseFormSchema),
     defaultValues,

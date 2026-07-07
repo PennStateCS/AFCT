@@ -42,8 +42,10 @@ export function useCourseHandlers(
       await updateAssignmentPublishStatus(assignmentId, newValue);
       setCourse(updateCourseAfterAssignmentPublish(course, assignmentId, newValue));
       showToast.success(`Assignment ${newValue ? 'published' : 'unpublished'} successfully!`);
-    } catch (error: any) {
-      const msg = error?.message || 'Unknown Error: Failed to update assignment status';
+    } catch (error) {
+      const msg =
+        (error instanceof Error && error.message) ||
+        'Unknown Error: Failed to update assignment status';
       showToast.error(msg);
       console.error('Error updating assignment:', error);
     }
@@ -111,8 +113,8 @@ export function useCourseHandlers(
       const updated = await updateCoursePublishStatus(course.id, isPublished);
       setCourse((prev) => (prev ? { ...prev, isPublished: updated.isPublished } : prev));
       showToast.success(isPublished ? 'Course published' : 'Course unpublished');
-    } catch (error: any) {
-      const msg = error?.message || 'Failed to archive course';
+    } catch (error) {
+      const msg = (error instanceof Error && error.message) || 'Failed to archive course';
       showToast.error(msg);
     }
   }, [course, setCourse]);
@@ -126,8 +128,8 @@ const handleCourseArchiveToggle = useCallback(async (isArchived: boolean) => {
       const updated = await updateCourseArchiveStatus(course.id, course.startDate, course.endDate, isArchived);
       setCourse((prev) => (prev ? { ...prev, isArchived: updated.isArchived } : prev));
       showToast.success(isArchived ? 'Course archived' : 'Course unarchived');
-    } catch (error: any) {
-      const msg = error?.message || 'Failed to archive course';
+    } catch (error) {
+      const msg = (error instanceof Error && error.message) || 'Failed to archive course';
       showToast.error(msg);
     }
   }, [course, setCourse]);
