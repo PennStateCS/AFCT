@@ -68,7 +68,58 @@ describe('GET /api/courses/[id]', () => {
     expect(res.status).toBe(400);
   });
 
+  it('returns 401 when unauthenticated', async () => {
+    const res = await GET(new Request('http://localhost/api/courses/1'), {
+      params: Promise.resolve({ id: 'course-1' }),
+    });
+
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 403 when a non-staff user is not enrolled in the course', async () => {
+    authMock.mockResolvedValue({ user: { id: 'stranger', role: 'STUDENT' } });
+    prismaMock.course.findUnique.mockResolvedValue({ id: 'course-1' });
+    prismaMock.roster.findFirst.mockResolvedValue(null);
+
+    const res = await GET(new Request('http://localhost/api/courses/1'), {
+      params: Promise.resolve({ id: 'course-1' }),
+    });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('allows an enrolled student to view the course', async () => {
+    authMock.mockResolvedValue({ user: { id: 'stu-1', role: 'STUDENT' } });
+    prismaMock.course.findUnique.mockResolvedValue({
+      id: 'course-1',
+      name: 'C1',
+      code: 'CS1',
+      regCode: 'ABC123',
+      semester: 'Fall 2026',
+      credits: 3,
+      startDate: new Date('2026-08-25T13:00:00.000Z'),
+      endDate: new Date('2026-12-15T22:00:00.000Z'),
+      registrationOpenAt: null,
+      registrationCloseAt: null,
+      isPublished: true,
+      isArchived: false,
+      emptyStringNotation: null,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+    });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+
+    const res = await GET(new Request('http://localhost/api/courses/1'), {
+      params: Promise.resolve({ id: 'course-1' }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.viewerRole).toBe('STUDENT');
+  });
+
   it('returns 404 when course is not found', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
     prismaMock.course.findUnique.mockResolvedValue(null);
 
     const res = await GET(new Request('http://localhost/api/courses/1'), {
@@ -154,6 +205,7 @@ describe('GET /api/courses/[id]', () => {
   });
 
   it('returns 500 when get throws', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
     prismaMock.course.findUnique.mockRejectedValue(new Error('db error'));
 
     const res = await GET(new Request('http://localhost/api/courses/1'), {
