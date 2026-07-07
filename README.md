@@ -20,6 +20,7 @@ Built with:
 - [Production Deployment](#production-deployment)
 - [Development Setup](#development-setup)
 - [Testing](#testing)
+- [API Documentation](#api-documentation)
 - [Contributors](#contributors)
 
 ## 📚 Tech Stack
@@ -60,6 +61,15 @@ Watch mode:
 ```bash
 npm run test:watch
 ```
+
+## 📖 API Documentation
+
+An interactive reference for the HTTP API, auto-generated from the route handlers and published on each push to `main`:
+
+- **[API reference](https://pennstatewilkes-barre.github.io/AFCT-Dashboard/)** — browsable docs for every endpoint (auth, parameters, request/response shapes).
+- **[OpenAPI spec](https://pennstatewilkes-barre.github.io/AFCT-Dashboard/openapi.json)** — the raw `openapi.json`, for importing into Postman/Insomnia or generating clients.
+
+Regenerate locally with `npm run docs`.
 
 ---
 
