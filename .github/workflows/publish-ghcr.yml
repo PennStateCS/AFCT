@@ -94,8 +94,13 @@ jobs:
       #
       # Gate on either build attempt succeeding, not success(): a recovered retry
       # leaves the job in a "a step failed" state, which would otherwise skip this.
+      #
+      # continue-on-error: this is an informational scan, and its only failure mode
+      # is Trivy's own binary download flaking (findings can't fail it while
+      # exit-code is 0) — a scanner hiccup must not block publishing the image.
       - name: Scan image for vulnerabilities (Trivy)
         if: ${{ steps.build.outcome == 'success' || steps.retry.outcome == 'success' }}
+        continue-on-error: true
         uses: aquasecurity/trivy-action@v0.33.1
         with:
           image-ref: ghcr.io/pennstatewilkes-barre/afct-dashboard@${{ steps.build.outputs.digest || steps.retry.outputs.digest }}
