@@ -8,9 +8,17 @@ permissions:
   contents: write # allow the auto-pin step to commit docker-compose.yml back
   packages: write
 
+# Serialize publishes: the auto-pin step commits back to main, so overlapping
+# runs would race on the push. Queue rather than cancel — never kill a publish
+# that may be mid-push.
+concurrency:
+  group: ghcr-publish
+  cancel-in-progress: false
+
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -83,8 +91,11 @@ jobs:
 
       # Scan the published image for known CVEs. Report-only for now (exit-code 0);
       # flip exit-code to '1' to make CRITICAL/HIGH block a release.
+      #
+      # Gate on either build attempt succeeding, not success(): a recovered retry
+      # leaves the job in a "a step failed" state, which would otherwise skip this.
       - name: Scan image for vulnerabilities (Trivy)
-        if: success()
+        if: ${{ steps.build.outcome == 'success' || steps.retry.outcome == 'success' }}
         uses: aquasecurity/trivy-action@v0.33.1
         with:
           image-ref: ghcr.io/pennstatewilkes-barre/afct-dashboard@${{ steps.build.outputs.digest || steps.retry.outputs.digest }}
@@ -97,7 +108,7 @@ jobs:
       # back to main. The push uses GITHUB_TOKEN, which does NOT re-trigger
       # workflows (no loop); the `[skip ci]` marker is a further safeguard.
       - name: Auto-pin prod compose to the published digest
-        if: success()
+        if: ${{ steps.build.outcome == 'success' || steps.retry.outcome == 'success' }}
         env:
           DIGEST: ${{ steps.build.outputs.digest || steps.retry.outputs.digest }}
         run: |
