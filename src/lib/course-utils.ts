@@ -220,8 +220,7 @@ export function isEnrolled(
 
 export function getInstructors(enrolled: EnrolledUser[] | undefined): EnrolledUser[] {
   if (!Array.isArray(enrolled)) return [];
-  // Treat both FACULTY and INSTRUCTOR as instructors (schema supports both)
-  return enrolled.filter((u) => u.courseRole === 'FACULTY' || u.courseRole === 'INSTRUCTOR');
+  return enrolled.filter((u) => u.courseRole === 'FACULTY');
 }
 
 export function getTAs(enrolled: EnrolledUser[] | undefined): EnrolledUser[] {

@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Obtain the author's roster row for the comment FK. Admins who aren't on the
-    // roster are auto-added as an instructor so they can comment.
+    // roster are auto-added as faculty so they can comment.
     let rosterEntry = await prisma.roster.findFirst({
       where: { courseId: assignment.courseId, userId: user.id },
     });
@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
         data: {
           courseId: assignment.courseId,
           userId: user.id,
-          role: 'INSTRUCTOR',
+          role: 'FACULTY',
         },
       });
     }
