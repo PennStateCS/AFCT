@@ -210,6 +210,41 @@ const readDiskStatsSample = async (): Promise<DiskIoSample | null> => {
   }
 };
 
+/**
+ * Full operational snapshot for the admin status dashboard: host/process metrics,
+ * database health and engine stats (Postgres or SQLite), a masked environment
+ * summary, recent active-session and error-rate heuristics from the audit log,
+ * upstream network probes, and orphaned-upload counts. Response is never cached.
+ *
+ * WARNING: this handler performs no authentication and there is no middleware in
+ * front of it, so every caller receives this diagnostic detail. Treat the shape
+ * as intentionally rich and the exposure as a known gap (see the security notes).
+ * @openapi
+ * summary: Operational status snapshot
+ * description: >-
+ *   Aggregated health and diagnostics for the status dashboard. Unauthenticated:
+ *   it returns host metrics, DB engine stats, masked env keys, active-session and
+ *   error-rate summaries, and abandoned-file counts. Fields are best-effort — any
+ *   probe that fails is simply omitted.
+ * parameters:
+ *   - name: deep
+ *     in: query
+ *     description: Set to "1" to include the most expensive probes (e.g. Postgres top-queries).
+ *     schema: { type: string, enum: ['1'] }
+ * responses:
+ *   200:
+ *     description: A best-effort diagnostic snapshot (fields vary by DB engine and environment).
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             system: { type: object, description: Host and process metrics }
+ *             database: { type: object, description: Reachability, engine details, and stats }
+ *             env: { type: object, description: Public vars plus masked key/length summary }
+ *             app: { type: object, description: Optional row counts and tool versions }
+ *             metrics: { type: object, description: Detected DB provider and request latency }
+ */
 export async function GET(req: Request) {
   const t0 = performance.now();
   const url = new URL(req.url);
