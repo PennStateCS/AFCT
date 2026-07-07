@@ -21,17 +21,29 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 type Role = 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT';
 
 /**
- * POST /api/courses/join
- *
- * Body:
- * - code: string (6 chars)
- *
- * Responses:
- * - 200: { success: true, message, course }
- * - 400: invalid code, admin join attempt, or registration not currently open
- * - 401: not authenticated
- * - 403: course unpublished/archived (faculty/admin only)
- * - 404: course not found (or hidden from students)
+ * Enrolls the signed-in user in a course via its 6-character registration code,
+ * assigning them their global role as the course role. Students never learn that
+ * an unpublished/archived course exists (masked as 404); faculty/admin get an
+ * explicit 403. Admins can't self-enroll, and the registration window must be open.
+ * @openapi
+ * summary: Join a course by registration code
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [code]
+ *         properties:
+ *           code: { type: string, description: 6-character course registration code }
+ * responses:
+ *   200:
+ *     description: Joined; returns a message and the course.
+ *   400: { description: Invalid code, admin join attempt, already enrolled, or registration not open. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Course unpublished or archived (faculty/admin only). }
+ *   404: { description: Course not found (also returned to students for hidden courses). }
+ *   500: { description: Server error. }
  */
 export async function POST(req: Request) {
   const session = await auth();
@@ -55,7 +67,6 @@ export async function POST(req: Request) {
   const userId = session.user.id;
   const role = session.user.role as Role;
 
-  // Check if user is already in roster
   const existing = await prisma.roster.findUnique({
     where: {
       courseId_userId: {
@@ -65,9 +76,8 @@ export async function POST(req: Request) {
     },
   });
 
-  // Handle courses not published or archived
+  // Staff get the real reason a course can't be joined; students are told 404 below.
   if (!course.isPublished && (role == 'ADMIN' || role == 'FACULTY')) {
-    // Notify admin or faculty that the course was not publihsed
     await createEnhancedActivityLog(prisma, req, {
       userId: session?.user?.id ?? null,
       action: 'COURSE_JOIN_DENIED',
@@ -78,7 +88,6 @@ export async function POST(req: Request) {
   }
 
   if (course.isArchived && (role === 'ADMIN' || role == 'FACULTY')) {
-    // Notify admin or faculty that the course is archived)
     await createEnhancedActivityLog(prisma, req, {
       userId: session?.user?.id ?? null,
       action: 'COURSE_JOIN_DENIED',

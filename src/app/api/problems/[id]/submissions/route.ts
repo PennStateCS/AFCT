@@ -3,6 +3,24 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
+/**
+ * Lists a user's submissions for one problem, newest first. Callers see their own
+ * by default; staff (FACULTY/TA/ADMIN) may pass `?userId=` to view another user's.
+ * @openapi
+ * summary: List a user's submissions for a problem
+ * parameters:
+ *   - { name: id, in: path, required: true, description: Problem id, schema: { type: string } }
+ *   - { name: userId, in: query, description: Whose submissions to fetch; staff only for others, defaults to the caller, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: The submissions, newest first.
+ *     content:
+ *       application/json:
+ *         schema: { type: array, items: { type: object } }
+ *   401: { description: Not signed in. }
+ *   403: { description: Requesting another user's submissions without a staff role. }
+ *   500: { description: Server error. }
+ */
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

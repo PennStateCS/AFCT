@@ -40,6 +40,37 @@ const submissionSelectWithoutEvaluation = {
   problemId: true,
 } as const;
 
+/**
+ * Assembles the grading/review view for one student on one assignment: their
+ * submissions (grouped by problem, with evaluation output), the comments about
+ * them, and their per-problem grades. Falls back gracefully if the optional
+ * `evaluationRaw` column is absent.
+ *
+ * Access: admins, or any user enrolled in the course. NOTE: enrollment is the only
+ * gate — it does not restrict `studentId` to the caller, so any course member can
+ * read another member's review data.
+ * @openapi
+ * summary: Get a student's review data for an assignment
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: aid, in: path, required: true, schema: { type: string } }
+ *   - { name: studentId, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: Submissions (by problem), comments, and problem grades for the student.
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             submissions: { type: object }
+ *             comments: { type: array, items: { type: object } }
+ *             problemGrades: { type: object }
+ *   401: { description: Not signed in. }
+ *   403: { description: Not enrolled in the course (and not admin). }
+ *   404: { description: Assignment not found for this course. }
+ *   500: { description: Server error. }
+ */
 export async function GET(
   req: Request,
   context: { params: Promise<{ id: string; aid: string; studentId: string }> },
