@@ -23,9 +23,16 @@ export default async function AssignmentPage({ params }: PageProps) {
   let initialAssignment: AssignmentWithDetails | null = null;
   let initialAssignments: { id: string; title: string }[] | undefined = undefined;
 
-  const isStudent = session.user.role === 'STUDENT';
+  // The viewer's per-course role decides staff vs student treatment; a global
+  // admin is always staff.
+  const enrollment = await prisma.roster.findFirst({
+    where: { courseId, userId: session.user.id },
+    select: { id: true, role: true },
+  });
+  const isStaff =
+    Boolean(session.user.isAdmin) || enrollment?.role === 'FACULTY' || enrollment?.role === 'TA';
 
-  if (!isStudent) {
+  if (isStaff) {
     initialAssignments = await prisma.assignment.findMany({
       where: { courseId },
       select: { id: true, title: true },
@@ -60,23 +67,12 @@ export default async function AssignmentPage({ params }: PageProps) {
     });
 
     if (assignment) {
-      const isStudent = session.user.role === 'STUDENT';
-      const enrollment = await prisma.roster.findFirst({
-        where: {
-          courseId,
-          userId: session.user.id,
-        },
-        select: {
-          id: true,
-          role: true,
-        },
-      });
-
-      const hasPrivilegedAccess = session.user.role === 'ADMIN' || !!enrollment;
+      // Staff (admin or course FACULTY/TA) see any assignment; an enrolled student
+      // sees it only once published.
       const hasStudentAccess =
-        isStudent && !!enrollment && enrollment.role === 'STUDENT' && assignment.isPublished;
+        enrollment?.role === 'STUDENT' && assignment.isPublished;
 
-      if ((isStudent && hasStudentAccess) || (!isStudent && hasPrivilegedAccess)) {
+      if (isStaff || hasStudentAccess) {
         const totalProblemPoints = assignment.problems.reduce((sum, ap) => {
           const value = typeof ap.maxPoints === 'number' ? ap.maxPoints : 0;
           return sum + (Number.isFinite(value) ? value : 0);
@@ -103,6 +99,7 @@ export default async function AssignmentPage({ params }: PageProps) {
     <AssignmentClient
       initialAssignment={initialAssignment}
       initialAssignments={initialAssignments}
+      isStaff={isStaff}
     />
   );
 }

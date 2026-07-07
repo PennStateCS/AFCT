@@ -85,7 +85,7 @@ export async function POST(
         userId: session?.user?.id ?? null,
         action: 'ASSIGNMENT_ADD_PROBLEMS_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }

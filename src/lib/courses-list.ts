@@ -69,7 +69,6 @@ export async function getCoursesListForUser(
               lastName: true,
               email: true,
               avatar: true,
-              role: true,
             },
           },
         },
@@ -96,7 +95,6 @@ export async function getCoursesListForUser(
     updatedAt: course.updatedAt,
     enrolled: course.roster.map((r) => ({
       ...r.user,
-      role: r.user.role,
       courseRole: r.role,
     })),
   }));

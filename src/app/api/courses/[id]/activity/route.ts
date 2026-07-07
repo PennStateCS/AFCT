@@ -54,7 +54,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         userId: session?.user?.id ?? null,
         action: 'COURSE_ACTIVITY_ACCESS_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }

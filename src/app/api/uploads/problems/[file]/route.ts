@@ -5,6 +5,7 @@ import stream from 'stream';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canAccessCourse } from '@/lib/permissions';
 
 /**
  * Serves a problem's attached file, inline. Staff (ADMIN/FACULTY/TA) may fetch any;
@@ -47,22 +48,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
 
-    const role = session.user.role;
-    let allowed = false;
-    if (['ADMIN', 'FACULTY', 'TA'].includes(role)) allowed = true;
-    else {
-      const roster = await prisma.roster.findFirst({
-        where: { courseId: problem.courseId, userId: session.user.id },
-      });
-      if (roster) allowed = true;
-    }
+    // Any member of the problem's course (student, TA, faculty) may fetch it, as
+    // may a global admin. canAccessCourse covers roster membership + admin.
+    const allowed = await canAccessCourse(session.user, problem.courseId);
 
     if (!allowed) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'PROBLEM_FILE_DOWNLOAD_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

@@ -85,7 +85,7 @@ describe('EditUserDialog', () => {
       payload[key] = value;
     });
 
-    expect(payload).toMatchObject({ firstName: 'Ada', lastName: 'Lovelace', role: 'STUDENT' });
+    expect(payload).toMatchObject({ firstName: 'Ada', lastName: 'Lovelace' });
     expect(onSave).toHaveBeenCalled();
     expect(setOpen).toHaveBeenCalledWith(false);
     expect(showToastSuccess).toHaveBeenCalledWith('User updated successfully.');

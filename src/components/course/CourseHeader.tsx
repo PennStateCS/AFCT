@@ -130,9 +130,7 @@ export function CourseHeader({
       .filter(Boolean)
       .join(', ');
   };
-  const facultyNames = formatAllFacultyNames(
-    getInstructors(enrolled).filter((u) => u.role !== 'ADMIN'),
-  );
+  const facultyNames = formatAllFacultyNames(getInstructors(enrolled));
 
   const taList = enrolled.filter((u) => u.courseRole === 'TA');
   const taNames =

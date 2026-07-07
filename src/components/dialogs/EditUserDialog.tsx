@@ -23,7 +23,6 @@ import { useSession } from 'next-auth/react';
 
 import type { User } from '@prisma/client';
 import { UpdateUserSchema, type UpdateUserRaw, type UpdateUserInput } from '@/schemas/user';
-import { roleOptions, formatRole } from '@/lib/roles';
 import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
@@ -48,7 +47,6 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
     () => ({
       firstName: user.firstName ?? '',
       lastName: user.lastName ?? '',
-      role: user.role,
       isAdmin: user.isAdmin ?? false,
       timezone: user.timezone ?? '',
       avatarFile: undefined,
@@ -150,7 +148,6 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
     const formData = new FormData();
     formData.append('firstName', parsed.firstName);
     formData.append('lastName', parsed.lastName);
-    formData.append('role', parsed.role);
     if (parsed.avatarFile instanceof File) formData.append('avatar', parsed.avatarFile);
     if (parsed.deleteAvatar) formData.append('deleteAvatar', 'true');
     formData.append('inactive', parsed.inactive ? 'true' : 'false');
@@ -177,7 +174,6 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
       ...user,
       firstName: parsed.firstName,
       lastName: parsed.lastName,
-      role: parsed.role as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT',
       isAdmin: viewerIsAdmin ? parsed.isAdmin : user.isAdmin,
       avatar: parsed.deleteAvatar ? null : user.avatar,
       inactive: parsed.inactive,
@@ -316,25 +312,6 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
               className="w-full cursor-not-allowed rounded border bg-gray-200 p-2 text-sm opacity-70"
             />
           </div>
-
-          {/* Default Role */}
-          <Controller
-            control={control}
-            name="role"
-            render={({ field }) => {
-              return (
-                <SelectField
-                  label="Default Role"
-                  name="role"
-                  value={field.value}
-                  onValueChange={(v) => field.onChange(v)}
-                  placeholder="Select a default role"
-                  options={roleOptions.map((r) => ({ value: r, label: formatRole(r) }))}
-                  error={errors.role?.message}
-                />
-              );
-            }}
-          />
 
           {/* Administrator flag (system admins only) */}
           {viewerIsAdmin && (

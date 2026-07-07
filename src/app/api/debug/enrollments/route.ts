@@ -48,7 +48,7 @@ export async function GET() {
 
     return NextResponse.json({
       userId: session.user.id,
-      userRole: session.user.role,
+      isAdmin: session.user.isAdmin,
       enrollments
     });
   } catch (error) {

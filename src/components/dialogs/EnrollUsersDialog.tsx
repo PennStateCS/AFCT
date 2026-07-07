@@ -12,18 +12,10 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import InputGroup from '@/components/ui/InputGroup';
-import { Badge } from '@/components/ui/RoleBadge';
 import { User } from '@prisma/client';
 
 // Subset of User fields needed for enrollment
-type EnrollableUser = Pick<User, 'id' | 'firstName' | 'lastName' | 'email' | 'role'>;
-
-const roleDisplayNames: Record<string, string> = {
-  ADMIN: 'Admin',
-  FACULTY: 'Faculty',
-  TA: 'TA',
-  STUDENT: 'Student',
-};
+type EnrollableUser = Pick<User, 'id' | 'firstName' | 'lastName' | 'email'>;
 
 type EnrollUserDialogProps = {
   open: boolean;
@@ -176,7 +168,6 @@ export function EnrollUserDialog({
                         </span>
                         <span className="text-muted-foreground text-xs">{user.email}</span>
                       </span>
-                      <Badge role={user.role}>{roleDisplayNames[user.role] || user.role}</Badge>
                     </label>
                   </li>
                 ))}

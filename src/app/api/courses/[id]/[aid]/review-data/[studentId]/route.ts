@@ -101,7 +101,7 @@ export async function GET(
         userId: session?.user?.id ?? null,
         action: 'REVIEW_DATA_ACCESS_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -112,7 +112,7 @@ export async function GET(
         userId: session?.user?.id ?? null,
         action: 'REVIEW_DATA_ACCESS_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -149,7 +149,6 @@ export async function GET(
                   firstName: true,
                   lastName: true,
                   avatar: true,
-                  role: true,
                 },
               },
             },
@@ -238,7 +237,7 @@ export async function GET(
         firstName: comment.roster.user.firstName ?? null,
         lastName: comment.roster.user.lastName ?? null,
         avatar: comment.roster.user.avatar ?? null,
-        role: comment.roster.role ?? comment.roster.user.role ?? null,
+        role: comment.roster.role ?? null,
       },
     }));
 

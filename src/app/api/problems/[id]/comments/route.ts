@@ -62,7 +62,6 @@ export async function GET(request: NextRequest, { params: _params }: { params: P
               select: {
                 firstName: true,
                 lastName: true,
-                role: true,
               },
             },
           },
@@ -160,7 +159,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         userId: session?.user?.id ?? null,
         action: 'COMMENT_CREATE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
     }
@@ -178,7 +177,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         userId: session?.user?.id ?? null,
         action: 'COMMENT_CREATE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
     }
@@ -198,7 +197,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
               select: {
                 firstName: true,
                 lastName: true,
-                role: true,
               },
             },
           },

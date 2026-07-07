@@ -36,7 +36,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
         userId: session?.user?.id ?? null,
         action: 'GROUP_PROBLEMS_ACCESS_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
@@ -108,7 +108,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         userId: session?.user?.id ?? null,
         action: 'GROUP_PROBLEMS_ACCESS_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
@@ -193,7 +193,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
         userId: session?.user?.id ?? null,
         action: 'GROUP_PROBLEMS_REMOVE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }

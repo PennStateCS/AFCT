@@ -10,7 +10,6 @@ const prismaMock = vi.hoisted(() => ({
 const authMock = vi.hoisted(() => vi.fn());
 const activityLogMock = vi.hoisted(() => vi.fn());
 const getSystemUploadLimitMock = vi.hoisted(() => vi.fn());
-const parseRoleMock = vi.hoisted(() => vi.fn());
 const writeFileMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const unlinkMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
@@ -18,7 +17,6 @@ vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 vi.mock('@/lib/upload-limits', () => ({ getSystemUploadLimit: getSystemUploadLimitMock }));
-vi.mock('@/lib/roles', () => ({ parseRole: parseRoleMock }));
 vi.mock('fs/promises', () => ({
   writeFile: writeFileMock,
   unlink: unlinkMock,
@@ -29,7 +27,6 @@ import { PATCH, DELETE, GET, POST } from './route';
 beforeEach(() => {
   vi.clearAllMocks();
   getSystemUploadLimitMock.mockResolvedValue({ maxBytes: 1024 * 1024, maxMb: 1 });
-  parseRoleMock.mockReturnValue(undefined);
   prismaMock.roster.findMany.mockResolvedValue([]);
 });
 
@@ -427,32 +424,6 @@ describe('PATCH /api/users/[id]', () => {
 
     // The unlink rejection is swallowed by the .catch() handler.
     expect(res.status).toBe(200);
-  });
-
-  it('updates role when parseRole returns valid role', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
-    parseRoleMock.mockReturnValue('FACULTY');
-    prismaMock.user.findUnique.mockResolvedValue({ avatar: null });
-    prismaMock.user.update.mockResolvedValue({
-      id: 'u1',
-      email: 'u1@example.com',
-      firstName: 'A',
-      lastName: 'B',
-      role: 'FACULTY',
-      inactive: false,
-      avatar: null,
-      timezone: null,
-    });
-
-    const req = new NextRequest('http://localhost/api/users/u1', {
-      method: 'PATCH',
-      body: JSON.stringify({ role: 'FACULTY' }),
-    });
-
-    const res = await PATCH(req, { params: Promise.resolve({ id: 'u1' }) });
-
-    expect(res.status).toBe(200);
-    expect(parseRoleMock).toHaveBeenCalledWith('FACULTY');
   });
 
   it('returns 403 when setting user inactive while in active course', async () => {

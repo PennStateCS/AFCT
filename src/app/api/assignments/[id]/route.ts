@@ -193,7 +193,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       userId: session?.user?.id ?? null,
       action: 'ASSIGNMENT_UPDATE_DENIED',
       severity: 'SECURITY',
-      metadata: { role: session?.user?.role ?? null },
+      metadata: {},
     });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
@@ -219,7 +219,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         userId: session?.user?.id ?? null,
         action: 'ASSIGNMENT_UPDATE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json(
         { error: 'Assignment must not have any submissions' },
@@ -232,7 +232,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         userId: session?.user?.id ?? null,
         action: 'ASSIGNMENT_UPDATE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Assignment must not have any grades' }, { status: 403 });
     }
@@ -253,7 +253,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         userId: session?.user?.id ?? null,
         action: 'ASSIGNMENT_UPDATE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json(
         { error: 'Cannot change assignment group mode after submissions exist' },
@@ -383,7 +383,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       userId: session?.user?.id ?? null,
       action: 'ASSIGNMENT_UPDATE_DENIED',
       severity: 'SECURITY',
-      metadata: { role: session?.user?.role ?? null },
+      metadata: {},
     });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
@@ -409,7 +409,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         userId: session?.user?.id ?? null,
         action: 'ASSIGNMENT_UPDATE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json(
         { error: 'Assignment must not have any submissions' },
@@ -422,7 +422,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         userId: session?.user?.id ?? null,
         action: 'ASSIGNMENT_UPDATE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Assignment must not have any grades' }, { status: 403 });
     }
@@ -436,7 +436,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         userId: session?.user?.id ?? null,
         action: 'ASSIGNMENT_UPDATE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json(
         { error: 'Cannot change assignment group mode after submissions exist' },
@@ -586,7 +586,7 @@ export async function POST(req: NextRequest) {
         userId: session?.user?.id ?? null,
         action: 'ASSIGNMENT_CREATE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
@@ -699,7 +699,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       userId: session?.user?.id ?? null,
       action: 'ASSIGNMENT_DELETE_DENIED',
       severity: 'SECURITY',
-      metadata: { role: session?.user?.role ?? null },
+      metadata: {},
     });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }

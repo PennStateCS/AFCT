@@ -49,7 +49,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
         userId: session?.user?.id ?? null,
         action: 'COURSE_ARCHIVE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
@@ -75,7 +75,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
           userId: session?.user?.id ?? null,
           action: 'COURSE_ARCHIVE_DENIED',
           severity: 'SECURITY',
-          metadata: { role: session?.user?.role ?? null },
+          metadata: {},
         });
         return NextResponse.json({ error: reason }, { status: 403 });
       }

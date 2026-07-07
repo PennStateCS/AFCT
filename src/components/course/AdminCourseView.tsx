@@ -213,7 +213,7 @@ export function AdminCourseView({
                 course.isArchived,
                 getInstructors(enrolled).length,
                 course.viewerRole,
-                course.viewerDefaultRole,
+                course.viewerIsAdmin,
               )}
               onEnrollUser={onEnrollUser}
               onBulkEnroll={onBulkEnroll}

@@ -4,6 +4,7 @@ import fs from 'fs';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
 /**
  * Serves a problem's solution file — the most sensitive protected material, so
@@ -50,14 +51,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ file
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
 
-    // Allow access only for admin/faculty/ta
-    const role = session.user.role;
-    if (!['ADMIN', 'FACULTY', 'TA'].includes(role)) {
+    // Allow access only for course staff (faculty/TA) or a global admin.
+    if (!(await canManageCourse(session.user, problem.courseId))) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'SOLUTION_DOWNLOAD_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

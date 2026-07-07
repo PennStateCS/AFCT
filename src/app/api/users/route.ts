@@ -23,8 +23,6 @@ const isStrongPassword = (pw: string) =>
  * Restricted to ADMIN/FACULTY/TA; the access itself is audited.
  * @openapi
  * summary: List users
- * parameters:
- *   - { name: role, in: query, description: Filter to a single role, schema: { type: string, enum: [STUDENT, TA, FACULTY, ADMIN] } }
  * responses:
  *   200:
  *     description: Users (optionally filtered by role).
@@ -42,9 +40,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    const { searchParams } = new URL(req.url);
-    const role = searchParams.get('role');
-    const users = await getUsersList(role);
+    const users = await getUsersList();
 
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
@@ -53,7 +49,6 @@ export async function GET(req: Request) {
       category: 'USER',
       metadata: {
         userId: session.user.id,
-        filterRole: role,
       },
     });
 
@@ -67,8 +62,7 @@ export async function GET(req: Request) {
 /**
  * Creates a single user directly (staff-provisioned account), unlike self-service
  * signup. Restricted to ADMIN/FACULTY/TA. Validates email, password strength, and
- * timezone, and rejects a duplicate email. Unlike signup, the role here comes from
- * a trusted staff caller.
+ * timezone, and rejects a duplicate email.
  * @openapi
  * summary: Create a user
  * requestBody:
@@ -77,13 +71,12 @@ export async function GET(req: Request) {
  *     application/json:
  *       schema:
  *         type: object
- *         required: [email, firstName, lastName, password, role]
+ *         required: [email, firstName, lastName, password]
  *         properties:
  *           email: { type: string }
  *           firstName: { type: string }
  *           lastName: { type: string }
  *           password: { type: string, description: Must meet the strength policy }
- *           role: { type: string, enum: [STUDENT, TA, FACULTY, ADMIN] }
  *           timezone: { type: string, description: Defaults to the system timezone }
  * responses:
  *   201:
@@ -102,15 +95,15 @@ export async function POST(req: Request) {
         userId: session?.user?.id ?? null,
         action: 'USER_CREATE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     const body = await req.json();
-    const { email, firstName, lastName, password, role, timezone } = body;
+    const { email, firstName, lastName, password, timezone } = body;
 
-    if (!email || !firstName || !lastName || !password || !role) {
+    if (!email || !firstName || !lastName || !password) {
       console.warn('[USERS_POST] Missing required fields');
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
@@ -150,7 +143,6 @@ export async function POST(req: Request) {
         email,
         firstName,
         lastName,
-        role,
         password: hashedPassword,
         timezone: timezone || systemSettings?.timezone || 'UTC',
       },
@@ -159,7 +151,6 @@ export async function POST(req: Request) {
         email: true,
         firstName: true,
         lastName: true,
-        role: true,
         createdAt: true,
         timezone: true,
       },
@@ -174,7 +165,6 @@ export async function POST(req: Request) {
         userId: session.user.id,
         createdUserId: newUser.id,
         createdUserEmail: newUser.email,
-        createdUserRole: newUser.role,
       },
     });
 

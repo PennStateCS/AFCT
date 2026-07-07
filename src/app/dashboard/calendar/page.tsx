@@ -24,7 +24,6 @@ export default async function CalendarPage() {
 
   const initialAssignments = await getAssignmentsForUserRange({
     userId: session.user.id,
-    role: session.user.role,
     startDate: new Date(startIso),
     endDate: new Date(endIso),
   });

@@ -122,7 +122,7 @@ export async function POST(req: Request) {
         action: 'TLS_UPDATE_DENIED',
         severity: 'SECURITY',
         category: 'SYSTEM',
-        metadata: { role: session.user.role ?? null },
+        metadata: {},
       });
     }
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
@@ -237,7 +237,7 @@ export async function DELETE(req: Request) {
         action: 'TLS_UPDATE_DENIED',
         severity: 'SECURITY',
         category: 'SYSTEM',
-        metadata: { role: session.user.role ?? null, attempted: 'reset' },
+        metadata: { attempted: 'reset' },
       });
     }
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });

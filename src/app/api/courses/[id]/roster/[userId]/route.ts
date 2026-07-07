@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { isAdmin } from '@/lib/permissions';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 /**
@@ -47,16 +48,13 @@ export async function DELETE(
     const currentCourseRole = currentRoster?.role ?? null;
     const currentCourseRoleValue = String(currentCourseRole ?? '');
 
-    // Only global ADMIN or course-level FACULTY/TA may attempt removal
-    if (
-      currentUser.role !== 'ADMIN' &&
-      !['FACULTY', 'TA'].includes(currentCourseRoleValue)
-    ) {
+    // Only global admins or course-level FACULTY/TA may attempt removal
+    if (!isAdmin(currentUser) && !['FACULTY', 'TA'].includes(currentCourseRoleValue)) {
       await createEnhancedActivityLog(prisma, req as unknown as Request, {
         userId: session?.user?.id ?? null,
         action: 'ROSTER_REMOVE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -67,7 +65,7 @@ export async function DELETE(
         userId: session?.user?.id ?? null,
         action: 'ROSTER_REMOVE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -89,7 +87,7 @@ export async function DELETE(
         userId: session?.user?.id ?? null,
         action: 'ROSTER_REMOVE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -205,26 +203,25 @@ export async function GET(
             lastName: true,
             email: true,
             avatar: true,
-            role: true,
           },
         },
       },
     });
     if (!rosterEntry) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    // Also return the viewer's global role and course role so the UI can decide which actions to show
+    // Also return the viewer's admin flag and course role so the UI can decide which actions to show
     const viewerRoster = await prisma.roster.findFirst({
       where: { courseId, userId: currentUser.id },
       select: { role: true },
     });
     const viewerCourseRole = viewerRoster?.role ?? null;
-    const viewerDefaultRole = currentUser.role ?? null;
+    const viewerIsAdmin = isAdmin(currentUser);
 
     return NextResponse.json({
       success: true,
       roster: rosterEntry,
       viewerCourseRole,
-      viewerDefaultRole,
+      viewerIsAdmin,
     });
   } catch (err) {
     console.error('GET /api/courses/[id]/roster/[userId] error:', err);
@@ -282,13 +279,13 @@ export async function PATCH(
     const currentRoster = await prisma.roster.findFirst({
       where: { courseId, userId: currentUser.id },
     });
-    const isAllowed = currentUser.role === 'ADMIN' || currentRoster?.role === 'FACULTY';
+    const isAllowed = isAdmin(currentUser) || currentRoster?.role === 'FACULTY';
     if (!isAllowed) {
       await createEnhancedActivityLog(prisma, req as unknown as Request, {
         userId: session?.user?.id ?? null,
         action: 'ROSTER_UPDATE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

@@ -8,13 +8,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  ADMIN
-  FACULTY
-  TA
-  STUDENT
-}
-
 enum CourseRole {
   FACULTY
   TA
@@ -58,10 +51,8 @@ model User {
   password  String
   temporaryPassword Boolean @default(false)
   // Global system-admin grant. Course-level abilities live on Roster.role; this
-  // flag is the only global privilege. (`role` is retained during the migration
-  // to the user+isAdmin model and will be removed once nothing references it.)
+  // flag is the only global privilege.
   isAdmin   Boolean @default(false)
-  role      Role    @default(STUDENT)
   avatar    String?
   timezone  String?
   inactive  Boolean @default(false)
@@ -76,7 +67,6 @@ model User {
   groupRosters  GroupRoster[] // Group memberships across courses
   commentsAbout Comment[]         @relation("CommentsAboutStudent") // Comments about this student's work
 
-  @@index([role])
   @@index([isAdmin])
   @@index([inactive])
   @@index([createdAt])

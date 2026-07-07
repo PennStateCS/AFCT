@@ -230,7 +230,7 @@ export function getTAs(enrolled: EnrolledUser[] | undefined): EnrolledUser[] {
 
 export function getStudents(enrolled: EnrolledUser[] | undefined): EnrolledUser[] {
   if (!Array.isArray(enrolled)) return [];
-  return enrolled.filter((u) => (u.courseRole ?? u.role) === 'STUDENT');
+  return enrolled.filter((u) => u.courseRole === 'STUDENT');
 }
 
 export function getStudentCount(enrolled: EnrolledUser[] | undefined): number {
@@ -238,7 +238,7 @@ export function getStudentCount(enrolled: EnrolledUser[] | undefined): number {
 }
 
 export function formatInstructorNames(enrolled: EnrolledUser[] | undefined): string {
-  const instructors = getInstructors(enrolled).filter((u) => u.role !== 'ADMIN');
+  const instructors = getInstructors(enrolled);
   if (instructors.length === 0) return 'TBA';
   return instructors
     .map((instructor) => `${instructor.firstName ?? ''} ${instructor.lastName ?? ''}`.trim())
@@ -263,8 +263,8 @@ export function sortRoster(enrolled: EnrolledUser[] | undefined): EnrolledUser[]
   if (!Array.isArray(enrolled)) return [];
   // Build a role priority using roleOrder but favor courseRole when present
   return enrolled.slice().sort((a, b) => {
-    const aRole = (a.courseRole ?? a.role ?? '').toUpperCase();
-    const bRole = (b.courseRole ?? b.role ?? '').toUpperCase();
+    const aRole = (a.courseRole ?? '').toUpperCase();
+    const bRole = (b.courseRole ?? '').toUpperCase();
     const diff = (roleOrder[aRole] ?? 99) - (roleOrder[bRole] ?? 99);
     if (diff !== 0) return diff;
     const aLast = (a.lastName || '').toLowerCase();
