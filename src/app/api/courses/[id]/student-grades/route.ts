@@ -3,6 +3,26 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
+/**
+ * Returns the signed-in student's own grade breakdown for a course — published
+ * assignments, their problems, and per-problem grade, latest submission status,
+ * and attempt count. Available to enrolled members (viewing their own data) and
+ * to staff.
+ * @openapi
+ * summary: Get my grades for a course
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: The caller's per-assignment, per-problem grade breakdown.
+ *     content:
+ *       application/json:
+ *         schema: { type: object, properties: { assignments: { type: array, items: { type: object } } } }
+ *   400: { description: Missing course id. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Not enrolled and not staff. }
+ *   500: { description: Server error. }
+ */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth();

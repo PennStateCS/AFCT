@@ -3,6 +3,28 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
+/**
+ * Removes a user from a course roster. Permission is tiered: global admins and
+ * course instructors/faculty may remove people, but TAs and students may not, and
+ * no one may remove a peer at instructor/faculty level. Two safety rules block the
+ * removal outright — the user must have no submissions in the course, and a course
+ * can't lose its last faculty member.
+ * @openapi
+ * summary: Remove a user from a course
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: userId, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: Removed; returns how many roster rows were deleted.
+ *     content:
+ *       application/json:
+ *         schema: { type: object, properties: { success: { type: boolean }, removed: { type: integer } } }
+ *   400: { description: User has submissions, or is the only faculty member. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller's role may not remove this user. }
+ *   500: { description: Server error. }
+ */
 export async function DELETE(
   req: NextRequest,
   context: { params: Promise<{ id: string; userId: string }> },
@@ -158,6 +180,22 @@ export async function DELETE(
   }
 }
 
+/**
+ * Returns one roster entry (with the user's profile) plus the viewer's own course
+ * and global roles, so the UI can decide which actions to offer. Any signed-in
+ * user may call it; `userId` may be the literal "me" to target the caller.
+ * @openapi
+ * summary: Get a roster entry
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: userId, in: path, required: true, description: A user id, or "me" for the caller, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: The roster entry and the viewer's roles.
+ *   401: { description: Not signed in. }
+ *   404: { description: No roster entry for that user in this course. }
+ *   500: { description: Server error. }
+ */
 export async function GET(
   req: NextRequest,
   context: { params: Promise<{ id: string; userId: string }> },
@@ -209,6 +247,33 @@ export async function GET(
   }
 }
 
+/**
+ * Changes a user's course role. Only a global admin or the course's instructor may
+ * do this. The last instructor can't be demoted, keeping every course with someone
+ * in charge.
+ * @openapi
+ * summary: Change a user's course role
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: userId, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [role]
+ *         properties:
+ *           role: { type: string, enum: [INSTRUCTOR, FACULTY, TA, STUDENT] }
+ * responses:
+ *   200:
+ *     description: Role updated.
+ *   400: { description: Invalid role, or demoting the only instructor. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller is not an admin or the course instructor. }
+ *   404: { description: Roster entry not found. }
+ *   500: { description: Server error. }
+ */
 export async function PATCH(
   req: NextRequest,
   context: { params: Promise<{ id: string; userId: string }> },

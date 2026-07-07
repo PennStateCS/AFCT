@@ -6,6 +6,26 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
+/**
+ * Serves a problem's attached file, inline. Staff (ADMIN/FACULTY/TA) may fetch any;
+ * other users must be enrolled in the problem's course. The download is audited, and
+ * traversal filenames are rejected.
+ * @openapi
+ * summary: Get a problem file
+ * parameters:
+ *   - { name: file, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: The file bytes (inline).
+ *     content:
+ *       application/octet-stream:
+ *         schema: { type: string, format: binary }
+ *   400: { description: Invalid filename. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Not enrolled in the problem's course (and not staff). }
+ *   404: { description: File not found. }
+ *   500: { description: Server error. }
+ */
 export async function GET(req: Request, { params }: { params: Promise<{ file: string }> }) {
   let actorId: string | null = null;
   let fileName: string | undefined;

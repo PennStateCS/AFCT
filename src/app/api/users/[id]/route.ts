@@ -1,4 +1,3 @@
-// /src/app/api/users/[id]
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
@@ -10,13 +9,52 @@ import { parseRole } from '@/lib/roles';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 
-// PATCH: Update a user's profile
+/**
+ * Updates a user: names, role, active status, timezone, and avatar. Accepts either
+ * JSON or multipart/form-data (the latter carries the avatar file). A user may
+ * edit themselves; ADMIN/FACULTY/TA may edit others. Deactivation is blocked while
+ * the user is still on a published, unarchived course. Field-level changes are
+ * recorded (before → after) in the audit log.
+ * @openapi
+ * summary: Update a user
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         properties:
+ *           firstName: { type: string }
+ *           lastName: { type: string }
+ *           role: { type: string, enum: [STUDENT, TA, FACULTY, ADMIN] }
+ *           inactive: { type: boolean }
+ *           timezone: { type: string }
+ *     multipart/form-data:
+ *       schema:
+ *         type: object
+ *         properties:
+ *           firstName: { type: string }
+ *           lastName: { type: string }
+ *           role: { type: string }
+ *           inactive: { type: string, enum: ['true', 'false'] }
+ *           timezone: { type: string }
+ *           avatar: { type: string, format: binary }
+ *           deleteAvatar: { type: string, enum: ['true'] }
+ * responses:
+ *   200:
+ *     description: The updated user.
+ *   400: { description: Invalid timezone. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Not allowed to edit this user, or deactivating an actively-enrolled user. }
+ *   413: { description: Avatar exceeds the system upload limit. }
+ *   500: { description: Server error. }
+ */
 export async function PATCH(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   const userId = id;
   let actorId: string | null = null;
-
-  // Attempting to update user: userId
 
   try {
     const session = await auth();
@@ -100,36 +138,30 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
 
     let avatarFilename: string | null | undefined;
 
-    // Save new avatar file and clean up the old one
+    // Write the new avatar, then remove the previous file so uploads don't pile up.
     if (avatarFile && avatarFile.size > 0) {
       const bytes = Buffer.from(await avatarFile.arrayBuffer());
       avatarFilename = `${userId}-${Date.now()}-${avatarFile.name}`;
       const uploadPath = path.join('/private', 'uploads', 'pfps', avatarFilename);
       await writeFile(uploadPath, bytes);
-      // Uploaded new avatar: avatarFilename
 
       if (userRecord?.avatar) {
         const oldPath = path.join('/private', 'uploads', 'pfps', userRecord.avatar);
         await unlink(oldPath).catch(() => {});
-        // Deleted old avatar
       }
     }
 
-    // Delete avatar if requested
     if (deleteAvatar && userRecord?.avatar) {
       const oldPath = path.join('/private', 'uploads', 'pfps', userRecord.avatar);
       await unlink(oldPath).catch(() => {});
       avatarFilename = null;
-      // Avatar removed
     }
 
-    // Make sure the user is not in any active courses if changing active status
+    // Don't let someone be deactivated while they're still on a live course
+    // (published and not archived, end date in the future).
     if (inactive) {
-      // Note logic appears swapped, but that is because inactive is the next state
-      // Generate the current date and time
       const currTime = new Date();
 
-      // Find if the user is in an active coruse
       const activeCourses = await prisma.roster.findMany({
         where: {
           userId: userId,
@@ -142,9 +174,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
         select: { course: { select: { isArchived: true, isPublished: true } } },
       });
 
-      // Return an error if the user is in an active course
       if (activeCourses) {
-        // Make sure the active course is not archived
         for (const activeCourse of activeCourses) {
           if (!activeCourse.course.isArchived && activeCourse.course.isPublished) {
             console.error(
@@ -165,7 +195,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       }
     }
 
-    // Prepare data for update
+    // Only fields that were actually supplied become `undefined` → left untouched.
     const dataToUpdate: {
       firstName?: string;
       lastName?: string;
@@ -182,7 +212,6 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       timezone: timezoneRaw ? timezoneRaw : undefined,
     };
 
-    // Perform the update
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: dataToUpdate,
@@ -225,7 +254,6 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       },
     });
 
-    // User updated
     return NextResponse.json(updatedUser);
   } catch (error) {
     console.error('[PATCH] Error updating user:', error);
@@ -239,13 +267,28 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
   }
 }
 
-// DELETE: Delete a user
+/**
+ * Deletes a user. Restricted to ADMIN/FACULTY/TA. The user's activity logs are
+ * deliberately preserved (schema `onDelete: SetNull` nulls their userId; each
+ * entry keeps the actor's name/email in metadata), and their avatar file is
+ * cleaned up. The deleted identity is captured for the audit entry before removal.
+ * @openapi
+ * summary: Delete a user
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: User deleted.
+ *     content:
+ *       application/json:
+ *         schema: { type: object, properties: { success: { type: boolean }, message: { type: string } } }
+ *   403: { description: Caller lacks a staff role. }
+ *   500: { description: Server error. }
+ */
 export async function DELETE(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   const userId = id;
   let actorId: string | null = null;
-
-  // Attempting to delete user
 
   try {
     const session = await auth();
@@ -263,7 +306,6 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     }
     actorId = currentUser.id;
 
-    // Valid to delete
     // Capture the target's identity before the row is gone, for the audit + avatar cleanup.
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -273,7 +315,6 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     if (user?.avatar) {
       const avatarPath = path.join('/private', 'uploads', 'pfps', user.avatar);
       await unlink(avatarPath).catch(() => {});
-      // Avatar file deleted
     }
 
     // Delete user from database. The user's activity logs are intentionally
@@ -298,7 +339,6 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
       },
     });
 
-    // User deleted
     return NextResponse.json({ success: true, message: 'User deleted' });
   } catch (error) {
     console.error('[DELETE] Error deleting user:', error);
@@ -312,11 +352,26 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
   }
 }
 
-// Block unsupported methods
+// This resource is edit/delete only; GET and POST are explicitly rejected so they
+// don't fall through to a framework default.
+/**
+ * @openapi
+ * summary: Not supported
+ * description: This resource only supports PATCH and DELETE.
+ * responses:
+ *   405: { description: Method not allowed. }
+ */
 export function GET() {
   return NextResponse.json({ error: 'Method not allowed' }, { status: 405 });
 }
 
+/**
+ * @openapi
+ * summary: Not supported
+ * description: This resource only supports PATCH and DELETE.
+ * responses:
+ *   405: { description: Method not allowed. }
+ */
 export function POST() {
   return NextResponse.json({ error: 'Method not allowed' }, { status: 405 });
 }

@@ -3,17 +3,31 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
-// GET: Fetch all published assignments for a course
+/**
+ * Lists a course's published assignments with each one's total and max grade
+ * (summed across its problems). Restricted to ADMIN/FACULTY.
+ * @openapi
+ * summary: List a course's published assignments
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: Published assignments with totalGrade and maxGrade.
+ *     content:
+ *       application/json:
+ *         schema: { type: array, items: { type: object } }
+ *   400: { description: Missing course id. }
+ *   403: { description: Caller is not an admin or faculty user. }
+ *   404: { description: Course not found. }
+ *   500: { description: Server error. }
+ */
 export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
-  // Await params
   const params = await context.params;
   const courseId = await params.id;
 
-    // Get authenticated user session
     const session = await auth();
     const user = session?.user;
 
-    // 1. Allow only ADMIN or FACULTY to toggle archive status
     if (!user || !['ADMIN', 'FACULTY'].includes(user.role)) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
@@ -24,13 +38,11 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-  // 2. Validate courseId
   if (!courseId) {
     return NextResponse.json({ error: 'Missing course ID' }, { status: 400 });
   }
 
   try {
-    // 3. Ensure the course exists
     const course = await prisma.course.findUnique({
       where: { id: courseId },
       select: { id: true },
@@ -40,8 +52,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
-    // 4. Fetch all published assignments along with problem info needed to
-    //    compute a student's total and max grade.
+    // Pull each assignment's problems too, to derive total/max grade below.
     const assignments = await prisma.assignment.findMany({
       where: {
         courseId: courseId,

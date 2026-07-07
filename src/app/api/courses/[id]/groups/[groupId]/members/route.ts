@@ -3,7 +3,25 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
-// GET members for a group
+/**
+ * Lists a group's members, oldest first. Staff only (ADMIN/FACULTY/TA). The group
+ * must belong to the course in the path.
+ * @openapi
+ * summary: List group members
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: groupId, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: The group's members.
+ *     content:
+ *       application/json:
+ *         schema: { type: object, properties: { members: { type: array, items: { type: object } } } }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller lacks a staff role. }
+ *   404: { description: Group not found in this course. }
+ *   500: { description: Server error. }
+ */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string; groupId: string }> }) {
   const { id, groupId } = await params;
 
@@ -44,7 +62,27 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 }
 
-// POST: add member to group
+/**
+ * Adds one user to a group. Staff only. The user must already be enrolled in the
+ * course; the upsert makes re-adding a no-op.
+ * @openapi
+ * summary: Add a group member
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: groupId, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema: { type: object, required: [userId], properties: { userId: { type: string } } }
+ * responses:
+ *   201: { description: Member added. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller lacks a staff role. }
+ *   404: { description: Group not found in this course. }
+ *   422: { description: Missing userId, or the user isn't enrolled in the course. }
+ *   500: { description: Server error. }
+ */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string; groupId: string }> }) {
   const { id, groupId } = await params;
 
@@ -104,7 +142,41 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 }
 
-// PATCH: set group members in bulk (members: string[])
+/**
+ * Replaces a group's membership with the given set of users in one call, computing
+ * the adds and removes. Permitted for global admins or course staff. Every user
+ * must be enrolled in the course, or the whole update is rejected.
+ * @openapi
+ * summary: Set group members in bulk
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: groupId, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [members]
+ *         properties:
+ *           members: { type: array, items: { type: string }, description: The complete desired member set }
+ * responses:
+ *   200:
+ *     description: Membership updated; lists who was added and removed.
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             success: { type: boolean }
+ *             added: { type: array, items: { type: string } }
+ *             removed: { type: array, items: { type: string } }
+ *   401: { description: Not signed in. }
+ *   403: { description: Not a global admin or course staff. }
+ *   404: { description: Group not found in this course. }
+ *   422: { description: Missing members array, or some users aren't enrolled. }
+ *   500: { description: Server error. }
+ */
 export async function PATCH(req: NextRequest, context: { params: Promise<{ id: string; groupId: string }> }) {
   const { id, groupId } = await context.params;
   let actorId: string | null = null;

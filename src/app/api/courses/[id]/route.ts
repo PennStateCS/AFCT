@@ -1,5 +1,3 @@
-// /src/api/courses/[id]/route.ts
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
@@ -20,7 +18,29 @@ type OptionalCountDelegate = {
   findMany?: (args: unknown) => Promise<CountRow[]>;
 };
 
-// GET: Fetch a course by ID with view-based metadata
+/**
+ * Fetches one course with derived metadata, shaped by the `view` query param to
+ * keep payloads lean (full/summary/roster/assignments/problems). Assignments come
+ * back with derived point totals and submission/comment counts; problems are
+ * tagged with whether an assignment uses them; the roster is flattened into a
+ * single `enrolled` array. If the caller is signed in, their course role is
+ * included — but note the course data itself is returned without an auth or
+ * enrollment check.
+ * @openapi
+ * summary: Get a course
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - name: view
+ *     in: query
+ *     description: Controls which relations are included.
+ *     schema: { type: string, enum: [full, summary, roster, assignments, problems], default: full }
+ * responses:
+ *   200:
+ *     description: The course with metadata for the requested view.
+ *   400: { description: Missing course id. }
+ *   404: { description: Course not found. }
+ *   500: { description: Server error. }
+ */
 export async function GET(req: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   const view = new URL(req.url).searchParams.get('view') ?? 'full';
@@ -312,7 +332,43 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
   }
 }
 
-// PUT: Update a course (Faculty/Admin/TA only)
+/**
+ * Updates a course's details and, when `instructorIds` is supplied, reconciles its
+ * faculty roster (adds, promotes, or removes to match the desired set). Runs the
+ * same archive/unpublish safety checks as the dedicated toggles, requires a
+ * registration window, and records a before→after diff of changed fields.
+ * ADMIN/FACULTY/TA only.
+ * @openapi
+ * summary: Update a course
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [name, code, semester, credits, startDate, endDate, registrationOpenAt, registrationCloseAt, isPublished, isArchived]
+ *         properties:
+ *           name: { type: string }
+ *           code: { type: string }
+ *           semester: { type: string }
+ *           credits: { type: number }
+ *           startDate: { type: string }
+ *           endDate: { type: string }
+ *           registrationOpenAt: { type: string }
+ *           registrationCloseAt: { type: string }
+ *           isPublished: { type: boolean }
+ *           isArchived: { type: boolean }
+ *           emptyStringNotation: { type: string }
+ *           instructorIds: { type: array, items: { type: string }, description: If present, becomes the exact faculty set }
+ * responses:
+ *   200:
+ *     description: The updated course with roster and assignments.
+ *   400: { description: Missing id, invalid isArchived, empty instructor list, or missing registration window. }
+ *   403: { description: Not staff, or an archive/unpublish safety check failed. }
+ *   500: { description: Server error. }
+ */
 export async function PUT(req: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
 
@@ -320,11 +376,9 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
     return NextResponse.json({ error: 'Missing course ID' }, { status: 400 });
   }
 
-  // Get authenticated user session
   const session = await auth();
   const user = session?.user;
 
-  // Allow only ADMIN, FACULTY, or TA to edit courses
   if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session?.user?.id ?? null,
@@ -664,7 +718,20 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
   }
 }
 
-// DELETE: Delete a course (Faculty/Admin/TA only, course must be archived)
+/**
+ * Permanently deletes a course. ADMIN/FACULTY/TA only, and the course must already
+ * be archived — a guard against deleting a live course. The archived requirement
+ * is enforced both up front and again in the delete's `where` clause.
+ * @openapi
+ * summary: Delete a course
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: Course deleted.
+ *   403: { description: Not staff, or the course is not archived. }
+ *   500: { description: Server error. }
+ */
 export async function DELETE(req: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
 
@@ -672,7 +739,6 @@ export async function DELETE(req: Request, context: { params: Promise<{ id: stri
     return NextResponse.json({ error: 'Missing course ID' }, { status: 400 });
   }
 
-  // Get authenticated user session
   const session = await auth();
   const user = session?.user;
 
@@ -705,7 +771,6 @@ export async function DELETE(req: Request, context: { params: Promise<{ id: stri
   await req.json();
 
   try {
-    // Deleting course code
     const deletedCourse = await prisma.course.delete({
       where: {
         id,

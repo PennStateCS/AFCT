@@ -4,6 +4,22 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
+/**
+ * Re-queues one submission for evaluation, resetting it to PENDING and clearing its
+ * prior feedback/result. Staff only (ADMIN/FACULTY/TA). The submission must have a
+ * stored file and its problem must still be linked to the assignment.
+ * @openapi
+ * summary: Rerun a submission
+ * parameters:
+ *   - { name: id, in: path, required: true, description: Submission id, schema: { type: string } }
+ * responses:
+ *   202: { description: Submission re-queued (status PENDING). }
+ *   400: { description: Submission has no file, or its problem is no longer linked. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller lacks a staff role. }
+ *   404: { description: Submission not found. }
+ *   500: { description: Server error. }
+ */
 export async function POST(req: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   let actorId: string | null = null;

@@ -3,6 +3,28 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
+/**
+ * Returns a student's per-problem grades and feedback for one assignment, keyed by
+ * problem id. A student may read their own; staff may read anyone's. Responds 204
+ * when nothing has been graded yet.
+ * @openapi
+ * summary: Get a student's problem grades for an assignment
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: aid, in: path, required: true, schema: { type: string } }
+ *   - { name: studentId, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: A map of problemId → { grade, feedback, updatedAt }.
+ *     content:
+ *       application/json:
+ *         schema: { type: object }
+ *   204: { description: No grades recorded yet. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Not the student in question and not staff. }
+ *   404: { description: Assignment not found in this course. }
+ *   500: { description: Server error. }
+ */
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string; aid: string; studentId: string }> },

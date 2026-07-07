@@ -1,5 +1,3 @@
-// /src/app/api/courses/[id]/problems/[pid]/route.ts
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import path from 'path';
@@ -7,6 +5,23 @@ import { promises as fs } from 'fs';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
+/**
+ * Deletes a problem within a course, unconditionally cascading its submissions and
+ * assignment links first, then removing the solution file. Staff only
+ * (ADMIN/FACULTY/TA). The problem must belong to the course in the path. Unlike
+ * DELETE /api/problems/[id], this does not refuse when the problem is used by an
+ * assignment — it removes those links.
+ * @openapi
+ * summary: Delete a course problem
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: pid, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200: { description: Problem deleted. }
+ *   403: { description: Caller lacks a staff role. }
+ *   404: { description: Problem not found in this course. }
+ *   500: { description: Server error. }
+ */
 export async function DELETE(
   req: Request,
   context: { params: Promise<{ id: string; pid: string }> },
@@ -14,7 +29,6 @@ export async function DELETE(
   const { id: courseId, pid: problemId } = await context.params;
 
   try {
-    // Step 1: Verify the user is authenticated and authorized (ADMIN, FACULTY, TA)
     const session = await auth();
     const user = session?.user;
 

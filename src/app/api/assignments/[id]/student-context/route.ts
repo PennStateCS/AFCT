@@ -2,6 +2,32 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
+/**
+ * Everything the caller needs to see their own work on an assignment, grouped by
+ * problem: their submissions, the comments addressed to them, and their per-problem
+ * and overall grades. Requires enrollment in the course; students can't see it
+ * until the assignment is published. Scoped entirely to the caller's own data.
+ * @openapi
+ * summary: Get my context for an assignment
+ * parameters:
+ *   - { name: id, in: path, required: true, description: Assignment id, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: The caller's submissions, comments, and grades for the assignment.
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             assignmentGrade: { type: number, nullable: true }
+ *             problemGrades: { type: object }
+ *             submissionCount: { type: integer }
+ *             submissionsByProblem: { type: object }
+ *             commentsByProblem: { type: object }
+ *   401: { description: Not signed in. }
+ *   404: { description: Assignment not found, unpublished (for students), or caller not enrolled. }
+ *   500: { description: Server error. }
+ */
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user?.id) {

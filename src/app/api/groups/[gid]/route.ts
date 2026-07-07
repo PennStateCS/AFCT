@@ -4,7 +4,27 @@ import { auth } from '@/lib/auth';
 import { UpdateGroupSchema } from '@/schemas/group';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
-// PATCH: update group name
+/**
+ * Renames a group by its global id (the course-agnostic variant of the course-
+ * scoped route). Staff only. Names remain unique within the group's course.
+ * @openapi
+ * summary: Rename a group by id
+ * parameters:
+ *   - { name: gid, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema: { type: object, required: [name], properties: { name: { type: string } } }
+ * responses:
+ *   200: { description: The updated group. }
+ *   400: { description: Validation failed. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller lacks a staff role. }
+ *   404: { description: Group not found. }
+ *   409: { description: Name already used in the course. }
+ *   500: { description: Server error. }
+ */
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ gid: string; id?: string }> },
@@ -78,7 +98,20 @@ export async function PATCH(
   }
 }
 
-// DELETE: remove group
+/**
+ * Deletes a group by its global id; membership rows cascade. Staff only.
+ * @openapi
+ * summary: Delete a group by id
+ * parameters:
+ *   - { name: gid, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200: { description: Group deleted. }
+ *   400: { description: Missing group id. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller lacks a staff role. }
+ *   404: { description: Group not found. }
+ *   500: { description: Server error. }
+ */
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ gid: string; id?: string }> },

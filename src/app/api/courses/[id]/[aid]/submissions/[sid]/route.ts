@@ -1,5 +1,3 @@
-// /src/api/courses/[id]/[aid]/submissions/[sid]/route.ts
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
@@ -39,6 +37,31 @@ const submissionSelectWithoutEvaluation = {
   problemId: true,
 } as const;
 
+/**
+ * Returns a student's submissions for an assignment, grouped by problem and each
+ * annotated with that problem's metadata (falls back gracefully if the optional
+ * `evaluationRaw` column is absent). The `[sid]` segment is the student id.
+ *
+ * Access: admins, or any user enrolled in the course. NOTE: enrollment is the only
+ * gate — it does not restrict `sid` to the caller, so any course member can view
+ * another member's submissions.
+ * @openapi
+ * summary: Get a student's submissions for an assignment
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: aid, in: path, required: true, schema: { type: string } }
+ *   - { name: sid, in: path, required: true, description: Student id, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: Submissions grouped by problem.
+ *     content:
+ *       application/json:
+ *         schema: { type: object }
+ *   401: { description: Not signed in. }
+ *   403: { description: Not enrolled in the course (and not admin). }
+ *   404: { description: Assignment not found, or it has no linked problems. }
+ *   500: { description: Server error. }
+ */
 export async function GET(
   req: Request,
   context: { params: Promise<{ id: string; aid: string; sid: string }> },

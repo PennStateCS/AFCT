@@ -1,5 +1,3 @@
-// /src/api/courses/[id]/[aid]/remove-problem/route.ts
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
@@ -21,13 +19,34 @@ interface AssignmentWithProblems {
   }[]
 }
 
+/**
+ * Detaches a problem from an assignment (and clears any group→problem mappings for
+ * it), leaving the problem itself intact in the course. Staff only
+ * (ADMIN/FACULTY/TA). Both the assignment and the problem must belong to the course
+ * in the path. Uses POST rather than DELETE because the problem id travels in the body.
+ * @openapi
+ * summary: Remove a problem from an assignment
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: aid, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema: { type: object, required: [problemId], properties: { problemId: { type: string } } }
+ * responses:
+ *   200: { description: The assignment's remaining problems. }
+ *   400: { description: Missing problemId. }
+ *   403: { description: Caller lacks a staff role. }
+ *   404: { description: Assignment or problem not found in this course. }
+ *   500: { description: Server error. }
+ */
 export async function POST(
   req: Request,
   context: { params: Promise<{ id: string; aid: string }> },
 ) {
   const { id: courseId, aid: assignmentId } = await context.params;
 
-  // Get the user session and check for required roles
   const session = await auth();
   const user = session?.user;
 
