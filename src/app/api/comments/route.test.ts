@@ -51,7 +51,7 @@ describe('POST /api/comments', () => {
   it('creates a comment and logs activity', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
     prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
-    prismaMock.roster.findUnique.mockResolvedValue({ id: 'r1' });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
     prismaMock.problem.findFirst.mockResolvedValue({ id: 'p1', courseId: 'c1' });
     prismaMock.comment.create.mockResolvedValue({
       id: 'cm1',
@@ -76,9 +76,9 @@ describe('POST /api/comments', () => {
   });
 
   it('allows admin to add comment without roster entry', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
-    prismaMock.roster.findUnique.mockResolvedValue(null);
+    prismaMock.roster.findFirst.mockResolvedValue(null);
     prismaMock.roster.create.mockResolvedValue({ id: 'r-admin', role: 'ADMIN' });
     prismaMock.problem.findFirst.mockResolvedValue({ id: 'p1', courseId: 'c1' });
     prismaMock.comment.create.mockResolvedValue({
@@ -120,7 +120,7 @@ describe('POST /api/comments', () => {
   it('returns 403 when user not enrolled', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
     prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
-    prismaMock.roster.findUnique.mockResolvedValue(null);
+    prismaMock.roster.findFirst.mockResolvedValue(null);
 
     const req = new NextRequest('http://localhost/api/comments', {
       method: 'POST',
@@ -135,7 +135,7 @@ describe('POST /api/comments', () => {
   it('returns 404 when problem not in course', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
     prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
-    prismaMock.roster.findUnique.mockResolvedValue({ id: 'r1' });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
     prismaMock.problem.findFirst.mockResolvedValue(null);
 
     const req = new NextRequest('http://localhost/api/comments', {
@@ -151,7 +151,8 @@ describe('POST /api/comments', () => {
   it('returns 404 when student not enrolled', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
-    prismaMock.roster.findUnique.mockResolvedValueOnce({ id: 'r1' }).mockResolvedValueOnce(null); // student lookup
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'FACULTY' });
+    prismaMock.roster.findUnique.mockResolvedValue(null); // student lookup
     prismaMock.problem.findFirst.mockResolvedValue({ id: 'p1', courseId: 'c1' });
 
     const req = new NextRequest('http://localhost/api/comments', {
@@ -172,9 +173,8 @@ describe('POST /api/comments', () => {
   it('creates comment about specific student', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
-    prismaMock.roster.findUnique
-      .mockResolvedValueOnce({ id: 'r1' })
-      .mockResolvedValueOnce({ id: 'r-student' });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'FACULTY' });
+    prismaMock.roster.findUnique.mockResolvedValue({ id: 'r-student' });
     prismaMock.problem.findFirst.mockResolvedValue({ id: 'p1', courseId: 'c1' });
     prismaMock.comment.create.mockResolvedValue({
       id: 'cm1',
@@ -238,7 +238,7 @@ describe('GET /api/comments', () => {
   it('returns 403 when user not enrolled', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
     prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
-    prismaMock.roster.findUnique.mockResolvedValue(null);
+    prismaMock.roster.findFirst.mockResolvedValue(null);
 
     const req = new NextRequest('http://localhost/api/comments?assignmentId=a1&problemId=p1');
     const res = await GET(req);
@@ -331,7 +331,7 @@ describe('DELETE /api/comments', () => {
   });
 
   it('deletes a comment and logs activity', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.comment.findUnique.mockResolvedValue({
       id: 'cm1',
       assignmentId: 'a1',
@@ -390,6 +390,7 @@ describe('DELETE /api/comments', () => {
       roster: { user: { id: 'other-user' } },
       assignment: { courseId: 'c1' },
     });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
 
     const req = new NextRequest('http://localhost/api/comments?commentId=cm1', {
       method: 'DELETE',
@@ -408,7 +409,7 @@ describe('DELETE /api/comments', () => {
       roster: { user: { id: 'other-user' } },
       assignment: { courseId: 'c1' },
     });
-    prismaMock.roster.findUnique.mockResolvedValue({ role: 'STUDENT' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
 
     const req = new NextRequest('http://localhost/api/comments?commentId=cm1', {
       method: 'DELETE',

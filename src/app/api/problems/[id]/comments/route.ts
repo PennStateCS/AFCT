@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { prisma } from '@/lib/prisma';
+import { canAccessCourse } from '@/lib/permissions';
 
 /**
  * Fetches comments for a problem. Any signed-in user may call it. Note the problem
@@ -153,7 +154,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const assignmentProblem = problem.assignments[0];
     const assignment = assignmentProblem.assignment;
 
-    // Find the user's roster entry for this course
+    // Authorize: any enrolled user (or admin) may comment.
+    if (!(await canAccessCourse(session.user, assignment.course.id))) {
+      await createEnhancedActivityLog(prisma, request, {
+        userId: session?.user?.id ?? null,
+        action: 'COMMENT_CREATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
+      return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
+    }
+
+    // Obtain the author's roster row for the comment FK.
     const rosterEntry = await prisma.roster.findFirst({
       where: {
         userId: session.user.id,
