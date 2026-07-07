@@ -147,22 +147,24 @@ function buildSpec(routes) {
 
     paths[apiPath] ||= {};
     for (const [method, { description, operation }] of Object.entries(ops)) {
-      const notes = [];
-      if (authed) {
-        notes.push(roles.length ? `**Auth:** requires ${roles.join(' / ')}` : '**Auth:** required');
-      }
-      notes.push(`[View source](${source})`);
-
+      const authNote = authed
+        ? roles.length
+          ? `**Auth:** requires ${roles.join(' / ')}`
+          : '**Auth:** required'
+        : '';
       const skeleton = {
         tags: [tag],
         summary: description || `${method} ${apiPath}`,
-        description: [description, notes.join(' · ')].filter(Boolean).join('\n\n'),
+        description: [description, authNote].filter(Boolean).join('\n\n'),
         ...(params.length ? { parameters: params } : {}),
-        responses: { 200: { description: 'Success' } },
+        // Only fall back to a placeholder response when the @openapi block doesn't
+        // declare its own — otherwise the placeholder lingers alongside real ones.
+        ...(operation?.responses ? {} : { responses: { 200: { description: 'Success' } } }),
       };
-      paths[apiPath][method.toLowerCase()] = operation
-        ? deepMerge(skeleton, operation)
-        : skeleton;
+      const op = operation ? deepMerge(skeleton, operation) : skeleton;
+      // Always append the source link, even when @openapi overrides the description.
+      op.description = [op.description, `[View source](${source})`].filter(Boolean).join('\n\n');
+      paths[apiPath][method.toLowerCase()] = op;
     }
   }
 

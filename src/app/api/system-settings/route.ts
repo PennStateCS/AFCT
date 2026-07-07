@@ -87,6 +87,40 @@ async function safeAuditLog(req: Request, data: EnhancedActivityLogData): Promis
   }
 }
 
+/**
+ * Returns the singleton system settings, falling back to defaults for any unset
+ * field. The hCaptcha secret is never returned — only `hcaptchaSecretConfigured`
+ * reports whether one is stored. Admin/Faculty only.
+ * @openapi
+ * summary: Get system settings
+ * responses:
+ *   200:
+ *     description: The effective system settings.
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             timezone: { type: string }
+ *             maxUploadSizeMb: { type: integer }
+ *             allowSignup: { type: boolean }
+ *             sessionTimeoutMinutes: { type: integer }
+ *             submissionEvalTimeoutMs: { type: integer }
+ *             submissionEvalMaxMemoryMb: { type: integer }
+ *             submissionResubmitCooldownMs: { type: integer }
+ *             submissionMaxConcurrent: { type: integer }
+ *             submissionMaxAttempts: { type: integer }
+ *             submissionAnalyzerLimit: { type: integer }
+ *             loginMaxAttempts: { type: integer }
+ *             loginLockoutMinutes: { type: integer }
+ *             backupEnabled: { type: boolean }
+ *             backupHour: { type: integer, description: Hour of day (0-23) the daily backup runs }
+ *             backupRetentionDays: { type: integer }
+ *             activityLogRetentionDays: { type: integer }
+ *             hcaptchaSiteKey: { type: string }
+ *             hcaptchaSecretConfigured: { type: boolean, description: Whether a secret is stored; the value is never returned }
+ *   403: { description: Caller is not an admin or faculty user. }
+ */
 export async function GET() {
   const session = await auth();
   const role = session?.user?.role;
@@ -147,6 +181,47 @@ type SettingsBody = {
   hcaptchaSecretClear?: boolean;
 };
 
+/**
+ * Updates the singleton system settings (upsert). Every field is optional, so a
+ * partial payload only touches the fields it includes; numeric fields are clamped
+ * to safe bounds and an invalid timezone is rejected. The hCaptcha secret is
+ * write-only: send a non-empty `hcaptchaSecretKey` to set it, or
+ * `hcaptchaSecretClear: true` to remove it. Changes are audited (never the secret
+ * value). Admin/Faculty only.
+ * @openapi
+ * summary: Update system settings
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         properties:
+ *           timezone: { type: string }
+ *           maxUploadSizeMb: { type: integer }
+ *           allowSignup: { type: boolean }
+ *           sessionTimeoutMinutes: { type: integer }
+ *           submissionEvalTimeoutMs: { type: integer }
+ *           submissionEvalMaxMemoryMb: { type: integer }
+ *           submissionResubmitCooldownMs: { type: integer }
+ *           submissionMaxConcurrent: { type: integer }
+ *           submissionMaxAttempts: { type: integer }
+ *           submissionAnalyzerLimit: { type: integer }
+ *           loginMaxAttempts: { type: integer }
+ *           loginLockoutMinutes: { type: integer }
+ *           backupEnabled: { type: boolean }
+ *           backupHour: { type: integer }
+ *           backupRetentionDays: { type: integer }
+ *           activityLogRetentionDays: { type: integer }
+ *           hcaptchaSiteKey: { type: string }
+ *           hcaptchaSecretKey: { type: string, description: Write-only; a non-empty value sets the secret }
+ *           hcaptchaSecretClear: { type: boolean, description: Set true to remove the stored secret }
+ * responses:
+ *   200: { description: The updated settings (same shape as GET). }
+ *   400: { description: Invalid JSON body or invalid timezone. }
+ *   403: { description: Caller is not an admin or faculty user (attempt is audited). }
+ *   500: { description: Failed to persist the update. }
+ */
 export async function PUT(req: Request) {
   const session = await auth();
   const role = session?.user?.role;
