@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { isAdmin } from '@/lib/permissions';
 import { DownloadLogsSchema } from '@/schemas/log';
 import { EXPORTABLE_LOG_FIELDS } from '@/lib/log-fields';
 import type { Prisma } from '@prisma/client';
@@ -10,7 +11,7 @@ const MAX_EXPORT_ROWS = 100_000;
 
 /**
  * Returns the selected activity-log columns within a time range, for CSV export.
- * Admin/Faculty only. Column names are validated against the exportable allow-list
+ * System administrators only. Column names are validated against the exportable allow-list
  * before reaching the Prisma select (guards field injection), and the result is
  * capped at MAX_EXPORT_ROWS so one export can't page the whole table into memory.
  * @openapi
@@ -33,12 +34,12 @@ const MAX_EXPORT_ROWS = 100_000;
  *       application/json:
  *         schema: { type: array, items: { type: object } }
  *   400: { description: "Invalid JSON, failed validation, or no valid fields selected." }
- *   403: { description: Caller is not an admin or faculty user. }
+ *   403: { description: Caller is not a system administrator. }
  *   500: { description: Export failed. }
  */
 export async function POST(req: Request) {
   const session = await auth();
-  if (!session || !['ADMIN', 'FACULTY'].includes(session.user.role)) {
+  if (!isAdmin(session?.user)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 

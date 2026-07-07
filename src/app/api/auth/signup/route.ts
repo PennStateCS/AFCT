@@ -15,8 +15,8 @@ import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
 /**
- * Self-service account registration. New accounts are always created as STUDENT —
- * elevated roles are assigned later through the staff-only user-management routes.
+ * Self-service account registration. New accounts are created with no elevated
+ * privileges; access is granted later through the staff-only user-management routes.
  * Gated by the `allowSignup` system setting, and protected by a tiered rate
  * limiter: repeated attempts escalate from silent friction, to a captcha challenge
  * (428), to an outright block (429). The password must satisfy the strength policy.
@@ -64,9 +64,6 @@ export async function POST(req: Request) {
       interactionMs,
       captchaToken,
     } = body;
-    // Self-signup always yields a STUDENT; any client-supplied role is ignored so
-    // the public endpoint can't be used to mint privileged accounts.
-    const role = 'STUDENT';
     const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : email;
     const ipAddress = getClientIp(req);
 
@@ -149,7 +146,6 @@ export async function POST(req: Request) {
         firstName,
         lastName,
         password: hashedPassword,
-        role,
       },
     });
 
@@ -161,7 +157,6 @@ export async function POST(req: Request) {
       metadata: {
         userId: newUser.id,
         email: normalizedEmail,
-        role: role,
       },
     });
 

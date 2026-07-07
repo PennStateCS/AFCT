@@ -19,6 +19,7 @@ import { GET } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  prismaMock.roster.findFirst.mockResolvedValue(null);
 });
 
 describe('GET /api/assignments/[id]/problems', () => {
@@ -40,6 +41,7 @@ describe('GET /api/assignments/[id]/problems', () => {
 
   it('returns 401 when role is not ADMIN or FACULTY', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1', isGroup: false });
 
     const req = new NextRequest('http://localhost/api/assignments/a1/problems');
     const res = await GET(req, { params: Promise.resolve({ id: 'a1' }) });
@@ -59,6 +61,7 @@ describe('GET /api/assignments/[id]/problems', () => {
 
   it('returns problems list', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1', isGroup: false });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
       {
@@ -87,6 +90,7 @@ describe('GET /api/assignments/[id]/problems', () => {
 
   it('group assignment returns only problems for user\'s group + unassigned problems', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1', isGroup: true });
     prismaMock.groupRoster.findFirst.mockResolvedValue({ groupId: 'g1' });
 
@@ -150,6 +154,7 @@ describe('GET /api/assignments/[id]/problems', () => {
 
   it('group assignment: user not in a group sees only unassigned problems', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1', isGroup: true });
     prismaMock.groupRoster.findFirst.mockResolvedValue(null); // user not in a group
 

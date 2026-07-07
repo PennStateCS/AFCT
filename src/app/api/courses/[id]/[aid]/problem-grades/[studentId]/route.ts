@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
 /**
  * Returns a student's per-problem grades and feedback for one assignment, keyed by
@@ -37,13 +38,12 @@ export async function GET(
 
     const { id: courseId, aid: assignmentId, studentId } = await params;
 
-    const isStaff = ['ADMIN', 'FACULTY', 'TA'].includes(session.user.role);
-    if (session.user.id !== studentId && !isStaff) {
+    if (!(await canManageCourse(session.user, courseId)) && session.user.id !== studentId) {
       await createEnhancedActivityLog(prisma, _req, {
         userId: session?.user?.id ?? null,
         action: 'PROBLEM_GRADES_ACCESS_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

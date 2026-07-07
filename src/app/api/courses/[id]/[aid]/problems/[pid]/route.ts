@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
 const AssignmentProblemSettingsSchema = z.object({
   maxPoints: z.number().min(0),
@@ -20,7 +21,8 @@ type AssignmentProblemSettingsInput = z.infer<typeof AssignmentProblemSettingsSc
 
 /**
  * Updates the per-assignment settings for one problem: its point value, submission
- * cap, and whether the autograder runs. Staff only (ADMIN/FACULTY/TA). The problem
+ * cap, and whether the autograder runs. Course staff (faculty or TAs) or a system
+ * admin. The problem
  * must already be linked to the assignment, and the assignment must belong to the
  * course in the path.
  * @openapi
@@ -43,7 +45,7 @@ type AssignmentProblemSettingsInput = z.infer<typeof AssignmentProblemSettingsSc
  * responses:
  *   200: { description: The updated assignment-problem settings. }
  *   400: { description: Invalid JSON or settings. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Caller is not course staff (faculty or TA) or a system admin. }
  *   404: { description: The problem isn't linked to this assignment/course. }
  *   500: { description: Server error. }
  */
@@ -57,12 +59,12 @@ export async function PUT(
     const session = await auth();
     const user = session?.user;
 
-    if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    if (!user?.id || !(await canManageCourse(user, courseId))) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'ASSIGNMENT_PROBLEM_SETTINGS_UPDATE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }

@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 import {
   Calendar,
@@ -106,7 +107,7 @@ export default function DashboardSidebarMenu() {
     lastName = '',
     avatar = '',
     timezone,
-    role = 'STUDENT',
+    isAdmin = false,
   } = session.user;
 
   // Resolve display name and avatar
@@ -127,7 +128,6 @@ export default function DashboardSidebarMenu() {
     avatar: avatarUrl,
     timezone: timezone ?? null,
     initials,
-    role: (role?.toUpperCase?.() || 'STUDENT') as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT',
     password: '', // password is not exposed from session
     temporaryPassword: Boolean(session.user.mustChangePassword),
     inactive: false, // inactive status is not exposed from session
@@ -135,11 +135,9 @@ export default function DashboardSidebarMenu() {
     updatedAt: new Date(), // updatedAt is not exposed from session
   };
 
-  const visibleCourses = courses.filter((c) => {
-    if (c.isArchived) return false;
-    if (user.role === 'STUDENT') return c.isPublished;
-    return true;
-  });
+  // The server (nav API) already scopes which courses are returned per the
+  // viewer's per-course role; here we only drop archived ones.
+  const visibleCourses = courses.filter((c) => !c.isArchived);
   const isDev = process.env.NODE_ENV !== 'production';
   const resolvedAdminMenu = (
     isDev
@@ -156,8 +154,8 @@ export default function DashboardSidebarMenu() {
     <>
       {/* Sidebar navigation content */}
       <SidebarContent>
-        {/* Admin menu */}
-        {(user.role === 'ADMIN' || user.role === 'FACULTY') && (
+        {/* Admin menu — system administrators only */}
+        {isAdmin && (
           <SidebarGroup>
             <SidebarGroupLabel
               aria-hidden={collapsed}
@@ -406,7 +404,16 @@ export default function DashboardSidebarMenu() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <SidebarMenuButton className="hover:bg-secondary data-[state=open]:bg-secondary/70 data-[state=open]:text-secondary-foreground h-14 bg-[#525252] px-3 py-3 transition-colors">
-                  <UserRound /> {user.name}
+                  <Avatar className="h-8 w-8 shrink-0">
+                    <AvatarImage
+                      src={user.avatar ? `/api/uploads/pfps/${user.avatar}` : undefined}
+                      alt={user.name}
+                    />
+                    <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
+                      {user.initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  {user.name}
                   <ChevronUp className="ml-auto" />
                 </SidebarMenuButton>
               </DropdownMenuTrigger>

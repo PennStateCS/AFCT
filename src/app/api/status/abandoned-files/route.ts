@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { isAdmin } from '@/lib/permissions';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 const CATEGORY_FOLDERS: Record<string, string> = {
@@ -22,8 +23,8 @@ const isSafeFileName = (name: string) => {
 
 /**
  * Deletes a single orphaned upload — a file on disk that no DB row references
- * (see the abandoned-file report on the status dashboard). Restricted to staff
- * (ADMIN/FACULTY/TA). Guards on every axis: the category must be known, the name
+ * (see the abandoned-file report on the status dashboard). System administrators
+ * only. Guards on every axis: the category must be known, the name
  * must be separator-free, the file must still be unreferenced, and the resolved
  * path must stay inside its category folder.
  * @openapi
@@ -45,7 +46,7 @@ const isSafeFileName = (name: string) => {
  *       application/json:
  *         schema: { type: object, properties: { ok: { type: boolean } } }
  *   400: { description: "Unknown category, unsafe filename, or path outside the category folder." }
- *   401: { description: "Not signed in, or lacking staff role." }
+ *   401: { description: "Not signed in, or not a system administrator." }
  *   404: { description: File not found on disk. }
  *   409: { description: A DB row still references this file — refused. }
  *   500: { description: Server error. }
@@ -55,13 +56,12 @@ export async function DELETE(req: Request) {
   try {
     const session = await auth();
     actorId = session?.user?.id ?? null;
-    const role = session?.user?.role;
-    if (!session?.user?.id || !role || !['ADMIN', 'FACULTY', 'TA'].includes(role)) {
+    if (!isAdmin(session?.user)) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'ABANDONED_FILES_DELETE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

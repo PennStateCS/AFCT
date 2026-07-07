@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
 /**
- * Removes one member from a group. Staff only (ADMIN/FACULTY/TA). The group must
- * belong to the course in the path and the membership must exist.
+ * Removes one member from a group. Course staff (faculty or TAs) or a system admin.
+ * The group must belong to the course in the path and the membership must exist.
  * @openapi
  * summary: Remove a group member
  * parameters:
@@ -15,7 +16,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
  * responses:
  *   200: { description: Member removed. }
  *   401: { description: Not signed in. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Not course staff or a system admin. }
  *   404: { description: Group or membership not found. }
  *   500: { description: Server error. }
  */
@@ -27,12 +28,12 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+  if (!(await canManageCourse(session.user, id))) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session?.user?.id ?? null,
       action: 'GROUP_MEMBER_REMOVE_DENIED',
       severity: 'SECURITY',
-      metadata: { role: session?.user?.role ?? null },
+      metadata: {},
     });
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }

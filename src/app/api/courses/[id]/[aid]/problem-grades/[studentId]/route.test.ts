@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const prismaMock = vi.hoisted(() => ({
+  roster: { findFirst: vi.fn() },
   assignment: { findFirst: vi.fn() },
   assignmentProblemGrade: { findMany: vi.fn() },
 }));
@@ -17,6 +18,7 @@ const defaultParams = { id: 'course-1', aid: 'assignment-1', studentId: 'student
 describe('GET /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     authMock.mockResolvedValue({ user: { id: 'staff-1', role: 'FACULTY' } });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: defaultParams.aid });
     prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
@@ -34,6 +36,7 @@ describe('GET /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
 
   it('returns 403 when student tries to view someone else', async () => {
     authMock.mockResolvedValue({ user: { id: 'other-student', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue(null);
 
     const res = await GET(new Request('http://localhost'), {
       params: Promise.resolve(defaultParams),

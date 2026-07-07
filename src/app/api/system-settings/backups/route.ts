@@ -3,15 +3,12 @@ import fs from 'fs';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { isAdmin } from '@/lib/permissions';
 import { listBackups, BACKUP_TRIGGER_DIR, BACKUP_TRIGGER_FILE } from '@/lib/backups';
-
-function authorized(role: string | undefined): boolean {
-  return !!role && ['ADMIN', 'FACULTY'].includes(role);
-}
 
 /**
  * Lists available backups, newest first, each pairing a database dump with its
- * matching upload-files archive. Admin/Faculty only.
+ * matching upload-files archive. System administrators only.
  * @openapi
  * summary: List backups
  * responses:
@@ -23,11 +20,11 @@ function authorized(role: string | undefined): boolean {
  *           type: object
  *           properties:
  *             backups: { type: array, items: { type: object } }
- *   403: { description: Caller is not an admin or faculty user. }
+ *   403: { description: Caller is not a system administrator. }
  */
 export async function GET() {
   const session = await auth();
-  if (!authorized(session?.user?.role)) {
+  if (!isAdmin(session?.user)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
   return NextResponse.json({ backups: listBackups() });
@@ -35,7 +32,7 @@ export async function GET() {
 
 /**
  * Requests an on-demand backup by dropping a trigger file the db-backup container
- * polls for. Admin/Faculty only. Returns 202 (accepted) — the backup runs
+ * polls for. System administrators only. Returns 202 (accepted) — the backup runs
  * asynchronously in that container, not in this request.
  * @openapi
  * summary: Trigger a backup now
@@ -45,12 +42,12 @@ export async function GET() {
  *     content:
  *       application/json:
  *         schema: { type: object, properties: { ok: { type: boolean } } }
- *   403: { description: Caller is not an admin or faculty user. }
+ *   403: { description: Caller is not a system administrator. }
  *   503: { description: The backup service (trigger volume) is not mounted. }
  */
 export async function POST(req: Request) {
   const session = await auth();
-  if (!authorized(session?.user?.role)) {
+  if (!isAdmin(session?.user)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 

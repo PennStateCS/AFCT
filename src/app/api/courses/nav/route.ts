@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { isAdmin } from '@/lib/permissions';
 
 /**
  * Compact course list for the sidebar navigation — only the caller's enrolled
@@ -21,16 +22,24 @@ export async function GET() {
   try {
     const session = await auth();
     const userId = session?.user?.id;
-    const role = session?.user?.role;
 
-    if (!userId || !role) {
+    if (!userId) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
     }
 
+    // In the nav a user sees a course if it's published, if they are staff
+    // (FACULTY/TA) in that course, or if they are a global admin.
     const courses = await prisma.course.findMany({
       where: {
         roster: { some: { userId } },
-        ...(role === 'STUDENT' ? { isPublished: true } : {}),
+        ...(isAdmin(session.user)
+          ? {}
+          : {
+              OR: [
+                { isPublished: true },
+                { roster: { some: { userId, role: { in: ['FACULTY', 'TA'] } } } },
+              ],
+            }),
       },
       select: {
         id: true,

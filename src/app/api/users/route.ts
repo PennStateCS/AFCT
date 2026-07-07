@@ -5,6 +5,7 @@ import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { getUsersList } from '@/lib/users-list';
+import { isAdmin } from '@/lib/permissions';
 
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
@@ -18,32 +19,28 @@ const isStrongPassword = (pw: string) =>
   /[^A-Za-z0-9]/.test(pw);
 
 /**
- * Lists users for the staff-facing users table, optionally filtered to one role.
- * Restricted to ADMIN/FACULTY/TA; the access itself is audited.
+ * Lists users for the admin-facing users table. System administrators only; the
+ * access itself is audited.
  * @openapi
  * summary: List users
- * parameters:
- *   - { name: role, in: query, description: Filter to a single role, schema: { type: string, enum: [STUDENT, TA, FACULTY, ADMIN] } }
  * responses:
  *   200:
- *     description: Users (optionally filtered by role).
+ *     description: Users.
  *     content:
  *       application/json:
  *         schema: { type: array, items: { type: object } }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: System administrators only. }
  *   500: { description: Server error. }
  */
 export async function GET(req: Request) {
   try {
     const session = await auth();
-    if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+    if (!session?.user || !isAdmin(session.user)) {
       console.warn('[USERS_GET] Unauthorized access attempt');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    const { searchParams } = new URL(req.url);
-    const role = searchParams.get('role');
-    const users = await getUsersList(role);
+    const users = await getUsersList();
 
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
@@ -52,7 +49,6 @@ export async function GET(req: Request) {
       category: 'USER',
       metadata: {
         userId: session.user.id,
-        filterRole: role,
       },
     });
 
@@ -64,10 +60,10 @@ export async function GET(req: Request) {
 }
 
 /**
- * Creates a single user directly (staff-provisioned account), unlike self-service
- * signup. Restricted to ADMIN/FACULTY/TA. Validates email, password strength, and
- * timezone, and rejects a duplicate email. Unlike signup, the role here comes from
- * a trusted staff caller.
+ * Creates a single user directly (admin-provisioned account), unlike self-service
+ * signup. System administrators only. Validates email, password strength, and
+ * timezone, and rejects a duplicate email. The account is created with no global
+ * role; admin rights are granted separately via the isAdmin flag.
  * @openapi
  * summary: Create a user
  * requestBody:
@@ -76,40 +72,39 @@ export async function GET(req: Request) {
  *     application/json:
  *       schema:
  *         type: object
- *         required: [email, firstName, lastName, password, role]
+ *         required: [email, firstName, lastName, password]
  *         properties:
  *           email: { type: string }
  *           firstName: { type: string }
  *           lastName: { type: string }
  *           password: { type: string, description: Must meet the strength policy }
- *           role: { type: string, enum: [STUDENT, TA, FACULTY, ADMIN] }
  *           timezone: { type: string, description: Defaults to the system timezone }
  * responses:
  *   201:
  *     description: The created user.
  *   400: { description: "Missing fields, invalid email, weak password, or invalid timezone." }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: System administrators only. }
  *   409: { description: Email already in use. }
  *   500: { description: Server error. }
  */
 export async function POST(req: Request) {
   try {
     const session = await auth();
-    if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+    if (!session?.user || !isAdmin(session.user)) {
       console.warn('[USERS_POST] Unauthorized access attempt');
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'USER_CREATE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     const body = await req.json();
-    const { email, firstName, lastName, password, role, timezone } = body;
+    const { email, firstName, lastName, password, timezone } = body;
 
-    if (!email || !firstName || !lastName || !password || !role) {
+    if (!email || !firstName || !lastName || !password) {
       console.warn('[USERS_POST] Missing required fields');
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
@@ -149,7 +144,6 @@ export async function POST(req: Request) {
         email,
         firstName,
         lastName,
-        role,
         password: hashedPassword,
         timezone: timezone || systemSettings?.timezone || 'UTC',
       },
@@ -158,7 +152,6 @@ export async function POST(req: Request) {
         email: true,
         firstName: true,
         lastName: true,
-        role: true,
         createdAt: true,
         timezone: true,
       },
@@ -173,7 +166,6 @@ export async function POST(req: Request) {
         userId: session.user.id,
         createdUserId: newUser.id,
         createdUserEmail: newUser.email,
-        createdUserRole: newUser.role,
       },
     });
 

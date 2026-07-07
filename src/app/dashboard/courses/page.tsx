@@ -10,9 +10,12 @@ export const metadata: Metadata = {
 export default async function CoursesPage() {
   const session = await auth();
   const userId = session?.user?.id;
-  const role = session?.user?.role;
+  // Global admins see all courses; everyone else is scoped to their published
+  // enrollments. Per-course FACULTY/TA privilege now lives in Roster.role and is
+  // resolved inside getCoursesListForUser via the roster filter.
+  const listRole = session?.user?.isAdmin ? 'ADMIN' : 'STUDENT';
 
-  const initialCourses = userId && role ? await getCoursesListForUser(userId, role) : [];
+  const initialCourses = userId ? await getCoursesListForUser(userId, listRole) : [];
 
   return <CoursesClient initialCourses={initialCourses} />;
 }

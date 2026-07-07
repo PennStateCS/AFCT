@@ -3,11 +3,13 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
 /**
  * Re-queues one submission for evaluation, resetting it to PENDING and clearing its
- * prior feedback/result. Staff only (ADMIN/FACULTY/TA). The submission must have a
- * stored file and its problem must still be linked to the assignment.
+ * prior feedback/result. Course staff (faculty or TAs) or a system admin. The
+ * submission must have a stored file and its problem must still be linked to the
+ * assignment.
  * @openapi
  * summary: Rerun a submission
  * parameters:
@@ -16,7 +18,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
  *   202: { description: Submission re-queued (status PENDING). }
  *   400: { description: "Submission has no file, or its problem is no longer linked." }
  *   401: { description: Not signed in. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Caller is not course staff or a system admin. }
  *   404: { description: Submission not found. }
  *   500: { description: Server error. }
  */
@@ -33,20 +35,11 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
-      await createEnhancedActivityLog(prisma, req, {
-        userId: session?.user?.id ?? null,
-        action: 'SUBMISSION_RERUN_DENIED',
-        severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
-      });
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
     const submission = await prisma.submission.findUnique({
       where: { id },
       select: {
         id: true,
+        courseId: true,
         assignmentId: true,
         problemId: true,
         studentId: true,
@@ -57,6 +50,16 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
 
     if (!submission) {
       return NextResponse.json({ error: 'Submission not found' }, { status: 404 });
+    }
+
+    if (!(await canManageCourse(user, submission.courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'SUBMISSION_RERUN_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     if (!submission.fileName) {

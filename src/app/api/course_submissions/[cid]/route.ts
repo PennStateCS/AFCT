@@ -2,12 +2,13 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
 /**
  * Re-queues every submission in a course, resetting each to PENDING and clearing its
- * feedback/result — the bulk counterpart to the single-submission rerun. Staff only
- * (ADMIN/FACULTY/TA). Logs each submission plus one batch-summary event, and returns
- * the count re-queued.
+ * feedback/result — the bulk counterpart to the single-submission rerun. Course staff
+ * (faculty or TAs) or a system admin. Logs each submission plus one batch-summary
+ * event, and returns the count re-queued.
  * @openapi
  * summary: Rerun all submissions in a course
  * parameters:
@@ -19,7 +20,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
  *       application/json:
  *         schema: { type: object, properties: { success: { type: boolean }, count: { type: integer } } }
  *   401: { description: Not signed in. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Caller is not course staff or a system admin. }
  *   500: { description: Server error. }
  */
 export async function POST(req: Request, context: { params: Promise<{ cid: string }> }) {
@@ -42,12 +43,12 @@ export async function POST(req: Request, context: { params: Promise<{ cid: strin
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    if (!(await canManageCourse(user, cid))) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'COURSE_SUBMISSIONS_RERUN_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

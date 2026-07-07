@@ -3,9 +3,11 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canUnpublishCourse } from '@/lib/course-status-checks';
+import { canManageCourse, COURSE_FACULTY_ROLES } from '@/lib/permissions';
 
 /**
- * Toggles a course's published state. ADMIN/FACULTY only. Unpublishing runs a
+ * Toggles a course's published state. Course faculty or a system admin (TAs
+ * excluded). Unpublishing runs a
  * safety check (canUnpublishCourse) that refuses if students would lose access to
  * work already in progress.
  * @openapi
@@ -25,7 +27,7 @@ import { canUnpublishCourse } from '@/lib/course-status-checks';
  *   200:
  *     description: The updated course (id, name, code, isPublished, updatedAt).
  *   400: { description: isPublished must be a boolean. }
- *   403: { description: "Not staff, or unpublishing is blocked by the safety check." }
+ *   403: { description: "Not course faculty or a system admin (TAs excluded), or unpublishing is blocked by the safety check." }
  *   500: { description: Server error. }
  */
 export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
@@ -42,12 +44,12 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     const user = session?.user;
     actorId = user?.id ?? null;
 
-    if (!user || !['ADMIN', 'FACULTY'].includes(user.role)) {
+    if (!user?.id || !(await canManageCourse(user, courseId, COURSE_FACULTY_ROLES))) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'COURSE_PUBLISH_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
@@ -59,7 +61,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
           userId: session?.user?.id ?? null,
           action: 'COURSE_PUBLISH_DENIED',
           severity: 'SECURITY',
-          metadata: { role: session?.user?.role ?? null },
+          metadata: {},
         });
         return NextResponse.json({ error: reason }, { status: 403 });
       }

@@ -57,7 +57,6 @@ async function deleteFileIfExists(filename: string) {
  *             firstName: { type: string }
  *             lastName: { type: string }
  *             avatar: { type: string, nullable: true }
- *             role: { type: string }
  *             timezone: { type: string, nullable: true }
  *   400: { description: Blank name or invalid timezone. }
  *   401: { description: Not signed in. }
@@ -147,7 +146,6 @@ export async function POST(req: Request) {
         firstName: true,
         lastName: true,
         avatar: true,
-        role: true,
         timezone: true,
       },
     });
@@ -198,7 +196,6 @@ export async function POST(req: Request) {
  *             firstName: { type: string }
  *             lastName: { type: string }
  *             avatar: { type: string, nullable: true }
- *             role: { type: string }
  *             timezone: { type: string, nullable: true }
  *   401: { description: Not signed in. }
  */
@@ -216,7 +213,6 @@ export async function GET() {
       firstName: true,
       lastName: true,
       avatar: true,
-      role: true,
       timezone: true,
     },
   });

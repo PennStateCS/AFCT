@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canAccessCourse } from '@/lib/permissions';
 
 /**
  * Returns the signed-in student's own grade breakdown for a course — published
@@ -35,18 +36,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: 'Missing course ID' }, { status: 400 });
     }
 
-    const member = await prisma.roster.findUnique({
-      where: { courseId_userId: { courseId, userId: session.user.id } },
-      select: { id: true },
-    });
-
-    const isStaff = ['ADMIN', 'FACULTY', 'TA'].includes(session.user.role);
-    if (!member && !isStaff) {
+    if (!(await canAccessCourse(session.user, courseId))) {
       await createEnhancedActivityLog(prisma, _req, {
         userId: session?.user?.id ?? null,
         action: 'COURSE_STUDENT_GRADES_ACCESS_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

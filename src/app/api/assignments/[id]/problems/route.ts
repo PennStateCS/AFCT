@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse, COURSE_FACULTY_ROLES } from '@/lib/permissions';
 import { ProblemTypeEnum } from '@/schemas/problem';
 import { z } from 'zod';
 
@@ -32,7 +33,7 @@ interface AssignmentProblemResult {
  * Lists an assignment's problems, tagged with whether the caller has solved each
  * (a correct submission) and their grade. For group assignments, visibility follows
  * the caller's group — unassigned problems show to everyone, group-mapped ones only
- * to that group's members. Currently restricted to ADMIN/FACULTY.
+ * to that group's members. Course faculty or a system admin (TAs excluded).
  * @openapi
  * summary: List an assignment's problems
  * parameters:
@@ -44,7 +45,7 @@ interface AssignmentProblemResult {
  *       application/json:
  *         schema: { type: array, items: { type: object } }
  *   400: { description: Missing assignment id. }
- *   401: { description: "Not signed in, or not an admin/faculty user." }
+ *   401: { description: "Not signed in, or not course faculty / a system admin (TAs excluded)." }
  *   404: { description: Assignment not found. }
  *   500: { description: Server error. }
  */
@@ -57,11 +58,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
   }
 
   const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  if (session.user.role !== 'ADMIN' && session.user.role !== 'FACULTY') {
+  if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -74,6 +71,11 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
 
     if (!assignment) {
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+    }
+
+    // Faculty-tier staff only (FACULTY, TAs excluded) or admin.
+    if (!(await canManageCourse(session.user, assignment.courseId, COURSE_FACULTY_ROLES))) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // ---- User and Course Id ----

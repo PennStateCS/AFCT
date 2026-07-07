@@ -65,7 +65,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
   });
 
   it('returns 400 when missing required fields', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
 
     const req = new NextRequest('http://localhost/api/courses/c1/duplicate', {
       method: 'POST',
@@ -78,7 +78,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
   });
 
   it('returns 400 for invalid credits', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
 
     const req = new NextRequest('http://localhost/api/courses/c1/duplicate', {
       method: 'POST',
@@ -94,7 +94,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
   });
 
   it('returns 400 for invalid course code format', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
 
     const req = new NextRequest('http://localhost/api/courses/c1/duplicate', {
       method: 'POST',
@@ -110,7 +110,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
   });
 
   it('returns 400 when start date is after end date', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
 
     const req = new NextRequest('http://localhost/api/courses/c1/duplicate', {
       method: 'POST',
@@ -131,7 +131,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
   });
 
   it('returns 400 when self-registration open is after close', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
 
     const req = new NextRequest('http://localhost/api/courses/c1/duplicate', {
       method: 'POST',
@@ -152,7 +152,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
   });
 
   it('duplicates a course', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.course.findUnique.mockResolvedValue(null);
@@ -180,7 +180,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
   });
 
   it('duplicates with problems only mode', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.course.findUnique.mockResolvedValue(null);
@@ -212,7 +212,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
   });
 
   it('duplicates with assignments and problems mode', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'TA' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.course.findUnique.mockResolvedValue(null);
@@ -254,7 +254,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
   });
 
   it('copies faculty and TAs when requested', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.course.findUnique.mockResolvedValue(null);
@@ -289,7 +289,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
   });
 
   it('uses fallback timezone from system settings', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: null });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'Europe/London' });
     prismaMock.course.findUnique.mockResolvedValue(null);
@@ -315,7 +315,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
   });
 
   it('uses legacy boolean flags for copy mode', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.course.findUnique.mockResolvedValue(null);

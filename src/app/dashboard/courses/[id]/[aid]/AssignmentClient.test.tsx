@@ -44,10 +44,10 @@ describe('AssignmentClient', () => {
     expect(screen.getByText('Loading')).toBeInTheDocument();
   });
 
-  it('routes students to student view with initial assignment', () => {
+  it('routes non-staff to student view with initial assignment', () => {
     useSessionMock.mockReturnValue({
       status: 'authenticated',
-      data: { user: { role: 'STUDENT' } },
+      data: { user: {} },
     });
 
     const initialAssignment = {
@@ -60,21 +60,24 @@ describe('AssignmentClient', () => {
       problems: [],
     } as AssignmentWithDetails;
 
-    render(<AssignmentClient initialAssignment={initialAssignment} />);
+    render(<AssignmentClient initialAssignment={initialAssignment} isStaff={false} />);
 
     expect(screen.getByText('student-view')).toBeInTheDocument();
     expect(studentViewMock).toHaveBeenCalledWith({ initialAssignment });
   });
 
-  it('routes privileged users to privileged view', () => {
+  it('routes staff to privileged view', () => {
     useSessionMock.mockReturnValue({
       status: 'authenticated',
-      data: { user: { role: 'FACULTY' } },
+      data: { user: {} },
     });
 
-    render(<AssignmentClient />);
+    render(<AssignmentClient isStaff={true} />);
 
     expect(screen.getByText('privilege-view')).toBeInTheDocument();
-    expect(privilegeViewMock).toHaveBeenCalledWith({ initialAssignment: null });
+    expect(privilegeViewMock).toHaveBeenCalledWith({
+      initialAssignment: null,
+      initialAssignments: undefined,
+    });
   });
 });

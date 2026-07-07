@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
 /**
  * Records a gradebook export in the audit log. The CSV itself is built and
  * downloaded client-side, so this endpoint just captures that an export happened
- * (and a little about its scope). Staff only (ADMIN/FACULTY/TA).
+ * (and a little about its scope). Course staff (faculty or TAs) or a system admin.
  * @openapi
  * summary: Log a gradebook export
  * parameters:
@@ -25,7 +26,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
  * responses:
  *   200: { description: Export recorded. }
  *   401: { description: Not signed in. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Not course staff (faculty or TAs) or a system admin. }
  *   500: { description: Server error. }
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -43,13 +44,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+    if (!(await canManageCourse(session.user, id))) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'GRADES_EXPORT_DENIED',
         severity: 'SECURITY',
         courseId: id,
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -95,7 +96,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 /**
  * Returns the full gradebook matrix for a course: students × assignments with each
  * cell holding the student's summed assignment grade (problem grades collapsed
- * into one total). Staff only (ADMIN/FACULTY/TA).
+ * into one total). Course staff (faculty or TAs) or a system admin.
  * @openapi
  * summary: Get the course grade matrix
  * parameters:
@@ -112,7 +113,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
  *             assignments: { type: array, items: { type: object } }
  *             grades: { type: object }
  *   401: { description: Not signed in. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Not course staff (faculty or TAs) or a system admin. }
  *   500: { description: Server error. }
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -127,12 +128,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+  if (!(await canManageCourse(session.user, id))) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session?.user?.id ?? null,
       action: 'COURSE_GRADES_ACCESS_DENIED',
       severity: 'SECURITY',
-      metadata: { role: session?.user?.role ?? null },
+      metadata: {},
     });
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }

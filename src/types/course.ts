@@ -1,4 +1,4 @@
-import { Course, Assignment, Problem, Role } from '@prisma/client';
+import { Course, Assignment, Problem } from '@prisma/client';
 
 // Assignment with problem count as returned by API. `maxPoints` is not stored on
 // the assignment record any more; consumers are expected to fetch it separately
@@ -32,8 +32,8 @@ export type FullCourse = Course & {
   rosterTotal?: number;
   // viewer's role in this course (ADMIN | FACULTY | TA | STUDENT) or null
   viewerRole?: string | null;
-  // viewer's global default role (ADMIN | FACULTY | TA | STUDENT) or null
-  viewerDefaultRole?: string | null;
+  // whether the viewer is a global site admin
+  viewerIsAdmin?: boolean;
 };
 
 export type DeleteTarget = {
@@ -46,7 +46,6 @@ export type EnrollableUser = {
   email: string;
   firstName: string | null;
   lastName: string | null;
-  role: Role;
 };
 
 export type TabType = 'assignments' | 'problems' | 'roster' | 'grades' | 'groups' | 'activity';

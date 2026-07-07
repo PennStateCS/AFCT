@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server';
 const prismaMock = vi.hoisted(() => ({
   course: { findUnique: vi.fn() },
   problem: { create: vi.fn(), findMany: vi.fn() },
+  roster: { findFirst: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -21,6 +22,7 @@ import { GET, POST } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  prismaMock.roster.findFirst.mockResolvedValue(null);
   uploadLimitMock.mockResolvedValue({ maxBytes: 5 * 1024 * 1024, maxMb: 5 });
 });
 
@@ -45,6 +47,7 @@ describe('POST /api/courses/[id]/problems', () => {
 
   it('returns 400 when required fields missing', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
 
     const formData = new FormData();
     formData.set('title', 'Problem');
@@ -61,6 +64,7 @@ describe('POST /api/courses/[id]/problems', () => {
 
   it('returns 404 when course not found', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.course.findUnique.mockResolvedValue(null);
 
     const formData = new FormData();
@@ -80,6 +84,7 @@ describe('POST /api/courses/[id]/problems', () => {
 
   it('creates problem and logs activity', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.course.findUnique.mockResolvedValue({ id: 'c1' });
     prismaMock.problem.create.mockResolvedValue({ id: 'p1', title: 'Problem' });
 
@@ -113,6 +118,7 @@ describe('GET /api/courses/[id]/problems', () => {
 
   it('returns problems list for staff', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.problem.findMany.mockResolvedValue([{ id: 'p1' }]);
 
     const req = new NextRequest('http://localhost/api/courses/c1/problems');

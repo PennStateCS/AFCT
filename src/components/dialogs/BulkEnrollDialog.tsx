@@ -13,7 +13,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/RoleBadge';
 import { useState, useEffect, useRef } from 'react';
 import { EnrollableUser } from '@/types/course';
 
@@ -150,14 +149,13 @@ export default function BulkEnrollDialog({
                 ) : (
                   <ul className="space-y-2">
                     {found.map((u) => (
-                      <li key={u.id} className="flex items-center justify-between gap-2">
+                      <li key={u.id} className="flex items-center gap-2">
                         <div>
                           <div className="text-sm">
                             {u.firstName} {u.lastName}
                           </div>
                           <div className="text-muted-foreground text-xs">{u.email}</div>
                         </div>
-                        <Badge role={u.role}>{u.role}</Badge>
                       </li>
                     ))}
                   </ul>

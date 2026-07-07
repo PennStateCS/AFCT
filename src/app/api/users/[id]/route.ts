@@ -3,18 +3,17 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { writeFile, unlink } from 'fs/promises';
 import path from 'path';
-import { Role } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { parseRole } from '@/lib/roles';
+import { isAdmin } from '@/lib/permissions';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 
 /**
- * Updates a user: names, role, active status, timezone, and avatar. Accepts either
- * JSON or multipart/form-data (the latter carries the avatar file). A user may
- * edit themselves; ADMIN/FACULTY/TA may edit others. Deactivation is blocked while
- * the user is still on a published, unarchived course. Field-level changes are
- * recorded (before → after) in the audit log.
+ * Updates a user: names, admin flag, active status, timezone, and avatar. Accepts
+ * either JSON or multipart/form-data (the latter carries the avatar file). A user
+ * may edit themselves; only admins may edit others or change the admin flag.
+ * Deactivation is blocked while the user is still on a published, unarchived
+ * course. Field-level changes are recorded (before → after) in the audit log.
  * @openapi
  * summary: Update a user
  * parameters:
@@ -28,7 +27,7 @@ import { getSystemUploadLimit } from '@/lib/upload-limits';
  *         properties:
  *           firstName: { type: string }
  *           lastName: { type: string }
- *           role: { type: string, enum: [STUDENT, TA, FACULTY, ADMIN] }
+ *           isAdmin: { type: boolean, description: Global admin flag (only writable by admins) }
  *           inactive: { type: boolean }
  *           timezone: { type: string }
  *     multipart/form-data:
@@ -37,7 +36,6 @@ import { getSystemUploadLimit } from '@/lib/upload-limits';
  *         properties:
  *           firstName: { type: string }
  *           lastName: { type: string }
- *           role: { type: string }
  *           inactive: { type: string, enum: ['true', 'false'] }
  *           timezone: { type: string }
  *           avatar: { type: string, format: binary }
@@ -60,22 +58,21 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     const session = await auth();
     const currentUser = session?.user;
 
-    if (!currentUser || !currentUser.id || !currentUser.role) {
+    if (!currentUser || !currentUser.id) {
       console.warn('[PATCH] Unauthorized request');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     actorId = currentUser.id;
 
-    const isAdminOnly = currentUser.role === 'ADMIN';
-    const canEdit =
-      isAdminOnly || currentUser.id === userId || ['FACULTY', 'TA'].includes(currentUser.role);
+    // A user may edit their own account; otherwise only admins may edit others.
+    const canEdit = isAdmin(currentUser) || currentUser.id === userId;
     if (!canEdit) {
       console.warn(`[PATCH] Forbidden: ${currentUser.id} tried to update user ${userId}`);
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'USER_UPDATE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -84,26 +81,27 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     const contentType = req.headers.get('content-type') || '';
     let firstName: string | undefined;
     let lastName: string | undefined;
-    let rawRole: string | undefined;
     let inactive: boolean | undefined;
     let avatarFile: File | null = null;
     let deleteAvatar = false;
     let timezoneRaw: string | undefined;
+    // The global admin flag — only applied when the actor is themselves an admin.
+    let isAdminFlag: boolean | undefined;
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await req.formData();
       firstName = formData.get('firstName') as string;
       lastName = formData.get('lastName') as string;
-      rawRole = formData.get('role') as string;
       inactive = formData.get('inactive') === 'true';
       avatarFile = formData.get('avatar') as File;
       deleteAvatar = formData.get('deleteAvatar') === 'true';
       timezoneRaw = (formData.get('timezone') as string) || undefined;
+      isAdminFlag = formData.has('isAdmin') ? formData.get('isAdmin') === 'true' : undefined;
     } else {
       const body = await req.json();
       ({ firstName, lastName, inactive } = body);
-      rawRole = body.role;
       timezoneRaw = body.timezone;
+      isAdminFlag = typeof body.isAdmin === 'boolean' ? body.isAdmin : undefined;
     }
     if (
       timezoneRaw &&
@@ -120,9 +118,6 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       );
     }
 
-    // Parse/validate role using shared helper
-    const role = parseRole(rawRole);
-
     // Retrieve current user record
     const userRecord = await prisma.user.findUnique({
       where: { id: userId },
@@ -130,7 +125,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
         avatar: true,
         firstName: true,
         lastName: true,
-        role: true,
+        isAdmin: true,
         inactive: true,
         timezone: true,
       },
@@ -184,7 +179,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
               userId: session?.user?.id ?? null,
               action: 'USER_UPDATE_DENIED',
               severity: 'SECURITY',
-              metadata: { role: session?.user?.role ?? null },
+              metadata: {},
             });
             return NextResponse.json(
               { error: 'Users in an active course cannot be inactive' },
@@ -200,14 +195,15 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       firstName?: string;
       lastName?: string;
       avatar?: string | null;
-      role?: Role;
+      isAdmin?: boolean;
       inactive?: boolean;
       timezone?: string | null;
     } = {
       firstName: firstName ?? undefined,
       lastName: lastName ?? undefined,
       avatar: avatarFilename !== undefined ? avatarFilename : undefined,
-      role: role,
+      // Only admins may change a user's admin flag; self-editors cannot escalate.
+      isAdmin: isAdmin(currentUser) ? isAdminFlag : undefined,
       inactive: inactive,
       timezone: timezoneRaw ? timezoneRaw : undefined,
     };
@@ -220,16 +216,22 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
         email: true,
         firstName: true,
         lastName: true,
-        role: true,
+        isAdmin: true,
         inactive: true,
         avatar: true,
         timezone: true,
       },
     });
 
-    // Record exactly what changed (before → after). Role and active-status
-    // changes especially matter when an admin edits another user's account.
-    const AUDITED_USER_FIELDS = ['firstName', 'lastName', 'role', 'inactive', 'timezone'] as const;
+    // Record exactly what changed (before → after). Admin-flag and active-status
+    // changes especially matter when an admin edits another account.
+    const AUDITED_USER_FIELDS = [
+      'firstName',
+      'lastName',
+      'isAdmin',
+      'inactive',
+      'timezone',
+    ] as const;
     const changes: Record<string, { from: string | boolean | null; to: string | boolean | null }> =
       {};
     for (const field of AUDITED_USER_FIELDS) {
@@ -268,7 +270,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
 }
 
 /**
- * Deletes a user. Restricted to ADMIN/FACULTY/TA. The user's activity logs are
+ * Deletes a user. System administrators only. The user's activity logs are
  * deliberately preserved (schema `onDelete: SetNull` nulls their userId; each
  * entry keeps the actor's name/email in metadata), and their avatar file is
  * cleaned up. The deleted identity is captured for the audit entry before removal.
@@ -282,7 +284,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
  *     content:
  *       application/json:
  *         schema: { type: object, properties: { success: { type: boolean }, message: { type: string } } }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: System administrators only (also returned when not signed in). }
  *   500: { description: Server error. }
  */
 export async function DELETE(req: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -294,13 +296,13 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     const session = await auth();
     const currentUser = session?.user;
 
-    if (!currentUser || !['ADMIN', 'FACULTY', 'TA'].includes(currentUser.role)) {
+    if (!currentUser || !isAdmin(currentUser)) {
       console.warn(`[DELETE] Forbidden: ${currentUser?.id} tried to delete user ${userId}`);
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'USER_DELETE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -309,7 +311,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     // Capture the target's identity before the row is gone, for the audit + avatar cleanup.
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { avatar: true, email: true, firstName: true, lastName: true, role: true },
+      select: { avatar: true, email: true, firstName: true, lastName: true },
     });
 
     if (user?.avatar) {
@@ -335,7 +337,6 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
         deletedUserId: userId,
         deletedUserEmail: user?.email ?? null,
         deletedUserName: [user?.firstName, user?.lastName].filter(Boolean).join(' ') || null,
-        deletedUserRole: user?.role ?? null,
       },
     });
 

@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 
 const prismaMock = vi.hoisted(() => ({
   assignment: { create: vi.fn() },
+  roster: { findFirst: vi.fn() },
   user: { findUnique: vi.fn() },
   systemSettings: { findUnique: vi.fn() },
 }));
@@ -29,6 +30,7 @@ import { POST } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  prismaMock.roster.findFirst.mockResolvedValue(null);
 });
 
 describe('POST /api/assignments', () => {
@@ -42,7 +44,7 @@ describe('POST /api/assignments', () => {
 
     const res = await POST(req);
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('returns 400 when required fields missing', async () => {
@@ -73,6 +75,7 @@ describe('POST /api/assignments', () => {
 
   it('returns 400 when late cutoff is provided while late submissions are disabled', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
 
     const req = new NextRequest('http://localhost/api/assignments', {
@@ -95,6 +98,7 @@ describe('POST /api/assignments', () => {
 
   it('returns 400 when late submissions are enabled without cutoff', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
 
     const req = new NextRequest('http://localhost/api/assignments', {
@@ -116,6 +120,7 @@ describe('POST /api/assignments', () => {
 
   it('returns 400 when late cutoff is before due date', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     toEndOfDayInTimezoneMock.mockReturnValueOnce(new Date('2025-02-01T00:00:00.000Z'));
     toDateTimeInTimezoneMock.mockReturnValueOnce(new Date('2025-01-01T00:00:00.000Z'));
@@ -140,6 +145,7 @@ describe('POST /api/assignments', () => {
 
   it('creates assignment and logs activity', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.assignment.create.mockResolvedValue({
       id: 'a1',
@@ -172,6 +178,7 @@ describe('POST /api/assignments', () => {
 
   it('creates a group assignment when isGroup is true', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.assignment.create.mockResolvedValue({
       id: 'a2',
@@ -201,7 +208,7 @@ describe('POST /api/assignments', () => {
   });
 
   it('uses system timezone fallback when user timezone is missing', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue(null);
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.assignment.create.mockResolvedValue({
@@ -234,6 +241,7 @@ describe('POST /api/assignments', () => {
 
   it('returns 500 when assignment creation throws', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.assignment.create.mockRejectedValue(new Error('db failed'));
 

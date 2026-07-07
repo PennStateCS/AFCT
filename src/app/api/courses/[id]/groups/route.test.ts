@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server';
 const prismaMock = vi.hoisted(() => ({
   group: { findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn() },
   course: { findUnique: vi.fn() },
+  roster: { findFirst: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -15,11 +16,15 @@ vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activity
 
 import { GET, POST } from './route';
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  prismaMock.roster.findFirst.mockResolvedValue(null);
+});
 
 describe('GET /api/courses/[id]/groups', () => {
   it('returns 400 when missing course id', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
 
     const res = await GET(new NextRequest('http://localhost/api/courses//groups'), {
       params: { id: '' },
@@ -47,6 +52,7 @@ describe('GET /api/courses/[id]/groups', () => {
 
   it('returns groups for course', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.group.findMany.mockResolvedValue([{ id: 'g1', name: 'A' }]);
 
     const res = await GET(new NextRequest('http://localhost/api/courses/c1/groups'), {
@@ -60,6 +66,7 @@ describe('GET /api/courses/[id]/groups', () => {
 
   it('returns 500 when fetching groups fails', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.group.findMany.mockRejectedValue(new Error('db fail'));
 
     const res = await GET(new NextRequest('http://localhost/api/courses/c1/groups'), {
@@ -72,6 +79,7 @@ describe('GET /api/courses/[id]/groups', () => {
 describe('POST /api/courses/[id]/groups', () => {
   it('returns 400 when missing course id', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
 
     const res = await POST(
       new NextRequest('http://localhost/api/courses//groups', {
@@ -111,6 +119,7 @@ describe('POST /api/courses/[id]/groups', () => {
 
   it('supports POST { action: "list" } to return groups (no-signal client)', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.group.findMany.mockResolvedValue([{ id: 'g1', name: 'A' }]);
 
     const res = await POST(
@@ -128,6 +137,7 @@ describe('POST /api/courses/[id]/groups', () => {
 
   it('returns 500 when list action query fails', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.group.findMany.mockRejectedValue(new Error('list fail'));
 
     const res = await POST(
@@ -142,6 +152,7 @@ describe('POST /api/courses/[id]/groups', () => {
 
   it('returns 422 when name missing', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
 
     const res = await POST(
       new NextRequest('http://localhost/api/courses/c1/groups', {
@@ -155,6 +166,7 @@ describe('POST /api/courses/[id]/groups', () => {
 
   it('returns 404 when course does not exist', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.course.findUnique.mockResolvedValue(null);
 
     const res = await POST(
@@ -169,6 +181,7 @@ describe('POST /api/courses/[id]/groups', () => {
 
   it('returns 409 when duplicate group name exists', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.course.findUnique.mockResolvedValue({ id: 'c1' });
     prismaMock.group.findUnique.mockResolvedValue({ id: 'g1', courseId: 'c1', name: 'New' });
 
@@ -184,6 +197,7 @@ describe('POST /api/courses/[id]/groups', () => {
 
   it('creates group', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.course.findUnique.mockResolvedValue({ id: 'c1' });
     prismaMock.group.findUnique.mockResolvedValue(null);
     prismaMock.group.create.mockResolvedValue({ id: 'g1', name: 'New' });
@@ -204,6 +218,7 @@ describe('POST /api/courses/[id]/groups', () => {
 
   it('returns 500 on invalid JSON body', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
 
     const res = await POST(
       new NextRequest('http://localhost/api/courses/c1/groups', {
@@ -217,6 +232,7 @@ describe('POST /api/courses/[id]/groups', () => {
 
   it('returns 500 when create throws', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.course.findUnique.mockResolvedValue({ id: 'c1' });
     prismaMock.group.findUnique.mockResolvedValue(null);
     prismaMock.group.create.mockRejectedValue(new Error('create fail'));

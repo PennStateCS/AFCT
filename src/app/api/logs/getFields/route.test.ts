@@ -22,7 +22,7 @@ describe('GET /api/logs/getFields', () => {
   });
 
   it('returns the exportable field list for an admin', async () => {
-    authMock.mockResolvedValue({ user: { id: 'a1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'a1', role: 'ADMIN', isAdmin: true } });
     const res = await GET();
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual([...EXPORTABLE_LOG_FIELDS]);

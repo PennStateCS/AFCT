@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { isAdmin } from '@/lib/permissions';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import {
   createEnhancedActivityLog,
@@ -90,7 +91,7 @@ async function safeAuditLog(req: Request, data: EnhancedActivityLogData): Promis
 /**
  * Returns the singleton system settings, falling back to defaults for any unset
  * field. The hCaptcha secret is never returned — only `hcaptchaSecretConfigured`
- * reports whether one is stored. Admin/Faculty only.
+ * reports whether one is stored. System administrators only.
  * @openapi
  * summary: Get system settings
  * responses:
@@ -119,12 +120,11 @@ async function safeAuditLog(req: Request, data: EnhancedActivityLogData): Promis
  *             activityLogRetentionDays: { type: integer }
  *             hcaptchaSiteKey: { type: string }
  *             hcaptchaSecretConfigured: { type: boolean, description: Whether a secret is stored; the value is never returned }
- *   403: { description: Caller is not an admin or faculty user. }
+ *   403: { description: Caller is not a system administrator. }
  */
 export async function GET() {
   const session = await auth();
-  const role = session?.user?.role;
-  if (!role || !['ADMIN', 'FACULTY'].includes(role)) {
+  if (!isAdmin(session?.user)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -187,7 +187,7 @@ type SettingsBody = {
  * to safe bounds and an invalid timezone is rejected. The hCaptcha secret is
  * write-only: send a non-empty `hcaptchaSecretKey` to set it, or
  * `hcaptchaSecretClear: true` to remove it. Changes are audited (never the secret
- * value). Admin/Faculty only.
+ * value). System administrators only.
  * @openapi
  * summary: Update system settings
  * requestBody:
@@ -219,13 +219,12 @@ type SettingsBody = {
  * responses:
  *   200: { description: The updated settings (same shape as GET). }
  *   400: { description: Invalid JSON body or invalid timezone. }
- *   403: { description: Caller is not an admin or faculty user (attempt is audited). }
+ *   403: { description: Caller is not a system administrator (attempt is audited). }
  *   500: { description: Failed to persist the update. }
  */
 export async function PUT(req: Request) {
   const session = await auth();
-  const role = session?.user?.role;
-  if (!role || !['ADMIN', 'FACULTY'].includes(role)) {
+  if (!session?.user || !isAdmin(session.user)) {
     // Record write attempts from a signed-in user who lacks permission — a
     // privilege-escalation probe is worth a trail. Unauthenticated hits are skipped.
     if (session?.user?.id) {
@@ -234,7 +233,7 @@ export async function PUT(req: Request) {
         action: 'SYSTEM_SETTINGS_UPDATE_DENIED',
         severity: 'SECURITY',
         category: 'SYSTEM',
-        metadata: { role: role ?? null },
+        metadata: {},
       });
     }
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });

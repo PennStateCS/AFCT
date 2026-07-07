@@ -39,6 +39,7 @@ import { GET } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  prismaMock.roster.findFirst.mockResolvedValue(null);
 });
 
 describe('GET /api/uploads/problems/[file]', () => {
@@ -88,7 +89,7 @@ describe('GET /api/uploads/problems/[file]', () => {
   });
 
   it('allows admin to download file', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: true } });
     prismaMock.problem.findFirst.mockResolvedValue({
       id: 'problem-1',
       courseId: 'course-1',
@@ -107,13 +108,14 @@ describe('GET /api/uploads/problems/[file]', () => {
   });
 
   it('allows faculty to download file', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'FACULTY' } });
+    authMock.mockResolvedValue({ user: { id: 'user-1' } });
     prismaMock.problem.findFirst.mockResolvedValue({
       id: 'problem-1',
       courseId: 'course-1',
       fileName: 'file.txt',
       originalFileName: 'original.txt',
     });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     vi.mocked(fs.existsSync).mockReturnValue(true);
 
     const res = await GET(new Request('http://localhost/api/uploads/problems/file.txt'), {
@@ -124,13 +126,14 @@ describe('GET /api/uploads/problems/[file]', () => {
   });
 
   it('allows TA to download file', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'TA' } });
+    authMock.mockResolvedValue({ user: { id: 'user-1' } });
     prismaMock.problem.findFirst.mockResolvedValue({
       id: 'problem-1',
       courseId: 'course-1',
       fileName: 'file.txt',
       originalFileName: 'original.txt',
     });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'TA' });
     vi.mocked(fs.existsSync).mockReturnValue(true);
 
     const res = await GET(new Request('http://localhost/api/uploads/problems/file.txt'), {
@@ -148,7 +151,7 @@ describe('GET /api/uploads/problems/[file]', () => {
       fileName: 'file.txt',
       originalFileName: 'original.txt',
     });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
     vi.mocked(fs.existsSync).mockReturnValue(true);
 
     const res = await GET(new Request('http://localhost/api/uploads/problems/file.txt'), {
@@ -159,7 +162,7 @@ describe('GET /api/uploads/problems/[file]', () => {
   });
 
   it('returns 404 when file not on disk', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: true } });
     prismaMock.problem.findFirst.mockResolvedValue({
       id: 'problem-1',
       courseId: 'course-1',
@@ -178,7 +181,7 @@ describe('GET /api/uploads/problems/[file]', () => {
   });
 
   it('uses fileName when originalFileName is null', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: true } });
     prismaMock.problem.findFirst.mockResolvedValue({
       id: 'problem-1',
       courseId: 'course-1',

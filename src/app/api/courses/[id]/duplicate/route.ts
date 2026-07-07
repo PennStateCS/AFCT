@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { isAdmin } from '@/lib/permissions';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
 import { toEmptyStringNotation } from '@/lib/empty-string-notation';
@@ -45,7 +46,7 @@ async function generateUniqueCourseCode() {
  * asked. `copyMode` (or the legacy copyAssignments/copyProblems booleans) selects
  * what carries over: assignments only, problems only, or assignments with their
  * problems. The copy always starts unpublished with a fresh registration code.
- * FACULTY/ADMIN/TA only. Dates are interpreted in the actor's timezone.
+ * System administrators only. Dates are interpreted in the actor's timezone.
  * @openapi
  * summary: Duplicate a course
  * parameters:
@@ -80,7 +81,7 @@ async function generateUniqueCourseCode() {
  *         schema: { type: object, properties: { id: { type: string }, message: { type: string } } }
  *   400: { description: "Missing fields, bad credits, bad code, or invalid dates." }
  *   401: { description: Not signed in. }
- *   403: { description: Caller may not duplicate courses. }
+ *   403: { description: System administrators only (logged as a security event). }
  *   500: { description: Server error. }
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -95,14 +96,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
     actorId = session.user.id;
 
-    // Only allow faculty/admin/ta to duplicate
-    const role = session.user.role;
-    if (!['FACULTY', 'ADMIN', 'TA'].includes(role)) {
+    // Duplicating a course is an admin-only operation.
+    if (!isAdmin(session.user)) {
       await createEnhancedActivityLog(prisma, req as unknown as Request, {
         userId: session?.user?.id ?? null,
         action: 'COURSE_DUPLICATE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
