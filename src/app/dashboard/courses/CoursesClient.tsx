@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { columns } from './course-columns';
 import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
@@ -13,61 +14,55 @@ import type { CourseListItem } from '@/lib/courses-list';
 type CourseWithRoster = CourseListItem;
 type CourseWithFaculty = CourseListItem;
 
+/** Cache key for the courses list; shared so callers can invalidate consistently. */
+export const coursesListQueryKey = ['courses', 'list'] as const;
+
 export default function CoursesClient({ initialCourses }: { initialCourses: CourseWithRoster[] }) {
-  const [courses, setCourses] = useState<CourseWithRoster[]>(initialCourses);
-  const [loading, setLoading] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const requestSeqRef = useRef(0);
-  const abortRef = useRef<AbortController | null>(null);
   const { timezone } = useEffectiveTimezone();
 
-  const fetchCourses = useCallback(async () => {
-    const requestSeq = ++requestSeqRef.current;
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    try {
-      setLoading(true);
-      setLoadError(null);
-      const res = await fetch('/api/courses/list', {
-        cache: 'no-store',
-        signal: controller.signal,
-      });
+  // Cached courses list — the SSR-provided list seeds the cache and is treated as
+  // fresh, so navigating back to Courses is instant with no refetch on mount.
+  const {
+    data: courses = [],
+    isFetching,
+    isError,
+    refetch,
+  } = useQuery({
+    queryKey: coursesListQueryKey,
+    queryFn: async () => {
+      const res = await fetch('/api/courses/list', { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed to fetch courses');
-      const data: CourseWithRoster[] = await res.json();
-      if (requestSeq !== requestSeqRef.current) return;
-      setCourses(data);
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') return;
-      if (requestSeq !== requestSeqRef.current) return;
-      console.error('Error loading courses:', error);
-      setLoadError('Failed to refresh courses. Please try again.');
-    } finally {
-      if (requestSeq !== requestSeqRef.current) return;
-      setLoading(false);
-    }
-  }, []);
+      return (await res.json()) as CourseWithRoster[];
+    },
+    initialData: initialCourses,
+    staleTime: 30_000,
+  });
+
+  // Full refresh (referentially stable so table columns stay memoized).
+  const refresh = useCallback(() => {
+    void refetch();
+  }, [refetch]);
+
+  // Optimistic single-row merge from a row action, written straight into the cache
+  // so the list reflects the change without a round-trip.
+  const patchCourse = useCallback(
+    (refreshedCourse: CourseWithFaculty) => {
+      queryClient.setQueryData<CourseWithRoster[]>(coursesListQueryKey, (prev) =>
+        (prev ?? []).map((c) =>
+          c.id === refreshedCourse.id
+            ? { ...c, ...refreshedCourse, enrolled: refreshedCourse.enrolled ?? c.enrolled }
+            : c,
+        ),
+      );
+    },
+    [queryClient],
+  );
 
   const columnsMemo = useMemo(
-    () =>
-      columns(
-        (refreshedCourse: CourseWithFaculty) => {
-          setCourses((prev) =>
-            prev.map((c) =>
-              c.id === refreshedCourse.id
-                ? { ...c, ...refreshedCourse, enrolled: refreshedCourse.enrolled ?? c.enrolled }
-                : c,
-            ),
-          );
-        },
-        () => {
-          void fetchCourses();
-        },
-        timezone,
-      ),
-    [setCourses, timezone, fetchCourses],
+    () => columns(patchCourse, refresh, timezone),
+    [patchCourse, refresh, timezone],
   );
 
   return (
@@ -82,10 +77,10 @@ export default function CoursesClient({ initialCourses }: { initialCourses: Cour
       </CardHeader>
 
       <CardContent>
-        {loadError && (
+        {isError && (
           <div className="mb-3 flex items-center justify-between rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            <span>{loadError}</span>
-            <Button size="sm" variant="outline" onClick={() => void fetchCourses()}>
+            <span>Failed to refresh courses. Please try again.</span>
+            <Button size="sm" variant="outline" onClick={refresh}>
               Retry
             </Button>
           </div>
@@ -93,12 +88,12 @@ export default function CoursesClient({ initialCourses }: { initialCourses: Cour
         <DataTable
           columns={columnsMemo}
           data={courses}
-          loading={loading}
+          loading={isFetching}
           tableLabel="Courses table"
         />
       </CardContent>
 
-      <CreateCourseDialog open={open} setOpen={setOpen} onSuccess={() => void fetchCourses()} />
+      <CreateCourseDialog open={open} setOpen={setOpen} onSuccess={refresh} />
     </Card>
   );
 }
