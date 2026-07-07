@@ -36,7 +36,7 @@ describe('POST /api/assignments/range', () => {
   });
 
   it('returns 400 when missing dates', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    authMock.mockResolvedValue({ user: { id: 'u1' } });
 
     const req = new NextRequest('http://localhost/api/assignments/range', {
       method: 'POST',
@@ -48,7 +48,7 @@ describe('POST /api/assignments/range', () => {
   });
 
   it('returns empty list when no courses', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    authMock.mockResolvedValue({ user: { id: 'u1' } });
     prismaMock.roster.findMany.mockResolvedValue([]);
 
     const req = new NextRequest('http://localhost/api/assignments/range', {
@@ -63,8 +63,8 @@ describe('POST /api/assignments/range', () => {
   });
 
   it('returns student-enhanced assignments', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    prismaMock.roster.findMany.mockResolvedValue([{ courseId: 'c1' }]);
+    authMock.mockResolvedValue({ user: { id: 'u1' } });
+    prismaMock.roster.findMany.mockResolvedValue([{ courseId: 'c1', role: 'STUDENT' }]);
     prismaMock.assignment.findMany.mockResolvedValue([
       {
         id: 'a1',
@@ -89,8 +89,8 @@ describe('POST /api/assignments/range', () => {
   });
 
   it('returns instructor-enhanced assignments', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'INSTRUCTOR' } });
-    prismaMock.roster.findMany.mockResolvedValue([{ courseId: 'c1' }]);
+    authMock.mockResolvedValue({ user: { id: 'u1' } });
+    prismaMock.roster.findMany.mockResolvedValue([{ courseId: 'c1', role: 'FACULTY' }]);
     prismaMock.assignment.findMany.mockResolvedValue([
       {
         id: 'a1',

@@ -4,7 +4,6 @@ import { PrismaAdapter } from '@auth/prisma-adapter';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
-import { Role } from '@prisma/client';
 import { inferSeverity } from '@/lib/activity-log-utils';
 import { getClientIpFromHeaders } from '@/lib/ip-utils';
 import {
@@ -115,7 +114,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           email: user.email,
           name: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
           isAdmin: user.isAdmin,
-          role: user.role,
           avatar: user.avatar || undefined,
           mustChangePassword: user.temporaryPassword,
         };
@@ -125,7 +123,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.role = user.role;
         token.isAdmin = user.isAdmin;
         token.id = user.id;
         token.avatar = user.avatar;
@@ -146,7 +143,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async session({ session, token }) {
       if (token) {
         session.user.id = token.id as string;
-        session.user.role = token.role as Role;
         session.user.isAdmin = Boolean(token.isAdmin);
         session.user.avatar = (token.avatar as string | null) || undefined;
 
@@ -157,7 +153,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             select: {
               firstName: true,
               lastName: true,
-              role: true,
               isAdmin: true,
               avatar: true,
               temporaryPassword: true,
@@ -167,7 +162,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           if (freshUser) {
             session.user.firstName = freshUser.firstName || undefined;
             session.user.lastName = freshUser.lastName || undefined;
-            session.user.role = freshUser.role;
             session.user.isAdmin = freshUser.isAdmin;
             session.user.avatar = freshUser.avatar || undefined;
             session.user.mustChangePassword = freshUser.temporaryPassword;

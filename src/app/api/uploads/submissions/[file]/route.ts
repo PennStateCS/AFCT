@@ -4,6 +4,7 @@ import fs from 'fs';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
 /**
  * Serves a submission's uploaded file as a download. Restricted to the submitting
@@ -43,24 +44,25 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
 
     const submission = await prisma.submission.findFirst({
       where: { fileName: file },
-      select: { id: true, originalFileName: true, studentId: true, assignmentId: true },
+      select: { id: true, originalFileName: true, studentId: true, assignmentId: true, courseId: true },
     });
 
     if (!submission) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
 
-    const role = session.user.role;
+    // The owning student may fetch their own file; otherwise the caller must be
+    // staff (faculty/TA) of the submission's course, or a global admin.
     let allowed = false;
-    if (['ADMIN', 'FACULTY', 'TA'].includes(role)) allowed = true;
-    else if (submission.studentId === session.user.id) allowed = true;
+    if (submission.studentId === session.user.id) allowed = true;
+    else if (await canManageCourse(session.user, submission.courseId)) allowed = true;
 
     if (!allowed) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'SUBMISSION_FILE_DOWNLOAD_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

@@ -33,7 +33,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       userId: session?.user?.id ?? null,
       action: 'GROUP_MEMBER_REMOVE_DENIED',
       severity: 'SECURITY',
-      metadata: { role: session?.user?.role ?? null },
+      metadata: {},
     });
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }

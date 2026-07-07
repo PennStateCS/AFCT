@@ -10,25 +10,27 @@ import { AssignmentWithDetails } from '@/lib/assignment-details';
 type AssignmentClientProps = {
   initialAssignment?: AssignmentWithDetails | null;
   initialAssignments?: { id: string; title: string }[];
+  // Whether the viewer is course staff (admin, or FACULTY/TA in this course),
+  // computed server-side from the roster. Drives the privileged vs student view.
+  isStaff?: boolean;
 };
 
 export default function AssignmentClient({
   initialAssignment = null,
   initialAssignments,
+  isStaff = false,
 }: AssignmentClientProps) {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
 
   if (status === 'loading') {
     return <LoadingSpinner label="Loading" />;
   }
 
-  if (status === 'unauthenticated' || !session) {
+  if (status === 'unauthenticated') {
     return <div className="p-6">You must be signed in to view this page.</div>;
   }
 
-  const role = session.user?.role;
-
-  if (role === 'STUDENT') {
+  if (!isStaff) {
     return <StudentAssignmentView initialAssignment={initialAssignment} />;
   }
 

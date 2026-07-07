@@ -94,7 +94,7 @@ export async function GET(
         userId: session?.user?.id ?? null,
         action: 'SUBMISSIONS_ACCESS_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -105,7 +105,7 @@ export async function GET(
         userId: session?.user?.id ?? null,
         action: 'SUBMISSIONS_ACCESS_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

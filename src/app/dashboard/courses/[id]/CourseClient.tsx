@@ -28,15 +28,23 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
   const router = useRouter();
   const { data: session } = useSession();
   const courseId = Array.isArray(id) ? id[0] : id;
-  const isStudent = session?.user?.role === 'STUDENT';
   const isAdmin = session?.user?.isAdmin === true;
+  // A viewer is a (non-privileged) student when they are NOT a global admin AND
+  // their per-course role is not staff (FACULTY/TA). Derive from the initial
+  // course payload so the data hook can request the correct view up front.
+  const initialIsStudent =
+    !initialCourse?.viewerIsAdmin &&
+    initialCourse?.viewerRole !== 'FACULTY' &&
+    initialCourse?.viewerRole !== 'TA';
   const { course, setCourse, refetchCourse, loadTabData, loadingSections } = useCourseData(
     courseId || '',
     {
       initialCourse: initialCourse ?? null,
-      isStudent,
+      isStudent: initialIsStudent,
     },
   );
+  const isStudent =
+    !course?.viewerIsAdmin && course?.viewerRole !== 'FACULTY' && course?.viewerRole !== 'TA';
   const { tab, handleTabChange } = useTabNavigation();
   const dialogStates = useDialogStates();
   const { allUsers, fetchAvailableUsers, handleEnrollUser } = useEnrollment(course);

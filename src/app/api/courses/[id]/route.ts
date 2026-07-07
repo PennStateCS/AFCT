@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canArchiveCourse, canUnpublishCourse } from '@/lib/course-status-checks';
-import { canAccessCourse, canManageCourse } from '@/lib/permissions';
+import { canAccessCourse, canManageCourse, isAdmin } from '@/lib/permissions';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
 import { toEmptyStringNotation } from '@/lib/empty-string-notation';
 
@@ -82,7 +82,6 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
                       id: true,
                       firstName: true,
                       lastName: true,
-                      role: true,
                       email: true,
                       avatar: true,
                     },
@@ -305,7 +304,7 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
 
     // Viewer's roles, from the roster lookup already done during the access check.
     const viewerRole: string | null = viewerRoster?.role ?? null;
-    const viewerDefaultRole: string | null = session.user.role ?? null;
+    const viewerIsAdmin = isAdmin(session.user);
 
     const response = {
       id: course.id,
@@ -331,7 +330,7 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
       problemTotal: courseData._count?.problems ?? problemRows.length,
       rosterTotal: courseData._count?.roster ?? rosterRows.length,
       viewerRole,
-      viewerDefaultRole,
+      viewerIsAdmin,
     };
 
     return NextResponse.json(response);
@@ -393,7 +392,7 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
       userId: session?.user?.id ?? null,
       action: 'COURSE_UPDATE_DENIED',
       severity: 'SECURITY',
-      metadata: { role: session?.user?.role ?? null },
+      metadata: {},
     });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
@@ -429,7 +428,7 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
         userId: session?.user?.id ?? null,
         action: 'COURSE_ARCHIVE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: reason }, { status: 403 });
     }
@@ -443,7 +442,7 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
         userId: session?.user?.id ?? null,
         action: 'COURSE_PUBLISH_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: reason }, { status: 403 });
     }
@@ -581,7 +580,6 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
                   id: true,
                   firstName: true,
                   lastName: true,
-                  role: true,
                   email: true,
                   avatar: true,
                 },
@@ -679,14 +677,14 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
     // Determine viewer's course role if authenticated
     const session = await auth();
     let viewerRole: string | null = null;
-    let viewerDefaultRole: string | null = null;
+    let viewerIsAdmin = false;
     if (session?.user) {
       const viewerRoster = await prisma.roster.findFirst({
         where: { courseId: updatedCourse.id, userId: session.user.id },
         select: { role: true },
       });
       viewerRole = viewerRoster?.role ?? null;
-      viewerDefaultRole = session.user.role ?? null;
+      viewerIsAdmin = isAdmin(session.user);
     }
 
     return NextResponse.json({
@@ -713,7 +711,7 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
       problems: updatedCourse.problems,
       assignments: assignmentsWithProblemCount,
       viewerRole,
-      viewerDefaultRole,
+      viewerIsAdmin,
     });
   } catch (error) {
     console.error('PUT /api/courses/[id] error:', error);
@@ -756,7 +754,7 @@ export async function DELETE(req: Request, context: { params: Promise<{ id: stri
       userId: session?.user?.id ?? null,
       action: 'COURSE_DELETE_DENIED',
       severity: 'SECURITY',
-      metadata: { role: session?.user?.role ?? null },
+      metadata: {},
     });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
@@ -772,7 +770,7 @@ export async function DELETE(req: Request, context: { params: Promise<{ id: stri
       userId: session?.user?.id ?? null,
       action: 'COURSE_DELETE_DENIED',
       severity: 'SECURITY',
-      metadata: { role: session?.user?.role ?? null },
+      metadata: {},
     });
     return NextResponse.json({ error: 'Course must be archived' }, { status: 403 });
   }

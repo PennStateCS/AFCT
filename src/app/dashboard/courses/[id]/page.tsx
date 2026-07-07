@@ -15,7 +15,7 @@ export default async function AdminCoursePage({ params }: Props) {
   const { id } = await params;
   const session = await auth();
   const viewerId = session?.user?.id;
-  const viewerDefaultRole = session?.user?.role ?? null;
+  const viewerIsAdmin = Boolean(session?.user?.isAdmin);
 
   const course = await prisma.course.findUnique({
     where: { id },
@@ -35,7 +35,6 @@ export default async function AdminCoursePage({ params }: Props) {
               id: true,
               firstName: true,
               lastName: true,
-              role: true,
               email: true,
               avatar: true,
             },
@@ -76,7 +75,7 @@ export default async function AdminCoursePage({ params }: Props) {
     problemTotal: course._count.problems,
     rosterTotal: course._count.roster,
     viewerRole: viewerRoster?.role ?? null,
-    viewerDefaultRole,
+    viewerIsAdmin,
   };
 
   return <CourseClient initialCourse={initialCourse} />;

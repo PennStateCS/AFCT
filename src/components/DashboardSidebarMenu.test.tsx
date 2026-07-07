@@ -166,9 +166,9 @@ describe('DashboardSidebarMenu', () => {
     expect(screen.queryByRole('link', { name: 'Development Tests' })).toBeNull();
   });
 
-  it('shows only published courses to students', () => {
+  it('shows all non-archived courses passed in (server scopes visibility)', () => {
     useSessionMock.mockReturnValue({
-      data: { user: { id: 'student-1', email: 'stud@example.com', role: 'STUDENT' } },
+      data: { user: { id: 'student-1', email: 'stud@example.com', isAdmin: false } },
     });
     useSWRMock.mockReturnValue({
       data: [
@@ -179,7 +179,7 @@ describe('DashboardSidebarMenu', () => {
     render(<DashboardSidebarMenu />);
 
     expect(screen.getByRole('link', { name: 'CS101' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'CS102' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'CS102' })).toBeInTheDocument();
   });
 
   it('renders a placeholder message when no courses are visible', () => {
@@ -193,9 +193,9 @@ describe('DashboardSidebarMenu', () => {
     expect(screen.getByText('No courses')).toBeInTheDocument();
   });
 
-  it('hides the admin menu for students', () => {
+  it('hides the admin menu for non-admin users', () => {
     useSessionMock.mockReturnValue({
-      data: { user: { id: 'student-1', email: 'stud@example.com', role: 'STUDENT' } },
+      data: { user: { id: 'student-1', email: 'stud@example.com', isAdmin: false } },
     });
 
     render(<DashboardSidebarMenu />);

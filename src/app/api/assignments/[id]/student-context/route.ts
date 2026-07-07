@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { canAccessCourse } from '@/lib/permissions';
+import { canAccessCourse, canManageCourse } from '@/lib/permissions';
 
 /**
  * Everything the caller needs to see their own work on an assignment, grouped by
@@ -57,7 +57,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 
-    if (!assignment.isPublished && session.user.role === 'STUDENT') {
+    if (!assignment.isPublished && !(await canManageCourse(session.user, assignment.courseId))) {
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 

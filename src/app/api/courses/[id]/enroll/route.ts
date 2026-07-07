@@ -51,7 +51,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
         action: 'COURSE_ENROLL_DENIED',
         severity: 'SECURITY',
         courseId,
-        metadata: { role: session.user.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -63,7 +63,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, role: true, inactive: true },
+      select: { id: true, inactive: true },
     });
 
     if (!user) {
@@ -74,19 +74,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
       return NextResponse.json({ error: 'User is inactive' }, { status: 401 });
     }
 
-    const mapRole = (r: string | null | undefined) => {
-        switch (r) {
-        case 'FACULTY':
-        case 'ADMIN':
-          return 'FACULTY';
-        case 'TA':
-          return 'TA';
-        default:
-          return 'STUDENT';
-      }
-    };
-
-    const roleToAssign = mapRole(user.role);
+    const roleToAssign = 'STUDENT';
 
     await prisma.roster.upsert({
       where: {

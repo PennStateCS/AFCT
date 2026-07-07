@@ -24,8 +24,8 @@ type ActionsCellProps = {
   facultyCount?: number;
   // viewer's course role preloaded from course API
   viewerRole?: string | null;
-  // viewer's global default role (ADMIN | FACULTY | TA | STUDENT)
-  viewerDefaultRole?: string | null;
+  // whether the viewer is a global site admin
+  viewerIsAdmin?: boolean;
 };
 
 function ActionsCell({
@@ -35,7 +35,7 @@ function ActionsCell({
   courseIsArchived,
   facultyCount,
   viewerRole,
-  viewerDefaultRole,
+  viewerIsAdmin,
 }: ActionsCellProps) {
   void facultyCount;
   const [open, setOpen] = useState(false);
@@ -47,7 +47,7 @@ function ActionsCell({
   const currentCourseRole = viewerRole ?? null;
 
   // Treat site ADMIN as having course management privileges
-  const isSiteAdmin = viewerDefaultRole === 'ADMIN';
+  const isSiteAdmin = Boolean(viewerIsAdmin);
   const isCourseAdmin = currentCourseRole === 'FACULTY' || isSiteAdmin;
 
   const handleDelete = async () => {
@@ -91,7 +91,10 @@ function ActionsCell({
 
   // Helper to determine whether the viewer (role `viewer`) can delete a target with course role `target`.
   // Site ADMIN users can delete any roster member. Otherwise fall back to course role rules.
-  const canViewerDeleteUser = (viewer: string | null | undefined, target: string): boolean => {
+  const canViewerDeleteUser = (
+    viewer: string | null | undefined,
+    target: string | null,
+  ): boolean => {
     // Site admin can remove anyone
     if (isSiteAdmin) return true;
     if (!viewer) return false;
@@ -198,7 +201,7 @@ function ActionsCell({
           hasSubmissions: user.hasSubmissions,
         }}
         initialViewerCourseRole={currentCourseRole}
-        initialViewerDefaultRole={viewerDefaultRole}
+        initialViewerDefaultRole={isSiteAdmin ? 'ADMIN' : null}
       />
     </div>
   );
@@ -210,10 +213,10 @@ export const userColumns = (
   courseIsArchived: boolean,
   facultyCount?: number,
   viewerRole?: string | null,
-  viewerDefaultRole?: string | null,
+  viewerIsAdmin?: boolean,
 ): ColumnDef<User>[] => {
   const currentCourseRole = viewerRole ?? null;
-  const isSiteAdmin = viewerDefaultRole === 'ADMIN';
+  const isSiteAdmin = Boolean(viewerIsAdmin);
   const viewerHasActions = isSiteAdmin || currentCourseRole === 'FACULTY';
 
   const cols: ColumnDef<User>[] = [
@@ -256,7 +259,12 @@ export const userColumns = (
     {
       accessorKey: 'role',
       header: 'Role',
-      cell: ({ row }) => <Badge role={(row.original as RosterUser).role} className="w-20" />,
+      cell: ({ row }) => (
+        <Badge
+          role={(row.original as RosterUser).role as 'FACULTY' | 'TA' | 'STUDENT' | undefined}
+          className="w-20"
+        />
+      ),
       sortingFn: roleSortingFn,
     },
   ];
@@ -273,7 +281,7 @@ export const userColumns = (
           courseIsArchived={courseIsArchived}
           facultyCount={facultyCount}
           viewerRole={viewerRole}
-          viewerDefaultRole={viewerDefaultRole}
+          viewerIsAdmin={viewerIsAdmin}
         />
       ),
     });

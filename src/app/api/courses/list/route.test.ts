@@ -24,8 +24,8 @@ describe('GET /api/courses/list', () => {
     expect(getCoursesListForUserMock).not.toHaveBeenCalled();
   });
 
-  it('returns 401 when user id or role is missing', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1' } });
+  it('returns 401 when user id is missing', async () => {
+    authMock.mockResolvedValue({ user: {} });
 
     const res = await GET();
 
@@ -33,20 +33,31 @@ describe('GET /api/courses/list', () => {
     expect(getCoursesListForUserMock).not.toHaveBeenCalled();
   });
 
-  it('returns role-scoped courses for authenticated user', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+  it('requests STUDENT-scoped courses for a non-admin user', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
     getCoursesListForUserMock.mockResolvedValue([{ id: 'c1', name: 'Course 1' }]);
 
     const res = await GET();
 
     expect(res.status).toBe(200);
-    expect(getCoursesListForUserMock).toHaveBeenCalledWith('u1', 'FACULTY');
+    expect(getCoursesListForUserMock).toHaveBeenCalledWith('u1', 'STUDENT');
+    expect(await res.json()).toEqual([{ id: 'c1', name: 'Course 1' }]);
+  });
+
+  it('requests ADMIN-scoped courses for an admin user', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
+    getCoursesListForUserMock.mockResolvedValue([{ id: 'c1', name: 'Course 1' }]);
+
+    const res = await GET();
+
+    expect(res.status).toBe(200);
+    expect(getCoursesListForUserMock).toHaveBeenCalledWith('u1', 'ADMIN');
     expect(await res.json()).toEqual([{ id: 'c1', name: 'Course 1' }]);
   });
 
   it('returns 500 when query fails', async () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     getCoursesListForUserMock.mockRejectedValue(new Error('boom'));
 
     const res = await GET();

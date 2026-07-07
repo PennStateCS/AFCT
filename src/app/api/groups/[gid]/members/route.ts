@@ -45,7 +45,7 @@ export async function GET(
         userId: session?.user?.id ?? null,
         action: 'GROUP_MEMBERS_VIEW_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -125,7 +125,7 @@ export async function POST(
         userId: session?.user?.id ?? null,
         action: 'GROUP_MEMBER_ADD_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

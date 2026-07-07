@@ -171,7 +171,6 @@ export const columns = (
     id: 'instructor',
     accessorFn: (row) =>
       getInstructors(row.enrolled as EnrolledUser[])
-        .filter((f) => f.role !== 'ADMIN')
         .map((f) => `${f.firstName ?? ''} ${f.lastName ?? ''}`.trim())
         .filter(Boolean)
         .join(', '),
@@ -179,8 +178,7 @@ export const columns = (
     enableSorting: true,
     header: 'Faculty',
     cell: ({ row }) => {
-      const instructors = getInstructors(row.original.enrolled as EnrolledUser[]);
-      const faculty = (instructors || []).filter((f) => f.role !== 'ADMIN');
+      const faculty = getInstructors(row.original.enrolled as EnrolledUser[]);
       if (faculty.length === 0) {
         return <span className="text-muted-foreground italic">None</span>;
       }

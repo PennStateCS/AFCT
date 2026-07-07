@@ -42,7 +42,7 @@ export async function POST(req: Request) {
       userId: session?.user?.id ?? null,
       action: 'ADMIN_RESET_PASSWORD_DENIED',
       severity: 'SECURITY',
-      metadata: { role: session?.user?.role ?? null },
+      metadata: {},
     });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
@@ -72,7 +72,6 @@ export async function POST(req: Request) {
       category: 'USER',
       metadata: {
         userId: session.user.id,
-        initiatedByRole: session.user.role,
         targetUserId: userId,
         temporaryPassword: Boolean(isTemporary),
       },

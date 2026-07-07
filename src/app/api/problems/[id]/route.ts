@@ -58,7 +58,7 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
         userId: session?.user?.id ?? null,
         action: 'PROBLEM_UPDATE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
@@ -77,7 +77,7 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
         userId: session?.user?.id ?? null,
         action: 'PROBLEM_UPDATE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
@@ -242,7 +242,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
         userId: session?.user?.id ?? null,
         action: 'PROBLEM_DELETE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
@@ -261,7 +261,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
         userId: session?.user?.id ?? null,
         action: 'PROBLEM_DELETE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }

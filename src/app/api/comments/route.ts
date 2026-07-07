@@ -4,7 +4,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { RoleEnum, CourseRoleEnum } from '@/schemas/user';
+import { CourseRoleEnum } from '@/schemas/user';
 import { canAccessCourse, canManageCourse } from '@/lib/permissions';
 
 // ---- Types ----
@@ -13,7 +13,6 @@ interface CommentUser {
   firstName?: string | null;
   lastName?: string | null;
   avatar?: string | null;
-  role?: z.infer<typeof RoleEnum> | null;
 }
 
 interface CommentRoster {
@@ -107,7 +106,7 @@ export async function POST(request: NextRequest) {
         userId: session?.user?.id ?? null,
         action: 'COMMENT_CREATE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
     }
@@ -164,7 +163,6 @@ export async function POST(request: NextRequest) {
                 firstName: true,
                 lastName: true,
                 avatar: true,
-                role: true, // global role if you want it too
               },
             },
           },
@@ -202,8 +200,7 @@ export async function POST(request: NextRequest) {
           firstName: comment.roster.user.firstName ?? null,
           lastName: comment.roster.user.lastName ?? null,
           avatar: comment.roster.user.avatar ?? null,
-          // prefer course role (FACULTY/TA/STUDENT); fall back to global
-          role: comment.roster.role ?? comment.roster.user.role ?? null,
+          role: comment.roster.role ?? null,
         },
       },
       { status: 201 },
@@ -285,7 +282,7 @@ export async function GET(request: NextRequest) {
         userId: session?.user?.id ?? null,
         action: 'COMMENT_VIEW_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
     }
@@ -322,7 +319,6 @@ export async function GET(request: NextRequest) {
                 firstName: true,
                 lastName: true,
                 avatar: true,
-                role: true, // global role (optional)
               },
             },
           },
@@ -341,7 +337,7 @@ export async function GET(request: NextRequest) {
         firstName: c.roster.user.firstName,
         lastName: c.roster.user.lastName,
         avatar: c.roster.user.avatar ?? null,
-        role: c.roster.role ?? c.roster.user.role ?? null,
+        role: c.roster.role ?? null,
       },
     })) as CommentResponse[];
 
@@ -401,7 +397,7 @@ export async function DELETE(request: NextRequest) {
         userId: session?.user?.id ?? null,
         action: 'COMMENT_DELETE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

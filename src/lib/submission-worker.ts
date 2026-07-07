@@ -210,7 +210,7 @@ async function runWorkerLoop() {
     });
     const busyStudentIds = inFlight.map((s) => s.studentId);
 
-    // Priority: staff before students (role asc), then nearest deadline, then FIFO.
+    // Priority: nearest deadline first, then FIFO.
     const nextSubmission = await prisma.submission.findFirst({
       where: {
         status: 'PENDING',
@@ -218,7 +218,6 @@ async function runWorkerLoop() {
         ...(busyStudentIds.length ? { studentId: { notIn: busyStudentIds } } : {}),
       },
       orderBy: [
-        { student : { role : 'asc' } },
         { assignmentProblem: { assignment: { dueDate: 'asc' } } },
         { submittedAt: 'asc' },
       ],

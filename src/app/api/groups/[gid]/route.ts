@@ -63,7 +63,7 @@ export async function PATCH(
         userId: session?.user?.id ?? null,
         action: 'GROUP_UPDATE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -140,7 +140,7 @@ export async function DELETE(
         userId: session?.user?.id ?? null,
         action: 'GROUP_DELETE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
