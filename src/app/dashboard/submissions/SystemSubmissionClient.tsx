@@ -1,6 +1,7 @@
 ﻿'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Download, Eye, File, RotateCcw } from 'lucide-react';
 import type { Course } from '@prisma/client';
 import { getInitials } from '@/app/utils/initials';
@@ -170,7 +171,6 @@ const fetchSubmissions = async (problemIds: string[]): Promise<SubmissionItem[]>
 export default function SystemSubmissionClient() {
   const [courses, setCourses] = useState<CourseItem[]>([]);
   const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
-  const [submissions, setSubmissions] = useState<SubmissionItem[]>([]);
   const [problems, setProblems] = useState<ProblemItem[]>([]);
   const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
   const [selectedAssignments, setSelectedAssignments] = useState<string[]>([]);
@@ -179,7 +179,6 @@ export default function SystemSubmissionClient() {
   const [loadingCourses, setLoadingCourses] = useState(false);
   const [loadingAssignments, setLoadingAssignments] = useState(false);
   const [loadingProblems, setLoadingProblems] = useState(false);
-  const [loadingSubmissions, setLoadingSubmissions] = useState(false);
   const [rerunning, setRerunning] = useState<Record<string, boolean>>({});
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
   const [activeFeedback, setActiveFeedback] = useState<string | null>(null);
@@ -193,27 +192,28 @@ export default function SystemSubmissionClient() {
     [rerunning],
   );
 
-  const loadSubmissions = async (problemIds: string[]) => {
-    if (problemIds.length === 0) {
-      setSubmissions([]);
-      return;
-    }
+  // Cached submissions list keyed by the selected problem set. The query varies
+  // with `selectedProblems`, so changing any course/assignment/problem filter
+  // (which cascades into `selectedProblems`) refetches automatically and dedupes
+  // identical requests. An empty selection resolves to [] without a network call.
+  const {
+    data: submissions = [],
+    isFetching: loadingSubmissions,
+    isError: submissionsError,
+    refetch: refetchSubmissions,
+  } = useQuery({
+    queryKey: ['admin', 'submissions', selectedProblems],
+    queryFn: () => fetchSubmissions(selectedProblems),
+  });
 
-    setLoadingSubmissions(true);
-    try {
-      const data = await fetchSubmissions(problemIds);
-      setSubmissions(data);
-    } catch (error) {
-      console.error(error);
+  useEffect(() => {
+    if (submissionsError) {
       showToast.error('Unable to load submissions');
-      setSubmissions([]);
-    } finally {
-      setLoadingSubmissions(false);
     }
-  };
+  }, [submissionsError]);
 
   const fetchReviewData = async (): Promise<void> => {
-    await loadSubmissions(selectedProblems);
+    await refetchSubmissions();
   };
 
   const handleViewFeedback = (submission: SubmissionItem) => {
@@ -293,10 +293,6 @@ export default function SystemSubmissionClient() {
     };
     void loadAssignments();
   }, [selectedCourses, courses]);
-
-  useEffect(() => {
-    void loadSubmissions(selectedProblems);
-  }, [selectedProblems]);
 
   useEffect(() => {
     const loadProblems = async () => {
