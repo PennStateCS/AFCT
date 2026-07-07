@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { auth } from '@/lib/auth';
 import { ProblemTypeEnum } from '@/schemas/problem';
 import { RoleEnum } from '@/schemas/user';
 import { z } from 'zod';
@@ -40,13 +41,13 @@ interface AssignmentWithProblemsAndCourse {
 /**
  * Fetches one assignment (scoped to the course) with its problems, a derived
  * `maxPoints`, and — in the `full` view — the course roster. Shaped for the
- * assignment detail page. Note: this handler performs no authentication, so the
- * assignment and, in full view, the roster are readable by any caller.
+ * assignment detail page. Access is restricted: staff (ADMIN/FACULTY/TA) may view
+ * any assignment; everyone else must be enrolled in the course.
  * @openapi
  * summary: Get a course assignment
  * description: >-
  *   Returns the assignment with its problems and, in the full view, the course
- *   roster. No authentication is enforced on this endpoint.
+ *   roster. Requires a session; non-staff callers must be enrolled in the course.
  * parameters:
  *   - { name: id, in: path, required: true, schema: { type: string } }
  *   - { name: aid, in: path, required: true, schema: { type: string } }
@@ -56,6 +57,8 @@ interface AssignmentWithProblemsAndCourse {
  *     schema: { type: string, default: full }
  * responses:
  *   200: { description: The assignment with problems (and roster in full view). }
+ *   401: { description: Not signed in. }
+ *   403: { description: Not staff and not enrolled in the course. }
  *   404: { description: Assignment not found in this course. }
  *   500: { description: Server error. }
  */
@@ -66,7 +69,22 @@ export async function GET(req: Request, context: { params: Promise<{ id: string;
   const includeRoster = view === 'full';
 
   try {
-    // Query the assignment from the database
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    // Access: staff may view any assignment; everyone else must be enrolled.
+    const isStaff = ['ADMIN', 'FACULTY', 'TA'].includes(session.user.role);
+    if (!isStaff) {
+      const enrolled = await prisma.roster.findFirst({
+        where: { courseId, userId: session.user.id },
+        select: { id: true },
+      });
+      if (!enrolled) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    }
+
     const assignment = (await prisma.assignment.findFirst({
       where: {
         id: assignmentId,
