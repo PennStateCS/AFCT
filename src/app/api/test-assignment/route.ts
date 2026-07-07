@@ -1,16 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+/**
+ * Diagnostic lookup that returns a trimmed view of one assignment by id. Loads
+ * the full course/problem graph but only echoes a few summary fields.
+ * Unauthenticated, and appears to be a development helper rather than a route
+ * the app itself calls.
+ * @openapi
+ * summary: Fetch an assignment summary (debug)
+ * parameters:
+ *   - { name: id, in: query, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: A summary of the assignment.
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             id: { type: string }
+ *             title: { type: string }
+ *             courseId: { type: string }
+ *             isPublished: { type: boolean }
+ *             course: { type: object }
+ *   400: { description: Missing id query parameter. }
+ *   404: { description: No assignment with that id. }
+ *   500: { description: Server error. }
+ */
 export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
     const id = url.searchParams.get('id');
-    
+
     if (!id) {
       return NextResponse.json({ error: 'Missing assignment ID' }, { status: 400 });
     }
-
-  // Testing assignment fetch for ID
 
     const assignment = await prisma.assignment.findUnique({
       where: { id },
@@ -25,7 +49,6 @@ export async function GET(req: NextRequest) {
     });
 
     if (!assignment) {
-      // Assignment not found in database
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 
