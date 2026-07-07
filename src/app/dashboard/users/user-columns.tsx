@@ -1,14 +1,12 @@
 'use client';
 
 import { ColumnDef } from '@tanstack/react-table';
-import { roleSortingFn } from '@/lib/roles';
 import { useState } from 'react';
 import { User } from '@prisma/client';
 import { getInitials } from '@/app/utils/initials';
 import type { UserListItem } from '@/lib/users-list';
 
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/RoleBadge';
 import { Badge as StatusBadge } from '@/components/ui/badge';
 import { EditUserDialog } from '@/components/dialogs/EditUserDialog';
 import { AdminResetPasswordDialog } from '@/components/dialogs/AdminResetPasswordDialog';
@@ -75,11 +73,15 @@ export function getUserColumns(
       },
     },
     {
-      accessorKey: 'role',
-      header: 'Role',
+      accessorKey: 'isAdmin',
+      header: 'Admin',
       meta: { priority: 3 },
-      cell: ({ row }) => <Badge role={row.original.role} className="w-20" />,
-      sortingFn: roleSortingFn,
+      cell: ({ row }) =>
+        row.original.isAdmin ? (
+          <StatusBadge variant="success">Admin</StatusBadge>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
     },
     {
       accessorKey: 'inactive',

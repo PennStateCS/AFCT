@@ -5,6 +5,9 @@ const prismaMock = vi.hoisted(() => ({
   submission: {
     findFirst: vi.fn(),
   },
+  roster: {
+    findFirst: vi.fn(),
+  },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -36,6 +39,7 @@ import { GET } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  prismaMock.roster.findFirst.mockResolvedValue(null);
 });
 
 describe('GET /api/uploads/submissions/[file]', () => {
@@ -69,11 +73,12 @@ describe('GET /api/uploads/submissions/[file]', () => {
   });
 
   it('returns 403 when user is not allowed', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'STUDENT' } });
+    authMock.mockResolvedValue({ user: { id: 'user-1' } });
     prismaMock.submission.findFirst.mockResolvedValue({
       originalFileName: 'solution.txt',
       studentId: 'user-2',
       assignmentId: 'assignment-1',
+      courseId: 'course-1',
     });
 
     const res = await GET(new Request('http://localhost/api/uploads/submissions/file.txt'), {
@@ -84,12 +89,13 @@ describe('GET /api/uploads/submissions/[file]', () => {
   });
 
   it('allows admin to download submission', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin-1', isAdmin: true } });
     prismaMock.submission.findFirst.mockResolvedValue({
       id: 'sub-1',
       originalFileName: 'solution.txt',
       studentId: 'user-2',
       assignmentId: 'assignment-1',
+      courseId: 'course-1',
     });
     vi.mocked(fs.existsSync).mockReturnValue(true);
 
@@ -103,13 +109,15 @@ describe('GET /api/uploads/submissions/[file]', () => {
   });
 
   it('allows faculty to download submission', async () => {
-    authMock.mockResolvedValue({ user: { id: 'fac-1', role: 'FACULTY' } });
+    authMock.mockResolvedValue({ user: { id: 'fac-1' } });
     prismaMock.submission.findFirst.mockResolvedValue({
       id: 'sub-1',
       originalFileName: 'solution.txt',
       studentId: 'user-2',
       assignmentId: 'assignment-1',
+      courseId: 'course-1',
     });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     vi.mocked(fs.existsSync).mockReturnValue(true);
 
     const res = await GET(new Request('http://localhost/api/uploads/submissions/file.txt'), {
@@ -120,13 +128,15 @@ describe('GET /api/uploads/submissions/[file]', () => {
   });
 
   it('allows TA to download submission', async () => {
-    authMock.mockResolvedValue({ user: { id: 'ta-1', role: 'TA' } });
+    authMock.mockResolvedValue({ user: { id: 'ta-1' } });
     prismaMock.submission.findFirst.mockResolvedValue({
       id: 'sub-1',
       originalFileName: 'solution.txt',
       studentId: 'user-2',
       assignmentId: 'assignment-1',
+      courseId: 'course-1',
     });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'TA' });
     vi.mocked(fs.existsSync).mockReturnValue(true);
 
     const res = await GET(new Request('http://localhost/api/uploads/submissions/file.txt'), {
@@ -154,12 +164,13 @@ describe('GET /api/uploads/submissions/[file]', () => {
   });
 
   it('returns 404 when file not on disk', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin-1', isAdmin: true } });
     prismaMock.submission.findFirst.mockResolvedValue({
       id: 'sub-1',
       originalFileName: 'solution.txt',
       studentId: 'user-2',
       assignmentId: 'assignment-1',
+      courseId: 'course-1',
     });
     vi.mocked(fs.existsSync).mockReturnValue(false);
 
@@ -173,12 +184,13 @@ describe('GET /api/uploads/submissions/[file]', () => {
   });
 
   it('uses fileName when originalFileName is null', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin-1', isAdmin: true } });
     prismaMock.submission.findFirst.mockResolvedValue({
       id: 'sub-1',
       originalFileName: null,
       studentId: 'user-2',
       assignmentId: 'assignment-1',
+      courseId: 'course-1',
     });
     vi.mocked(fs.existsSync).mockReturnValue(true);
 

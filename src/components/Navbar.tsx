@@ -1,27 +1,20 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import { usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { toast } from 'sonner';
-import { LockKeyhole, LogOut, Moon, Sun, UserPen, UserRound } from 'lucide-react';
-import { getInitials } from '@/app/utils/initials'
+import { Moon, Sun } from 'lucide-react';
 import { Badge } from '@/components/ui/RoleBadge';
 import { useNavbarBreadcrumbs } from '@/components/navbar/NavbarBreadcrumbContext';
-import { safeSignOut } from '@/lib/safe-signout';
-import { ChangePasswordDialog } from '@/components/dialogs/ChangePasswordDialog';
-import { EditProfileDialog } from '@/components/dialogs/EditProfileDialog';
 import type { SessionUser } from '@/types/next-auth';
 
 // UI Components
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -39,8 +32,6 @@ import { EnhancedSidebarTrigger } from './ui/EnhancedSidebarTrigger';
 const Navbar: React.FC = () => {
   const { setTheme } = useTheme();
   const { data, status } = useSession();
-  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
-  const [editProfileOpen, setEditProfileOpen] = useState(false);
   const pathname = usePathname();
   const { courseLabel, assignmentLabel } = useNavbarBreadcrumbs();
 
@@ -152,72 +143,7 @@ const Navbar: React.FC = () => {
       </div>
 
       <div className="ml-2 flex items-center gap-2 text-right sm:gap-4">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              className="h-auto rounded-md px-1 py-1 hover:bg-white/20 sm:px-2"
-              aria-label="User account menu"
-            >
-              <span className="flex items-center gap-2 sm:gap-3">
-                <span className="hidden flex-col items-end sm:flex">
-                  <span className="max-w-[12rem] truncate font-semibold text-white">
-                    {`${user.firstName} ${user.lastName}`}
-                  </span>
-                  <Badge role={user.role} className="text-xs" />
-                </span>
-                <Avatar className="h-11 w-11" aria-label="User avatar">
-                  <AvatarImage 
-                    src={`/api/uploads/pfps/${user.avatar}`}
-                    alt={`${user.firstName} ${user.lastName}`} />
-                  <AvatarFallback>
-                    {getInitials(user.firstName, user.lastName, user.email)}
-                  </AvatarFallback>
-                </Avatar>
-              </span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuItem>
-              <span className="flex w-full items-center gap-2 text-left">
-                <UserRound className="h-4 w-4" />
-                User Account
-              </span>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 text-left"
-                onClick={() => setEditProfileOpen(true)}
-              >
-                <UserPen className="h-4 w-4" />
-                Edit Profile
-              </button>
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 text-left"
-                onClick={() => setChangePasswordOpen(true)}
-              >
-                <LockKeyhole className="h-4 w-4" />
-                Change Password
-              </button>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 text-left"
-                onClick={() => void safeSignOut({ callbackUrl: '/' })}
-              >
-                <LogOut className="h-4 w-4" />
-                Sign out
-              </button>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {user.isAdmin && <Badge role="ADMIN" className="text-xs" />}
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -237,25 +163,6 @@ const Navbar: React.FC = () => {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-
-      <ChangePasswordDialog
-        open={changePasswordOpen}
-        setOpen={setChangePasswordOpen}
-        onChangePassword={async (oldPassword, newPassword) => {
-          const res = await fetch('/api/users/change-password', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ oldPassword, newPassword }),
-          });
-          if (!res.ok) {
-            const { error } = await res.json();
-            toast.error(error || 'Failed to change password');
-            throw new Error(error || 'Failed to change password');
-          }
-          toast.success('Password changed!');
-        }}
-      />
-      <EditProfileDialog user={user} open={editProfileOpen} setOpen={setEditProfileOpen} />
     </nav>
   );
 };

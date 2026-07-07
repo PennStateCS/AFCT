@@ -56,7 +56,6 @@ export default async function DashboardPage() {
                   id: true,
                   firstName: true,
                   lastName: true,
-                  role: true,
                 },
               },
             },
@@ -81,7 +80,7 @@ export default async function DashboardPage() {
   const courseIds = courses.map((c) => c.id);
 
   const gradingRoleEntries = rosterEntries.filter(
-    (entry) => entry.role === 'TA' || entry.role === 'FACULTY' || entry.role === 'INSTRUCTOR',
+    (entry) => entry.role === 'TA' || entry.role === 'FACULTY',
   );
   const gradingCourseIds = gradingRoleEntries.map((entry) => entry.courseId);
   const showSubmissions = gradingCourseIds.length > 0;
@@ -210,7 +209,11 @@ export default async function DashboardPage() {
       <h1 className="sr-only">Dashboard</h1>
       {/* Left (Big Column) */}
       <div className="w-full lg:w-3/4">
-        <DashboardClient sessionUser={session.user} courses={courses} title={'Current Courses'} />
+        <DashboardClient
+          sessionUser={{ id, role: session.user.isAdmin ? 'ADMIN' : 'STUDENT' }}
+          courses={courses}
+          title={'Current Courses'}
+        />
       </div>
 
       {/* Right (Skinny Column) */}

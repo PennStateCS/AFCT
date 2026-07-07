@@ -4,10 +4,11 @@ import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy';
+import { isAdmin } from '@/lib/permissions';
 
 /**
  * Sets another user's password on their behalf (an admin-initiated reset).
- * Restricted to ADMIN/FACULTY; the new password still has to meet the strength
+ * System administrators only; the new password still has to meet the strength
  * policy. Pass `isTemporary` to force a change at next login. The plaintext
  * password is never logged — only who reset whom.
  * @openapi
@@ -30,18 +31,18 @@ import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy
  *       application/json:
  *         schema: { type: object, properties: { success: { type: boolean } } }
  *   400: { description: Missing fields or weak password. }
- *   403: { description: Caller is not an admin or faculty user. }
+ *   403: { description: Caller is not a system administrator. }
  *   500: { description: Reset failed. }
  */
 export async function POST(req: Request) {
   const session = await auth();
 
-  if (!session || !['ADMIN', 'FACULTY'].includes(session.user.role)) {
+  if (!session?.user || !isAdmin(session.user)) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session?.user?.id ?? null,
       action: 'ADMIN_RESET_PASSWORD_DENIED',
       severity: 'SECURITY',
-      metadata: { role: session?.user?.role ?? null },
+      metadata: {},
     });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
@@ -71,7 +72,6 @@ export async function POST(req: Request) {
       category: 'USER',
       metadata: {
         userId: session.user.id,
-        initiatedByRole: session.user.role,
         targetUserId: userId,
         temporaryPassword: Boolean(isTemporary),
       },

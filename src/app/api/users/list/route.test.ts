@@ -22,7 +22,7 @@ describe('GET /api/users/list', () => {
   });
 
   it('returns users list for authorized roles', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     getUsersListMock.mockResolvedValue([{ id: 'u2', email: 'u2@example.com' }]);
 
     const res = await GET(new Request('http://localhost/api/users/list?role=STUDENT'));
@@ -33,7 +33,7 @@ describe('GET /api/users/list', () => {
   });
 
   it('returns 500 when query throws', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     getUsersListMock.mockRejectedValue(new Error('db error'));
 
     const res = await GET(new Request('http://localhost/api/users/list'));

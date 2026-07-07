@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
 /**
  * Removes a user from a group, addressed by the group's and user's global ids.
- * Staff only (ADMIN/FACULTY/TA).
+ * Course staff (faculty or TAs) or a system admin.
  * @openapi
  * summary: Remove a group member by ids
  * parameters:
@@ -15,7 +16,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
  *   200: { description: Member removed. }
  *   400: { description: Missing ids. }
  *   401: { description: Not signed in. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Not course staff or a system admin. }
  *   404: { description: Group or membership not found. }
  *   500: { description: Server error. }
  */
@@ -29,15 +30,6 @@ export async function DELETE(
 
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
-    await createEnhancedActivityLog(prisma, req, {
-      userId: session?.user?.id ?? null,
-      action: 'GROUP_MEMBER_REMOVE_DENIED',
-      severity: 'SECURITY',
-      metadata: { role: session?.user?.role ?? null },
-    });
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
 
   try {
     const group = await prisma.group.findUnique({ where: { id: groupId } });
@@ -45,6 +37,16 @@ export async function DELETE(
     if (providedCourseId && group.courseId !== providedCourseId)
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
     const courseId = group.courseId;
+
+    if (!(await canManageCourse(session.user, courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'GROUP_MEMBER_REMOVE_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const entry = await prisma.groupRoster.findUnique({
       where: { groupId_userId: { groupId, userId } },

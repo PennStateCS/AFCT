@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 
 const prismaMock = vi.hoisted(() => ({
   $transaction: vi.fn(),
+  roster: { findFirst: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -16,6 +17,8 @@ import { POST } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Default: caller not enrolled (denied); authorized tests grant a course role.
+  prismaMock.roster.findFirst.mockResolvedValue(null);
 });
 
 describe('POST /api/courses/[id]/bulk-enroll', () => {
@@ -47,6 +50,7 @@ describe('POST /api/courses/[id]/bulk-enroll', () => {
 
   it('returns 400 when no users provided', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
 
     const req = new NextRequest('http://localhost/api/courses/c1/bulk-enroll', {
       method: 'POST',
@@ -59,7 +63,7 @@ describe('POST /api/courses/[id]/bulk-enroll', () => {
   });
 
   it('bulk enrolls users', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
 
     const tx = {
       roster: {
@@ -87,7 +91,7 @@ describe('POST /api/courses/[id]/bulk-enroll', () => {
   });
 
   it('sets STUDENT role for both updates and creates', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
 
     const tx = {
       roster: {
@@ -129,6 +133,7 @@ describe('POST /api/courses/[id]/bulk-enroll', () => {
 
   it('returns 500 when enrollment transaction fails', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.$transaction.mockRejectedValue(new Error('tx failed'));
 
     const req = new NextRequest('http://localhost/api/courses/c1/bulk-enroll', {

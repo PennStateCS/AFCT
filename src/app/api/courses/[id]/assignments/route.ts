@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse, COURSE_FACULTY_ROLES } from '@/lib/permissions';
 
 /**
  * Lists a course's published assignments with each one's total and max grade
- * (summed across its problems). Restricted to ADMIN/FACULTY.
+ * (summed across its problems). Course faculty or a system admin (TAs excluded).
  * @openapi
  * summary: List a course's published assignments
  * parameters:
@@ -17,7 +18,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
  *       application/json:
  *         schema: { type: array, items: { type: object } }
  *   400: { description: Missing course id. }
- *   403: { description: Caller is not an admin or faculty user. }
+ *   403: { description: Caller is not course faculty or a system admin (TAs excluded). }
  *   404: { description: Course not found. }
  *   500: { description: Server error. }
  */
@@ -28,12 +29,12 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     const session = await auth();
     const user = session?.user;
 
-    if (!user || !['ADMIN', 'FACULTY'].includes(user.role)) {
+    if (!(await canManageCourse(user, courseId, COURSE_FACULTY_ROLES))) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'COURSE_ASSIGNMENTS_ACCESS_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }

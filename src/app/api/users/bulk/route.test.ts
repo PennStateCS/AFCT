@@ -73,24 +73,28 @@ describe('POST /api/users/bulk', () => {
     expect(res.status).toBe(403);
   });
 
-  it('allows ADMIN, FACULTY, and TA roles', async () => {
-    for (const role of ['ADMIN', 'FACULTY', 'TA'] as const) {
-      authMock.mockResolvedValue({ user: { id: 'u1', role } });
+  it('allows admins (past auth, then validation) and denies non-admins', async () => {
+    // Admin gets past auth and fails validation on empty rows.
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
+    const adminReq = new Request('http://localhost/api/users/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ rows: [] }),
+    });
+    expect((await POST(adminReq)).status).toBe(400);
 
+    // Non-admins (including faculty/TA) can no longer bulk-create users.
+    for (const role of ['FACULTY', 'TA', 'STUDENT'] as const) {
+      authMock.mockResolvedValue({ user: { id: 'u1', role } });
       const req = new Request('http://localhost/api/users/bulk', {
         method: 'POST',
         body: JSON.stringify({ rows: [] }),
       });
-
-      const res = await POST(req);
-
-      // Authorized roles get past auth and then fail validation for empty rows.
-      expect(res.status).toBe(400);
+      expect((await POST(req)).status).toBe(403);
     }
   });
 
   it('returns 400 when rows are missing', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
 
     const req = new Request('http://localhost/api/users/bulk', {
       method: 'POST',
@@ -103,7 +107,7 @@ describe('POST /api/users/bulk', () => {
   });
 
   it('creates valid users and reports row failures', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
 
     prismaMock.user.findUnique
       .mockResolvedValueOnce(null)

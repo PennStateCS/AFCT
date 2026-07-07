@@ -93,7 +93,7 @@ beforeEach(() => {
     allowLateSubmissions: false,
     lateCutoff: null,
   });
-  prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1' });
+  prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
   prismaMock.submission.findFirst.mockResolvedValue(null);
   prismaMock.submission.create.mockResolvedValue({
     id: 'submission-1',
@@ -184,7 +184,7 @@ describe('POST /api/submissions', () => {
   });
 
   it('allows an admin to submit without a roster entry', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.roster.findFirst.mockResolvedValue(null);
 
     const res = await POST(makeRequest(makeFormData()));

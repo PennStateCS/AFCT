@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { ProblemTypeEnum } from '@/schemas/problem';
+import { canManageCourse } from '@/lib/permissions';
 import { z } from 'zod';
 
 // Types
@@ -21,8 +22,8 @@ interface AssignmentWithProblems {
 
 /**
  * Detaches a problem from an assignment (and clears any group→problem mappings for
- * it), leaving the problem itself intact in the course. Staff only
- * (ADMIN/FACULTY/TA). Both the assignment and the problem must belong to the course
+ * it), leaving the problem itself intact in the course. Course staff (faculty or
+ * TAs) or a system admin. Both the assignment and the problem must belong to the course
  * in the path. Uses POST rather than DELETE because the problem id travels in the body.
  * @openapi
  * summary: Remove a problem from an assignment
@@ -37,7 +38,7 @@ interface AssignmentWithProblems {
  * responses:
  *   200: { description: The assignment's remaining problems. }
  *   400: { description: Missing problemId. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Caller is not course staff (faculty or TA) or a system admin. }
  *   404: { description: Assignment or problem not found in this course. }
  *   500: { description: Server error. }
  */
@@ -50,12 +51,12 @@ export async function POST(
   const session = await auth();
   const user = session?.user;
 
-  if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+  if (!user || !(await canManageCourse(user, courseId))) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session?.user?.id ?? null,
       action: 'ASSIGNMENT_REMOVE_PROBLEM_DENIED',
       severity: 'SECURITY',
-      metadata: { role: session?.user?.role ?? null },
+      metadata: {},
     });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }

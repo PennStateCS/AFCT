@@ -15,6 +15,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validationResponse } from '@/lib/zod-error';
 import { auth } from '@/lib/auth';
+import { isAdmin } from '@/lib/permissions';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { toEmptyStringNotation } from '@/lib/empty-string-notation';
@@ -26,7 +27,7 @@ import type { Prisma } from '@prisma/client';
  */
 type RosterItem = Prisma.RosterGetPayload<{
   include: {
-    user: { select: { id: true; firstName: true; lastName: true; role: true } };
+    user: { select: { id: true; firstName: true; lastName: true } };
   };
 }>;
 
@@ -91,7 +92,7 @@ export async function GET() {
       include: {
         roster: {
           include: {
-            user: { select: { id: true, firstName: true, lastName: true, role: true } },
+            user: { select: { id: true, firstName: true, lastName: true } },
           },
         },
         assignments: {
@@ -144,8 +145,9 @@ export async function GET() {
 // ----------------------------------------
 /**
  * Creates a course (with a generated registration code) and seeds its faculty
- * roster, all in one transaction. Admin/TA/Faculty only. Datetime-local strings
- * are interpreted in the actor's effective timezone before being stored as UTC.
+ * roster, all in one transaction. System administrators only. Datetime-local
+ * strings are interpreted in the actor's effective timezone before being stored
+ * as UTC.
  * @openapi
  * summary: Create a course
  * requestBody:
@@ -172,7 +174,7 @@ export async function GET() {
  *   201:
  *     description: Course created; returns the course with its `enrolled` roster.
  *   400: { description: "Missing registration window, or Zod validation failed." }
- *   403: { description: Caller may not create courses (logged as a security event). }
+ *   403: { description: System administrators only (logged as a security event). }
  *   409: { description: A course with that code and semester already exists. }
  *   500: { description: Server error. }
  */
@@ -185,13 +187,12 @@ export async function POST(req: Request) {
     // 2) Ensure user is authorized to create courses
     const session = await auth();
     actorId = session?.user?.id ?? null;
-    const role = session?.user?.role;
-    if (!role || !['ADMIN', 'TA', 'FACULTY'].includes(role)) {
+    if (!isAdmin(session?.user)) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'COURSE_CREATE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
     }
@@ -283,7 +284,7 @@ export async function POST(req: Request) {
         include: {
           roster: {
             include: {
-              user: { select: { id: true, firstName: true, lastName: true, role: true } },
+              user: { select: { id: true, firstName: true, lastName: true } },
             },
           },
         },
