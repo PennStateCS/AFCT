@@ -188,7 +188,7 @@ export function ImportUsersDialog({ open, setOpen, onSuccess }: ImportUsersDialo
     setParseError(null);
 
     try {
-      const res = await fetch('/api/users/bulk', {
+      const res = await fetch('/api/admin/users/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rows, temporaryPasswords }),

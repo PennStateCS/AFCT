@@ -75,7 +75,7 @@ export function DownloadLogsDialog({
     useEffect(() => {
         async function init() {
             try {
-                const res = await fetch(`/api/logs/getFields`, {
+                const res = await fetch(`/api/admin/logs/fields`, {
                     method: 'GET',
                     headers: { 'Content-Type': 'application/json' },
                 });
@@ -140,7 +140,7 @@ export function DownloadLogsDialog({
             endTime: raw.endTime === "" ? "3000-01-01T12:00" : raw.endTime,
         };
 
-        const res = await fetch('/api/logs/getData', {
+        const res = await fetch('/api/admin/logs/export', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),

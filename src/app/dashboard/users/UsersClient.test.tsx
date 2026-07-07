@@ -127,7 +127,7 @@ describe('UsersClient', () => {
     expect(screen.getByTestId('table-loading').textContent).toBe('true');
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/users/list', { cache: 'no-store' });
+      expect(global.fetch).toHaveBeenCalledWith('/api/admin/users/list', { cache: 'no-store' });
       expect(screen.getByTestId('table-rows').textContent).toBe('1');
       expect(screen.getByTestId('table-loading').textContent).toBe('false');
     });
