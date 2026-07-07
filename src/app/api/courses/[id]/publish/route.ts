@@ -1,31 +1,47 @@
-// /src/api/courses/[id]/publish/route.ts
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canUnpublishCourse } from '@/lib/course-status-checks';
 
+/**
+ * Toggles a course's published state. ADMIN/FACULTY only. Unpublishing runs a
+ * safety check (canUnpublishCourse) that refuses if students would lose access to
+ * work already in progress.
+ * @openapi
+ * summary: Publish or unpublish a course
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [isPublished]
+ *         properties:
+ *           isPublished: { type: boolean }
+ * responses:
+ *   200:
+ *     description: The updated course (id, name, code, isPublished, updatedAt).
+ *   400: { description: isPublished must be a boolean. }
+ *   403: { description: Not staff, or unpublishing is blocked by the safety check. }
+ *   500: { description: Server error. }
+ */
 export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
   let actorId: string | null = null;
   try {
-    // Extract course ID from route params
     const { id: courseId } = await context.params;
 
-    // Parse JSON body
     const { isPublished } = await req.json();
-
-    // Validate input
     if (typeof isPublished !== 'boolean') {
       return NextResponse.json({ error: 'isPublished must be a boolean' }, { status: 400 });
     }
 
-    // Get authenticated user session
     const session = await auth();
     const user = session?.user;
     actorId = user?.id ?? null;
 
-    // Allow only ADMIN or FACULTY to toggle publish status
     if (!user || !['ADMIN', 'FACULTY'].includes(user.role)) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
@@ -36,7 +52,6 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    // Centralized check for unpublishing
     if (!isPublished) {
       const { canUnpublish, reason } = await canUnpublishCourse(prisma, courseId);
       if (!canUnpublish) {
@@ -49,8 +64,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
         return NextResponse.json({ error: reason }, { status: 403 });
       }
     }
-     
-    // Update course publish status
+
     const updated = await prisma.course.update({
       where: { id: courseId },
       data: { isPublished },
@@ -63,7 +77,6 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
       },
     });
 
-    // Log the publish/unpublish event
     await createEnhancedActivityLog(prisma, req, {
       userId: user.id,
       action: isPublished ? 'COURSE_PUBLISHED' : 'COURSE_UNPUBLISHED',
@@ -78,7 +91,6 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
       },
     });
 
-    // Respond with the updated course
     return NextResponse.json(updated);
   } catch (error) {
     console.error('PATCH /api/courses/[id]/publish error:', error);

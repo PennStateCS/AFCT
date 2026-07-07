@@ -41,6 +41,26 @@ function certMeta(info: CertInfo) {
   };
 }
 
+/**
+ * Returns metadata about the currently installed TLS certificate and whether a
+ * CSR is awaiting a signed cert. Admin only. Never returns key or PEM material.
+ * @openapi
+ * summary: Get TLS certificate status
+ * responses:
+ *   200:
+ *     description: Certificate metadata and pending-CSR flag.
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             subject: { type: string, nullable: true }
+ *             issuer: { type: string, nullable: true }
+ *             validTo: { type: string, nullable: true }
+ *             selfSigned: { type: boolean, nullable: true }
+ *             pendingCsr: { type: boolean }
+ *   403: { description: Caller is not an admin. }
+ */
 export async function GET() {
   if (!(await requireAdmin())) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
@@ -58,6 +78,39 @@ type Body = {
   altNames?: string[];
 };
 
+/**
+ * Performs a certificate operation, chosen by the `action` field. Admin only;
+ * unauthorized-but-authenticated attempts are recorded as a security event. Cert
+ * bodies and keys are accepted in the request but never echoed back or logged.
+ * @openapi
+ * summary: Install or generate a TLS certificate
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         properties:
+ *           action:
+ *             type: string
+ *             enum: [install, generate-csr, install-signed, self-signed]
+ *             description: >-
+ *               install (default) = upload cert+key; generate-csr = create a CSR to
+ *               be signed externally; install-signed = install the cert returned for
+ *               a pending CSR; self-signed = generate a self-signed cert.
+ *           cert: { type: string, description: PEM cert (install / install-signed) }
+ *           key: { type: string, description: PEM private key (install) }
+ *           chain: { type: string, description: Optional intermediate chain }
+ *           commonName: { type: string, description: CSR/self-signed subject CN }
+ *           organization: { type: string }
+ *           altNames: { type: array, items: { type: string } }
+ * responses:
+ *   200:
+ *     description: The resulting certificate metadata (plus `csr` for generate-csr).
+ *   400: { description: Invalid JSON, or the certificate/key was rejected by validation. }
+ *   403: { description: Caller is not an admin. }
+ *   500: { description: The certificate operation failed. }
+ */
 export async function POST(req: Request) {
   const session = await auth();
   if (session?.user?.role !== 'ADMIN') {
@@ -165,6 +218,15 @@ export async function POST(req: Request) {
   }
 }
 
+/**
+ * Removes the installed certificate and reverts to a self-signed one. Admin only.
+ * @openapi
+ * summary: Reset TLS to a self-signed certificate
+ * responses:
+ *   200:
+ *     description: Certificate reset; returns the new (self-signed) metadata.
+ *   403: { description: Caller is not an admin. }
+ */
 export async function DELETE(req: Request) {
   const session = await auth();
   if (session?.user?.role !== 'ADMIN') {

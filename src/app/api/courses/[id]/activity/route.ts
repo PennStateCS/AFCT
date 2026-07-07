@@ -3,6 +3,33 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
+/**
+ * Returns a paginated activity feed for one course — logs tied directly to the
+ * course plus its assignments, problems, submissions, and recent logins by course
+ * members. Staff (ADMIN/FACULTY/TA) may view any course; everyone else must be on
+ * the roster.
+ * @openapi
+ * summary: Get a course's activity feed
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: limit, in: query, schema: { type: integer, default: 50 } }
+ *   - { name: offset, in: query, schema: { type: integer, default: 0 } }
+ * responses:
+ *   200:
+ *     description: A page of activity entries with a total count.
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             activities: { type: array, items: { type: object } }
+ *             totalCount: { type: integer }
+ *             hasMore: { type: boolean }
+ *   401: { description: Not signed in. }
+ *   403: { description: Not enrolled and not staff. }
+ *   404: { description: Course not found. }
+ *   500: { description: Server error. }
+ */
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth();

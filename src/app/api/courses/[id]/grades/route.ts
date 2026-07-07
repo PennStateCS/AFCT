@@ -2,10 +2,32 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-// Route handler for course grades
 
-// Records a gradebook export. The CSV is built and downloaded client-side, so the
-// client pings this endpoint (fire-and-forget) so the export is captured in the audit log.
+/**
+ * Records a gradebook export in the audit log. The CSV itself is built and
+ * downloaded client-side, so this endpoint just captures that an export happened
+ * (and a little about its scope). Staff only (ADMIN/FACULTY/TA).
+ * @openapi
+ * summary: Log a gradebook export
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: false
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         properties:
+ *           platform: { type: string, description: Target LMS/platform label }
+ *           wholeGradebook: { type: boolean }
+ *           assignmentCount: { type: integer }
+ *           studentCount: { type: integer }
+ * responses:
+ *   200: { description: Export recorded. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller lacks a staff role. }
+ *   500: { description: Server error. }
+ */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
@@ -70,6 +92,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 }
 
+/**
+ * Returns the full gradebook matrix for a course: students × assignments with each
+ * cell holding the student's summed assignment grade (problem grades collapsed
+ * into one total). Staff only (ADMIN/FACULTY/TA).
+ * @openapi
+ * summary: Get the course grade matrix
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: Students, assignments, and a nested grades map (grades[studentId][assignmentId]).
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             students: { type: array, items: { type: object } }
+ *             assignments: { type: array, items: { type: object } }
+ *             grades: { type: object }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller lacks a staff role. }
+ *   500: { description: Server error. }
+ */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
@@ -82,7 +127,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Only allow faculty/ta/admin to fetch full grade matrix
   if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session?.user?.id ?? null,
