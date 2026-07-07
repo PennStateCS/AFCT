@@ -28,7 +28,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
  *       application/json:
  *         schema: { type: object, properties: { success: { type: boolean } } }
  *   400: { description: Missing userId. }
- *   401: { description: Not signed in, or the target user is inactive. }
+ *   401: { description: "Not signed in, or the target user is inactive." }
  *   403: { description: Caller lacks a staff role. }
  *   404: { description: Target user not found. }
  *   500: { description: Server error. }

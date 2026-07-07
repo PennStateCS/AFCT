@@ -5,11 +5,16 @@
 // endpoint can be enriched by adding an `@openapi` YAML block in the comment
 // directly above its handler; that block is deep-merged over the inferred one.
 //
+// After building, it reports enrichment coverage and exits non-zero if any
+// @openapi block is malformed or the emitted spec fails OpenAPI schema validation
+// (set DOCS_STRICT=1 to also fail when any operation lacks an @openapi block).
+//
 // Run: npm run docs:api   →   writes to $DOCS_OUT (default: docs-dist/)
 
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { load as loadYaml } from 'js-yaml';
+import { Validator } from '@seriousme/openapi-schema-validator';
 
 const API_DIR = 'src/app/api';
 const OUT_DIR = process.env.DOCS_OUT || 'docs-dist';
@@ -72,19 +77,19 @@ function commentAbove(lines, i) {
 }
 
 // Split a comment block into a plain-text description and an optional @openapi
-// YAML operation object.
+// YAML operation object. `parseError` is set when an @openapi block is present
+// but its YAML is malformed, so the caller can surface it instead of silently
+// falling back to the skeleton.
 function splitComment(block) {
   const idx = block.findIndex((l) => l.trim().startsWith('@openapi'));
-  if (idx === -1) return { description: block.join(' ').trim(), operation: null };
+  if (idx === -1) return { description: block.join(' ').trim(), operation: null, parseError: null };
   const description = block.slice(0, idx).join(' ').trim();
   const yamlText = block.slice(idx + 1).join('\n');
-  let operation = null;
   try {
-    operation = loadYaml(yamlText) || null;
-  } catch {
-    // malformed @openapi block — fall back to the skeleton
+    return { description, operation: loadYaml(yamlText) || null, parseError: null };
+  } catch (err) {
+    return { description, operation: null, parseError: err.message };
   }
-  return { description, operation };
 }
 
 function deepMerge(base, extra) {
@@ -128,6 +133,7 @@ function tagFor(apiPath) {
 function buildSpec(routes) {
   const paths = {};
   const tags = new Set();
+  const stats = { enriched: 0, skeletonOnly: [], parseErrors: [] };
 
   for (const file of routes.sort()) {
     if (SKIP.has(file)) continue;
@@ -146,7 +152,14 @@ function buildSpec(routes) {
     tags.add(tag);
 
     paths[apiPath] ||= {};
-    for (const [method, { description, operation }] of Object.entries(ops)) {
+    for (const [method, { description, operation, parseError }] of Object.entries(ops)) {
+      if (parseError) {
+        stats.parseErrors.push({ apiPath, method, message: parseError });
+      } else if (operation) {
+        stats.enriched += 1;
+      } else {
+        stats.skeletonOnly.push(`${method} ${apiPath}`);
+      }
       const authNote = authed
         ? roles.length
           ? `**Auth:** requires ${roles.join(' / ')}`
@@ -168,7 +181,7 @@ function buildSpec(routes) {
     }
   }
 
-  return {
+  const spec = {
     openapi: '3.0.3',
     info: {
       title: 'AFCT Dashboard API',
@@ -182,6 +195,7 @@ function buildSpec(routes) {
     tags: [...tags].sort().map((name) => ({ name })),
     paths,
   };
+  return { spec, stats };
 }
 
 const SWAGGER_HTML = `<!doctype html>
@@ -211,7 +225,7 @@ const SWAGGER_HTML = `<!doctype html>
 `;
 
 const routes = findRoutes(API_DIR);
-const spec = buildSpec(routes);
+const { spec, stats } = buildSpec(routes);
 mkdirSync(OUT_DIR, { recursive: true });
 writeFileSync(join(OUT_DIR, 'openapi.json'), JSON.stringify(spec, null, 2));
 writeFileSync(join(OUT_DIR, 'index.html'), SWAGGER_HTML);
@@ -221,3 +235,42 @@ console.log(
   `[docs] wrote ${OUT_DIR}/openapi.json (${Object.keys(spec.paths).length} paths, ` +
     `${endpointCount} operations) + index.html`,
 );
+
+// Coverage: how many operations carry a hand-written @openapi block vs. rely on
+// the inferred skeleton alone.
+const skeletonCount = stats.skeletonOnly.length;
+console.log(
+  `[docs] enrichment: ${stats.enriched}/${endpointCount} operations have an @openapi block` +
+    (skeletonCount ? ` (${skeletonCount} inferred-only)` : ''),
+);
+if (skeletonCount) {
+  console.log('[docs] inferred-only operations:');
+  for (const op of stats.skeletonOnly) console.log(`         - ${op}`);
+}
+
+// A malformed @openapi block silently degrades to the skeleton, so treat it as a
+// hard error — the block was meant to say something and isn't.
+if (stats.parseErrors.length) {
+  console.error(`\n[docs] ERROR: ${stats.parseErrors.length} malformed @openapi block(s):`);
+  for (const e of stats.parseErrors) {
+    console.error(`         - ${e.method} ${e.apiPath}: ${e.message.split('\n')[0]}`);
+  }
+  process.exit(1);
+}
+
+// Structural validation against the OpenAPI 3.x schema, so a bad deep-merge or a
+// syntactically-valid-but-wrong block can't slip a broken spec into the docs.
+const { valid, errors } = await new Validator().validate(spec);
+if (!valid) {
+  console.error('\n[docs] ERROR: generated spec is not a valid OpenAPI document:');
+  console.error(typeof errors === 'string' ? errors : JSON.stringify(errors, null, 2));
+  process.exit(1);
+}
+console.log('[docs] spec validates against the OpenAPI schema');
+
+// Opt-in gate (DOCS_STRICT=1): also fail when any operation is still skeleton-only,
+// so a team can enforce full enrichment once they've reached it.
+if (process.env.DOCS_STRICT === '1' && skeletonCount) {
+  console.error(`\n[docs] ERROR: DOCS_STRICT set and ${skeletonCount} operation(s) lack an @openapi block.`);
+  process.exit(1);
+}

@@ -90,7 +90,7 @@ function computeLateSubmissionState(options: {
  * responses:
  *   200: { description: The assignment with its problems and maxPoints. }
  *   401: { description: Not signed in. }
- *   404: { description: Not found, or not visible to the caller. }
+ *   404: { description: "Not found, or not visible to the caller." }
  *   500: { description: Server error. }
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -194,7 +194,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
  * responses:
  *   200: { description: The updated assignment. }
  *   400: { description: Inconsistent late-submission window. }
- *   403: { description: Not staff, or a state guard blocked the change. }
+ *   403: { description: "Not staff, or a state guard blocked the change." }
  *   404: { description: Assignment not found. }
  *   500: { description: Server error. }
  */
@@ -373,7 +373,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
  * responses:
  *   200: { description: The updated assignment. }
  *   400: { description: Inconsistent late-submission window. }
- *   403: { description: Not staff, or a state guard blocked the change. }
+ *   403: { description: "Not staff, or a state guard blocked the change." }
  *   404: { description: Assignment not found. }
  *   500: { description: Server error. }
  */
@@ -566,7 +566,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
  *           isGroup: { type: boolean }
  * responses:
  *   201: { description: The created assignment. }
- *   400: { description: Missing fields, or an inconsistent late-submission window. }
+ *   400: { description: "Missing fields, or an inconsistent late-submission window." }
  *   403: { description: Caller lacks a staff role. }
  *   500: { description: Server error. }
  */

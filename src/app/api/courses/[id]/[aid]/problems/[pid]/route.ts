@@ -38,7 +38,7 @@ type AssignmentProblemSettingsInput = z.infer<typeof AssignmentProblemSettingsSc
  *         required: [maxPoints, maxSubmissions, autograderEnabled]
  *         properties:
  *           maxPoints: { type: number, minimum: 0 }
- *           maxSubmissions: { type: integer, description: -1 for unlimited, else >= 1 }
+ *           maxSubmissions: { type: integer, description: "-1 for unlimited, else >= 1" }
  *           autograderEnabled: { type: boolean }
  * responses:
  *   200: { description: The updated assignment-problem settings. }

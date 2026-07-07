@@ -31,7 +31,7 @@ import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy
  *           properties:
  *             success: { type: boolean }
  *             message: { type: string }
- *   400: { description: Missing fields, weak password, wrong current password, or reused password. }
+ *   400: { description: "Missing fields, weak password, wrong current password, or reused password." }
  *   401: { description: Not signed in. }
  *   403: { description: Session role is not permitted to change passwords. }
  *   404: { description: User record not found. }
