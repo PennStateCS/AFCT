@@ -3,6 +3,25 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
+/**
+ * Re-queues every submission in a course, resetting each to PENDING and clearing its
+ * feedback/result — the bulk counterpart to the single-submission rerun. Staff only
+ * (ADMIN/FACULTY/TA). Logs each submission plus one batch-summary event, and returns
+ * the count re-queued.
+ * @openapi
+ * summary: Rerun all submissions in a course
+ * parameters:
+ *   - { name: cid, in: path, required: true, description: Course id, schema: { type: string } }
+ * responses:
+ *   202:
+ *     description: Submissions re-queued; returns the count.
+ *     content:
+ *       application/json:
+ *         schema: { type: object, properties: { success: { type: boolean }, count: { type: integer } } }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller lacks a staff role. }
+ *   500: { description: Server error. }
+ */
 export async function POST(req: Request, context: { params: Promise<{ cid: string }> }) {
   const { cid } = await context.params;
   let actorId: string | null = null;

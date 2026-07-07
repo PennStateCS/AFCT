@@ -5,6 +5,26 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
+/**
+ * Serves a submission's uploaded file as a download. Restricted to the submitting
+ * student and to staff (ADMIN/FACULTY/TA). The download is audited, and traversal
+ * filenames are rejected.
+ * @openapi
+ * summary: Get a submission file
+ * parameters:
+ *   - { name: file, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: The file bytes (as an attachment).
+ *     content:
+ *       application/octet-stream:
+ *         schema: { type: string, format: binary }
+ *   400: { description: Invalid filename. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Not the submitting student and not staff. }
+ *   404: { description: File not found. }
+ *   500: { description: Server error. }
+ */
 export async function GET(req: Request, { params }: { params: Promise<{ file: string }> }) {
   let actorId: string | null = null;
   let fileName: string | undefined;

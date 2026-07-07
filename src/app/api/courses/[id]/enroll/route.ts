@@ -1,12 +1,38 @@
-// /src/api/courses/[id]/enroll/route.ts
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
-// POST: Enroll a user into a course using their global role
-// Expects: { userId: string }
+/**
+ * Adds (or re-roles) a single user on a course roster. Staff only
+ * (ADMIN/FACULTY/TA). The course role is derived from the target's global role —
+ * admins/faculty become FACULTY, TAs stay TA, everyone else STUDENT — so callers
+ * don't pick the role directly. Upserts, so re-enrolling just refreshes the role.
+ * @openapi
+ * summary: Enroll a user in a course
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [userId]
+ *         properties:
+ *           userId: { type: string }
+ * responses:
+ *   200:
+ *     description: Enrolled.
+ *     content:
+ *       application/json:
+ *         schema: { type: object, properties: { success: { type: boolean } } }
+ *   400: { description: Missing userId. }
+ *   401: { description: Not signed in, or the target user is inactive. }
+ *   403: { description: Caller lacks a staff role. }
+ *   404: { description: Target user not found. }
+ *   500: { description: Server error. }
+ */
 export async function POST(req: Request, context: { params: Promise<{ id: string }> }) {
   const { id: courseId } = await context.params;
   let actorId: string | null = null;
@@ -30,13 +56,10 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
     }
 
     const { userId } = await req.json();
-
-    // Validate required field
     if (!userId) {
       return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
     }
 
-    // Look up the user and retrieve their global role
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { id: true, role: true, inactive: true },
@@ -50,7 +73,6 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
       return NextResponse.json({ error: 'User is inactive' }, { status: 401 });
     }
 
-    // Map global role to course role
     const mapRole = (r: string | null | undefined) => {
         switch (r) {
         case 'FACULTY':
@@ -63,7 +85,6 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
       }
     };
 
-    // Upsert the user into the course roster inheriting their global role
     const roleToAssign = mapRole(user.role);
 
     await prisma.roster.upsert({
@@ -83,7 +104,6 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
       },
     });
 
-    // Log enrollment to the ActivityLog
     await createEnhancedActivityLog(prisma, req, {
       userId: actorId,
       action: 'ENROLL_USER',
@@ -98,10 +118,8 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
       },
     });
 
-    // Return success response
     return NextResponse.json({ success: true });
   } catch (error) {
-    // Catch and log any unexpected errors
     console.error('Enrollment error:', error);
     await createEnhancedActivityLog(prisma, req, {
       userId: actorId,

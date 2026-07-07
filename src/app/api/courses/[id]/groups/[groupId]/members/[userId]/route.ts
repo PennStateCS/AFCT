@@ -3,7 +3,22 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
-// DELETE: remove member from group
+/**
+ * Removes one member from a group. Staff only (ADMIN/FACULTY/TA). The group must
+ * belong to the course in the path and the membership must exist.
+ * @openapi
+ * summary: Remove a group member
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: groupId, in: path, required: true, schema: { type: string } }
+ *   - { name: userId, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200: { description: Member removed. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller lacks a staff role. }
+ *   404: { description: Group or membership not found. }
+ *   500: { description: Server error. }
+ */
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string; groupId: string; userId: string }> }) {
   const { id, groupId, userId } = await params;
 

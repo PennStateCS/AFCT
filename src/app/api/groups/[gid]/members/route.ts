@@ -3,7 +3,25 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
-// GET: list members for a group
+/**
+ * Lists a group's members (with user profiles) by the group's global id. Staff
+ * only (ADMIN/FACULTY/TA).
+ * @openapi
+ * summary: List group members by group id
+ * parameters:
+ *   - { name: gid, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: The group's members with profiles.
+ *     content:
+ *       application/json:
+ *         schema: { type: object, properties: { members: { type: array, items: { type: object } } } }
+ *   400: { description: Missing group id. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller lacks a staff role. }
+ *   404: { description: Group not found. }
+ *   500: { description: Server error. }
+ */
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ gid: string; id?: string }> },
@@ -56,7 +74,32 @@ export async function GET(
   }
 }
 
-// POST: add a member to a group
+/**
+ * Adds a member to a group by the group's global id. Staff only. Accepts either a
+ * `userId` or an `email` to identify the user, who must be enrolled in the group's
+ * course and not already a member.
+ * @openapi
+ * summary: Add a group member by group id
+ * parameters:
+ *   - { name: gid, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         properties:
+ *           userId: { type: string, description: Provide this or email }
+ *           email: { type: string, description: Provide this or userId }
+ * responses:
+ *   201: { description: Member added. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller lacks a staff role. }
+ *   404: { description: Group or user not found. }
+ *   409: { description: User is already in the group. }
+ *   422: { description: User is not enrolled in the course. }
+ *   500: { description: Server error. }
+ */
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ gid: string; id?: string }> },

@@ -1,5 +1,3 @@
-// /src/app/api/courses/[id]/problems/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { writeFile, mkdir } from 'fs/promises';
@@ -23,12 +21,41 @@ async function ensureDirExists(dir: string) {
 // Upload directory path
 const uploadDir = path.join('/private', 'uploads', 'solutions');
 
-// POST: Create a new problem with optional solution file
+/**
+ * Creates a problem in a course from an uploaded solution file. Staff only
+ * (ADMIN/FACULTY/TA). The file is size-checked and stored under a generated name;
+ * `maxStates` applies to FA/PDA and `isDeterministic` to FA. (Sibling of
+ * POST /api/problems, scoped to the course in the path.)
+ * @openapi
+ * summary: Create a problem in a course
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     multipart/form-data:
+ *       schema:
+ *         type: object
+ *         required: [title, type, file]
+ *         properties:
+ *           title: { type: string }
+ *           description: { type: string }
+ *           type: { type: string, enum: [PDA, RE, CFG, FA] }
+ *           maxStates: { type: string, description: FA/PDA only }
+ *           isDeterministic: { type: string, enum: ['true', 'false'], description: FA only }
+ *           file: { type: string, format: binary }
+ * responses:
+ *   201: { description: The created problem. }
+ *   400: { description: Missing fields or file. }
+ *   403: { description: Caller lacks a staff role. }
+ *   404: { description: Course not found. }
+ *   413: { description: File exceeds the system upload limit. }
+ *   500: { description: Server error. }
+ */
 export async function POST(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id: courseId } = await context.params;
 
   try {
-    // Step 1: Authorize only TA, FACULTY, or ADMIN
     const session = await auth();
     const user = session?.user;
 
@@ -129,7 +156,26 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
   }
 }
 
-// GET: List all problems for a specific course
+/**
+ * Lists all problems in a course, newest first. Note: this handler performs no
+ * authentication, so the problem records (including stored solution filenames) are
+ * returned to any caller. The solution files themselves are served by a separate,
+ * access-controlled route.
+ * @openapi
+ * summary: List a course's problems
+ * description: >-
+ *   Returns every problem in the course. No authentication is enforced on this
+ *   endpoint.
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: The course's problems.
+ *     content:
+ *       application/json:
+ *         schema: { type: array, items: { type: object } }
+ *   500: { description: Server error. }
+ */
 export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id: courseId } = await context.params;
 

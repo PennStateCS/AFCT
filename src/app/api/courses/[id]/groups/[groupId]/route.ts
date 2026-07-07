@@ -3,12 +3,39 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
-// Respond to preflight requests
+/**
+ * CORS preflight handler.
+ * @openapi
+ * summary: CORS preflight
+ * responses:
+ *   204: { description: No content. }
+ */
 export async function OPTIONS() {
   return new NextResponse(null, { status: 204 });
 }
 
-// PATCH: update a group's name
+/**
+ * Renames a group. Staff only (ADMIN/FACULTY/TA). The group must belong to the
+ * course in the path, and the new name must be unique within that course.
+ * @openapi
+ * summary: Rename a group
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: groupId, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema: { type: object, required: [name], properties: { name: { type: string } } }
+ * responses:
+ *   200: { description: The updated group. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller lacks a staff role. }
+ *   404: { description: Group not found in this course. }
+ *   409: { description: Name already used by another group in the course. }
+ *   422: { description: Missing name. }
+ *   500: { description: Server error. }
+ */
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; groupId: string }> },
@@ -73,7 +100,21 @@ export async function PATCH(
   }
 }
 
-// DELETE: delete a group (and cascade group members)
+/**
+ * Deletes a group; its membership rows cascade away with it. Staff only. The group
+ * must belong to the course in the path.
+ * @openapi
+ * summary: Delete a group
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: groupId, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200: { description: Group deleted. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller lacks a staff role. }
+ *   404: { description: Group not found in this course. }
+ *   500: { description: Server error. }
+ */
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; groupId: string }> },

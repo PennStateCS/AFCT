@@ -1,5 +1,3 @@
-// /src/app/api/problems/[id]/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import fs from 'fs';
@@ -10,7 +8,40 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 
-// PUT /api/problems/[id] - Update an existing problem
+/**
+ * Updates a problem (multipart/form-data). Staff only (ADMIN/FACULTY/TA). Sending a
+ * new file replaces the stored solution — it's structure-validated and size-checked
+ * first, and the previous file is removed. Omitting the file keeps the current one.
+ * @openapi
+ * summary: Update a problem
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     multipart/form-data:
+ *       schema:
+ *         type: object
+ *         required: [title, type, courseId]
+ *         properties:
+ *           title: { type: string }
+ *           description: { type: string }
+ *           type: { type: string }
+ *           courseId: { type: string }
+ *           maxPoints: { type: string }
+ *           maxSubmissions: { type: string }
+ *           maxStates: { type: string }
+ *           isDeterministic: { type: string, enum: ['true', 'false'] }
+ *           autograderEnabled: { type: string, enum: ['true', 'false'] }
+ *           file: { type: string, format: binary, description: Optional new solution file }
+ * responses:
+ *   200: { description: The updated problem. }
+ *   400: { description: Missing fields or the new file failed structure validation. }
+ *   403: { description: Caller lacks a staff role. }
+ *   404: { description: Problem not found. }
+ *   413: { description: File exceeds the system upload limit. }
+ *   500: { description: Server error. }
+ */
 export async function PUT(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   let actorId: string | null = null;
   try {
@@ -170,7 +201,21 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
   }
 }
 
-// DELETE /api/problems/[id] - Delete a problem
+/**
+ * Deletes a problem and its solution file. Staff only (ADMIN/FACULTY/TA). Refused
+ * while the problem is still attached to any assignment; otherwise its submissions
+ * are removed first, then the record and file.
+ * @openapi
+ * summary: Delete a problem
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200: { description: Problem deleted. }
+ *   400: { description: Problem is still linked to an assignment. }
+ *   403: { description: Caller lacks a staff role. }
+ *   404: { description: Problem not found. }
+ *   500: { description: Server error. }
+ */
 export async function DELETE(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   let actorId: string | null = null;
   try {

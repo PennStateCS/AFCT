@@ -1,5 +1,3 @@
-// /src/api/courses/[id]/[aid]/route.ts
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { ProblemTypeEnum } from '@/schemas/problem';
@@ -39,9 +37,29 @@ interface AssignmentWithProblemsAndCourse {
   };
 }
 
-// GET: Fetch a specific assignment and related data within a course
+/**
+ * Fetches one assignment (scoped to the course) with its problems, a derived
+ * `maxPoints`, and — in the `full` view — the course roster. Shaped for the
+ * assignment detail page. Note: this handler performs no authentication, so the
+ * assignment and, in full view, the roster are readable by any caller.
+ * @openapi
+ * summary: Get a course assignment
+ * description: >-
+ *   Returns the assignment with its problems and, in the full view, the course
+ *   roster. No authentication is enforced on this endpoint.
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: aid, in: path, required: true, schema: { type: string } }
+ *   - name: view
+ *     in: query
+ *     description: '"full" (default) includes the roster; any other value omits it.'
+ *     schema: { type: string, default: full }
+ * responses:
+ *   200: { description: The assignment with problems (and roster in full view). }
+ *   404: { description: Assignment not found in this course. }
+ *   500: { description: Server error. }
+ */
 export async function GET(req: Request, context: { params: Promise<{ id: string; aid: string }> }) {
-  // Destructure courseId and assignmentId from the dynamic route parameters
   const { id: courseId, aid: assignmentId } = await context.params;
   const { searchParams } = new URL(req.url);
   const view = searchParams.get('view') ?? 'full';
