@@ -21,6 +21,7 @@ const eslintConfig = [
       'next-env.d.ts',
       'public/**',
       'src/generated/**',
+      'src/types/api.ts', // generated from the OpenAPI spec by `npm run docs:types`
     ],
   },
   ...compat.extends('next/core-web-vitals', 'next/typescript'),
