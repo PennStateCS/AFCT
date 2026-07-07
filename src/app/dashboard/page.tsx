@@ -81,7 +81,7 @@ export default async function DashboardPage() {
   const courseIds = courses.map((c) => c.id);
 
   const gradingRoleEntries = rosterEntries.filter(
-    (entry) => entry.role === 'TA' || entry.role === 'FACULTY' || entry.role === 'INSTRUCTOR',
+    (entry) => entry.role === 'TA' || entry.role === 'FACULTY',
   );
   const gradingCourseIds = gradingRoleEntries.map((entry) => entry.courseId);
   const showSubmissions = gradingCourseIds.length > 0;

@@ -48,7 +48,7 @@ function ActionsCell({
 
   // Treat site ADMIN as having course management privileges
   const isSiteAdmin = viewerDefaultRole === 'ADMIN';
-  const isCourseAdmin = currentCourseRole === 'INSTRUCTOR' || isSiteAdmin;
+  const isCourseAdmin = currentCourseRole === 'FACULTY' || isSiteAdmin;
 
   const handleDelete = async () => {
     try {
@@ -95,10 +95,8 @@ function ActionsCell({
     // Site admin can remove anyone
     if (isSiteAdmin) return true;
     if (!viewer) return false;
-    // Instructors can remove anyone except other instructors
-    if (viewer === 'INSTRUCTOR') return target !== 'INSTRUCTOR';
-    // Faculty can remove anyone except instructors and other faculty
-    if (viewer === 'FACULTY') return target !== 'INSTRUCTOR' && target !== 'FACULTY';
+    // Faculty can remove anyone except other faculty
+    if (viewer === 'FACULTY') return target !== 'FACULTY';
     return false;
   };
 
@@ -216,8 +214,7 @@ export const userColumns = (
 ): ColumnDef<User>[] => {
   const currentCourseRole = viewerRole ?? null;
   const isSiteAdmin = viewerDefaultRole === 'ADMIN';
-  const viewerHasActions =
-    isSiteAdmin || currentCourseRole === 'INSTRUCTOR' || currentCourseRole === 'FACULTY';
+  const viewerHasActions = isSiteAdmin || currentCourseRole === 'FACULTY';
 
   const cols: ColumnDef<User>[] = [
     {

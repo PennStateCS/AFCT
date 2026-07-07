@@ -230,7 +230,7 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
   console.log('[seed] development: setting explicit rosters for Charles Xavier and Oliver Green');
   try {
     if (charles?.id && charlesCmpen271Course) {
-      await upsertRoster(prisma, charlesCmpen271Course.id, charles.id, 'INSTRUCTOR');
+      await upsertRoster(prisma, charlesCmpen271Course.id, charles.id, 'FACULTY');
     }
 
     if (oliver?.id) {
