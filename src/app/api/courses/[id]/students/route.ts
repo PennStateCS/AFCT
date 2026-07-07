@@ -1,16 +1,28 @@
-// /src/app/api/courses/[id]/students/route.ts
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
+/**
+ * Returns just the STUDENT members of a course (user profiles). Staff only
+ * (ADMIN/FACULTY/TA).
+ * @openapi
+ * summary: List a course's students
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: The course's students.
+ *     content:
+ *       application/json:
+ *         schema: { type: array, items: { type: object } }
+ *   403: { description: Caller lacks a staff role. }
+ *   500: { description: Server error. }
+ */
 export async function GET(req: Request, context: { params: Promise<{ id: string }> }) {
-  // Extract the course ID from route parameters
   const { id: courseId } = await context.params;
 
   try {
-    // Check that the user is authenticated and authorized
     const session = await auth();
     const user = session?.user;
 
@@ -24,7 +36,6 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    // Query roster entries for the course
     const rosterEntries = await prisma.roster.findMany({
       where: { courseId },
       include: {
@@ -40,7 +51,6 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
       },
     });
 
-    // Filter users with STUDENT role
     const students = rosterEntries.filter((r: (typeof rosterEntries)[number]) => r.role === 'STUDENT').map((r: (typeof rosterEntries)[number]) => r.user);
 
     return NextResponse.json(students);

@@ -7,6 +7,30 @@ import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { BACKUP_DIR, isValidBackupName } from '@/lib/backups';
 
+/**
+ * Streams a single backup file to the caller as an attachment. Admin/Faculty only.
+ * A database dump contains the entire database (password hashes and all PII), so
+ * the download is always recorded as a SECURITY audit event. The filename is
+ * checked against a strict allow-list and the resolved path must stay inside the
+ * backup directory — two independent guards against path traversal.
+ * @openapi
+ * summary: Download a backup file
+ * parameters:
+ *   - name: file
+ *     in: query
+ *     required: true
+ *     description: Exact backup filename from the list endpoint.
+ *     schema: { type: string }
+ * responses:
+ *   200:
+ *     description: The backup file as an octet-stream attachment.
+ *     content:
+ *       application/octet-stream:
+ *         schema: { type: string, format: binary }
+ *   400: { description: Filename failed the allow-list or path check. }
+ *   403: { description: Caller is not an admin or faculty user. }
+ *   404: { description: The backup file does not exist. }
+ */
 export async function GET(req: Request) {
   const session = await auth();
   const role = session?.user?.role;

@@ -3,7 +3,22 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
-// DELETE: remove a user from a group
+/**
+ * Removes a user from a group, addressed by the group's and user's global ids.
+ * Staff only (ADMIN/FACULTY/TA).
+ * @openapi
+ * summary: Remove a group member by ids
+ * parameters:
+ *   - { name: gid, in: path, required: true, schema: { type: string } }
+ *   - { name: uid, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200: { description: Member removed. }
+ *   400: { description: Missing ids. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller lacks a staff role. }
+ *   404: { description: Group or membership not found. }
+ *   500: { description: Server error. }
+ */
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ gid: string; uid: string; id?: string }> },

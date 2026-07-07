@@ -2,7 +2,23 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-// GET: list groups for a course
+
+/**
+ * Lists a course's groups, alphabetically. Staff only (ADMIN/FACULTY/TA).
+ * @openapi
+ * summary: List course groups
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: The course's groups.
+ *     content:
+ *       application/json:
+ *         schema: { type: array, items: { type: object } }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller lacks a staff role. }
+ *   500: { description: Server error. }
+ */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
@@ -47,7 +63,34 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 }
 
-// POST: supports both create and "list via body" to avoid client-side use of AbortController.signal.
+/**
+ * Creates a group in the course. Staff only (ADMIN/FACULTY/TA). Also doubles as a
+ * "list" endpoint: a body of `{ action: 'list' }` returns the groups instead of
+ * creating one — a workaround so the client can list without needing a GET's
+ * AbortController plumbing. Group names are unique per course.
+ * @openapi
+ * summary: Create a course group (or list via body)
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         properties:
+ *           name: { type: string, description: New group name (create mode) }
+ *           action: { type: string, enum: [list], description: Return the group list instead of creating }
+ * responses:
+ *   200: { description: The group list (when action is "list"). }
+ *   201: { description: The created group. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller lacks a staff role. }
+ *   404: { description: Course not found. }
+ *   409: { description: A group with that name already exists in the course. }
+ *   422: { description: Missing group name. }
+ *   500: { description: Server error. }
+ */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 

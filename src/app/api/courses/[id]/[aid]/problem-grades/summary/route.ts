@@ -3,6 +3,26 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
+/**
+ * Per-student completion summary for one assignment: maps each student to whether
+ * every problem in the assignment has been graded (used to flag fully-graded
+ * students in the grading UI). Staff only (ADMIN/FACULTY/TA).
+ * @openapi
+ * summary: Get an assignment's grading-completion summary
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: aid, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: A map of studentId → fully-graded boolean (empty object if the assignment has no problems).
+ *     content:
+ *       application/json:
+ *         schema: { type: object, additionalProperties: { type: boolean } }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller lacks a staff role. }
+ *   404: { description: Assignment not found in this course. }
+ *   500: { description: Server error. }
+ */
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string; aid: string }> },

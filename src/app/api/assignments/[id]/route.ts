@@ -1,5 +1,3 @@
-// /src/app/api/assignments/[id]
-
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
@@ -80,7 +78,21 @@ function computeLateSubmissionState(options: {
   return { ok: true, allowLateSubmissions, lateCutoff };
 }
 
-// Get a single assignment by ID
+/**
+ * Fetches one assignment with its course and problems, plus a derived `maxPoints`
+ * total. Visibility is role-aware: students only see published assignments in
+ * courses they're enrolled in, faculty/TA need access to the course, and admins see
+ * anything. Anything the caller may not see is masked as a 404.
+ * @openapi
+ * summary: Get an assignment
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200: { description: The assignment with its problems and maxPoints. }
+ *   401: { description: Not signed in. }
+ *   404: { description: Not found, or not visible to the caller. }
+ *   500: { description: Server error. }
+ */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
 
@@ -156,7 +168,36 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 }
 
-// Update an existing assignment (full update)
+/**
+ * Full update of an assignment. Staff only (ADMIN/FACULTY/TA). Guards protect data
+ * integrity: an assignment can't be unpublished once it has submissions or grades,
+ * and its group mode can't change after any submission exists. Late-submission
+ * rules are validated the same way as on create.
+ * @openapi
+ * summary: Update an assignment (full)
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         properties:
+ *           title: { type: string }
+ *           description: { type: string }
+ *           dueDate: { type: string }
+ *           allowLateSubmissions: { type: boolean }
+ *           lateCutoff: { type: string, nullable: true }
+ *           isPublished: { type: boolean }
+ *           isGroup: { type: boolean }
+ * responses:
+ *   200: { description: The updated assignment. }
+ *   400: { description: Inconsistent late-submission window. }
+ *   403: { description: Not staff, or a state guard blocked the change. }
+ *   404: { description: Assignment not found. }
+ *   500: { description: Server error. }
+ */
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
@@ -307,7 +348,35 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 }
 
-// Partial update of an assignment (PATCH)
+/**
+ * Partial update of an assignment — only the fields present in the body are
+ * changed. Staff only (ADMIN/FACULTY/TA), with the same unpublish/group-mode guards
+ * and late-window validation as the full update.
+ * @openapi
+ * summary: Update an assignment (partial)
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         properties:
+ *           title: { type: string }
+ *           description: { type: string }
+ *           dueDate: { type: string }
+ *           allowLateSubmissions: { type: boolean }
+ *           lateCutoff: { type: string, nullable: true }
+ *           isPublished: { type: boolean }
+ *           isGroup: { type: boolean }
+ * responses:
+ *   200: { description: The updated assignment. }
+ *   400: { description: Inconsistent late-submission window. }
+ *   403: { description: Not staff, or a state guard blocked the change. }
+ *   404: { description: Assignment not found. }
+ *   500: { description: Server error. }
+ */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
@@ -470,7 +539,37 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 }
 
-// Create a new assignment (POST /api/assignments/[id])
+/**
+ * Creates an assignment. Staff only (ADMIN/FACULTY/TA). Note: this handler ignores
+ * the `[id]` path segment and takes the course from the body — it mirrors
+ * POST /api/assignments and exists for clients that post to this path. (One
+ * difference: late submissions default to on here.)
+ * @openapi
+ * summary: Create an assignment (alias)
+ * parameters:
+ *   - { name: id, in: path, required: true, description: Ignored by this handler, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [title, courseId]
+ *         properties:
+ *           title: { type: string }
+ *           description: { type: string }
+ *           courseId: { type: string }
+ *           dueDate: { type: string }
+ *           allowLateSubmissions: { type: boolean }
+ *           lateCutoff: { type: string }
+ *           isPublished: { type: boolean }
+ *           isGroup: { type: boolean }
+ * responses:
+ *   201: { description: The created assignment. }
+ *   400: { description: Missing fields, or an inconsistent late-submission window. }
+ *   403: { description: Caller lacks a staff role. }
+ *   500: { description: Server error. }
+ */
 export async function POST(req: NextRequest) {
   const session = await auth();
 
@@ -564,7 +663,21 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// Delete an assignment if safe
+/**
+ * Deletes an assignment, but only when it's safe: no submissions and no comments.
+ * Its problem links are cleared first, then the assignment is removed. Staff only
+ * (ADMIN/FACULTY/TA).
+ * @openapi
+ * summary: Delete an assignment
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200: { description: Assignment deleted. }
+ *   400: { description: Submissions or comments exist. }
+ *   403: { description: Caller lacks a staff role. }
+ *   404: { description: Assignment not found. }
+ *   500: { description: Server error. }
+ */
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
