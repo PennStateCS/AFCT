@@ -74,6 +74,27 @@ const TAG_DESCRIPTIONS = {
   public: 'Public credential verification.',
 };
 
+// ── Redoc page options ───────────────────────────────────────────────────────
+// Flip these to change the rendered docs page (docs-dist/index.html); they're
+// passed straight to Redoc.init(). Full reference: https://redocly.com/docs/redoc/config
+const REDOC_OPTIONS = {
+  disableSearch: false, // true = hide the left-nav search box
+  hideDownloadButton: false, // true = hide the "Download" (raw openapi.json) button
+  expandResponses: '200,201', // which responses start expanded: 'all' | '200,201' | '' (none)
+  jsonSampleExpandLevel: 2, // depth JSON samples auto-expand to: a number, or 'all'
+  sortOperationsAlphabetically: false, // sort operations within a tag in the nav
+  sortTagsAlphabetically: false, // sort tag groups in the nav (already sorted in the spec)
+  onlyRequiredInSamples: false, // true = request samples show only required fields
+  hideSchemaTitles: false, // true = hide schema names above object schemas
+  hideSingleRequestSampleTab: false, // true = collapse the sample tab when there's only one
+  menuToggle: true, // let readers collapse tag groups in the nav
+  pathInMiddlePanel: true, // show the request path in the content panel
+  requiredPropsFirst: true, // list required properties before optional ones
+  sortPropsAlphabetically: true, // sort object properties A–Z
+  // Branding — uncomment and set to match the app:
+  // theme: { colors: { primary: { main: '#2563eb' } }, sidebar: { width: '280px' } },
+};
+
 function findRoutes(dir) {
   const out = [];
   for (const name of readdirSync(dir)) {
@@ -322,13 +343,7 @@ const REDOC_HTML = `<!doctype html>
   <script>
     Redoc.init(
       'openapi.json',
-      {
-        hideDownloadButton: false, // keep the button to download the raw spec
-        expandResponses: '200,201',
-        requiredPropsFirst: true,
-        sortPropsAlphabetically: true,
-        pathInMiddlePanel: true,
-      },
+      ${JSON.stringify(REDOC_OPTIONS, null, 6)},
       document.getElementById('redoc'),
     );
   </script>
