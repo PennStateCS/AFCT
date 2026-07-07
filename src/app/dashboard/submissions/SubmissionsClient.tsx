@@ -168,7 +168,7 @@ const fetchSubmissions = async (problemIds: string[]): Promise<SubmissionItem[]>
   return (await response.json()) as SubmissionItem[];
 };
 
-export default function SystemSubmissionClient() {
+export default function SubmissionsClient() {
   const [courses, setCourses] = useState<CourseItem[]>([]);
   const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
   const [problems, setProblems] = useState<ProblemItem[]>([]);

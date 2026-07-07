@@ -48,7 +48,7 @@ const SEVERITY_VARIANT: Record<Severity, 'info' | 'warning' | 'danger' | 'destru
   SECURITY: 'destructive',
 };
 
-export default function SystemLoggingClient() {
+export default function SystemLogsClient() {
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
