@@ -41,7 +41,7 @@ async function resolveUserTimezone(userId?: string | null) {
  *           isGroup: { type: boolean }
  * responses:
  *   201: { description: The created assignment. }
- *   400: { description: Missing fields, or an inconsistent late-submission window. }
+ *   400: { description: "Missing fields, or an inconsistent late-submission window." }
  *   403: { description: Caller lacks a staff role. }
  *   500: { description: Server error. }
  */

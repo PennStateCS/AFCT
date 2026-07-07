@@ -58,8 +58,8 @@ const submissionSelectWithoutEvaluation = {
  *       application/json:
  *         schema: { type: object }
  *   401: { description: Not signed in. }
- *   403: { description: Not staff and requesting another student's submissions, or not enrolled. }
- *   404: { description: Assignment not found, or it has no linked problems. }
+ *   403: { description: "Not staff and requesting another student's submissions, or not enrolled." }
+ *   404: { description: "Assignment not found, or it has no linked problems." }
  *   500: { description: Server error. }
  */
 export async function GET(

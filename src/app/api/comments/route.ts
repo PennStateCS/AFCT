@@ -75,7 +75,7 @@ const createCommentSchema = z.object({
  *   400: { description: Validation failed. }
  *   401: { description: Not signed in. }
  *   403: { description: Author is not enrolled in the course. }
- *   404: { description: Assignment, problem, or named student not found. }
+ *   404: { description: "Assignment, problem, or named student not found." }
  *   500: { description: Server error. }
  */
 export async function POST(request: NextRequest) {

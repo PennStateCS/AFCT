@@ -25,7 +25,7 @@ import { canUnpublishCourse } from '@/lib/course-status-checks';
  *   200:
  *     description: The updated course (id, name, code, isPublished, updatedAt).
  *   400: { description: isPublished must be a boolean. }
- *   403: { description: Not staff, or unpublishing is blocked by the safety check. }
+ *   403: { description: "Not staff, or unpublishing is blocked by the safety check." }
  *   500: { description: Server error. }
  */
 export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {

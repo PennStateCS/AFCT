@@ -80,7 +80,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
  *   401: { description: Not signed in. }
  *   403: { description: Caller lacks a staff role. }
  *   404: { description: Group not found in this course. }
- *   422: { description: Missing userId, or the user isn't enrolled in the course. }
+ *   422: { description: "Missing userId, or the user isn't enrolled in the course." }
  *   500: { description: Server error. }
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string; groupId: string }> }) {
@@ -174,7 +174,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
  *   401: { description: Not signed in. }
  *   403: { description: Not a global admin or course staff. }
  *   404: { description: Group not found in this course. }
- *   422: { description: Missing members array, or some users aren't enrolled. }
+ *   422: { description: "Missing members array, or some users aren't enrolled." }
  *   500: { description: Server error. }
  */
 export async function PATCH(req: NextRequest, context: { params: Promise<{ id: string; groupId: string }> }) {
