@@ -28,6 +28,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/status/abandoned-files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete an orphaned upload
+         * @description Deletes a single orphaned upload — a file on disk that no DB row references  (see the abandoned-file report on the status dashboard). System administrators  only. Guards on every axis: the category must be known, the name  must be separator-free, the file must still be unreferenced, and the resolved  path must stay inside its category folder.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/abandoned-files/route.ts)
+         */
+        delete: operations["deleteAdminStatusAbandonedFiles"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Operational status snapshot
+         * @description Aggregated health and diagnostics for the status dashboard (system administrators only). Returns host metrics, DB engine stats, masked env keys, active-session and error-rate summaries, and abandoned-file counts. Fields are best-effort — any probe that fails is simply omitted.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/route.ts)
+         */
+        get: operations["getAdminStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/submissions": {
         parameters: {
             query?: never;
@@ -1664,52 +1710,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/status/abandoned-files": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete an orphaned upload
-         * @description Deletes a single orphaned upload — a file on disk that no DB row references  (see the abandoned-file report on the status dashboard). System administrators  only. Guards on every axis: the category must be known, the name  must be separator-free, the file must still be unreferenced, and the resolved  path must stay inside its category folder.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/status/abandoned-files/route.ts)
-         */
-        delete: operations["deleteStatusAbandonedFiles"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Operational status snapshot
-         * @description Aggregated health and diagnostics for the status dashboard (system administrators only). Returns host metrics, DB engine stats, masked env keys, active-session and error-rate summaries, and abandoned-file counts. Fields are best-effort — any probe that fails is simply omitted.
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/status/route.ts)
-         */
-        get: operations["getStatus"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/submissions/{id}/rerun": {
         parameters: {
             query?: never;
@@ -2197,6 +2197,125 @@ export interface operations {
             };
             /** @description Reset failed. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteAdminStatusAbandonedFiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    category: "solutions" | "submissions" | "pfps" | "problems";
+                    /** @description Bare filename, no path separators */
+                    fileName: string;
+                };
+            };
+        };
+        responses: {
+            /** @description File deleted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok?: boolean;
+                    };
+                };
+            };
+            /** @description Unknown category, unsafe filename, or path outside the category folder. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in, or not a system administrator. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description File not found on disk. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description A DB row still references this file — refused. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminStatus: {
+        parameters: {
+            query?: {
+                /** @description Set to "1" to include the most expensive probes (e.g. Postgres top-queries). */
+                deep?: "1";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A best-effort diagnostic snapshot (fields vary by DB engine and environment). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description Host and process metrics */
+                        system?: Record<string, never>;
+                        /** @description Reachability, engine details, and stats */
+                        database?: Record<string, never>;
+                        /** @description Public vars plus masked key/length summary */
+                        env?: Record<string, never>;
+                        /** @description Optional row counts and tool versions */
+                        app?: Record<string, never>;
+                        /** @description Detected DB provider and request latency */
+                        metrics?: Record<string, never>;
+                    };
+                };
+            };
+            /** @description Caller is not a system administrator. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7414,125 +7533,6 @@ export interface operations {
             };
             /** @description Server error. */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    deleteStatusAbandonedFiles: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @enum {string} */
-                    category: "solutions" | "submissions" | "pfps" | "problems";
-                    /** @description Bare filename, no path separators */
-                    fileName: string;
-                };
-            };
-        };
-        responses: {
-            /** @description File deleted. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        ok?: boolean;
-                    };
-                };
-            };
-            /** @description Unknown category, unsafe filename, or path outside the category folder. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not signed in, or not a system administrator. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description File not found on disk. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description A DB row still references this file — refused. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    getStatus: {
-        parameters: {
-            query?: {
-                /** @description Set to "1" to include the most expensive probes (e.g. Postgres top-queries). */
-                deep?: "1";
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description A best-effort diagnostic snapshot (fields vary by DB engine and environment). */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** @description Host and process metrics */
-                        system?: Record<string, never>;
-                        /** @description Reachability, engine details, and stats */
-                        database?: Record<string, never>;
-                        /** @description Public vars plus masked key/length summary */
-                        env?: Record<string, never>;
-                        /** @description Optional row counts and tool versions */
-                        app?: Record<string, never>;
-                        /** @description Detected DB provider and request latency */
-                        metrics?: Record<string, never>;
-                    };
-                };
-            };
-            /** @description Caller is not a system administrator. */
-            403: {
                 headers: {
                     [name: string]: unknown;
                 };
