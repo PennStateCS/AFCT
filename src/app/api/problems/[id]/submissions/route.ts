@@ -10,7 +10,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
  * summary: List a user's submissions for a problem
  * parameters:
  *   - { name: id, in: path, required: true, description: Problem id, schema: { type: string } }
- *   - { name: userId, in: query, description: Whose submissions to fetch; staff only for others, defaults to the caller, schema: { type: string } }
+ *   - { name: userId, in: query, description: "Whose submissions to fetch; staff only for others, defaults to the caller", schema: { type: string } }
  * responses:
  *   200:
  *     description: The submissions, newest first.

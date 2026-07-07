@@ -34,9 +34,9 @@ import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
  *           file: { type: string, format: binary, description: The solution file (XML) }
  * responses:
  *   202: { description: Submission accepted and queued (status PENDING). }
- *   400: { description: Missing fields, unlinked problem, or invalid file structure. }
+ *   400: { description: "Missing fields, unlinked problem, or invalid file structure." }
  *   401: { description: Not signed in. }
- *   403: { description: Not enrolled, or the late/late-cutoff policy rejected it. }
+ *   403: { description: "Not enrolled, or the late/late-cutoff policy rejected it." }
  *   404: { description: Assignment not found. }
  *   413: { description: File exceeds the system upload limit. }
  *   429: { description: Resubmit cooldown in effect (see Retry-After). }
