@@ -1,5 +1,23 @@
 import { NextResponse } from 'next/server';
 
+/**
+ * Lightweight liveness check used by the container healthcheck. No auth, no DB.
+ * @openapi
+ * responses:
+ *   200:
+ *     description: Service is healthy.
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             status: { type: string, example: ok }
+ *             uptime: { type: number }
+ *             environment: { type: string }
+ *             version: { type: string }
+ *   503:
+ *     description: Health check failed.
+ */
 export async function GET() {
   try {
     // Basic health check - you can add more checks here like DB connectivity
