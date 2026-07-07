@@ -21,7 +21,8 @@ type AssignmentProblemSettingsInput = z.infer<typeof AssignmentProblemSettingsSc
 
 /**
  * Updates the per-assignment settings for one problem: its point value, submission
- * cap, and whether the autograder runs. Staff only (ADMIN/FACULTY/TA). The problem
+ * cap, and whether the autograder runs. Course staff (faculty or TAs) or a system
+ * admin. The problem
  * must already be linked to the assignment, and the assignment must belong to the
  * course in the path.
  * @openapi
@@ -44,7 +45,7 @@ type AssignmentProblemSettingsInput = z.infer<typeof AssignmentProblemSettingsSc
  * responses:
  *   200: { description: The updated assignment-problem settings. }
  *   400: { description: Invalid JSON or settings. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Caller is not course staff (faculty or TA) or a system admin. }
  *   404: { description: The problem isn't linked to this assignment/course. }
  *   500: { description: Server error. }
  */

@@ -8,8 +8,8 @@ import { canManageCourse } from '@/lib/permissions';
 
 /**
  * Serves a submission's uploaded file as a download. Restricted to the submitting
- * student and to staff (ADMIN/FACULTY/TA). The download is audited, and traversal
- * filenames are rejected.
+ * student, course staff (faculty or TAs), or a system admin. The download is audited,
+ * and traversal filenames are rejected.
  * @openapi
  * summary: Get a submission file
  * parameters:
@@ -22,7 +22,7 @@ import { canManageCourse } from '@/lib/permissions';
  *         schema: { type: string, format: binary }
  *   400: { description: Invalid filename. }
  *   401: { description: Not signed in. }
- *   403: { description: Not the submitting student and not staff. }
+ *   403: { description: "Not the submitting student, course staff, or a system admin." }
  *   404: { description: File not found. }
  *   500: { description: Server error. }
  */

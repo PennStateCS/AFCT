@@ -7,8 +7,7 @@ import { canAccessCourse } from '@/lib/permissions';
 /**
  * Returns a paginated activity feed for one course — logs tied directly to the
  * course plus its assignments, problems, submissions, and recent logins by course
- * members. Staff (ADMIN/FACULTY/TA) may view any course; everyone else must be on
- * the roster.
+ * members. Any enrolled member of the course (any role) or a system admin.
  * @openapi
  * summary: Get a course's activity feed
  * parameters:
@@ -27,7 +26,7 @@ import { canAccessCourse } from '@/lib/permissions';
  *             totalCount: { type: integer }
  *             hasMore: { type: boolean }
  *   401: { description: Not signed in. }
- *   403: { description: Not enrolled and not staff. }
+ *   403: { description: Not enrolled in the course and not a system admin. }
  *   404: { description: Course not found. }
  *   500: { description: Server error. }
  */

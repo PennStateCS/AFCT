@@ -42,13 +42,14 @@ interface AssignmentWithProblemsAndCourse {
 /**
  * Fetches one assignment (scoped to the course) with its problems, a derived
  * `maxPoints`, and — in the `full` view — the course roster. Shaped for the
- * assignment detail page. Access is restricted: staff (ADMIN/FACULTY/TA) may view
- * any assignment; everyone else must be enrolled in the course.
+ * assignment detail page. Access: any enrolled member of the course (any role) or a
+ * system admin.
  * @openapi
  * summary: Get a course assignment
  * description: >-
  *   Returns the assignment with its problems and, in the full view, the course
- *   roster. Requires a session; non-staff callers must be enrolled in the course.
+ *   roster. Requires a session; the caller must be an enrolled member of the course
+ *   (any role) or a system admin.
  * parameters:
  *   - { name: id, in: path, required: true, schema: { type: string } }
  *   - { name: aid, in: path, required: true, schema: { type: string } }
@@ -59,7 +60,7 @@ interface AssignmentWithProblemsAndCourse {
  * responses:
  *   200: { description: The assignment with problems (and roster in full view). }
  *   401: { description: Not signed in. }
- *   403: { description: Not staff and not enrolled in the course. }
+ *   403: { description: Not an enrolled member of the course and not a system admin. }
  *   404: { description: Assignment not found in this course. }
  *   500: { description: Server error. }
  */
@@ -74,7 +75,7 @@ export async function GET(req: Request, context: { params: Promise<{ id: string;
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    // Access: staff may view any assignment; everyone else must be enrolled.
+    // Access: any enrolled member of the course (any role) or a system admin.
     if (!(await canAccessCourse(session.user, courseId))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

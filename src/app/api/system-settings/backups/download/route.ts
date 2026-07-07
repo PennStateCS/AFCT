@@ -9,7 +9,7 @@ import { isAdmin } from '@/lib/permissions';
 import { BACKUP_DIR, isValidBackupName } from '@/lib/backups';
 
 /**
- * Streams a single backup file to the caller as an attachment. Admin/Faculty only.
+ * Streams a single backup file to the caller as an attachment. System administrators only.
  * A database dump contains the entire database (password hashes and all PII), so
  * the download is always recorded as a SECURITY audit event. The filename is
  * checked against a strict allow-list and the resolved path must stay inside the
@@ -29,7 +29,7 @@ import { BACKUP_DIR, isValidBackupName } from '@/lib/backups';
  *       application/octet-stream:
  *         schema: { type: string, format: binary }
  *   400: { description: Filename failed the allow-list or path check. }
- *   403: { description: Caller is not an admin or faculty user. }
+ *   403: { description: Caller is not a system administrator. }
  *   404: { description: The backup file does not exist. }
  */
 export async function GET(req: Request) {

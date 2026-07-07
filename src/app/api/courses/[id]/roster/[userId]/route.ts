@@ -165,8 +165,9 @@ export async function DELETE(
 
 /**
  * Returns one roster entry (with the user's profile) plus the viewer's own course
- * and global roles, so the UI can decide which actions to offer. Any signed-in
- * user may call it; `userId` may be the literal "me" to target the caller.
+ * role and an `viewerIsAdmin` flag, so the UI can decide which actions to offer.
+ * Any signed-in user may call it; `userId` may be the literal "me" to target the
+ * caller.
  * @openapi
  * summary: Get a roster entry
  * parameters:
@@ -174,7 +175,7 @@ export async function DELETE(
  *   - { name: userId, in: path, required: true, description: 'A user id, or "me" for the caller', schema: { type: string } }
  * responses:
  *   200:
- *     description: The roster entry and the viewer's roles.
+ *     description: The roster entry, the viewer's course role, and viewerIsAdmin.
  *   401: { description: Not signed in. }
  *   404: { description: No roster entry for that user in this course. }
  *   500: { description: Server error. }
@@ -250,9 +251,9 @@ export async function GET(
  * responses:
  *   200:
  *     description: Role updated.
- *   400: { description: "Invalid role, or demoting the only instructor." }
+ *   400: { description: "Invalid role, or demoting the only faculty member." }
  *   401: { description: Not signed in. }
- *   403: { description: Caller is not an admin or the course instructor. }
+ *   403: { description: Caller is not a system admin or a course faculty member. }
  *   404: { description: Roster entry not found. }
  *   500: { description: Server error. }
  */

@@ -5,8 +5,8 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canManageCourse } from '@/lib/permissions';
 
 /**
- * Removes one member from a group. Staff only (ADMIN/FACULTY/TA). The group must
- * belong to the course in the path and the membership must exist.
+ * Removes one member from a group. Course staff (faculty or TAs) or a system admin.
+ * The group must belong to the course in the path and the membership must exist.
  * @openapi
  * summary: Remove a group member
  * parameters:
@@ -16,7 +16,7 @@ import { canManageCourse } from '@/lib/permissions';
  * responses:
  *   200: { description: Member removed. }
  *   401: { description: Not signed in. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Not course staff or a system admin. }
  *   404: { description: Group or membership not found. }
  *   500: { description: Server error. }
  */

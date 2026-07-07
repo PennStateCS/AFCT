@@ -8,8 +8,9 @@ import { canManageCourse } from '@/lib/permissions';
 
 /**
  * Serves a problem's solution file — the most sensitive protected material, so
- * access is limited to staff (ADMIN/FACULTY/TA) and every successful serve is
- * audited (both inline and `?download=1`). Traversal filenames are rejected.
+ * access is limited to course staff (faculty or TAs) or a system admin, and every
+ * successful serve is audited (both inline and `?download=1`). Traversal filenames
+ * are rejected.
  * @openapi
  * summary: Get a solution file
  * parameters:
@@ -23,7 +24,7 @@ import { canManageCourse } from '@/lib/permissions';
  *         schema: { type: string, format: binary }
  *   400: { description: Invalid filename. }
  *   401: { description: Not signed in. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Caller is not course staff or a system admin. }
  *   404: { description: File not found. }
  *   500: { description: Server error. }
  */

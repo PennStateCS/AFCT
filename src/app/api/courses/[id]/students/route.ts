@@ -5,8 +5,8 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canManageCourse } from '@/lib/permissions';
 
 /**
- * Returns just the STUDENT members of a course (user profiles). Staff only
- * (ADMIN/FACULTY/TA).
+ * Returns just the STUDENT members of a course (user profiles). Course staff
+ * (faculty or TAs) or a system admin.
  * @openapi
  * summary: List a course's students
  * parameters:
@@ -17,7 +17,7 @@ import { canManageCourse } from '@/lib/permissions';
  *     content:
  *       application/json:
  *         schema: { type: array, items: { type: object } }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Not course staff (faculty or TAs) or a system admin. }
  *   500: { description: Server error. }
  */
 export async function GET(req: Request, context: { params: Promise<{ id: string }> }) {

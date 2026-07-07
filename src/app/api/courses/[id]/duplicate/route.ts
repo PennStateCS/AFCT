@@ -46,7 +46,7 @@ async function generateUniqueCourseCode() {
  * asked. `copyMode` (or the legacy copyAssignments/copyProblems booleans) selects
  * what carries over: assignments only, problems only, or assignments with their
  * problems. The copy always starts unpublished with a fresh registration code.
- * FACULTY/ADMIN/TA only. Dates are interpreted in the actor's timezone.
+ * System administrators only. Dates are interpreted in the actor's timezone.
  * @openapi
  * summary: Duplicate a course
  * parameters:
@@ -81,7 +81,7 @@ async function generateUniqueCourseCode() {
  *         schema: { type: object, properties: { id: { type: string }, message: { type: string } } }
  *   400: { description: "Missing fields, bad credits, bad code, or invalid dates." }
  *   401: { description: Not signed in. }
- *   403: { description: Caller may not duplicate courses. }
+ *   403: { description: System administrators only (logged as a security event). }
  *   500: { description: Server error. }
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

@@ -7,8 +7,9 @@ import { canManageCourse } from '@/lib/permissions';
 
 /**
  * Re-queues one submission for evaluation, resetting it to PENDING and clearing its
- * prior feedback/result. Staff only (ADMIN/FACULTY/TA). The submission must have a
- * stored file and its problem must still be linked to the assignment.
+ * prior feedback/result. Course staff (faculty or TAs) or a system admin. The
+ * submission must have a stored file and its problem must still be linked to the
+ * assignment.
  * @openapi
  * summary: Rerun a submission
  * parameters:
@@ -17,7 +18,7 @@ import { canManageCourse } from '@/lib/permissions';
  *   202: { description: Submission re-queued (status PENDING). }
  *   400: { description: "Submission has no file, or its problem is no longer linked." }
  *   401: { description: Not signed in. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Caller is not course staff or a system admin. }
  *   404: { description: Submission not found. }
  *   500: { description: Server error. }
  */

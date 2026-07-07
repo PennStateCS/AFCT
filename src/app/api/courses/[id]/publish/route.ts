@@ -6,7 +6,8 @@ import { canUnpublishCourse } from '@/lib/course-status-checks';
 import { canManageCourse, COURSE_FACULTY_ROLES } from '@/lib/permissions';
 
 /**
- * Toggles a course's published state. ADMIN/FACULTY only. Unpublishing runs a
+ * Toggles a course's published state. Course faculty or a system admin (TAs
+ * excluded). Unpublishing runs a
  * safety check (canUnpublishCourse) that refuses if students would lose access to
  * work already in progress.
  * @openapi
@@ -26,7 +27,7 @@ import { canManageCourse, COURSE_FACULTY_ROLES } from '@/lib/permissions';
  *   200:
  *     description: The updated course (id, name, code, isPublished, updatedAt).
  *   400: { description: isPublished must be a boolean. }
- *   403: { description: "Not staff, or unpublishing is blocked by the safety check." }
+ *   403: { description: "Not course faculty or a system admin (TAs excluded), or unpublishing is blocked by the safety check." }
  *   500: { description: Server error. }
  */
 export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {

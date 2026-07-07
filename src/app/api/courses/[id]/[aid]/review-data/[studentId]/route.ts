@@ -47,9 +47,9 @@ const submissionSelectWithoutEvaluation = {
  * them, and their per-problem grades. Falls back gracefully if the optional
  * `evaluationRaw` column is absent.
  *
- * Access: staff (ADMIN/FACULTY/TA) may read any student's data; a non-staff user
- * may read only their own (`studentId` must be their id). Course membership is also
- * required, except for global admins.
+ * Access: the student themselves, course staff, or a system admin (`studentId` must
+ * be the caller's id unless they are course staff or a system admin). Course
+ * membership is also required, except for global admins.
  * @openapi
  * summary: Get a student's review data for an assignment
  * parameters:
@@ -68,7 +68,7 @@ const submissionSelectWithoutEvaluation = {
  *             comments: { type: array, items: { type: object } }
  *             problemGrades: { type: object }
  *   401: { description: Not signed in. }
- *   403: { description: "Not staff and requesting another student's data, or not enrolled." }
+ *   403: { description: "Requesting another student's data without being course staff or a system admin, or not an enrolled member of the course." }
  *   404: { description: Assignment not found for this course. }
  *   500: { description: Server error. }
  */

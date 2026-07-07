@@ -143,7 +143,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 /**
- * Full update of an assignment. Staff only (ADMIN/FACULTY/TA). Guards protect data
+ * Full update of an assignment. Course staff (faculty or TAs) or a system admin.
+ * Guards protect data
  * integrity: an assignment can't be unpublished once it has submissions or grades,
  * and its group mode can't change after any submission exists. Late-submission
  * rules are validated the same way as on create.
@@ -168,7 +169,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
  * responses:
  *   200: { description: The updated assignment. }
  *   400: { description: Inconsistent late-submission window. }
- *   403: { description: "Not staff, or a state guard blocked the change." }
+ *   401: { description: Not signed in. }
+ *   403: { description: "Not course staff or a system admin, or a state guard blocked the change." }
  *   404: { description: Assignment not found. }
  *   500: { description: Server error. }
  */
@@ -335,8 +337,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
 /**
  * Partial update of an assignment — only the fields present in the body are
- * changed. Staff only (ADMIN/FACULTY/TA), with the same unpublish/group-mode guards
- * and late-window validation as the full update.
+ * changed. Course staff (faculty or TAs) or a system admin, with the same
+ * unpublish/group-mode guards and late-window validation as the full update.
  * @openapi
  * summary: Update an assignment (partial)
  * parameters:
@@ -358,7 +360,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
  * responses:
  *   200: { description: The updated assignment. }
  *   400: { description: Inconsistent late-submission window. }
- *   403: { description: "Not staff, or a state guard blocked the change." }
+ *   401: { description: Not signed in. }
+ *   403: { description: "Not course staff or a system admin, or a state guard blocked the change." }
  *   404: { description: Assignment not found. }
  *   500: { description: Server error. }
  */
@@ -536,7 +539,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 /**
- * Creates an assignment. Staff only (ADMIN/FACULTY/TA). Note: this handler ignores
+ * Creates an assignment. Course staff (faculty or TAs) or a system admin, checked
+ * against the body's courseId. Note: this handler ignores
  * the `[id]` path segment and takes the course from the body — it mirrors
  * POST /api/assignments and exists for clients that post to this path. (One
  * difference: late submissions default to on here.)
@@ -563,7 +567,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
  * responses:
  *   201: { description: The created assignment. }
  *   400: { description: "Missing fields, or an inconsistent late-submission window." }
- *   403: { description: Caller lacks a staff role. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Not course staff or a system admin. }
  *   500: { description: Server error. }
  */
 export async function POST(req: NextRequest) {
@@ -665,8 +670,8 @@ export async function POST(req: NextRequest) {
 
 /**
  * Deletes an assignment, but only when it's safe: no submissions and no comments.
- * Its problem links are cleared first, then the assignment is removed. Staff only
- * (ADMIN/FACULTY/TA).
+ * Its problem links are cleared first, then the assignment is removed. Course staff
+ * (faculty or TAs) or a system admin.
  * @openapi
  * summary: Delete an assignment
  * parameters:
@@ -674,7 +679,8 @@ export async function POST(req: NextRequest) {
  * responses:
  *   200: { description: Assignment deleted. }
  *   400: { description: Submissions or comments exist. }
- *   403: { description: Caller lacks a staff role. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Not course staff or a system admin. }
  *   404: { description: Assignment not found. }
  *   500: { description: Server error. }
  */

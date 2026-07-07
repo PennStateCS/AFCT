@@ -218,12 +218,12 @@ const readDiskStatsSample = async (): Promise<DiskIoSample | null> => {
  * summary, recent active-session and error-rate heuristics from the audit log,
  * upstream network probes, and orphaned-upload counts. Response is never cached.
  *
- * Admin/Faculty only — the payload includes other users' session PII (emails, IPs),
+ * System administrators only — the payload includes other users' session PII (emails, IPs),
  * an env-var inventory, and infrastructure internals, so it must not be public.
  * @openapi
  * summary: Operational status snapshot
  * description: >-
- *   Aggregated health and diagnostics for the status dashboard (Admin/Faculty only).
+ *   Aggregated health and diagnostics for the status dashboard (system administrators only).
  *   Returns host metrics, DB engine stats, masked env keys, active-session and
  *   error-rate summaries, and abandoned-file counts. Fields are best-effort — any
  *   probe that fails is simply omitted.
@@ -245,10 +245,10 @@ const readDiskStatsSample = async (): Promise<DiskIoSample | null> => {
  *             env: { type: object, description: Public vars plus masked key/length summary }
  *             app: { type: object, description: Optional row counts and tool versions }
  *             metrics: { type: object, description: Detected DB provider and request latency }
- *   403: { description: Caller is not an admin or faculty user. }
+ *   403: { description: Caller is not a system administrator. }
  */
 export async function GET(req: Request) {
-  // Admin/Faculty only: the snapshot exposes other users' session PII, an env-var
+  // System administrators only: the snapshot exposes other users' session PII, an env-var
   // inventory, and infrastructure internals. Deny everyone else before doing work.
   const session = await auth();
   if (!isAdmin(session?.user)) {

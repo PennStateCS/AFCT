@@ -10,10 +10,10 @@ import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 
 /**
- * Creates a problem from an uploaded solution file (multipart/form-data). Staff
- * only (ADMIN/FACULTY/TA). The file's XML structure is validated against the
- * problem type before it's written to disk, and it's size-checked against the
- * system upload limit. `maxStates` applies to FA/PDA and `isDeterministic` to FA.
+ * Creates a problem from an uploaded solution file (multipart/form-data). Course
+ * staff (faculty or TAs) or a system admin. The file's XML structure is validated
+ * against the problem type before it's written to disk, and it's size-checked against
+ * the system upload limit. `maxStates` applies to FA/PDA and `isDeterministic` to FA.
  * @openapi
  * summary: Create a problem
  * requestBody:
@@ -38,7 +38,7 @@ import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
  * responses:
  *   200: { description: The created problem. }
  *   400: { description: Missing fields or the solution file failed structure validation. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Caller is not course staff or a system admin. }
  *   413: { description: File exceeds the system upload limit. }
  *   500: { description: Server error. }
  */

@@ -16,8 +16,8 @@ export async function OPTIONS() {
 }
 
 /**
- * Renames a group. Staff only (ADMIN/FACULTY/TA). The group must belong to the
- * course in the path, and the new name must be unique within that course.
+ * Renames a group. Course staff (faculty or TAs) or a system admin. The group must
+ * belong to the course in the path, and the new name must be unique within that course.
  * @openapi
  * summary: Rename a group
  * parameters:
@@ -31,7 +31,7 @@ export async function OPTIONS() {
  * responses:
  *   200: { description: The updated group. }
  *   401: { description: Not signed in. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Not course staff or a system admin. }
  *   404: { description: Group not found in this course. }
  *   409: { description: Name already used by another group in the course. }
  *   422: { description: Missing name. }
@@ -102,8 +102,8 @@ export async function PATCH(
 }
 
 /**
- * Deletes a group; its membership rows cascade away with it. Staff only. The group
- * must belong to the course in the path.
+ * Deletes a group; its membership rows cascade away with it. Course staff (faculty
+ * or TAs) or a system admin. The group must belong to the course in the path.
  * @openapi
  * summary: Delete a group
  * parameters:
@@ -112,7 +112,7 @@ export async function PATCH(
  * responses:
  *   200: { description: Group deleted. }
  *   401: { description: Not signed in. }
- *   403: { description: Caller lacks a staff role. }
+ *   403: { description: Not course staff or a system admin. }
  *   404: { description: Group not found in this course. }
  *   500: { description: Server error. }
  */
