@@ -22,9 +22,34 @@ function displayName(u: {
   return name || u.email || u.id;
 }
 
-// GET: a single page of activity logs, newest first, with userId resolved to a
-// display name. Supports ?page, ?pageSize, and ?q (search on action / category /
-// author name), all applied server-side.
+/**
+ * A single page of activity (audit) logs, newest first, with `userId` resolved to
+ * the author's display name. Search, severity filter, and sort all run server-side.
+ * @openapi
+ * summary: List activity (audit) logs
+ * parameters:
+ *   - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+ *   - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+ *   - { name: q, in: query, description: Match on action, category, or author name/email, schema: { type: string } }
+ *   - { name: severity, in: query, schema: { type: string, enum: [INFO, WARNING, ERROR, SECURITY] } }
+ *   - { name: sortBy, in: query, schema: { type: string, enum: [timestamp, severity, category, action, ipAddress, userLastName, userFirstName] } }
+ *   - { name: sortDir, in: query, schema: { type: string, enum: [asc, desc], default: desc } }
+ * responses:
+ *   200:
+ *     description: One page of logs.
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             rows: { type: array, items: { type: object }, description: ActivityLog rows; userId is the resolved author name }
+ *             total: { type: integer }
+ *             page: { type: integer }
+ *             pageSize: { type: integer }
+ *             totalPages: { type: integer }
+ *   403: { description: Caller is not an admin or faculty user. }
+ *   500: { description: Query failed. }
+ */
 export async function GET(req: Request) {
   try {
     const session = await auth();

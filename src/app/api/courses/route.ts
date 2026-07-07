@@ -69,8 +69,21 @@ async function generateUniqueCourseCode() {
 // GET /api/courses
 // ----------------------------------------
 /**
- * Returns all courses ordered by creation date.
- * Includes roster users (id/name/role) and assignment/problem metadata.
+ * Returns every course, newest first, each with its `enrolled` roster (user +
+ * courseRole) and per-assignment derived `maxPoints`/`problemCount`.
+ * @openapi
+ * summary: List all courses
+ * description: >-
+ *   Returns every course with its roster and assignment metadata for the
+ *   dashboard. This endpoint performs no authentication or authorization — any
+ *   caller receives the full course list and roster names.
+ * responses:
+ *   200:
+ *     description: Array of courses, each with an `enrolled` roster and assignments.
+ *     content:
+ *       application/json:
+ *         schema: { type: array, items: { type: object } }
+ *   500: { description: Server error. }
  */
 export async function GET() {
   try {
@@ -130,13 +143,38 @@ export async function GET() {
 // POST /api/courses
 // ----------------------------------------
 /**
- * Creates a course and seeds roster faculty entries.
- *
- * Expected payload (validated upstream):
- * - name, code, semester, credits
- * - startDate, endDate (datetime-local strings)
- * - isPublished (optional)
- * - facultyIds (optional)
+ * Creates a course (with a generated registration code) and seeds its faculty
+ * roster, all in one transaction. Admin/TA/Faculty only. Datetime-local strings
+ * are interpreted in the actor's effective timezone before being stored as UTC.
+ * @openapi
+ * summary: Create a course
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [name, code, semester, credits, startDate, endDate, registrationOpenAt, registrationCloseAt]
+ *         properties:
+ *           name: { type: string }
+ *           code: { type: string }
+ *           semester: { type: string }
+ *           credits: { type: number }
+ *           startDate: { type: string, description: datetime-local string }
+ *           endDate: { type: string, description: datetime-local string }
+ *           registrationOpenAt: { type: string, description: datetime-local string }
+ *           registrationCloseAt: { type: string, description: datetime-local string }
+ *           isPublished: { type: boolean }
+ *           instructorIds: { type: array, items: { type: string } }
+ *           facultyIds: { type: array, items: { type: string } }
+ *           emptyStringNotation: { type: string }
+ * responses:
+ *   201:
+ *     description: Course created; returns the course with its `enrolled` roster.
+ *   400: { description: Missing registration window, or Zod validation failed. }
+ *   403: { description: Caller may not create courses (logged as a security event). }
+ *   409: { description: A course with that code and semester already exists. }
+ *   500: { description: Server error. }
  */
 export async function POST(req: Request) {
   let actorId: string | null = null;

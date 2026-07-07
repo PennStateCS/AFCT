@@ -25,6 +25,46 @@ async function deleteFileIfExists(filename: string) {
   }
 }
 
+/**
+ * Updates the signed-in user's own profile: names, timezone, and avatar. The
+ * avatar is written to disk and any previous file is removed; `deleteAvatar`
+ * clears it instead. Sent as multipart/form-data because it carries a file.
+ * @openapi
+ * summary: Update my profile
+ * requestBody:
+ *   required: true
+ *   content:
+ *     multipart/form-data:
+ *       schema:
+ *         type: object
+ *         required: [firstName, lastName]
+ *         properties:
+ *           firstName: { type: string }
+ *           lastName: { type: string }
+ *           timezone: { type: string, description: One of the app's common timezones; blank clears it }
+ *           avatar: { type: string, format: binary, description: New profile image }
+ *           deleteAvatar: { type: string, enum: ['true'], description: Remove the current avatar }
+ * responses:
+ *   200:
+ *     description: The updated profile.
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             id: { type: string }
+ *             email: { type: string }
+ *             firstName: { type: string }
+ *             lastName: { type: string }
+ *             avatar: { type: string, nullable: true }
+ *             role: { type: string }
+ *             timezone: { type: string, nullable: true }
+ *   400: { description: Blank name or invalid timezone. }
+ *   401: { description: Not signed in. }
+ *   404: { description: User not found. }
+ *   413: { description: Avatar exceeds the system upload limit. }
+ *   500: { description: Update failed. }
+ */
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -141,6 +181,27 @@ export async function POST(req: Request) {
   }
 }
 
+/**
+ * Returns the signed-in user's own profile.
+ * @openapi
+ * summary: Get my profile
+ * responses:
+ *   200:
+ *     description: The current user's profile.
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             id: { type: string }
+ *             email: { type: string }
+ *             firstName: { type: string }
+ *             lastName: { type: string }
+ *             avatar: { type: string, nullable: true }
+ *             role: { type: string }
+ *             timezone: { type: string, nullable: true }
+ *   401: { description: Not signed in. }
+ */
 export async function GET() {
   const session = await auth();
   if (!session?.user?.id) {
