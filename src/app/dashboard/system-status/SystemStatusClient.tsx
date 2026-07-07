@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -404,43 +405,31 @@ const Sparkline = ({
 
 export default function SystemStatusClient() {
   const { timezone } = useEffectiveTimezone();
-  const [status, setStatus] = useState<StatusResponse | null>(null);
-  const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [deep, setDeep] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const timerRef = useRef<number | null>(null);
   const [deletingFiles, setDeletingFiles] = useState<Record<string, boolean>>({});
 
-  const fetchStatus = useCallback(async () => {
-    setLoading(true);
-    try {
+  // Live system status, cached per `deep` toggle. Auto-refresh drives the query's
+  // own polling interval, replacing the old manual setInterval loop.
+  const {
+    data: status = null,
+    isLoading,
+    isFetching,
+    dataUpdatedAt,
+    refetch,
+  } = useQuery({
+    queryKey: ['admin', 'status', deep],
+    queryFn: async () => {
       const r = await fetch(`/api/admin/status${deep ? '?deep=1' : ''}`, { cache: 'no-store' });
-      const data = (await r.json()) as StatusResponse;
-      setStatus(data);
-      setLastUpdated(new Date());
-    } catch {
-      setStatus(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [deep]);
+      if (!r.ok) throw new Error('Failed to fetch status');
+      return (await r.json()) as StatusResponse;
+    },
+    refetchInterval: autoRefresh ? 15_000 : false,
+    staleTime: 0,
+  });
 
-  useEffect(() => {
-    fetchStatus();
-  }, [fetchStatus]);
-
-  useEffect(() => {
-    if (autoRefresh) {
-      timerRef.current = window.setInterval(fetchStatus, 15_000);
-    } else if (timerRef.current) {
-      window.clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    return () => {
-      if (timerRef.current) window.clearInterval(timerRef.current);
-    };
-  }, [autoRefresh, fetchStatus]);
+  const loading = isLoading || isFetching;
+  const lastUpdated = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
 
   const handleDeleteAbandonedFile = useCallback(
     async (category: string, fileName: string) => {
@@ -460,7 +449,7 @@ export default function SystemStatusClient() {
           const err = await res.json().catch(() => null);
           throw new Error(err?.error || 'Failed to delete file');
         }
-        await fetchStatus();
+        await refetch();
       } catch (err) {
         console.error('Delete abandoned file error:', err);
         window.alert(err instanceof Error ? err.message : 'Failed to delete file');
@@ -468,7 +457,7 @@ export default function SystemStatusClient() {
         setDeletingFiles((prev) => ({ ...prev, [key]: false }));
       }
     },
-    [deletingFiles, fetchStatus],
+    [deletingFiles, refetch],
   );
 
   const dbOk = status?.database?.ok ?? false;
@@ -636,7 +625,7 @@ export default function SystemStatusClient() {
             <div className="text-muted-foreground text-xs" aria-live="polite">
               {lastUpdated ? `Updated ${formatTimeInTimeZone(lastUpdated, timezone)}` : ''}
             </div>
-            <Button size="sm" onClick={fetchStatus} disabled={loading}>
+            <Button size="sm" onClick={() => refetch()} disabled={loading}>
               {loading ? 'Refreshing…' : 'Refresh'}
             </Button>
           </div>
