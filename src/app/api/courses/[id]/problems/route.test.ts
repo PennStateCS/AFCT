@@ -102,7 +102,17 @@ describe('POST /api/courses/[id]/problems', () => {
 });
 
 describe('GET /api/courses/[id]/problems', () => {
-  it('returns problems list', async () => {
+  it('returns 403 for a non-staff user', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+
+    const req = new NextRequest('http://localhost/api/courses/c1/problems');
+    const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('returns problems list for staff', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.problem.findMany.mockResolvedValue([{ id: 'p1' }]);
 
     const req = new NextRequest('http://localhost/api/courses/c1/problems');

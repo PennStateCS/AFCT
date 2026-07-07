@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import type { PeerCertificate } from 'tls';
 import { prisma } from '@/lib/prisma';
+import { auth } from '@/lib/auth';
 import { execSync } from 'child_process';
 
 export const runtime = 'nodejs';
@@ -216,14 +217,13 @@ const readDiskStatsSample = async (): Promise<DiskIoSample | null> => {
  * summary, recent active-session and error-rate heuristics from the audit log,
  * upstream network probes, and orphaned-upload counts. Response is never cached.
  *
- * WARNING: this handler performs no authentication and there is no middleware in
- * front of it, so every caller receives this diagnostic detail. Treat the shape
- * as intentionally rich and the exposure as a known gap (see the security notes).
+ * Admin/Faculty only — the payload includes other users' session PII (emails, IPs),
+ * an env-var inventory, and infrastructure internals, so it must not be public.
  * @openapi
  * summary: Operational status snapshot
  * description: >-
- *   Aggregated health and diagnostics for the status dashboard. Unauthenticated:
- *   it returns host metrics, DB engine stats, masked env keys, active-session and
+ *   Aggregated health and diagnostics for the status dashboard (Admin/Faculty only).
+ *   Returns host metrics, DB engine stats, masked env keys, active-session and
  *   error-rate summaries, and abandoned-file counts. Fields are best-effort — any
  *   probe that fails is simply omitted.
  * parameters:
@@ -244,8 +244,17 @@ const readDiskStatsSample = async (): Promise<DiskIoSample | null> => {
  *             env: { type: object, description: Public vars plus masked key/length summary }
  *             app: { type: object, description: Optional row counts and tool versions }
  *             metrics: { type: object, description: Detected DB provider and request latency }
+ *   403: { description: Caller is not an admin or faculty user. }
  */
 export async function GET(req: Request) {
+  // Admin/Faculty only: the snapshot exposes other users' session PII, an env-var
+  // inventory, and infrastructure internals. Deny everyone else before doing work.
+  const session = await auth();
+  const role = session?.user?.role;
+  if (!role || !['ADMIN', 'FACULTY'].includes(role)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  }
+
   const t0 = performance.now();
   const url = new URL(req.url);
   const deep = url.searchParams.get('deep') === '1';

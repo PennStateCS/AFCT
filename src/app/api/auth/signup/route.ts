@@ -15,10 +15,11 @@ import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
 /**
- * Self-service account registration. Gated by the `allowSignup` system setting,
- * and protected by a tiered rate limiter: repeated attempts escalate from silent
- * friction, to a captcha challenge (428), to an outright block (429). The
- * password must satisfy the app's strength policy.
+ * Self-service account registration. New accounts are always created as STUDENT —
+ * elevated roles are assigned later through the staff-only user-management routes.
+ * Gated by the `allowSignup` system setting, and protected by a tiered rate
+ * limiter: repeated attempts escalate from silent friction, to a captcha challenge
+ * (428), to an outright block (429). The password must satisfy the strength policy.
  * @openapi
  * summary: Register a new account
  * requestBody:
@@ -33,7 +34,6 @@ const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
  *           lastName: { type: string }
  *           email: { type: string }
  *           password: { type: string, description: Must meet the strength policy }
- *           role: { type: string, description: Accepted from the client; defaults to STUDENT }
  *           interactionMs: { type: integer, description: Time spent on the form; feeds bot-friction heuristics }
  *           captchaToken: { type: string, description: Required only when the rate limiter issues a challenge }
  * responses:
@@ -61,10 +61,12 @@ export async function POST(req: Request) {
       lastName,
       email,
       password,
-      role = 'STUDENT',
       interactionMs,
       captchaToken,
     } = body;
+    // Self-signup always yields a STUDENT; any client-supplied role is ignored so
+    // the public endpoint can't be used to mint privileged accounts.
+    const role = 'STUDENT';
     const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : email;
     const ipAddress = getClientIp(req);
 
@@ -141,8 +143,6 @@ export async function POST(req: Request) {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // NOTE: `role` is taken from the request body (defaulting to STUDENT). There
-    // is no server-side check that the caller may claim an elevated role.
     const newUser = await prisma.user.create({
       data: {
         email: normalizedEmail,
