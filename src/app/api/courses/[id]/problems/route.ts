@@ -157,15 +157,11 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
 }
 
 /**
- * Lists all problems in a course, newest first. Note: this handler performs no
- * authentication, so the problem records (including stored solution filenames) are
- * returned to any caller. The solution files themselves are served by a separate,
- * access-controlled route.
+ * Lists all problems in a course, newest first. Staff only (ADMIN/FACULTY/TA) — the
+ * rows include stored solution filenames, which students must not see. The solution
+ * files themselves are served by a separate, access-controlled route.
  * @openapi
  * summary: List a course's problems
- * description: >-
- *   Returns every problem in the course. No authentication is enforced on this
- *   endpoint.
  * parameters:
  *   - { name: id, in: path, required: true, schema: { type: string } }
  * responses:
@@ -174,10 +170,17 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
  *     content:
  *       application/json:
  *         schema: { type: array, items: { type: object } }
+ *   403: { description: Caller lacks a staff role. }
  *   500: { description: Server error. }
  */
 export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id: courseId } = await context.params;
+
+  const session = await auth();
+  const role = session?.user?.role;
+  if (!role || !['ADMIN', 'FACULTY', 'TA'].includes(role)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  }
 
   try {
     const problems = await prisma.problem.findMany({
