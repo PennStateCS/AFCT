@@ -31,14 +31,11 @@ README.md
 docker-compose*.yml
 .dockerignore
 
-# Env files (keep examples by unignoring)
+# Env files: never bake secrets into the image (templates aren't needed in it)
 .env*
-!.env.example
 
-# Prisma: ignore local dev DB, keep schema & migrations
+# Prisma: ignore a local SQLite dev DB if present (schema + migrations stay in context)
 prisma/dev.db*
-!prisma/schema.prisma
-!prisma/migrations/**
 
 # Uploads: ignore runtime data but keep placeholder so dir exists
 **/public/uploads/*
@@ -47,6 +44,12 @@ prisma/dev.db*
 # IDE
 .vscode
 .idea
+
+# Local tooling & secrets — never bake into the image
+.claude
+*.key
+*.crt
+*.pem
 
 # Optional: ignore tests if not needed in image
 **/__tests__/**
