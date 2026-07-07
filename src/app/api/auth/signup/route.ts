@@ -1,5 +1,3 @@
-// /src/app/api/auth/signup
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
@@ -16,6 +14,45 @@ import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy
 
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
+/**
+ * Self-service account registration. Gated by the `allowSignup` system setting,
+ * and protected by a tiered rate limiter: repeated attempts escalate from silent
+ * friction, to a captcha challenge (428), to an outright block (429). The
+ * password must satisfy the app's strength policy.
+ * @openapi
+ * summary: Register a new account
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [firstName, lastName, email, password]
+ *         properties:
+ *           firstName: { type: string }
+ *           lastName: { type: string }
+ *           email: { type: string }
+ *           password: { type: string, description: Must meet the strength policy }
+ *           role: { type: string, description: Accepted from the client; defaults to STUDENT }
+ *           interactionMs: { type: integer, description: Time spent on the form; feeds bot-friction heuristics }
+ *           captchaToken: { type: string, description: Required only when the rate limiter issues a challenge }
+ * responses:
+ *   201:
+ *     description: Account created.
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             message: { type: string }
+ *             userId: { type: string }
+ *   400: { description: Missing fields, invalid email, or weak password. }
+ *   403: { description: Signup is disabled. }
+ *   409: { description: Email already registered. }
+ *   428: { description: Rate limiter requires a captcha challenge; retry with captchaToken. }
+ *   429: { description: Too many attempts; retry after the Retry-After header. }
+ *   500: { description: Server error. }
+ */
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -39,17 +76,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Signup is disabled.' }, { status: 403 });
     }
 
-    // Check for required fields
     if (!normalizedEmail || !password || !firstName || !lastName) {
       return NextResponse.json({ error: 'Missing required fields.' }, { status: 400 });
     }
-
-    // Validate email format
     if (!isValidEmail(normalizedEmail)) {
       return NextResponse.json({ error: 'Invalid email format.' }, { status: 400 });
     }
-
-    // Validate password strength
     if (!isStrongPassword(password)) {
       return NextResponse.json({ error: passwordRequirementText }, { status: 400 });
     }
@@ -100,19 +132,17 @@ export async function POST(req: Request) {
       await applyBotFriction(rateDecision.frictionDelayMs);
     }
 
-    // Check for existing user
     const existingUser = await prisma.user.findUnique({
       where: { email: normalizedEmail },
     });
-
     if (existingUser) {
       return NextResponse.json({ error: 'Email already registered.' }, { status: 409 });
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create new user in the database
+    // NOTE: `role` is taken from the request body (defaulting to STUDENT). There
+    // is no server-side check that the caller may claim an elevated role.
     const newUser = await prisma.user.create({
       data: {
         email: normalizedEmail,
@@ -123,7 +153,6 @@ export async function POST(req: Request) {
       },
     });
 
-    // Log the signup event in ActivityLog
     await createEnhancedActivityLog(prisma, req, {
       userId: newUser.id,
       action: 'USER_SIGNUP',
@@ -138,7 +167,6 @@ export async function POST(req: Request) {
 
     recordSignupSuccess({ ip: ipAddress, identifier: normalizedEmail });
 
-    // Return success response
     return NextResponse.json({ message: 'User created', userId: newUser.id }, { status: 201 });
   } catch (err) {
     console.error('[SIGNUP_ERROR]', err);
