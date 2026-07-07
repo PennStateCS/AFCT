@@ -108,11 +108,11 @@ export async function GET(
  *       schema:
  *         type: object
  *         properties:
- *           grade: { type: number, nullable: true, description: 0..maxPoints, or null to clear }
+ *           grade: { type: number, nullable: true, description: "0..maxPoints, or null to clear" }
  *           feedback: { type: string, nullable: true }
  * responses:
  *   200: { description: The saved (or cleared) grade and feedback. }
- *   400: { description: Grade not a number/null, or out of range. }
+ *   400: { description: "Grade not a number/null, or out of range." }
  *   401: { description: Not signed in. }
  *   403: { description: Caller lacks a staff role. }
  *   404: { description: Problem not found in this assignment/course. }

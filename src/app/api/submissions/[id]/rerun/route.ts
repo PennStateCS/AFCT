@@ -14,7 +14,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
  *   - { name: id, in: path, required: true, description: Submission id, schema: { type: string } }
  * responses:
  *   202: { description: Submission re-queued (status PENDING). }
- *   400: { description: Submission has no file, or its problem is no longer linked. }
+ *   400: { description: "Submission has no file, or its problem is no longer linked." }
  *   401: { description: Not signed in. }
  *   403: { description: Caller lacks a staff role. }
  *   404: { description: Submission not found. }

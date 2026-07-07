@@ -49,7 +49,7 @@ type CreatedRow = {
  *             items:
  *               type: object
  *               properties:
- *                 rowNumber: { type: integer, description: Source spreadsheet row, for error reporting }
+ *                 rowNumber: { type: integer, description: "Source spreadsheet row, for error reporting" }
  *                 firstName: { type: string }
  *                 lastName: { type: string }
  *                 email: { type: string }

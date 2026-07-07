@@ -174,10 +174,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
  *         required: [problemIds, groupId]
  *         properties:
  *           problemIds: { type: array, items: { type: string } }
- *           groupId: { type: string, description: A group id, or "ALL" }
+ *           groupId: { type: string, description: 'A group id, or "ALL"' }
  * responses:
  *   200: { description: Mappings removed. }
- *   400: { description: Empty body, no problemIds, invalid group, or missing groupId. }
+ *   400: { description: "Empty body, no problemIds, invalid group, or missing groupId." }
  *   403: { description: Caller lacks a staff role. }
  *   500: { description: Server error. }
  */

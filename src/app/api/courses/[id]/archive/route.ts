@@ -25,7 +25,7 @@ import { canArchiveCourse } from '@/lib/course-status-checks';
  *   200:
  *     description: The updated course (id, name, code, isArchived, updatedAt).
  *   400: { description: isArchived must be a boolean. }
- *   403: { description: Not staff, or archiving is blocked by the safety check. }
+ *   403: { description: "Not staff, or archiving is blocked by the safety check." }
  *   404: { description: Course not found. }
  *   500: { description: Server error. }
  */

@@ -171,7 +171,7 @@ export async function GET() {
  * responses:
  *   201:
  *     description: Course created; returns the course with its `enrolled` roster.
- *   400: { description: Missing registration window, or Zod validation failed. }
+ *   400: { description: "Missing registration window, or Zod validation failed." }
  *   403: { description: Caller may not create courses (logged as a security event). }
  *   409: { description: A course with that code and semester already exists. }
  *   500: { description: Server error. }
