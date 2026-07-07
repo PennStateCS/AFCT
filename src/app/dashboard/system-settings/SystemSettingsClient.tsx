@@ -221,7 +221,7 @@ export default function SystemSettingsClient() {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch('/api/system-settings', { cache: 'no-store' });
+        const res = await fetch('/api/admin/settings', { cache: 'no-store' });
         if (!res.ok) throw new Error('Failed to load system settings');
         const data = (await res.json()) as SystemSettingsResponse;
 
@@ -289,7 +289,7 @@ export default function SystemSettingsClient() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch('/api/system-settings/tls', { cache: 'no-store' });
+        const res = await fetch('/api/admin/settings/tls', { cache: 'no-store' });
         if (res.ok) {
           const info = (await res.json()) as TlsInfo;
           setTls(info);
@@ -302,7 +302,7 @@ export default function SystemSettingsClient() {
 
   const loadBackups = useCallback(async (): Promise<number> => {
     try {
-      const res = await fetch('/api/system-settings/backups', { cache: 'no-store' });
+      const res = await fetch('/api/admin/settings/backups', { cache: 'no-store' });
       if (res.ok) {
         const data = (await res.json()) as { backups?: BackupInfo[] };
         const list = Array.isArray(data.backups) ? data.backups : [];
@@ -325,7 +325,7 @@ export default function SystemSettingsClient() {
     setBackupNowBusy(true);
     try {
       const before = await loadBackups();
-      const res = await fetch('/api/system-settings/backups', { method: 'POST' });
+      const res = await fetch('/api/admin/settings/backups', { method: 'POST' });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
         throw new Error(body?.error || 'Failed to start backup');
@@ -378,7 +378,7 @@ export default function SystemSettingsClient() {
         keyFile.text(),
         chainFile ? chainFile.text() : Promise.resolve(undefined),
       ]);
-      const res = await fetch('/api/system-settings/tls', {
+      const res = await fetch('/api/admin/settings/tls', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cert, key, chain }),
@@ -401,7 +401,7 @@ export default function SystemSettingsClient() {
   const resetCert = async () => {
     setTlsBusy(true);
     try {
-      const res = await fetch('/api/system-settings/tls', { method: 'DELETE' });
+      const res = await fetch('/api/admin/settings/tls', { method: 'DELETE' });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || 'Failed to reset certificate.');
       setTls(data as TlsInfo);
@@ -423,7 +423,7 @@ export default function SystemSettingsClient() {
   });
 
   const tlsAction = async (payload: Record<string, unknown>) => {
-    const res = await fetch('/api/system-settings/tls', {
+    const res = await fetch('/api/admin/settings/tls', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -538,7 +538,7 @@ export default function SystemSettingsClient() {
 
     setSaving(true);
     try {
-      const res = await fetch('/api/system-settings', {
+      const res = await fetch('/api/admin/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -994,7 +994,7 @@ export default function SystemSettingsClient() {
                             {b.dumpFile ? (
                               <a
                                 className="text-sky-600 underline"
-                                href={`/api/system-settings/backups/download?file=${encodeURIComponent(b.dumpFile)}`}
+                                href={`/api/admin/settings/backups/download?file=${encodeURIComponent(b.dumpFile)}`}
                               >
                                 Download ({formatBytes(b.dumpSize)})
                               </a>
@@ -1006,7 +1006,7 @@ export default function SystemSettingsClient() {
                             {b.filesFile ? (
                               <a
                                 className="text-sky-600 underline"
-                                href={`/api/system-settings/backups/download?file=${encodeURIComponent(b.filesFile)}`}
+                                href={`/api/admin/settings/backups/download?file=${encodeURIComponent(b.filesFile)}`}
                               >
                                 Download ({formatBytes(b.filesSize)})
                               </a>

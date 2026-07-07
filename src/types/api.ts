@@ -4,6 +4,78 @@
  */
 
 export interface paths {
+    "/api/admin/logs/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export activity logs
+         * @description Returns the selected activity-log columns within a time range, for CSV export.  System administrators only. Column names are validated against the exportable allow-list  before reaching the Prisma select (guards field injection), and the result is  capped at MAX_EXPORT_ROWS so one export can't page the whole table into memory.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/logs/export/route.ts)
+         */
+        post: operations["postAdminLogsExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/logs/fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List exportable log fields
+         * @description Lists the activity-log columns that may be included in a CSV export; drives the  Download dialog's field picker. System administrators only.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/logs/fields/route.ts)
+         */
+        get: operations["getAdminLogsFields"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List activity (audit) logs
+         * @description A single page of activity (audit) logs, newest first, with `userId` resolved to  the author's display name. Search, severity filter, and sort all run server-side.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/logs/route.ts)
+         */
+        get: operations["getAdminLogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/reset-password": {
         parameters: {
             query?: never;
@@ -23,6 +95,134 @@ export interface paths {
          */
         post: operations["postAdminResetPassword"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/settings/backups/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download a backup file
+         * @description Streams a single backup file to the caller as an attachment. System administrators only.  A database dump contains the entire database (password hashes and all PII), so  the download is always recorded as a SECURITY audit event. The filename is  checked against a strict allow-list and the resolved path must stay inside the  backup directory — two independent guards against path traversal.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/backups/download/route.ts)
+         */
+        get: operations["getAdminSettingsBackupsDownload"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/settings/backups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List backups
+         * @description Lists available backups, newest first, each pairing a database dump with its  matching upload-files archive. System administrators only.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/backups/route.ts)
+         */
+        get: operations["getAdminSettingsBackups"];
+        put?: never;
+        /**
+         * Trigger a backup now
+         * @description Requests an on-demand backup by dropping a trigger file the db-backup container  polls for. System administrators only. Returns 202 (accepted) — the backup runs  asynchronously in that container, not in this request.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/backups/route.ts)
+         */
+        post: operations["postAdminSettingsBackups"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get system settings
+         * @description Returns the singleton system settings, falling back to defaults for any unset  field. The hCaptcha secret is never returned — only `hcaptchaSecretConfigured`  reports whether one is stored. System administrators only.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/route.ts)
+         */
+        get: operations["getAdminSettings"];
+        /**
+         * Update system settings
+         * @description Updates the singleton system settings (upsert). Every field is optional, so a  partial payload only touches the fields it includes; numeric fields are clamped  to safe bounds and an invalid timezone is rejected. The hCaptcha secret is  write-only: send a non-empty `hcaptchaSecretKey` to set it, or  `hcaptchaSecretClear: true` to remove it. Changes are audited (never the secret  value). System administrators only.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/route.ts)
+         */
+        put: operations["putAdminSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/settings/tls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get TLS certificate status
+         * @description Returns metadata about the currently installed TLS certificate and whether a  CSR is awaiting a signed cert. Admin only. Never returns key or PEM material.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/tls/route.ts)
+         */
+        get: operations["getAdminSettingsTls"];
+        put?: never;
+        /**
+         * Install or generate a TLS certificate
+         * @description Performs a certificate operation, chosen by the `action` field. Admin only;  unauthorized-but-authenticated attempts are recorded as a security event. Cert  bodies and keys are accepted in the request but never echoed back or logged.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/tls/route.ts)
+         */
+        post: operations["postAdminSettingsTls"];
+        /**
+         * Reset TLS to a self-signed certificate
+         * @description Removes the installed certificate and reverts to a self-signed one. Admin only.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/tls/route.ts)
+         */
+        delete: operations["deleteAdminSettingsTls"];
         options?: never;
         head?: never;
         patch?: never;
@@ -92,6 +292,86 @@ export interface paths {
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/submissions/route.ts)
          */
         post: operations["postAdminSubmissions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/users/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk-create users
+         * @description Bulk-creates user accounts from parsed spreadsheet rows (the CSV import flow).  System administrators only. Accounts are created with no global role. Each row  is validated independently — a bad row  is collected in `failed` with a reason rather than aborting the batch — so the  response always reports per-row created/failed outcomes. Duplicate emails are  caught both within the batch and against existing users. `temporaryPasswords`  forces a reset at first login.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/users/bulk/route.ts)
+         */
+        post: operations["postAdminUsersBulk"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/users/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List users (lightweight)
+         * @description Lightweight user list used to refresh the users table without the audit-logging  side effect of the main `/api/users` GET. Same staff-role restriction and role  filter, but read-only.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/users/list/route.ts)
+         */
+        get: operations["getAdminUsersList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List users
+         * @description Lists users for the admin-facing users table. System administrators only; the  access itself is audited.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/users/route.ts)
+         */
+        get: operations["getAdminUsers"];
+        put?: never;
+        /**
+         * Create a user
+         * @description Creates a single user directly (admin-provisioned account), unlike self-service  signup. System administrators only. Validates email, password strength, and  timezone, and rejects a duplicate email. The account is created with no global  role; admin rights are granted separately via the isAdmin flag.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/users/route.ts)
+         */
+        post: operations["postAdminUsers"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1424,78 +1704,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/logging": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List activity (audit) logs
-         * @description A single page of activity (audit) logs, newest first, with `userId` resolved to  the author's display name. Search, severity filter, and sort all run server-side.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/logging/route.ts)
-         */
-        get: operations["getLogging"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/logs/getData": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Export activity logs
-         * @description Returns the selected activity-log columns within a time range, for CSV export.  System administrators only. Column names are validated against the exportable allow-list  before reaching the Prisma select (guards field injection), and the result is  capped at MAX_EXPORT_ROWS so one export can't page the whole table into memory.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/logs/getData/route.ts)
-         */
-        post: operations["postLogsGetData"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/logs/getFields": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List exportable log fields
-         * @description Lists the activity-log columns that may be included in a CSV export; drives the  Download dialog's field picker. System administrators only.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/logs/getFields/route.ts)
-         */
-        get: operations["getLogsGetFields"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/problems/{id}/comments": {
         parameters: {
             query?: never;
@@ -1758,62 +1966,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/system-settings/backups/download": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Download a backup file
-         * @description Streams a single backup file to the caller as an attachment. System administrators only.  A database dump contains the entire database (password hashes and all PII), so  the download is always recorded as a SECURITY audit event. The filename is  checked against a strict allow-list and the resolved path must stay inside the  backup directory — two independent guards against path traversal.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/system-settings/backups/download/route.ts)
-         */
-        get: operations["getSystemSettingsBackupsDownload"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/system-settings/backups": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List backups
-         * @description Lists available backups, newest first, each pairing a database dump with its  matching upload-files archive. System administrators only.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/system-settings/backups/route.ts)
-         */
-        get: operations["getSystemSettingsBackups"];
-        put?: never;
-        /**
-         * Trigger a backup now
-         * @description Requests an on-demand backup by dropping a trigger file the db-backup container  polls for. System administrators only. Returns 202 (accepted) — the backup runs  asynchronously in that container, not in this request.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/system-settings/backups/route.ts)
-         */
-        post: operations["postSystemSettingsBackups"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/system-settings/public": {
         parameters: {
             query?: never;
@@ -1831,78 +1983,6 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/system-settings": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get system settings
-         * @description Returns the singleton system settings, falling back to defaults for any unset  field. The hCaptcha secret is never returned — only `hcaptchaSecretConfigured`  reports whether one is stored. System administrators only.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/system-settings/route.ts)
-         */
-        get: operations["getSystemSettings"];
-        /**
-         * Update system settings
-         * @description Updates the singleton system settings (upsert). Every field is optional, so a  partial payload only touches the fields it includes; numeric fields are clamped  to safe bounds and an invalid timezone is rejected. The hCaptcha secret is  write-only: send a non-empty `hcaptchaSecretKey` to set it, or  `hcaptchaSecretClear: true` to remove it. Changes are audited (never the secret  value). System administrators only.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/system-settings/route.ts)
-         */
-        put: operations["putSystemSettings"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/system-settings/tls": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get TLS certificate status
-         * @description Returns metadata about the currently installed TLS certificate and whether a  CSR is awaiting a signed cert. Admin only. Never returns key or PEM material.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/system-settings/tls/route.ts)
-         */
-        get: operations["getSystemSettingsTls"];
-        put?: never;
-        /**
-         * Install or generate a TLS certificate
-         * @description Performs a certificate operation, chosen by the `action` field. Admin only;  unauthorized-but-authenticated attempts are recorded as a security event. Cert  bodies and keys are accepted in the request but never echoed back or logged.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/system-settings/tls/route.ts)
-         */
-        post: operations["postSystemSettingsTls"];
-        /**
-         * Reset TLS to a self-signed certificate
-         * @description Removes the installed certificate and reverts to a self-signed one. Admin only.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/system-settings/tls/route.ts)
-         */
-        delete: operations["deleteSystemSettingsTls"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2024,30 +2104,6 @@ export interface paths {
         patch: operations["patchUsersById"];
         trace?: never;
     };
-    "/api/users/bulk": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Bulk-create users
-         * @description Bulk-creates user accounts from parsed spreadsheet rows (the CSV import flow).  System administrators only. Accounts are created with no global role. Each row  is validated independently — a bad row  is collected in `failed` with a reason rather than aborting the batch — so the  response always reports per-row created/failed outcomes. Duplicate emails are  caught both within the batch and against existing users. `temporaryPasswords`  forces a reset at first login.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/users/bulk/route.ts)
-         */
-        post: operations["postUsersBulk"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/users/change-password": {
         parameters: {
             query?: never;
@@ -2072,62 +2128,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/users/list": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List users (lightweight)
-         * @description Lightweight user list used to refresh the users table without the audit-logging  side effect of the main `/api/users` GET. Same staff-role restriction and role  filter, but read-only.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/users/list/route.ts)
-         */
-        get: operations["getUsersList"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/users": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List users
-         * @description Lists users for the admin-facing users table. System administrators only; the  access itself is audited.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/users/route.ts)
-         */
-        get: operations["getUsers"];
-        put?: never;
-        /**
-         * Create a user
-         * @description Creates a single user directly (admin-provisioned account), unlike self-service  signup. System administrators only. Validates email, password strength, and  timezone, and rejects a duplicate email. The account is created with no global  role; admin rights are granted separately via the isAdmin flag.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/users/route.ts)
-         */
-        post: operations["postUsers"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2146,6 +2146,146 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    postAdminLogsExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Field names from getFields */
+                    cols: string[];
+                    /** @description Start of range (datetime-local; ignored if unparseable) */
+                    begTime: string;
+                    /** @description End of range (datetime-local; ignored if unparseable) */
+                    endTime: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Matching log rows with only the requested columns. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>[];
+                };
+            };
+            /** @description Invalid JSON, failed validation, or no valid fields selected. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not a system administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Export failed. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminLogsFields: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The exportable field names. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            /** @description Caller is not a system administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminLogs: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                /** @description Match on action, category, or author name/email */
+                q?: string;
+                severity?: "INFO" | "WARNING" | "ERROR" | "SECURITY";
+                sortBy?: "timestamp" | "severity" | "category" | "action" | "ipAddress" | "userLastName" | "userFirstName";
+                sortDir?: "asc" | "desc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of logs. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description ActivityLog rows; userId is the resolved author name */
+                        rows?: Record<string, never>[];
+                        total?: number;
+                        page?: number;
+                        pageSize?: number;
+                        totalPages?: number;
+                    };
+                };
+            };
+            /** @description Caller is not a system administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Query failed. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     postAdminResetPassword: {
         parameters: {
             query?: never;
@@ -2197,6 +2337,375 @@ export interface operations {
             };
             /** @description Reset failed. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminSettingsBackupsDownload: {
+        parameters: {
+            query: {
+                /** @description Exact backup filename from the list endpoint. */
+                file: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The backup file as an octet-stream attachment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description Filename failed the allow-list or path check. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not a system administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The backup file does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminSettingsBackups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The available backup pairs. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        backups?: Record<string, never>[];
+                    };
+                };
+            };
+            /** @description Caller is not a system administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postAdminSettingsBackups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Backup requested; it will run asynchronously. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok?: boolean;
+                    };
+                };
+            };
+            /** @description Caller is not a system administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The backup service (trigger volume) is not mounted. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The effective system settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        timezone?: string;
+                        maxUploadSizeMb?: number;
+                        allowSignup?: boolean;
+                        sessionTimeoutMinutes?: number;
+                        submissionEvalTimeoutMs?: number;
+                        submissionEvalMaxMemoryMb?: number;
+                        submissionResubmitCooldownMs?: number;
+                        submissionMaxConcurrent?: number;
+                        submissionMaxAttempts?: number;
+                        submissionAnalyzerLimit?: number;
+                        loginMaxAttempts?: number;
+                        loginLockoutMinutes?: number;
+                        backupEnabled?: boolean;
+                        /** @description Hour of day (0-23) the daily backup runs */
+                        backupHour?: number;
+                        backupRetentionDays?: number;
+                        activityLogRetentionDays?: number;
+                        hcaptchaSiteKey?: string;
+                        /** @description Whether a secret is stored; the value is never returned */
+                        hcaptchaSecretConfigured?: boolean;
+                    };
+                };
+            };
+            /** @description Caller is not a system administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    putAdminSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    timezone?: string;
+                    maxUploadSizeMb?: number;
+                    allowSignup?: boolean;
+                    sessionTimeoutMinutes?: number;
+                    submissionEvalTimeoutMs?: number;
+                    submissionEvalMaxMemoryMb?: number;
+                    submissionResubmitCooldownMs?: number;
+                    submissionMaxConcurrent?: number;
+                    submissionMaxAttempts?: number;
+                    submissionAnalyzerLimit?: number;
+                    loginMaxAttempts?: number;
+                    loginLockoutMinutes?: number;
+                    backupEnabled?: boolean;
+                    backupHour?: number;
+                    backupRetentionDays?: number;
+                    activityLogRetentionDays?: number;
+                    hcaptchaSiteKey?: string;
+                    /** @description Write-only; a non-empty value sets the secret */
+                    hcaptchaSecretKey?: string;
+                    /** @description Set true to remove the stored secret */
+                    hcaptchaSecretClear?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The updated settings (same shape as GET). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid JSON body or invalid timezone. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not a system administrator (attempt is audited). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Failed to persist the update. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminSettingsTls: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Certificate metadata and pending-CSR flag. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        subject?: string | null;
+                        issuer?: string | null;
+                        validTo?: string | null;
+                        selfSigned?: boolean | null;
+                        pendingCsr?: boolean;
+                    };
+                };
+            };
+            /** @description Caller is not an admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postAdminSettingsTls: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * @description install (default) = upload cert+key; generate-csr = create a CSR to be signed externally; install-signed = install the cert returned for a pending CSR; self-signed = generate a self-signed cert.
+                     * @enum {string}
+                     */
+                    action?: "install" | "generate-csr" | "install-signed" | "self-signed";
+                    /** @description PEM cert (install / install-signed) */
+                    cert?: string;
+                    /** @description PEM private key (install) */
+                    key?: string;
+                    /** @description Optional intermediate chain */
+                    chain?: string;
+                    /** @description CSR/self-signed subject CN */
+                    commonName?: string;
+                    organization?: string;
+                    altNames?: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description The resulting certificate metadata (plus `csr` for generate-csr). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid JSON, or the certificate/key was rejected by validation. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not an admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The certificate operation failed. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteAdminSettingsTls: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Certificate reset; returns the new (self-signed) metadata. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Caller is not an admin. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2369,6 +2878,221 @@ export interface operations {
             };
             /** @description Caller is not a system administrator. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postAdminUsersBulk: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    rows: {
+                        /** @description Source spreadsheet row, for error reporting */
+                        rowNumber?: number;
+                        firstName?: string;
+                        lastName?: string;
+                        email?: string;
+                        password?: string;
+                    }[];
+                    /** @description Force a password change at first login */
+                    temporaryPasswords?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Per-row outcome — a summary plus created and failed lists. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        summary?: {
+                            total?: number;
+                            created?: number;
+                            failed?: number;
+                        };
+                        created?: Record<string, never>[];
+                        failed?: Record<string, never>[];
+                    };
+                };
+            };
+            /** @description No rows provided. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description System administrators only. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminUsersList: {
+        parameters: {
+            query?: {
+                /** @description Filter to a single role */
+                role?: "STUDENT" | "TA" | "FACULTY" | "ADMIN";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Users (optionally filtered by role). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>[];
+                };
+            };
+            /** @description Caller lacks a staff role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminUsers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Users. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>[];
+                };
+            };
+            /** @description System administrators only. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postAdminUsers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    email: string;
+                    firstName: string;
+                    lastName: string;
+                    /** @description Must meet the strength policy */
+                    password: string;
+                    /** @description Defaults to the system timezone */
+                    timezone?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The created user. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing fields, invalid email, weak password, or invalid timezone. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description System administrators only. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Email already in use. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6693,146 +7417,6 @@ export interface operations {
             };
         };
     };
-    getLogging: {
-        parameters: {
-            query?: {
-                page?: number;
-                pageSize?: number;
-                /** @description Match on action, category, or author name/email */
-                q?: string;
-                severity?: "INFO" | "WARNING" | "ERROR" | "SECURITY";
-                sortBy?: "timestamp" | "severity" | "category" | "action" | "ipAddress" | "userLastName" | "userFirstName";
-                sortDir?: "asc" | "desc";
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description One page of logs. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** @description ActivityLog rows; userId is the resolved author name */
-                        rows?: Record<string, never>[];
-                        total?: number;
-                        page?: number;
-                        pageSize?: number;
-                        totalPages?: number;
-                    };
-                };
-            };
-            /** @description Caller is not a system administrator. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Query failed. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    postLogsGetData: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @description Field names from getFields */
-                    cols: string[];
-                    /** @description Start of range (datetime-local; ignored if unparseable) */
-                    begTime: string;
-                    /** @description End of range (datetime-local; ignored if unparseable) */
-                    endTime: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Matching log rows with only the requested columns. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>[];
-                };
-            };
-            /** @description Invalid JSON, failed validation, or no valid fields selected. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Caller is not a system administrator. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Export failed. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    getLogsGetFields: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The exportable field names. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": string[];
-                };
-            };
-            /** @description Caller is not a system administrator. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     getProblemsByIdComments: {
         parameters: {
             query: {
@@ -7703,127 +8287,6 @@ export interface operations {
             };
         };
     };
-    getSystemSettingsBackupsDownload: {
-        parameters: {
-            query: {
-                /** @description Exact backup filename from the list endpoint. */
-                file: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The backup file as an octet-stream attachment. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/octet-stream": string;
-                };
-            };
-            /** @description Filename failed the allow-list or path check. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Caller is not a system administrator. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description The backup file does not exist. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    getSystemSettingsBackups: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The available backup pairs. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        backups?: Record<string, never>[];
-                    };
-                };
-            };
-            /** @description Caller is not a system administrator. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    postSystemSettingsBackups: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Backup requested; it will run asynchronously. */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        ok?: boolean;
-                    };
-                };
-            };
-            /** @description Caller is not a system administrator. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description The backup service (trigger volume) is not mounted. */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     getSystemSettingsPublic: {
         parameters: {
             query?: never;
@@ -7845,254 +8308,6 @@ export interface operations {
                         sessionTimeoutMinutes?: number;
                         hcaptchaSiteKey?: string;
                     };
-                };
-            };
-        };
-    };
-    getSystemSettings: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The effective system settings. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        timezone?: string;
-                        maxUploadSizeMb?: number;
-                        allowSignup?: boolean;
-                        sessionTimeoutMinutes?: number;
-                        submissionEvalTimeoutMs?: number;
-                        submissionEvalMaxMemoryMb?: number;
-                        submissionResubmitCooldownMs?: number;
-                        submissionMaxConcurrent?: number;
-                        submissionMaxAttempts?: number;
-                        submissionAnalyzerLimit?: number;
-                        loginMaxAttempts?: number;
-                        loginLockoutMinutes?: number;
-                        backupEnabled?: boolean;
-                        /** @description Hour of day (0-23) the daily backup runs */
-                        backupHour?: number;
-                        backupRetentionDays?: number;
-                        activityLogRetentionDays?: number;
-                        hcaptchaSiteKey?: string;
-                        /** @description Whether a secret is stored; the value is never returned */
-                        hcaptchaSecretConfigured?: boolean;
-                    };
-                };
-            };
-            /** @description Caller is not a system administrator. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    putSystemSettings: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    timezone?: string;
-                    maxUploadSizeMb?: number;
-                    allowSignup?: boolean;
-                    sessionTimeoutMinutes?: number;
-                    submissionEvalTimeoutMs?: number;
-                    submissionEvalMaxMemoryMb?: number;
-                    submissionResubmitCooldownMs?: number;
-                    submissionMaxConcurrent?: number;
-                    submissionMaxAttempts?: number;
-                    submissionAnalyzerLimit?: number;
-                    loginMaxAttempts?: number;
-                    loginLockoutMinutes?: number;
-                    backupEnabled?: boolean;
-                    backupHour?: number;
-                    backupRetentionDays?: number;
-                    activityLogRetentionDays?: number;
-                    hcaptchaSiteKey?: string;
-                    /** @description Write-only; a non-empty value sets the secret */
-                    hcaptchaSecretKey?: string;
-                    /** @description Set true to remove the stored secret */
-                    hcaptchaSecretClear?: boolean;
-                };
-            };
-        };
-        responses: {
-            /** @description The updated settings (same shape as GET). */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Invalid JSON body or invalid timezone. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Caller is not a system administrator (attempt is audited). */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Failed to persist the update. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    getSystemSettingsTls: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Certificate metadata and pending-CSR flag. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        subject?: string | null;
-                        issuer?: string | null;
-                        validTo?: string | null;
-                        selfSigned?: boolean | null;
-                        pendingCsr?: boolean;
-                    };
-                };
-            };
-            /** @description Caller is not an admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    postSystemSettingsTls: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /**
-                     * @description install (default) = upload cert+key; generate-csr = create a CSR to be signed externally; install-signed = install the cert returned for a pending CSR; self-signed = generate a self-signed cert.
-                     * @enum {string}
-                     */
-                    action?: "install" | "generate-csr" | "install-signed" | "self-signed";
-                    /** @description PEM cert (install / install-signed) */
-                    cert?: string;
-                    /** @description PEM private key (install) */
-                    key?: string;
-                    /** @description Optional intermediate chain */
-                    chain?: string;
-                    /** @description CSR/self-signed subject CN */
-                    commonName?: string;
-                    organization?: string;
-                    altNames?: string[];
-                };
-            };
-        };
-        responses: {
-            /** @description The resulting certificate metadata (plus `csr` for generate-csr). */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Invalid JSON, or the certificate/key was rejected by validation. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Caller is not an admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description The certificate operation failed. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    deleteSystemSettingsTls: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Certificate reset; returns the new (self-signed) metadata. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Caller is not an admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
                 };
             };
         };
@@ -8463,76 +8678,6 @@ export interface operations {
             };
         };
     };
-    postUsersBulk: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    rows: {
-                        /** @description Source spreadsheet row, for error reporting */
-                        rowNumber?: number;
-                        firstName?: string;
-                        lastName?: string;
-                        email?: string;
-                        password?: string;
-                    }[];
-                    /** @description Force a password change at first login */
-                    temporaryPasswords?: boolean;
-                };
-            };
-        };
-        responses: {
-            /** @description Per-row outcome — a summary plus created and failed lists. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        summary?: {
-                            total?: number;
-                            created?: number;
-                            failed?: number;
-                        };
-                        created?: Record<string, never>[];
-                        failed?: Record<string, never>[];
-                    };
-                };
-            };
-            /** @description No rows provided. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description System administrators only. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     postUsersChangePassword: {
         parameters: {
             query?: never;
@@ -8582,151 +8727,6 @@ export interface operations {
             };
             /** @description User record not found. */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    getUsersList: {
-        parameters: {
-            query?: {
-                /** @description Filter to a single role */
-                role?: "STUDENT" | "TA" | "FACULTY" | "ADMIN";
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Users (optionally filtered by role). */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>[];
-                };
-            };
-            /** @description Caller lacks a staff role. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    getUsers: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Users. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>[];
-                };
-            };
-            /** @description System administrators only. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    postUsers: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    email: string;
-                    firstName: string;
-                    lastName: string;
-                    /** @description Must meet the strength policy */
-                    password: string;
-                    /** @description Defaults to the system timezone */
-                    timezone?: string;
-                };
-            };
-        };
-        responses: {
-            /** @description The created user. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Missing fields, invalid email, weak password, or invalid timezone. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description System administrators only. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Email already in use. */
-            409: {
                 headers: {
                     [name: string]: unknown;
                 };
