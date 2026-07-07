@@ -93,7 +93,7 @@ export default function SystemLoggingClient() {
         params.set('sortDir', sort.desc ? 'desc' : 'asc');
       }
 
-      const res = await fetch(`/api/logging?${params.toString()}`, { cache: 'no-store' });
+      const res = await fetch(`/api/admin/logs?${params.toString()}`, { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed to fetch logs');
       const data: { rows: LogRow[]; total: number } = await res.json();
       setLogs(data.rows ?? []);

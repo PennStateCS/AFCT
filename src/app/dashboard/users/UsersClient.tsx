@@ -32,7 +32,7 @@ export default function UsersClient({ initialUsers }: { initialUsers?: UserListI
     try {
       setLoading(true);
       setLoadError(null);
-      const res = await fetch('/api/users/list', { cache: 'no-store' });
+      const res = await fetch('/api/admin/users/list', { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed to fetch users');
       const data: UserListItem[] = await res.json();
       setUsers(data);

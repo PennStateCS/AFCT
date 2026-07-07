@@ -260,7 +260,7 @@ export function useEnrollment(course: FullCourse | null) {
 
   const fetchAvailableUsers = useCallback(async () => {
     try {
-      const res = await fetch('/api/users');
+      const res = await fetch('/api/admin/users');
       if (!res.ok) throw new Error('Failed to fetch users');
       const users: User[] = await res.json();
 
