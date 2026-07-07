@@ -30,6 +30,7 @@ import { getSystemUploadLimit } from '@/lib/upload-limits';
  *           firstName: { type: string }
  *           lastName: { type: string }
  *           role: { type: string, enum: [STUDENT, TA, FACULTY, ADMIN] }
+ *           isAdmin: { type: boolean, description: Global admin flag (only writable by admins) }
  *           inactive: { type: boolean }
  *           timezone: { type: string }
  *     multipart/form-data:
@@ -89,6 +90,8 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     let avatarFile: File | null = null;
     let deleteAvatar = false;
     let timezoneRaw: string | undefined;
+    // The global admin flag — only applied when the actor is themselves an admin.
+    let isAdminFlag: boolean | undefined;
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await req.formData();
@@ -99,11 +102,13 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       avatarFile = formData.get('avatar') as File;
       deleteAvatar = formData.get('deleteAvatar') === 'true';
       timezoneRaw = (formData.get('timezone') as string) || undefined;
+      isAdminFlag = formData.has('isAdmin') ? formData.get('isAdmin') === 'true' : undefined;
     } else {
       const body = await req.json();
       ({ firstName, lastName, inactive } = body);
       rawRole = body.role;
       timezoneRaw = body.timezone;
+      isAdminFlag = typeof body.isAdmin === 'boolean' ? body.isAdmin : undefined;
     }
     if (
       timezoneRaw &&
@@ -131,6 +136,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
         firstName: true,
         lastName: true,
         role: true,
+        isAdmin: true,
         inactive: true,
         timezone: true,
       },
@@ -201,14 +207,16 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       lastName?: string;
       avatar?: string | null;
       role?: Role;
+      isAdmin?: boolean;
       inactive?: boolean;
       timezone?: string | null;
     } = {
       firstName: firstName ?? undefined,
       lastName: lastName ?? undefined,
       avatar: avatarFilename !== undefined ? avatarFilename : undefined,
-      // Only admins may change a user's role; self-editors cannot escalate.
+      // Only admins may change a user's role or admin flag; self-editors cannot escalate.
       role: isAdmin(currentUser) ? role : undefined,
+      isAdmin: isAdmin(currentUser) ? isAdminFlag : undefined,
       inactive: inactive,
       timezone: timezoneRaw ? timezoneRaw : undefined,
     };
@@ -222,15 +230,23 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
         firstName: true,
         lastName: true,
         role: true,
+        isAdmin: true,
         inactive: true,
         avatar: true,
         timezone: true,
       },
     });
 
-    // Record exactly what changed (before → after). Role and active-status
-    // changes especially matter when an admin edits another user's account.
-    const AUDITED_USER_FIELDS = ['firstName', 'lastName', 'role', 'inactive', 'timezone'] as const;
+    // Record exactly what changed (before → after). Role, admin-flag, and
+    // active-status changes especially matter when an admin edits another account.
+    const AUDITED_USER_FIELDS = [
+      'firstName',
+      'lastName',
+      'role',
+      'isAdmin',
+      'inactive',
+      'timezone',
+    ] as const;
     const changes: Record<string, { from: string | boolean | null; to: string | boolean | null }> =
       {};
     for (const field of AUDITED_USER_FIELDS) {

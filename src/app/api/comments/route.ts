@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { RoleEnum, CourseRoleEnum } from '@/schemas/user';
-import { canAccessCourse } from '@/lib/permissions';
+import { canAccessCourse, canManageCourse } from '@/lib/permissions';
 
 // ---- Types ----
 interface CommentUser {
@@ -101,28 +101,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 
-    // Verify author is in this course (admins can be added automatically)
-    let rosterEntry = await prisma.roster.findUnique({
-      where: { courseId_userId: { courseId: assignment.courseId, userId: user.id } },
+    // Authorize: any enrolled user (or admin) may comment.
+    if (!(await canAccessCourse(user, assignment.courseId))) {
+      await createEnhancedActivityLog(prisma, request, {
+        userId: session?.user?.id ?? null,
+        action: 'COMMENT_CREATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
+      });
+      return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
+    }
+
+    // Obtain the author's roster row for the comment FK. Admins who aren't on the
+    // roster are auto-added as an instructor so they can comment.
+    let rosterEntry = await prisma.roster.findFirst({
+      where: { courseId: assignment.courseId, userId: user.id },
     });
     if (!rosterEntry) {
-      if (user.role === 'ADMIN') {
-        rosterEntry = await prisma.roster.create({
-          data: {
-            courseId: assignment.courseId,
-            userId: user.id,
-            role: 'INSTRUCTOR',
-          },
-        });
-      } else {
-        await createEnhancedActivityLog(prisma, request, {
-          userId: session?.user?.id ?? null,
-          action: 'COMMENT_CREATE_DENIED',
-          severity: 'SECURITY',
-          metadata: { role: session?.user?.role ?? null },
-        });
-        return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
-      }
+      rosterEntry = await prisma.roster.create({
+        data: {
+          courseId: assignment.courseId,
+          userId: user.id,
+          role: 'INSTRUCTOR',
+        },
+      });
     }
 
     // Verify problem belongs to course
@@ -392,24 +394,16 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Comment not found' }, { status: 404 });
     }
 
-    // Owner or ADMIN/FACULTY can delete; otherwise check course role via roster
+    // The author may delete their own comment; otherwise course staff (admin bypasses).
     const isOwner = comment.roster.user.id === user.id;
-    const isAdminFaculty = ['ADMIN', 'FACULTY'].includes(user.role as string);
-    if (!isOwner && !isAdminFaculty) {
-      const userRosterEntry = await prisma.roster.findUnique({
-        where: {
-          courseId_userId: { courseId: comment.assignment.courseId, userId: user.id },
-        },
+    if (!isOwner && !(await canManageCourse(user, comment.assignment.courseId))) {
+      await createEnhancedActivityLog(prisma, request, {
+        userId: session?.user?.id ?? null,
+        action: 'COMMENT_DELETE_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
       });
-      if (!userRosterEntry || userRosterEntry.role === 'STUDENT') {
-        await createEnhancedActivityLog(prisma, request, {
-          userId: session?.user?.id ?? null,
-          action: 'COMMENT_DELETE_DENIED',
-          severity: 'SECURITY',
-          metadata: { role: session?.user?.role ?? null },
-        });
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     await prisma.comment.delete({ where: { id: commentId } });

@@ -29,6 +29,7 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
   const { data: session } = useSession();
   const courseId = Array.isArray(id) ? id[0] : id;
   const isStudent = session?.user?.role === 'STUDENT';
+  const isAdmin = session?.user?.isAdmin === true;
   const { course, setCourse, refetchCourse, loadTabData, loadingSections } = useCourseData(
     courseId || '',
     {
@@ -178,7 +179,7 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
         course={course}
         isStudent={isStudent}
         onEditClick={() => dialogStates.setEditOpen(true)}
-        onDuplicate={openDuplicate}
+        onDuplicate={isAdmin ? openDuplicate : undefined}
         onPublishToggle={handlePublishToggle}
         onArchiveToggle={handleArchiveToggle}
       />
@@ -251,7 +252,7 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
         />
       )}
 
-      {!isStudent && (
+      {isAdmin && (
         <DuplicateCourseDialog
           open={duplicateOpen}
           setOpen={setDuplicateOpen}
