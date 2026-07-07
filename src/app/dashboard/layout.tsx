@@ -9,6 +9,7 @@ import Navbar from '@/components/Navbar';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import AuthGate from '@/components/AuthGate';
 import { NavbarBreadcrumbProvider } from '@/components/navbar/NavbarBreadcrumbContext';
+import QueryProvider from '@/components/providers/QueryProvider';
 
 export const metadata: Metadata = {
   title: {
@@ -44,15 +45,17 @@ export default async function DashboardLayout({ children }: { children: React.Re
       defaultOpen={defaultOpen}
     >
       <AuthGate>
-        <NavbarBreadcrumbProvider>
-          <div className="flex min-h-screen w-full">
-            <DashboardSidebarShell />
-            <div className="flex flex-1 flex-col p-4">
-              <Navbar />
-              <main lang="en">{children}</main>
+        <QueryProvider>
+          <NavbarBreadcrumbProvider>
+            <div className="flex min-h-screen w-full">
+              <DashboardSidebarShell />
+              <div className="flex flex-1 flex-col p-4">
+                <Navbar />
+                <main lang="en">{children}</main>
+              </div>
             </div>
-          </div>
-        </NavbarBreadcrumbProvider>
+          </NavbarBreadcrumbProvider>
+        </QueryProvider>
       </AuthGate>
     </SidebarProvider>
   );

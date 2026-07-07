@@ -1,6 +1,18 @@
 /** @vitest-environment jsdom */
+import { createElement, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+// A fresh QueryClient per test so the course cache never leaks between cases.
+// retry:false keeps failure paths fast; gcTime:0 avoids lingering cache.
+const createWrapper = () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  });
+  return ({ children }: { children: ReactNode }) =>
+    createElement(QueryClientProvider, { client }, children);
+};
 
 const replaceMock = vi.fn();
 const searchParamsMock = { get: vi.fn(), toString: vi.fn(() => '') };
@@ -70,7 +82,7 @@ describe('useCourseData', () => {
       ok: true,
       json: async () => ({ id: 'c1', name: 'X', enrolled: [], assignments: [], problems: [] }),
     });
-    const { result } = renderHook(() => useCourseData('c1'));
+    const { result } = renderHook(() => useCourseData('c1'), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.course).not.toBeNull());
     expect(result.current.course?.id).toBe('c1');
     expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1?view=summary');
@@ -78,37 +90,41 @@ describe('useCourseData', () => {
 
   it('does not fetch when an initial course is supplied', async () => {
     const initialCourse = { id: 'c1', name: 'X', assignments: [{}], problems: [], enrolled: [] } as never;
-    renderHook(() => useCourseData('c1', { initialCourse }));
+    renderHook(() => useCourseData('c1', { initialCourse }), { wrapper: createWrapper() });
     await Promise.resolve();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('surfaces a toast when the course fetch fails', async () => {
     fetchMock.mockResolvedValue({ ok: false });
-    renderHook(() => useCourseData('c1'));
+    renderHook(() => useCourseData('c1'), { wrapper: createWrapper() });
     await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('Failed to load course'));
   });
 
-  it('lazily loads a tab section and marks it loaded', async () => {
-    const initialCourse = { id: 'c1', name: 'X', assignments: [{}], problems: [], enrolled: [] } as never;
+  it('lazily loads the assignments section and merges it into the course', async () => {
+    const initialCourse = { id: 'c1', name: 'X', assignments: [], problems: [], enrolled: [] } as never;
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({ assignments: [{ id: 'a1' }] }) });
-    const { result } = renderHook(() => useCourseData('c1', { initialCourse }));
+    const { result } = renderHook(() => useCourseData('c1', { initialCourse }), {
+      wrapper: createWrapper(),
+    });
     await act(async () => {
       await result.current.loadTabData('assignments');
     });
     expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1?view=assignments');
-    expect(result.current.loadedSections.assignments).toBe(true);
+    expect(result.current.course?.assignments).toEqual([{ id: 'a1' }]);
   });
 
   it('lazily loads the roster tab', async () => {
-    const initialCourse = { id: 'c1', name: 'X', assignments: [{}], problems: [], enrolled: [] } as never;
+    const initialCourse = { id: 'c1', name: 'X', assignments: [], problems: [], enrolled: [] } as never;
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({ enrolled: [{ id: 'u1' }] }) });
-    const { result } = renderHook(() => useCourseData('c1', { initialCourse }));
+    const { result } = renderHook(() => useCourseData('c1', { initialCourse }), {
+      wrapper: createWrapper(),
+    });
     await act(async () => {
       await result.current.loadTabData('roster');
     });
     expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1?view=roster');
-    expect(result.current.loadedSections.roster).toBe(true);
+    expect(result.current.course?.enrolled).toEqual([{ id: 'u1' }]);
   });
 
   it('fetches the full view (not summary) for a student on mount', async () => {
@@ -116,15 +132,15 @@ describe('useCourseData', () => {
       ok: true,
       json: async () => ({ id: 'c1', name: 'X', enrolled: [], assignments: [], problems: [] }),
     });
-    renderHook(() => useCourseData('c1', { isStudent: true }));
+    renderHook(() => useCourseData('c1', { isStudent: true }), { wrapper: createWrapper() });
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1?view=full'));
   });
 
   it('does not lazily load tabs for a student (they already have full data)', async () => {
     const initialCourse = { id: 'c1', name: 'X', assignments: [{}], problems: [], enrolled: [] } as never;
-    const { result } = renderHook(() =>
-      useCourseData('c1', { initialCourse, isStudent: true }),
-    );
+    const { result } = renderHook(() => useCourseData('c1', { initialCourse, isStudent: true }), {
+      wrapper: createWrapper(),
+    });
     await act(async () => {
       await result.current.loadTabData('assignments');
     });
