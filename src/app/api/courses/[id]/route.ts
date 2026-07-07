@@ -370,12 +370,12 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
  *           isPublished: { type: boolean }
  *           isArchived: { type: boolean }
  *           emptyStringNotation: { type: string }
- *           instructorIds: { type: array, items: { type: string }, description: If present, becomes the exact faculty set }
+ *           instructorIds: { type: array, items: { type: string }, description: "If present, becomes the exact faculty set" }
  * responses:
  *   200:
  *     description: The updated course with roster and assignments.
- *   400: { description: Missing id, invalid isArchived, empty instructor list, or missing registration window. }
- *   403: { description: Not staff, or an archive/unpublish safety check failed. }
+ *   400: { description: "Missing id, invalid isArchived, empty instructor list, or missing registration window." }
+ *   403: { description: "Not staff, or an archive/unpublish safety check failed." }
  *   500: { description: Server error. }
  */
 export async function PUT(req: Request, context: { params: Promise<{ id: string }> }) {
@@ -738,7 +738,7 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
  * responses:
  *   200:
  *     description: Course deleted.
- *   403: { description: Not staff, or the course is not archived. }
+ *   403: { description: "Not staff, or the course is not archived." }
  *   500: { description: Server error. }
  */
 export async function DELETE(req: Request, context: { params: Promise<{ id: string }> }) {

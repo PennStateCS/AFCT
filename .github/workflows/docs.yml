@@ -36,7 +36,9 @@ jobs:
         env:
           SKIP_PRISMA_GENERATE: '1'
 
-      - name: Generate OpenAPI + Swagger UI
+      # docs:api also validates the emitted spec against the OpenAPI schema and
+      # fails on a malformed @openapi block, so a bad spec can't reach Pages.
+      - name: Generate and validate OpenAPI docs
         run: npm run docs:api
 
       - name: Upload Pages artifact

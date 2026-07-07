@@ -78,7 +78,7 @@ async function generateUniqueCourseCode() {
  *     content:
  *       application/json:
  *         schema: { type: object, properties: { id: { type: string }, message: { type: string } } }
- *   400: { description: Missing fields, bad credits, bad code, or invalid dates. }
+ *   400: { description: "Missing fields, bad credits, bad code, or invalid dates." }
  *   401: { description: Not signed in. }
  *   403: { description: Caller may not duplicate courses. }
  *   500: { description: Server error. }

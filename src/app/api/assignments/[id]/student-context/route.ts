@@ -25,7 +25,7 @@ import { prisma } from '@/lib/prisma';
  *             submissionsByProblem: { type: object }
  *             commentsByProblem: { type: object }
  *   401: { description: Not signed in. }
- *   404: { description: Assignment not found, unpublished (for students), or caller not enrolled. }
+ *   404: { description: "Assignment not found, unpublished (for students), or caller not enrolled." }
  *   500: { description: Server error. }
  */
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {

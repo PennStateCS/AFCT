@@ -39,7 +39,7 @@ type Role = 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT';
  * responses:
  *   200:
  *     description: Joined; returns a message and the course.
- *   400: { description: Invalid code, admin join attempt, already enrolled, or registration not open. }
+ *   400: { description: "Invalid code, admin join attempt, already enrolled, or registration not open." }
  *   401: { description: Not signed in. }
  *   403: { description: Course unpublished or archived (faculty/admin only). }
  *   404: { description: Course not found (also returned to students for hidden courses). }

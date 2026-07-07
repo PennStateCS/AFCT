@@ -25,7 +25,7 @@ import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
  *         properties:
  *           title: { type: string }
  *           description: { type: string }
- *           type: { type: string, description: Problem type (e.g. FA, PDA, RE, CFG) }
+ *           type: { type: string, description: "Problem type (e.g. FA, PDA, RE, CFG)" }
  *           courseId: { type: string }
  *           assignmentId: { type: string }
  *           maxPoints: { type: string }

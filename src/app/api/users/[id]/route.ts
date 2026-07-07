@@ -47,7 +47,7 @@ import { getSystemUploadLimit } from '@/lib/upload-limits';
  *     description: The updated user.
  *   400: { description: Invalid timezone. }
  *   401: { description: Not signed in. }
- *   403: { description: Not allowed to edit this user, or deactivating an actively-enrolled user. }
+ *   403: { description: "Not allowed to edit this user, or deactivating an actively-enrolled user." }
  *   413: { description: Avatar exceeds the system upload limit. }
  *   500: { description: Server error. }
  */

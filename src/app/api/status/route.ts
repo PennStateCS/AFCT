@@ -240,7 +240,7 @@ const readDiskStatsSample = async (): Promise<DiskIoSample | null> => {
  *           type: object
  *           properties:
  *             system: { type: object, description: Host and process metrics }
- *             database: { type: object, description: Reachability, engine details, and stats }
+ *             database: { type: object, description: "Reachability, engine details, and stats" }
  *             env: { type: object, description: Public vars plus masked key/length summary }
  *             app: { type: object, description: Optional row counts and tool versions }
  *             metrics: { type: object, description: Detected DB provider and request latency }

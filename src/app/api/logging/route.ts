@@ -30,7 +30,7 @@ function displayName(u: {
  * parameters:
  *   - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
  *   - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
- *   - { name: q, in: query, description: Match on action, category, or author name/email, schema: { type: string } }
+ *   - { name: q, in: query, description: "Match on action, category, or author name/email", schema: { type: string } }
  *   - { name: severity, in: query, schema: { type: string, enum: [INFO, WARNING, ERROR, SECURITY] } }
  *   - { name: sortBy, in: query, schema: { type: string, enum: [timestamp, severity, category, action, ipAddress, userLastName, userFirstName] } }
  *   - { name: sortDir, in: query, schema: { type: string, enum: [asc, desc], default: desc } }
