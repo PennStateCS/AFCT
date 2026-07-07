@@ -1,4 +1,4 @@
-// Generates an OpenAPI spec + a Swagger UI page for the app's API routes.
+// Generates an OpenAPI spec + a Redoc reference page for the app's API routes.
 //
 // The skeleton (paths, HTTP methods, path params, auth hints, source links) is
 // inferred from src/app/api/**/route.ts, so it always matches the code. Any
@@ -26,6 +26,53 @@ const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 const SKIP = new Set([join(API_DIR, 'auth', '[...nextauth]', 'route.ts')]);
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+
+// Rendered as markdown at the top of the docs — the orientation a new consumer needs.
+const API_DESCRIPTION = [
+  'Auto-generated reference for the AFCT Dashboard API. Paths and methods are inferred',
+  'from the route files so the docs stay in step with the code; individual endpoints are',
+  'enriched with an `@openapi` block in the source.',
+  '',
+  '## Authentication',
+  '',
+  'The API authenticates with the **NextAuth session cookie**. Most endpoints require a',
+  'signed-in session; some additionally require an `ADMIN`, `FACULTY`, or `TA` role — the',
+  'requirement is stated on each operation. A few endpoints (health, signup, login, public',
+  'settings) need no session.',
+  '',
+  '## Conventions',
+  '',
+  '- **Base URL:** same-origin, relative to the deployed app.',
+  '- **Errors:** failures return a JSON body with an `error` or `message` string (see the',
+  '  `Error` schema).',
+  '- **Dates:** `datetime-local` strings (`YYYY-MM-DDTHH:MM`) are interpreted in the',
+  "  actor's timezone and stored as UTC.",
+  '- Every operation links to its **source** on GitHub.',
+].join('\n');
+
+// One-line context per tag (tags are the first path segment). Unlisted tags render bare.
+const TAG_DESCRIPTIONS = {
+  auth: 'Sign-up and credential/email checks.',
+  courses: 'Courses, rosters, enrollment, groups, grades, and their assignments and problems.',
+  course_submissions: 'Course-wide submission re-runs.',
+  comments: 'Per-problem discussion comments.',
+  assignments: 'Assignment CRUD and per-assignment problem and grade views.',
+  problems: 'Problem bank CRUD, submissions, and comments.',
+  submissions: 'Student submissions and re-evaluation.',
+  users: 'User accounts and administration.',
+  profile: "The signed-in user's own profile.",
+  groups: 'Course groups addressed by group id.',
+  logging: 'Activity/audit log browsing.',
+  logs: 'Activity-log export.',
+  admin: 'Admin-only user and submission tools.',
+  'system-settings': 'System configuration, TLS certificates, and backups.',
+  session: 'Session keep-alive.',
+  status: 'Operational status and diagnostics.',
+  health: 'Liveness probe for the container healthcheck.',
+  uploads: 'Serving uploaded files (avatars, problem files, submissions).',
+  solutions: 'Serving problem solution files (staff only).',
+  public: 'Public credential verification.',
+};
 
 function findRoutes(dir) {
   const out = [];
@@ -130,6 +177,36 @@ function tagFor(apiPath) {
   return seg.replace(/[{}]/g, '');
 }
 
+// Stable, unique operationId from method + path, e.g.
+// GET /api/courses/{id}/{aid} -> getCoursesByIdByAid. Drives client codegen.
+const toPascal = (s) =>
+  s
+    .replace(/[-_]+/g, ' ')
+    .replace(/(?:^|\s)(\w)/g, (_, c) => c.toUpperCase())
+    .replace(/\s+/g, '');
+function operationId(method, apiPath) {
+  const parts = apiPath
+    .replace(/^\/api\//, '')
+    .split('/')
+    .filter(Boolean)
+    .map((seg) => {
+      const param = seg.match(/^\{(.+)\}$/);
+      return toPascal(param ? `by-${param[1]}` : seg);
+    });
+  return method.toLowerCase() + parts.join('');
+}
+
+// Point any error response (>= 400) that doesn't already describe a body at the
+// shared Error schema, so every 4xx/5xx documents the same { error | message } shape.
+function attachErrorResponses(op) {
+  if (!op.responses) return;
+  for (const [code, resp] of Object.entries(op.responses)) {
+    if (Number(code) >= 400 && resp && typeof resp === 'object' && !resp.$ref && !resp.content) {
+      resp.content = { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } };
+    }
+  }
+}
+
 function buildSpec(routes) {
   const paths = {};
   const tags = new Set();
@@ -167,8 +244,12 @@ function buildSpec(routes) {
         : '';
       const skeleton = {
         tags: [tag],
+        operationId: operationId(method, apiPath),
         summary: description || `${method} ${apiPath}`,
         description: [description, authNote].filter(Boolean).join('\n\n'),
+        // Machine-readable auth: an authenticated route needs the session cookie;
+        // a public one advertises no requirement. An @openapi block can override.
+        security: authed ? [{ cookieAuth: [] }] : [],
         ...(params.length ? { parameters: params } : {}),
         // Only fall back to a placeholder response when the @openapi block doesn't
         // declare its own — otherwise the placeholder lingers alongside real ones.
@@ -177,6 +258,7 @@ function buildSpec(routes) {
       const op = operation ? deepMerge(skeleton, operation) : skeleton;
       // Always append the source link, even when @openapi overrides the description.
       op.description = [op.description, `[View source](${source})`].filter(Boolean).join('\n\n');
+      attachErrorResponses(op);
       paths[apiPath][method.toLowerCase()] = op;
     }
   }
@@ -186,39 +268,69 @@ function buildSpec(routes) {
     info: {
       title: 'AFCT Dashboard API',
       version: pkg.version || '0.0.0',
-      description:
-        'Auto-generated reference for the app\'s API routes. Paths and methods are ' +
-        'inferred from the route files; individual endpoints can be enriched with an ' +
-        '`@openapi` block in the code.',
+      description: API_DESCRIPTION,
     },
     servers: [{ url: '/', description: 'Same-origin (relative to the deployed app)' }],
-    tags: [...tags].sort().map((name) => ({ name })),
+    tags: [...tags].sort().map((name) =>
+      TAG_DESCRIPTIONS[name] ? { name, description: TAG_DESCRIPTIONS[name] } : { name },
+    ),
     paths,
+    components: {
+      securitySchemes: {
+        // NextAuth stores the session in a cookie; the Secure-prefixed variant is
+        // used over HTTPS. Operations that require a session reference this scheme.
+        cookieAuth: {
+          type: 'apiKey',
+          in: 'cookie',
+          name: 'next-auth.session-token',
+          description:
+            'NextAuth session cookie (`__Secure-next-auth.session-token` over HTTPS). ' +
+            'Role requirements, where they apply, are noted in each operation description.',
+        },
+      },
+      schemas: {
+        // Shared error body. Handlers return one of these string fields; error
+        // responses (4xx/5xx) reference this schema.
+        Error: {
+          type: 'object',
+          description: 'Error response. Handlers return `error` or `message` with a human-readable reason.',
+          properties: {
+            error: { type: 'string' },
+            message: { type: 'string' },
+          },
+        },
+      },
+    },
   };
   return { spec, stats };
 }
 
-const SWAGGER_HTML = `<!doctype html>
+// Redoc renders openapi.json as a static, read-only reference (three-panel layout,
+// left-nav search, a spec-download button). It fetches openapi.json from the same
+// directory, so it works as-is on GitHub Pages.
+const REDOC_HTML = `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AFCT Dashboard API</title>
-  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
-  <style>body { margin: 0 }</style>
+  <style>body { margin: 0; padding: 0 }</style>
 </head>
 <body>
-  <div id="swagger-ui"></div>
-  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js" crossorigin></script>
+  <div id="redoc"></div>
+  <script src="https://unpkg.com/redoc@2/bundles/redoc.standalone.js"></script>
   <script>
-    window.ui = SwaggerUIBundle({
-      url: 'openapi.json',
-      dom_id: '#swagger-ui',
-      deepLinking: true,
-      // Read-only reference: "Try it out" can't reach a private deployment cross-origin.
-      supportedSubmitMethods: [],
-      docExpansion: 'none',
-    });
+    Redoc.init(
+      'openapi.json',
+      {
+        hideDownloadButton: false, // keep the button to download the raw spec
+        expandResponses: '200,201',
+        requiredPropsFirst: true,
+        sortPropsAlphabetically: true,
+        pathInMiddlePanel: true,
+      },
+      document.getElementById('redoc'),
+    );
   </script>
 </body>
 </html>
@@ -228,7 +340,7 @@ const routes = findRoutes(API_DIR);
 const { spec, stats } = buildSpec(routes);
 mkdirSync(OUT_DIR, { recursive: true });
 writeFileSync(join(OUT_DIR, 'openapi.json'), JSON.stringify(spec, null, 2));
-writeFileSync(join(OUT_DIR, 'index.html'), SWAGGER_HTML);
+writeFileSync(join(OUT_DIR, 'index.html'), REDOC_HTML);
 
 const endpointCount = Object.values(spec.paths).reduce((n, o) => n + Object.keys(o).length, 0);
 console.log(
@@ -256,6 +368,22 @@ if (stats.parseErrors.length) {
     console.error(`         - ${e.method} ${e.apiPath}: ${e.message.split('\n')[0]}`);
   }
   process.exit(1);
+}
+
+// operationIds must be unique for client codegen; the schema check doesn't enforce it.
+const seenOpIds = new Map();
+for (const [p, methods] of Object.entries(spec.paths)) {
+  for (const [m, op] of Object.entries(methods)) {
+    if (!op.operationId) continue;
+    if (seenOpIds.has(op.operationId)) {
+      console.error(
+        `\n[docs] ERROR: duplicate operationId "${op.operationId}" ` +
+          `(${m} ${p} and ${seenOpIds.get(op.operationId)})`,
+      );
+      process.exit(1);
+    }
+    seenOpIds.set(op.operationId, `${m} ${p}`);
+  }
 }
 
 // Structural validation against the OpenAPI 3.x schema, so a bad deep-merge or a
