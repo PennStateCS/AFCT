@@ -6,7 +6,6 @@ import { usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
 import { LockKeyhole, LogOut, Moon, Sun, UserPen, UserRound } from 'lucide-react';
-import { getInitials } from '@/app/utils/initials'
 import { Badge } from '@/components/ui/RoleBadge';
 import { useNavbarBreadcrumbs } from '@/components/navbar/NavbarBreadcrumbContext';
 import { safeSignOut } from '@/lib/safe-signout';
@@ -16,7 +15,6 @@ import type { SessionUser } from '@/types/next-auth';
 
 // UI Components
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -159,21 +157,9 @@ const Navbar: React.FC = () => {
               className="h-auto rounded-md px-1 py-1 hover:bg-white/20 sm:px-2"
               aria-label="User account menu"
             >
-              <span className="flex items-center gap-2 sm:gap-3">
-                <span className="hidden flex-col items-end sm:flex">
-                  <span className="max-w-[12rem] truncate font-semibold text-white">
-                    {`${user.firstName} ${user.lastName}`}
-                  </span>
-                  <Badge role={user.role} className="text-xs" />
-                </span>
-                <Avatar className="h-11 w-11" aria-label="User avatar">
-                  <AvatarImage 
-                    src={`/api/uploads/pfps/${user.avatar}`}
-                    alt={`${user.firstName} ${user.lastName}`} />
-                  <AvatarFallback>
-                    {getInitials(user.firstName, user.lastName, user.email)}
-                  </AvatarFallback>
-                </Avatar>
+              <span className="flex items-center gap-2">
+                {user.isAdmin && <Badge role="ADMIN" className="text-xs" />}
+                <UserRound className="h-6 w-6 text-white" />
               </span>
             </Button>
           </DropdownMenuTrigger>
