@@ -5,10 +5,10 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 /**
  * Removes a user from a course roster. Permission is tiered: global admins and
- * course instructors/faculty may remove people, but TAs and students may not, and
- * no one may remove a peer at instructor/faculty level. Two safety rules block the
- * removal outright — the user must have no submissions in the course, and a course
- * can't lose its last faculty member.
+ * course faculty may remove people, but TAs and students may not, and a faculty
+ * member may not remove another faculty member. Two safety rules block the removal
+ * outright — the user must have no submissions in the course, and a course can't
+ * lose its last faculty member.
  * @openapi
  * summary: Remove a user from a course
  * parameters:
@@ -47,10 +47,10 @@ export async function DELETE(
     const currentCourseRole = currentRoster?.role ?? null;
     const currentCourseRoleValue = String(currentCourseRole ?? '');
 
-    // Only global ADMIN or course-level INSTRUCTOR/FACULTY/TA may attempt removal
+    // Only global ADMIN or course-level FACULTY/TA may attempt removal
     if (
       currentUser.role !== 'ADMIN' &&
-      !['ADMIN', 'INSTRUCTOR', 'FACULTY', 'TA'].includes(currentCourseRoleValue)
+      !['FACULTY', 'TA'].includes(currentCourseRoleValue)
     ) {
       await createEnhancedActivityLog(prisma, req as unknown as Request, {
         userId: session?.user?.id ?? null,
@@ -79,26 +79,11 @@ export async function DELETE(
     });
     const targetCourseRoleValue = String(targetRoster?.role ?? '');
 
-    // Faculty may not remove instructor/faculty
+    // A faculty member may not remove another faculty member (a global admin may).
     if (
       currentCourseRoleValue === 'FACULTY' &&
       targetRoster &&
-      ['ADMIN', 'INSTRUCTOR', 'FACULTY'].includes(targetCourseRoleValue)
-    ) {
-      await createEnhancedActivityLog(prisma, req as unknown as Request, {
-        userId: session?.user?.id ?? null,
-        action: 'ROSTER_REMOVE_DENIED',
-        severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
-      });
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    // Course admins/instructors may not remove other course admins/instructors
-    if (
-      ['ADMIN', 'INSTRUCTOR'].includes(currentCourseRoleValue) &&
-      targetRoster &&
-      ['ADMIN', 'INSTRUCTOR'].includes(targetCourseRoleValue)
+      targetCourseRoleValue === 'FACULTY'
     ) {
       await createEnhancedActivityLog(prisma, req as unknown as Request, {
         userId: session?.user?.id ?? null,
@@ -248,9 +233,9 @@ export async function GET(
 }
 
 /**
- * Changes a user's course role. Only a global admin or the course's instructor may
- * do this. The last instructor can't be demoted, keeping every course with someone
- * in charge.
+ * Changes a user's course role. Only a global admin or a course faculty member may
+ * do this. The last faculty member can't be demoted, keeping every course with
+ * someone in charge.
  * @openapi
  * summary: Change a user's course role
  * parameters:
@@ -264,7 +249,7 @@ export async function GET(
  *         type: object
  *         required: [role]
  *         properties:
- *           role: { type: string, enum: [INSTRUCTOR, FACULTY, TA, STUDENT] }
+ *           role: { type: string, enum: [FACULTY, TA, STUDENT] }
  * responses:
  *   200:
  *     description: Role updated.
@@ -289,15 +274,15 @@ export async function PATCH(
 
     const body = await req.json();
     const newRole = body?.role;
-    const allowedRoles = ['INSTRUCTOR', 'FACULTY', 'TA', 'STUDENT'];
+    const allowedRoles = ['FACULTY', 'TA', 'STUDENT'];
     if (!allowedRoles.includes(newRole))
       return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
 
-    // Check permissions: ADMIN or course's ADMIN
+    // Check permissions: global admin or a course faculty member
     const currentRoster = await prisma.roster.findFirst({
       where: { courseId, userId: currentUser.id },
     });
-    const isAllowed = currentUser.role === 'ADMIN' || currentRoster?.role === 'INSTRUCTOR';
+    const isAllowed = currentUser.role === 'ADMIN' || currentRoster?.role === 'FACULTY';
     if (!isAllowed) {
       await createEnhancedActivityLog(prisma, req as unknown as Request, {
         userId: session?.user?.id ?? null,
@@ -316,13 +301,13 @@ export async function PATCH(
     if (!target) return NextResponse.json({ error: 'Roster entry not found' }, { status: 404 });
 
     // Prevent demoting the only faculty member
-    if (target.role === 'INSTRUCTOR' && newRole !== 'INSTRUCTOR') {
-      const instructorCount = await prisma.roster.count({
-        where: { courseId, role: 'INSTRUCTOR' },
+    if (target.role === 'FACULTY' && newRole !== 'FACULTY') {
+      const facultyCount = await prisma.roster.count({
+        where: { courseId, role: 'FACULTY' },
       });
-      if (instructorCount <= 1) {
+      if (facultyCount <= 1) {
         return NextResponse.json(
-          { error: 'Cannot demote the only course instructor' },
+          { error: 'Cannot demote the only course faculty member' },
           { status: 400 },
         );
       }

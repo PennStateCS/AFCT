@@ -117,7 +117,7 @@ export const assignCourseRosters = async (
   for (const course of courses) {
     const instructor = pickRandom(facultyUsers);
     if (instructor) {
-      await upsertRoster(prisma, course.id, instructor.id, 'INSTRUCTOR' as CourseRole);
+      await upsertRoster(prisma, course.id, instructor.id, 'FACULTY' as CourseRole);
     }
 
     if (course.assignTa && taUsers.length > 0) {
