@@ -37,15 +37,15 @@ const isSafeFileName = (name: string) => {
  *         required: [category, fileName]
  *         properties:
  *           category: { type: string, enum: [solutions, submissions, pfps, problems] }
- *           fileName: { type: string, description: Bare filename, no path separators }
+ *           fileName: { type: string, description: "Bare filename, no path separators" }
  * responses:
  *   200:
  *     description: File deleted.
  *     content:
  *       application/json:
  *         schema: { type: object, properties: { ok: { type: boolean } } }
- *   400: { description: Unknown category, unsafe filename, or path outside the category folder. }
- *   401: { description: Not signed in, or lacking staff role. }
+ *   400: { description: "Unknown category, unsafe filename, or path outside the category folder." }
+ *   401: { description: "Not signed in, or lacking staff role." }
  *   404: { description: File not found on disk. }
  *   409: { description: A DB row still references this file — refused. }
  *   500: { description: Server error. }

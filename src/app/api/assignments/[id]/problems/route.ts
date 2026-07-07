@@ -44,7 +44,7 @@ interface AssignmentProblemResult {
  *       application/json:
  *         schema: { type: array, items: { type: object } }
  *   400: { description: Missing assignment id. }
- *   401: { description: Not signed in, or not an admin/faculty user. }
+ *   401: { description: "Not signed in, or not an admin/faculty user." }
  *   404: { description: Assignment not found. }
  *   500: { description: Server error. }
  */

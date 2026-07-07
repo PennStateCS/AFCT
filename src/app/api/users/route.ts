@@ -87,7 +87,7 @@ export async function GET(req: Request) {
  * responses:
  *   201:
  *     description: The created user.
- *   400: { description: Missing fields, invalid email, weak password, or invalid timezone. }
+ *   400: { description: "Missing fields, invalid email, weak password, or invalid timezone." }
  *   403: { description: Caller lacks a staff role. }
  *   409: { description: Email already in use. }
  *   500: { description: Server error. }

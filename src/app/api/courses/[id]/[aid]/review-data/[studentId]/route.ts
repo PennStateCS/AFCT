@@ -67,7 +67,7 @@ const submissionSelectWithoutEvaluation = {
  *             comments: { type: array, items: { type: object } }
  *             problemGrades: { type: object }
  *   401: { description: Not signed in. }
- *   403: { description: Not staff and requesting another student's data, or not enrolled. }
+ *   403: { description: "Not staff and requesting another student's data, or not enrolled." }
  *   404: { description: Assignment not found for this course. }
  *   500: { description: Server error. }
  */

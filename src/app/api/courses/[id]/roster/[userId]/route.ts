@@ -20,7 +20,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
  *     content:
  *       application/json:
  *         schema: { type: object, properties: { success: { type: boolean }, removed: { type: integer } } }
- *   400: { description: User has submissions, or is the only faculty member. }
+ *   400: { description: "User has submissions, or is the only faculty member." }
  *   401: { description: Not signed in. }
  *   403: { description: Caller's role may not remove this user. }
  *   500: { description: Server error. }
@@ -188,7 +188,7 @@ export async function DELETE(
  * summary: Get a roster entry
  * parameters:
  *   - { name: id, in: path, required: true, schema: { type: string } }
- *   - { name: userId, in: path, required: true, description: A user id, or "me" for the caller, schema: { type: string } }
+ *   - { name: userId, in: path, required: true, description: 'A user id, or "me" for the caller', schema: { type: string } }
  * responses:
  *   200:
  *     description: The roster entry and the viewer's roles.
@@ -268,7 +268,7 @@ export async function GET(
  * responses:
  *   200:
  *     description: Role updated.
- *   400: { description: Invalid role, or demoting the only instructor. }
+ *   400: { description: "Invalid role, or demoting the only instructor." }
  *   401: { description: Not signed in. }
  *   403: { description: Caller is not an admin or the course instructor. }
  *   404: { description: Roster entry not found. }

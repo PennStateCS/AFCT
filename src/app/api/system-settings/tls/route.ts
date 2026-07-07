@@ -107,7 +107,7 @@ type Body = {
  * responses:
  *   200:
  *     description: The resulting certificate metadata (plus `csr` for generate-csr).
- *   400: { description: Invalid JSON, or the certificate/key was rejected by validation. }
+ *   400: { description: "Invalid JSON, or the certificate/key was rejected by validation." }
  *   403: { description: Caller is not an admin. }
  *   500: { description: The certificate operation failed. }
  */

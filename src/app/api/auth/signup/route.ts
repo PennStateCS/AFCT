@@ -46,7 +46,7 @@ const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
  *           properties:
  *             message: { type: string }
  *             userId: { type: string }
- *   400: { description: Missing fields, invalid email, or weak password. }
+ *   400: { description: "Missing fields, invalid email, or weak password." }
  *   403: { description: Signup is disabled. }
  *   409: { description: Email already registered. }
  *   428: { description: Rate limiter requires a captcha challenge; retry with captchaToken. }

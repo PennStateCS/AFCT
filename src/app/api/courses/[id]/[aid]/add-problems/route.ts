@@ -59,7 +59,7 @@ type ProblemSettingsInput = z.infer<typeof ProblemSettingsSchema>;
  *               properties:
  *                 problemId: { type: string }
  *                 maxPoints: { type: number, minimum: 0 }
- *                 maxSubmissions: { type: integer, description: -1 for unlimited, else >= 1 }
+ *                 maxSubmissions: { type: integer, description: "-1 for unlimited, else >= 1" }
  *                 autograderEnabled: { type: boolean }
  *           groupId: { type: string, description: A group id or "ALL" (group assignments only) }
  * responses:
