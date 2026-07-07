@@ -415,7 +415,7 @@ export default function SystemStatusClient() {
   const fetchStatus = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch(`/api/status${deep ? '?deep=1' : ''}`, { cache: 'no-store' });
+      const r = await fetch(`/api/admin/status${deep ? '?deep=1' : ''}`, { cache: 'no-store' });
       const data = (await r.json()) as StatusResponse;
       setStatus(data);
       setLastUpdated(new Date());
@@ -451,7 +451,7 @@ export default function SystemStatusClient() {
 
       setDeletingFiles((prev) => ({ ...prev, [key]: true }));
       try {
-        const res = await fetch('/api/status/abandoned-files', {
+        const res = await fetch('/api/admin/status/abandoned-files', {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ category, fileName }),
