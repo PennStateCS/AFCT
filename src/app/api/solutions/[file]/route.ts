@@ -5,6 +5,27 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
+/**
+ * Serves a problem's solution file — the most sensitive protected material, so
+ * access is limited to staff (ADMIN/FACULTY/TA) and every successful serve is
+ * audited (both inline and `?download=1`). Traversal filenames are rejected.
+ * @openapi
+ * summary: Get a solution file
+ * parameters:
+ *   - { name: file, in: path, required: true, schema: { type: string } }
+ *   - { name: download, in: query, description: Set to "1" to mark the access as a download in the audit log, schema: { type: string, enum: ['1'] } }
+ * responses:
+ *   200:
+ *     description: The solution file bytes (as an attachment).
+ *     content:
+ *       application/octet-stream:
+ *         schema: { type: string, format: binary }
+ *   400: { description: Invalid filename. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller lacks a staff role. }
+ *   404: { description: File not found. }
+ *   500: { description: Server error. }
+ */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ file: string }> }) {
   let actorId: string | null = null;
   let fileName: string | undefined;

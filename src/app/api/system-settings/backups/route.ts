@@ -9,7 +9,22 @@ function authorized(role: string | undefined): boolean {
   return !!role && ['ADMIN', 'FACULTY'].includes(role);
 }
 
-// List available backups (newest first), paired as { database dump, files archive }.
+/**
+ * Lists available backups, newest first, each pairing a database dump with its
+ * matching upload-files archive. Admin/Faculty only.
+ * @openapi
+ * summary: List backups
+ * responses:
+ *   200:
+ *     description: The available backup pairs.
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             backups: { type: array, items: { type: object } }
+ *   403: { description: Caller is not an admin or faculty user. }
+ */
 export async function GET() {
   const session = await auth();
   if (!authorized(session?.user?.role)) {
@@ -18,7 +33,21 @@ export async function GET() {
   return NextResponse.json({ backups: listBackups() });
 }
 
-// Request an on-demand backup: drop a flag the db-backup container watches for.
+/**
+ * Requests an on-demand backup by dropping a trigger file the db-backup container
+ * polls for. Admin/Faculty only. Returns 202 (accepted) — the backup runs
+ * asynchronously in that container, not in this request.
+ * @openapi
+ * summary: Trigger a backup now
+ * responses:
+ *   202:
+ *     description: Backup requested; it will run asynchronously.
+ *     content:
+ *       application/json:
+ *         schema: { type: object, properties: { ok: { type: boolean } } }
+ *   403: { description: Caller is not an admin or faculty user. }
+ *   503: { description: The backup service (trigger volume) is not mounted. }
+ */
 export async function POST(req: Request) {
   const session = await auth();
   if (!authorized(session?.user?.role)) {

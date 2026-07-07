@@ -3,6 +3,27 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
+/**
+ * Returns each course group alongside the problem ids mapped to it for this
+ * assignment (the group→problem assignment matrix). Requires a signed-in user.
+ * @openapi
+ * summary: Get group→problem mappings for an assignment
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: aid, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: Groups, each with its mapped problemIds.
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             success: { type: boolean }
+ *             groups: { type: array, items: { type: object } }
+ *   403: { description: Not signed in. }
+ *   500: { description: Server error. }
+ */
 export async function GET(_: Request, { params }: { params: Promise<{ id: string; aid: string }> }) {
   const { id: courseId, aid: assignmentId } = await params;
 
@@ -55,8 +76,26 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   }
 }
 
-// Support POST { action: 'list' } as an alternative to GET so clients do not
-// need to use AbortController.signal when requesting group mappings.
+/**
+ * Same group→problem mapping data as GET, exposed over POST so clients can request
+ * it without a GET's AbortController plumbing. Requires `{ action: 'list' }` and a
+ * signed-in user.
+ * @openapi
+ * summary: Get group→problem mappings (via POST)
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: aid, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema: { type: object, required: [action], properties: { action: { type: string, enum: [list] } } }
+ * responses:
+ *   200: { description: Groups with their mapped problemIds. }
+ *   400: { description: Unsupported action. }
+ *   403: { description: Not signed in. }
+ *   500: { description: Server error. }
+ */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string; aid: string }> }) {
   const { id: courseId, aid: assignmentId } = await params;
 
@@ -117,7 +156,31 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 }
 
-// DELETE: remove group->problem mappings for an assignment
+/**
+ * Removes group→problem mappings for an assignment. Staff only (ADMIN/FACULTY/TA).
+ * A `groupId` is required — pass a specific group id, or "ALL" to clear the given
+ * problems from every group. The problems themselves stay on the assignment.
+ * @openapi
+ * summary: Remove group→problem mappings
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: aid, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [problemIds, groupId]
+ *         properties:
+ *           problemIds: { type: array, items: { type: string } }
+ *           groupId: { type: string, description: A group id, or "ALL" }
+ * responses:
+ *   200: { description: Mappings removed. }
+ *   400: { description: Empty body, no problemIds, invalid group, or missing groupId. }
+ *   403: { description: Caller lacks a staff role. }
+ *   500: { description: Server error. }
+ */
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string; aid: string }> }) {
   const { id: courseId, aid: assignmentId } = await params;
 

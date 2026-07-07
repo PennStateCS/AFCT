@@ -28,19 +28,35 @@ interface AssignmentProblemResult {
   AssignmentProblemGrade?: { grade: number | null } | null;
 }
 
+/**
+ * Lists an assignment's problems, tagged with whether the caller has solved each
+ * (a correct submission) and their grade. For group assignments, visibility follows
+ * the caller's group — unassigned problems show to everyone, group-mapped ones only
+ * to that group's members. Currently restricted to ADMIN/FACULTY.
+ * @openapi
+ * summary: List an assignment's problems
+ * parameters:
+ *   - { name: id, in: path, required: true, description: Assignment id, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: The visible problems with solved/grade flags.
+ *     content:
+ *       application/json:
+ *         schema: { type: array, items: { type: object } }
+ *   400: { description: Missing assignment id. }
+ *   401: { description: Not signed in, or not an admin/faculty user. }
+ *   404: { description: Assignment not found. }
+ *   500: { description: Server error. }
+ */
 export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
-  // Await params if it is a Promise (some environments do this)
   const params = await context.params;
   const assignmentId = params?.id;
 
-  // 1. Validate courseId
   if (!assignmentId) {
     return NextResponse.json({ error: 'Missing course ID' }, { status: 400 });
   }
 
-  // 2. Verify
   const session = await auth();
-  
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

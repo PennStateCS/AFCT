@@ -3,6 +3,25 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
+/**
+ * Reads one student's grade and feedback for a specific problem within an
+ * assignment. A student may read their own; staff may read anyone's. Returns nulls
+ * (not 404) when the problem exists but hasn't been graded.
+ * @openapi
+ * summary: Get a single problem grade
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: aid, in: path, required: true, schema: { type: string } }
+ *   - { name: pid, in: path, required: true, schema: { type: string } }
+ *   - { name: studentId, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: The grade, feedback, and updatedAt (grade/feedback null if ungraded).
+ *   401: { description: Not signed in. }
+ *   403: { description: Not the student in question and not staff. }
+ *   404: { description: Problem not found in this assignment/course. }
+ *   500: { description: Server error. }
+ */
 export async function GET(
   _req: NextRequest,
   {
@@ -71,6 +90,34 @@ export async function GET(
   }
 }
 
+/**
+ * Sets or clears a student's grade (and optional feedback) for one problem. Staff
+ * only (ADMIN/FACULTY/TA). A numeric grade must be within [0, maxPoints]; sending
+ * a null grade deletes the record. Every change is audited with the previous value.
+ * @openapi
+ * summary: Set or clear a problem grade
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: aid, in: path, required: true, schema: { type: string } }
+ *   - { name: pid, in: path, required: true, schema: { type: string } }
+ *   - { name: studentId, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         properties:
+ *           grade: { type: number, nullable: true, description: 0..maxPoints, or null to clear }
+ *           feedback: { type: string, nullable: true }
+ * responses:
+ *   200: { description: The saved (or cleared) grade and feedback. }
+ *   400: { description: Grade not a number/null, or out of range. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller lacks a staff role. }
+ *   404: { description: Problem not found in this assignment/course. }
+ *   500: { description: Server error. }
+ */
 export async function POST(
   req: NextRequest,
   {

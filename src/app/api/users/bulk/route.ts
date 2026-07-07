@@ -27,6 +27,54 @@ type CreatedRow = {
   userId: string;
 };
 
+/**
+ * Bulk-creates student accounts from parsed spreadsheet rows (the CSV import flow).
+ * Restricted to ADMIN/FACULTY/TA. Each row is validated independently — a bad row
+ * is collected in `failed` with a reason rather than aborting the batch — so the
+ * response always reports per-row created/failed outcomes. Duplicate emails are
+ * caught both within the batch and against existing users. All accounts are created
+ * as STUDENT; `temporaryPasswords` forces a reset at first login.
+ * @openapi
+ * summary: Bulk-create users
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [rows]
+ *         properties:
+ *           rows:
+ *             type: array
+ *             items:
+ *               type: object
+ *               properties:
+ *                 rowNumber: { type: integer, description: Source spreadsheet row, for error reporting }
+ *                 firstName: { type: string }
+ *                 lastName: { type: string }
+ *                 email: { type: string }
+ *                 password: { type: string }
+ *           temporaryPasswords: { type: boolean, description: Force a password change at first login }
+ * responses:
+ *   200:
+ *     description: Per-row outcome — a summary plus created and failed lists.
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             summary:
+ *               type: object
+ *               properties:
+ *                 total: { type: integer }
+ *                 created: { type: integer }
+ *                 failed: { type: integer }
+ *             created: { type: array, items: { type: object } }
+ *             failed: { type: array, items: { type: object } }
+ *   400: { description: No rows provided. }
+ *   403: { description: Caller lacks a staff role. }
+ *   500: { description: Server error. }
+ */
 export async function POST(req: Request) {
   try {
     const session = await auth();

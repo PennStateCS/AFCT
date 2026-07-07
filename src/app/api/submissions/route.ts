@@ -1,5 +1,3 @@
-// /src/app/api/submissions/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -12,8 +10,39 @@ import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { getQueueSettings } from '@/lib/eval-config';
 import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 
+/**
+ * Submits a student's solution file for one assignment problem (multipart/form-data)
+ * and queues it for evaluation. Requires a signed-in user who is enrolled in the
+ * course (admins may submit anywhere). The problem must be linked to the assignment;
+ * the authoritative course comes from the assignment, not the client. Enforces a
+ * resubmit cooldown (429), the assignment's late/late-cutoff policy (403), an upload
+ * size limit (413), and XML structure validation. On success the submission is
+ * stored PENDING and returned with 202.
+ * @openapi
+ * summary: Submit a solution
+ * requestBody:
+ *   required: true
+ *   content:
+ *     multipart/form-data:
+ *       schema:
+ *         type: object
+ *         required: [assignmentId, problemId]
+ *         properties:
+ *           assignmentId: { type: string }
+ *           problemId: { type: string }
+ *           courseId: { type: string, description: Ignored; derived from the assignment }
+ *           file: { type: string, format: binary, description: The solution file (XML) }
+ * responses:
+ *   202: { description: Submission accepted and queued (status PENDING). }
+ *   400: { description: Missing fields, unlinked problem, or invalid file structure. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Not enrolled, or the late/late-cutoff policy rejected it. }
+ *   404: { description: Assignment not found. }
+ *   413: { description: File exceeds the system upload limit. }
+ *   429: { description: Resubmit cooldown in effect (see Retry-After). }
+ *   500: { description: Server error. }
+ */
 export async function POST(req: NextRequest) {
-  // 1. Verify session
   const session = await auth();
   if (!session) {
     console.warn('Unauthorized submission attempt');
@@ -417,10 +446,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Success
     return NextResponse.json(submission, { status: 202 });
-
-    // Error
   } catch (error: unknown) {
     // Clean up the orphaned upload if the submission record was never created
     if (uploadedFilePath) {

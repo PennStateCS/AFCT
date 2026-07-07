@@ -18,6 +18,35 @@ const AssignmentProblemSettingsSchema = z.object({
 
 type AssignmentProblemSettingsInput = z.infer<typeof AssignmentProblemSettingsSchema>;
 
+/**
+ * Updates the per-assignment settings for one problem: its point value, submission
+ * cap, and whether the autograder runs. Staff only (ADMIN/FACULTY/TA). The problem
+ * must already be linked to the assignment, and the assignment must belong to the
+ * course in the path.
+ * @openapi
+ * summary: Update an assignment problem's settings
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: aid, in: path, required: true, schema: { type: string } }
+ *   - { name: pid, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [maxPoints, maxSubmissions, autograderEnabled]
+ *         properties:
+ *           maxPoints: { type: number, minimum: 0 }
+ *           maxSubmissions: { type: integer, description: -1 for unlimited, else >= 1 }
+ *           autograderEnabled: { type: boolean }
+ * responses:
+ *   200: { description: The updated assignment-problem settings. }
+ *   400: { description: Invalid JSON or settings. }
+ *   403: { description: Caller lacks a staff role. }
+ *   404: { description: The problem isn't linked to this assignment/course. }
+ *   500: { description: Server error. }
+ */
 export async function PUT(
   req: Request,
   { params }: { params: Promise<{ id: string; aid: string; pid: string }> },

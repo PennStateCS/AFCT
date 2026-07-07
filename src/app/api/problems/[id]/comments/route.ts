@@ -3,7 +3,27 @@ import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { prisma } from '@/lib/prisma';
 
-// GET - Fetch comments for a specific problem
+/**
+ * Fetches comments for a problem. Any signed-in user may call it. Note the problem
+ * is identified by the `?problemId` query parameter — the `[id]` path segment is
+ * ignored. An optional `studentId` narrows to comments about, or authored by, that
+ * student.
+ * @openapi
+ * summary: List comments for a problem
+ * parameters:
+ *   - { name: id, in: path, required: true, description: Ignored; problemId comes from the query, schema: { type: string } }
+ *   - { name: problemId, in: query, required: true, schema: { type: string } }
+ *   - { name: studentId, in: query, description: Narrow to a student's thread, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: The problem's comments, oldest first.
+ *     content:
+ *       application/json:
+ *         schema: { type: array, items: { type: object } }
+ *   400: { description: Missing problemId. }
+ *   401: { description: Not signed in. }
+ *   500: { description: Server error. }
+ */
 export async function GET(request: NextRequest, { params: _params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth();
@@ -72,7 +92,27 @@ export async function GET(request: NextRequest, { params: _params }: { params: P
   }
 }
 
-// POST - Create a new comment for a specific problem
+/**
+ * Posts a comment on a problem (identified by the `[id]` path segment here). The
+ * author must be enrolled in the problem's course; the comment is attached to the
+ * problem's first linked assignment.
+ * @openapi
+ * summary: Add a comment to a problem
+ * parameters:
+ *   - { name: id, in: path, required: true, description: Problem id, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema: { type: object, required: [content], properties: { content: { type: string } } }
+ * responses:
+ *   201: { description: The created comment. }
+ *   400: { description: Empty content. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller is not enrolled in the course. }
+ *   404: { description: Problem or its assignment not found. }
+ *   500: { description: Server error. }
+ */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   let actorId: string | null = null;
   try {

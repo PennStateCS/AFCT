@@ -1,31 +1,48 @@
-// /src/api/courses/[id]/archive/route.ts
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canArchiveCourse } from '@/lib/course-status-checks';
 
+/**
+ * Toggles a course's archived state. ADMIN/FACULTY only. Archiving runs a safety
+ * check (canArchiveCourse) using the course's stored dates rather than any client
+ * value, to avoid timezone drift deciding whether a course has really ended.
+ * @openapi
+ * summary: Archive or unarchive a course
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [isArchived]
+ *         properties:
+ *           isArchived: { type: boolean }
+ * responses:
+ *   200:
+ *     description: The updated course (id, name, code, isArchived, updatedAt).
+ *   400: { description: isArchived must be a boolean. }
+ *   403: { description: Not staff, or archiving is blocked by the safety check. }
+ *   404: { description: Course not found. }
+ *   500: { description: Server error. }
+ */
 export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
   let actorId: string | null = null;
   try {
-    // Extract params
     const { id: courseId } = await context.params;
 
-    // Parse JSON body
     const { isArchived } = await req.json();
-
-    // Validate input
     if (typeof isArchived !== 'boolean') {
       return NextResponse.json({ error: 'isArchived must be a boolean' }, { status: 400 });
     }
 
-    // Get authenticated user session
     const session = await auth();
     const user = session?.user;
     actorId = user?.id ?? null;
 
-    // Allow only ADMIN or FACULTY to toggle archive status
     if (!user || !['ADMIN', 'FACULTY'].includes(user.role)) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
@@ -63,7 +80,6 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
       }
     }
 
-    // Update course archive status
     const updated = await prisma.course.update({
       where: { id: courseId },
       data: { isArchived },
@@ -76,7 +92,6 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
       },
     });
 
-    // Log the archive/notArchived event
     await createEnhancedActivityLog(prisma, req, {
       userId: user.id,
       action: isArchived ? 'COURSE_ARCHIVED' : 'COURSE_NOT_ARCHIVED',
@@ -91,7 +106,6 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
       },
     });
 
-    // Respond with the updated course
     return NextResponse.json(updated);
   } catch (error) {
     console.error('Failed PATCH /api/courses/[id]/archive error:', error);
