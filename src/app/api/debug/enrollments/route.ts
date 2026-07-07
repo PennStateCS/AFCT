@@ -1,8 +1,27 @@
-// Debug endpoint to check user enrollments
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 
+/**
+ * Debug helper: returns the signed-in user's own roster entries (with a little
+ * course info) plus their id and role. Handy for diagnosing enrollment issues;
+ * scoped to the caller, so it exposes nothing about other users.
+ * @openapi
+ * summary: Inspect my enrollments (debug)
+ * responses:
+ *   200:
+ *     description: The caller's roster entries and role.
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             userId: { type: string }
+ *             userRole: { type: string }
+ *             enrollments: { type: array, items: { type: object } }
+ *   401: { description: Not signed in. }
+ *   500: { description: Query failed. }
+ */
 export async function GET() {
   const session = await auth();
 

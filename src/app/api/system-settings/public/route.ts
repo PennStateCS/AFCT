@@ -7,6 +7,25 @@ import {
 } from '@/lib/system-settings';
 import { getHcaptchaSiteKey } from '@/lib/hcaptcha';
 
+/**
+ * The safe subset of system settings the login and signup screens need before a
+ * user is authenticated. Deliberately public and limited to non-sensitive values
+ * — notably the hCaptcha *site* key, never the secret.
+ * @openapi
+ * summary: Get public system settings
+ * responses:
+ *   200:
+ *     description: Public settings for unauthenticated screens.
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             timezone: { type: string }
+ *             allowSignup: { type: boolean }
+ *             sessionTimeoutMinutes: { type: integer }
+ *             hcaptchaSiteKey: { type: string }
+ */
 export async function GET() {
   const settings = await prisma.systemSettings.findUnique({ where: { id: 1 } });
   return NextResponse.json({
