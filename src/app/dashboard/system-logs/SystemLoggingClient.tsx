@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import type { OnChangeFn, PaginationState, SortingState } from '@tanstack/react-table';
 import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
@@ -48,8 +49,6 @@ const SEVERITY_VARIANT: Record<Severity, 'info' | 'warning' | 'danger' | 'destru
 };
 
 export default function SystemLoggingClient() {
-  const [logs, setLogs] = useState<LogRow[]>([]);
-  const [total, setTotal] = useState(0);
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
@@ -59,9 +58,6 @@ export default function SystemLoggingClient() {
   const [search, setSearch] = useState('');
   const [severity, setSeverity] = useState<Severity | typeof ALL_SEVERITIES>(ALL_SEVERITIES);
   const [sorting, setSorting] = useState<SortingState>([{ id: 'timestamp', desc: true }]);
-
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [selectedData, setSelectedData] = useState('');
   const [title, setTitle] = useState('');
@@ -77,38 +73,49 @@ export default function SystemLoggingClient() {
     return () => clearTimeout(t);
   }, [searchInput]);
 
-  const fetchLogs = useCallback(async () => {
-    try {
-      setLoading(true);
-      setLoadError(null);
+  // Stable, serializable description of the current query — used both as the
+  // React Query cache key and to build the request params. Each distinct
+  // combination of page/size/search/severity/sort is cached separately.
+  const sort = sorting[0];
+  const queryParams = {
+    page: pageIndex + 1,
+    pageSize,
+    q: search || undefined,
+    severity: severity !== ALL_SEVERITIES ? severity : undefined,
+    sortBy: sort?.id,
+    sortDir: sort ? (sort.desc ? 'desc' : 'asc') : undefined,
+  };
+
+  // Cached, server-paginated log list. keepPreviousData keeps the current page
+  // visible while the next one loads, so the table doesn't flash empty.
+  const {
+    data,
+    isLoading,
+    isFetching,
+    isError,
+    refetch,
+  } = useQuery({
+    queryKey: ['admin', 'logs', queryParams],
+    queryFn: async () => {
       const params = new URLSearchParams({
-        page: String(pageIndex + 1),
-        pageSize: String(pageSize),
+        page: String(queryParams.page),
+        pageSize: String(queryParams.pageSize),
       });
-      if (search) params.set('q', search);
-      if (severity !== ALL_SEVERITIES) params.set('severity', severity);
-      const sort = sorting[0];
-      if (sort) {
-        params.set('sortBy', sort.id);
-        params.set('sortDir', sort.desc ? 'desc' : 'asc');
-      }
+      if (queryParams.q) params.set('q', queryParams.q);
+      if (queryParams.severity) params.set('severity', queryParams.severity);
+      if (queryParams.sortBy) params.set('sortBy', queryParams.sortBy);
+      if (queryParams.sortDir) params.set('sortDir', queryParams.sortDir);
 
       const res = await fetch(`/api/admin/logs?${params.toString()}`, { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed to fetch logs');
-      const data: { rows: LogRow[]; total: number } = await res.json();
-      setLogs(data.rows ?? []);
-      setTotal(data.total ?? 0);
-    } catch (error) {
-      setLoadError('Failed to load logs. Please try again.');
-      console.error('Error loading logs:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [pageIndex, pageSize, search, severity, sorting]);
+      return (await res.json()) as { rows: LogRow[]; total: number };
+    },
+    placeholderData: keepPreviousData,
+  });
 
-  useEffect(() => {
-    void fetchLogs();
-  }, [fetchLogs]);
+  const logs = data?.rows ?? [];
+  const total = data?.total ?? 0;
+  const loading = isLoading || isFetching;
 
   const handleViewerOpen = (row: LogRow) => {
     setSelectedData(JSON.stringify(row, null, 2));
@@ -210,12 +217,12 @@ export default function SystemLoggingClient() {
       </CardHeader>
 
       <CardContent>
-        {loadError ? (
+        {isError ? (
           <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-red-300 bg-red-50 px-3 py-2">
             <p role="alert" className="text-sm text-red-700">
-              {loadError}
+              Failed to load logs. Please try again.
             </p>
-            <Button variant="outline" size="sm" onClick={() => void fetchLogs()}>
+            <Button variant="outline" size="sm" onClick={() => void refetch()}>
               Retry
             </Button>
           </div>
