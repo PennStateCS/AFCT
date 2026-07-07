@@ -29,7 +29,9 @@ const prismaMock = vi.hoisted(() => ({
 
 const execSyncMock = vi.hoisted(() => vi.fn());
 const tlsConnectMock = vi.hoisted(() => vi.fn());
+const authMock = vi.hoisted(() => vi.fn());
 
+vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('dns', () => ({ promises: { lookup: vi.fn().mockResolvedValue([]) } }));
 vi.mock('child_process', () => ({ execSync: execSyncMock }));
@@ -80,6 +82,8 @@ beforeEach(() => {
   process.env.DATABASE_URL = 'sqlite://memory';
   process.env.NEXTAUTH_URL = 'http://localhost:3000';
 
+  authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+
   prismaMock.$queryRaw.mockResolvedValue([]);
   prismaMock.$queryRawUnsafe.mockResolvedValue([]);
   prismaMock.activityLog.findMany.mockResolvedValue([]);
@@ -125,6 +129,30 @@ afterEach(() => {
 });
 
 describe('GET /api/status', () => {
+  it('returns 403 for an unauthenticated request', async () => {
+    authMock.mockResolvedValue(null);
+
+    const res = await GET(new Request('http://localhost/api/status'));
+
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 403 for a non-staff (student) user', async () => {
+    authMock.mockResolvedValue({ user: { id: 's1', role: 'STUDENT' } });
+
+    const res = await GET(new Request('http://localhost/api/status'));
+
+    expect(res.status).toBe(403);
+  });
+
+  it('allows a faculty user', async () => {
+    authMock.mockResolvedValue({ user: { id: 'f1', role: 'FACULTY' } });
+
+    const res = await GET(new Request('http://localhost/api/status'));
+
+    expect(res.status).toBe(200);
+  });
+
   it('returns status payload', async () => {
     const req = new Request('http://localhost/api/status');
     const res = await GET(req);

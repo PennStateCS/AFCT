@@ -23,9 +23,9 @@ type OptionalCountDelegate = {
  * keep payloads lean (full/summary/roster/assignments/problems). Assignments come
  * back with derived point totals and submission/comment counts; problems are
  * tagged with whether an assignment uses them; the roster is flattened into a
- * single `enrolled` array. If the caller is signed in, their course role is
- * included — but note the course data itself is returned without an auth or
- * enrollment check.
+ * single `enrolled` array, and the caller's own course role is included. Access is
+ * restricted: staff (ADMIN/FACULTY/TA) may view any course; everyone else must be
+ * enrolled in it.
  * @openapi
  * summary: Get a course
  * parameters:
@@ -38,6 +38,8 @@ type OptionalCountDelegate = {
  *   200:
  *     description: The course with metadata for the requested view.
  *   400: { description: Missing course id. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Not staff and not enrolled in the course. }
  *   404: { description: Course not found. }
  *   500: { description: Server error. }
  */
@@ -47,6 +49,11 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
 
   if (!id) {
     return NextResponse.json({ error: 'Missing course ID' }, { status: 400 });
+  }
+
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
@@ -105,6 +112,17 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
 
     if (!course) {
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
+    }
+
+    // Access: staff may view any course; everyone else must be enrolled in it.
+    // This roster lookup is reused below to report the viewer's course role.
+    const isStaff = ['ADMIN', 'FACULTY', 'TA'].includes(session.user.role);
+    const viewerRoster = await prisma.roster.findFirst({
+      where: { courseId: course.id, userId: session.user.id },
+      select: { role: true },
+    });
+    if (!isStaff && !viewerRoster) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // The findUnique uses conditional includes, so widen to the relations and
@@ -285,18 +303,9 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
       }));
     }
 
-    // Determine viewer's course role if authenticated
-    const session = await auth();
-    let viewerRole: string | null = null;
-    let viewerDefaultRole: string | null = null;
-    if (session?.user) {
-      const viewerRoster = await prisma.roster.findFirst({
-        where: { courseId: course.id, userId: session.user.id },
-        select: { role: true },
-      });
-      viewerRole = viewerRoster?.role ?? null;
-      viewerDefaultRole = session.user.role ?? null;
-    }
+    // Viewer's roles, from the roster lookup already done during the access check.
+    const viewerRole: string | null = viewerRoster?.role ?? null;
+    const viewerDefaultRole: string | null = session.user.role ?? null;
 
     const response = {
       id: course.id,
