@@ -16,6 +16,9 @@ node_modules/
 out/
 build/
 
+# Generated API docs (built in CI, published to Pages)
+docs-dist/
+
 # Docker
 docker-compose.override.yml
 .docker/
