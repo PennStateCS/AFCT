@@ -19,6 +19,7 @@ import { UploadCloud, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useSession } from 'next-auth/react';
 
 import type { User } from '@prisma/client';
 import { UpdateUserSchema, type UpdateUserRaw, type UpdateUserInput } from '@/schemas/user';
@@ -35,6 +36,9 @@ type EditUserDialogProps = {
 
 export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogProps) {
   const { timezone: effectiveTimezone } = useEffectiveTimezone();
+  // Only system admins may see/change the admin flag; the backend enforces this too.
+  const { data: session } = useSession();
+  const viewerIsAdmin = Boolean(session?.user?.isAdmin);
   // Local preview state (keep separate from RHF file)
   const [avatarPreview, setAvatarPreview] = useState<string>(`/api/uploads/pfps/${user.avatar}`);
   const [serverTimezone, setServerTimezone] = useState('UTC');
@@ -45,6 +49,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
       firstName: user.firstName ?? '',
       lastName: user.lastName ?? '',
       role: user.role,
+      isAdmin: user.isAdmin ?? false,
       timezone: user.timezone ?? '',
       avatarFile: undefined,
       deleteAvatar: false,
@@ -150,6 +155,8 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
     if (parsed.deleteAvatar) formData.append('deleteAvatar', 'true');
     formData.append('inactive', parsed.inactive ? 'true' : 'false');
     if (parsed.timezone) formData.append('timezone', parsed.timezone);
+    // Only admins can set this; the backend ignores it from non-admins regardless.
+    if (viewerIsAdmin) formData.append('isAdmin', parsed.isAdmin ? 'true' : 'false');
 
     const res = await fetch(`/api/users/${user.id}`, {
       method: 'PATCH',
@@ -171,6 +178,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
       firstName: parsed.firstName,
       lastName: parsed.lastName,
       role: parsed.role as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT',
+      isAdmin: viewerIsAdmin ? parsed.isAdmin : user.isAdmin,
       avatar: parsed.deleteAvatar ? null : user.avatar,
       inactive: parsed.inactive,
       timezone: parsed.timezone || undefined,
@@ -327,6 +335,28 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
               );
             }}
           />
+
+          {/* Administrator flag (system admins only) */}
+          {viewerIsAdmin && (
+            <Controller
+              control={control}
+              name="isAdmin"
+              render={({ field }) => (
+                <SelectField
+                  label="Administrator"
+                  name="isAdmin"
+                  value={field.value ? 'true' : 'false'}
+                  onValueChange={(v) => field.onChange(v === 'true')}
+                  placeholder="Select administrator access"
+                  options={[
+                    { value: 'false', label: 'No' },
+                    { value: 'true', label: 'Yes' },
+                  ]}
+                  error={errors.isAdmin?.message}
+                />
+              )}
+            />
+          )}
 
           {/* Inactive */}
           <Controller

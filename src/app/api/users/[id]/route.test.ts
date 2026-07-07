@@ -163,6 +163,63 @@ describe('PATCH /api/users/[id]', () => {
     expect(res.status).toBe(200);
   });
 
+  it('lets an admin grant the isAdmin flag', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
+    prismaMock.user.findUnique.mockResolvedValue({ avatar: null, isAdmin: false });
+    prismaMock.user.update.mockResolvedValue({
+      id: 'u1',
+      email: 'u1@example.com',
+      firstName: 'A',
+      lastName: 'B',
+      role: 'FACULTY',
+      isAdmin: true,
+      inactive: false,
+      avatar: null,
+      timezone: null,
+    });
+
+    const req = new NextRequest('http://localhost/api/users/u1', {
+      method: 'PATCH',
+      body: JSON.stringify({ isAdmin: true }),
+    });
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'u1' }) });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ isAdmin: true }) }),
+    );
+  });
+
+  it('ignores isAdmin from a non-admin editing their own account', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.user.findUnique.mockResolvedValue({ avatar: null, isAdmin: false });
+    prismaMock.user.update.mockResolvedValue({
+      id: 'u1',
+      email: 'u1@example.com',
+      firstName: 'A',
+      lastName: 'B',
+      role: 'STUDENT',
+      isAdmin: false,
+      inactive: false,
+      avatar: null,
+      timezone: null,
+    });
+
+    const req = new NextRequest('http://localhost/api/users/u1', {
+      method: 'PATCH',
+      body: JSON.stringify({ isAdmin: true }),
+    });
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'u1' }) });
+
+    expect(res.status).toBe(200);
+    // The self-editing student's admin flag must be left untouched (undefined).
+    expect(prismaMock.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ isAdmin: undefined }) }),
+    );
+  });
+
   it('returns 400 when timezone invalid', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
 

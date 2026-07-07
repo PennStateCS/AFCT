@@ -122,7 +122,7 @@ beforeEach(() => {
   useSidebarMock.mockReturnValue({ state: 'expanded' });
   usePathnameMock.mockReturnValue('/dashboard');
   useSessionMock.mockReturnValue({
-    data: { user: { id: 'user-1', email: 'user@example.com', role: 'ADMIN' } },
+    data: { user: { id: 'user-1', email: 'user@example.com', role: 'ADMIN', isAdmin: true } },
   });
   useSWRMock.mockReturnValue({ data: [] });
 });

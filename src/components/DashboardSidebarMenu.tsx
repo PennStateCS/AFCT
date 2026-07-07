@@ -107,6 +107,7 @@ export default function DashboardSidebarMenu() {
     avatar = '',
     timezone,
     role = 'STUDENT',
+    isAdmin = false,
   } = session.user;
 
   // Resolve display name and avatar
@@ -156,8 +157,8 @@ export default function DashboardSidebarMenu() {
     <>
       {/* Sidebar navigation content */}
       <SidebarContent>
-        {/* Admin menu */}
-        {(user.role === 'ADMIN' || user.role === 'FACULTY') && (
+        {/* Admin menu — system administrators only */}
+        {isAdmin && (
           <SidebarGroup>
             <SidebarGroupLabel
               aria-hidden={collapsed}
