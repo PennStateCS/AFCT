@@ -71,7 +71,7 @@ describe('GET /api/courses', () => {
 
 describe('POST /api/courses', () => {
   it('creates a course and returns enrolled roster', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.course.findFirst.mockResolvedValue(null);
@@ -147,7 +147,7 @@ describe('POST /api/courses', () => {
   });
 
   it('returns 409 when a duplicate course exists', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.course.findFirst.mockResolvedValue({ id: 'existing' });
@@ -172,7 +172,7 @@ describe('POST /api/courses', () => {
   });
 
   it('falls back to system timezone when user timezone is missing', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: null });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.course.findFirst.mockResolvedValue(null);
@@ -245,7 +245,7 @@ describe('POST /api/courses', () => {
   });
 
   it('returns validation response when validation fails', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN', isAdmin: true } });
     validationResponseMock.mockReturnValue({ status: 400 });
     const req = new Request('http://localhost/api/courses', {
       method: 'POST',
@@ -258,7 +258,7 @@ describe('POST /api/courses', () => {
   });
 
   it('seeds instructor roster rows and excludes them from faculty-only rows', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.course.findFirst.mockResolvedValue(null);
 
@@ -314,7 +314,7 @@ describe('POST /api/courses', () => {
 
   it('returns 500 when course creation throws a non-validation error', async () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.course.findFirst.mockResolvedValue(null);
     prismaMock.course.findUnique.mockResolvedValue(null);

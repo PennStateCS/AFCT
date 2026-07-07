@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
 /**
  * Adds (or re-roles) a single user on a course roster. Staff only
@@ -44,7 +45,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+    if (!(await canManageCourse(session.user, courseId))) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session.user.id,
         action: 'COURSE_ENROLL_DENIED',

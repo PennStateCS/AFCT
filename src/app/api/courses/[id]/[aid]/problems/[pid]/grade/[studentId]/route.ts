@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
 /**
  * Reads one student's grade and feedback for a specific problem within an
@@ -38,8 +39,7 @@ export async function GET(
 
     const { id: courseId, aid: assignmentId, pid: problemId, studentId } = await params;
 
-    const isStaff = ['ADMIN', 'FACULTY', 'TA'].includes(session.user.role);
-    if (session.user.id !== studentId && !isStaff) {
+    if (!(await canManageCourse(session.user, courseId)) && session.user.id !== studentId) {
       await createEnhancedActivityLog(prisma, _req, {
         userId: session?.user?.id ?? null,
         action: 'PROBLEM_GRADE_ACCESS_DENIED',
@@ -134,7 +134,9 @@ export async function POST(
     }
     graderId = session.user.id;
 
-    if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+    const { id: courseId, aid: assignmentId, pid: problemId, studentId } = await params;
+
+    if (!(await canManageCourse(session.user, courseId))) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'PROBLEM_GRADE_UPDATE_DENIED',
@@ -143,8 +145,6 @@ export async function POST(
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
-
-    const { id: courseId, aid: assignmentId, pid: problemId, studentId } = await params;
 
     const assignmentProblem = await prisma.assignmentProblem.findUnique({
       where: {

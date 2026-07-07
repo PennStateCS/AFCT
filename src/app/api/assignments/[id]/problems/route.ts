@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse, COURSE_FACULTY_ROLES } from '@/lib/permissions';
 import { ProblemTypeEnum } from '@/schemas/problem';
 import { z } from 'zod';
 
@@ -57,11 +58,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
   }
 
   const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  if (session.user.role !== 'ADMIN' && session.user.role !== 'FACULTY') {
+  if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -74,6 +71,11 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
 
     if (!assignment) {
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+    }
+
+    // Faculty-tier staff only (INSTRUCTOR/FACULTY, TAs excluded) or admin.
+    if (!(await canManageCourse(session.user, assignment.courseId, COURSE_FACULTY_ROLES))) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // ---- User and Course Id ----

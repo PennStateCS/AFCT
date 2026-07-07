@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse, COURSE_FACULTY_ROLES } from '@/lib/permissions';
 
 /**
  * Lists a course's published assignments with each one's total and max grade
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     const session = await auth();
     const user = session?.user;
 
-    if (!user || !['ADMIN', 'FACULTY'].includes(user.role)) {
+    if (!(await canManageCourse(user, courseId, COURSE_FACULTY_ROLES))) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'COURSE_ASSIGNMENTS_ACCESS_DENIED',

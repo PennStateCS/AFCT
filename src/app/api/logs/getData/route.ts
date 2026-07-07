@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { isAdmin } from '@/lib/permissions';
 import { DownloadLogsSchema } from '@/schemas/log';
 import { EXPORTABLE_LOG_FIELDS } from '@/lib/log-fields';
 import type { Prisma } from '@prisma/client';
@@ -38,7 +39,7 @@ const MAX_EXPORT_ROWS = 100_000;
  */
 export async function POST(req: Request) {
   const session = await auth();
-  if (!session || !['ADMIN', 'FACULTY'].includes(session.user.role)) {
+  if (!isAdmin(session?.user)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 

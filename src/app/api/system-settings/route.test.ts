@@ -39,7 +39,7 @@ describe('GET /api/system-settings', () => {
   });
 
   it('returns settings with defaults', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.systemSettings.findUnique.mockResolvedValue(null);
 
     const res = await GET();
@@ -69,7 +69,7 @@ describe('GET /api/system-settings', () => {
   });
 
   it('returns stored settings', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.systemSettings.findUnique.mockResolvedValue({
       id: 1,
       timezone: 'America/New_York',
@@ -126,7 +126,7 @@ describe('PUT /api/system-settings', () => {
   });
 
   it('returns 400 for invalid JSON body', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
 
     const req = new Request('http://localhost/api/system-settings', {
       method: 'PUT',
@@ -140,7 +140,7 @@ describe('PUT /api/system-settings', () => {
   });
 
   it('returns 400 for invalid timezone', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
 
     const req = new Request('http://localhost/api/system-settings', {
       method: 'PUT',
@@ -153,7 +153,7 @@ describe('PUT /api/system-settings', () => {
   });
 
   it('upserts settings and clamps size', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.systemSettings.upsert.mockResolvedValue({
       id: 1,
       timezone: 'UTC',
@@ -178,7 +178,7 @@ describe('PUT /api/system-settings', () => {
   });
 
   it('persists allowSignup when provided', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.systemSettings.upsert.mockResolvedValue({
       id: 1,
       timezone: 'UTC',
@@ -238,7 +238,7 @@ describe('PUT /api/system-settings', () => {
   });
 
   it('clamps and persists submission queue settings when provided', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.systemSettings.upsert.mockResolvedValue({
       id: 1,
       timezone: 'UTC',
@@ -301,7 +301,7 @@ describe('PUT /api/system-settings', () => {
     });
 
   it('persists hcaptcha site + secret keys and never echoes the secret', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     okUpsert();
 
     const res = await PUT(putBody({ hcaptchaSiteKey: ' site-1 ', hcaptchaSecretKey: ' secret-1 ' }));
@@ -316,7 +316,7 @@ describe('PUT /api/system-settings', () => {
   });
 
   it('keeps the existing secret when a blank secret is sent', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     okUpsert();
 
     const res = await PUT(putBody({ hcaptchaSiteKey: 'site-1', hcaptchaSecretKey: '' }));
@@ -328,7 +328,7 @@ describe('PUT /api/system-settings', () => {
   });
 
   it('clears the secret when hcaptchaSecretClear is set', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     okUpsert();
 
     const res = await PUT(putBody({ hcaptchaSecretClear: true, hcaptchaSecretKey: 'ignored' }));
@@ -339,7 +339,7 @@ describe('PUT /api/system-settings', () => {
   });
 
   it('clamps session timeout to minimum when too low', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.systemSettings.upsert.mockResolvedValue({
       id: 1,
       timezone: 'UTC',
@@ -372,18 +372,18 @@ describe('PUT /api/system-settings', () => {
     expect(prismaMock.systemSettings.upsert).not.toHaveBeenCalled();
   });
 
-  it('allows a FACULTY user to update settings', async () => {
+  it('denies a FACULTY user (no admin flag) with 403', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     okUpsert();
 
     const res = await PUT(putBody({}));
 
-    expect(res.status).toBe(200);
-    expect(prismaMock.systemSettings.upsert).toHaveBeenCalled();
+    expect(res.status).toBe(403);
+    expect(prismaMock.systemSettings.upsert).not.toHaveBeenCalled();
   });
 
   it('clamps maxUploadSizeMb above the maximum', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     okUpsert();
 
     const res = await PUT(putBody({ maxUploadSizeMb: 999_999 }));
@@ -395,7 +395,7 @@ describe('PUT /api/system-settings', () => {
   });
 
   it('clamps submissionAnalyzerLimit above the cap', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     okUpsert();
 
     const res = await PUT(putBody({ submissionAnalyzerLimit: 999 }));
@@ -407,7 +407,7 @@ describe('PUT /api/system-settings', () => {
   });
 
   it('clamps submissionAnalyzerLimit below the floor', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     okUpsert();
 
     const res = await PUT(putBody({ submissionAnalyzerLimit: 0 }));
@@ -418,7 +418,7 @@ describe('PUT /api/system-settings', () => {
   });
 
   it('leaves submissionAnalyzerLimit untouched when not provided', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     okUpsert();
 
     const res = await PUT(putBody({}));
@@ -429,7 +429,7 @@ describe('PUT /api/system-settings', () => {
   });
 
   it('clears the site key when a blank value is sent', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     okUpsert();
 
     const res = await PUT(putBody({ hcaptchaSiteKey: '   ' }));
@@ -440,7 +440,7 @@ describe('PUT /api/system-settings', () => {
   });
 
   it('records an audit log with a before/after diff when a setting changes', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.systemSettings.findUnique.mockResolvedValue({
       id: 1,
       timezone: 'UTC',
@@ -470,7 +470,7 @@ describe('PUT /api/system-settings', () => {
   });
 
   it('never logs the hCaptcha secret value, only that it changed', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ id: 1, timezone: 'UTC', maxUploadSizeMb: 25 });
     okUpsert();
 
@@ -484,7 +484,7 @@ describe('PUT /api/system-settings', () => {
   });
 
   it('skips the audit log on a no-op save', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     const row = {
       id: 1,
       timezone: 'UTC',

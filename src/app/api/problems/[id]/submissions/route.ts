@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { canManageCourse } from '@/lib/permissions';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 /**
@@ -36,18 +37,24 @@ export async function GET(
     const { searchParams } = new URL(req.url);
     const userId = searchParams.get('userId');
 
-    // Verify user is either requesting their own submissions or is an instructor/faculty
-    if (userId && userId !== session.user.id && 
-        session.user.role !== 'FACULTY' && 
-        session.user.role !== 'ADMIN' && 
-        session.user.role !== 'TA') {
-      await createEnhancedActivityLog(prisma, req, {
-        userId: session?.user?.id ?? null,
-        action: 'SUBMISSION_VIEW_DENIED',
-        severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+    // Verify user is either requesting their own submissions or is course staff
+    if (userId && userId !== session.user.id) {
+      const problemForAuth = await prisma.problem.findUnique({
+        where: { id: problemId },
+        select: { courseId: true },
       });
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      if (!problemForAuth) {
+        return NextResponse.json({ error: 'Problem not found' }, { status: 404 });
+      }
+      if (!(await canManageCourse(session.user, problemForAuth.courseId))) {
+        await createEnhancedActivityLog(prisma, req, {
+          userId: session?.user?.id ?? null,
+          action: 'SUBMISSION_VIEW_DENIED',
+          severity: 'SECURITY',
+          metadata: { role: session?.user?.role ?? null },
+        });
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
     }
 
     // If no userId specified, use the current user's ID

@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
+import { canManageCourse } from '@/lib/permissions';
 
 type ProblemType = 'PDA' | 'RE' | 'CFG' | 'FA';
 
@@ -59,7 +60,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
     const session = await auth();
     const user = session?.user;
 
-    if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    if (!user || !(await canManageCourse(user, courseId))) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'PROBLEM_CREATE_DENIED',
@@ -177,8 +178,8 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
   const { id: courseId } = await context.params;
 
   const session = await auth();
-  const role = session?.user?.role;
-  if (!role || !['ADMIN', 'FACULTY', 'TA'].includes(role)) {
+  const user = session?.user;
+  if (!user || !(await canManageCourse(user, courseId))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 

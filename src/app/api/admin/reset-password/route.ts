@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy';
+import { isAdmin } from '@/lib/permissions';
 
 /**
  * Sets another user's password on their behalf (an admin-initiated reset).
@@ -36,7 +37,7 @@ import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy
 export async function POST(req: Request) {
   const session = await auth();
 
-  if (!session || !['ADMIN', 'FACULTY'].includes(session.user.role)) {
+  if (!session?.user || !isAdmin(session.user)) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session?.user?.id ?? null,
       action: 'ADMIN_RESET_PASSWORD_DENIED',

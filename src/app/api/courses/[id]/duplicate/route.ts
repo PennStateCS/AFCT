@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { isAdmin } from '@/lib/permissions';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
 import { toEmptyStringNotation } from '@/lib/empty-string-notation';
@@ -95,9 +96,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
     actorId = session.user.id;
 
-    // Only allow faculty/admin/ta to duplicate
-    const role = session.user.role;
-    if (!['FACULTY', 'ADMIN', 'TA'].includes(role)) {
+    // Duplicating a course is an admin-only operation.
+    if (!isAdmin(session.user)) {
       await createEnhancedActivityLog(prisma, req as unknown as Request, {
         userId: session?.user?.id ?? null,
         action: 'COURSE_DUPLICATE_DENIED',

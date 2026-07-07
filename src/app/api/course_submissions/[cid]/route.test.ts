@@ -6,6 +6,7 @@ import { NextRequest } from 'next/server';
 
 const prismaMock = vi.hoisted(() => ({
   submission: { findMany: vi.fn(), update: vi.fn() },
+  roster: { findFirst: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -24,6 +25,7 @@ const params = (cid = 'c1') => ({ params: Promise.resolve({ cid }) });
 
 beforeEach(() => {
   vi.clearAllMocks();
+  prismaMock.roster.findFirst.mockResolvedValue(null);
 });
 
 describe('POST /api/course_submissions/[cid]', () => {
@@ -47,6 +49,7 @@ describe('POST /api/course_submissions/[cid]', () => {
 
   it('requeues every submission in the course and returns the count', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.submission.findMany.mockResolvedValue([
       { id: 's1', courseId: 'c1', assignmentId: 'a1', problemId: 'p1' },
       { id: 's2', courseId: 'c1', assignmentId: 'a1', problemId: 'p2' },
@@ -74,7 +77,7 @@ describe('POST /api/course_submissions/[cid]', () => {
   });
 
   it('returns 202 with a count of 0 when the course has no submissions', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.submission.findMany.mockResolvedValue([]);
 
     const res = await POST(makeRequest(), params());
@@ -87,6 +90,7 @@ describe('POST /api/course_submissions/[cid]', () => {
 
   it('returns 500 when a submission update fails', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'TA' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'TA' });
     prismaMock.submission.findMany.mockResolvedValue([
       { id: 's1', courseId: 'c1', assignmentId: 'a1', problemId: 'p1' },
     ]);

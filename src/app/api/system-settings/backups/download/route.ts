@@ -5,6 +5,7 @@ import { Readable } from 'stream';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { isAdmin } from '@/lib/permissions';
 import { BACKUP_DIR, isValidBackupName } from '@/lib/backups';
 
 /**
@@ -33,8 +34,7 @@ import { BACKUP_DIR, isValidBackupName } from '@/lib/backups';
  */
 export async function GET(req: Request) {
   const session = await auth();
-  const role = session?.user?.role;
-  if (!role || !['ADMIN', 'FACULTY'].includes(role)) {
+  if (!isAdmin(session?.user)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 

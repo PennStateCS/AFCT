@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canAccessCourse } from '@/lib/permissions';
 
 /**
  * Returns a paginated activity feed for one course — logs tied directly to the
@@ -48,26 +49,14 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
-    const role = session.user.role;
-    const isPrivileged = role ? ['ADMIN', 'FACULTY', 'TA'].includes(role) : true;
-    if (!isPrivileged) {
-      const rosterEntry = await prisma.roster.findFirst({
-        where: {
-          courseId,
-          userId: session.user.id,
-        },
-        select: { id: true },
+    if (!(await canAccessCourse(session.user, courseId))) {
+      await createEnhancedActivityLog(prisma, request, {
+        userId: session?.user?.id ?? null,
+        action: 'COURSE_ACTIVITY_ACCESS_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
       });
-
-      if (!rosterEntry) {
-        await createEnhancedActivityLog(prisma, request, {
-          userId: session?.user?.id ?? null,
-          action: 'COURSE_ACTIVITY_ACCESS_DENIED',
-          severity: 'SECURITY',
-          metadata: { role: session?.user?.role ?? null },
-        });
-        return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-      }
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
     // Get URL search params for pagination

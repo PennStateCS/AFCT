@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
+import { isAdmin } from '@/lib/permissions';
 import { EXPORTABLE_LOG_FIELDS } from '@/lib/log-fields';
 
 /**
@@ -17,7 +18,7 @@ import { EXPORTABLE_LOG_FIELDS } from '@/lib/log-fields';
  */
 export async function GET() {
   const session = await auth();
-  if (!session || !['ADMIN', 'FACULTY'].includes(session.user.role)) {
+  if (!isAdmin(session?.user)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
   return NextResponse.json([...EXPORTABLE_LOG_FIELDS]);
