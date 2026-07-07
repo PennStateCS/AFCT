@@ -7,6 +7,7 @@ const prismaMock = vi.hoisted(() => ({
   },
   roster: {
     findUnique: vi.fn(),
+    findFirst: vi.fn(),
     create: vi.fn(),
   },
   problem: {
@@ -247,7 +248,7 @@ describe('GET /api/comments', () => {
   it('fetches all comments for assignment/problem', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
     prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
-    prismaMock.roster.findUnique.mockResolvedValue({ id: 'r1' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
     prismaMock.comment.findMany.mockResolvedValue([
       {
         id: 'cm1',
@@ -270,7 +271,7 @@ describe('GET /api/comments', () => {
   it('filters comments by studentId', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
-    prismaMock.roster.findUnique.mockResolvedValue({ id: 'r1' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.comment.findMany.mockResolvedValue([]);
 
     const req = new NextRequest(
@@ -290,7 +291,7 @@ describe('GET /api/comments', () => {
   it('supports assignment-scope fetch for student without problemId', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
-    prismaMock.roster.findUnique.mockResolvedValue({ id: 'r1' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.comment.findMany.mockResolvedValue([]);
 
     const req = new NextRequest(

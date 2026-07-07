@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server';
 const prismaMock = vi.hoisted(() => ({
   course: { findUnique: vi.fn() },
   assignment: { findMany: vi.fn() },
+  roster: { findFirst: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -15,11 +16,14 @@ import { GET } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  prismaMock.roster.findFirst.mockResolvedValue(null);
 });
 
 describe('GET /api/courses/[id]/assignments', () => {
   it('returns 400 when courseId missing', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    // Empty courseId can't match a roster row, so this test uses a global admin to
+    // pass the auth gate and reach the 400 (missing course id) branch.
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
 
     const req = new NextRequest('http://localhost/api/courses//assignments');
     const res = await GET(req, { params: Promise.resolve({ id: '' }) });
@@ -38,6 +42,7 @@ describe('GET /api/courses/[id]/assignments', () => {
 
   it('returns 404 when course not found', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.course.findUnique.mockResolvedValue(null);
 
     const req = new NextRequest('http://localhost/api/courses/c1/assignments');
@@ -48,6 +53,7 @@ describe('GET /api/courses/[id]/assignments', () => {
 
   it('returns assignments with grade totals', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.course.findUnique.mockResolvedValue({ id: 'c1' });
     // include problems needed for grade math
     prismaMock.assignment.findMany.mockResolvedValue([

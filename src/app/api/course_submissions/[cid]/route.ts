@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
 /**
  * Re-queues every submission in a course, resetting each to PENDING and clearing its
@@ -42,7 +43,7 @@ export async function POST(req: Request, context: { params: Promise<{ cid: strin
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    if (!(await canManageCourse(user, cid))) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'COURSE_SUBMISSIONS_RERUN_DENIED',

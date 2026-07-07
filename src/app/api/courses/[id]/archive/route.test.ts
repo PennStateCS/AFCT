@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const prismaMock = vi.hoisted(() => ({
   course: { findUnique: vi.fn(), update: vi.fn() },
+  roster: { findFirst: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -17,6 +18,8 @@ import { PATCH } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Default: caller is not enrolled (denied) unless a test says otherwise.
+  prismaMock.roster.findFirst.mockResolvedValue(null);
 });
 
 describe('PATCH /api/courses/[id]/archive', () => {
@@ -45,7 +48,7 @@ describe('PATCH /api/courses/[id]/archive', () => {
   });
 
   it('returns 404 when course not found on archive', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.course.findUnique.mockResolvedValue(null);
 
     const req = new Request('http://localhost/api/courses/c1/archive', {
@@ -59,7 +62,7 @@ describe('PATCH /api/courses/[id]/archive', () => {
   });
 
   it('returns 403 when cannot archive', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.course.findUnique.mockResolvedValue({ startDate: new Date(), endDate: new Date() });
     canArchiveMock.mockResolvedValue({ canArchive: false, reason: 'blocked' });
 
@@ -75,6 +78,8 @@ describe('PATCH /api/courses/[id]/archive', () => {
 
   it('archives course and logs activity', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    // Caller is FACULTY in this course (archive is faculty-tier).
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.course.findUnique.mockResolvedValue({ startDate: new Date(), endDate: new Date() });
     canArchiveMock.mockResolvedValue({ canArchive: true });
     prismaMock.course.update.mockResolvedValue({

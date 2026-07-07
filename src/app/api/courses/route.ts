@@ -15,6 +15,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validationResponse } from '@/lib/zod-error';
 import { auth } from '@/lib/auth';
+import { isAdmin } from '@/lib/permissions';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { toEmptyStringNotation } from '@/lib/empty-string-notation';
@@ -185,8 +186,7 @@ export async function POST(req: Request) {
     // 2) Ensure user is authorized to create courses
     const session = await auth();
     actorId = session?.user?.id ?? null;
-    const role = session?.user?.role;
-    if (!role || !['ADMIN', 'TA', 'FACULTY'].includes(role)) {
+    if (!isAdmin(session?.user)) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'COURSE_CREATE_DENIED',

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy';
+import { isAdmin } from '@/lib/permissions';
 
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
@@ -78,7 +79,7 @@ type CreatedRow = {
 export async function POST(req: Request) {
   try {
     const session = await auth();
-    if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+    if (!session?.user || !isAdmin(session.user)) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'USER_BULK_CREATE_DENIED',

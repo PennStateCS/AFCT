@@ -18,6 +18,7 @@ import { GET } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  prismaMock.roster.findFirst.mockResolvedValue(null);
 });
 
 describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
@@ -43,7 +44,7 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
   });
 
   it('returns 404 when no problems', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([]);
 
@@ -55,7 +56,7 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
   });
 
   it('returns grouped submissions', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
       {
@@ -109,7 +110,7 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
   it('allows staff on the roster to view any student submissions', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1' });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'FACULTY' });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
       {
         problem: {
@@ -146,7 +147,7 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
   it('allows a student to view their own submissions', async () => {
     authMock.mockResolvedValue({ user: { id: 'student-a', role: 'STUDENT' } });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1' });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
       {
         problem: {
@@ -170,7 +171,7 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
   });
 
   it('handles P2022 Prisma error for evaluationRaw and retries', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
       {
@@ -214,7 +215,7 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
   });
 
   it('rethrows non-P2022 Prisma errors', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
       {
@@ -252,7 +253,7 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
   });
 
   it('does not fail request when activity logging fails', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
       {
@@ -283,7 +284,7 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
   });
 
   it('returns 500 when unexpected error occurs', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.assignment.findFirst.mockRejectedValue(new Error('DB error'));
 
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});

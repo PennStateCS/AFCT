@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 import { toDateTimeInTimezone, toEndOfDayInTimezone } from '@/lib/date-utils';
 
 async function resolveUserTimezone(userId?: string | null) {
@@ -51,7 +52,16 @@ export async function POST(req: NextRequest) {
     const session = await auth();
     actorId = session?.user?.id ?? null;
 
-    if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const data = await req.json();
+    if (!data.title || !data.courseId) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    if (!(await canManageCourse(session.user, data.courseId))) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'ASSIGNMENT_CREATE_DENIED',
@@ -59,11 +69,6 @@ export async function POST(req: NextRequest) {
         metadata: { role: session?.user?.role ?? null },
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
-
-    const data = await req.json();
-    if (!data.title || !data.courseId) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
     const userTimezone = await resolveUserTimezone(session.user.id);

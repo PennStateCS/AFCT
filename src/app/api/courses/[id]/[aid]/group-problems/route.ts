@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canAccessCourse, canManageCourse } from '@/lib/permissions';
 
 /**
  * Returns each course group alongside the problem ids mapped to it for this
@@ -30,7 +31,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   try {
     const session = await auth();
     const user = session?.user;
-    if (!user) {
+    if (!user || !(await canAccessCourse(user, courseId))) {
       await createEnhancedActivityLog(prisma, _ as Request, {
         userId: session?.user?.id ?? null,
         action: 'GROUP_PROBLEMS_ACCESS_DENIED',
@@ -102,7 +103,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   try {
     const session = await auth();
     const user = session?.user;
-    if (!user) {
+    if (!user || !(await canAccessCourse(user, courseId))) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'GROUP_PROBLEMS_ACCESS_DENIED',
@@ -187,7 +188,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   try {
     const session = await auth();
     const user = session?.user;
-    if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    if (!user || !(await canManageCourse(user, courseId))) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'GROUP_PROBLEMS_REMOVE_DENIED',

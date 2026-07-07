@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 import type { Prisma } from '@prisma/client';
 
 /**
@@ -44,8 +45,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     // Only faculty/admin/ta can bulk enroll
-    const role = session.user.role;
-    if (!['FACULTY', 'ADMIN', 'TA'].includes(role)) {
+    if (!(await canManageCourse(session.user, courseId))) {
       await createEnhancedActivityLog(prisma, req as unknown as Request, {
         userId: session?.user?.id ?? null,
         action: 'COURSE_BULK_ENROLL_DENIED',

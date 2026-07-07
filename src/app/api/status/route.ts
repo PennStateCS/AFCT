@@ -4,6 +4,7 @@ import fs from 'fs';
 import type { PeerCertificate } from 'tls';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { isAdmin } from '@/lib/permissions';
 import { execSync } from 'child_process';
 
 export const runtime = 'nodejs';
@@ -250,8 +251,7 @@ export async function GET(req: Request) {
   // Admin/Faculty only: the snapshot exposes other users' session PII, an env-var
   // inventory, and infrastructure internals. Deny everyone else before doing work.
   const session = await auth();
-  const role = session?.user?.role;
-  if (!role || !['ADMIN', 'FACULTY'].includes(role)) {
+  if (!isAdmin(session?.user)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 

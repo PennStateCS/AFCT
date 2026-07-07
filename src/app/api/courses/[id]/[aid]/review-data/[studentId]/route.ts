@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canAccessCourse, canManageCourse } from '@/lib/permissions';
 
 type SubmissionRecord = {
   id: string;
@@ -95,8 +96,7 @@ export async function GET(
     }
 
     // Students may only read their own review data; staff may read anyone's.
-    const isStaff = ['ADMIN', 'FACULTY', 'TA'].includes(user.role);
-    if (!isStaff && user.id !== studentId) {
+    if (!(await canManageCourse(user, courseId)) && user.id !== studentId) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'REVIEW_DATA_ACCESS_DENIED',
@@ -107,20 +107,14 @@ export async function GET(
     }
 
     // Course-membership requirement (global admins excepted), as before.
-    if (user.role !== 'ADMIN') {
-      const rosterEntry = await prisma.roster.findFirst({
-        where: { courseId, userId: user.id },
-        select: { id: true },
+    if (!(await canAccessCourse(user, courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'REVIEW_DATA_ACCESS_DENIED',
+        severity: 'SECURITY',
+        metadata: { role: session?.user?.role ?? null },
       });
-      if (!rosterEntry) {
-        await createEnhancedActivityLog(prisma, req, {
-          userId: session?.user?.id ?? null,
-          action: 'REVIEW_DATA_ACCESS_DENIED',
-          severity: 'SECURITY',
-          metadata: { role: session?.user?.role ?? null },
-        });
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const [assignmentProblems, commentsRaw, gradesRaw] = await Promise.all([

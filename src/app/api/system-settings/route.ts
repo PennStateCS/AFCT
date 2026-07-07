@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { isAdmin } from '@/lib/permissions';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import {
   createEnhancedActivityLog,
@@ -123,8 +124,7 @@ async function safeAuditLog(req: Request, data: EnhancedActivityLogData): Promis
  */
 export async function GET() {
   const session = await auth();
-  const role = session?.user?.role;
-  if (!role || !['ADMIN', 'FACULTY'].includes(role)) {
+  if (!isAdmin(session?.user)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -225,7 +225,7 @@ type SettingsBody = {
 export async function PUT(req: Request) {
   const session = await auth();
   const role = session?.user?.role;
-  if (!role || !['ADMIN', 'FACULTY'].includes(role)) {
+  if (!session?.user || !isAdmin(session.user)) {
     // Record write attempts from a signed-in user who lacks permission — a
     // privilege-escalation probe is worth a trail. Unauthenticated hits are skipped.
     if (session?.user?.id) {

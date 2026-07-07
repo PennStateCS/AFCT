@@ -27,7 +27,7 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
 
     authMock.mockResolvedValue({ user: { id: 'faculty-1', role: 'FACULTY' } });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: params.aid });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1' });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1', role: 'FACULTY' });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
       {
         problem: {
@@ -65,6 +65,7 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
 
   it('returns 403 when a student requests another student’s review data', async () => {
     authMock.mockResolvedValue({ user: { id: 'student-2', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue(null);
 
     const res = await GET(new Request('http://localhost'), { params: Promise.resolve(params) });
 
@@ -73,6 +74,7 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
 
   it('allows a student to view their own review data', async () => {
     authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1', role: 'STUDENT' });
 
     const res = await GET(new Request('http://localhost'), { params: Promise.resolve(params) });
 

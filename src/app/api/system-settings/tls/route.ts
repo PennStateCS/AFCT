@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
+import { isAdmin } from '@/lib/permissions';
 import { prisma } from '@/lib/prisma';
 import {
   createEnhancedActivityLog,
@@ -19,7 +20,7 @@ import {
 
 async function requireAdmin() {
   const session = await auth();
-  return session?.user?.role === 'ADMIN';
+  return isAdmin(session?.user);
 }
 
 // Audit logging must never break a certificate operation, so swallow its errors.
@@ -113,7 +114,7 @@ type Body = {
  */
 export async function POST(req: Request) {
   const session = await auth();
-  if (session?.user?.role !== 'ADMIN') {
+  if (!session?.user || !isAdmin(session.user)) {
     // Trail authenticated-but-unauthorized attempts to change the server certificate.
     if (session?.user?.id) {
       await safeAuditLog(req, {
@@ -229,7 +230,7 @@ export async function POST(req: Request) {
  */
 export async function DELETE(req: Request) {
   const session = await auth();
-  if (session?.user?.role !== 'ADMIN') {
+  if (!session?.user || !isAdmin(session.user)) {
     if (session?.user?.id) {
       await safeAuditLog(req, {
         userId: session.user.id,

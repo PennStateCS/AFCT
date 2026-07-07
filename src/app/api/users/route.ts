@@ -5,6 +5,7 @@ import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { getUsersList } from '@/lib/users-list';
+import { isAdmin } from '@/lib/permissions';
 
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
@@ -36,7 +37,7 @@ const isStrongPassword = (pw: string) =>
 export async function GET(req: Request) {
   try {
     const session = await auth();
-    if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+    if (!session?.user || !isAdmin(session.user)) {
       console.warn('[USERS_GET] Unauthorized access attempt');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
@@ -95,7 +96,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const session = await auth();
-    if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+    if (!session?.user || !isAdmin(session.user)) {
       console.warn('[USERS_POST] Unauthorized access attempt');
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,

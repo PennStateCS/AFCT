@@ -12,8 +12,12 @@ import type { CourseRole } from '@prisma/client';
 // The slice of the session user these checks need.
 export type PermissionUser = { id?: string | null; isAdmin?: boolean | null } | null | undefined;
 
+// Course roles at the faculty tier (top of a course; TAs excluded). INSTRUCTOR is
+// the legacy name for FACULTY and is treated the same until the two are merged.
+export const COURSE_FACULTY_ROLES: CourseRole[] = ['INSTRUCTOR', 'FACULTY'];
+
 // Course roles that count as "staff" (may manage a course). Admins bypass this.
-export const COURSE_STAFF_ROLES: CourseRole[] = ['FACULTY', 'TA'];
+export const COURSE_STAFF_ROLES: CourseRole[] = ['INSTRUCTOR', 'FACULTY', 'TA'];
 
 /** Global system administrator — full access everywhere. */
 export function isAdmin(user: PermissionUser): boolean {

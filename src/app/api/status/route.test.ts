@@ -82,7 +82,7 @@ beforeEach(() => {
   process.env.DATABASE_URL = 'sqlite://memory';
   process.env.NEXTAUTH_URL = 'http://localhost:3000';
 
-  authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+  authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
 
   prismaMock.$queryRaw.mockResolvedValue([]);
   prismaMock.$queryRawUnsafe.mockResolvedValue([]);
@@ -145,12 +145,12 @@ describe('GET /api/status', () => {
     expect(res.status).toBe(403);
   });
 
-  it('allows a faculty user', async () => {
+  it('denies a faculty user (no admin flag) with 403', async () => {
     authMock.mockResolvedValue({ user: { id: 'f1', role: 'FACULTY' } });
 
     const res = await GET(new Request('http://localhost/api/status'));
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(403);
   });
 
   it('returns status payload', async () => {

@@ -119,7 +119,7 @@ describe('GET /api/courses/[id]', () => {
   });
 
   it('returns 404 when course is not found', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.course.findUnique.mockResolvedValue(null);
 
     const res = await GET(new Request('http://localhost/api/courses/1'), {
@@ -176,7 +176,7 @@ describe('GET /api/courses/[id]', () => {
     prismaMock.submission.count.mockResolvedValue(2);
     prismaMock.comment.count.mockResolvedValue(1);
     prismaMock.assignmentProblem.findMany.mockResolvedValue([{ problemId: 'p1' }]);
-    authMock.mockResolvedValue({ user: { id: 'viewer-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'viewer-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
 
     const res = await GET(new Request('http://localhost/api/courses/1'), {
@@ -205,7 +205,7 @@ describe('GET /api/courses/[id]', () => {
   });
 
   it('returns 500 when get throws', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.course.findUnique.mockRejectedValue(new Error('db error'));
 
     const res = await GET(new Request('http://localhost/api/courses/1'), {
@@ -218,7 +218,7 @@ describe('GET /api/courses/[id]', () => {
 
 describe('PUT /api/courses/[id]', () => {
   it('returns 400 when id is missing', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
 
     const req = new Request('http://localhost/api/courses/', {
       method: 'PUT',
@@ -244,7 +244,7 @@ describe('PUT /api/courses/[id]', () => {
   });
 
   it('returns 400 when isArchived is not a boolean', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
 
     const req = new Request('http://localhost/api/courses/1', {
@@ -258,7 +258,7 @@ describe('PUT /api/courses/[id]', () => {
   });
 
   it('returns 403 when archive check fails', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     canArchiveMock.mockResolvedValue({ canArchive: false, reason: 'archive blocked' });
 
@@ -273,7 +273,7 @@ describe('PUT /api/courses/[id]', () => {
   });
 
   it('returns 403 when unpublish check fails', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     canUnpublishMock.mockResolvedValue({ canUnpublish: false, reason: 'unpublish blocked' });
 
@@ -288,7 +288,7 @@ describe('PUT /api/courses/[id]', () => {
   });
 
   it('returns 400 when registration window is missing', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
 
     const req = new Request('http://localhost/api/courses/1', {
@@ -302,7 +302,7 @@ describe('PUT /api/courses/[id]', () => {
   });
 
   it('requires at least one faculty member', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
 
     const req = new Request('http://localhost/api/courses/1', {
       method: 'PUT',
@@ -325,7 +325,7 @@ describe('PUT /api/courses/[id]', () => {
   });
 
   it('updates course and syncs faculty roster', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
 
@@ -406,7 +406,7 @@ describe('PUT /api/courses/[id]', () => {
   });
 
   it('rejects an empty instructor list once the registration window is provided', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
 
     const req = new Request('http://localhost/api/courses/1', {
@@ -434,7 +434,7 @@ describe('PUT /api/courses/[id]', () => {
   });
 
   it('falls back to the system timezone and groups TA/student roster rows', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     // No personal timezone -> system settings fallback path.
     prismaMock.user.findUnique.mockResolvedValue({ timezone: null });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
@@ -501,7 +501,7 @@ describe('PUT /api/courses/[id]', () => {
   });
 
   it('syncs faculty remove/promote/add and includes admin in instructor lists', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
 
@@ -588,7 +588,7 @@ describe('PUT /api/courses/[id]', () => {
   });
 
   it('returns 500 when transaction throws', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.$transaction.mockRejectedValue(new Error('tx failed'));
 
@@ -615,7 +615,7 @@ describe('PUT /api/courses/[id]', () => {
   });
 
   it('returns 500 when updated course cannot be reloaded', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
 
     const txMock = {
@@ -658,7 +658,7 @@ describe('PUT /api/courses/[id]', () => {
 
 describe('DELETE /api/courses/[id]', () => {
   it('returns 400 when id is missing', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
 
     const req = new Request('http://localhost/api/courses/', {
       method: 'DELETE',
@@ -682,7 +682,7 @@ describe('DELETE /api/courses/[id]', () => {
   });
 
   it('returns 403 when course is not archived', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.course.findFirst.mockResolvedValue({ isArchived: false });
 
     const req = new Request('http://localhost/api/courses/1', {
@@ -695,7 +695,7 @@ describe('DELETE /api/courses/[id]', () => {
   });
 
   it('returns 403 when course does not exist', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.course.findFirst.mockResolvedValue(null);
 
     const req = new Request('http://localhost/api/courses/1', {
@@ -708,7 +708,7 @@ describe('DELETE /api/courses/[id]', () => {
   });
 
   it('deletes archived course and logs activity', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.course.findFirst.mockResolvedValue({ isArchived: true });
     prismaMock.course.delete.mockResolvedValue({ id: 'course-1', name: 'Course 1' });
 
@@ -723,7 +723,7 @@ describe('DELETE /api/courses/[id]', () => {
   });
 
   it('returns 500 when delete throws', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.course.findFirst.mockResolvedValue({ isArchived: true });
     prismaMock.course.delete.mockRejectedValue(new Error('delete failed'));
 
