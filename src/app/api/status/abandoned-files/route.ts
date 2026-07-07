@@ -12,6 +12,7 @@ const CATEGORY_FOLDERS: Record<string, string> = {
   problems: 'problems',
 };
 
+// Reject anything that could escape the category folder (traversal or separators).
 const isSafeFileName = (name: string) => {
   if (!name) return false;
   if (name.includes('..')) return false;
@@ -19,6 +20,36 @@ const isSafeFileName = (name: string) => {
   return true;
 };
 
+/**
+ * Deletes a single orphaned upload — a file on disk that no DB row references
+ * (see the abandoned-file report on the status dashboard). Restricted to staff
+ * (ADMIN/FACULTY/TA). Guards on every axis: the category must be known, the name
+ * must be separator-free, the file must still be unreferenced, and the resolved
+ * path must stay inside its category folder.
+ * @openapi
+ * summary: Delete an orphaned upload
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [category, fileName]
+ *         properties:
+ *           category: { type: string, enum: [solutions, submissions, pfps, problems] }
+ *           fileName: { type: string, description: Bare filename, no path separators }
+ * responses:
+ *   200:
+ *     description: File deleted.
+ *     content:
+ *       application/json:
+ *         schema: { type: object, properties: { ok: { type: boolean } } }
+ *   400: { description: Unknown category, unsafe filename, or path outside the category folder. }
+ *   401: { description: Not signed in, or lacking staff role. }
+ *   404: { description: File not found on disk. }
+ *   409: { description: A DB row still references this file — refused. }
+ *   500: { description: Server error. }
+ */
 export async function DELETE(req: Request) {
   let actorId: string | null = null;
   try {

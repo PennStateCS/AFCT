@@ -1,16 +1,51 @@
-// /src/app/api/public/login/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcrypt';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
+/**
+ * Verifies email/password credentials and returns the matching user's public
+ * profile. This only checks credentials and records the attempt in the audit
+ * log — it does not establish a session (NextAuth owns the session cookie).
+ * Every failure path returns the same generic "Invalid credentials" to avoid
+ * revealing which part was wrong.
+ * @openapi
+ * summary: Verify login credentials
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [email, password]
+ *         properties:
+ *           email: { type: string }
+ *           password: { type: string }
+ * responses:
+ *   200:
+ *     description: Credentials are valid; returns the user's public fields.
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             user:
+ *               type: object
+ *               properties:
+ *                 id: { type: string }
+ *                 email: { type: string }
+ *                 firstName: { type: string }
+ *                 lastName: { type: string }
+ *                 role: { type: string }
+ *   400: { description: Email or password missing. }
+ *   401: { description: Invalid credentials, or the account is inactive. }
+ *   500: { description: Server error. }
+ */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { email, password } = body || {};
 
-    // Check for missing credentials
     if (!email || !password) {
       console.warn('Login failed: Missing email or password');
       await createEnhancedActivityLog(prisma, req, {

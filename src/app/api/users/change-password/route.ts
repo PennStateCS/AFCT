@@ -1,5 +1,3 @@
-// /src/app/api/users/change-password/
-
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -7,10 +5,41 @@ import bcrypt from 'bcrypt';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy';
 
+/**
+ * Lets a signed-in user change their own password. Requires the current password,
+ * enforces the strength policy, and forbids reusing the existing one. A correct
+ * change also clears the `temporaryPassword` flag (used after admin resets).
+ * @openapi
+ * summary: Change my password
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [oldPassword, newPassword]
+ *         properties:
+ *           oldPassword: { type: string }
+ *           newPassword: { type: string, description: Must meet the strength policy and differ from the old one }
+ * responses:
+ *   200:
+ *     description: Password updated.
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             success: { type: boolean }
+ *             message: { type: string }
+ *   400: { description: Missing fields, weak password, wrong current password, or reused password. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Session role is not permitted to change passwords. }
+ *   404: { description: User record not found. }
+ *   500: { description: Server error. }
+ */
 export async function POST(req: NextRequest) {
   let actorId: string | null = null;
   try {
-    // 1. Verify the current session (must be logged in)
     const session = await auth();
 
     if (!session?.user?.id || !session.user.role) {
@@ -22,9 +51,8 @@ export async function POST(req: NextRequest) {
     actorId = userId;
     const userRole = session.user.role;
 
-    // Change password attempt
-
-    // 2. Validate role is permitted
+    // Every real role may change its own password; the guard mainly rejects
+    // sessions carrying an unexpected role value.
     const ALLOWED_ROLES = ['STUDENT', 'TA', 'FACULTY', 'ADMIN'];
     if (!ALLOWED_ROLES.includes(userRole)) {
       console.warn(`[CHANGE_PASSWORD] Forbidden role: ${userRole}`);
@@ -37,7 +65,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // 3. Parse incoming request body
     const { oldPassword, newPassword } = await req.json();
 
     if (!oldPassword || !newPassword) {
@@ -50,7 +77,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: passwordRequirementText }, { status: 400 });
     }
 
-    // 4. Fetch the user’s current password hash
     const user = await prisma.user.findUnique({ where: { id: userId } });
 
     if (!user?.password) {
@@ -58,7 +84,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // 5. Check if the old password matches
     const isValid = await bcrypt.compare(oldPassword, user.password);
     if (!isValid) {
       console.warn(`[CHANGE_PASSWORD] Incorrect old password for user ${userId}`);
@@ -74,7 +99,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Incorrect old password' }, { status: 400 });
     }
 
-    // 6. Prevent reuse of the same password
+    // Reject reuse of the current password.
     const isSameAsOld = await bcrypt.compare(newPassword, user.password);
     if (isSameAsOld) {
       console.warn('[CHANGE_PASSWORD] New password is same as old');
@@ -84,17 +109,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 7. Hash new password and update in DB
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
+    // Clearing temporaryPassword retires any admin-issued reset.
     await prisma.user.update({
       where: { id: userId },
       data: { password: hashedPassword, temporaryPassword: false },
     });
 
-    // Password successfully updated
-
-    // 8. Log the password change
     await createEnhancedActivityLog(prisma, req, {
       userId,
       action: 'CHANGE_PASSWORD',
@@ -108,7 +130,6 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 9. Respond with success
     return NextResponse.json({ success: true, message: 'Password updated successfully' });
   } catch (err) {
     console.error('[CHANGE_PASSWORD_ERROR]', err);
