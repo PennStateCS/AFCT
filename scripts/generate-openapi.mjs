@@ -1,4 +1,4 @@
-// Generates an OpenAPI spec + a Swagger UI page for the app's API routes.
+// Generates an OpenAPI spec + a Redoc reference page for the app's API routes.
 //
 // The skeleton (paths, HTTP methods, path params, auth hints, source links) is
 // inferred from src/app/api/**/route.ts, so it always matches the code. Any
@@ -26,6 +26,53 @@ const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 const SKIP = new Set([join(API_DIR, 'auth', '[...nextauth]', 'route.ts')]);
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+
+// Rendered as markdown at the top of the docs — the orientation a new consumer needs.
+const API_DESCRIPTION = [
+  'Auto-generated reference for the AFCT Dashboard API. Paths and methods are inferred',
+  'from the route files so the docs stay in step with the code; individual endpoints are',
+  'enriched with an `@openapi` block in the source.',
+  '',
+  '## Authentication',
+  '',
+  'The API authenticates with the **NextAuth session cookie**. Most endpoints require a',
+  'signed-in session; some additionally require an `ADMIN`, `FACULTY`, or `TA` role — the',
+  'requirement is stated on each operation. A few endpoints (health, signup, login, public',
+  'settings) need no session.',
+  '',
+  '## Conventions',
+  '',
+  '- **Base URL:** same-origin, relative to the deployed app.',
+  '- **Errors:** failures return a JSON body with an `error` or `message` string (see the',
+  '  `Error` schema).',
+  '- **Dates:** `datetime-local` strings (`YYYY-MM-DDTHH:MM`) are interpreted in the',
+  "  actor's timezone and stored as UTC.",
+  '- Every operation links to its **source** on GitHub.',
+].join('\n');
+
+// One-line context per tag (tags are the first path segment). Unlisted tags render bare.
+const TAG_DESCRIPTIONS = {
+  auth: 'Sign-up and credential/email checks.',
+  courses: 'Courses, rosters, enrollment, groups, grades, and their assignments and problems.',
+  course_submissions: 'Course-wide submission re-runs.',
+  comments: 'Per-problem discussion comments.',
+  assignments: 'Assignment CRUD and per-assignment problem and grade views.',
+  problems: 'Problem bank CRUD, submissions, and comments.',
+  submissions: 'Student submissions and re-evaluation.',
+  users: 'User accounts and administration.',
+  profile: "The signed-in user's own profile.",
+  groups: 'Course groups addressed by group id.',
+  logging: 'Activity/audit log browsing.',
+  logs: 'Activity-log export.',
+  admin: 'Admin-only user and submission tools.',
+  'system-settings': 'System configuration, TLS certificates, and backups.',
+  session: 'Session keep-alive.',
+  status: 'Operational status and diagnostics.',
+  health: 'Liveness probe for the container healthcheck.',
+  uploads: 'Serving uploaded files (avatars, problem files, submissions).',
+  solutions: 'Serving problem solution files (staff only).',
+  public: 'Public credential verification.',
+};
 
 function findRoutes(dir) {
   const out = [];
@@ -221,13 +268,12 @@ function buildSpec(routes) {
     info: {
       title: 'AFCT Dashboard API',
       version: pkg.version || '0.0.0',
-      description:
-        'Auto-generated reference for the app\'s API routes. Paths and methods are ' +
-        'inferred from the route files; individual endpoints can be enriched with an ' +
-        '`@openapi` block in the code.',
+      description: API_DESCRIPTION,
     },
     servers: [{ url: '/', description: 'Same-origin (relative to the deployed app)' }],
-    tags: [...tags].sort().map((name) => ({ name })),
+    tags: [...tags].sort().map((name) =>
+      TAG_DESCRIPTIONS[name] ? { name, description: TAG_DESCRIPTIONS[name] } : { name },
+    ),
     paths,
     components: {
       securitySchemes: {
@@ -259,27 +305,32 @@ function buildSpec(routes) {
   return { spec, stats };
 }
 
-const SWAGGER_HTML = `<!doctype html>
+// Redoc renders openapi.json as a static, read-only reference (three-panel layout,
+// left-nav search, a spec-download button). It fetches openapi.json from the same
+// directory, so it works as-is on GitHub Pages.
+const REDOC_HTML = `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AFCT Dashboard API</title>
-  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
-  <style>body { margin: 0 }</style>
+  <style>body { margin: 0; padding: 0 }</style>
 </head>
 <body>
-  <div id="swagger-ui"></div>
-  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js" crossorigin></script>
+  <div id="redoc"></div>
+  <script src="https://unpkg.com/redoc@2/bundles/redoc.standalone.js"></script>
   <script>
-    window.ui = SwaggerUIBundle({
-      url: 'openapi.json',
-      dom_id: '#swagger-ui',
-      deepLinking: true,
-      // Read-only reference: "Try it out" can't reach a private deployment cross-origin.
-      supportedSubmitMethods: [],
-      docExpansion: 'none',
-    });
+    Redoc.init(
+      'openapi.json',
+      {
+        hideDownloadButton: false, // keep the button to download the raw spec
+        expandResponses: '200,201',
+        requiredPropsFirst: true,
+        sortPropsAlphabetically: true,
+        pathInMiddlePanel: true,
+      },
+      document.getElementById('redoc'),
+    );
   </script>
 </body>
 </html>
@@ -289,7 +340,7 @@ const routes = findRoutes(API_DIR);
 const { spec, stats } = buildSpec(routes);
 mkdirSync(OUT_DIR, { recursive: true });
 writeFileSync(join(OUT_DIR, 'openapi.json'), JSON.stringify(spec, null, 2));
-writeFileSync(join(OUT_DIR, 'index.html'), SWAGGER_HTML);
+writeFileSync(join(OUT_DIR, 'index.html'), REDOC_HTML);
 
 const endpointCount = Object.values(spec.paths).reduce((n, o) => n + Object.keys(o).length, 0);
 console.log(
