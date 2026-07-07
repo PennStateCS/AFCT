@@ -85,7 +85,7 @@ jobs:
       # flip exit-code to '1' to make CRITICAL/HIGH block a release.
       - name: Scan image for vulnerabilities (Trivy)
         if: success()
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@v0.33.1
         with:
           image-ref: ghcr.io/pennstatewilkes-barre/afct-dashboard@${{ steps.build.outputs.digest || steps.retry.outputs.digest }}
           format: table
