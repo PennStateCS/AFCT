@@ -114,6 +114,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           id: user.id,
           email: user.email,
           name: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+          isAdmin: user.isAdmin,
           role: user.role,
           avatar: user.avatar || undefined,
           mustChangePassword: user.temporaryPassword,
@@ -125,6 +126,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         token.role = user.role;
+        token.isAdmin = user.isAdmin;
         token.id = user.id;
         token.avatar = user.avatar;
         token.mustChangePassword = Boolean(user.mustChangePassword);
@@ -145,6 +147,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (token) {
         session.user.id = token.id as string;
         session.user.role = token.role as Role;
+        session.user.isAdmin = Boolean(token.isAdmin);
         session.user.avatar = (token.avatar as string | null) || undefined;
 
         // Always fetch fresh user data to ensure profile updates are reflected
@@ -155,6 +158,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               firstName: true,
               lastName: true,
               role: true,
+              isAdmin: true,
               avatar: true,
               temporaryPassword: true,
             },
@@ -164,6 +168,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             session.user.firstName = freshUser.firstName || undefined;
             session.user.lastName = freshUser.lastName || undefined;
             session.user.role = freshUser.role;
+            session.user.isAdmin = freshUser.isAdmin;
             session.user.avatar = freshUser.avatar || undefined;
             session.user.mustChangePassword = freshUser.temporaryPassword;
             // Update the combined name as well
