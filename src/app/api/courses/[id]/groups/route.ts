@@ -38,7 +38,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       userId: session?.user?.id ?? null,
       action: 'COURSE_GROUPS_VIEW_DENIED',
       severity: 'SECURITY',
-      metadata: { role: session?.user?.role ?? null },
+      metadata: {},
     });
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
@@ -109,7 +109,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       userId: session?.user?.id ?? null,
       action: 'GROUP_CREATE_DENIED',
       severity: 'SECURITY',
-      metadata: { role: session?.user?.role ?? null },
+      metadata: {},
     });
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }

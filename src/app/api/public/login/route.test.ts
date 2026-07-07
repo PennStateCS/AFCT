@@ -104,7 +104,6 @@ describe('POST /api/public/login', () => {
         email: 'test@example.com',
         firstName: 'Test',
         lastName: 'User',
-        role: 'STUDENT',
       },
     });
     expect(activityLogMock).toHaveBeenCalled();

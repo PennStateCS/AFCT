@@ -493,18 +493,6 @@ describe('course-utils', () => {
       expect(result[1].id).toBe('user-3');
     });
 
-    it('should use global role if courseRole is undefined', () => {
-      const enrolled: EnrolledUser[] = [
-        { id: 'user-1', role: 'STUDENT', firstName: 'John' },
-        { id: 'user-2', role: 'FACULTY', firstName: 'Jane' },
-      ];
-
-      const result = getStudents(enrolled);
-
-      expect(result).toHaveLength(1);
-      expect(result[0].id).toBe('user-1');
-    });
-
     it('should return empty array for undefined', () => {
       expect(getStudents(undefined)).toEqual([]);
     });
@@ -551,7 +539,7 @@ describe('course-utils', () => {
       expect(result).toBe('John Doe, Bob Johnson');
     });
 
-    it('should exclude ADMIN role instructors', () => {
+    it('should include all FACULTY courseRole instructors regardless of global role', () => {
       const enrolled: EnrolledUser[] = [
         { id: 'user-1', courseRole: 'FACULTY', firstName: 'John', lastName: 'Doe', role: 'ADMIN' },
         {
@@ -565,7 +553,7 @@ describe('course-utils', () => {
 
       const result = formatInstructorNames(enrolled);
 
-      expect(result).toBe('Jane Smith');
+      expect(result).toBe('John Doe, Jane Smith');
     });
 
     it('should return TBA when no instructors', () => {

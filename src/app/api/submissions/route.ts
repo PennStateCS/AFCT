@@ -182,7 +182,6 @@ export async function POST(req: NextRequest) {
         courseId,
         assignmentId,
         problemId,
-        role: session.user.role,
         error: 'User is not enrolled in or assigned to this course.',
       },
     });

@@ -106,7 +106,6 @@ export default function DashboardSidebarMenu() {
     lastName = '',
     avatar = '',
     timezone,
-    role = 'STUDENT',
     isAdmin = false,
   } = session.user;
 
@@ -128,7 +127,6 @@ export default function DashboardSidebarMenu() {
     avatar: avatarUrl,
     timezone: timezone ?? null,
     initials,
-    role: (role?.toUpperCase?.() || 'STUDENT') as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT',
     password: '', // password is not exposed from session
     temporaryPassword: Boolean(session.user.mustChangePassword),
     inactive: false, // inactive status is not exposed from session
@@ -136,11 +134,9 @@ export default function DashboardSidebarMenu() {
     updatedAt: new Date(), // updatedAt is not exposed from session
   };
 
-  const visibleCourses = courses.filter((c) => {
-    if (c.isArchived) return false;
-    if (user.role === 'STUDENT') return c.isPublished;
-    return true;
-  });
+  // The server (nav API) already scopes which courses are returned per the
+  // viewer's per-course role; here we only drop archived ones.
+  const visibleCourses = courses.filter((c) => !c.isArchived);
   const isDev = process.env.NODE_ENV !== 'production';
   const resolvedAdminMenu = (
     isDev

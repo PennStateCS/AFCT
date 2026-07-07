@@ -27,7 +27,7 @@ import type { Prisma } from '@prisma/client';
  */
 type RosterItem = Prisma.RosterGetPayload<{
   include: {
-    user: { select: { id: true; firstName: true; lastName: true; role: true } };
+    user: { select: { id: true; firstName: true; lastName: true } };
   };
 }>;
 
@@ -92,7 +92,7 @@ export async function GET() {
       include: {
         roster: {
           include: {
-            user: { select: { id: true, firstName: true, lastName: true, role: true } },
+            user: { select: { id: true, firstName: true, lastName: true } },
           },
         },
         assignments: {
@@ -191,7 +191,7 @@ export async function POST(req: Request) {
         userId: session?.user?.id ?? null,
         action: 'COURSE_CREATE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
     }
@@ -283,7 +283,7 @@ export async function POST(req: Request) {
         include: {
           roster: {
             include: {
-              user: { select: { id: true, firstName: true, lastName: true, role: true } },
+              user: { select: { id: true, firstName: true, lastName: true } },
             },
           },
         },

@@ -38,7 +38,9 @@ export default function StudentAssignmentPage({
   const { data: session } = useSession();
   const { timezone } = useEffectiveTimezone();
   const userId = session?.user?.id ?? null;
-  const isStudent = session?.user?.role === 'STUDENT';
+  // No per-course role is available here; a non-admin viewer is treated as a
+  // student for the purpose of hiding unpublished assignments.
+  const isStudent = !session?.user?.isAdmin;
 
   const [assignment, setAssignment] = useState<AssignmentWithDetails | null>(initialAssignment);
   const epsSymbol = useEmptyStringSymbol(assignment?.courseId);

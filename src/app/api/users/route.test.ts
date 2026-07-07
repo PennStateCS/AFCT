@@ -49,20 +49,20 @@ describe('GET /api/users', () => {
   });
 
   it('returns users and logs activity', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     getUsersListMock.mockResolvedValue([{ id: 'u2', email: 'u2@example.com' }]);
 
-    const res = await GET(new Request('http://localhost/api/users?role=STUDENT'));
+    const res = await GET(new Request('http://localhost/api/users'));
 
     expect(res.status).toBe(200);
-    expect(getUsersListMock).toHaveBeenCalledWith('STUDENT');
+    expect(getUsersListMock).toHaveBeenCalledWith();
     const body = await res.json();
     expect(body).toEqual([{ id: 'u2', email: 'u2@example.com' }]);
     expect(activityLogMock).toHaveBeenCalled();
   });
 
   it('returns 500 when database query fails', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     getUsersListMock.mockRejectedValue(new Error('Database error'));
 
     const res = await GET(new Request('http://localhost/api/users'));
@@ -84,7 +84,6 @@ describe('POST /api/users', () => {
         firstName: 'A',
         lastName: 'B',
         password: 'Strong1!a',
-        role: 'STUDENT',
       }),
     });
 
@@ -94,7 +93,7 @@ describe('POST /api/users', () => {
   });
 
   it('returns 400 when required fields missing', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
 
     const req = new Request('http://localhost/api/users', {
       method: 'POST',
@@ -107,7 +106,7 @@ describe('POST /api/users', () => {
   });
 
   it('returns 400 when email invalid', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
 
     const req = new Request('http://localhost/api/users', {
       method: 'POST',
@@ -116,7 +115,6 @@ describe('POST /api/users', () => {
         firstName: 'A',
         lastName: 'B',
         password: 'Strong1!a',
-        role: 'STUDENT',
       }),
     });
 
@@ -126,7 +124,7 @@ describe('POST /api/users', () => {
   });
 
   it('returns 400 when password weak', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
 
     const req = new Request('http://localhost/api/users', {
       method: 'POST',
@@ -135,7 +133,6 @@ describe('POST /api/users', () => {
         firstName: 'A',
         lastName: 'B',
         password: 'weak',
-        role: 'STUDENT',
       }),
     });
 
@@ -145,7 +142,7 @@ describe('POST /api/users', () => {
   });
 
   it('returns 409 when email already exists', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ id: 'u2' });
 
     const req = new Request('http://localhost/api/users', {
@@ -155,7 +152,6 @@ describe('POST /api/users', () => {
         firstName: 'A',
         lastName: 'B',
         password: 'Strong1!a',
-        role: 'STUDENT',
       }),
     });
 
@@ -165,7 +161,7 @@ describe('POST /api/users', () => {
   });
 
   it('returns 400 when timezone invalid', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue(null);
 
     const req = new Request('http://localhost/api/users', {
@@ -175,7 +171,6 @@ describe('POST /api/users', () => {
         firstName: 'A',
         lastName: 'B',
         password: 'Strong1!a',
-        role: 'STUDENT',
         timezone: 'Bad/Zone',
       }),
     });
@@ -186,7 +181,7 @@ describe('POST /api/users', () => {
   });
 
   it('creates user and logs activity', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue(null);
     prismaMock.systemSettings.findUnique.mockResolvedValue({ id: 1, timezone: 'UTC' });
     prismaMock.user.create.mockResolvedValue({ id: 'u2', email: 'test@example.com' });
@@ -198,7 +193,6 @@ describe('POST /api/users', () => {
         firstName: 'A',
         lastName: 'B',
         password: 'Strong1!a',
-        role: 'STUDENT',
       }),
     });
 
@@ -210,7 +204,7 @@ describe('POST /api/users', () => {
   });
 
   it('returns 500 when user creation fails', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue(null);
     prismaMock.systemSettings.findUnique.mockResolvedValue({ id: 1, timezone: 'UTC' });
     prismaMock.user.create.mockRejectedValue(new Error('Database error'));
@@ -222,7 +216,6 @@ describe('POST /api/users', () => {
         firstName: 'A',
         lastName: 'B',
         password: 'Strong1!a',
-        role: 'STUDENT',
       }),
     });
 

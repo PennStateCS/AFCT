@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canUnpublishCourse } from '@/lib/course-status-checks';
+import { canManageCourse, COURSE_FACULTY_ROLES } from '@/lib/permissions';
 
 /**
  * Toggles a course's published state. ADMIN/FACULTY only. Unpublishing runs a
@@ -42,12 +43,12 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     const user = session?.user;
     actorId = user?.id ?? null;
 
-    if (!user || !['ADMIN', 'FACULTY'].includes(user.role)) {
+    if (!user?.id || !(await canManageCourse(user, courseId, COURSE_FACULTY_ROLES))) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session?.user?.id ?? null,
         action: 'COURSE_PUBLISH_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
@@ -59,7 +60,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
           userId: session?.user?.id ?? null,
           action: 'COURSE_PUBLISH_DENIED',
           severity: 'SECURITY',
-          metadata: { role: session?.user?.role ?? null },
+          metadata: {},
         });
         return NextResponse.json({ error: reason }, { status: 403 });
       }

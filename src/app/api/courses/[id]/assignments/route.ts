@@ -34,7 +34,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
         userId: session?.user?.id ?? null,
         action: 'COURSE_ASSIGNMENTS_ACCESS_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }

@@ -40,7 +40,7 @@ export async function GET(
         userId: session?.user?.id ?? null,
         action: 'PROBLEM_GRADES_SUMMARY_ACCESS_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

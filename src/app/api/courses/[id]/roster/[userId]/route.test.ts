@@ -155,7 +155,7 @@ describe('DELETE /api/courses/[id]/roster/[userId]', () => {
   });
 
   it('returns 400 when user has submissions', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     prismaMock.roster.findFirst
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ role: 'STUDENT' });
@@ -171,7 +171,7 @@ describe('DELETE /api/courses/[id]/roster/[userId]', () => {
   });
 
   it('returns 400 when removing only faculty member', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     prismaMock.roster.findFirst
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ role: 'FACULTY' })
@@ -188,7 +188,7 @@ describe('DELETE /api/courses/[id]/roster/[userId]', () => {
   });
 
   it('removes roster entry when allowed', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     prismaMock.roster.findFirst
       .mockResolvedValueOnce({ role: 'ADMIN' })
       .mockResolvedValueOnce({ role: 'STUDENT' })
@@ -252,7 +252,7 @@ describe('PATCH /api/courses/[id]/roster/[userId]', () => {
   });
 
   it('updates role when allowed', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     prismaMock.roster.findFirst
       .mockResolvedValueOnce({ role: 'ADMIN' })
       .mockResolvedValueOnce({ id: 'r1', role: 'STUDENT' });

@@ -61,7 +61,7 @@ export async function DELETE(req: Request) {
         userId: session?.user?.id ?? null,
         action: 'ABANDONED_FILES_DELETE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

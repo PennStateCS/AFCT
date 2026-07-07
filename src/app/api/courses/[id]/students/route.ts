@@ -31,7 +31,7 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
         userId: session?.user?.id ?? null,
         action: 'COURSE_STUDENTS_ACCESS_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
@@ -45,7 +45,6 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
             firstName: true,
             lastName: true,
             email: true,
-            role: true,
           },
         },
       },

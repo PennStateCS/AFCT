@@ -27,17 +27,8 @@ describe('GET /api/courses/nav', () => {
     expect(prismaMock.course.findMany).not.toHaveBeenCalled();
   });
 
-  it('returns 401 when user id or role is missing', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1' } });
-
-    const res = await GET();
-
-    expect(res.status).toBe(401);
-    expect(prismaMock.course.findMany).not.toHaveBeenCalled();
-  });
-
-  it('filters to published courses for students', async () => {
-    authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
+  it('applies the published-or-staff filter for non-admin users', async () => {
+    authMock.mockResolvedValue({ user: { id: 'student-1', isAdmin: false } });
     prismaMock.course.findMany.mockResolvedValue([
       {
         id: 'c1',
@@ -54,7 +45,10 @@ describe('GET /api/courses/nav', () => {
     expect(prismaMock.course.findMany).toHaveBeenCalledWith({
       where: {
         roster: { some: { userId: 'student-1' } },
-        isPublished: true,
+        OR: [
+          { isPublished: true },
+          { roster: { some: { userId: 'student-1', role: { in: ['FACULTY', 'TA'] } } } },
+        ],
       },
       select: {
         id: true,
@@ -78,8 +72,8 @@ describe('GET /api/courses/nav', () => {
     ]);
   });
 
-  it('does not force published filter for non-student roles', async () => {
-    authMock.mockResolvedValue({ user: { id: 'fac-1', role: 'FACULTY' } });
+  it('does not force published filter for admins', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', isAdmin: true } });
     prismaMock.course.findMany.mockResolvedValue([]);
 
     const res = await GET();
@@ -87,7 +81,7 @@ describe('GET /api/courses/nav', () => {
     expect(res.status).toBe(200);
     expect(prismaMock.course.findMany).toHaveBeenCalledWith({
       where: {
-        roster: { some: { userId: 'fac-1' } },
+        roster: { some: { userId: 'admin-1' } },
       },
       select: {
         id: true,
@@ -102,7 +96,7 @@ describe('GET /api/courses/nav', () => {
 
   it('returns 500 when database query fails', async () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     prismaMock.course.findMany.mockRejectedValue(new Error('boom'));
 
     const res = await GET();

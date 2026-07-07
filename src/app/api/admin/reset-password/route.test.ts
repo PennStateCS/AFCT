@@ -45,7 +45,7 @@ describe('POST /api/admin/reset-password', () => {
   });
 
   it('returns 400 when fields missing', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
+    authMock.mockResolvedValue({ user: { id: 'admin', isAdmin: true } });
 
     const req = new Request('http://localhost/api/admin/reset-password', {
       method: 'POST',
@@ -58,7 +58,7 @@ describe('POST /api/admin/reset-password', () => {
   });
 
   it('returns 400 when password weak', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
+    authMock.mockResolvedValue({ user: { id: 'admin', isAdmin: true } });
 
     const req = new Request('http://localhost/api/admin/reset-password', {
       method: 'POST',
@@ -71,7 +71,7 @@ describe('POST /api/admin/reset-password', () => {
   });
 
   it('resets password and logs activity', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
+    authMock.mockResolvedValue({ user: { id: 'admin', isAdmin: true } });
     prismaMock.user.update.mockResolvedValue({ id: 'u1' });
 
     const req = new Request('http://localhost/api/admin/reset-password', {
@@ -94,7 +94,6 @@ describe('POST /api/admin/reset-password', () => {
         action: 'RESET_PASSWORD',
         metadata: expect.objectContaining({
           userId: 'admin',
-          initiatedByRole: 'ADMIN',
           targetUserId: 'u1',
           temporaryPassword: true,
         }),

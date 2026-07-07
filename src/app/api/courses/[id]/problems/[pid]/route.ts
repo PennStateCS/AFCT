@@ -38,7 +38,7 @@ export async function DELETE(
         userId: session?.user?.id ?? null,
         action: 'PROBLEM_DELETE_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }

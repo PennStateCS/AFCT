@@ -51,7 +51,6 @@ export async function POST(req: NextRequest) {
 
     const assignments = await getAssignmentsForUserRange({
       userId: session.user.id,
-      role: session.user.role,
       startDate,
       endDate,
     });

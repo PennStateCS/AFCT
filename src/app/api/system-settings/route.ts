@@ -224,7 +224,6 @@ type SettingsBody = {
  */
 export async function PUT(req: Request) {
   const session = await auth();
-  const role = session?.user?.role;
   if (!session?.user || !isAdmin(session.user)) {
     // Record write attempts from a signed-in user who lacks permission — a
     // privilege-escalation probe is worth a trail. Unauthenticated hits are skipped.
@@ -234,7 +233,7 @@ export async function PUT(req: Request) {
         action: 'SYSTEM_SETTINGS_UPDATE_DENIED',
         severity: 'SECURITY',
         category: 'SYSTEM',
-        metadata: { role: role ?? null },
+        metadata: {},
       });
     }
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });

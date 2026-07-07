@@ -56,7 +56,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
         userId: session?.user?.id ?? null,
         action: 'SUBMISSION_RERUN_DENIED',
         severity: 'SECURITY',
-        metadata: { role: session?.user?.role ?? null },
+        metadata: {},
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

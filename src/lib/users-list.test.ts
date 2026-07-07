@@ -18,24 +18,19 @@ beforeEach(() => {
 const args = () => prismaMock.user.findMany.mock.calls[0][0];
 
 describe('getUsersList', () => {
-  it('filters by role when one is provided', async () => {
+  it('does not filter by role (global role removed)', async () => {
     await getUsersList('FACULTY');
-    expect(args().where).toEqual({ role: 'FACULTY' });
+    expect(args().where).toBeUndefined();
   });
 
-  it('returns all users (no where filter) when no role is given', async () => {
+  it('returns all users (no where filter)', async () => {
     await getUsersList();
     expect(args().where).toBeUndefined();
   });
 
-  it('treats null the same as "no filter"', async () => {
-    await getUsersList(null);
-    expect(args().where).toBeUndefined();
-  });
-
-  it('sorts by role then last name', async () => {
+  it('sorts by last name', async () => {
     await getUsersList();
-    expect(args().orderBy).toEqual([{ role: 'asc' }, { lastName: 'asc' }]);
+    expect(args().orderBy).toEqual([{ lastName: 'asc' }]);
   });
 
   it('passes through the query result', async () => {
