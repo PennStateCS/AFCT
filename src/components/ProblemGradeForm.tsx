@@ -23,15 +23,12 @@ export default function ProblemGradeForm({
   isSaving = false,
   isLoading = false,
   error,
-  autograderStatus,
-  onRerun,
   onChange,
   onSubmit,
 }: ProblemGradeFormProps) {
   const gradeValue = typeof value === 'string' ? value : '';
   const trimmed = gradeValue.trim();
   const parsed = trimmed === '' ? null : Number(trimmed);
-  const numericGrade = Number.isNaN(parsed) ? null : parsed;
   const sanitizedCurrent = typeof currentGrade === 'number' ? currentGrade : null;
   const isNumeric = trimmed === '' ? true : !Number.isNaN(parsed);
   const isDirty =
@@ -58,10 +55,6 @@ export default function ProblemGradeForm({
     event.preventDefault();
     if (!disableButton) onSubmit();
   };
-
-  const status = autograderStatus?.toUpperCase();
-  const isPending = status === 'PENDING' || status === 'PROCESSING';
-  const isFailed = status === 'FAILED';
 
   return (
     <div className="flex flex-col gap-2">

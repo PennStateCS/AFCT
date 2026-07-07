@@ -66,7 +66,6 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
     reValidateMode: 'onChange',
   });
 
-  const isPublished = watch('isPublished');
   const startDateStr = watch('startDate'); // string (YYYY-MM-DDTHH:MM)
 
   // Fetch faculty list when dialog opens
@@ -115,11 +114,6 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
       const msg = await safeMessage(res);
       toast.error(msg ?? 'Failed to create course');
     }
-  };
-
-  const onSubmitWrapper = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    handleSubmit((data) => onSubmit(data as unknown as FormValues))(e);
   };
 
   return (

@@ -36,7 +36,7 @@ vi.mock('@/components/ui/SwitchField', () => ({
 }));
 
 vi.mock('@/components/FileUploadInput', () => ({
-  default: ({ id, label, onChange, value }: any) => (
+  default: ({ id, label, onChange }: any) => (
     <div>
       <label htmlFor={id}>{label}</label>
       <input

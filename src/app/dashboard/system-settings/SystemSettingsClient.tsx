@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
@@ -23,9 +23,20 @@ import {
   clampSubmissionMaxConcurrent,
   clampSubmissionMaxAttempts,
   clampSubmissionAnalyzerLimit,
+  clampLoginMaxAttempts,
+  clampLoginLockoutMinutes,
+  clampBackupHour,
+  clampBackupRetentionDays,
+  clampActivityLogRetentionDays,
   DEFAULT_ALLOW_SIGNUP,
   DEFAULT_MAX_UPLOAD_SIZE_MB,
   DEFAULT_SESSION_TIMEOUT_MINUTES,
+  DEFAULT_LOGIN_MAX_ATTEMPTS,
+  DEFAULT_LOGIN_LOCKOUT_MINUTES,
+  DEFAULT_BACKUP_ENABLED,
+  DEFAULT_BACKUP_HOUR,
+  DEFAULT_BACKUP_RETENTION_DAYS,
+  DEFAULT_ACTIVITY_LOG_RETENTION_DAYS,
   DEFAULT_SYSTEM_TIMEZONE,
   DEFAULT_SUBMISSION_EVAL_TIMEOUT_MS,
   DEFAULT_SUBMISSION_EVAL_MAX_MEMORY_MB,
@@ -47,6 +58,16 @@ import {
   MAX_SUBMISSION_MAX_ATTEMPTS,
   MIN_SUBMISSION_ANALYZER_LIMIT,
   MAX_SUBMISSION_ANALYZER_LIMIT,
+  MIN_LOGIN_MAX_ATTEMPTS,
+  MAX_LOGIN_MAX_ATTEMPTS,
+  MIN_LOGIN_LOCKOUT_MINUTES,
+  MAX_LOGIN_LOCKOUT_MINUTES,
+  MIN_BACKUP_HOUR,
+  MAX_BACKUP_HOUR,
+  MIN_BACKUP_RETENTION_DAYS,
+  MAX_BACKUP_RETENTION_DAYS,
+  MIN_ACTIVITY_LOG_RETENTION_DAYS,
+  MAX_ACTIVITY_LOG_RETENTION_DAYS,
 } from '@/lib/system-settings';
 import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
@@ -64,6 +85,12 @@ type SystemSettingsResponse = {
   submissionMaxConcurrent: number;
   submissionMaxAttempts: number;
   submissionAnalyzerLimit: number;
+  loginMaxAttempts: number;
+  loginLockoutMinutes: number;
+  backupEnabled: boolean;
+  backupHour: number;
+  backupRetentionDays: number;
+  activityLogRetentionDays: number;
   hcaptchaSiteKey: string;
   hcaptchaSecretConfigured: boolean;
 };
@@ -91,16 +118,50 @@ type FormSnapshot = {
   maxConcurrent: number | '';
   maxAttempts: number | '';
   analyzerLimit: number | '';
+  loginMaxAttempts: number | '';
+  loginLockoutMinutes: number | '';
+  backupEnabled: boolean;
+  backupHour: number | '';
+  backupRetentionDays: number | '';
+  activityLogRetentionDays: number | '';
   hcaptchaSiteKey: string;
 };
 
 type TlsMethod = 'csr' | 'self-signed' | 'upload' | null;
 
+// One backup = a database dump plus a matching upload-files archive.
+type BackupInfo = {
+  timestamp: string;
+  dumpFile: string | null;
+  dumpSize: number | null;
+  filesFile: string | null;
+  filesSize: number | null;
+};
+
 const msToSec = (ms: number) => Math.round(ms / 1000);
 const secToMs = (sec: number) => Math.round(sec * 1000);
 
+const formatBytes = (n: number | null) => {
+  if (n == null) return '—';
+  if (n < 1024) return `${n} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let v = n / 1024;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v.toFixed(1)} ${units[i]}`;
+};
+
+// Turn the backup filename timestamp (YYYYMMDD-HHMMSS) into a readable date.
+const formatBackupTs = (ts: string) => {
+  const m = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/.exec(ts);
+  return m ? `${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}:${m[6]}` : ts;
+};
+
 const SETTINGS_TAB_KEY = 'afct.systemSettingsTab';
-const SETTINGS_TABS = ['general', 'queue', 'captcha', 'tls'];
+const SETTINGS_TABS = ['general', 'queue', 'backups', 'captcha', 'tls'];
 
 export default function SystemSettingsClient() {
   const [loading, setLoading] = useState(true);
@@ -118,6 +179,21 @@ export default function SystemSettingsClient() {
   const [maxConcurrent, setMaxConcurrent] = useState<number | ''>('');
   const [maxAttempts, setMaxAttempts] = useState<number | ''>('');
   const [analyzerLimit, setAnalyzerLimit] = useState<number | ''>('');
+
+  // Login lockout policy (per-account).
+  const [loginMaxAttempts, setLoginMaxAttempts] = useState<number | ''>('');
+  const [loginLockoutMinutes, setLoginLockoutMinutes] = useState<number | ''>('');
+
+  // Database backup schedule.
+  const [backupEnabled, setBackupEnabled] = useState(true);
+  const [backupHour, setBackupHour] = useState<number | ''>('');
+  const [backupRetentionDays, setBackupRetentionDays] = useState<number | ''>('');
+  const [activityLogRetentionDays, setActivityLogRetentionDays] = useState<number | ''>('');
+
+  // Available backups (managed independently of the settings form's Save).
+  const [backups, setBackups] = useState<BackupInfo[]>([]);
+  const [backupsLoading, setBackupsLoading] = useState(true);
+  const [backupNowBusy, setBackupNowBusy] = useState(false);
 
   // hCaptcha keys. The secret is write-only: we only know whether one is set.
   const [hcaptchaSiteKey, setHcaptchaSiteKey] = useState('');
@@ -167,6 +243,16 @@ export default function SystemSettingsClient() {
           maxConcurrent: Number(data.submissionMaxConcurrent) || DEFAULT_SUBMISSION_MAX_CONCURRENT,
           maxAttempts: Number(data.submissionMaxAttempts) || DEFAULT_SUBMISSION_MAX_ATTEMPTS,
           analyzerLimit: Number(data.submissionAnalyzerLimit) || DEFAULT_SUBMISSION_ANALYZER_LIMIT,
+          loginMaxAttempts: Number(data.loginMaxAttempts) || DEFAULT_LOGIN_MAX_ATTEMPTS,
+          loginLockoutMinutes: Number(data.loginLockoutMinutes) || DEFAULT_LOGIN_LOCKOUT_MINUTES,
+          backupEnabled: data.backupEnabled ?? DEFAULT_BACKUP_ENABLED,
+          backupHour: clampBackupHour(Number(data.backupHour) || DEFAULT_BACKUP_HOUR),
+          backupRetentionDays: clampBackupRetentionDays(
+            Number(data.backupRetentionDays) || DEFAULT_BACKUP_RETENTION_DAYS,
+          ),
+          activityLogRetentionDays: clampActivityLogRetentionDays(
+            Number(data.activityLogRetentionDays) || DEFAULT_ACTIVITY_LOG_RETENTION_DAYS,
+          ),
           hcaptchaSiteKey: data.hcaptchaSiteKey ?? '',
         };
 
@@ -180,6 +266,12 @@ export default function SystemSettingsClient() {
         setMaxConcurrent(norm.maxConcurrent);
         setMaxAttempts(norm.maxAttempts);
         setAnalyzerLimit(norm.analyzerLimit);
+        setLoginMaxAttempts(norm.loginMaxAttempts);
+        setLoginLockoutMinutes(norm.loginLockoutMinutes);
+        setBackupEnabled(norm.backupEnabled);
+        setBackupHour(norm.backupHour);
+        setBackupRetentionDays(norm.backupRetentionDays);
+        setActivityLogRetentionDays(norm.activityLogRetentionDays);
         setHcaptchaSiteKey(norm.hcaptchaSiteKey);
         setHcaptchaSecretConfigured(Boolean(data.hcaptchaSecretConfigured));
         setHcaptchaSecretKey('');
@@ -207,6 +299,53 @@ export default function SystemSettingsClient() {
       }
     })();
   }, []);
+
+  const loadBackups = useCallback(async (): Promise<number> => {
+    try {
+      const res = await fetch('/api/system-settings/backups', { cache: 'no-store' });
+      if (res.ok) {
+        const data = (await res.json()) as { backups?: BackupInfo[] };
+        const list = Array.isArray(data.backups) ? data.backups : [];
+        setBackups(list);
+        setBackupsLoading(false);
+        return list.length;
+      }
+    } catch {
+      // non-fatal; the list just stays empty
+    }
+    setBackupsLoading(false);
+    return 0;
+  }, []);
+
+  useEffect(() => {
+    loadBackups();
+  }, [loadBackups]);
+
+  const handleBackupNow = async () => {
+    setBackupNowBusy(true);
+    try {
+      const before = await loadBackups();
+      const res = await fetch('/api/system-settings/backups', { method: 'POST' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error || 'Failed to start backup');
+      }
+      showToast.success('Backup requested — it should appear within a minute.');
+      // The backup container runs the request on its next tick; poll until the
+      // new backup shows up (or we give up after ~1 minute).
+      let tries = 0;
+      const poll = async () => {
+        tries += 1;
+        const count = await loadBackups();
+        if (count <= before && tries < 10) setTimeout(poll, 6000);
+      };
+      setTimeout(poll, 6000);
+    } catch (err) {
+      showToast.error(err instanceof Error ? err.message : 'Failed to start backup');
+    } finally {
+      setBackupNowBusy(false);
+    }
+  };
 
   // Restore the last-viewed tab on load, and remember it on change.
   useEffect(() => {
@@ -391,6 +530,11 @@ export default function SystemSettingsClient() {
     const concurrent = clampSubmissionMaxConcurrent(Number(maxConcurrent));
     const attempts = clampSubmissionMaxAttempts(Number(maxAttempts));
     const analyzer = clampSubmissionAnalyzerLimit(Number(analyzerLimit));
+    const loginAttempts = clampLoginMaxAttempts(Number(loginMaxAttempts));
+    const lockoutMinutes = clampLoginLockoutMinutes(Number(loginLockoutMinutes));
+    const bkpHour = clampBackupHour(Number(backupHour));
+    const bkpRetention = clampBackupRetentionDays(Number(backupRetentionDays));
+    const logRetention = clampActivityLogRetentionDays(Number(activityLogRetentionDays));
 
     setSaving(true);
     try {
@@ -408,6 +552,12 @@ export default function SystemSettingsClient() {
           submissionMaxConcurrent: concurrent,
           submissionMaxAttempts: attempts,
           submissionAnalyzerLimit: analyzer,
+          loginMaxAttempts: loginAttempts,
+          loginLockoutMinutes: lockoutMinutes,
+          backupEnabled,
+          backupHour: bkpHour,
+          backupRetentionDays: bkpRetention,
+          activityLogRetentionDays: logRetention,
           hcaptchaSiteKey: hcaptchaSiteKey.trim(),
           ...(hcaptchaSecretClear
             ? { hcaptchaSecretClear: true }
@@ -429,6 +579,11 @@ export default function SystemSettingsClient() {
       setMaxConcurrent(concurrent);
       setMaxAttempts(attempts);
       setAnalyzerLimit(analyzer);
+      setLoginMaxAttempts(loginAttempts);
+      setLoginLockoutMinutes(lockoutMinutes);
+      setBackupHour(bkpHour);
+      setBackupRetentionDays(bkpRetention);
+      setActivityLogRetentionDays(logRetention);
       setHcaptchaSiteKey(savedSiteKey);
       setHcaptchaSecretConfigured(
         hcaptchaSecretClear ? false : hcaptchaSecretKey.trim() ? true : hcaptchaSecretConfigured,
@@ -446,6 +601,12 @@ export default function SystemSettingsClient() {
         maxConcurrent: concurrent,
         maxAttempts: attempts,
         analyzerLimit: analyzer,
+        loginMaxAttempts: loginAttempts,
+        loginLockoutMinutes: lockoutMinutes,
+        backupEnabled,
+        backupHour: bkpHour,
+        backupRetentionDays: bkpRetention,
+        activityLogRetentionDays: logRetention,
         hcaptchaSiteKey: savedSiteKey,
       });
       showToast.success('System settings updated successfully.');
@@ -468,6 +629,12 @@ export default function SystemSettingsClient() {
     setMaxConcurrent(baseline.maxConcurrent);
     setMaxAttempts(baseline.maxAttempts);
     setAnalyzerLimit(baseline.analyzerLimit);
+    setLoginMaxAttempts(baseline.loginMaxAttempts);
+    setLoginLockoutMinutes(baseline.loginLockoutMinutes);
+    setBackupEnabled(baseline.backupEnabled);
+    setBackupHour(baseline.backupHour);
+    setBackupRetentionDays(baseline.backupRetentionDays);
+    setActivityLogRetentionDays(baseline.activityLogRetentionDays);
     setHcaptchaSiteKey(baseline.hcaptchaSiteKey);
     setHcaptchaSecretKey('');
     setHcaptchaSecretClear(false);
@@ -486,6 +653,12 @@ export default function SystemSettingsClient() {
     maxConcurrent,
     maxAttempts,
     analyzerLimit,
+    loginMaxAttempts,
+    loginLockoutMinutes,
+    backupEnabled,
+    backupHour,
+    backupRetentionDays,
+    activityLogRetentionDays,
     hcaptchaSiteKey,
   };
   const isDirty =
@@ -534,6 +707,12 @@ export default function SystemSettingsClient() {
                 className="hover:bg-accent px-4 whitespace-nowrap data-[state=active]:bg-secondary data-[state=active]:text-white"
               >
                 Evaluator
+              </TabsTrigger>
+              <TabsTrigger
+                value="backups"
+                className="hover:bg-accent px-4 whitespace-nowrap data-[state=active]:bg-secondary data-[state=active]:text-white"
+              >
+                Backups
               </TabsTrigger>
               <TabsTrigger
                 value="captcha"
@@ -593,6 +772,45 @@ export default function SystemSettingsClient() {
                 setValue={(val) => setSessionTimeoutMinutes(val === '' ? '' : Number(val))}
                 disabled={disabled}
                 description={`Signs out after inactivity. ${MIN_SESSION_TIMEOUT_MINUTES}–${MAX_SESSION_TIMEOUT_MINUTES} min.`}
+              />
+              <InputGroup
+                label="Failed logins before lockout"
+                name="loginMaxAttempts"
+                type="number"
+                required
+                requiredMark
+                min={MIN_LOGIN_MAX_ATTEMPTS}
+                max={MAX_LOGIN_MAX_ATTEMPTS}
+                value={loginMaxAttempts === '' ? '' : String(loginMaxAttempts)}
+                setValue={(val) => setLoginMaxAttempts(val === '' ? '' : Number(val))}
+                disabled={disabled}
+                description={`Failed attempts on one account before it's temporarily locked. ${MIN_LOGIN_MAX_ATTEMPTS}–${MAX_LOGIN_MAX_ATTEMPTS}.`}
+              />
+              <InputGroup
+                label="Account lockout duration (minutes)"
+                name="loginLockoutMinutes"
+                type="number"
+                required
+                requiredMark
+                min={MIN_LOGIN_LOCKOUT_MINUTES}
+                max={MAX_LOGIN_LOCKOUT_MINUTES}
+                value={loginLockoutMinutes === '' ? '' : String(loginLockoutMinutes)}
+                setValue={(val) => setLoginLockoutMinutes(val === '' ? '' : Number(val))}
+                disabled={disabled}
+                description={`How long a locked account must wait. ${MIN_LOGIN_LOCKOUT_MINUTES}–${MAX_LOGIN_LOCKOUT_MINUTES} min.`}
+              />
+              <InputGroup
+                label="Audit log retention (days)"
+                name="activityLogRetentionDays"
+                type="number"
+                required
+                requiredMark
+                min={MIN_ACTIVITY_LOG_RETENTION_DAYS}
+                max={MAX_ACTIVITY_LOG_RETENTION_DAYS}
+                value={activityLogRetentionDays === '' ? '' : String(activityLogRetentionDays)}
+                setValue={(val) => setActivityLogRetentionDays(val === '' ? '' : Number(val))}
+                disabled={disabled}
+                description={`System Logs older than this are deleted daily. ${MIN_ACTIVITY_LOG_RETENTION_DAYS}–${MAX_ACTIVITY_LOG_RETENTION_DAYS} days.`}
               />
               <SwitchField
                 id="allow-signup"
@@ -691,6 +909,121 @@ export default function SystemSettingsClient() {
                 disabled={disabled}
                 description={`Depth of the cfganalyzer equivalence check. Higher is more thorough but slower. ${MIN_SUBMISSION_ANALYZER_LIMIT}–${MAX_SUBMISSION_ANALYZER_LIMIT}.`}
               />
+            </div>
+            </TabsContent>
+
+            <TabsContent value="backups">
+            <p className="text-muted-foreground mb-4 text-sm">
+              Automatic database backups. Dumps are taken on the server and pruned
+              after the retention window.
+            </p>
+            <div className="max-w-md space-y-5">
+              <SwitchField
+                id="backup-enabled"
+                name="backup-enabled"
+                label="Enable automatic backups"
+                checked={backupEnabled}
+                onCheckedChange={setBackupEnabled}
+                disabled={disabled}
+                descriptionPlacement="inline"
+                description="When off, no scheduled dumps are taken."
+                boxClassName="border-black"
+              />
+              <InputGroup
+                label="Daily backup time (hour)"
+                name="backupHour"
+                type="number"
+                required
+                requiredMark
+                min={MIN_BACKUP_HOUR}
+                max={MAX_BACKUP_HOUR}
+                value={backupHour === '' ? '' : String(backupHour)}
+                setValue={(val) => setBackupHour(val === '' ? '' : Number(val))}
+                disabled={disabled || !backupEnabled}
+                description={`24-hour clock, server time (UTC). ${MIN_BACKUP_HOUR}–${MAX_BACKUP_HOUR}. e.g. 2 = 2:00 AM.`}
+              />
+              <InputGroup
+                label="Retention (days)"
+                name="backupRetentionDays"
+                type="number"
+                required
+                requiredMark
+                min={MIN_BACKUP_RETENTION_DAYS}
+                max={MAX_BACKUP_RETENTION_DAYS}
+                value={backupRetentionDays === '' ? '' : String(backupRetentionDays)}
+                setValue={(val) => setBackupRetentionDays(val === '' ? '' : Number(val))}
+                disabled={disabled || !backupEnabled}
+                description={`Older dumps are deleted. ${MIN_BACKUP_RETENTION_DAYS}–${MAX_BACKUP_RETENTION_DAYS} days.`}
+              />
+            </div>
+            <p className="text-muted-foreground mt-3 text-xs">
+              Backups are stored on the server. Copy them off-host regularly — on-host
+              backups don’t survive host loss.
+            </p>
+
+            <div className="mt-6 space-y-3">
+              <div className="text-sm font-medium">Available backups</div>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleBackupNow}
+                disabled={disabled || backupNowBusy}
+              >
+                {backupNowBusy ? 'Requesting…' : 'Back up now'}
+              </Button>
+
+              {backupsLoading ? (
+                <p className="text-muted-foreground text-sm">Loading…</p>
+              ) : backups.length === 0 ? (
+                <p className="text-muted-foreground text-sm">No backups yet.</p>
+              ) : (
+                <div className="overflow-x-auto rounded-md border">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/30 text-left">
+                      <tr>
+                        <th className="p-2 font-medium">Taken (server time)</th>
+                        <th className="p-2 font-medium">Database</th>
+                        <th className="p-2 font-medium">Files</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {backups.map((b) => (
+                        <tr key={b.timestamp} className="border-t">
+                          <td className="p-2 whitespace-nowrap">{formatBackupTs(b.timestamp)}</td>
+                          <td className="p-2">
+                            {b.dumpFile ? (
+                              <a
+                                className="text-sky-600 underline"
+                                href={`/api/system-settings/backups/download?file=${encodeURIComponent(b.dumpFile)}`}
+                              >
+                                Download ({formatBytes(b.dumpSize)})
+                              </a>
+                            ) : (
+                              '—'
+                            )}
+                          </td>
+                          <td className="p-2">
+                            {b.filesFile ? (
+                              <a
+                                className="text-sky-600 underline"
+                                href={`/api/system-settings/backups/download?file=${encodeURIComponent(b.filesFile)}`}
+                              >
+                                Download ({formatBytes(b.filesSize)})
+                              </a>
+                            ) : (
+                              '—'
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <p className="text-muted-foreground text-xs">
+                Download both the database and files from the same row to keep a complete,
+                restorable copy off-host.
+              </p>
             </div>
             </TabsContent>
 

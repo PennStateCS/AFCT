@@ -45,7 +45,7 @@ export default function StudentAssignmentPage({
   const [loading, setLoading] = useState(!initialAssignment);
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
   const [commentsLoading, setCommentsLoading] = useState(false);
-  const [submissionCount, setSubmissionCount] = useState(0);
+  const [, setSubmissionCount] = useState(0);
   const [submissions, setSubmissions] = useState<Record<string, StudentProblemSubmission[]>>({});
   const [comments, setComments] = useState<Record<string, StudentProblemComment[]>>({});
   const [newComment, setNewComment] = useState<Record<string, string>>({});
@@ -381,8 +381,11 @@ export default function StudentAssignmentPage({
                 onDeleteComment={(commentId: string) => handleDeleteComment(commentId)}
                 isSaving={selectedProblem ? submittingComment[selectedProblem.problem.id] : false}
                 deletingComments={{}}
-                onViewSubmission={(submission: StudentProblemSubmission) =>
-                  setOpenDialog({ open: true, submission })
+                onViewSubmission={(submission) =>
+                  setOpenDialog({
+                    open: true,
+                    submission: submission as unknown as StudentProblemSubmission,
+                  })
                 }
                 courseIsArchived={courseIsArchived}
                 currentGrade={selectedProblemGrade}
