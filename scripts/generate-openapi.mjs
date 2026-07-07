@@ -130,6 +130,25 @@ function tagFor(apiPath) {
   return seg.replace(/[{}]/g, '');
 }
 
+// Stable, unique operationId from method + path, e.g.
+// GET /api/courses/{id}/{aid} -> getCoursesByIdByAid. Drives client codegen.
+const toPascal = (s) =>
+  s
+    .replace(/[-_]+/g, ' ')
+    .replace(/(?:^|\s)(\w)/g, (_, c) => c.toUpperCase())
+    .replace(/\s+/g, '');
+function operationId(method, apiPath) {
+  const parts = apiPath
+    .replace(/^\/api\//, '')
+    .split('/')
+    .filter(Boolean)
+    .map((seg) => {
+      const param = seg.match(/^\{(.+)\}$/);
+      return toPascal(param ? `by-${param[1]}` : seg);
+    });
+  return method.toLowerCase() + parts.join('');
+}
+
 // Point any error response (>= 400) that doesn't already describe a body at the
 // shared Error schema, so every 4xx/5xx documents the same { error | message } shape.
 function attachErrorResponses(op) {
@@ -178,6 +197,7 @@ function buildSpec(routes) {
         : '';
       const skeleton = {
         tags: [tag],
+        operationId: operationId(method, apiPath),
         summary: description || `${method} ${apiPath}`,
         description: [description, authNote].filter(Boolean).join('\n\n'),
         // Machine-readable auth: an authenticated route needs the session cookie;
@@ -297,6 +317,22 @@ if (stats.parseErrors.length) {
     console.error(`         - ${e.method} ${e.apiPath}: ${e.message.split('\n')[0]}`);
   }
   process.exit(1);
+}
+
+// operationIds must be unique for client codegen; the schema check doesn't enforce it.
+const seenOpIds = new Map();
+for (const [p, methods] of Object.entries(spec.paths)) {
+  for (const [m, op] of Object.entries(methods)) {
+    if (!op.operationId) continue;
+    if (seenOpIds.has(op.operationId)) {
+      console.error(
+        `\n[docs] ERROR: duplicate operationId "${op.operationId}" ` +
+          `(${m} ${p} and ${seenOpIds.get(op.operationId)})`,
+      );
+      process.exit(1);
+    }
+    seenOpIds.set(op.operationId, `${m} ${p}`);
+  }
 }
 
 // Structural validation against the OpenAPI 3.x schema, so a bad deep-merge or a
