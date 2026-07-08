@@ -103,7 +103,7 @@ describe('AssignmentDashboardPage (PrivilegeAssignmentView)', () => {
   it('renders the seeded assignment title and fetches course problems on the problems tab', async () => {
     const problems = [{ id: 'p1', title: 'Course Problem One', type: 'FA' }];
     const fetchMock = routeFetch({
-      '/problems': () => ({ ok: true, json: async () => problems }),
+      'view=problems': () => ({ ok: true, json: async () => ({ problems }) }),
       '/assignments': () => ({ ok: true, json: async () => [] }),
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -123,7 +123,7 @@ describe('AssignmentDashboardPage (PrivilegeAssignmentView)', () => {
     // (This course-problems read feeds the "Add Existing Problem" dialog's
     // candidate list; the visible table renders the assignment's own problems.)
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/problems');
+      expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1?view=problems');
     });
 
     // The fetched course problem flows through to the association dialog's
@@ -135,7 +135,7 @@ describe('AssignmentDashboardPage (PrivilegeAssignmentView)', () => {
 
   it('seeds the assignment dropdown from initialAssignments with no /assignments fetch on mount', async () => {
     const fetchMock = routeFetch({
-      '/problems': () => ({ ok: true, json: async () => [] }),
+      'view=problems': () => ({ ok: true, json: async () => ({ problems: [] }) }),
       '/assignments': () => ({ ok: true, json: async () => [] }),
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -149,7 +149,7 @@ describe('AssignmentDashboardPage (PrivilegeAssignmentView)', () => {
 
     // Let the problems fetch settle so any stray assignments fetch would have fired.
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/problems');
+      expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1?view=problems');
     });
 
     const calledUrls = fetchMock.mock.calls.map((c) => c[0] as string);
@@ -158,7 +158,7 @@ describe('AssignmentDashboardPage (PrivilegeAssignmentView)', () => {
 
   it('fetches groups and group-problem mappings for a group assignment', async () => {
     const fetchMock = routeFetch({
-      '/problems': () => ({ ok: true, json: async () => [] }),
+      'view=problems': () => ({ ok: true, json: async () => ({ problems: [] }) }),
       '/assignments': () => ({ ok: true, json: async () => [] }),
       '/groups': () => ({ ok: true, json: async () => ({ groups: [{ id: 'g1', name: 'Team A' }] }) }),
       '/group-problems': () => ({

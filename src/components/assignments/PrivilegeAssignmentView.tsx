@@ -161,17 +161,20 @@ export default function AssignmentDashboardPage({
   // dialogs). Only fetched when one of those surfaces needs it. On any failure
   // the queryFn returns [] (no toast), matching the previous .catch behavior.
   const problemsEnabled = tab === 'problems' || addProblemDialogOpen || createProblemOpen;
+  // Reads the course's problems via ?view=problems and shares the course-detail
+  // hook's ['course', id, 'problems'] cache entry, so the ProblemsCard and this
+  // picker dedupe (one canonical way to list a course's problems).
   const problemsQuery = useQuery({
-    queryKey: ['course', id, 'problems-list'],
-    queryFn: () =>
-      fetch(`/api/courses/${id}/problems`)
-        .then((res) => res.json())
-        .then((data) => (Array.isArray(data) ? (data as Problem[]) : []))
-        .catch(() => [] as Problem[]),
+    queryKey: ['course', id, 'problems'],
+    queryFn: async () => {
+      const res = await fetch(`/api/courses/${id}?view=problems`);
+      if (!res.ok) throw new Error('Failed to fetch problems');
+      return (await res.json()) as { problems?: Problem[] };
+    },
     enabled: !!id && problemsEnabled,
     staleTime: 30_000,
   });
-  const allProblems = problemsQuery.data ?? [];
+  const allProblems = problemsQuery.data?.problems ?? [];
   const problemsLoading = problemsEnabled && problemsQuery.isFetching;
 
   // Read 2 — assignment list for the dropdown. Seeded from the SSR-provided
@@ -901,7 +904,7 @@ export default function AssignmentDashboardPage({
         courseIsArchived={courseIsArchived}
         assignmentId={aid}
         onCreated={async (created) => {
-          await queryClient.invalidateQueries({ queryKey: ['course', id, 'problems-list'] });
+          await queryClient.invalidateQueries({ queryKey: ['course', id, 'problems'] });
           if (created?.id && !aid) {
             await handleAddProblems([created.id]);
           }
