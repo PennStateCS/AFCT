@@ -6,6 +6,8 @@ import { auth } from '@/lib/auth';
 import { canManageCourse } from '@/lib/permissions';
 import { ProblemType } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { apiError } from '@/lib/api/http';
+import { logDenial } from '@/lib/api/activity';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 
@@ -55,13 +57,7 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
     actorId = user?.id ?? null;
 
     if (!user) {
-      await createEnhancedActivityLog(prisma, req, {
-        userId: session?.user?.id ?? null,
-        action: 'PROBLEM_UPDATE_DENIED',
-        severity: 'SECURITY',
-        metadata: {},
-      });
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+      return apiError(401, 'Unauthorized');
     }
 
     // Check if problem exists
@@ -74,13 +70,11 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
     }
 
     if (!(await canManageCourse(user, existingProblem.courseId))) {
-      await createEnhancedActivityLog(prisma, req, {
-        userId: session?.user?.id ?? null,
+      return logDenial(req, {
+        userId: user.id,
         action: 'PROBLEM_UPDATE_DENIED',
-        severity: 'SECURITY',
-        metadata: {},
+        courseId: existingProblem.courseId,
       });
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     // Parse multipart form data
@@ -239,13 +233,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     actorId = user?.id ?? null;
 
     if (!user) {
-      await createEnhancedActivityLog(prisma, req, {
-        userId: session?.user?.id ?? null,
-        action: 'PROBLEM_DELETE_DENIED',
-        severity: 'SECURITY',
-        metadata: {},
-      });
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+      return apiError(401, 'Unauthorized');
     }
 
     // Check if problem exists
@@ -258,13 +246,11 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     }
 
     if (!(await canManageCourse(user, existingProblem.courseId))) {
-      await createEnhancedActivityLog(prisma, req, {
-        userId: session?.user?.id ?? null,
+      return logDenial(req, {
+        userId: user.id,
         action: 'PROBLEM_DELETE_DENIED',
-        severity: 'SECURITY',
-        metadata: {},
+        courseId: existingProblem.courseId,
       });
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     // Prevent deletion if the problem is linked to any assignment
