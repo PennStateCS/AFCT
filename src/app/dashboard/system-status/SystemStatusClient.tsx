@@ -428,7 +428,11 @@ export default function SystemStatusClient() {
     staleTime: 0,
   });
 
-  const loading = isLoading || isFetching;
+  // `loading` gates the skeleton-vs-content: show the skeleton only on the cold
+  // first load (isLoading), so a background poll/refresh doesn't blank the status.
+  // `refreshing` (any in-flight fetch) drives the Refresh button state.
+  const loading = isLoading;
+  const refreshing = isFetching;
   const lastUpdated = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
 
   const handleDeleteAbandonedFile = useCallback(
@@ -625,8 +629,8 @@ export default function SystemStatusClient() {
             <div className="text-muted-foreground text-xs" aria-live="polite">
               {lastUpdated ? `Updated ${formatTimeInTimeZone(lastUpdated, timezone)}` : ''}
             </div>
-            <Button size="sm" onClick={() => refetch()} disabled={loading}>
-              {loading ? 'Refreshing…' : 'Refresh'}
+            <Button size="sm" onClick={() => refetch()} disabled={refreshing}>
+              {refreshing ? 'Refreshing…' : 'Refresh'}
             </Button>
           </div>
         </CardHeader>

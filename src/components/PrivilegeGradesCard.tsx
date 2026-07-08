@@ -108,6 +108,9 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
 
   const students = gradesQuery.data?.students ?? EMPTY_STUDENTS;
   const assignments = gradesQuery.data?.assignments ?? EMPTY_ASSIGNMENTS;
+  // Drives the refresh/export button state (disabled + spinner) during any fetch.
+  // The grades table itself blocks only on a cold load (isPending) — see below —
+  // so a background refresh doesn't hide the cached grid.
   const loading = gradesQuery.isPending || gradesQuery.isFetching;
   const lastUpdated = useMemo(
     () => (gradesQuery.data ? new Date(gradesQuery.data.fetchedAt) : null),
@@ -323,7 +326,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         <DataTable
           columns={columns}
           data={students}
-          loading={loading}
+          loading={gradesQuery.isPending}
           tableLabel="Course grades table"
           showExportButton={false}
           actionButtons={
