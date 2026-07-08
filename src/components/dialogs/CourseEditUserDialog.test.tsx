@@ -4,8 +4,16 @@ import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import CourseEditUserDialog from './CourseEditUserDialog';
+
+function renderWithClient(ui: React.ReactElement) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  });
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
 
 vi.mock('@/components/ui/dialog', () => import('@/test/mocks/ui').then((mod) => mod.dialogMock));
 vi.mock('@/components/ui/select', () => import('@/test/mocks/ui').then((mod) => mod.selectMock));
@@ -58,7 +66,7 @@ describe('CourseEditUserDialog', () => {
 
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) } as Response);
 
-    render(
+    renderWithClient(
       <CourseEditUserDialog
         open
         setOpen={setOpen}
@@ -90,7 +98,7 @@ describe('CourseEditUserDialog', () => {
       json: async () => ({ error: 'nope' }),
     } as Response);
 
-    render(
+    renderWithClient(
       <CourseEditUserDialog
         open
         setOpen={setOpen}
