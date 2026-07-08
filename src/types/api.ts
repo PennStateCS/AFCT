@@ -917,8 +917,6 @@ export interface paths {
          * Archive or unarchive a course
          * @description Toggles a course's archived state. Course faculty or a system admin (TAs  excluded). Archiving runs a safety  check (canArchiveCourse) using the course's stored dates rather than any client  value, to avoid timezone drift deciding whether a course has really ended.
          *
-         *     **Auth:** required
-         *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/archive/route.ts)
          */
         patch: operations["patchCoursesByIdArchive"];
@@ -958,8 +956,6 @@ export interface paths {
         /**
          * Bulk-enroll students
          * @description Enrolls many users as STUDENT in one transaction (the roster's bulk-add flow).  Course staff (faculty or TAs) or a system admin. Existing roster entries are  reset to STUDENT rather than duplicated, so it's safe to re-run. Every user is  added as a STUDENT regardless of any other role.
-         *
-         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/bulk-enroll/route.ts)
          */
@@ -1006,8 +1002,6 @@ export interface paths {
         /**
          * Enroll a user in a course
          * @description Adds (or re-roles) a single user on a course roster. Course staff (faculty or  TAs) or a system admin. The user is always added as a STUDENT — callers don't  pick the role directly. Upserts, so re-enrolling just resets the role to STUDENT.
-         *
-         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/enroll/route.ts)
          */
@@ -1272,8 +1266,6 @@ export interface paths {
         /**
          * Publish or unpublish a course
          * @description Toggles a course's published state. Course faculty or a system admin (TAs  excluded). Unpublishing runs a  safety check (canUnpublishCourse) that refuses if students would lose access to  work already in progress.
-         *
-         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/publish/route.ts)
          */
@@ -4859,6 +4851,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Not course faculty or a system admin (TAs excluded), or archiving is blocked by the safety check. */
             403: {
                 headers: {
@@ -6111,6 +6112,15 @@ export interface operations {
             };
             /** @description isPublished must be a boolean. */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
