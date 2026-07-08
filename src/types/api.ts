@@ -889,8 +889,6 @@ export interface paths {
          * Get a course's activity feed
          * @description Returns a paginated activity feed for one course — logs tied directly to the  course plus its assignments, problems, submissions, and recent logins by course  members. Any enrolled member of the course (any role) or a system admin.
          *
-         *     **Auth:** required
-         *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/activity/route.ts)
          */
         get: operations["getCoursesByIdActivity"];
@@ -936,8 +934,6 @@ export interface paths {
         /**
          * List a course's published assignments
          * @description Lists a course's published assignments with each one's total and max grade  (summed across its problems). Course faculty or a system admin (TAs excluded).
-         *
-         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/route.ts)
          */
@@ -1272,8 +1268,6 @@ export interface paths {
         /**
          * Create a problem in a course
          * @description Creates a problem in a course from an uploaded solution file. Course staff  (faculty or TAs) or a system admin. The file is size-checked and stored under a generated name;  `maxStates` applies to FA/PDA and `isDeterministic` to FA. (Sibling of  POST /api/problems, scoped to the course in the path.)
-         *
-         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/problems/route.ts)
          */
@@ -4938,8 +4932,8 @@ export interface operations {
                     "application/json": Record<string, never>[];
                 };
             };
-            /** @description Missing course id. */
-            400: {
+            /** @description Not signed in. */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6061,6 +6055,15 @@ export interface operations {
             };
             /** @description Missing fields or file. */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
