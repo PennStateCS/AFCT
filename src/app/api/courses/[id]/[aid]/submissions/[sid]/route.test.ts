@@ -33,7 +33,8 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
   });
 
   it('returns 404 when assignment not found', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1' } });
+    // Admin passes the wrapper's access gate, then hits the handler's 404.
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     prismaMock.assignment.findFirst.mockResolvedValue(null);
 
     const res = await GET(new Request('http://localhost/api/courses/c1/a1/submissions/s1'), {
