@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 export const RoleEnum = z.enum(['ADMIN', 'FACULTY', 'TA', 'STUDENT']);
-export const CourseRoleEnum = z.enum(['INSTRUCTOR', 'FACULTY', 'TA', 'STUDENT']);
+export const CourseRoleEnum = z.enum(['FACULTY', 'TA', 'STUDENT']);
 
 export const StrongPassword = z
   .string()
@@ -20,7 +20,6 @@ const BaseUserSchema = z.object({
     .trim()
     .email('Enter a valid email.')
     .transform((v) => v.toLowerCase()),
-  role: RoleEnum,
 });
 
 export const CreateUserSchema = BaseUserSchema.extend({
@@ -60,7 +59,7 @@ const ImageFileOptional = createImageFileSchema();
 export const UpdateUserSchema = z.object({
   firstName: z.string().trim().min(1, 'First name is required.').max(60, 'First name is too long.'),
   lastName: z.string().trim().min(1, 'Last name is required.').max(60, 'Last name is too long.'),
-  role: RoleEnum,
+  isAdmin: z.boolean().default(false),
   avatarFile: ImageFileOptional,
   deleteAvatar: z.boolean().default(false),
   inactive: z.boolean(),

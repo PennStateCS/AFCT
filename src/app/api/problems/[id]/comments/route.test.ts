@@ -155,7 +155,7 @@ describe('POST /api/problems/[id]/comments', () => {
         },
       ],
     });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1' });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
     prismaMock.comment.create.mockResolvedValue({
       id: 'c1',
       content: 'Hello',

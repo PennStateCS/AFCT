@@ -25,10 +25,14 @@ vi.mock('@/lib/toast', () => ({
 
 vi.mock('@/components/ui/InputGroup', () => ({
   __esModule: true,
+  // Mirror the real InputGroup's two APIs: RHF `fieldProps`, and the
+  // controlled `value`/`setValue` pair used by the assignment-override fields.
   default: ({
     label,
     name,
     fieldProps = {},
+    value,
+    setValue,
     type = 'text',
     ...rest
   }: {
@@ -39,6 +43,8 @@ vi.mock('@/components/ui/InputGroup', () => ({
       onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
       onBlur?: (event: React.FocusEvent<HTMLInputElement>) => void;
     };
+    value?: string;
+    setValue?: (val: string) => void;
     type?: string;
   }) => (
     <label>
@@ -47,8 +53,11 @@ vi.mock('@/components/ui/InputGroup', () => ({
         aria-label={label}
         name={name}
         type={type}
-        value={fieldProps?.value ?? ''}
-        onChange={(event) => fieldProps?.onChange?.(event)}
+        value={value ?? fieldProps?.value ?? ''}
+        onChange={(event) => {
+          if (setValue) setValue(event.target.value);
+          else fieldProps?.onChange?.(event);
+        }}
         onBlur={(event) => fieldProps?.onBlur?.(event)}
         {...rest}
       />

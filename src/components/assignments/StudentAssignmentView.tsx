@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
@@ -9,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
 import { ArrowLeft } from 'lucide-react';
 import JffViewerDialog from '@/components/JffViewerDialog';
+import { useEmptyStringSymbol } from '@/lib/useEmptyStringSymbol';
 import { ProblemListCard } from '@/components/assignments/ProblemListCard';
 import ProblemWorkspace from '@/components/assignments/ProblemWorkspace';
 import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
@@ -26,6 +28,12 @@ type StudentAssignmentViewProps = {
   initialAssignment?: AssignmentWithDetails | null;
 };
 
+// Stable empty defaults so the values derived from the context query keep a
+// constant identity between renders (keeps the memoized problem list stable).
+const EMPTY_SUBMISSIONS: Record<string, StudentProblemSubmission[]> = {};
+const EMPTY_COMMENTS: Record<string, StudentProblemComment[]> = {};
+const EMPTY_GRADES: Record<string, number | null> = {};
+
 export default function StudentAssignmentPage({
   initialAssignment = null,
 }: StudentAssignmentViewProps) {
@@ -37,19 +45,58 @@ export default function StudentAssignmentPage({
   const { data: session } = useSession();
   const { timezone } = useEffectiveTimezone();
   const userId = session?.user?.id ?? null;
-  const isStudent = session?.user?.role === 'STUDENT';
+  // No per-course role is available here; a non-admin viewer is treated as a
+  // student for the purpose of hiding unpublished assignments.
+  const isStudent = !session?.user?.isAdmin;
 
-  const [assignment, setAssignment] = useState<AssignmentWithDetails | null>(initialAssignment);
-  const [loading, setLoading] = useState(!initialAssignment);
-  const [submissionsLoading, setSubmissionsLoading] = useState(false);
-  const [commentsLoading, setCommentsLoading] = useState(false);
-  const [submissionCount, setSubmissionCount] = useState(0);
-  const [submissions, setSubmissions] = useState<Record<string, StudentProblemSubmission[]>>({});
-  const [comments, setComments] = useState<Record<string, StudentProblemComment[]>>({});
+  const queryClient = useQueryClient();
+
+  // Assignment shell — cached; the SSR-provided assignment seeds it so there's no
+  // refetch on mount when the server already sent it, and back-navigation is warm.
+  const assignmentQuery = useQuery({
+    queryKey: ['assignment', assignmentId],
+    queryFn: async () => {
+      const res = await fetch(`/api/assignments/${assignmentId}`);
+      if (!res.ok) {
+        const err = new Error('Failed to fetch assignment') as Error & { status?: number };
+        err.status = res.status;
+        throw err;
+      }
+      return (await res.json()) as AssignmentWithDetails;
+    },
+    initialData: initialAssignment ?? undefined,
+    enabled: !!assignmentId && !!session,
+    retry: false,
+    staleTime: 30_000,
+  });
+  const assignment = assignmentQuery.data ?? null;
+  const loading = assignmentQuery.isPending;
+  const epsSymbol = useEmptyStringSymbol(assignment?.courseId);
+
+  // Per-student submissions, comments, and grades — cached, and re-pulled (via
+  // invalidation) after the student adds or deletes a comment.
+  const contextQuery = useQuery({
+    queryKey: ['assignment', assignmentId, 'student-context'],
+    queryFn: async () => {
+      const res = await fetch(`/api/assignments/${assignmentId}/student-context`);
+      if (!res.ok) throw new Error('Failed to fetch assignment context');
+      return (await res.json()) as StudentAssignmentContext;
+    },
+    enabled: !!assignmentId && !!userId,
+    staleTime: 30_000,
+  });
+  const submissions = contextQuery.data?.submissionsByProblem ?? EMPTY_SUBMISSIONS;
+  const comments = contextQuery.data?.commentsByProblem ?? EMPTY_COMMENTS;
+  const problemGrades = contextQuery.data?.problemGrades ?? EMPTY_GRADES;
+  const assignmentGrade = contextQuery.data?.assignmentGrade ?? null;
+  // Cold-load only: after the student adds/deletes a comment the context query is
+  // invalidated and refetches; isFetching would blank the submissions/comments
+  // panels on every such refetch. isPending is true only before the first load.
+  const submissionsLoading = contextQuery.isPending;
+  const commentsLoading = contextQuery.isPending;
+
   const [newComment, setNewComment] = useState<Record<string, string>>({});
   const [submittingComment, setSubmittingComment] = useState<Record<string, boolean>>({});
-  const [problemGrades, setProblemGrades] = useState<Record<string, number | null>>({});
-  const [assignmentGrade, setAssignmentGrade] = useState<number | null>(null);
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
   const [openDialog, setOpenDialog] = useState<{
     open: boolean;
@@ -58,33 +105,15 @@ export default function StudentAssignmentPage({
   const limitText = (value: string, max = 120) =>
     value.length > max ? `${value.slice(0, max - 1)}…` : value;
 
-  const loadStudentContext = useCallback(async () => {
-    if (!assignmentId || !userId) return;
-
-    setSubmissionsLoading(true);
-    setCommentsLoading(true);
-
-    try {
-      const response = await fetch(`/api/assignments/${assignmentId}/student-context`);
-      if (!response.ok) throw new Error('Failed to fetch assignment context');
-
-      const context = (await response.json()) as StudentAssignmentContext;
-      setAssignmentGrade(context.assignmentGrade);
-      setProblemGrades(context.problemGrades);
-      setSubmissionCount(context.submissionCount);
-      setSubmissions(context.submissionsByProblem);
-      setComments(context.commentsByProblem);
-    } catch (error) {
-      console.error('Error fetching assignment context:', error);
-      showToast.error('Failed to load assignment context');
-      setSubmissionCount(0);
-      setSubmissions({});
-      setComments({});
-    } finally {
-      setSubmissionsLoading(false);
-      setCommentsLoading(false);
-    }
-  }, [assignmentId, userId]);
+  // Re-pull the student context after a mutation (comment add/delete); the query
+  // refetches because it's active.
+  const refreshContext = useCallback(
+    () =>
+      queryClient.invalidateQueries({
+        queryKey: ['assignment', assignmentId, 'student-context'],
+      }),
+    [queryClient, assignmentId],
+  );
 
   const handleSubmitComment = useCallback(
     async (problemId: string) => {
@@ -105,7 +134,7 @@ export default function StudentAssignmentPage({
         }
 
         setNewComment((prev) => ({ ...prev, [problemId]: '' }));
-        await loadStudentContext();
+        await refreshContext();
         showToast.success('Comment added successfully!');
       } catch (error) {
         console.error('Error submitting comment:', error);
@@ -114,7 +143,7 @@ export default function StudentAssignmentPage({
         setSubmittingComment((prev) => ({ ...prev, [problemId]: false }));
       }
     },
-    [loadStudentContext, newComment],
+    [refreshContext, newComment],
   );
 
   const handleDeleteComment = useCallback(
@@ -127,54 +156,36 @@ export default function StudentAssignmentPage({
           const error = await response.json().catch(() => ({}));
           throw new Error(error?.error || 'Failed to delete comment');
         }
-        await loadStudentContext();
+        await refreshContext();
         showToast.success('Comment deleted successfully');
       } catch (error) {
         console.error('Error deleting comment:', error);
         showToast.error('Failed to delete comment');
       }
     },
-    [loadStudentContext],
+    [refreshContext],
   );
 
+  // A 404 means the assignment is missing or forbidden — bounce to the dashboard;
+  // any other failure just surfaces a toast.
   useEffect(() => {
-    const fetchAssignment = async () => {
-      if (initialAssignment) {
-        setAssignment(initialAssignment);
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const res = await fetch(`/api/assignments/${assignmentId}`);
-        if (!res.ok) {
-          if (res.status === 404) {
-            showToast.error('Assignment not found or you do not have permission to view it');
-            router.push('/dashboard');
-            return;
-          }
-          throw new Error('Failed to fetch assignment');
-        }
-        const data = (await res.json()) as AssignmentWithDetails;
-        setAssignment(data);
-      } catch (error) {
-        console.error('Error fetching assignment:', error);
-        showToast.error('Failed to load assignment');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (assignmentId && session) {
-      void fetchAssignment();
+    const err = assignmentQuery.error as (Error & { status?: number }) | null;
+    if (!err) return;
+    if (err.status === 404) {
+      showToast.error('Assignment not found or you do not have permission to view it');
+      router.push('/dashboard');
+    } else {
+      console.error('Error fetching assignment:', err);
+      showToast.error('Failed to load assignment');
     }
-  }, [assignmentId, initialAssignment, router, session]);
+  }, [assignmentQuery.error, router]);
 
   useEffect(() => {
-    if (assignment) {
-      void loadStudentContext();
+    if (contextQuery.isError) {
+      console.error('Error fetching assignment context:', contextQuery.error);
+      showToast.error('Failed to load assignment context');
     }
-  }, [assignment, loadStudentContext]);
+  }, [contextQuery.isError, contextQuery.error]);
 
   useEffect(() => {
     if (!assignment || assignment.problems.length === 0) {
@@ -270,7 +281,6 @@ export default function StudentAssignmentPage({
       }
     : null;
 
-  console.log()
   return (
     <div className="space-y-6 p-6">
       <Card>
@@ -379,8 +389,11 @@ export default function StudentAssignmentPage({
                 onDeleteComment={(commentId: string) => handleDeleteComment(commentId)}
                 isSaving={selectedProblem ? submittingComment[selectedProblem.problem.id] : false}
                 deletingComments={{}}
-                onViewSubmission={(submission: StudentProblemSubmission) =>
-                  setOpenDialog({ open: true, submission })
+                onViewSubmission={(submission) =>
+                  setOpenDialog({
+                    open: true,
+                    submission: submission as unknown as StudentProblemSubmission,
+                  })
                 }
                 courseIsArchived={courseIsArchived}
                 currentGrade={selectedProblemGrade}
@@ -413,6 +426,7 @@ export default function StudentAssignmentPage({
             title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
             width="70vw"
             height="70vh"
+            epsSymbol={epsSymbol}
           />
         )}
       {openDialog.submission &&

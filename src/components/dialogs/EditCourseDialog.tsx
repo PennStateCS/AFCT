@@ -13,10 +13,13 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Course, User } from '@prisma/client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import InputGroup from '@/components/ui/InputGroup';
+import SelectField from '@/components/ui/SelectField';
 import SwitchField from '@/components/ui/SwitchField';
 import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
+import { EMPTY_STRING_NOTATION_OPTIONS } from '@/lib/empty-string-notation';
 
 import { useForm, Controller } from 'react-hook-form';
 import { showToast } from '@/lib/toast';
@@ -82,6 +85,7 @@ export function EditCourseDialog({
       isPublished: course.isPublished ?? false,
       isArchived: course.isArchived ?? false,
       instructorIds: getInstructors(course.enrolled).map((u) => u.id),
+      emptyStringNotation: course.emptyStringNotation ?? 'EPSILON',
     }),
     [course, timeZone],
   );
@@ -91,7 +95,7 @@ export function EditCourseDialog({
     handleSubmit,
     reset,
     watch,
-    formState: { isDirty, isValid, errors, isSubmitting },
+    formState: { isValid, errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(CourseFormSchema),
     defaultValues,
@@ -102,21 +106,23 @@ export function EditCourseDialog({
   // Keep min (end) in sync with start
   const startDateStr = watch('startDate');
 
-  const [facultyList, setFacultyList] = useState<User[]>([]);
-
+  // Fetch faculty list when dialog opens. Shared cache entry (identical query
+  // key) with CreateCourseDialog so the two dedupe onto one request.
+  const facultyQuery = useQuery({
+    queryKey: ['admin', 'users', 'faculty'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/users?role=FACULTY');
+      if (!res.ok) throw new Error('Failed to load faculty');
+      const data = await res.json();
+      return (Array.isArray(data) ? data : []) as Array<User & { role?: string }>;
+    },
+    enabled: open,
+    staleTime: 30_000,
+  });
+  const facultyList = (facultyQuery.data ?? []).filter((user) => user.role === 'FACULTY');
   useEffect(() => {
-    if (!open) return;
-    (async () => {
-      try {
-        const res = await fetch('/api/users?role=FACULTY');
-        if (!res.ok) throw new Error('Failed to load faculty');
-        const data = await res.json();
-        setFacultyList((Array.isArray(data) ? data : []).filter((user) => user.role === 'FACULTY'));
-      } catch {
-        toast.error('Failed to load faculty list.');
-      }
-    })();
-  }, [open]);
+    if (facultyQuery.isError) toast.error('Failed to load faculty list.');
+  }, [facultyQuery.isError]);
 
   // Reset to current course when opened; also clear on close from outside
   useEffect(() => {
@@ -359,6 +365,24 @@ export function EditCourseDialog({
                 searchPlaceholder="Search faculty..."
                 emptyStateText="No faculty found."
                 error={errors.instructorIds?.message}
+              />
+            )}
+          />
+
+          {/* EMPTY STRING NOTATION */}
+          <Controller
+            name="emptyStringNotation"
+            control={control}
+            render={({ field }) => (
+              <SelectField
+                label="Empty string notation"
+                name="emptyStringNotation"
+                id="emptyStringNotation"
+                value={field.value}
+                onValueChange={field.onChange}
+                options={EMPTY_STRING_NOTATION_OPTIONS}
+                description="Choose how the empty string should appear in automata and languages."
+                error={errors.emptyStringNotation?.message}
               />
             )}
           />

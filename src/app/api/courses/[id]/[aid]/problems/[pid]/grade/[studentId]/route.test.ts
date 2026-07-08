@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const prismaMock = vi.hoisted(() => ({
+  roster: { findFirst: vi.fn() },
   assignmentProblem: { findUnique: vi.fn() },
   assignmentProblemGrade: {
     findUnique: vi.fn(),
@@ -27,6 +28,7 @@ const defaultParams = {
 describe('/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     authMock.mockResolvedValue({ user: { id: 'staff-1', role: 'FACULTY' } });
     prismaMock.assignmentProblem.findUnique.mockResolvedValue({
       assignment: { courseId: defaultParams.id },
@@ -58,6 +60,7 @@ describe('/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]', () => {
 
     it('returns 403 when user is neither staff nor owner', async () => {
       authMock.mockResolvedValue({ user: { id: 'other', role: 'STUDENT' } });
+      prismaMock.roster.findFirst.mockResolvedValue(null);
 
       const res = await GET(new Request('http://localhost'), {
         params: Promise.resolve(defaultParams),
@@ -121,6 +124,7 @@ describe('/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]', () => {
 
     it('returns 403 for non-staff users', async () => {
       authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
+      prismaMock.roster.findFirst.mockResolvedValue(null);
 
       const res = await POST(buildRequest({ grade: 10 }), {
         params: Promise.resolve(defaultParams),

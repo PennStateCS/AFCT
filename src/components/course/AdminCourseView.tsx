@@ -13,6 +13,7 @@ import { getInstructors } from '@/lib/course-utils';
 import { NotebookText, FileText, GraduationCap, Table, Users, Activity } from 'lucide-react';
 import { Assignment, Problem } from '@prisma/client';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import { useMemo } from 'react';
 
 interface AdminCourseViewProps {
   course: FullCourse;
@@ -71,6 +72,30 @@ export function AdminCourseView({
     onDelete: onProblemDelete,
     timeZone: timezone,
   });
+
+  // Memoize roster columns so a re-render doesn't recreate the array (and its
+  // cell components), which would force RosterCard's DataTable and its rows to
+  // re-render.
+  const facultyCount = getInstructors(enrolled).length;
+  const rosterColumns = useMemo(
+    () =>
+      userColumns(
+        onRefreshCourse,
+        course.id,
+        course.isArchived,
+        facultyCount,
+        course.viewerRole,
+        course.viewerIsAdmin,
+      ),
+    [
+      onRefreshCourse,
+      course.id,
+      course.isArchived,
+      facultyCount,
+      course.viewerRole,
+      course.viewerIsAdmin,
+    ],
+  );
 
   return (
     <Tabs defaultValue="assignments" value={tab} onValueChange={onTabChange}>
@@ -207,14 +232,7 @@ export function AdminCourseView({
             <RosterCard
               courseIsArchived={course.isArchived}
               enrolled={enrolled}
-              userColumns={userColumns(
-                onRefreshCourse,
-                course.id,
-                course.isArchived,
-                getInstructors(enrolled).length,
-                course.viewerRole,
-                course.viewerDefaultRole,
-              )}
+              userColumns={rosterColumns}
               onEnrollUser={onEnrollUser}
               onBulkEnroll={onBulkEnroll}
               loading={isRosterLoading}

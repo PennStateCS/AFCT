@@ -1,0 +1,192 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const prismaMock = vi.hoisted(() => ({
+  user: { findMany: vi.fn() },
+  activityLog: { findMany: vi.fn(), count: vi.fn() },
+}));
+
+const authMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
+vi.mock('@/lib/auth', () => ({ auth: authMock }));
+
+import { GET } from './route';
+
+const request = (query = '') => new Request(`http://localhost/api/logging${query}`);
+
+beforeEach(() => {
+  vi.resetAllMocks();
+});
+
+describe('GET /api/logging', () => {
+  it('returns 403 when unauthenticated', async () => {
+    authMock.mockResolvedValue(null);
+    expect((await GET(request())).status).toBe(403);
+  });
+
+  it('returns 403 when the user is not an admin', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    expect((await GET(request())).status).toBe(403);
+  });
+
+  it('returns a page of logs with total and userId resolved to a name', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.activityLog.count.mockResolvedValue(2);
+    prismaMock.activityLog.findMany.mockResolvedValue([
+      { id: 'log1', userId: 'u1', action: 'A', timestamp: new Date('2025-01-02T00:00:00.000Z') },
+      { id: 'log2', userId: null, action: 'B', timestamp: new Date('2025-01-01T00:00:00.000Z') },
+    ]);
+    prismaMock.user.findMany.mockResolvedValue([
+      { id: 'u1', firstName: 'Ada', lastName: 'Lovelace', email: null },
+    ]);
+
+    const res = await GET(request());
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.total).toBe(2);
+    expect(body.page).toBe(1);
+    expect(body.pageSize).toBe(50);
+    expect(body.totalPages).toBe(1);
+    expect(body.rows[0].userId).toBe('Ada Lovelace');
+    expect(body.rows[1].userId).toBeNull();
+  });
+
+  it('applies page and pageSize as skip/take', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.activityLog.count.mockResolvedValue(100);
+    prismaMock.activityLog.findMany.mockResolvedValue([]);
+
+    const res = await GET(request('?page=3&pageSize=20'));
+
+    const call = prismaMock.activityLog.findMany.mock.calls[0][0];
+    expect(call.skip).toBe(40);
+    expect(call.take).toBe(20);
+    const body = await res.json();
+    expect(body.totalPages).toBe(5);
+    expect(body.page).toBe(3);
+  });
+
+  it('clamps pageSize to the maximum', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.activityLog.count.mockResolvedValue(0);
+    prismaMock.activityLog.findMany.mockResolvedValue([]);
+
+    await GET(request('?pageSize=99999'));
+
+    expect(prismaMock.activityLog.findMany.mock.calls[0][0].take).toBe(200);
+  });
+
+  it('searches action/category and logs authored by matching users', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
+    // First user.findMany = search-by-name match; second = name resolution.
+    prismaMock.user.findMany
+      .mockResolvedValueOnce([{ id: 'u1' }])
+      .mockResolvedValueOnce([{ id: 'u1', firstName: 'Ada', lastName: 'Lovelace', email: null }]);
+    prismaMock.activityLog.count.mockResolvedValue(1);
+    prismaMock.activityLog.findMany.mockResolvedValue([
+      { id: 'log1', userId: 'u1', action: 'LOGIN', timestamp: new Date() },
+    ]);
+
+    const res = await GET(request('?q=ada'));
+
+    expect(res.status).toBe(200);
+    const where = prismaMock.activityLog.findMany.mock.calls[0][0].where;
+    // action + category + matched-user clauses, wrapped in the AND combiner.
+    const orClause = where.AND[0].OR;
+    expect(orClause).toHaveLength(3);
+    expect(orClause).toContainEqual({ userId: { in: ['u1'] } });
+    const body = await res.json();
+    expect(body.rows[0].userId).toBe('Ada Lovelace');
+  });
+
+  it('sorts by an allowed column and direction', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.activityLog.count.mockResolvedValue(0);
+    prismaMock.activityLog.findMany.mockResolvedValue([]);
+
+    await GET(request('?sortBy=action&sortDir=asc'));
+
+    expect(prismaMock.activityLog.findMany.mock.calls[0][0].orderBy).toEqual({ action: 'asc' });
+  });
+
+  it('sorts the user column by author last name', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.activityLog.count.mockResolvedValue(0);
+    prismaMock.activityLog.findMany.mockResolvedValue([]);
+
+    await GET(request('?sortBy=userId&sortDir=desc'));
+
+    expect(prismaMock.activityLog.findMany.mock.calls[0][0].orderBy).toEqual({
+      user: { lastName: 'desc' },
+    });
+  });
+
+  it('defaults to newest-first for an unknown sort column', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.activityLog.count.mockResolvedValue(0);
+    prismaMock.activityLog.findMany.mockResolvedValue([]);
+
+    await GET(request('?sortBy=bogus&sortDir=asc'));
+
+    expect(prismaMock.activityLog.findMany.mock.calls[0][0].orderBy).toEqual({ timestamp: 'desc' });
+  });
+
+  it('filters by severity when a valid level is given (case-insensitive)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.activityLog.count.mockResolvedValue(0);
+    prismaMock.activityLog.findMany.mockResolvedValue([]);
+
+    await GET(request('?severity=error'));
+
+    const where = prismaMock.activityLog.findMany.mock.calls[0][0].where;
+    expect(where).toEqual({ AND: [{ severity: 'ERROR' }] });
+  });
+
+  it('ignores an unknown severity value', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.activityLog.count.mockResolvedValue(0);
+    prismaMock.activityLog.findMany.mockResolvedValue([]);
+
+    await GET(request('?severity=bogus'));
+
+    const where = prismaMock.activityLog.findMany.mock.calls[0][0].where;
+    expect(where).toEqual({});
+  });
+
+  it('falls back to email when the user has no name', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.activityLog.count.mockResolvedValue(1);
+    prismaMock.activityLog.findMany.mockResolvedValue([
+      { id: 'log1', userId: 'u1', action: 'A', timestamp: new Date() },
+    ]);
+    prismaMock.user.findMany.mockResolvedValue([
+      { id: 'u1', firstName: null, lastName: null, email: 'nameless@x.edu' },
+    ]);
+
+    const res = await GET(request());
+    const body = await res.json();
+    expect(body.rows[0].userId).toBe('nameless@x.edu');
+  });
+
+  it('leaves the raw id when the author is not found', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.activityLog.count.mockResolvedValue(1);
+    prismaMock.activityLog.findMany.mockResolvedValue([
+      { id: 'log1', userId: 'ghost', action: 'A', timestamp: new Date() },
+    ]);
+    prismaMock.user.findMany.mockResolvedValue([]);
+
+    const res = await GET(request());
+    const body = await res.json();
+    expect(body.rows[0].userId).toBe('ghost');
+  });
+
+  it('returns 500 when the query fails', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.activityLog.count.mockRejectedValue(new Error('db down'));
+    prismaMock.activityLog.findMany.mockResolvedValue([]);
+
+    expect((await GET(request())).status).toBe(500);
+  });
+});

@@ -47,7 +47,7 @@ describe('POST /api/courses/join', () => {
   });
 
   it('returns 400 when code is invalid', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'STUDENT' } });
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: false } });
 
     const req = new Request('http://localhost/api/courses/join', {
       method: 'POST',
@@ -60,7 +60,7 @@ describe('POST /api/courses/join', () => {
   });
 
   it('returns 404 when course not found', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'STUDENT' } });
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: false } });
     prismaMock.course.findUnique.mockResolvedValue(null);
 
     const req = new Request('http://localhost/api/courses/join', {
@@ -73,8 +73,8 @@ describe('POST /api/courses/join', () => {
     expect(res.status).toBe(404);
   });
 
-  it('returns 403 for faculty/admin when course is unpublished', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'FACULTY' } });
+  it('returns 404 for admins when course is unpublished', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: true } });
     prismaMock.course.findUnique.mockResolvedValue(buildCourse({ isPublished: false }));
 
     const req = new Request('http://localhost/api/courses/join', {
@@ -84,11 +84,11 @@ describe('POST /api/courses/join', () => {
     });
 
     const res = await POST(req);
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
   });
 
   it('returns 404 for students when course is unpublished', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'STUDENT' } });
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: false } });
     prismaMock.course.findUnique.mockResolvedValue(buildCourse({ isPublished: false }));
 
     const req = new Request('http://localhost/api/courses/join', {
@@ -102,7 +102,7 @@ describe('POST /api/courses/join', () => {
   });
 
   it('returns 400 when admin tries to join', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: true } });
     prismaMock.course.findUnique.mockResolvedValue(buildCourse());
     prismaMock.roster.findUnique.mockResolvedValue(null);
 
@@ -117,7 +117,7 @@ describe('POST /api/courses/join', () => {
   });
 
   it('returns 400 when already enrolled', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'STUDENT' } });
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: false } });
     prismaMock.course.findUnique.mockResolvedValue(buildCourse());
     prismaMock.roster.findUnique.mockResolvedValue({ role: 'STUDENT' });
 
@@ -132,7 +132,7 @@ describe('POST /api/courses/join', () => {
   });
 
   it('creates roster entry for student', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'STUDENT' } });
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: false } });
     prismaMock.course.findUnique.mockResolvedValue(buildCourse());
     prismaMock.roster.findUnique.mockResolvedValue(null);
     prismaMock.roster.create.mockResolvedValue({ id: 'roster-1' });
@@ -153,7 +153,7 @@ describe('POST /api/courses/join', () => {
   });
 
   it('returns 400 when registration has not opened yet', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'STUDENT' } });
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: false } });
     prismaMock.course.findUnique.mockResolvedValue(
       buildCourse({
         registrationOpenAt: new Date('2999-01-01T00:00:00.000Z'),
@@ -175,7 +175,7 @@ describe('POST /api/courses/join', () => {
   });
 
   it('returns 400 when registration window has closed', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'STUDENT' } });
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: false } });
     prismaMock.course.findUnique.mockResolvedValue(
       buildCourse({
         registrationOpenAt: new Date('2000-01-01T00:00:00.000Z'),

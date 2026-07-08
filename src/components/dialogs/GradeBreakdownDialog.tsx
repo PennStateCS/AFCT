@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DataTable } from '@/components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
 import {
@@ -47,51 +48,70 @@ export function GradeBreakdownDialog({
   setOpen,
   onSaved,
 }: GradeBreakdownDialogProps) {
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
   const [rows, setRows] = useState<Row[]>([]);
   const [originalRows, setOriginalRows] = useState<Row[]>([]);
   const [saving, setSaving] = useState(false);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [aRes, gRes] = await Promise.all([
-        fetch(`/api/courses/${courseId}/${assignmentId}`),
-        fetch(
-          `/api/courses/${courseId}/${assignmentId}/problem-grades/${studentId}`,
-        ),
-      ]);
-      if (!aRes.ok) throw new Error('assignment');
-      if (!gRes.ok && gRes.status !== 204) throw new Error('grades');
+  // Assignment problem links (with maxPoints) and the student's current per-problem
+  // grades — both cached and fetched only while the dialog is open, so reopening the
+  // same breakdown is served warm instead of refetching every time.
+  const assignmentQuery = useQuery({
+    queryKey: ['course', courseId, 'assignment', assignmentId],
+    queryFn: async () => {
+      const res = await fetch(`/api/courses/${courseId}/${assignmentId}`);
+      if (!res.ok) throw new Error('Failed to fetch assignment');
+      return (await res.json()) as {
+        problems?: Array<{ problem: { id: string; title?: string | null }; maxPoints: number }>;
+      };
+    },
+    enabled: open,
+    staleTime: 30_000,
+  });
 
-      const assignment = await aRes.json();
-      const grades = gRes.status === 204 ? {} : await gRes.json();
+  const gradesQuery = useQuery({
+    queryKey: ['course', courseId, 'assignment', assignmentId, 'problem-grades', studentId],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/courses/${courseId}/${assignmentId}/problem-grades/${studentId}`,
+      );
+      // 204 means nothing graded yet — treat as an empty map.
+      if (res.status === 204) return {} as Record<string, { grade: number | null }>;
+      if (!res.ok) throw new Error('Failed to fetch problem grades');
+      return (await res.json()) as Record<string, { grade: number | null }>;
+    },
+    enabled: open,
+    staleTime: 30_000,
+  });
 
-      const problemLinks: Array<{
-        problem: { id: string; title?: string | null };
-        maxPoints: number;
-      }> = assignment.problems || [];
+  const loading = assignmentQuery.isFetching || gradesQuery.isFetching;
+  const loadFailed = assignmentQuery.isError || gradesQuery.isError;
 
-      const newRows: Row[] = problemLinks.map((link) => ({
-        id: link.problem.id,
-        problemId: link.problem.id,
-        title: link.problem.title ?? 'Untitled',
-        maxPoints: link.maxPoints,
-        grade: grades[link.problem.id]?.grade ?? null,
-      }));
-      setRows(newRows);
-      setOriginalRows(newRows);
-    } catch (err) {
-      console.error('failed to load breakdown', err);
-      showToast.error('Failed to load grade breakdown');
-    } finally {
-      setLoading(false);
-    }
-  }, [assignmentId, courseId, studentId]);
-
+  // Surface a load failure the same way the imperative fetch did.
   useEffect(() => {
-    if (open) fetchData();
-  }, [open, fetchData]);
+    if (loadFailed) {
+      showToast.error('Failed to load grade breakdown');
+    }
+  }, [loadFailed]);
+
+  // Seed the editable rows from the cached reads whenever the dialog opens (or the
+  // underlying data changes). Edits live in local state from here.
+  useEffect(() => {
+    if (!open) return;
+    const assignment = assignmentQuery.data;
+    const grades = gradesQuery.data;
+    if (!assignment || grades === undefined) return;
+    const problemLinks = assignment.problems ?? [];
+    const newRows: Row[] = problemLinks.map((link) => ({
+      id: link.problem.id,
+      problemId: link.problem.id,
+      title: link.problem.title ?? 'Untitled',
+      maxPoints: link.maxPoints,
+      grade: grades[link.problem.id]?.grade ?? null,
+    }));
+    setRows(newRows);
+    setOriginalRows(newRows);
+  }, [open, assignmentQuery.data, gradesQuery.data]);
 
   const handleGradeChange = useCallback(
     (problemId: string, value: string) => {
@@ -121,20 +141,26 @@ export function GradeBreakdownDialog({
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
-      await Promise.all(
-        rows.map((r) =>
-          fetch(
-            `/api/courses/${courseId}/${assignmentId}/problems/${r.problemId}/grade/${studentId}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ grade: r.grade }),
-            },
-          ).then((res) => {
-            if (!res.ok) throw new Error('save');
-          }),
-        ),
+      // One request for the whole breakdown; the server diffs and writes only what
+      // changed (replaces the old one-POST-per-problem fan-out).
+      const gradesPayload = rows.reduce<Record<string, number | null>>((acc, r) => {
+        acc[r.problemId] = r.grade;
+        return acc;
+      }, {});
+      const res = await fetch(
+        `/api/courses/${courseId}/${assignmentId}/problem-grades/${studentId}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ grades: gradesPayload }),
+        },
       );
+      if (!res.ok) throw new Error('save');
+      // Refresh this student's cached grades so reopening reflects the save; the
+      // parent (grades matrix) refreshes via onSaved.
+      await queryClient.invalidateQueries({
+        queryKey: ['course', courseId, 'assignment', assignmentId, 'problem-grades', studentId],
+      });
       showToast.success('Grades saved');
       onSaved?.();
       setOpen(false);
@@ -144,7 +170,7 @@ export function GradeBreakdownDialog({
     } finally {
       setSaving(false);
     }
-  }, [rows, courseId, assignmentId, studentId, onSaved, setOpen]);
+  }, [rows, courseId, assignmentId, studentId, onSaved, setOpen, queryClient]);
 
   const columns = useMemo<ColumnDef<Row, unknown>[]>(
     () => [

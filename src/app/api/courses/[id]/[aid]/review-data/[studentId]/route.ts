@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canAccessCourse, canManageCourse } from '@/lib/permissions';
 
 type SubmissionRecord = {
   id: string;
@@ -28,18 +29,51 @@ const submissionSelectWithEvaluation = {
   problemId: true,
 } as const;
 
+// Deliberately omits `evaluationRaw`: this is the fallback used when that optional
+// column is absent (P2022), so it must NOT select it — otherwise the retry re-runs
+// the identical failing query.
 const submissionSelectWithoutEvaluation = {
   id: true,
   submittedAt: true,
   status: true,
   feedback: true,
   correct: true,
-  evaluationRaw: true,
   fileName: true,
   originalFileName: true,
   problemId: true,
 } as const;
 
+/**
+ * Assembles the grading/review view for one student on one assignment: their
+ * submissions (grouped by problem, with evaluation output), the comments about
+ * them, and their per-problem grades. Falls back gracefully if the optional
+ * `evaluationRaw` column is absent.
+ *
+ * Access: the student themselves, course staff, or a system admin (`studentId` must
+ * be the caller's id unless they are course staff or a system admin). Course
+ * membership is also required, except for global admins.
+ * @openapi
+ * summary: Get a student's review data for an assignment
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: aid, in: path, required: true, schema: { type: string } }
+ *   - { name: studentId, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: Submissions (by problem), comments, and problem grades for the student.
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             submissions: { type: object }
+ *             comments: { type: array, items: { type: object } }
+ *             problemGrades: { type: object }
+ *   401: { description: Not signed in. }
+ *   403: { description: "Requesting another student's data without being course staff or a system admin, or not an enrolled member of the course." }
+ *   404: { description: Assignment not found for this course. }
+ *   500: { description: Server error. }
+ */
 export async function GET(
   req: Request,
   context: { params: Promise<{ id: string; aid: string; studentId: string }> },
@@ -63,14 +97,26 @@ export async function GET(
       return NextResponse.json({ error: 'Assignment not found for this course' }, { status: 404 });
     }
 
-    if (user.role !== 'ADMIN') {
-      const rosterEntry = await prisma.roster.findFirst({
-        where: { courseId, userId: user.id },
-        select: { id: true },
+    // Students may only read their own review data; staff may read anyone's.
+    if (!(await canManageCourse(user, courseId)) && user.id !== studentId) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'REVIEW_DATA_ACCESS_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
       });
-      if (!rosterEntry) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // Course-membership requirement (global admins excepted), as before.
+    if (!(await canAccessCourse(user, courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'REVIEW_DATA_ACCESS_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const [assignmentProblems, commentsRaw, gradesRaw] = await Promise.all([
@@ -105,7 +151,6 @@ export async function GET(
                   firstName: true,
                   lastName: true,
                   avatar: true,
-                  role: true,
                 },
               },
             },
@@ -194,7 +239,7 @@ export async function GET(
         firstName: comment.roster.user.firstName ?? null,
         lastName: comment.roster.user.lastName ?? null,
         avatar: comment.roster.user.avatar ?? null,
-        role: comment.roster.role ?? comment.roster.user.role ?? null,
+        role: comment.roster.role ?? null,
       },
     }));
 
@@ -213,6 +258,7 @@ export async function GET(
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,
         action: 'VIEW_ASSIGNMENT_SUBMISSIONS',
+        severity: 'INFO',
         category: 'SUBMISSION',
         courseId,
         assignmentId,

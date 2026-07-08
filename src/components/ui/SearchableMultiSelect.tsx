@@ -40,13 +40,15 @@ export function SearchableMultiSelect({
   searchPlaceholder = 'Search...',
   emptyStateText = 'No results found.',
   error,
-  isValid,
   id,
   disabled,
 }: SearchableMultiSelectProps) {
   const [search, setSearch] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
-  const triggerId = id ?? useId();
+  // Call useId() unconditionally (hooks must run in the same order every render);
+  // fall back to it only when no explicit id was provided.
+  const generatedId = useId();
+  const triggerId = id ?? generatedId;
 
   const filteredItems = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -84,6 +86,9 @@ export function SearchableMultiSelect({
       ) : null}
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger asChild>
+          {/* This trigger is a combobox-style validation control; aria-invalid is
+              intentionally exposed for AT even though the implicit button role flags it. */}
+          {/* eslint-disable-next-line jsx-a11y/role-supports-aria-props */}
           <button
             type="button"
             id={triggerId}
@@ -98,21 +103,30 @@ export function SearchableMultiSelect({
               error && 'border-red-500',
             )}
           >
-            <span className={cn('truncate text-left', !selectedLabels && 'text-muted-foreground')}>
+            <span
+              className={cn(
+                'min-w-0 flex-1 truncate text-left',
+                !selectedLabels && 'text-muted-foreground',
+              )}
+            >
               {selectedLabels || placeholder}
             </span>
-            <ChevronDown className="text-muted-foreground h-4 w-4" />
+            <ChevronDown className="text-muted-foreground ml-2 h-4 w-4 shrink-0" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="bg-popover w-[var(--radix-dropdown-menu-trigger-width)] p-2">
+        <DropdownMenuContent
+          align="start"
+          collisionPadding={8}
+          className="bg-popover flex max-h-72 w-[var(--radix-dropdown-menu-trigger-width)] flex-col p-2"
+        >
           <Input
             placeholder={searchPlaceholder}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => e.stopPropagation()}
-            className="mb-2 h-9 text-sm"
+            className="mb-2 h-9 shrink-0 text-sm"
           />
-          <div className="max-h-64 overflow-auto rounded border">
+          <div className="min-h-0 flex-1 overflow-auto rounded border">
             {filteredItems.length === 0 ? (
               <div className="text-muted-foreground p-3 text-center text-sm">{emptyStateText}</div>
             ) : (

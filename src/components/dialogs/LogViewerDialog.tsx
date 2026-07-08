@@ -21,20 +21,23 @@ export function LogViewerDialog({ data, open, onOpenChange, title }: { data: str
   };
 
   return (
-    <div className="p-8">
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="truncate">{title || 'System Log'}</DialogTitle>
-            </DialogHeader>
-		          <div className="p-4 pt-2 text-left whitespace-pre-wrap font-mono text-sm">
-              {data || ''}
-              </div>
-              <button className="flex justify-end" onClick={handleCopy}>
-                <Copy className="text-right h-4 w-4 cursor-pointer" />
-              </button>
-        </DialogContent>
-      </Dialog>
-    </div>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="bg-card">
+        <DialogHeader>
+          <DialogTitle className="truncate">{title || 'System Log'}</DialogTitle>
+        </DialogHeader>
+        <div className="p-4 pt-2 text-left whitespace-pre-wrap font-mono text-sm">
+          {data || ''}
+        </div>
+        <button
+          type="button"
+          className="flex justify-end"
+          onClick={handleCopy}
+          aria-label="Copy log to clipboard"
+        >
+          <Copy className="text-right h-4 w-4 cursor-pointer" />
+        </button>
+      </DialogContent>
+    </Dialog>
   );
 }

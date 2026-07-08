@@ -4,6 +4,9 @@ const prismaMock = vi.hoisted(() => ({
   course: {
     update: vi.fn(),
   },
+  roster: {
+    findFirst: vi.fn(),
+  },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -19,6 +22,7 @@ import { PATCH } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  prismaMock.roster.findFirst.mockResolvedValue(null);
 });
 
 describe('PATCH /api/courses/[id]/publish', () => {
@@ -47,7 +51,7 @@ describe('PATCH /api/courses/[id]/publish', () => {
   });
 
   it('returns 403 when cannot unpublish', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     canUnpublishMock.mockResolvedValue({ canUnpublish: false, reason: 'blocked' });
 
     const req = new Request('http://localhost/api/courses/c1/publish', {
@@ -61,7 +65,8 @@ describe('PATCH /api/courses/[id]/publish', () => {
   });
 
   it('updates publish status and logs activity', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     canUnpublishMock.mockResolvedValue({ canUnpublish: true });
     prismaMock.course.update.mockResolvedValue({
       id: 'c1',

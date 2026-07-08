@@ -5,12 +5,20 @@ on:
     branches: ['main']
 
 permissions:
-  contents: read
+  contents: write # allow the auto-pin step to commit docker-compose.yml back
   packages: write
+
+# Serialize publishes: the auto-pin step commits back to main, so overlapping
+# runs would race on the push. Queue rather than cancel — never kill a publish
+# that may be mid-push.
+concurrency:
+  group: ghcr-publish
+  cancel-in-progress: false
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -49,6 +57,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: docker/Dockerfile
           push: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -61,6 +70,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: docker/Dockerfile
           push: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -78,3 +88,50 @@ jobs:
           echo ""
           echo "Image ID:"
           echo "${{ steps.build.outputs.imageid || steps.retry.outputs.imageid }}"
+
+      # Scan the published image for known CVEs. Report-only for now (exit-code 0);
+      # flip exit-code to '1' to make CRITICAL/HIGH block a release.
+      #
+      # Gate on either build attempt succeeding, not success(): a recovered retry
+      # leaves the job in a "a step failed" state, which would otherwise skip this.
+      #
+      # continue-on-error: this is an informational scan, and its only failure mode
+      # is Trivy's own binary download flaking (findings can't fail it while
+      # exit-code is 0) — a scanner hiccup must not block publishing the image.
+      - name: Scan image for vulnerabilities (Trivy)
+        if: ${{ steps.build.outcome == 'success' || steps.retry.outcome == 'success' }}
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@v0.33.1
+        with:
+          image-ref: ghcr.io/pennstatewilkes-barre/afct-dashboard@${{ steps.build.outputs.digest || steps.retry.outputs.digest }}
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '0'
+
+      # Pin docker-compose.yml to the exact digest just published, and commit it
+      # back to main. The push uses GITHUB_TOKEN, which does NOT re-trigger
+      # workflows (no loop); the `[skip ci]` marker is a further safeguard.
+      - name: Auto-pin prod compose to the published digest
+        if: ${{ steps.build.outcome == 'success' || steps.retry.outcome == 'success' }}
+        env:
+          DIGEST: ${{ steps.build.outputs.digest || steps.retry.outputs.digest }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DIGEST}" ]; then
+            echo "No digest available; skipping pin."
+            exit 0
+          fi
+          IMAGE="ghcr.io/pennstatewilkes-barre/afct-dashboard@${DIGEST}"
+          sed -i -E \
+            "s#^([[:space:]]*image:[[:space:]]*)ghcr\.io/pennstatewilkes-barre/afct-dashboard.*#\1${IMAGE}#" \
+            docker-compose.yml
+          if git diff --quiet -- docker-compose.yml; then
+            echo "docker-compose.yml already pinned to ${DIGEST}."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docker-compose.yml
+          git commit -m "chore(release): pin prod image to ${DIGEST} [skip ci]"
+          git push origin HEAD:${{ github.ref_name }}

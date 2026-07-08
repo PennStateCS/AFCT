@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse, COURSE_FACULTY_ROLES } from '@/lib/permissions';
 import { ProblemTypeEnum } from '@/schemas/problem';
 import { z } from 'zod';
 
@@ -28,24 +29,36 @@ interface AssignmentProblemResult {
   AssignmentProblemGrade?: { grade: number | null } | null;
 }
 
+/**
+ * Lists an assignment's problems, tagged with whether the caller has solved each
+ * (a correct submission) and their grade. For group assignments, visibility follows
+ * the caller's group — unassigned problems show to everyone, group-mapped ones only
+ * to that group's members. Course faculty or a system admin (TAs excluded).
+ * @openapi
+ * summary: List an assignment's problems
+ * parameters:
+ *   - { name: id, in: path, required: true, description: Assignment id, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: The visible problems with solved/grade flags.
+ *     content:
+ *       application/json:
+ *         schema: { type: array, items: { type: object } }
+ *   400: { description: Missing assignment id. }
+ *   401: { description: "Not signed in, or not course faculty / a system admin (TAs excluded)." }
+ *   404: { description: Assignment not found. }
+ *   500: { description: Server error. }
+ */
 export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
-  // Await params if it is a Promise (some environments do this)
   const params = await context.params;
   const assignmentId = params?.id;
 
-  // 1. Validate courseId
   if (!assignmentId) {
     return NextResponse.json({ error: 'Missing course ID' }, { status: 400 });
   }
 
-  // 2. Verify
   const session = await auth();
-  
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  if (session.user.role !== 'ADMIN' && session.user.role !== 'FACULTY') {
+  if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -58,6 +71,11 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
 
     if (!assignment) {
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+    }
+
+    // Faculty-tier staff only (FACULTY, TAs excluded) or admin.
+    if (!(await canManageCourse(session.user, assignment.courseId, COURSE_FACULTY_ROLES))) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // ---- User and Course Id ----
@@ -108,7 +126,9 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     // For group assignments: include problems that are unassigned (apply to everyone)
     // or explicitly mapped to the user's group. For non-group assignments return all.
     const visible = assignmentProblems.filter((ap) => {
-      const mapped = (ap.problem as any).groupAssignmentProblems ?? [];
+      const mapped =
+        (ap.problem as { groupAssignmentProblems?: { groupId: string }[] })
+          .groupAssignmentProblems ?? [];
       if (!assignment.isGroup) return true; // assignment-level problems when not group-mode
       if (mapped.length === 0) return true; // unassigned -> visible to everyone
       if (!userGroupId) return false; // user has no group -> can't see group-only problems
@@ -118,7 +138,11 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     const problems: ProblemWithSolved[] = visible.map((ap) => ({
       ...ap.problem,
       solved: ap.submissions.length > 0,
-      grade: (ap as any).AssignmentProblemGrade?.grade ?? (ap as any).grades?.[0]?.grade ?? null,
+      grade:
+        (ap as { AssignmentProblemGrade?: { grade?: number | null } }).AssignmentProblemGrade
+          ?.grade ??
+        (ap as { grades?: { grade?: number | null }[] }).grades?.[0]?.grade ??
+        null,
     }));
 
     // ---- Activity log ----
@@ -126,6 +150,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       await createEnhancedActivityLog(prisma, req, {
         userId,
         action: 'VIEW_ASSIGNMENT_PROBLEMS',
+        severity: 'INFO',
         category: 'ASSIGNMENT',
         assignmentId,
         courseId,

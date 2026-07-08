@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -25,7 +25,10 @@ type CreateGroupDialogProps = {
 };
 
 export function CreateGroupDialog({ open, setOpen, courseId, onSuccess }: CreateGroupDialogProps) {
-  const defaults: CreateGroupRaw = { name: '', courseId: courseId ?? '' };
+  const defaults: CreateGroupRaw = useMemo(
+    () => ({ name: '', courseId: courseId ?? '' }),
+    [courseId],
+  );
 
   const { control, handleSubmit, reset, setError, formState: { errors, isSubmitting, isValid } } = useForm<CreateGroupRaw>({
     resolver: zodResolver(CreateGroupSchema),
@@ -34,7 +37,7 @@ export function CreateGroupDialog({ open, setOpen, courseId, onSuccess }: Create
 
   useEffect(() => {
     if (open) reset(defaults);
-  }, [open, reset]);
+  }, [open, reset, defaults]);
 
   const onSubmit = async (raw: CreateGroupRaw) => {
     try {
@@ -57,7 +60,7 @@ export function CreateGroupDialog({ open, setOpen, courseId, onSuccess }: Create
         if (body?.details && typeof body.details === 'object') {
           Object.entries(body.details).forEach(([field, msgs]) => {
             const msg = Array.isArray(msgs) ? msgs.join(', ') : String(msgs);
-            setError(field as any, { type: 'server', message: msg });
+            setError(field as Parameters<typeof setError>[0], { type: 'server', message: msg });
           });
           toast.error(body.error || 'Invalid input');
         } else {

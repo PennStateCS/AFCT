@@ -1,25 +1,66 @@
-// /src/app/api/problems/[id]/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import fs from 'fs';
 import path from 'path';
 import { auth } from '@/lib/auth';
+import { canManageCourse } from '@/lib/permissions';
 import { ProblemType } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 
-// PUT /api/problems/[id] - Update an existing problem
+/**
+ * Updates a problem (multipart/form-data). Course staff (faculty or TAs) or a system
+ * admin. Sending a new file replaces the stored solution — it's structure-validated
+ * and size-checked first, and the previous file is removed. Omitting the file keeps
+ * the current one.
+ * @openapi
+ * summary: Update a problem
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     multipart/form-data:
+ *       schema:
+ *         type: object
+ *         required: [title, type, courseId]
+ *         properties:
+ *           title: { type: string }
+ *           description: { type: string }
+ *           type: { type: string }
+ *           courseId: { type: string }
+ *           maxPoints: { type: string }
+ *           maxSubmissions: { type: string }
+ *           maxStates: { type: string }
+ *           isDeterministic: { type: string, enum: ['true', 'false'] }
+ *           autograderEnabled: { type: string, enum: ['true', 'false'] }
+ *           file: { type: string, format: binary, description: Optional new solution file }
+ * responses:
+ *   200: { description: The updated problem. }
+ *   400: { description: Missing fields or the new file failed structure validation. }
+ *   403: { description: Caller is not course staff or a system admin. }
+ *   404: { description: Problem not found. }
+ *   413: { description: File exceeds the system upload limit. }
+ *   500: { description: Server error. }
+ */
 export async function PUT(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+  let actorId: string | null = null;
   try {
     const { id: problemId } = await context.params;
 
     // Verify authenticated user
     const session = await auth();
     const user = session?.user;
+    actorId = user?.id ?? null;
 
-    if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    if (!user) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'PROBLEM_UPDATE_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -30,6 +71,16 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
 
     if (!existingProblem) {
       return NextResponse.json({ error: 'Problem not found' }, { status: 404 });
+    }
+
+    if (!(await canManageCourse(user, existingProblem.courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'PROBLEM_UPDATE_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     // Parse multipart form data
@@ -72,6 +123,7 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
         await createEnhancedActivityLog(prisma, req, {
           userId: user.id,
           action: 'SUBMISSION_INVALID_FILE_STRUCTURE',
+          severity: 'WARNING',
           category: 'SUBMISSION',
           courseId,
           assignmentId,
@@ -131,6 +183,7 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
     await createEnhancedActivityLog(prisma, req, {
       userId: user.id,
       action: 'UPDATE_PROBLEM',
+      severity: 'INFO',
       category: 'PROBLEM',
       courseId,
       problemId,
@@ -138,7 +191,10 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
         userId: user.id,
         courseId: courseId,
         problemId: problemId,
+        problemTitle: updatedProblem.title,
         problemType: type,
+        maxPoints: updatedProblem.maxPoints,
+        autograderEnabled: updatedProblem.autograderEnabled,
         fileName,
         fileUpdated: !!file,
       },
@@ -147,20 +203,48 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
     return NextResponse.json(updatedProblem);
   } catch (err) {
     console.error('Problem update error:', err);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: actorId,
+      action: 'PROBLEM_UPDATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }
 
-// DELETE /api/problems/[id] - Delete a problem
+/**
+ * Deletes a problem and its solution file. Course staff (faculty or TAs) or a system
+ * admin. Refused while the problem is still attached to any assignment; otherwise its
+ * submissions are removed first, then the record and file.
+ * @openapi
+ * summary: Delete a problem
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200: { description: Problem deleted. }
+ *   400: { description: Problem is still linked to an assignment. }
+ *   403: { description: Caller is not course staff or a system admin. }
+ *   404: { description: Problem not found. }
+ *   500: { description: Server error. }
+ */
 export async function DELETE(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+  let actorId: string | null = null;
   try {
     const { id: problemId } = await context.params;
 
     // Verify authenticated user
     const session = await auth();
     const user = session?.user;
+    actorId = user?.id ?? null;
 
-    if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    if (!user) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'PROBLEM_DELETE_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -171,6 +255,16 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
 
     if (!existingProblem) {
       return NextResponse.json({ error: 'Problem not found' }, { status: 404 });
+    }
+
+    if (!(await canManageCourse(user, existingProblem.courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'PROBLEM_DELETE_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     // Prevent deletion if the problem is linked to any assignment
@@ -207,6 +301,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     await createEnhancedActivityLog(prisma, req, {
       userId: user.id,
       action: 'DELETE_PROBLEM',
+      severity: 'INFO',
       category: 'PROBLEM',
       courseId: existingProblem.courseId,
       problemId,
@@ -214,6 +309,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
         userId: user.id,
         courseId: existingProblem.courseId,
         problemId: problemId,
+        problemTitle: existingProblem.title,
         fileName: existingProblem.fileName || null,
       },
     });
@@ -221,6 +317,12 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('Problem deletion error:', err);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: actorId,
+      action: 'PROBLEM_DELETE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }

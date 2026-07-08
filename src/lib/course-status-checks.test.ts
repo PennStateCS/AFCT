@@ -10,7 +10,7 @@ describe('course-status-checks', () => {
       submission: {
         findFirst: vi.fn(),
       },
-      assignmentGrade: {
+      assignmentProblemGrade: {
         findFirst: vi.fn(),
       },
     } as any;
@@ -64,8 +64,10 @@ describe('course-status-checks', () => {
       });
       expect(mockPrisma.assignmentProblemGrade.findFirst).toHaveBeenCalledWith({
         where: {
-          assignment: {
-            courseId: 'course-1',
+          assignmentProblem: {
+            assignment: {
+              courseId: 'course-1',
+            },
           },
         },
         select: { id: true },
@@ -147,8 +149,10 @@ describe('course-status-checks', () => {
       });
       expect(mockPrisma.assignmentProblemGrade.findFirst).toHaveBeenCalledWith({
         where: {
-          assignment: {
-            courseId: 'course-1',
+          assignmentProblem: {
+            assignment: {
+              courseId: 'course-1',
+            },
           },
         },
         select: { id: true },

@@ -1,4 +1,4 @@
-import { Problem, Role } from '@prisma/client';
+import { Problem, CourseRole } from '@prisma/client';
 
 export type AssignmentProblemLink = {
   problem: Problem;
@@ -13,7 +13,7 @@ export type AssignmentCourseSummary = {
   code?: string;
   isArchived?: boolean;
   roster?: Array<{
-    role: Role | null;
+    role: CourseRole | null;
     user: {
       id: string;
       firstName: string | null;
@@ -60,7 +60,7 @@ export type StudentProblemComment = {
   createdAt: string;
   authorId?: string | null;
   authorName: string;
-  authorRole: Role;
+  authorRole: CourseRole;
   problemId: string;
 };
 

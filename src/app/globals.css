@@ -104,7 +104,7 @@
   --table-highlight: #ececec;
   --table-background: #ffffff;
   --node-color: #fff59d;
-  --grid-color: #e5e7eb;
+  --grid-color: #edeff2;
   --success: #2d6a1e;
   /* Badge colors — derived from brand palette (--primary, --tertiary, --destructive, --success) */
   --badge-success: #2d5a1b;        /* tint of --success */

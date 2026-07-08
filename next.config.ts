@@ -5,12 +5,30 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  // Acknowledge Turbopack when custom webpack config is present (Next 16+)
   turbopack: {
     root: __dirname,
   },
-  // Fix for CommonJS modules in ESM context
-  transpilePackages: ['jsonwebtoken', 'bcrypt'],
+
+  // Keep native/server-only deps external so they load from node_modules at
+  // runtime instead of being bundled (bcrypt is a native addon). This is
+  // bundler-agnostic — it applies under Turbopack too, unlike webpack externals.
+  serverExternalPackages: ['bcrypt'],
+
+  // Baseline security headers on every response. No CSP here — that needs
+  // app-specific tuning; these are safe defense-in-depth defaults.
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'X-DNS-Prefetch-Control', value: 'off' },
+        ],
+      },
+    ];
+  },
 
   webpack: (config, { isServer, webpack }) => {
     // Fix CommonJS/ESM module issues
@@ -30,27 +48,14 @@ const nextConfig: NextConfig = {
       }),
     );
 
-    // Handle CommonJS modules that break in ESM context
+    // crypto is a Node built-in; keep it external on the server. (bcrypt is
+    // handled by serverExternalPackages above.)
     if (isServer) {
       config.externals = config.externals || [];
       config.externals.push({
-        jsonwebtoken: 'commonjs jsonwebtoken',
-        bcrypt: 'commonjs bcrypt',
         crypto: 'commonjs crypto',
       });
     }
-
-    // Prevent watchpack from scanning Docker volume mounts with restricted perms
-    config.watchOptions = {
-      ...(config.watchOptions || {}),
-      ignored: [
-        '**/dev-postgres/**',
-        '**/dev-postgres',
-        '**/dev-postgres/**/*',
-        '/app/dev-postgres/**',
-        '/app/dev-postgres/**/*',
-      ],
-    };
 
     return config;
   },

@@ -1,8 +1,121 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
-// Route handler for course grades
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
+/**
+ * Records a gradebook export in the audit log. The CSV itself is built and
+ * downloaded client-side, so this endpoint just captures that an export happened
+ * (and a little about its scope). Course staff (faculty or TAs) or a system admin.
+ * @openapi
+ * summary: Log a gradebook export
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: false
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         properties:
+ *           platform: { type: string, description: Target LMS/platform label }
+ *           wholeGradebook: { type: boolean }
+ *           assignmentCount: { type: integer }
+ *           studentCount: { type: integer }
+ * responses:
+ *   200: { description: Export recorded. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Not course staff (faculty or TAs) or a system admin. }
+ *   500: { description: Server error. }
+ */
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+
+  if (!id) {
+    return NextResponse.json({ error: 'Missing course ID' }, { status: 400 });
+  }
+
+  let actorId: string | null = null;
+  try {
+    const session = await auth();
+    actorId = session?.user?.id ?? null;
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (!(await canManageCourse(session.user, id))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'GRADES_EXPORT_DENIED',
+        severity: 'SECURITY',
+        courseId: id,
+        metadata: {},
+      });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const platform = typeof body?.platform === 'string' ? body.platform : 'unknown';
+    const wholeGradebook = body?.wholeGradebook === true;
+    const assignmentCount = Number.isFinite(Number(body?.assignmentCount))
+      ? Number(body.assignmentCount)
+      : 0;
+    const studentCount = Number.isFinite(Number(body?.studentCount)) ? Number(body.studentCount) : 0;
+
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session.user.id,
+      action: 'GRADES_EXPORTED',
+      severity: 'INFO',
+      category: 'SUBMISSION',
+      courseId: id,
+      metadata: {
+        userId: session.user.id,
+        courseId: id,
+        platform,
+        wholeGradebook,
+        assignmentCount,
+        studentCount,
+      },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('POST /api/courses/[id]/grades (export log) error:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: actorId,
+      action: 'GRADES_EXPORT_ERROR',
+      severity: 'ERROR',
+      courseId: id,
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
+    return NextResponse.json({ error: 'Failed to record export' }, { status: 500 });
+  }
+}
+
+/**
+ * Returns the full gradebook matrix for a course: students × assignments with each
+ * cell holding the student's summed assignment grade (problem grades collapsed
+ * into one total). Course staff (faculty or TAs) or a system admin.
+ * @openapi
+ * summary: Get the course grade matrix
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: Students, assignments, and a nested grades map (grades[studentId][assignmentId]).
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             students: { type: array, items: { type: object } }
+ *             assignments: { type: array, items: { type: object } }
+ *             grades: { type: object }
+ *   401: { description: Not signed in. }
+ *   403: { description: Not course staff (faculty or TAs) or a system admin. }
+ *   500: { description: Server error. }
+ */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
@@ -15,8 +128,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Only allow faculty/ta/admin to fetch full grade matrix
-  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
+  if (!(await canManageCourse(session.user, id))) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'COURSE_GRADES_ACCESS_DENIED',
+      severity: 'SECURITY',
+      metadata: {},
+    });
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

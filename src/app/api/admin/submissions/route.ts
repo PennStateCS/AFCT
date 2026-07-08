@@ -1,7 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { isAdmin } from '@/lib/permissions';
 
+/**
+ * Returns every submission across a set of problems, flattened for the admin
+ * grading view — student, course, assignment/problem titles, status, and the
+ * recorded grade (joined from AssignmentProblemGrade). System administrators only.
+ * Takes the problem ids in the body rather than the query string since the list
+ * can be long.
+ * @openapi
+ * summary: List submissions for problems (admin)
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [problemIds]
+ *         properties:
+ *           problemIds: { type: array, items: { type: string } }
+ * responses:
+ *   200:
+ *     description: Flattened submissions, newest first.
+ *     content:
+ *       application/json:
+ *         schema: { type: array, items: { type: object } }
+ *   400: { description: problemIds missing or empty. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller is not a system administrator. }
+ *   500: { description: Server error. }
+ */
 export async function POST(req: NextRequest) {
   try {
     const session = await auth();
@@ -9,7 +39,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (session.user.role !== 'ADMIN' && session.user.role !== 'FACULTY') {
+    if (!isAdmin(session?.user)) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'ADMIN_SUBMISSIONS_ACCESS_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -108,6 +144,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(formattedSubmissions);
   } catch (error) {
     console.error('Error fetching submissions:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: null,
+      action: 'ADMIN_SUBMISSIONS_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json(
       { error: 'Failed to fetch submissions' },
       { status: 500 }

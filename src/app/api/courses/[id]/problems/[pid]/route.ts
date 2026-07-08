@@ -1,12 +1,28 @@
-// /src/app/api/courses/[id]/problems/[pid]/route.ts
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import path from 'path';
 import { promises as fs } from 'fs';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
+/**
+ * Deletes a problem within a course, unconditionally cascading its submissions and
+ * assignment links first, then removing the solution file. Course staff (faculty or
+ * TAs) or a system admin. The problem must belong to the course in the path. Unlike
+ * DELETE /api/problems/[id], this does not refuse when the problem is used by an
+ * assignment — it removes those links.
+ * @openapi
+ * summary: Delete a course problem
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: pid, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200: { description: Problem deleted. }
+ *   403: { description: Caller is not course staff (faculty or TA) or a system admin. }
+ *   404: { description: Problem not found in this course. }
+ *   500: { description: Server error. }
+ */
 export async function DELETE(
   req: Request,
   context: { params: Promise<{ id: string; pid: string }> },
@@ -14,11 +30,16 @@ export async function DELETE(
   const { id: courseId, pid: problemId } = await context.params;
 
   try {
-    // Step 1: Verify the user is authenticated and authorized (ADMIN, FACULTY, TA)
     const session = await auth();
     const user = session?.user;
 
-    if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    if (!user || !(await canManageCourse(user, courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'PROBLEM_DELETE_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -70,6 +91,7 @@ export async function DELETE(
     await createEnhancedActivityLog(prisma, req, {
       userId: user.id,
       action: 'DELETE_PROBLEM',
+      severity: 'INFO',
       category: 'PROBLEM',
       courseId,
       problemId,
@@ -86,6 +108,12 @@ export async function DELETE(
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('API DELETE error:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: null,
+      action: 'PROBLEM_DELETE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Failed to delete problem.' }, { status: 500 });
   }
 }

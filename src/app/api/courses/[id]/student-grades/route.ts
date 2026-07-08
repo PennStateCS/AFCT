@@ -1,7 +1,29 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canAccessCourse } from '@/lib/permissions';
 
+/**
+ * Returns the signed-in student's own grade breakdown for a course — published
+ * assignments, their problems, and per-problem grade, latest submission status,
+ * and attempt count. Available to enrolled members (viewing their own data) and
+ * to staff.
+ * @openapi
+ * summary: Get my grades for a course
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: The caller's per-assignment, per-problem grade breakdown.
+ *     content:
+ *       application/json:
+ *         schema: { type: object, properties: { assignments: { type: array, items: { type: object } } } }
+ *   400: { description: Missing course id. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Not enrolled and not staff. }
+ *   500: { description: Server error. }
+ */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth();
@@ -14,13 +36,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: 'Missing course ID' }, { status: 400 });
     }
 
-    const member = await prisma.roster.findUnique({
-      where: { courseId_userId: { courseId, userId: session.user.id } },
-      select: { id: true },
-    });
-
-    const isStaff = ['ADMIN', 'FACULTY', 'TA'].includes(session.user.role);
-    if (!member && !isStaff) {
+    if (!(await canAccessCourse(session.user, courseId))) {
+      await createEnhancedActivityLog(prisma, _req, {
+        userId: session?.user?.id ?? null,
+        action: 'COURSE_STUDENT_GRADES_ACCESS_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

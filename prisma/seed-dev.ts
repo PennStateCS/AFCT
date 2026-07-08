@@ -7,7 +7,11 @@
  * - Randomized rosters (instructors/TAs/students)
  * - Problems for each course
  */
-import { PrismaClient, Role } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
+
+// Seed-only category used to group people and drive roster assignment. Users no
+// longer carry a global role; admins are flagged via `isAdmin`.
+type SeedCategory = 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT';
 import {
   adminData,
   assignmentData,
@@ -68,12 +72,12 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
     email: string;
     firstName: string;
     lastName: string;
-    role: Role;
+    role: SeedCategory;
   }> = [
-    ...withRole([adminData], 'ADMIN' as Role),
-    ...withRole(facultyData, 'FACULTY' as Role),
-    ...withRole(taData, 'TA' as Role),
-    ...withRole(studentData, 'STUDENT' as Role),
+    ...withRole([adminData], 'ADMIN' as SeedCategory),
+    ...withRole(facultyData, 'FACULTY' as SeedCategory),
+    ...withRole(taData, 'TA' as SeedCategory),
+    ...withRole(studentData, 'STUDENT' as SeedCategory),
   ];
 
   console.log(`[seed] development: preparing ${userSeeds.length} users`);
@@ -94,7 +98,7 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
       firstName: userSeed.firstName,
       lastName: userSeed.lastName,
       password: hashedPassword,
-      role: userSeed.role,
+      isAdmin: userSeed.role === 'ADMIN',
     })),
     skipDuplicates: true,
   });
@@ -230,7 +234,7 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
   console.log('[seed] development: setting explicit rosters for Charles Xavier and Oliver Green');
   try {
     if (charles?.id && charlesCmpen271Course) {
-      await upsertRoster(prisma, charlesCmpen271Course.id, charles.id, 'INSTRUCTOR');
+      await upsertRoster(prisma, charlesCmpen271Course.id, charles.id, 'FACULTY');
     }
 
     if (oliver?.id) {

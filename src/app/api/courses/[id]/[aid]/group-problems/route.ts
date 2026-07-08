@@ -2,20 +2,52 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canAccessCourse, canManageCourse } from '@/lib/permissions';
 
+/**
+ * Returns each course group alongside the problem ids mapped to it for this
+ * assignment (the group→problem assignment matrix). Any enrolled member of the
+ * course (any role) or a system admin.
+ * @openapi
+ * summary: Get group→problem mappings for an assignment
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: aid, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: Groups, each with its mapped problemIds.
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             success: { type: boolean }
+ *             groups: { type: array, items: { type: object } }
+ *   403: { description: Not an enrolled member of the course and not a system admin. }
+ *   500: { description: Server error. }
+ */
 export async function GET(_: Request, { params }: { params: Promise<{ id: string; aid: string }> }) {
   const { id: courseId, aid: assignmentId } = await params;
 
   try {
     const session = await auth();
     const user = session?.user;
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    if (!user || !(await canAccessCourse(user, courseId))) {
+      await createEnhancedActivityLog(prisma, _ as Request, {
+        userId: session?.user?.id ?? null,
+        action: 'GROUP_PROBLEMS_ACCESS_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
 
-    // Fetch groups for the course and their assignment problem mappings
-    const groups = await prisma.group.findMany({ where: { courseId }, select: { id: true, name: true } });
-
-    // Fetch groupAssignmentProblem rows for this assignment
-    const mappings = await prisma.groupAssignmentProblem.findMany({ where: { assignmentId } });
+    // Fetch the course's groups and this assignment's group→problem mappings.
+    // Independent reads, so run them concurrently.
+    const [groups, mappings] = await Promise.all([
+      prisma.group.findMany({ where: { courseId }, select: { id: true, name: true } }),
+      prisma.groupAssignmentProblem.findMany({ where: { assignmentId } }),
+    ]);
 
     const mapByGroup: Record<string, string[]> = {};
     for (const m of mappings) {
@@ -30,6 +62,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       await createEnhancedActivityLog(prisma, _ as Request, {
         userId: user.id,
         action: 'VIEW_GROUP_PROBLEMS',
+        severity: 'INFO',
         category: 'ASSIGNMENT',
         courseId,
         assignmentId,
@@ -46,61 +79,44 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   }
 }
 
-// Support POST { action: 'list' } as an alternative to GET so clients do not
-// need to use AbortController.signal when requesting group mappings.
-export async function POST(req: Request, { params }: { params: Promise<{ id: string; aid: string }> }) {
-  const { id: courseId, aid: assignmentId } = await params;
-
-  try {
-    const session = await auth();
-    const user = session?.user;
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-
-    const body = await req.json().catch(() => ({}));
-    if (body?.action !== 'list') {
-      return NextResponse.json({ error: 'Unsupported POST action' }, { status: 400 });
-    }
-
-    // Reuse GET logic to build response
-    const groups = await prisma.group.findMany({ where: { courseId }, select: { id: true, name: true } });
-    const mappings = await prisma.groupAssignmentProblem.findMany({ where: { assignmentId } });
-
-    const mapByGroup: Record<string, string[]> = {};
-    for (const m of mappings) {
-      if (!mapByGroup[m.groupId]) mapByGroup[m.groupId] = [];
-      mapByGroup[m.groupId].push(m.problemId);
-    }
-
-    const result = groups.map((g) => ({ id: g.id, name: g.name, problemIds: mapByGroup[g.id] ?? [] }));
-
-    try {
-      await createEnhancedActivityLog(prisma, req as Request, {
-        userId: user.id,
-        action: 'VIEW_GROUP_PROBLEMS',
-        category: 'ASSIGNMENT',
-        courseId,
-        assignmentId,
-        metadata: { courseId, assignmentId },
-      });
-    } catch (logErr) {
-      console.error('[group-problems] activityLog.create failed:', logErr);
-    }
-
-    return NextResponse.json({ success: true, groups: result });
-  } catch (err) {
-    console.error('Failed to POST group-problems:', err);
-    return NextResponse.json({ error: 'Failed to fetch group problems' }, { status: 500 });
-  }
-}
-
-// DELETE: remove group->problem mappings for an assignment
+/**
+ * Removes group→problem mappings for an assignment. Course staff (faculty or TAs) or
+ * a system admin. A `groupId` is required — pass a specific group id, or "ALL" to clear the given
+ * problems from every group. The problems themselves stay on the assignment.
+ * @openapi
+ * summary: Remove group→problem mappings
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: aid, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [problemIds, groupId]
+ *         properties:
+ *           problemIds: { type: array, items: { type: string } }
+ *           groupId: { type: string, description: 'A group id, or "ALL"' }
+ * responses:
+ *   200: { description: Mappings removed. }
+ *   400: { description: "Empty body, no problemIds, invalid group, or missing groupId." }
+ *   403: { description: Caller is not course staff (faculty or TA) or a system admin. }
+ *   500: { description: Server error. }
+ */
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string; aid: string }> }) {
   const { id: courseId, aid: assignmentId } = await params;
 
   try {
     const session = await auth();
     const user = session?.user;
-    if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    if (!user || !(await canManageCourse(user, courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'GROUP_PROBLEMS_REMOVE_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -147,6 +163,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
       await createEnhancedActivityLog(prisma, req as Request, {
         userId: user.id,
         action: 'REMOVE_GROUP_PROBLEMS',
+        severity: 'INFO',
         category: 'ASSIGNMENT',
         courseId,
         assignmentId,
@@ -160,6 +177,12 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('Failed to delete group problems:', err);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: null,
+      action: 'GROUP_PROBLEMS_REMOVE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Failed to delete group problems' }, { status: 500 });
   }
 }

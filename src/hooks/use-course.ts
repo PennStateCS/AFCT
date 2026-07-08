@@ -1,55 +1,83 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import type { SetStateAction } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { showToast } from '@/lib/toast';
 import { FullCourse, DeleteTarget, EnrollableUser, TabType } from '@/types/course';
-import { getEnrolledIds } from '@/lib/course-utils';
+import { getEnrolledIds, type EnrolledUser } from '@/lib/course-utils';
 import { Assignment, Problem, User } from '@prisma/client';
 
 type CourseSectionView = 'summary' | 'full' | 'assignments' | 'problems' | 'roster';
+type SectionKey = 'assignments' | 'problems' | 'roster';
 
+/** Cache key for a course view; shared so callers can invalidate consistently. */
+export const courseQueryKey = (courseId: string, view: CourseSectionView) =>
+  ['course', courseId, view] as const;
+
+/**
+ * Course data hook backed by the TanStack Query cache. Every view fetch goes
+ * through `queryClient.fetchQuery`, so the cache dedupes in-flight requests and
+ * serves warm data instantly when the user navigates back to a course (no network
+ * within the staleTime window). Local component state still drives rendering and
+ * optimistic `setCourse` updates — those are mirrored into the base cache entry so
+ * the cache stays consistent with what the user sees.
+ */
 export function useCourseData(
   courseId: string,
   options?: { initialCourse?: FullCourse | null; isStudent?: boolean },
 ) {
-  const courseRequestSeqRef = useRef(0);
-  const sectionRequestSeqRef = useRef({ assignments: 0, problems: 0, roster: 0 });
-  const [course, setCourse] = useState<FullCourse | null>(options?.initialCourse ?? null);
-  const [loadedSections, setLoadedSections] = useState<{
-    assignments: boolean;
-    problems: boolean;
-    roster: boolean;
-  }>({
-    assignments: !!options?.isStudent,
-    problems: !!options?.isStudent,
-    roster: !!options?.isStudent,
-  });
-  const [loadingSections, setLoadingSections] = useState<{
-    assignments: boolean;
-    problems: boolean;
-    roster: boolean;
-  }>({
+  const queryClient = useQueryClient();
+  const isStudent = !!options?.isStudent;
+  const baseView: CourseSectionView = isStudent ? 'full' : 'summary';
+
+  // Seed from a warm cache entry (fast back-navigation) before the SSR prop.
+  const [course, setCourseState] = useState<FullCourse | null>(
+    () =>
+      (courseId
+        ? (queryClient.getQueryData(courseQueryKey(courseId, baseView)) as FullCourse | undefined)
+        : undefined) ??
+      options?.initialCourse ??
+      null,
+  );
+  const [loadingSections, setLoadingSections] = useState<Record<SectionKey, boolean>>({
     assignments: false,
     problems: false,
     roster: false,
   });
 
-  const fetchCourseByView = useCallback(
-    async (view: CourseSectionView) => {
-      if (!courseId) return null;
-      const res = await fetch(`/api/courses/${courseId}?view=${view}`);
-      if (!res.ok) throw new Error('Failed to fetch course');
-      return res.json();
+  // setCourse mirrors optimistic updates into the base cache entry so the cached
+  // course matches what's rendered (keeps back-navigation showing current data).
+  const setCourse = useCallback(
+    (updater: SetStateAction<FullCourse | null>) => {
+      setCourseState((prev) => {
+        const next = typeof updater === 'function' ? updater(prev) : updater;
+        if (courseId) queryClient.setQueryData(courseQueryKey(courseId, baseView), next);
+        return next;
+      });
     },
-    [courseId],
+    [courseId, baseView, queryClient],
+  );
+
+  const fetchCourseByView = useCallback(
+    async (view: CourseSectionView): Promise<FullCourse | null> => {
+      if (!courseId) return null;
+      return queryClient.fetchQuery({
+        queryKey: courseQueryKey(courseId, view),
+        queryFn: async () => {
+          const res = await fetch(`/api/courses/${courseId}?view=${view}`);
+          if (!res.ok) throw new Error('Failed to fetch course');
+          return (await res.json()) as FullCourse;
+        },
+      });
+    },
+    [courseId, queryClient],
   );
 
   const fetchCourse = useCallback(async () => {
-    const requestSeq = ++courseRequestSeqRef.current;
     try {
-      const data = await fetchCourseByView(options?.isStudent ? 'full' : 'summary');
-      if (requestSeq !== courseRequestSeqRef.current) return;
+      const data = await fetchCourseByView(baseView);
       if (!data) return;
       setCourse({
         ...data,
@@ -59,110 +87,89 @@ export function useCourseData(
         problems: data.problems || [],
       });
     } catch (error) {
-      if (requestSeq !== courseRequestSeqRef.current) return;
       showToast.error('Failed to load course');
       console.error('Error fetching course:', error);
     }
-  }, [fetchCourseByView, options?.isStudent]);
+  }, [fetchCourseByView, baseView, setCourse]);
 
   const loadTabData = useCallback(
     async (tab: TabType) => {
-      if (!courseId || options?.isStudent) return;
+      if (!courseId || isStudent) return;
+      const section = tab as SectionKey;
+      if (section !== 'assignments' && section !== 'problems' && section !== 'roster') return;
+      // Only show the section spinner on a COLD cache. When the entry is already
+      // cached, switching to the tab renders instantly (fetchQuery returns the
+      // cached data within staleTime with no refetch) — so flipping the loading
+      // flag would just flash a needless spinner on every tab switch.
+      const hasCached =
+        queryClient.getQueryData(courseQueryKey(courseId, section)) !== undefined;
       try {
-        if (tab === 'assignments' && !loadedSections.assignments && !loadingSections.assignments) {
-          const requestSeq = ++sectionRequestSeqRef.current.assignments;
-          setLoadingSections((prev) => ({ ...prev, assignments: true }));
-          const data = await fetchCourseByView('assignments');
-          if (requestSeq !== sectionRequestSeqRef.current.assignments) return;
-          if (!data) return;
-          setCourse((prev) =>
-            prev
-              ? { ...prev, assignments: data.assignments ?? prev.assignments ?? [] }
-              : {
-                  ...data,
-                  assignments: data.assignments ?? [],
-                  problems: data.problems ?? [],
-                  enrolled: data.enrolled ?? [],
-                },
-          );
-          setLoadedSections((prev) => ({ ...prev, assignments: true }));
-          setLoadingSections((prev) => ({ ...prev, assignments: false }));
-        }
-
-        if (tab === 'problems' && !loadedSections.problems && !loadingSections.problems) {
-          const requestSeq = ++sectionRequestSeqRef.current.problems;
-          setLoadingSections((prev) => ({ ...prev, problems: true }));
-          const data = await fetchCourseByView('problems');
-          if (requestSeq !== sectionRequestSeqRef.current.problems) return;
-          if (!data) return;
-          setCourse((prev) =>
-            prev
-              ? { ...prev, problems: data.problems ?? prev.problems ?? [] }
-              : {
-                  ...data,
-                  assignments: data.assignments ?? [],
-                  problems: data.problems ?? [],
-                  enrolled: data.enrolled ?? [],
-                },
-          );
-          setLoadedSections((prev) => ({ ...prev, problems: true }));
-          setLoadingSections((prev) => ({ ...prev, problems: false }));
-        }
-
-        if (tab === 'roster' && !loadedSections.roster && !loadingSections.roster) {
-          const requestSeq = ++sectionRequestSeqRef.current.roster;
-          setLoadingSections((prev) => ({ ...prev, roster: true }));
-          const data = await fetchCourseByView('roster');
-          if (requestSeq !== sectionRequestSeqRef.current.roster) return;
-          if (!data) return;
-          setCourse((prev) =>
-            prev
-              ? { ...prev, enrolled: data.enrolled ?? prev.enrolled ?? [] }
-              : {
-                  ...data,
-                  assignments: data.assignments ?? [],
-                  problems: data.problems ?? [],
-                  enrolled: data.enrolled ?? [],
-                },
-          );
-          setLoadedSections((prev) => ({ ...prev, roster: true }));
-          setLoadingSections((prev) => ({ ...prev, roster: false }));
-        }
+        if (!hasCached) setLoadingSections((prev) => ({ ...prev, [section]: true }));
+        // Served from the query cache when fresh; refetched when stale/invalidated.
+        const data = await fetchCourseByView(section);
+        if (!hasCached) setLoadingSections((prev) => ({ ...prev, [section]: false }));
+        if (!data) return;
+        setCourse((prev) =>
+          prev
+            ? {
+                ...prev,
+                ...(section === 'assignments'
+                  ? { assignments: data.assignments ?? prev.assignments ?? [] }
+                  : {}),
+                ...(section === 'problems'
+                  ? { problems: data.problems ?? prev.problems ?? [] }
+                  : {}),
+                ...(section === 'roster' ? { enrolled: data.enrolled ?? prev.enrolled ?? [] } : {}),
+              }
+            : {
+                ...data,
+                assignments: data.assignments ?? [],
+                problems: data.problems ?? [],
+                enrolled: data.enrolled ?? [],
+              },
+        );
       } catch (error) {
-        if (tab === 'assignments') {
-          setLoadingSections((prev) => ({ ...prev, assignments: false }));
-        }
-        if (tab === 'problems') {
-          setLoadingSections((prev) => ({ ...prev, problems: false }));
-        }
-        if (tab === 'roster') {
-          setLoadingSections((prev) => ({ ...prev, roster: false }));
-        }
+        setLoadingSections((prev) => ({ ...prev, [section]: false }));
         showToast.error('Failed to load tab data');
         console.error('Error loading tab data:', error);
       }
     },
-    [courseId, fetchCourseByView, loadedSections, loadingSections, options?.isStudent],
+    [courseId, isStudent, fetchCourseByView, setCourse, queryClient],
   );
+
+  // Invalidate the whole course (all views) then re-pull the base view. Section
+  // tabs re-pull lazily on next visit because their cache entries are now stale.
+  const refetchCourse = useCallback(async () => {
+    if (courseId) await queryClient.invalidateQueries({ queryKey: ['course', courseId] });
+    await fetchCourse();
+  }, [courseId, queryClient, fetchCourse]);
+
+  // Warm the base cache entry from the SSR-provided course on first mount.
+  useEffect(() => {
+    if (!courseId || !options?.initialCourse) return;
+    if (queryClient.getQueryData(courseQueryKey(courseId, baseView)) === undefined) {
+      queryClient.setQueryData(courseQueryKey(courseId, baseView), options.initialCourse);
+    }
+    // Only on mount / course change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courseId]);
 
   useEffect(() => {
     if (!course) {
       fetchCourse();
       return;
     }
-
     // Students need full assignment data for their default view.
-    if (options?.isStudent && course.assignments.length === 0) {
+    if (isStudent && course.assignments.length === 0) {
       fetchCourse();
     }
-  }, [fetchCourse, course, options?.isStudent]);
+  }, [fetchCourse, course, isStudent]);
 
   return {
     course,
     setCourse,
-    refetchCourse: fetchCourse,
+    refetchCourse,
     loadTabData,
-    loadedSections,
     loadingSections,
   };
 }
@@ -255,16 +262,24 @@ export function useDialogStates() {
 }
 
 export function useEnrollment(course: FullCourse | null) {
+  const queryClient = useQueryClient();
   const [allUsers, setAllUsers] = useState<EnrollableUser[]>([]);
 
   const fetchAvailableUsers = useCallback(async () => {
     try {
-      const res = await fetch('/api/users');
-      if (!res.ok) throw new Error('Failed to fetch users');
-      const users: User[] = await res.json();
+      // Cached so reopening the enroll dialog doesn't refetch the full user list.
+      const users = await queryClient.fetchQuery({
+        queryKey: ['admin', 'users', 'all'],
+        queryFn: async () => {
+          const res = await fetch('/api/admin/users');
+          if (!res.ok) throw new Error('Failed to fetch users');
+          return (await res.json()) as User[];
+        },
+        staleTime: 30_000,
+      });
 
       if (course) {
-        const inCourseIds = new Set(getEnrolledIds(course.enrolled as any[]));
+        const inCourseIds = new Set(getEnrolledIds(course.enrolled as EnrolledUser[]));
         const available = users.filter((u) => !inCourseIds.has(u.id));
         setAllUsers(available);
         return available;
@@ -276,7 +291,7 @@ export function useEnrollment(course: FullCourse | null) {
       console.error('Error fetching users:', error);
       return [] as EnrollableUser[];
     }
-  }, [course]);
+  }, [course, queryClient]);
 
   const handleEnrollUser = useCallback(
     async (user: EnrollableUser, courseId: string, refetchCourse: () => void) => {

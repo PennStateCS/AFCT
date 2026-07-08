@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { getClientIp, getClientIpSimple, getRequestMetadata } from './ip-utils';
+import { getClientIp, getClientIpSimple, getRequestMetadata, normalizeIp } from './ip-utils';
 
 // Helper to create mock Request with headers
 function createMockRequest(headers: Record<string, string> = {}): Request {
@@ -23,12 +23,32 @@ describe('ip-utils', () => {
     vi.useRealTimers();
   });
 
+  describe('normalizeIp', () => {
+    it('strips the ::ffff: prefix from IPv4-mapped addresses', () => {
+      expect(normalizeIp('::ffff:172.18.0.1')).toBe('172.18.0.1');
+    });
+
+    it('leaves plain IPv4 addresses unchanged', () => {
+      expect(normalizeIp('203.0.113.195')).toBe('203.0.113.195');
+    });
+
+    it('leaves genuine IPv6 addresses unchanged', () => {
+      expect(normalizeIp('2001:db8::1')).toBe('2001:db8::1');
+      expect(normalizeIp('::ffff:beef')).toBe('::ffff:beef');
+    });
+  });
+
   describe('getClientIp', () => {
     it('should extract IP from x-forwarded-for header (first IP)', () => {
       const req = createMockRequest({
         'x-forwarded-for': '203.0.113.195, 70.41.3.18, 150.172.238.178',
       });
       expect(getClientIp(req)).toBe('203.0.113.195');
+    });
+
+    it('normalizes an IPv4-mapped IPv6 client address', () => {
+      const req = createMockRequest({ 'x-forwarded-for': '::ffff:172.18.0.1' });
+      expect(getClientIp(req)).toBe('172.18.0.1');
     });
 
     it('should trim whitespace from x-forwarded-for IP', () => {

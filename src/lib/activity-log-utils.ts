@@ -14,11 +14,50 @@ export type ActivityCategory =
   | 'PROBLEM' // Problem CRUD
   | 'SUBMISSION'; // Submission CRUD, grading
 
+export type LogSeverity = 'INFO' | 'WARNING' | 'ERROR' | 'SECURITY';
+
+/**
+ * Classify an action into a severity from its name. Our actions follow a
+ * consistent verb/outcome convention, so the suffix reliably encodes intent:
+ *   - access-control denials and auth failures  -> SECURITY
+ *   - operational failures (…_ERROR)             -> ERROR
+ *   - expected rejections / invalid input        -> WARNING
+ *   - everything else (normal activity)          -> INFO
+ * Callers may pass an explicit severity to override this.
+ */
+export function inferSeverity(action: string): LogSeverity {
+  const a = action.toUpperCase();
+  const isAuth = a.includes('LOGIN') || a.includes('SIGNUP') || a.includes('AUTH');
+
+  if (a.includes('DENIED') || a.includes('UNAUTHORIZED') || a.includes('FORBIDDEN')) {
+    return 'SECURITY';
+  }
+  if (a.includes('CHALLENGE_REQUIRED')) return 'SECURITY';
+  if (isAuth && (a.includes('FAILED') || a.includes('RATE_LIMIT'))) return 'SECURITY';
+
+  if (a.includes('ERROR')) return 'ERROR';
+
+  if (
+    a.includes('REJECTED') ||
+    a.includes('INVALID') ||
+    a.includes('TOO_LARGE') ||
+    a.includes('RATE_LIMIT') ||
+    a.includes('FAILED') ||
+    a.includes('STDERR')
+  ) {
+    return 'WARNING';
+  }
+
+  return 'INFO';
+}
+
 export interface EnhancedActivityLogData {
   userId?: string | null;
   action: string;
   timestamp?: Date;
   category?: ActivityCategory;
+  /** Overrides the severity inferred from the action name. */
+  severity?: LogSeverity;
   courseId?: string | null;
   assignmentId?: string | null;
   problemId?: string | null;
@@ -162,6 +201,7 @@ export async function createEnhancedActivityLog(
   data: EnhancedActivityLogData,
 ): Promise<void> {
   const category = data.category || getActivityCategory(data.action);
+  const severity = data.severity ?? inferSeverity(data.action);
   const ipAddress = getClientIp(req);
   const userAgent = req.headers.get('user-agent') || undefined;
   const includeDisplayMetadata = data.includeDisplayMetadata !== false;
@@ -181,15 +221,20 @@ export async function createEnhancedActivityLog(
     email: string | null;
   } | null = null;
   if (safeUserId) {
-    const userRecord = await prisma.user.findUnique({
-      where: { id: safeUserId },
-      select: { id: true, firstName: true, lastName: true, email: true },
-    });
-    if (!userRecord) {
-      // Drop the FK so the log still records without crashing
+    try {
+      const userRecord = await prisma.user.findUnique({
+        where: { id: safeUserId },
+        select: { id: true, firstName: true, lastName: true, email: true },
+      });
+      if (!userRecord) {
+        // Drop the FK so the log still records without crashing
+        safeUserId = null;
+      } else {
+        userDisplay = userRecord;
+      }
+    } catch {
+      // Best-effort enrichment; never let a lookup failure break logging.
       safeUserId = null;
-    } else {
-      userDisplay = userRecord;
     }
   }
 
@@ -207,57 +252,61 @@ export async function createEnhancedActivityLog(
   }
 
   if (includeDisplayMetadata) {
-    const [courseRecord, assignmentRecord, problemRecord, submissionRecord] = await Promise.all([
-      data.courseId
-        ? prisma.course.findUnique({
-            where: { id: data.courseId },
-            select: { name: true, code: true },
-          })
-        : Promise.resolve(null),
-      data.assignmentId
-        ? prisma.assignment.findUnique({
-            where: { id: data.assignmentId },
-            select: { title: true },
-          })
-        : Promise.resolve(null),
-      data.problemId
-        ? prisma.problem.findUnique({
-            where: { id: data.problemId },
-            select: { title: true },
-          })
-        : Promise.resolve(null),
-      data.submissionId
-        ? prisma.submission.findUnique({
-            where: { id: data.submissionId },
-            select: { fileName: true, originalFileName: true },
-          })
-        : Promise.resolve(null),
-    ]);
+    try {
+      const [courseRecord, assignmentRecord, problemRecord, submissionRecord] = await Promise.all([
+        data.courseId
+          ? prisma.course.findUnique({
+              where: { id: data.courseId },
+              select: { name: true, code: true },
+            })
+          : Promise.resolve(null),
+        data.assignmentId
+          ? prisma.assignment.findUnique({
+              where: { id: data.assignmentId },
+              select: { title: true },
+            })
+          : Promise.resolve(null),
+        data.problemId
+          ? prisma.problem.findUnique({
+              where: { id: data.problemId },
+              select: { title: true },
+            })
+          : Promise.resolve(null),
+        data.submissionId
+          ? prisma.submission.findUnique({
+              where: { id: data.submissionId },
+              select: { fileName: true, originalFileName: true },
+            })
+          : Promise.resolve(null),
+      ]);
 
-    if (courseRecord) {
-      if (courseRecord.name) {
-        baseMetadata.courseName = courseRecord.name;
+      if (courseRecord) {
+        if (courseRecord.name) {
+          baseMetadata.courseName = courseRecord.name;
+        }
+        if (courseRecord.code) {
+          baseMetadata.courseCode = courseRecord.code;
+        }
       }
-      if (courseRecord.code) {
-        baseMetadata.courseCode = courseRecord.code;
-      }
-    }
 
-    if (assignmentRecord?.title) {
-      baseMetadata.assignmentTitle = assignmentRecord.title;
-    }
-
-    if (problemRecord?.title) {
-      baseMetadata.problemTitle = problemRecord.title;
-    }
-
-    if (submissionRecord) {
-      if (submissionRecord.originalFileName) {
-        baseMetadata.submissionOriginalFileName = submissionRecord.originalFileName;
+      if (assignmentRecord?.title) {
+        baseMetadata.assignmentTitle = assignmentRecord.title;
       }
-      if (submissionRecord.fileName) {
-        baseMetadata.submissionFileName = submissionRecord.fileName;
+
+      if (problemRecord?.title) {
+        baseMetadata.problemTitle = problemRecord.title;
       }
+
+      if (submissionRecord) {
+        if (submissionRecord.originalFileName) {
+          baseMetadata.submissionOriginalFileName = submissionRecord.originalFileName;
+        }
+        if (submissionRecord.fileName) {
+          baseMetadata.submissionFileName = submissionRecord.fileName;
+        }
+      }
+    } catch {
+      // Best-effort enrichment; never let a lookup failure break logging.
     }
   }
 
@@ -267,6 +316,7 @@ export async function createEnhancedActivityLog(
         userId: safeUserId,
         action: data.action,
         category,
+        severity,
         courseId: data.courseId ?? null,
         assignmentId: data.assignmentId ?? null,
         problemId: data.problemId ?? null,
@@ -283,8 +333,8 @@ export async function createEnhancedActivityLog(
       console.warn('[ActivityLog] FK violation skipped (P2003):', err.meta);
       return;
     }
-    // Other errors should surface
-    throw err;
+    // Audit logging must never break the request it is recording.
+    console.error('[ActivityLog] write failed:', err);
   }
 }
 

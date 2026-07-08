@@ -17,6 +17,10 @@ vi.mock('@/hooks/use-effective-timezone', () => ({
   useEffectiveTimezone: () => ({ timezone: 'UTC' }),
 }));
 
+vi.mock('next-auth/react', () => ({
+  useSession: () => ({ data: { user: { isAdmin: true } }, status: 'authenticated' }),
+}));
+
 const { showToastSuccess, showToastError } = vi.hoisted(() => ({
   showToastSuccess: vi.fn(),
   showToastError: vi.fn(),
@@ -81,7 +85,7 @@ describe('EditUserDialog', () => {
       payload[key] = value;
     });
 
-    expect(payload).toMatchObject({ firstName: 'Ada', lastName: 'Lovelace', role: 'STUDENT' });
+    expect(payload).toMatchObject({ firstName: 'Ada', lastName: 'Lovelace' });
     expect(onSave).toHaveBeenCalled();
     expect(setOpen).toHaveBeenCalledWith(false);
     expect(showToastSuccess).toHaveBeenCalledWith('User updated successfully.');

@@ -115,7 +115,7 @@ export function EditProblemDialog({
     reset,
     watch,
     setError,
-    formState: { errors, isSubmitting, isValid, isDirty },
+    formState: { errors, isSubmitting, isValid },
   } = useForm<FormValues>({
     resolver: zodResolver(ProblemFormSchema),
     defaultValues: defaults,

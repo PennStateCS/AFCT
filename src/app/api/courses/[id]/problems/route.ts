@@ -1,5 +1,3 @@
-// /src/app/api/courses/[id]/problems/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { writeFile, mkdir } from 'fs/promises';
@@ -8,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
+import { canManageCourse } from '@/lib/permissions';
 
 type ProblemType = 'PDA' | 'RE' | 'CFG' | 'FA';
 
@@ -23,16 +22,51 @@ async function ensureDirExists(dir: string) {
 // Upload directory path
 const uploadDir = path.join('/private', 'uploads', 'solutions');
 
-// POST: Create a new problem with optional solution file
+/**
+ * Creates a problem in a course from an uploaded solution file. Course staff
+ * (faculty or TAs) or a system admin. The file is size-checked and stored under a generated name;
+ * `maxStates` applies to FA/PDA and `isDeterministic` to FA. (Sibling of
+ * POST /api/problems, scoped to the course in the path.)
+ * @openapi
+ * summary: Create a problem in a course
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     multipart/form-data:
+ *       schema:
+ *         type: object
+ *         required: [title, type, file]
+ *         properties:
+ *           title: { type: string }
+ *           description: { type: string }
+ *           type: { type: string, enum: [PDA, RE, CFG, FA] }
+ *           maxStates: { type: string, description: FA/PDA only }
+ *           isDeterministic: { type: string, enum: ['true', 'false'], description: FA only }
+ *           file: { type: string, format: binary }
+ * responses:
+ *   201: { description: The created problem. }
+ *   400: { description: Missing fields or file. }
+ *   403: { description: Caller is not course staff (faculty or TA) or a system admin. }
+ *   404: { description: Course not found. }
+ *   413: { description: File exceeds the system upload limit. }
+ *   500: { description: Server error. }
+ */
 export async function POST(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id: courseId } = await context.params;
 
   try {
-    // Step 1: Authorize only TA, FACULTY, or ADMIN
     const session = await auth();
     const user = session?.user;
 
-    if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    if (!user || !(await canManageCourse(user, courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'PROBLEM_CREATE_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -95,6 +129,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
     await createEnhancedActivityLog(prisma, req, {
       userId: user.id,
       action: 'CREATE_PROBLEM',
+      severity: 'INFO',
       category: 'PROBLEM',
       courseId,
       problemId: problem.id,
@@ -112,23 +147,12 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
     return NextResponse.json(problem, { status: 201 });
   } catch (error) {
     console.error('Error creating problem:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-  }
-}
-
-// GET: List all problems for a specific course
-export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const { id: courseId } = await context.params;
-
-  try {
-    const problems = await prisma.problem.findMany({
-      where: { courseId },
-      orderBy: { createdAt: 'desc' },
+    await createEnhancedActivityLog(prisma, req, {
+      userId: null,
+      action: 'PROBLEM_CREATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
     });
-
-    return NextResponse.json(problems);
-  } catch (error) {
-    console.error('Error fetching problems:', error);
-    return NextResponse.json({ error: 'Failed to fetch problems' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

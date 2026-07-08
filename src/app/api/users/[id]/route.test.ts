@@ -10,7 +10,6 @@ const prismaMock = vi.hoisted(() => ({
 const authMock = vi.hoisted(() => vi.fn());
 const activityLogMock = vi.hoisted(() => vi.fn());
 const getSystemUploadLimitMock = vi.hoisted(() => vi.fn());
-const parseRoleMock = vi.hoisted(() => vi.fn());
 const writeFileMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const unlinkMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
@@ -18,7 +17,6 @@ vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 vi.mock('@/lib/upload-limits', () => ({ getSystemUploadLimit: getSystemUploadLimitMock }));
-vi.mock('@/lib/roles', () => ({ parseRole: parseRoleMock }));
 vi.mock('fs/promises', () => ({
   writeFile: writeFileMock,
   unlink: unlinkMock,
@@ -29,7 +27,6 @@ import { PATCH, DELETE, GET, POST } from './route';
 beforeEach(() => {
   vi.clearAllMocks();
   getSystemUploadLimitMock.mockResolvedValue({ maxBytes: 1024 * 1024, maxMb: 1 });
-  parseRoleMock.mockReturnValue(undefined);
   prismaMock.roster.findMany.mockResolvedValue([]);
 });
 
@@ -60,8 +57,8 @@ describe('PATCH /api/users/[id]', () => {
     expect(res.status).toBe(401);
   });
 
-  it('returns 401 when user has no role', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', email: 'test@test.com' } });
+  it('returns 401 when user has no id', async () => {
+    authMock.mockResolvedValue({ user: { email: 'test@test.com' } });
 
     const req = new NextRequest('http://localhost/api/users/u1', {
       method: 'PATCH',
@@ -87,7 +84,7 @@ describe('PATCH /api/users/[id]', () => {
   });
 
   it('allows ADMIN to update any user', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ avatar: null });
     prismaMock.user.update.mockResolvedValue({
       id: 'u1',
@@ -111,19 +108,8 @@ describe('PATCH /api/users/[id]', () => {
     expect(prismaMock.user.update).toHaveBeenCalled();
   });
 
-  it('allows FACULTY to update users', async () => {
+  it('denies a non-admin FACULTY editing another user', async () => {
     authMock.mockResolvedValue({ user: { id: 'faculty', role: 'FACULTY' } });
-    prismaMock.user.findUnique.mockResolvedValue({ avatar: null });
-    prismaMock.user.update.mockResolvedValue({
-      id: 'u1',
-      email: 'u1@example.com',
-      firstName: 'A',
-      lastName: 'B',
-      role: 'STUDENT',
-      inactive: false,
-      avatar: null,
-      timezone: null,
-    });
 
     const req = new NextRequest('http://localhost/api/users/u1', {
       method: 'PATCH',
@@ -132,22 +118,12 @@ describe('PATCH /api/users/[id]', () => {
 
     const res = await PATCH(req, { params: Promise.resolve({ id: 'u1' }) });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(403);
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
   });
 
-  it('allows TA to update users', async () => {
+  it('denies a non-admin TA editing another user', async () => {
     authMock.mockResolvedValue({ user: { id: 'ta', role: 'TA' } });
-    prismaMock.user.findUnique.mockResolvedValue({ avatar: null });
-    prismaMock.user.update.mockResolvedValue({
-      id: 'u1',
-      email: 'u1@example.com',
-      firstName: 'A',
-      lastName: 'B',
-      role: 'STUDENT',
-      inactive: false,
-      avatar: null,
-      timezone: null,
-    });
 
     const req = new NextRequest('http://localhost/api/users/u1', {
       method: 'PATCH',
@@ -156,7 +132,8 @@ describe('PATCH /api/users/[id]', () => {
 
     const res = await PATCH(req, { params: Promise.resolve({ id: 'u1' }) });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(403);
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
   });
 
   it('allows user to update their own profile', async () => {
@@ -181,6 +158,63 @@ describe('PATCH /api/users/[id]', () => {
     const res = await PATCH(req, { params: Promise.resolve({ id: 'u1' }) });
 
     expect(res.status).toBe(200);
+  });
+
+  it('lets an admin grant the isAdmin flag', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
+    prismaMock.user.findUnique.mockResolvedValue({ avatar: null, isAdmin: false });
+    prismaMock.user.update.mockResolvedValue({
+      id: 'u1',
+      email: 'u1@example.com',
+      firstName: 'A',
+      lastName: 'B',
+      role: 'FACULTY',
+      isAdmin: true,
+      inactive: false,
+      avatar: null,
+      timezone: null,
+    });
+
+    const req = new NextRequest('http://localhost/api/users/u1', {
+      method: 'PATCH',
+      body: JSON.stringify({ isAdmin: true }),
+    });
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'u1' }) });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ isAdmin: true }) }),
+    );
+  });
+
+  it('ignores isAdmin from a non-admin editing their own account', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.user.findUnique.mockResolvedValue({ avatar: null, isAdmin: false });
+    prismaMock.user.update.mockResolvedValue({
+      id: 'u1',
+      email: 'u1@example.com',
+      firstName: 'A',
+      lastName: 'B',
+      role: 'STUDENT',
+      isAdmin: false,
+      inactive: false,
+      avatar: null,
+      timezone: null,
+    });
+
+    const req = new NextRequest('http://localhost/api/users/u1', {
+      method: 'PATCH',
+      body: JSON.stringify({ isAdmin: true }),
+    });
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'u1' }) });
+
+    expect(res.status).toBe(200);
+    // The self-editing student's admin flag must be left untouched (undefined).
+    expect(prismaMock.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ isAdmin: undefined }) }),
+    );
   });
 
   it('returns 400 when timezone invalid', async () => {
@@ -392,32 +426,6 @@ describe('PATCH /api/users/[id]', () => {
     expect(res.status).toBe(200);
   });
 
-  it('updates role when parseRole returns valid role', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
-    parseRoleMock.mockReturnValue('FACULTY');
-    prismaMock.user.findUnique.mockResolvedValue({ avatar: null });
-    prismaMock.user.update.mockResolvedValue({
-      id: 'u1',
-      email: 'u1@example.com',
-      firstName: 'A',
-      lastName: 'B',
-      role: 'FACULTY',
-      inactive: false,
-      avatar: null,
-      timezone: null,
-    });
-
-    const req = new NextRequest('http://localhost/api/users/u1', {
-      method: 'PATCH',
-      body: JSON.stringify({ role: 'FACULTY' }),
-    });
-
-    const res = await PATCH(req, { params: Promise.resolve({ id: 'u1' }) });
-
-    expect(res.status).toBe(200);
-    expect(parseRoleMock).toHaveBeenCalledWith('FACULTY');
-  });
-
   it('returns 403 when setting user inactive while in active course', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
     prismaMock.user.findUnique.mockResolvedValue({ avatar: null });
@@ -580,7 +588,7 @@ describe('DELETE /api/users/[id]', () => {
   });
 
   it('allows ADMIN to delete user', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ avatar: null });
     prismaMock.user.delete.mockResolvedValue({
       id: 'u1',
@@ -603,56 +611,28 @@ describe('DELETE /api/users/[id]', () => {
     expect(prismaMock.user.delete).toHaveBeenCalledWith({ where: { id: 'u1' } });
   });
 
-  it('allows FACULTY to delete user', async () => {
+  it('denies a non-admin FACULTY deleting a user', async () => {
     authMock.mockResolvedValue({ user: { id: 'faculty', role: 'FACULTY' } });
-    prismaMock.user.findUnique.mockResolvedValue({ avatar: null });
-    prismaMock.user.delete.mockResolvedValue({
-      id: 'u1',
-      email: 'u1@example.com',
-      firstName: 'A',
-      lastName: 'B',
-      role: 'STUDENT',
-      inactive: false,
-      avatar: null,
-      timezone: null,
-      password: 'hashed',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
 
     const req = new NextRequest('http://localhost/api/users/u1', { method: 'DELETE' });
     const res = await DELETE(req, { params: Promise.resolve({ id: 'u1' }) });
 
-    expect(res.status).toBe(200);
-    expect(prismaMock.user.delete).toHaveBeenCalled();
+    expect(res.status).toBe(403);
+    expect(prismaMock.user.delete).not.toHaveBeenCalled();
   });
 
-  it('allows TA to delete user', async () => {
+  it('denies a non-admin TA deleting a user', async () => {
     authMock.mockResolvedValue({ user: { id: 'ta', role: 'TA' } });
-    prismaMock.user.findUnique.mockResolvedValue({ avatar: null });
-    prismaMock.user.delete.mockResolvedValue({
-      id: 'u1',
-      email: 'u1@example.com',
-      firstName: 'A',
-      lastName: 'B',
-      role: 'STUDENT',
-      inactive: false,
-      avatar: null,
-      timezone: null,
-      password: 'hashed',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
 
     const req = new NextRequest('http://localhost/api/users/u1', { method: 'DELETE' });
     const res = await DELETE(req, { params: Promise.resolve({ id: 'u1' }) });
 
-    expect(res.status).toBe(200);
-    expect(prismaMock.user.delete).toHaveBeenCalled();
+    expect(res.status).toBe(403);
+    expect(prismaMock.user.delete).not.toHaveBeenCalled();
   });
 
   it('deletes avatar file when user has avatar', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ avatar: 'user-avatar.png' });
     prismaMock.user.delete.mockResolvedValue({
       id: 'u1',
@@ -676,7 +656,7 @@ describe('DELETE /api/users/[id]', () => {
   });
 
   it('still deletes the user when removing the avatar file fails', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ avatar: 'user-avatar.png' });
     prismaMock.user.delete.mockResolvedValue({
       id: 'u1',
@@ -702,7 +682,7 @@ describe('DELETE /api/users/[id]', () => {
   });
 
   it('skips avatar deletion when user has no avatar', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ avatar: null });
     prismaMock.user.delete.mockResolvedValue({
       id: 'u1',
@@ -725,8 +705,8 @@ describe('DELETE /api/users/[id]', () => {
     expect(unlinkMock).not.toHaveBeenCalled();
   });
 
-  it('deletes activity logs for user', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN' } });
+  it('preserves the deleted user\'s activity logs (audit trail)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ avatar: null });
     prismaMock.user.delete.mockResolvedValue({
       id: 'u1',
@@ -745,13 +725,14 @@ describe('DELETE /api/users/[id]', () => {
     const req = new NextRequest('http://localhost/api/users/u1', { method: 'DELETE' });
     await DELETE(req, { params: Promise.resolve({ id: 'u1' }) });
 
-    expect(prismaMock.activityLog.deleteMany).toHaveBeenCalledWith({
-      where: { userId: 'u1' },
-    });
+    // The user's logs are intentionally NOT wiped — onDelete: SetNull keeps the
+    // audit trail (userId nulled), so their history survives deletion.
+    expect(prismaMock.activityLog.deleteMany).not.toHaveBeenCalled();
+    expect(prismaMock.user.delete).toHaveBeenCalledWith({ where: { id: 'u1' } });
   });
 
   it('deletes user and logs activity', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ avatar: 'avatar.png' });
     prismaMock.user.delete.mockResolvedValue({
       id: 'u1',
@@ -776,7 +757,7 @@ describe('DELETE /api/users/[id]', () => {
   });
 
   it('returns 500 when deletion fails', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ avatar: null });
     prismaMock.user.delete.mockRejectedValue(new Error('Database error'));
 
