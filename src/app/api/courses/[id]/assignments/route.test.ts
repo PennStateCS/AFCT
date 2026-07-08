@@ -31,13 +31,13 @@ describe('GET /api/courses/[id]/assignments', () => {
     expect(res.status).toBe(400);
   });
 
-  it('returns 403 when unauthorized', async () => {
+  it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
     const req = new NextRequest('http://localhost/api/courses/c1/assignments');
     const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('returns 404 when course not found', async () => {
