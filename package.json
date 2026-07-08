@@ -126,6 +126,7 @@
     "@hookform/resolvers": "^3.6.0",
     "@seriousme/openapi-schema-validator": "^2.9.0",
     "@tailwindcss/postcss": "^4.1.12",
+    "@tanstack/react-query-devtools": "^5.101.2",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
