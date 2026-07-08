@@ -651,8 +651,6 @@ export interface paths {
          * Get group→problem mappings for an assignment
          * @description Returns each course group alongside the problem ids mapped to it for this  assignment (the group→problem assignment matrix). Any enrolled member of the  course (any role) or a system admin.
          *
-         *     **Auth:** required
-         *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/group-problems/route.ts)
          */
         get: operations["getCoursesByIdByAidGroupProblems"];
@@ -661,8 +659,6 @@ export interface paths {
         /**
          * Remove group→problem mappings
          * @description Removes group→problem mappings for an assignment. Course staff (faculty or TAs) or  a system admin. A `groupId` is required — pass a specific group id, or "ALL" to clear the given  problems from every group. The problems themselves stay on the assignment.
-         *
-         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/group-problems/route.ts)
          */
@@ -714,8 +710,6 @@ export interface paths {
         /**
          * Get an assignment's grading-completion summary
          * @description Per-student completion summary for one assignment: maps each student to whether  every problem in the assignment has been graded (used to flag fully-graded  students in the grading UI). Course staff (faculty or TAs) or a system admin.
-         *
-         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/problem-grades/summary/route.ts)
          */
@@ -4021,6 +4015,15 @@ export interface operations {
                     };
                 };
             };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Not an enrolled member of the course and not a system admin. */
             403: {
                 headers: {
@@ -4070,6 +4073,15 @@ export interface operations {
             };
             /** @description Empty body, no problemIds, invalid group, or missing groupId. */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
