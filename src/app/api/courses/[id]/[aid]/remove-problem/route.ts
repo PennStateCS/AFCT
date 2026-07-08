@@ -69,19 +69,17 @@ export async function POST(
       return NextResponse.json({ error: 'Missing problemId.' }, { status: 400 });
     }
 
-    // Validate that the assignment exists and belongs to the specified course
-    const assignment = await prisma.assignment.findFirst({
-      where: { id: assignmentId, courseId },
-    });
+    // Validate that both the assignment and the problem exist and belong to the
+    // course. Independent reads → run concurrently; the assignment is still
+    // checked first so its 404 takes precedence, preserving prior behavior.
+    const [assignment, problem] = await Promise.all([
+      prisma.assignment.findFirst({ where: { id: assignmentId, courseId } }),
+      prisma.problem.findFirst({ where: { id: problemId, courseId } }),
+    ]);
 
     if (!assignment) {
       return NextResponse.json({ error: 'Assignment not found.' }, { status: 404 });
     }
-
-    // Validate that the problem belongs to the same course
-    const problem = await prisma.problem.findFirst({
-      where: { id: problemId, courseId },
-    });
 
     if (!problem) {
       return NextResponse.json({ error: 'Problem not found in this course.' }, { status: 404 });
