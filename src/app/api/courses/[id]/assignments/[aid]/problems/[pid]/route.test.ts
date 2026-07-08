@@ -42,7 +42,7 @@ describe('PUT /api/courses/[id]/[aid]/problems/[pid]', () => {
   it('returns 403 when user is unauthorized', async () => {
     authMock.mockResolvedValue({ user: { id: 'student-1' } });
 
-    const req = new Request('http://localhost/api/courses/c1/a1/problems/p1', {
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems/p1', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ maxPoints: 10, maxSubmissions: 2, autograderEnabled: true }),
@@ -53,7 +53,7 @@ describe('PUT /api/courses/[id]/[aid]/problems/[pid]', () => {
   });
 
   it('returns 400 for invalid payload', async () => {
-    const req = new Request('http://localhost/api/courses/c1/a1/problems/p1', {
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems/p1', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
@@ -66,7 +66,7 @@ describe('PUT /api/courses/[id]/[aid]/problems/[pid]', () => {
   it('returns 404 when assignment problem link is missing', async () => {
     prismaMock.assignmentProblem.findUnique.mockResolvedValue(null);
 
-    const req = new Request('http://localhost/api/courses/c1/a1/problems/p1', {
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems/p1', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ maxPoints: 10, maxSubmissions: 2, autograderEnabled: true }),
@@ -77,7 +77,7 @@ describe('PUT /api/courses/[id]/[aid]/problems/[pid]', () => {
   });
 
   it('updates assignment problem settings', async () => {
-    const req = new Request('http://localhost/api/courses/c1/a1/problems/p1', {
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems/p1', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ maxPoints: 25, maxSubmissions: -1, autograderEnabled: false }),
@@ -109,7 +109,7 @@ describe('PUT /api/courses/[id]/[aid]/problems/[pid]', () => {
   });
 
   it('returns 400 for an invalid JSON body', async () => {
-    const req = new Request('http://localhost/api/courses/c1/a1/problems/p1', {
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems/p1', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: 'not json',
@@ -124,7 +124,7 @@ describe('PUT /api/courses/[id]/[aid]/problems/[pid]', () => {
   it('still succeeds when activity logging fails', async () => {
     activityLogMock.mockRejectedValue(new Error('log down'));
 
-    const req = new Request('http://localhost/api/courses/c1/a1/problems/p1', {
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems/p1', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ maxPoints: 10, maxSubmissions: 2, autograderEnabled: true }),
@@ -140,7 +140,7 @@ describe('PUT /api/courses/[id]/[aid]/problems/[pid]', () => {
       problem: { title: 'Problem 1' },
     });
 
-    const req = new Request('http://localhost/api/courses/c1/a1/problems/p1', {
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems/p1', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ maxPoints: 10, maxSubmissions: 2, autograderEnabled: true }),
@@ -153,7 +153,7 @@ describe('PUT /api/courses/[id]/[aid]/problems/[pid]', () => {
   it('returns 500 when the update fails', async () => {
     prismaMock.assignmentProblem.update.mockRejectedValue(new Error('db down'));
 
-    const req = new Request('http://localhost/api/courses/c1/a1/problems/p1', {
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems/p1', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ maxPoints: 10, maxSubmissions: 2, autograderEnabled: true }),

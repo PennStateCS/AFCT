@@ -192,7 +192,7 @@ describe('EditProblemDialog assignment settings', () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      '/api/courses/course-1/assignment-1/problems/problem-1',
+      '/api/courses/course-1/assignments/assignment-1/problems/problem-1',
       expect.objectContaining({
         method: 'PUT',
         body: JSON.stringify({

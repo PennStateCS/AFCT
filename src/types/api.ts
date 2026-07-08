@@ -580,228 +580,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/courses/{id}/{aid}/group-problems": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get group→problem mappings for an assignment
-         * @description Returns each course group alongside the problem ids mapped to it for this  assignment (the group→problem assignment matrix). Any enrolled member of the  course (any role) or a system admin.
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/group-problems/route.ts)
-         */
-        get: operations["getCoursesByIdByAidGroupProblems"];
-        put?: never;
-        post?: never;
-        /**
-         * Remove group→problem mappings
-         * @description Removes group→problem mappings for an assignment. Course staff (faculty or TAs) or  a system admin. A `groupId` is required — pass a specific group id, or "ALL" to clear the given  problems from every group. The problems themselves stay on the assignment.
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/group-problems/route.ts)
-         */
-        delete: operations["deleteCoursesByIdByAidGroupProblems"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/courses/{id}/{aid}/problem-grades/{studentId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get a student's problem grades for an assignment
-         * @description Returns a student's per-problem grades and feedback for one assignment, keyed by  problem id. A student may read their own; staff may read anyone's. Responds 204  when nothing has been graded yet.
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/problem-grades/[studentId]/route.ts)
-         */
-        get: operations["getCoursesByIdByAidProblemGradesByStudentId"];
-        put?: never;
-        /**
-         * Batch set/clear a student's problem grades for an assignment
-         * @description Batch-saves this student's problem grades for the assignment in a single request —  the write counterpart to the GET above (co-located as the same resource). The body  maps problemId → grade (a number within [0, maxPoints], or null to clear). Course  staff (faculty or TAs) or a system admin. Only problems whose grade actually changed  are written: a null for a graded problem deletes it, a number upserts it (existing  feedback is left untouched), and unchanged problems are skipped. Every applied change  is audited with its previous value, mirroring the single-problem grade route.
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/problem-grades/[studentId]/route.ts)
-         */
-        post: operations["postCoursesByIdByAidProblemGradesByStudentId"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/courses/{id}/{aid}/problem-grades/summary": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get an assignment's grading-completion summary
-         * @description Per-student completion summary for one assignment: maps each student to whether  every problem in the assignment has been graded (used to flag fully-graded  students in the grading UI). Course staff (faculty or TAs) or a system admin.
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/problem-grades/summary/route.ts)
-         */
-        get: operations["getCoursesByIdByAidProblemGradesSummary"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/courses/{id}/{aid}/problems/{pid}/grade/{studentId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get a single problem grade
-         * @description Reads one student's grade and feedback for a specific problem within an  assignment. The student themselves, course staff, or a system admin. Returns nulls  (not 404) when the problem exists but hasn't been graded.
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]/route.ts)
-         */
-        get: operations["getCoursesByIdByAidProblemsByPidGradeByStudentId"];
-        put?: never;
-        /**
-         * Set or clear a problem grade
-         * @description Sets or clears a student's grade (and optional feedback) for one problem. Course  staff (faculty or TAs) or a system admin. A numeric grade must be within [0, maxPoints]; sending  a null grade deletes the record. Every change is audited with the previous value.
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]/route.ts)
-         */
-        post: operations["postCoursesByIdByAidProblemsByPidGradeByStudentId"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/courses/{id}/{aid}/problems/{pid}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Update an assignment problem's settings
-         * @description Updates the per-assignment settings for one problem: its point value, submission  cap, and whether the autograder runs. Course staff (faculty or TAs) or a system  admin. The problem  must already be linked to the assignment, and the assignment must belong to the  course in the path.
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/problems/[pid]/route.ts)
-         */
-        put: operations["putCoursesByIdByAidProblemsByPid"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/courses/{id}/{aid}/problems": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Add problems to an assignment
-         * @description Attaches problems to an assignment with per-problem settings (points, submission  cap, autograder). Course staff (faculty or TAs) or a system admin. Adds only problems not already  linked — existing links, especially those with submissions, are preserved and  reported back. For group assignments, an optional `groupId` (or "ALL") maps the  given problems to specific groups, even ones already on the assignment. Only  problems belonging to this course are accepted.
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/problems/route.ts)
-         */
-        post: operations["postCoursesByIdByAidProblems"];
-        /**
-         * Remove a problem from an assignment
-         * @description Detaches a problem from an assignment (and clears any group→problem mappings for  it), leaving the problem itself intact in the course. Course staff (faculty or  TAs) or a system admin. Both the assignment and the problem must belong to the  course in the path. The problem id travels in the request body.
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/problems/route.ts)
-         */
-        delete: operations["deleteCoursesByIdByAidProblems"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/courses/{id}/{aid}/review-data/{studentId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get a student's review data for an assignment
-         * @description Assembles the grading/review view for one student on one assignment: their  submissions (grouped by problem, with evaluation output), the comments about  them, and their per-problem grades. Falls back gracefully if the optional  `evaluationRaw` column is absent.   Access: the student themselves, course staff, or a system admin (`studentId` must  be the caller's id unless they are course staff or a system admin). Course  membership is also required, except for global admins.
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/review-data/[studentId]/route.ts)
-         */
-        get: operations["getCoursesByIdByAidReviewDataByStudentId"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/courses/{id}/{aid}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get a course assignment
-         * @description Returns the assignment with its problems and, in the full view, the course roster. Requires a session; the caller must be an enrolled member of the course (any role) or a system admin.
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/route.ts)
-         */
-        get: operations["getCoursesByIdByAid"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/courses/{id}/{aid}/submissions/{sid}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get a student's submissions for an assignment
-         * @description Returns a student's submissions for an assignment, grouped by problem and each  annotated with that problem's metadata (falls back gracefully if the optional  `evaluationRaw` column is absent). The `[sid]` segment is the student id.   Access: the student themselves, course staff, or a system admin (`sid` must be the  caller's id unless they are course staff or a system admin). Course membership is  also required, except for global admins.
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/submissions/[sid]/route.ts)
-         */
-        get: operations["getCoursesByIdByAidSubmissionsBySid"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/courses/{id}/activity": {
         parameters: {
             query?: never;
@@ -844,6 +622,228 @@ export interface paths {
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/archive/route.ts)
          */
         patch: operations["patchCoursesByIdArchive"];
+        trace?: never;
+    };
+    "/api/courses/{id}/assignments/{aid}/group-problems": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get group→problem mappings for an assignment
+         * @description Returns each course group alongside the problem ids mapped to it for this  assignment (the group→problem assignment matrix). Any enrolled member of the  course (any role) or a system admin.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/group-problems/route.ts)
+         */
+        get: operations["getCoursesByIdAssignmentsByAidGroupProblems"];
+        put?: never;
+        post?: never;
+        /**
+         * Remove group→problem mappings
+         * @description Removes group→problem mappings for an assignment. Course staff (faculty or TAs) or  a system admin. A `groupId` is required — pass a specific group id, or "ALL" to clear the given  problems from every group. The problems themselves stay on the assignment.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/group-problems/route.ts)
+         */
+        delete: operations["deleteCoursesByIdAssignmentsByAidGroupProblems"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/{id}/assignments/{aid}/problem-grades/{studentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a student's problem grades for an assignment
+         * @description Returns a student's per-problem grades and feedback for one assignment, keyed by  problem id. A student may read their own; staff may read anyone's. Responds 204  when nothing has been graded yet.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/problem-grades/[studentId]/route.ts)
+         */
+        get: operations["getCoursesByIdAssignmentsByAidProblemGradesByStudentId"];
+        put?: never;
+        /**
+         * Batch set/clear a student's problem grades for an assignment
+         * @description Batch-saves this student's problem grades for the assignment in a single request —  the write counterpart to the GET above (co-located as the same resource). The body  maps problemId → grade (a number within [0, maxPoints], or null to clear). Course  staff (faculty or TAs) or a system admin. Only problems whose grade actually changed  are written: a null for a graded problem deletes it, a number upserts it (existing  feedback is left untouched), and unchanged problems are skipped. Every applied change  is audited with its previous value, mirroring the single-problem grade route.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/problem-grades/[studentId]/route.ts)
+         */
+        post: operations["postCoursesByIdAssignmentsByAidProblemGradesByStudentId"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/{id}/assignments/{aid}/problem-grades/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get an assignment's grading-completion summary
+         * @description Per-student completion summary for one assignment: maps each student to whether  every problem in the assignment has been graded (used to flag fully-graded  students in the grading UI). Course staff (faculty or TAs) or a system admin.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/problem-grades/summary/route.ts)
+         */
+        get: operations["getCoursesByIdAssignmentsByAidProblemGradesSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/{id}/assignments/{aid}/problems/{pid}/grade/{studentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a single problem grade
+         * @description Reads one student's grade and feedback for a specific problem within an  assignment. The student themselves, course staff, or a system admin. Returns nulls  (not 404) when the problem exists but hasn't been graded.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/problems/[pid]/grade/[studentId]/route.ts)
+         */
+        get: operations["getCoursesByIdAssignmentsByAidProblemsByPidGradeByStudentId"];
+        put?: never;
+        /**
+         * Set or clear a problem grade
+         * @description Sets or clears a student's grade (and optional feedback) for one problem. Course  staff (faculty or TAs) or a system admin. A numeric grade must be within [0, maxPoints]; sending  a null grade deletes the record. Every change is audited with the previous value.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/problems/[pid]/grade/[studentId]/route.ts)
+         */
+        post: operations["postCoursesByIdAssignmentsByAidProblemsByPidGradeByStudentId"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/{id}/assignments/{aid}/problems/{pid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update an assignment problem's settings
+         * @description Updates the per-assignment settings for one problem: its point value, submission  cap, and whether the autograder runs. Course staff (faculty or TAs) or a system  admin. The problem  must already be linked to the assignment, and the assignment must belong to the  course in the path.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/problems/[pid]/route.ts)
+         */
+        put: operations["putCoursesByIdAssignmentsByAidProblemsByPid"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/{id}/assignments/{aid}/problems": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add problems to an assignment
+         * @description Attaches problems to an assignment with per-problem settings (points, submission  cap, autograder). Course staff (faculty or TAs) or a system admin. Adds only problems not already  linked — existing links, especially those with submissions, are preserved and  reported back. For group assignments, an optional `groupId` (or "ALL") maps the  given problems to specific groups, even ones already on the assignment. Only  problems belonging to this course are accepted.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/problems/route.ts)
+         */
+        post: operations["postCoursesByIdAssignmentsByAidProblems"];
+        /**
+         * Remove a problem from an assignment
+         * @description Detaches a problem from an assignment (and clears any group→problem mappings for  it), leaving the problem itself intact in the course. Course staff (faculty or  TAs) or a system admin. Both the assignment and the problem must belong to the  course in the path. The problem id travels in the request body.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/problems/route.ts)
+         */
+        delete: operations["deleteCoursesByIdAssignmentsByAidProblems"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/{id}/assignments/{aid}/review-data/{studentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a student's review data for an assignment
+         * @description Assembles the grading/review view for one student on one assignment: their  submissions (grouped by problem, with evaluation output), the comments about  them, and their per-problem grades. Falls back gracefully if the optional  `evaluationRaw` column is absent.   Access: the student themselves, course staff, or a system admin (`studentId` must  be the caller's id unless they are course staff or a system admin). Course  membership is also required, except for global admins.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/review-data/[studentId]/route.ts)
+         */
+        get: operations["getCoursesByIdAssignmentsByAidReviewDataByStudentId"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/{id}/assignments/{aid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a course assignment
+         * @description Returns the assignment with its problems and, in the full view, the course roster. Requires a session; the caller must be an enrolled member of the course (any role) or a system admin.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/route.ts)
+         */
+        get: operations["getCoursesByIdAssignmentsByAid"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/{id}/assignments/{aid}/submissions/{sid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a student's submissions for an assignment
+         * @description Returns a student's submissions for an assignment, grouped by problem and each  annotated with that problem's metadata (falls back gracefully if the optional  `evaluationRaw` column is absent). The `[sid]` segment is the student id.   Access: the student themselves, course staff, or a system admin (`sid` must be the  caller's id unless they are course staff or a system admin). Course membership is  also required, except for global admins.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/submissions/[sid]/route.ts)
+         */
+        get: operations["getCoursesByIdAssignmentsByAidSubmissionsBySid"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/courses/{id}/assignments": {
@@ -3792,868 +3792,6 @@ export interface operations {
             };
         };
     };
-    getCoursesByIdByAidGroupProblems: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                aid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Groups, each with its mapped problemIds. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        success?: boolean;
-                        groups?: Record<string, never>[];
-                    };
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not an enrolled member of the course and not a system admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    deleteCoursesByIdByAidGroupProblems: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                aid: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    problemIds: string[];
-                    /** @description A group id, or "ALL" */
-                    groupId: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Mappings removed. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Empty body, no problemIds, invalid group, or missing groupId. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Caller is not course staff (faculty or TA) or a system admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    getCoursesByIdByAidProblemGradesByStudentId: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                aid: string;
-                studentId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description A map of problemId → { grade, feedback, updatedAt }. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>;
-                };
-            };
-            /** @description No grades recorded yet. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not the student in question and not staff. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Assignment not found in this course. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    postCoursesByIdByAidProblemGradesByStudentId: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                aid: string;
-                studentId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @description Map of problemId to grade (0..maxPoints) or null to clear. */
-                    grades: {
-                        [key: string]: number | null;
-                    };
-                };
-            };
-        };
-        responses: {
-            /** @description Batch applied; returns the number of problems changed. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Bad body, unknown problem id, or a grade out of range. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Caller is not course staff (faculty or TA) or a system admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Assignment not found in this course. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    getCoursesByIdByAidProblemGradesSummary: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                aid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description A map of studentId → fully-graded boolean (empty object if the assignment has no problems). */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: boolean;
-                    };
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Caller is not course staff (faculty or TA) or a system admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Assignment not found in this course. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    getCoursesByIdByAidProblemsByPidGradeByStudentId: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                aid: string;
-                pid: string;
-                studentId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The grade, feedback, and updatedAt (grade/feedback null if ungraded). */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not the student themselves, course staff, or a system admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Problem not found in this assignment/course. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    postCoursesByIdByAidProblemsByPidGradeByStudentId: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                aid: string;
-                pid: string;
-                studentId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @description 0..maxPoints, or null to clear */
-                    grade?: number | null;
-                    feedback?: string | null;
-                };
-            };
-        };
-        responses: {
-            /** @description The saved (or cleared) grade and feedback. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Grade not a number/null, or out of range. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Caller is not course staff (faculty or TA) or a system admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Problem not found in this assignment/course. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    putCoursesByIdByAidProblemsByPid: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                aid: string;
-                pid: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    maxPoints: number;
-                    /** @description -1 for unlimited, else >= 1 */
-                    maxSubmissions: number;
-                    autograderEnabled: boolean;
-                };
-            };
-        };
-        responses: {
-            /** @description The updated assignment-problem settings. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Invalid JSON or settings. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Caller is not course staff (faculty or TA) or a system admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description The problem isn't linked to this assignment/course. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    postCoursesByIdByAidProblems: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                aid: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    problemIds?: string[];
-                    problemSettings?: {
-                        problemId: string;
-                        maxPoints: number;
-                        /** @description -1 for unlimited, else >= 1 */
-                        maxSubmissions: number;
-                        autograderEnabled: boolean;
-                    }[];
-                    /** @description A group id or "ALL" (group assignments only) */
-                    groupId?: string;
-                };
-            };
-        };
-        responses: {
-            /** @description The assignment's problem list plus a summary of what changed. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Empty/invalid body or invalid problemSettings. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Caller is not course staff (faculty or TA) or a system admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    deleteCoursesByIdByAidProblems: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                aid: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    problemId: string;
-                };
-            };
-        };
-        responses: {
-            /** @description The assignment's remaining problems. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Missing problemId. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Caller is not course staff (faculty or TA) or a system admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Assignment or problem not found in this course. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    getCoursesByIdByAidReviewDataByStudentId: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                aid: string;
-                studentId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Submissions (by problem), comments, and problem grades for the student. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        submissions?: Record<string, never>;
-                        comments?: Record<string, never>[];
-                        problemGrades?: Record<string, never>;
-                    };
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Requesting another student's data without being course staff or a system admin, or not an enrolled member of the course. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Assignment not found for this course. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    getCoursesByIdByAid: {
-        parameters: {
-            query?: {
-                /** @description "full" (default) includes the roster; any other value omits it. */
-                view?: string;
-            };
-            header?: never;
-            path: {
-                id: string;
-                aid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The assignment with problems (and roster in full view). */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not an enrolled member of the course and not a system admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Assignment not found in this course. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    getCoursesByIdByAidSubmissionsBySid: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                aid: string;
-                /** @description Student id */
-                sid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Submissions grouped by problem. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>;
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Requesting another student's submissions without being course staff or a system admin, or not an enrolled member of the course. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Assignment not found, or it has no linked problems. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     getCoursesByIdActivity: {
         parameters: {
             query?: {
@@ -4771,6 +3909,868 @@ export interface operations {
                 };
             };
             /** @description Course not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getCoursesByIdAssignmentsByAidGroupProblems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Groups, each with its mapped problemIds. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success?: boolean;
+                        groups?: Record<string, never>[];
+                    };
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not an enrolled member of the course and not a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteCoursesByIdAssignmentsByAidGroupProblems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    problemIds: string[];
+                    /** @description A group id, or "ALL" */
+                    groupId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Mappings removed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Empty body, no problemIds, invalid group, or missing groupId. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not course staff (faculty or TA) or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getCoursesByIdAssignmentsByAidProblemGradesByStudentId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+                studentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A map of problemId → { grade, feedback, updatedAt }. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description No grades recorded yet. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not the student in question and not staff. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Assignment not found in this course. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postCoursesByIdAssignmentsByAidProblemGradesByStudentId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+                studentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Map of problemId to grade (0..maxPoints) or null to clear. */
+                    grades: {
+                        [key: string]: number | null;
+                    };
+                };
+            };
+        };
+        responses: {
+            /** @description Batch applied; returns the number of problems changed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad body, unknown problem id, or a grade out of range. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not course staff (faculty or TA) or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Assignment not found in this course. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getCoursesByIdAssignmentsByAidProblemGradesSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A map of studentId → fully-graded boolean (empty object if the assignment has no problems). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not course staff (faculty or TA) or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Assignment not found in this course. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getCoursesByIdAssignmentsByAidProblemsByPidGradeByStudentId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+                pid: string;
+                studentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The grade, feedback, and updatedAt (grade/feedback null if ungraded). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not the student themselves, course staff, or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Problem not found in this assignment/course. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postCoursesByIdAssignmentsByAidProblemsByPidGradeByStudentId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+                pid: string;
+                studentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description 0..maxPoints, or null to clear */
+                    grade?: number | null;
+                    feedback?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description The saved (or cleared) grade and feedback. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Grade not a number/null, or out of range. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not course staff (faculty or TA) or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Problem not found in this assignment/course. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    putCoursesByIdAssignmentsByAidProblemsByPid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+                pid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    maxPoints: number;
+                    /** @description -1 for unlimited, else >= 1 */
+                    maxSubmissions: number;
+                    autograderEnabled: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The updated assignment-problem settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid JSON or settings. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not course staff (faculty or TA) or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The problem isn't linked to this assignment/course. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postCoursesByIdAssignmentsByAidProblems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    problemIds?: string[];
+                    problemSettings?: {
+                        problemId: string;
+                        maxPoints: number;
+                        /** @description -1 for unlimited, else >= 1 */
+                        maxSubmissions: number;
+                        autograderEnabled: boolean;
+                    }[];
+                    /** @description A group id or "ALL" (group assignments only) */
+                    groupId?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The assignment's problem list plus a summary of what changed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Empty/invalid body or invalid problemSettings. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not course staff (faculty or TA) or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteCoursesByIdAssignmentsByAidProblems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    problemId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The assignment's remaining problems. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing problemId. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not course staff (faculty or TA) or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Assignment or problem not found in this course. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getCoursesByIdAssignmentsByAidReviewDataByStudentId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+                studentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Submissions (by problem), comments, and problem grades for the student. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        submissions?: Record<string, never>;
+                        comments?: Record<string, never>[];
+                        problemGrades?: Record<string, never>;
+                    };
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Requesting another student's data without being course staff or a system admin, or not an enrolled member of the course. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Assignment not found for this course. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getCoursesByIdAssignmentsByAid: {
+        parameters: {
+            query?: {
+                /** @description "full" (default) includes the roster; any other value omits it. */
+                view?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The assignment with problems (and roster in full view). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not an enrolled member of the course and not a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Assignment not found in this course. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getCoursesByIdAssignmentsByAidSubmissionsBySid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+                /** @description Student id */
+                sid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Submissions grouped by problem. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Requesting another student's submissions without being course staff or a system admin, or not an enrolled member of the course. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Assignment not found, or it has no linked problems. */
             404: {
                 headers: {
                     [name: string]: unknown;
