@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import Link from 'next/link';
 
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -20,25 +21,34 @@ type DashboardCourse = {
   isPublished: boolean;
   isArchived: boolean;
   enrolled?: EnrolledUser[];
+  // The viewer's role in THIS course (from their roster entry). Drives per-course
+  // visibility and privileged display — a global role can't, since a user may be
+  // faculty in one course and a student in another.
+  userRole?: 'FACULTY' | 'TA' | 'STUDENT';
 };
 
 type Props = {
   sessionUser: {
     id: string;
-    role: string;
+    isAdmin: boolean;
   };
   title: string;
   courses: DashboardCourse[];
 };
 
 export default function DashboardClient({ sessionUser, courses, title }: Props) {
-  const { role } = sessionUser;
-  const isPrivileged = role === 'ADMIN' || role === 'FACULTY' || role === 'TA';
+  const { isAdmin } = sessionUser;
   const now = new Date();
   const { timezone } = useEffectiveTimezone();
 
-  const visibleCourses =
-    role === 'STUDENT' ? courses.filter((course) => course.isPublished) : courses;
+  // Course staff (FACULTY/TA in that course) or a system admin may see the course
+  // even while it's unpublished and see its enrollment count; students see neither.
+  const canManageCourse = (course: DashboardCourse) =>
+    isAdmin || course.userRole === 'FACULTY' || course.userRole === 'TA';
+
+  const visibleCourses = courses.filter(
+    (course) => course.isPublished || canManageCourse(course),
+  );
 
   return (
     <Card className="flex h-full" aria-labelledby="current-courses-title">
@@ -98,7 +108,7 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
                       </div>
 
                       <div className="space-y-1 text-sm">
-                        {isPrivileged && (
+                        {canManageCourse(course) && (
                           <div>
                             <span className="font-semibold">Enrollment:</span>{' '}
                             {getStudentCount(course.enrolled)}
