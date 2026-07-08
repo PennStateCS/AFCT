@@ -8,6 +8,8 @@ import { ProblemType } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
+import { apiError } from '@/lib/api/http';
+import { logDenial } from '@/lib/api/activity';
 
 /**
  * Creates a problem from an uploaded solution file (multipart/form-data). Course
@@ -50,13 +52,7 @@ export async function POST(req: Request) {
     actorId = user?.id ?? null;
 
     if (!user) {
-      await createEnhancedActivityLog(prisma, req, {
-        userId: session?.user?.id ?? null,
-        action: 'PROBLEM_CREATE_DENIED',
-        severity: 'SECURITY',
-        metadata: {},
-      });
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+      return apiError(401, 'Unauthorized');
     }
 
     // Parse multipart form data
@@ -81,13 +77,11 @@ export async function POST(req: Request) {
     }
 
     if (!(await canManageCourse(user, courseId))) {
-      await createEnhancedActivityLog(prisma, req, {
-        userId: session?.user?.id ?? null,
+      return logDenial(req, {
+        userId: user.id,
         action: 'PROBLEM_CREATE_DENIED',
-        severity: 'SECURITY',
-        metadata: {},
+        courseId,
       });
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     const { maxBytes, maxMb } = await getSystemUploadLimit();
