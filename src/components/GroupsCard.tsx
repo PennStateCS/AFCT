@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DataTable } from '@/components/ui/data-table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,19 @@ import ManageGroupMembersDialog from '@/components/dialogs/ManageGroupDialog';
 import RandomGroupsDialog from '@/components/dialogs/RandomGroupsDialog';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
+type CourseStudent = {
+  id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+  avatar?: string | null;
+};
+
+// Stable empty defaults so values derived from the queries keep a constant
+// identity between renders (keeps the memoized table data / dialogs stable).
+const EMPTY_GROUPS: Group[] = [];
+const EMPTY_STUDENTS: CourseStudent[] = [];
+
 export function GroupsCard({
   courseId,
   courseIsArchived,
@@ -24,9 +38,8 @@ export function GroupsCard({
   courseIsArchived?: boolean;
 }) {
   const { timezone } = useEffectiveTimezone();
-  const [loading, setLoading] = useState(true);
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [students, setStudents] = useState<any[]>([]);
+  const queryClient = useQueryClient();
+
   const [createOpen, setCreateOpen] = useState(false);
   const [randomOpen, setRandomOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -36,46 +49,70 @@ export function GroupsCard({
   const [manageOpen, setManageOpen] = useState(false);
   const [managingGroup, setManagingGroup] = useState<Group | null>(null);
 
-  const fetchGroups = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/courses/${courseId}/groups`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'list' }),
-      });
+  // Cached groups list, read via GET /api/courses/{id}/groups.
+  const groupsQuery = useQuery({
+    queryKey: ['course', courseId, 'groups'],
+    queryFn: async () => {
+      const res = await fetch(`/api/courses/${courseId}/groups`);
       if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load groups');
       const data = await res.json();
-      setGroups(Array.isArray(data) ? data : (data?.groups ?? []));
-    } catch (err) {
-      console.error('Fetch groups error:', err);
-      showToast.error('Failed to load groups');
-    } finally {
-      setLoading(false);
+      return (Array.isArray(data) ? data : (data?.groups ?? [])) as Group[];
+    },
+    staleTime: 30_000,
+  });
+  const groups = groupsQuery.data ?? EMPTY_GROUPS;
+  const loading = groupsQuery.isPending;
+
+  // Seed the students query from a course view already in the cache. The course
+  // page caches the course under ['course', courseId, <view>] with an `enrolled`
+  // array of user objects tagged with `courseRole`; the STUDENT-role subset maps
+  // exactly onto what GET /api/courses/{id}/students returns (id/first/last/email,
+  // plus the harmless optional avatar). Both the base `summary` view (always warm
+  // on mount) and the `roster` view carry `enrolled`, so we check both. Returns
+  // undefined when no roster-bearing view is cached, so the query fetches normally.
+  const seededStudents = useMemo<CourseStudent[] | undefined>(() => {
+    for (const view of ['roster', 'summary'] as const) {
+      const cached = queryClient.getQueryData(['course', courseId, view]) as
+        | { enrolled?: Array<Record<string, unknown>> }
+        | undefined;
+      const enrolled = cached?.enrolled;
+      if (!Array.isArray(enrolled)) continue;
+      return enrolled
+        .filter((u) => u.courseRole === 'STUDENT')
+        .map((u) => ({
+          id: String(u.id),
+          firstName: (u.firstName ?? null) as string | null,
+          lastName: (u.lastName ?? null) as string | null,
+          email: (u.email ?? null) as string | null,
+          avatar: (u.avatar ?? null) as string | null,
+        }));
     }
+    return undefined;
+    // courseId is the only input that changes the cache lookup; the cache itself
+    // isn't reactive, so we intentionally read it once per courseId.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId]);
 
-  useEffect(() => {
-    fetchGroups();
-  }, [fetchGroups]);
+  // Cached course students (a plain GET). When the roster is already in the
+  // course cache we seed from it (initialData) and skip the network round-trip.
+  const studentsQuery = useQuery({
+    queryKey: ['course', courseId, 'students'],
+    queryFn: async () => {
+      const res = await fetch(`/api/courses/${courseId}/students`);
+      if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load students');
+      return (await res.json()) as CourseStudent[];
+    },
+    initialData: seededStudents,
+    staleTime: 30_000,
+  });
+  const students = studentsQuery.data ?? EMPTY_STUDENTS;
 
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const res = await fetch(`/api/courses/${courseId}/students`);
-        if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load students');
-        const body = await res.json();
-        if (!mounted) return;
-        setStudents(body);
-      } catch (err) {
-        console.error('Fetch students error:', err);
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, [courseId]);
+  // Re-pull the groups list after a mutation succeeds; the query refetches
+  // because it's active.
+  const refreshGroups = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: ['course', courseId, 'groups'] }),
+    [queryClient, courseId],
+  );
 
   const handleDelete = async () => {
     if (!deletingGroup) return;
@@ -91,21 +128,21 @@ export function GroupsCard({
       showToast.success('Group deleted');
       setConfirmOpen(false);
       setDeletingGroup(null);
-      fetchGroups();
+      refreshGroups();
     } catch (err) {
       console.error('Delete group error:', err);
       showToast.error('Failed to delete group');
     }
   };
 
-  const columns = useMemo<ColumnDef<Group, any>[]>(
+  const columns = useMemo<ColumnDef<Group>[]>(
     () => [
       { accessorKey: 'name', header: 'Name', meta: { priority: 1 } },
       {
         accessorKey: 'createdAt',
         header: 'Created At',
         meta: { priority: 3 },
-        cell: ({ row }) => formatDateTimeInTimeZone((row.original as any).createdAt, timezone),
+        cell: ({ row }) => formatDateTimeInTimeZone(row.original.createdAt, timezone),
       },
 
       {
@@ -201,28 +238,28 @@ export function GroupsCard({
         open={createOpen}
         setOpen={setCreateOpen}
         courseId={courseId}
-        onSuccess={fetchGroups}
+        onSuccess={refreshGroups}
       />
       <RandomGroupsDialog
         open={randomOpen}
         setOpen={setRandomOpen}
         courseId={courseId}
         students={students}
-        onCreated={fetchGroups}
+        onCreated={refreshGroups}
       />
       <EditGroupDialog
         open={editOpen}
         setOpen={setEditOpen}
         group={editingGroup ?? undefined}
         courseId={courseId}
-        onSuccess={fetchGroups}
+        onSuccess={refreshGroups}
       />
       <ManageGroupMembersDialog
         open={manageOpen}
         setOpen={setManageOpen}
         courseId={courseId}
         group={managingGroup ?? null}
-        onChanged={fetchGroups}
+        onChanged={refreshGroups}
         initialStudents={students}
       />
 

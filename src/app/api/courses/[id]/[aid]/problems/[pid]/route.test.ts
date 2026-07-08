@@ -5,6 +5,9 @@ const prismaMock = vi.hoisted(() => ({
     findUnique: vi.fn(),
     update: vi.fn(),
   },
+  roster: {
+    findFirst: vi.fn(),
+  },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -19,7 +22,10 @@ import { PUT } from './route';
 describe('PUT /api/courses/[id]/[aid]/problems/[pid]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+    // clearAllMocks doesn't reset implementations, so drop any leaked mockRejectedValue.
+    activityLogMock.mockReset();
+    authMock.mockResolvedValue({ user: { id: 'admin-1', isAdmin: true } });
+    prismaMock.roster.findFirst.mockResolvedValue(null);
     prismaMock.assignmentProblem.findUnique.mockResolvedValue({
       assignment: { courseId: 'c1' },
       problem: { title: 'Problem 1' },
@@ -34,7 +40,7 @@ describe('PUT /api/courses/[id]/[aid]/problems/[pid]', () => {
   });
 
   it('returns 403 when user is unauthorized', async () => {
-    authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
+    authMock.mockResolvedValue({ user: { id: 'student-1' } });
 
     const req = new Request('http://localhost/api/courses/c1/a1/problems/p1', {
       method: 'PUT',

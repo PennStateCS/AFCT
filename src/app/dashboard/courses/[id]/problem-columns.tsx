@@ -5,10 +5,10 @@ import { ColumnDef } from '@tanstack/react-table';
 import type { Problem } from '@prisma/client';
 import { useState } from 'react';
 import { ChevronDown, Pencil, Trash2, FileText, Eye } from 'lucide-react';
-import { Badge } from '@/components/ui/RoleBadge';
 import { Badge as StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import JffViewerDialog from '@/components/JffViewerDialog';
+import { useEmptyStringSymbol } from '@/lib/useEmptyStringSymbol';
 import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
 import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
 import { formatDateInTimeZone } from '@/lib/date';
@@ -44,6 +44,7 @@ export const useProblemColumns = ({
     open: false,
     problem: null,
   });
+  const epsSymbol = useEmptyStringSymbol(openDialog.problem?.courseId);
 
   const columns: ColumnDef<Problem>[] = [
     {
@@ -184,6 +185,7 @@ export const useProblemColumns = ({
             title={`${openDialog.problem.originalFileName || openDialog.problem.fileName} - Problem`}
             width="70vw"
             height="70vh"
+            epsSymbol={epsSymbol}
           />
         );
       case 'RE':

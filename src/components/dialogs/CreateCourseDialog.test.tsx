@@ -4,6 +4,7 @@ import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { CreateCourseDialog } from './CreateCourseDialog';
 
@@ -182,7 +183,14 @@ const fillForm = async (user: ReturnType<typeof userEvent.setup>) => {
 const renderDialog = (props: Partial<React.ComponentProps<typeof CreateCourseDialog>> = {}) => {
   const setOpen = vi.fn();
   const onSuccess = vi.fn();
-  render(<CreateCourseDialog open setOpen={setOpen} onSuccess={onSuccess} {...props} />);
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <CreateCourseDialog open setOpen={setOpen} onSuccess={onSuccess} {...props} />
+    </QueryClientProvider>,
+  );
   return { setOpen, onSuccess };
 };
 

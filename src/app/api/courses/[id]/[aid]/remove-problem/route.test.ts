@@ -5,6 +5,7 @@ const prismaMock = vi.hoisted(() => ({
   problem: { findFirst: vi.fn() },
   assignmentProblem: { deleteMany: vi.fn() },
   groupAssignmentProblem: { deleteMany: vi.fn() },
+  roster: { findFirst: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -18,6 +19,7 @@ import { POST } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  prismaMock.roster.findFirst.mockResolvedValue(null);
 });
 
 describe('POST /api/courses/[id]/[aid]/remove-problem', () => {
@@ -34,7 +36,7 @@ describe('POST /api/courses/[id]/[aid]/remove-problem', () => {
   });
 
   it('returns 400 when missing problemId', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
 
     const req = new Request('http://localhost/api/courses/c1/a1/remove-problem', {
       method: 'POST',
@@ -46,7 +48,7 @@ describe('POST /api/courses/[id]/[aid]/remove-problem', () => {
   });
 
   it('returns 404 when assignment missing', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.assignment.findFirst.mockResolvedValue(null);
 
     const req = new Request('http://localhost/api/courses/c1/a1/remove-problem', {
@@ -59,7 +61,7 @@ describe('POST /api/courses/[id]/[aid]/remove-problem', () => {
   });
 
   it('returns 404 when problem missing', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
     prismaMock.problem.findFirst.mockResolvedValue(null);
 
@@ -73,7 +75,7 @@ describe('POST /api/courses/[id]/[aid]/remove-problem', () => {
   });
 
   it('removes problem and returns updated list', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
     prismaMock.problem.findFirst.mockResolvedValue({ id: 'p1', title: 'Problem' });
     prismaMock.assignment.findUnique.mockResolvedValue({

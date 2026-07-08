@@ -1,25 +1,45 @@
-// /src/app/api/courses/[id]/students/route.ts
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
+/**
+ * Returns just the STUDENT members of a course (user profiles). Course staff
+ * (faculty or TAs) or a system admin.
+ * @openapi
+ * summary: List a course's students
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: The course's students.
+ *     content:
+ *       application/json:
+ *         schema: { type: array, items: { type: object } }
+ *   403: { description: Not course staff (faculty or TAs) or a system admin. }
+ *   500: { description: Server error. }
+ */
 export async function GET(req: Request, context: { params: Promise<{ id: string }> }) {
-  // Extract the course ID from route parameters
   const { id: courseId } = await context.params;
 
   try {
-    // Check that the user is authenticated and authorized
     const session = await auth();
-    const user = session?.user;
 
-    if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    if (!(await canManageCourse(session?.user, courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'COURSE_STUDENTS_ACCESS_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    // Query roster entries for the course
+    // Filter to STUDENT in the query (indexed) rather than fetching every roster
+    // row and filtering in JS.
     const rosterEntries = await prisma.roster.findMany({
-      where: { courseId },
+      where: { courseId, role: 'STUDENT' },
       include: {
         user: {
           select: {
@@ -27,14 +47,12 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
             firstName: true,
             lastName: true,
             email: true,
-            role: true,
           },
         },
       },
     });
 
-    // Filter users with STUDENT role
-    const students = rosterEntries.filter((r: (typeof rosterEntries)[number]) => r.role === 'STUDENT').map((r: (typeof rosterEntries)[number]) => r.user);
+    const students = rosterEntries.map((r: (typeof rosterEntries)[number]) => r.user);
 
     return NextResponse.json(students);
   } catch (err) {

@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getInitials } from '@/app/utils/initials';
 import { DataTable } from '@/components/ui/data-table';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -39,37 +40,40 @@ type ApiStudent = {
   avatar?: string;
 };
 
+type GradesResponse = {
+  students: ApiStudent[];
+  assignments: Assignment[];
+  grades: Record<string, Record<string, number | null>>;
+};
+
+type GradesData = {
+  students: StudentRow[];
+  assignments: Assignment[];
+  fetchedAt: number;
+};
+
+const EMPTY_STUDENTS: StudentRow[] = [];
+const EMPTY_ASSIGNMENTS: Assignment[] = [];
+
 export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
   const VISIBILITY_REFRESH_MS = 60_000;
   const { data: session } = useSession();
   const { timezone } = useEffectiveTimezone();
-  const [loading, setLoading] = useState(true);
-  const [students, setStudents] = useState<StudentRow[]>([]);
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const queryClient = useQueryClient();
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  const inFlightRef = useRef(false);
-  const lastFetchAtRef = useRef(0);
-  const canExport = !!session?.user && ['ADMIN', 'FACULTY', 'TA'].includes(session.user.role);
+  const canExport = Boolean(session?.user?.isAdmin);
 
-  const fetchGrades = useCallback(async () => {
-    if (inFlightRef.current) return;
-    inFlightRef.current = true;
-    setLoading(true);
-    try {
+  // Cached students × assignments grade matrix. Fetched cold on mount (no SSR
+  // seed) and re-pulled via invalidation after a grade edit or the visibility
+  // refresh.
+  const gradesQuery = useQuery<GradesData>({
+    queryKey: ['course', courseId, 'grades'],
+    queryFn: async () => {
       const res = await fetch(`/api/courses/${courseId}/grades`);
       if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load grades');
-      const body = await res.json();
+      const body = (await res.json()) as GradesResponse;
 
-      const {
-        students: s,
-        assignments: a,
-        grades,
-      } = body as {
-        students: ApiStudent[];
-        assignments: Assignment[];
-        grades: Record<string, Record<string, number | null>>;
-      };
+      const { students: s, assignments: a, grades } = body;
 
       // maxPoints is already computed by the grades API (sum of problem max points)
       const assignmentsWithPoints: Assignment[] = a.map((asg) => ({
@@ -93,33 +97,49 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         return row;
       });
 
-      setStudents(rows);
-      setAssignments(assignmentsWithPoints);
-      setLastUpdated(new Date());
-      lastFetchAtRef.current = Date.now();
-    } catch (err) {
-      console.error('Fetch grades error:', err);
-      showToast.error('Failed to load grades');
-    } finally {
-      setLoading(false);
-      inFlightRef.current = false;
-    }
-  }, [courseId]);
+      return {
+        students: rows,
+        assignments: assignmentsWithPoints,
+        fetchedAt: Date.now(),
+      };
+    },
+    staleTime: 30_000,
+  });
 
+  const students = gradesQuery.data?.students ?? EMPTY_STUDENTS;
+  const assignments = gradesQuery.data?.assignments ?? EMPTY_ASSIGNMENTS;
+  // Drives the refresh/export button state (disabled + spinner) during any fetch.
+  // The grades table itself blocks only on a cold load (isPending) — see below —
+  // so a background refresh doesn't hide the cached grid.
+  const loading = gradesQuery.isPending || gradesQuery.isFetching;
+  const lastUpdated = useMemo(
+    () => (gradesQuery.data ? new Date(gradesQuery.data.fetchedAt) : null),
+    [gradesQuery.data],
+  );
+
+  const refreshGrades = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: ['course', courseId, 'grades'] }),
+    [queryClient, courseId],
+  );
+
+  // Surface fetch failures as a toast, preserving the prior behavior.
   useEffect(() => {
-    fetchGrades();
-  }, [fetchGrades]);
+    if (gradesQuery.isError) {
+      console.error('Fetch grades error:', gradesQuery.error);
+      showToast.error('Failed to load grades');
+    }
+  }, [gradesQuery.isError, gradesQuery.error]);
 
-  // Add a mechanism to refresh data when component becomes visible
+  // Refresh data when the tab becomes visible again and the cached matrix is stale.
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        const now = Date.now();
-        if (now - lastFetchAtRef.current < VISIBILITY_REFRESH_MS) {
+        const fetchedAt = gradesQuery.data?.fetchedAt ?? 0;
+        if (Date.now() - fetchedAt < VISIBILITY_REFRESH_MS) {
           return;
         }
         // Page became visible and data is stale, refresh data.
-        fetchGrades();
+        void refreshGrades();
       }
     };
 
@@ -127,7 +147,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [fetchGrades]);
+  }, [gradesQuery.data?.fetchedAt, refreshGrades]);
 
   const exportGrades = useCallback(
     (platform: LmsPlatform, assignmentIds: string[]) => {
@@ -162,8 +182,20 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
       link.click();
 
       showToast.success(`Grades exported for ${platform}`);
+
+      // Record the export in the audit log (best-effort; never block the download).
+      void fetch(`/api/courses/${courseId}/grades`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          platform,
+          wholeGradebook: selectedForExport.length === assignments.length,
+          assignmentCount: exportAssignments.length,
+          studentCount: students.length,
+        }),
+      }).catch(() => {});
     },
-    [students, assignments],
+    [students, assignments, courseId],
   );
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -181,7 +213,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
           return (
             <Avatar className="h-10 w-10">
               <AvatarImage
-                src={`/api/uploads/pfps/${user.avatar}`}
+                src={user.avatar ? `/api/uploads/pfps/${user.avatar}` : undefined}
                 alt={`${user.firstName} ${user.lastName}`}
               />
               <AvatarFallback className="bg-secondary text-secondary-foreground">
@@ -294,14 +326,14 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         <DataTable
           columns={columns}
           data={students}
-          loading={loading}
+          loading={gradesQuery.isPending}
           tableLabel="Course grades table"
           showExportButton={false}
           actionButtons={
             <>
               <Button
                 variant="secondary"
-                onClick={fetchGrades}
+                onClick={() => void refreshGrades()}
                 disabled={loading}
                 className="flex items-center gap-2 bg-green-600 text-white hover:bg-green-700"
               >
@@ -334,7 +366,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
           studentName={selectedStudent.name}
           open={dialogOpen}
           setOpen={setDialogOpen}
-          onSaved={fetchGrades}
+          onSaved={() => void refreshGrades()}
         />
       )}
 

@@ -8,15 +8,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  ADMIN
-  FACULTY
-  TA
-  STUDENT
-}
-
 enum CourseRole {
-  INSTRUCTOR
   FACULTY
   TA
   STUDENT
@@ -37,6 +29,20 @@ enum SubmissionStatus {
   FAILED
 }
 
+// How the empty string is rendered in automata/languages for a course.
+enum EmptyStringNotation {
+  EPSILON // ε
+  LAMBDA // λ
+}
+
+// Severity/level of an audit-log entry.
+enum LogSeverity {
+  INFO // routine, successful activity
+  WARNING // expected rejections / invalid input / non-fatal issues
+  ERROR // system or operational failures
+  SECURITY // auth failures and access-control denials
+}
+
 model User {
   id        String  @id @default(cuid())
   email     String  @unique
@@ -44,7 +50,9 @@ model User {
   lastName  String?
   password  String
   temporaryPassword Boolean @default(false)
-  role      Role    @default(STUDENT)
+  // Global system-admin grant. Course-level abilities live on Roster.role; this
+  // flag is the only global privilege.
+  isAdmin   Boolean @default(false)
   avatar    String?
   timezone  String?
   inactive  Boolean @default(false)
@@ -59,7 +67,7 @@ model User {
   groupRosters  GroupRoster[] // Group memberships across courses
   commentsAbout Comment[]         @relation("CommentsAboutStudent") // Comments about this student's work
 
-  @@index([role])
+  @@index([isAdmin])
   @@index([inactive])
   @@index([createdAt])
 }
@@ -77,6 +85,9 @@ model Course {
   registrationCloseAt DateTime?
   isPublished Boolean  @default(false)
   isArchived  Boolean  @default(false)
+
+  // How the empty string is displayed in automata/languages for this course.
+  emptyStringNotation EmptyStringNotation @default(EPSILON)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -368,15 +379,18 @@ model ActivityLog {
 
   // Additional categorization
   category  String? // SYSTEM, COURSE, ASSIGNMENT, PROBLEM, SUBMISSION, USER
+  severity  LogSeverity @default(INFO)
   ipAddress String?
   userAgent String?
 
-  @@index([timestamp])
-  @@index([userId])
+  // Index strategy for a high-write, admin-read log table. Composites serve
+  // "filter by X, order by timestamp desc" in a single scan; single-column
+  // indexes that are the leftmost prefix of a composite are omitted to keep
+  // insert cost down (e.g. userId is covered by [userId, courseId]).
+  @@index([timestamp]) // default System Logs ordering
+  @@index([severity, timestamp]) // severity dropdown + timestamp sort
   @@index([action])
   @@index([category])
-  @@index([courseId])
-  @@index([assignmentId])
   @@index([problemId])
   @@index([submissionId])
   @@index([courseId, action])
@@ -393,12 +407,33 @@ model SystemSettings {
   allowSignup     Boolean @default(true)
   sessionTimeoutMinutes Int @default(20)
 
+  // Login lockout policy (per-account): how many failed attempts before the
+  // account is temporarily locked, and for how long.
+  loginMaxAttempts    Int @default(10)
+  loginLockoutMinutes Int @default(45)
+
+  // Database backups (run by the db-backup container). backupHour is the
+  // server-time (UTC) hour to run the daily dump; retention is days of dumps kept.
+  backupEnabled       Boolean @default(true)
+  backupHour          Int     @default(2)
+  backupRetentionDays Int     @default(14)
+
+  // How long to keep audit-log rows before the pruner deletes them.
+  activityLogRetentionDays Int @default(365)
+
   // Submission queue tunables (time values stored in ms)
   submissionEvalTimeoutMs      Int @default(30000)
   submissionEvalMaxMemoryMb    Int @default(256)
   submissionResubmitCooldownMs Int @default(10000)
   submissionMaxConcurrent      Int @default(5)
   submissionMaxAttempts        Int @default(3)
+  // Exploration bound passed to the cfganalyzer evaluator (CFGANALYZER_LIMIT).
+  submissionAnalyzerLimit      Int @default(15)
+
+  // hCaptcha keys (null = fall back to env, then disabled). Secret is never
+  // returned to the client.
+  hcaptchaSiteKey   String?
+  hcaptchaSecretKey String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

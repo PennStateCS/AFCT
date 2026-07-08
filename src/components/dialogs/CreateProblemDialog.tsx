@@ -21,9 +21,6 @@ import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import { Check, ChevronDown, Search as SearchIcon } from 'lucide-react';
 
@@ -104,7 +101,6 @@ export function CreateProblemDialog({
   });
 
   const type = watch('type');
-  const isUnlimitedSubmissions = watch('isUnlimitedSubmissions');
   const isUnlimitedStates = watch('isUnlimitedStates');
   const file = watch('file');
 
@@ -122,24 +118,10 @@ export function CreateProblemDialog({
 
   // Internal visibility state: only show dialog after groups are loaded (if needed)
   const [internalOpen, setInternalOpen] = useState(false);
-  const [initializing, setInitializing] = useState(false);
+  const [, setInitializing] = useState(false);
 
   const { maxMb, loading: loadingMaxSize } = useMaxUploadSize();
 
-  const fileErrorMessage = (() => {
-    const e = errors.file;
-    if (!e) return '';
-    if (typeof e === 'string') return e;
-    if (typeof e === 'object' && e !== null) {
-      const m = (e as { message?: unknown }).message;
-      if (typeof m === 'string') return m;
-    }
-    try {
-      return JSON.stringify(e);
-    } catch {
-      return String(e);
-    }
-  })();
 
   useEffect(() => {
     let aborted = false;
@@ -167,19 +149,15 @@ export function CreateProblemDialog({
             if (data?.isGroup) {
               setGroupsLoading(true);
               try {
-                const gr = await fetch(`/api/courses/${courseId}/groups`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ action: 'list' }),
-                });
+                const gr = await fetch(`/api/courses/${courseId}/groups`);
                 if (gr.ok) {
                   const gdata = await gr.json();
                   setGroups(Array.isArray(gdata) ? gdata : []);
                 } else {
                   setGroups([]);
                 }
-              } catch (err: any) {
-                if (err?.name === 'AbortError') return;
+              } catch (err) {
+                if ((err as { name?: string } | null)?.name === 'AbortError') return;
                 console.error('Failed to load groups:', err);
                 setGroups([]);
               } finally {
@@ -193,8 +171,8 @@ export function CreateProblemDialog({
           setAssignmentIsGroup(false);
           setGroups([]);
         }
-      } catch (err: any) {
-        if (err?.name === 'AbortError') return;
+      } catch (err) {
+        if ((err as { name?: string } | null)?.name === 'AbortError') return;
         console.error('Failed to load assignment info:', err);
         setAssignmentIsGroup(false);
         setGroups([]);
@@ -287,7 +265,9 @@ export function CreateProblemDialog({
         // the created problem to that assignment (group assignment support is based on assignment.groupId)
         if (created?.id && assignmentId) {
           try {
-            const payload: any = { problemIds: [created.id] };
+            const payload: { problemIds: string[]; groupId?: string } = {
+              problemIds: [created.id],
+            };
             // If the assignment supports group assignments and a specific group
             // was chosen (not 'ALL'), include the groupId. If 'ALL' is chosen,
             // omit groupId to assign to all students.

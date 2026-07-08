@@ -15,8 +15,10 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validationResponse } from '@/lib/zod-error';
 import { auth } from '@/lib/auth';
+import { isAdmin } from '@/lib/permissions';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { toEmptyStringNotation } from '@/lib/empty-string-notation';
 import type { Prisma } from '@prisma/client';
 
 /**
@@ -25,7 +27,7 @@ import type { Prisma } from '@prisma/client';
  */
 type RosterItem = Prisma.RosterGetPayload<{
   include: {
-    user: { select: { id: true; firstName: true; lastName: true; role: true } };
+    user: { select: { id: true; firstName: true; lastName: true } };
   };
 }>;
 
@@ -68,8 +70,21 @@ async function generateUniqueCourseCode() {
 // GET /api/courses
 // ----------------------------------------
 /**
- * Returns all courses ordered by creation date.
- * Includes roster users (id/name/role) and assignment/problem metadata.
+ * Returns every course, newest first, each with its `enrolled` roster (user +
+ * courseRole) and per-assignment derived `maxPoints`/`problemCount`.
+ * @openapi
+ * summary: List all courses
+ * description: >-
+ *   Returns every course with its roster and assignment metadata for the
+ *   dashboard. This endpoint performs no authentication or authorization — any
+ *   caller receives the full course list and roster names.
+ * responses:
+ *   200:
+ *     description: Array of courses, each with an `enrolled` roster and assignments.
+ *     content:
+ *       application/json:
+ *         schema: { type: array, items: { type: object } }
+ *   500: { description: Server error. }
  */
 export async function GET() {
   try {
@@ -77,7 +92,7 @@ export async function GET() {
       include: {
         roster: {
           include: {
-            user: { select: { id: true, firstName: true, lastName: true, role: true } },
+            user: { select: { id: true, firstName: true, lastName: true } },
           },
         },
         assignments: {
@@ -129,23 +144,56 @@ export async function GET() {
 // POST /api/courses
 // ----------------------------------------
 /**
- * Creates a course and seeds roster faculty entries.
- *
- * Expected payload (validated upstream):
- * - name, code, semester, credits
- * - startDate, endDate (datetime-local strings)
- * - isPublished (optional)
- * - facultyIds (optional)
+ * Creates a course (with a generated registration code) and seeds its faculty
+ * roster, all in one transaction. System administrators only. Datetime-local
+ * strings are interpreted in the actor's effective timezone before being stored
+ * as UTC.
+ * @openapi
+ * summary: Create a course
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [name, code, semester, credits, startDate, endDate, registrationOpenAt, registrationCloseAt]
+ *         properties:
+ *           name: { type: string }
+ *           code: { type: string }
+ *           semester: { type: string }
+ *           credits: { type: number }
+ *           startDate: { type: string, description: datetime-local string }
+ *           endDate: { type: string, description: datetime-local string }
+ *           registrationOpenAt: { type: string, description: datetime-local string }
+ *           registrationCloseAt: { type: string, description: datetime-local string }
+ *           isPublished: { type: boolean }
+ *           instructorIds: { type: array, items: { type: string } }
+ *           facultyIds: { type: array, items: { type: string } }
+ *           emptyStringNotation: { type: string }
+ * responses:
+ *   201:
+ *     description: Course created; returns the course with its `enrolled` roster.
+ *   400: { description: "Missing registration window, or Zod validation failed." }
+ *   403: { description: System administrators only (logged as a security event). }
+ *   409: { description: A course with that code and semester already exists. }
+ *   500: { description: Server error. }
  */
 export async function POST(req: Request) {
+  let actorId: string | null = null;
   try {
     // 1) Parse payload of information
     const json = await req.json();
 
     // 2) Ensure user is authorized to create courses
     const session = await auth();
-    const role = session?.user?.role;
-    if (!role || !['ADMIN', 'TA', 'FACULTY'].includes(role)) {
+    actorId = session?.user?.id ?? null;
+    if (!isAdmin(session?.user)) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'COURSE_CREATE_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
       return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
     }
 
@@ -202,6 +250,7 @@ export async function POST(req: Request) {
             : null,
           isPublished: json.isPublished ?? false,
           isArchived: false,
+          emptyStringNotation: toEmptyStringNotation(json.emptyStringNotation),
         },
       });
 
@@ -235,7 +284,7 @@ export async function POST(req: Request) {
         include: {
           roster: {
             include: {
-              user: { select: { id: true, firstName: true, lastName: true, role: true } },
+              user: { select: { id: true, firstName: true, lastName: true } },
             },
           },
         },
@@ -253,6 +302,7 @@ export async function POST(req: Request) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session.user.id,
         action: 'CREATE_COURSE',
+        severity: 'INFO',
         category: 'COURSE',
         courseId: created.course.id,
         metadata: {
@@ -280,6 +330,7 @@ export async function POST(req: Request) {
           registrationCloseAt: created.course.registrationCloseAt,
           isPublished: created.course.isPublished,
           isArchived: created.course.isArchived,
+          emptyStringNotation: created.course.emptyStringNotation,
           enrolled:
             created.withRoster?.roster.map((r: RosterItem) => ({
               ...r.user,
@@ -295,6 +346,12 @@ export async function POST(req: Request) {
     if (resp.status === 400) return resp;
 
     console.error('Failed to create course:', err);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: actorId,
+      action: 'COURSE_CREATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }
 }

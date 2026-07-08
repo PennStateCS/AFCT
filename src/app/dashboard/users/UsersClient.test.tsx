@@ -3,8 +3,16 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import UsersClient from './UsersClient';
 import type { UserListItem } from '@/lib/users-list';
+
+// Render with a fresh QueryClient per test (retry off, no lingering cache) so the
+// users query starts clean each time.
+const renderWithClient = (ui: React.ReactElement) => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+};
 
 const replaceMock = vi.hoisted(() => vi.fn());
 const getUserColumnsMock = vi.hoisted(() => vi.fn(() => []));
@@ -95,7 +103,7 @@ describe('UsersClient', () => {
       },
     ];
 
-    render(<UsersClient initialUsers={users} />);
+    renderWithClient(<UsersClient initialUsers={users} />);
 
     expect(screen.getByTestId('table-loading').textContent).toBe('false');
     expect(screen.getByTestId('table-rows').textContent).toBe('1');
@@ -122,12 +130,12 @@ describe('UsersClient', () => {
       ],
     });
 
-    render(<UsersClient />);
+    renderWithClient(<UsersClient />);
 
     expect(screen.getByTestId('table-loading').textContent).toBe('true');
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/users/list', { cache: 'no-store' });
+      expect(global.fetch).toHaveBeenCalledWith('/api/admin/users/list', { cache: 'no-store' });
       expect(screen.getByTestId('table-rows').textContent).toBe('1');
       expect(screen.getByTestId('table-loading').textContent).toBe('false');
     });
@@ -154,7 +162,7 @@ describe('UsersClient', () => {
       ],
     });
 
-    render(<UsersClient />);
+    renderWithClient(<UsersClient />);
 
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent(
@@ -173,7 +181,7 @@ describe('UsersClient', () => {
   it('opens dialog from query string and clears query on close', () => {
     searchState.create = 'open';
 
-    render(<UsersClient initialUsers={[]} />);
+    renderWithClient(<UsersClient initialUsers={[]} />);
 
     expect(screen.getByTestId('create-dialog-state')).toHaveTextContent('open');
 
@@ -199,7 +207,7 @@ describe('UsersClient', () => {
       },
     ];
 
-    render(<UsersClient initialUsers={users} />);
+    renderWithClient(<UsersClient initialUsers={users} />);
 
     expect(getUserColumnsMock).toHaveBeenCalledTimes(1);
 
@@ -213,7 +221,7 @@ describe('UsersClient', () => {
   });
 
   it('opens import users dialog from button click', async () => {
-    render(<UsersClient initialUsers={[]} />);
+    renderWithClient(<UsersClient initialUsers={[]} />);
 
     expect(screen.getByTestId('bulk-dialog-state')).toHaveTextContent('closed');
 

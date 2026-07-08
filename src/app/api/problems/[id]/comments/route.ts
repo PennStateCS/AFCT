@@ -2,9 +2,30 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { prisma } from '@/lib/prisma';
+import { canAccessCourse } from '@/lib/permissions';
 
-// GET - Fetch comments for a specific problem
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+/**
+ * Fetches comments for a problem. Any signed-in user may call it. Note the problem
+ * is identified by the `?problemId` query parameter — the `[id]` path segment is
+ * ignored. An optional `studentId` narrows to comments about, or authored by, that
+ * student.
+ * @openapi
+ * summary: List comments for a problem
+ * parameters:
+ *   - { name: id, in: path, required: true, description: Ignored; problemId comes from the query, schema: { type: string } }
+ *   - { name: problemId, in: query, required: true, schema: { type: string } }
+ *   - { name: studentId, in: query, description: Narrow to a student's thread, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: The problem's comments, oldest first.
+ *     content:
+ *       application/json:
+ *         schema: { type: array, items: { type: object } }
+ *   400: { description: Missing problemId. }
+ *   401: { description: Not signed in. }
+ *   500: { description: Server error. }
+ */
+export async function GET(request: NextRequest, { params: _params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
@@ -41,7 +62,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
               select: {
                 firstName: true,
                 lastName: true,
-                role: true,
               },
             },
           },
@@ -72,13 +92,35 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
-// POST - Create a new comment for a specific problem
+/**
+ * Posts a comment on a problem (identified by the `[id]` path segment here). The
+ * author must be enrolled in the problem's course; the comment is attached to the
+ * problem's first linked assignment.
+ * @openapi
+ * summary: Add a comment to a problem
+ * parameters:
+ *   - { name: id, in: path, required: true, description: Problem id, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema: { type: object, required: [content], properties: { content: { type: string } } }
+ * responses:
+ *   201: { description: The created comment. }
+ *   400: { description: Empty content. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller is not enrolled in the course. }
+ *   404: { description: Problem or its assignment not found. }
+ *   500: { description: Server error. }
+ */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  let actorId: string | null = null;
   try {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    actorId = session.user.id;
 
     const resolvedParams = await params;
     const problemId = resolvedParams.id;
@@ -111,7 +153,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const assignmentProblem = problem.assignments[0];
     const assignment = assignmentProblem.assignment;
 
-    // Find the user's roster entry for this course
+    // Authorize: any enrolled user (or admin) may comment.
+    if (!(await canAccessCourse(session.user, assignment.course.id))) {
+      await createEnhancedActivityLog(prisma, request, {
+        userId: session?.user?.id ?? null,
+        action: 'COMMENT_CREATE_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
+      return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
+    }
+
+    // Obtain the author's roster row for the comment FK.
     const rosterEntry = await prisma.roster.findFirst({
       where: {
         userId: session.user.id,
@@ -120,6 +173,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
 
     if (!rosterEntry) {
+      await createEnhancedActivityLog(prisma, request, {
+        userId: session?.user?.id ?? null,
+        action: 'COMMENT_CREATE_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
       return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
     }
 
@@ -138,7 +197,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
               select: {
                 firstName: true,
                 lastName: true,
-                role: true,
               },
             },
           },
@@ -149,6 +207,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     await createEnhancedActivityLog(prisma, request, {
       userId: session.user.id,
       action: 'CREATE_COMMENT',
+      severity: 'INFO',
       category: 'ASSIGNMENT',
       courseId: assignment.course.id,
       assignmentId: assignment.id,
@@ -178,6 +237,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json(transformedComment, { status: 201 });
   } catch (error) {
     console.error('Error creating comment:', error);
+    await createEnhancedActivityLog(prisma, request, {
+      userId: actorId,
+      action: 'COMMENT_CREATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Failed to create comment' }, { status: 500 });
   }
 }

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -180,22 +181,12 @@ const formatMs = (ms?: number | null) =>
   typeof ms === 'number' && Number.isFinite(ms) ? `${ms} ms` : '—';
 const formatRate = (pct?: number | null) =>
   typeof pct === 'number' && Number.isFinite(pct) ? `${pct.toFixed(1)}%` : '—';
-const formatLoad = (arr?: number[] | null) => {
-  if (!Array.isArray(arr) || arr.length === 0) return '—';
-  return arr.map((n) => n.toFixed(2)).join(' / ');
-};
 const formatDbVersion = (v?: string | null) => {
   if (!v) return '—';
   const pg = v.match(/(PostgreSQL\s+\d+(?:\.\d+)?)/i)?.[1];
   const bits = v.match(/(\d+-bit)/i)?.[1];
   if (pg) return [pg, bits].filter(Boolean).join(' ');
   return v.split(',')[0]?.trim() || v;
-};
-const formatBytesPerSec = (b?: number | null) =>
-  typeof b === 'number' && Number.isFinite(b) ? `${formatBytes(b)}/s` : '—';
-const formatHash = (v?: string | null) => {
-  if (!v) return '—';
-  return v.length > 12 ? v.slice(0, 12) : v;
 };
 const toTitleCase = (s?: string | null) =>
   s ? s.replace(/\w\S*/g, (w) => w[0].toUpperCase() + w.slice(1).toLowerCase()) : '—';
@@ -262,14 +253,17 @@ function useTrends(sample: HistoryPoint | null, keepHours: number) {
     const hist = readHistory();
     const now = Date.now();
 
-    // Push latest sample and trim (max 24h kept)
+    // Push latest sample and trim (max 24h kept). Reuse the freshly-built array as
+    // the source for windowing instead of reading history from storage a second time.
+    let source = hist;
     if (sample) {
       const withNew = [...hist.filter((p) => now - p.ts <= keepHours * 3600_000), sample];
       writeHistory(withNew);
+      source = withNew;
     }
 
     const windowMs = windowHours * 3600_000;
-    const windowHist = (sample ? [...readHistory()] : hist).filter((p) => now - p.ts <= windowMs);
+    const windowHist = source.filter((p) => now - p.ts <= windowMs);
     if (windowHist.length < 2) {
       return {
         cpuDelta: 0,
@@ -414,43 +408,35 @@ const Sparkline = ({
 
 export default function SystemStatusClient() {
   const { timezone } = useEffectiveTimezone();
-  const [status, setStatus] = useState<StatusResponse | null>(null);
-  const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [deep, setDeep] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const timerRef = useRef<number | null>(null);
   const [deletingFiles, setDeletingFiles] = useState<Record<string, boolean>>({});
 
-  const fetchStatus = useCallback(async () => {
-    setLoading(true);
-    try {
-      const r = await fetch(`/api/status${deep ? '?deep=1' : ''}`, { cache: 'no-store' });
-      const data = (await r.json()) as StatusResponse;
-      setStatus(data);
-      setLastUpdated(new Date());
-    } catch {
-      setStatus(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [deep]);
+  // Live system status, cached per `deep` toggle. Auto-refresh drives the query's
+  // own polling interval, replacing the old manual setInterval loop.
+  const {
+    data: status = null,
+    isLoading,
+    isFetching,
+    dataUpdatedAt,
+    refetch,
+  } = useQuery({
+    queryKey: ['admin', 'status', deep],
+    queryFn: async () => {
+      const r = await fetch(`/api/admin/status${deep ? '?deep=1' : ''}`, { cache: 'no-store' });
+      if (!r.ok) throw new Error('Failed to fetch status');
+      return (await r.json()) as StatusResponse;
+    },
+    refetchInterval: autoRefresh ? 15_000 : false,
+    staleTime: 0,
+  });
 
-  useEffect(() => {
-    fetchStatus();
-  }, [fetchStatus]);
-
-  useEffect(() => {
-    if (autoRefresh) {
-      timerRef.current = window.setInterval(fetchStatus, 15_000);
-    } else if (timerRef.current) {
-      window.clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    return () => {
-      if (timerRef.current) window.clearInterval(timerRef.current);
-    };
-  }, [autoRefresh, fetchStatus]);
+  // `loading` gates the skeleton-vs-content: show the skeleton only on the cold
+  // first load (isLoading), so a background poll/refresh doesn't blank the status.
+  // `refreshing` (any in-flight fetch) drives the Refresh button state.
+  const loading = isLoading;
+  const refreshing = isFetching;
+  const lastUpdated = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
 
   const handleDeleteAbandonedFile = useCallback(
     async (category: string, fileName: string) => {
@@ -461,7 +447,7 @@ export default function SystemStatusClient() {
 
       setDeletingFiles((prev) => ({ ...prev, [key]: true }));
       try {
-        const res = await fetch('/api/status/abandoned-files', {
+        const res = await fetch('/api/admin/status/abandoned-files', {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ category, fileName }),
@@ -470,7 +456,7 @@ export default function SystemStatusClient() {
           const err = await res.json().catch(() => null);
           throw new Error(err?.error || 'Failed to delete file');
         }
-        await fetchStatus();
+        await refetch();
       } catch (err) {
         console.error('Delete abandoned file error:', err);
         window.alert(err instanceof Error ? err.message : 'Failed to delete file');
@@ -478,7 +464,7 @@ export default function SystemStatusClient() {
         setDeletingFiles((prev) => ({ ...prev, [key]: false }));
       }
     },
-    [deletingFiles, fetchStatus],
+    [deletingFiles, refetch],
   );
 
   const dbOk = status?.database?.ok ?? false;
@@ -524,10 +510,39 @@ export default function SystemStatusClient() {
       sessions24h: status.sessionSummary?.total24h,
       latencyMs: status.metrics?.latencyMs,
     };
-  }, [status, sStats?.cpuProcessPct, sStats?.memProcessPctOfSystem, dbSizeBytes, dbTables]);
+  }, [
+    status,
+    sStats?.cpuProcessPct,
+    sStats?.memProcessPctOfSystem,
+    sStats?.diskIo?.readBytesPerSec,
+    sStats?.diskIo?.writeBytesPerSec,
+    dbSizeBytes,
+    dbTables,
+  ]);
 
   // Trends (keep 24h, window selectable)
   const { windowHours, setHours, trends } = useTrends(sample, 24);
+
+  // Sparkline series: read history once (localStorage + JSON.parse), filter to the
+  // selected window, then derive all four series. Recomputed only when the window
+  // changes or a new sample is persisted (`status` poll), instead of reading and
+  // filtering history four separate times on every render.
+  const sparklines = useMemo(() => {
+    const windowMs = windowHours * 3600_000;
+    const now = Date.now();
+    const windowHist = readHistory().filter((p) => now - p.ts <= windowMs);
+    return {
+      cpu: windowHist.map((p) => p.cpuPct ?? 0),
+      latency: windowHist.map((p) => p.latencyMs ?? 0),
+      mem: windowHist.map((p) => p.memPct ?? 0),
+      diskIo: windowHist.map((p) => (p.diskIoBps ?? 0) / 1024 / 1024),
+    };
+    // Depend on `sample` (rebuilt each poll) so the series recompute after each new
+    // history point is persisted by useTrends. `sample` isn't read directly, so
+    // exhaustive-deps can't infer the dependency — flag it explicitly rather than
+    // dropping it (which would freeze the sparklines between window changes).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [windowHours, sample]);
 
   const sessionSummary = status?.sessionSummary;
 
@@ -590,10 +605,7 @@ export default function SystemStatusClient() {
             <CardTitle role="heading" aria-level={1} className="text-2xl">
               System Status
             </CardTitle>
-            <Badge
-              variant={dbOk ? 'success' : 'danger'}
-              title={status?.database?.message || ''}
-            >
+            <Badge variant={dbOk ? 'success' : 'danger'} title={status?.database?.message || ''}>
               DB {dbOk ? 'OK' : 'DOWN'}
             </Badge>
             <Badge variant="info" title="Database provider">
@@ -638,8 +650,8 @@ export default function SystemStatusClient() {
             <div className="text-muted-foreground text-xs" aria-live="polite">
               {lastUpdated ? `Updated ${formatTimeInTimeZone(lastUpdated, timezone)}` : ''}
             </div>
-            <Button size="sm" onClick={fetchStatus} disabled={loading}>
-              {loading ? 'Refreshing…' : 'Refresh'}
+            <Button size="sm" onClick={() => refetch()} disabled={refreshing}>
+              {refreshing ? 'Refreshing…' : 'Refresh'}
             </Button>
           </div>
         </CardHeader>
@@ -746,25 +758,13 @@ export default function SystemStatusClient() {
                     <div className="text-muted-foreground text-xs font-semibold">
                       CPU % (last {windowHours}h)
                     </div>
-                    <Sparkline
-                      points={readHistory()
-                        .filter((p) => Date.now() - p.ts <= windowHours * 3600_000)
-                        .map((p) => p.cpuPct ?? 0)}
-                      width={100}
-                      height={30}
-                    />
+                    <Sparkline points={sparklines.cpu} width={100} height={30} />
                   </div>
                   <div className="space-y-2 rounded border p-3">
                     <div className="text-muted-foreground text-xs font-semibold">
                       Latency (ms) (last {windowHours}h)
                     </div>
-                    <Sparkline
-                      points={readHistory()
-                        .filter((p) => Date.now() - p.ts <= windowHours * 3600_000)
-                        .map((p) => p.latencyMs ?? 0)}
-                      width={100}
-                      height={30}
-                    />
+                    <Sparkline points={sparklines.latency} width={100} height={30} />
                   </div>
                 </div>
                 <div className="space-y-4">
@@ -772,25 +772,13 @@ export default function SystemStatusClient() {
                     <div className="text-muted-foreground text-xs font-semibold">
                       Mem % (last {windowHours}h)
                     </div>
-                    <Sparkline
-                      points={readHistory()
-                        .filter((p) => Date.now() - p.ts <= windowHours * 3600_000)
-                        .map((p) => p.memPct ?? 0)}
-                      width={100}
-                      height={30}
-                    />
+                    <Sparkline points={sparklines.mem} width={100} height={30} />
                   </div>
                   <div className="space-y-2 rounded border p-3">
                     <div className="text-muted-foreground text-xs font-semibold">
                       Disk IO (MB/s) (last {windowHours}h)
                     </div>
-                    <Sparkline
-                      points={readHistory()
-                        .filter((p) => Date.now() - p.ts <= windowHours * 3600_000)
-                        .map((p) => (p.diskIoBps ?? 0) / 1024 / 1024)}
-                      width={100}
-                      height={30}
-                    />
+                    <Sparkline points={sparklines.diskIo} width={100} height={30} />
                   </div>
                 </div>
               </div>
@@ -832,9 +820,7 @@ export default function SystemStatusClient() {
               <CardTitle role="heading" aria-level={2} className="text-lg">
                 Database Overview
               </CardTitle>
-              <Badge variant={dbOk ? 'success' : 'danger'}>
-                {dbOk ? 'OK' : 'DOWN'}
-              </Badge>
+              <Badge variant={dbOk ? 'success' : 'danger'}>{dbOk ? 'OK' : 'DOWN'}</Badge>
             </CardHeader>
             <CardContent>
               <div className="mb-3 text-sm">
@@ -1059,9 +1045,7 @@ export default function SystemStatusClient() {
               <CardTitle role="heading" aria-level={2} className="text-lg">
                 Abandoned Files
               </CardTitle>
-              <Badge variant="neutral">
-                Total: {status.abandonedFiles?.total ?? 0}
-              </Badge>
+              <Badge variant="neutral">Total: {status.abandonedFiles?.total ?? 0}</Badge>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -1172,21 +1156,11 @@ export default function SystemStatusClient() {
               Sessions
               {sessionSummary ? (
                 <span className="ml-2 space-x-2">
-                  <Badge variant="neutral">
-                    24h: {sessionSummary.total24h}
-                  </Badge>
-                  <Badge variant="neutral">
-                    Users: {sessionSummary.uniqUsers24h}
-                  </Badge>
-                  <Badge variant="neutral">
-                    5m: {sessionSummary.last5m}
-                  </Badge>
-                  <Badge variant="neutral">
-                    15m: {sessionSummary.last15m}
-                  </Badge>
-                  <Badge variant="neutral">
-                    60m: {sessionSummary.last60m}
-                  </Badge>
+                  <Badge variant="neutral">24h: {sessionSummary.total24h}</Badge>
+                  <Badge variant="neutral">Users: {sessionSummary.uniqUsers24h}</Badge>
+                  <Badge variant="neutral">5m: {sessionSummary.last5m}</Badge>
+                  <Badge variant="neutral">15m: {sessionSummary.last15m}</Badge>
+                  <Badge variant="neutral">60m: {sessionSummary.last60m}</Badge>
                 </span>
               ) : null}
             </CardTitle>
@@ -1223,7 +1197,7 @@ export default function SystemStatusClient() {
                     </thead>
                     <tbody>
                       {status.activeSessions!.map((s, i) => (
-                        <tr key={i} className="border-b last:border-0">
+                        <tr key={s.userId ?? s.email ?? i} className="border-b last:border-0">
                           <td className="py-2 pr-3">
                             <div className="font-medium">{s.email ?? s.userId ?? 'Unknown'}</div>
                           </td>

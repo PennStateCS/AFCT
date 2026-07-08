@@ -2,8 +2,27 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
-// GET: list members for a group
+/**
+ * Lists a group's members (with user profiles) by the group's global id. Course
+ * staff (faculty or TAs) or a system admin.
+ * @openapi
+ * summary: List group members by group id
+ * parameters:
+ *   - { name: gid, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: The group's members with profiles.
+ *     content:
+ *       application/json:
+ *         schema: { type: object, properties: { members: { type: array, items: { type: object } } } }
+ *   400: { description: Missing group id. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Not course staff or a system admin. }
+ *   404: { description: Group not found. }
+ *   500: { description: Server error. }
+ */
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ gid: string; id?: string }> },
@@ -14,14 +33,22 @@ export async function GET(
 
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role))
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   try {
     const group = await prisma.group.findUnique({ where: { id: groupId } });
     if (!group) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
     if (providedCourseId && group.courseId !== providedCourseId)
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+
+    if (!(await canManageCourse(session.user, group.courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'GROUP_MEMBERS_VIEW_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const members = await prisma.groupRoster.findMany({
       where: { groupId },
@@ -49,7 +76,32 @@ export async function GET(
   }
 }
 
-// POST: add a member to a group
+/**
+ * Adds a member to a group by the group's global id. Course staff (faculty or TAs)
+ * or a system admin. Accepts either a `userId` or an `email` to identify the user,
+ * who must be enrolled in the group's course and not already a member.
+ * @openapi
+ * summary: Add a group member by group id
+ * parameters:
+ *   - { name: gid, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         properties:
+ *           userId: { type: string, description: Provide this or email }
+ *           email: { type: string, description: Provide this or userId }
+ * responses:
+ *   201: { description: Member added. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Not course staff or a system admin. }
+ *   404: { description: Group or user not found. }
+ *   409: { description: User is already in the group. }
+ *   422: { description: User is not enrolled in the course. }
+ *   500: { description: Server error. }
+ */
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ gid: string; id?: string }> },
@@ -60,8 +112,6 @@ export async function POST(
 
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role))
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   try {
     const group = await prisma.group.findUnique({ where: { id: groupId } });
@@ -69,6 +119,16 @@ export async function POST(
     if (providedCourseId && group.courseId !== providedCourseId)
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
     const courseId = group.courseId;
+
+    if (!(await canManageCourse(session.user, courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'GROUP_MEMBER_ADD_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const body = await req.json().catch(() => ({}));
     const userId = body?.userId ?? null;
@@ -99,6 +159,7 @@ export async function POST(
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'ADD_GROUP_MEMBER',
+      severity: 'INFO',
       category: 'COURSE',
       metadata: { courseId, groupId, addedUserId: user.id },
     });
@@ -106,6 +167,12 @@ export async function POST(
     return NextResponse.json({ member: { id: created.id, userId: user.id } }, { status: 201 });
   } catch (err) {
     console.error('[GROUP_MEMBERS_POST_ERROR]', err);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'GROUP_MEMBER_ADD_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

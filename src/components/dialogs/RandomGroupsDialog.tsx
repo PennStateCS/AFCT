@@ -35,7 +35,7 @@ export default function RandomGroupsDialog({ open, setOpen, courseId, students, 
       setNumGroups(1);
       return;
     }
-    if (numGroups > available) setNumGroups(available);
+    setNumGroups((prev) => (prev > available ? available : prev));
   }, [students.length, excluded.size]);
 
 
@@ -82,7 +82,7 @@ export default function RandomGroupsDialog({ open, setOpen, courseId, students, 
       if (availableStudents.length === 0) throw new Error('No students available to assign.');
       const shuffled = shuffle(availableStudents.map((s) => s.id));
       let idx = 0;
-      const createdGroups: any[] = [];
+      const createdGroups: unknown[] = [];
 
       for (let g = 0; g < sizes.length; g++) {
         const groupName = `${prefix} ${g + 1}`;

@@ -16,7 +16,7 @@ import SwitchField from '@/components/ui/SwitchField';
 import { Textarea } from '@/components/ui/textarea';
 import InputGroup from '@/components/ui/InputGroup';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 
 import { useForm, Controller } from 'react-hook-form';
 import { showToast } from '@/lib/toast';
@@ -102,6 +102,7 @@ export function EditAssignmentDialog({
       assignment.allowLateSubmissions,
       assignment.courseId,
       assignment.description,
+      assignment.isGroup,
       assignment.isPublished,
       assignment.title,
       assignmentDueDateString,
@@ -115,7 +116,7 @@ export function EditAssignmentDialog({
     reset,
     watch,
     setValue,
-    formState: { errors, isDirty, isValid, isSubmitting },
+    formState: { errors, isValid, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(AssignmentFormSchema),
     defaultValues,
@@ -414,15 +415,3 @@ export function EditAssignmentDialog({
   );
 }
 
-async function safeMessage(res: Response) {
-  try {
-    const data = await res.json();
-    return (
-      (data as { message?: string; error?: string })?.message ??
-      (data as { message?: string; error?: string })?.error ??
-      null
-    );
-  } catch {
-    return null;
-  }
-}

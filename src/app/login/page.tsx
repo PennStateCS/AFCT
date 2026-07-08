@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
@@ -59,7 +59,29 @@ export default function LoginPage() {
 
   const searchParams = useSearchParams();
   const isDev = process.env.NODE_ENV !== 'production';
-  const captchaSiteKey = process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY;
+  // Site key comes from admin settings at runtime, falling back to the build-time env.
+  const [captchaSiteKey, setCaptchaSiteKey] = useState<string | undefined>(
+    process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY,
+  );
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch('/api/system-settings/public', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = (await res.json()) as { hcaptchaSiteKey?: string | null };
+        if (active && typeof data.hcaptchaSiteKey === 'string' && data.hcaptchaSiteKey) {
+          setCaptchaSiteKey(data.hcaptchaSiteKey);
+        }
+      } catch {
+        // keep env fallback
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const getMonotonicNow = () =>
     typeof performance !== 'undefined' ? performance.now() : Date.now();
@@ -67,14 +89,14 @@ export default function LoginPage() {
     Math.max(0, Math.round(getMonotonicNow() - interactionStartRef.current));
   const shouldRenderCaptcha = Boolean(captchaVisible && captchaSiteKey);
 
-  const requestCaptchaIfAvailable = () => {
+  const requestCaptchaIfAvailable = useCallback(() => {
     if (!captchaSiteKey) {
       showToast.error('Security challenge unavailable. Please contact support.');
       return;
     }
     setCaptchaVisible(true);
     setCaptchaToken(null);
-  };
+  }, [captchaSiteKey]);
 
   const handleCaptchaVerify = (token: string) => setCaptchaToken(token);
   const handleCaptchaReset = () => setCaptchaToken(null);
@@ -132,7 +154,7 @@ export default function LoginPage() {
     }
 
     showToast.error('Invalid email or password.');
-  }, [searchParams]);
+  }, [searchParams, requestCaptchaIfAvailable]);
 
   // Basic credential flow with minimal client-side validation before delegating to NextAuth.
   const handleLogin = async (e: React.FormEvent) => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { Download, Package, Eye } from 'lucide-react';
+import { Eye } from 'lucide-react';
 import { useState } from 'react';
 import JffViewerDialog from './JffViewerDialog';
 import { Badge } from './ui/badge';
@@ -21,6 +21,8 @@ type Props = {
   problem: Problem;
   submissionCount: number;
   className?: string;
+  /** Empty-string symbol for the course (ε / λ); falls back to the viewer default. */
+  epsSymbol?: string;
 };
 
 const getProblemTypeBadgeProps = (type: string | null) => {
@@ -56,7 +58,12 @@ const getProblemTypeBadgeProps = (type: string | null) => {
   );
 };
 
-export default function ProblemDetails({ problem, submissionCount, className = '' }: Props) {
+export default function ProblemDetails({
+  problem,
+  submissionCount,
+  className = '',
+  epsSymbol,
+}: Props) {
   const typeProps = getProblemTypeBadgeProps(problem.type ?? null);
   const [open, setOpen] = useState(false);
   // problem data available via prop
@@ -122,6 +129,7 @@ export default function ProblemDetails({ problem, submissionCount, className = '
                     width="70vw"
                     height="70vh"
                     showGridDefault={true}
+                    epsSymbol={epsSymbol}
                   />
                 </div>
               </div>

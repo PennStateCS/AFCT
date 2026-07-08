@@ -5,17 +5,26 @@ const prismaMock = vi.hoisted(() => ({
   submission: {
     findMany: vi.fn(),
   },
+  problem: {
+    findUnique: vi.fn(),
+  },
+  roster: {
+    findFirst: vi.fn(),
+  },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
+const activityLogMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
+vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 
 import { GET } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  prismaMock.roster.findFirst.mockResolvedValue(null);
 });
 
 describe('GET /api/problems/[id]/submissions', () => {
@@ -30,6 +39,7 @@ describe('GET /api/problems/[id]/submissions', () => {
 
   it('returns 403 when requesting another user without permission', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', role: 'STUDENT' } });
+    prismaMock.problem.findUnique.mockResolvedValue({ courseId: 'c1' });
 
     const req = new NextRequest(
       'http://localhost/api/problems/problem-1/submissions?userId=user-2',

@@ -1,9 +1,8 @@
-// /src/app/api/assignments
-
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 import { toDateTimeInTimezone, toEndOfDayInTimezone } from '@/lib/date-utils';
 
 async function resolveUserTimezone(userId?: string | null) {
@@ -18,22 +17,60 @@ async function resolveUserTimezone(userId?: string | null) {
   return system?.timezone || tz;
 }
 
+/**
+ * Creates an assignment in a course. Course staff (faculty or TAs) or a system
+ * admin, checked against the body's courseId. The due date is
+ * interpreted as end-of-day in the actor's timezone. Late submissions and their
+ * cutoff must agree — a cutoff is required when late is on, forbidden when off, and
+ * must fall on or after the due date.
+ * @openapi
+ * summary: Create an assignment
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [title, courseId]
+ *         properties:
+ *           title: { type: string }
+ *           description: { type: string }
+ *           courseId: { type: string }
+ *           dueDate: { type: string, description: Interpreted as end-of-day in the actor's timezone }
+ *           allowLateSubmissions: { type: boolean }
+ *           lateCutoff: { type: string, description: Required when allowLateSubmissions is true }
+ *           isPublished: { type: boolean }
+ *           isGroup: { type: boolean }
+ * responses:
+ *   201: { description: The created assignment. }
+ *   401: { description: Not signed in. }
+ *   400: { description: "Missing fields, or an inconsistent late-submission window." }
+ *   403: { description: Not course staff or a system admin. }
+ *   500: { description: Server error. }
+ */
 export async function POST(req: NextRequest) {
+  let actorId: string | null = null;
   try {
-    // Retrieve the current authenticated session
     const session = await auth();
+    actorId = session?.user?.id ?? null;
 
-    // Ensure user is authenticated and has the correct role
-    if (!session || !['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Parse incoming request data
     const data = await req.json();
-
-    // Validate required fields
     if (!data.title || !data.courseId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    if (!(await canManageCourse(session.user, data.courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'ASSIGNMENT_CREATE_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     const userTimezone = await resolveUserTimezone(session.user.id);
@@ -67,7 +104,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create a new assignment in the database
     const created = await prisma.assignment.create({
       data: {
         title: data.title,
@@ -76,16 +112,15 @@ export async function POST(req: NextRequest) {
         allowLateSubmissions,
         lateCutoff: lateCutoffDate,
         isPublished: data.isPublished || false,
-        // Persist isGroup when provided (default to false)
         isGroup: !!data.isGroup,
         courseId: data.courseId,
       },
     });
 
-    // Log the creation action to ActivityLog
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'CREATE_ASSIGNMENT',
+      severity: 'INFO',
       category: 'ASSIGNMENT',
       courseId: created.courseId,
       assignmentId: created.id,
@@ -103,11 +138,15 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Respond with the newly created assignment
     return NextResponse.json(created, { status: 201 });
   } catch (error) {
-    // Log error to the server console
     console.error('Assignment creation failed:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: actorId,
+      action: 'ASSIGNMENT_CREATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Failed to create assignment' }, { status: 500 });
   }
 }

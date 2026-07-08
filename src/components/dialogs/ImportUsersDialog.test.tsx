@@ -36,7 +36,7 @@ vi.mock('@/components/ui/SwitchField', () => ({
 }));
 
 vi.mock('@/components/FileUploadInput', () => ({
-  default: ({ id, label, onChange, value }: any) => (
+  default: ({ id, label, onChange }: any) => (
     <div>
       <label htmlFor={id}>{label}</label>
       <input
@@ -113,7 +113,7 @@ describe('ImportUsersDialog', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
     const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/users/bulk');
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/admin/users/bulk');
     expect(requestInit).toMatchObject({ method: 'POST' });
     expect(requestInit.body).toContain('"temporaryPasswords":true');
 

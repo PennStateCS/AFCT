@@ -1,6 +1,7 @@
 'use client';
 import React from 'react';
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
@@ -34,52 +35,48 @@ export default function CalendarClient({
   initialMonth?: string;
 }) {
   const { timezone } = useEffectiveTimezone();
-  const [assignments, setAssignments] = useState<CalendarAssignment[]>(initialAssignments ?? []);
   const [selected, setSelected] = useState<Date | undefined>(undefined);
-  const [loading, setLoading] = useState(!Array.isArray(initialAssignments));
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [visibleStart, setVisibleStart] = useState<Date | null>(null);
-  const [visibleEnd, setVisibleEnd] = useState<Date | null>(null);
   const [currentMonth, setCurrentMonth] = useState(
     initialMonth ? new Date(initialMonth) : new Date(),
   );
   const [visibleAssignmentLimit, setVisibleAssignmentLimit] = useState(2);
-  const requestIdRef = useRef(0);
-  const activeRequestControllerRef = useRef<AbortController | null>(null);
-  const didUseInitialDataRef = useRef(Array.isArray(initialAssignments));
 
   // Dialog state
   const [dayDialogOpen, setDayDialogOpen] = useState(false);
   const [dialogDate, setDialogDate] = useState<Date | null>(null);
   const [dialogAssignments, setDialogAssignments] = useState<CalendarAssignment[]>([]);
 
-  const fetchForMonth = useCallback(
-    async (month: Date) => {
-      try {
-        setLoading(true);
-        setLoadError(null);
-        const currentRequest = ++requestIdRef.current;
-        activeRequestControllerRef.current?.abort();
-        const controller = new AbortController();
-        activeRequestControllerRef.current = controller;
-        const { startIso, endIso } = getMonthRangeIso(month, timezone);
-
-        setVisibleStart(new Date(startIso));
-        setVisibleEnd(new Date(endIso));
-
-        const data = await fetchAssignmentsInRange(startIso, endIso, controller.signal);
-        if (currentRequest !== requestIdRef.current) return;
-        setAssignments(data);
-      } catch (error) {
-        if ((error as Error).name === 'AbortError') return;
-        console.error('Error loading calendar assignments:', error);
-        setLoadError('Failed to load calendar assignments. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    },
-    [timezone],
+  // ISO range for the visible month, in the user's timezone. This drives the cache
+  // key, so each month is fetched once and served warm on revisit / back-and-forth
+  // month navigation (no refetch within the staleTime window).
+  const { startIso, endIso } = useMemo(
+    () => getMonthRangeIso(currentMonth, timezone),
+    [currentMonth, timezone],
   );
+
+  // The SSR-provided range, captured once, so `initialAssignments` seed only the
+  // month they belong to — not every month the user later navigates to.
+  const [initialRange] = useState(() =>
+    getMonthRangeIso(initialMonth ? new Date(initialMonth) : new Date(), timezone),
+  );
+  const isInitialRange = startIso === initialRange.startIso && endIso === initialRange.endIso;
+
+  const {
+    data: assignments = [],
+    isFetching: loading,
+    isError,
+    refetch,
+  } = useQuery({
+    queryKey: ['assignments', 'range', startIso, endIso],
+    queryFn: ({ signal }) => fetchAssignmentsInRange(startIso, endIso, signal),
+    initialData:
+      isInitialRange && Array.isArray(initialAssignments) ? initialAssignments : undefined,
+    staleTime: 30_000,
+  });
+
+  const refresh = useCallback(() => {
+    void refetch();
+  }, [refetch]);
 
   const openDayDialog = (date: Date, dayAssignments: CalendarAssignment[]) => {
     setDialogDate(date);
@@ -92,14 +89,6 @@ export default function CalendarClient({
     setDialogDate(null);
     setDialogAssignments([]);
   };
-
-  useEffect(() => {
-    if (didUseInitialDataRef.current) {
-      didUseInitialDataRef.current = false;
-      return;
-    }
-    void fetchForMonth(currentMonth);
-  }, [fetchForMonth, currentMonth]);
 
   useEffect(() => {
     const updateLimit = () => {
@@ -116,12 +105,6 @@ export default function CalendarClient({
     updateLimit();
     window.addEventListener('resize', updateLimit);
     return () => window.removeEventListener('resize', updateLimit);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      activeRequestControllerRef.current?.abort();
-    };
   }, []);
 
   const monthLabel = useMemo(() => {
@@ -143,7 +126,10 @@ export default function CalendarClient({
   };
 
   // Helper to get a YYYY-MM-DD key in the user's timezone
-  const localDateKey = (date: Date | string) => getDateKeyInTimeZone(date, timezone);
+  const localDateKey = useCallback(
+    (date: Date | string) => getDateKeyInTimeZone(date, timezone),
+    [timezone],
+  );
 
   // Group assignments by date string (YYYY-MM-DD) using local dates.
   const assignmentsByDate = useMemo(() => {
@@ -154,7 +140,7 @@ export default function CalendarClient({
       grouped[dateStr].push(a);
     });
     return grouped;
-  }, [assignments, timezone]);
+  }, [assignments, localDateKey]);
 
   // Navigate to a different day in the dialog (previous/next)
   const navigateDay = (date: Date) => {
@@ -179,16 +165,12 @@ export default function CalendarClient({
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
         <Card className="flex h-full w-full flex-col">
           <CardContent className="relative flex min-h-0 flex-1 flex-col pt-6">
-            {loadError ? (
+            {isError ? (
               <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-red-300 bg-red-50 px-3 py-2">
                 <p role="alert" className="text-sm text-red-700">
-                  {loadError}
+                  Failed to load calendar assignments. Please try again.
                 </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void fetchForMonth(currentMonth)}
-                >
+                <Button variant="outline" size="sm" onClick={refresh}>
                   Retry
                 </Button>
               </div>
@@ -261,7 +243,10 @@ export default function CalendarClient({
                     today: 'rounded-none bg-transparent text-inherit',
                   }}
                   components={{
-                    DayButton: (props: any) => {
+                    DayButton: (props: {
+                      day: { date: Date };
+                      onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
+                    }) => {
                       const dateStr = localDateKey(props.day.date);
                       const dayAssignments = (assignmentsByDate[dateStr] || [])
                         .slice()
@@ -307,7 +292,7 @@ export default function CalendarClient({
                           aria-label={`${formattedDayLabel}${isToday ? ', today' : ''}. ${dayAssignments.length} assignment${dayAssignments.length === 1 ? '' : 's'}. Press Enter to open assignments for this day.`}
                           onClick={(e) => {
                             openCurrentDay();
-                            props.onClick?.(e as any);
+                            props.onClick?.(e as unknown as React.MouseEvent<HTMLButtonElement>);
                           }}
                           onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
                             // Do not hijack keyboard events from nested interactive elements (e.g., assignment links).
@@ -316,7 +301,7 @@ export default function CalendarClient({
                             if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
                               e.preventDefault();
                               openCurrentDay();
-                              props.onClick?.(e as any);
+                              props.onClick?.(e as unknown as React.MouseEvent<HTMLButtonElement>);
                             }
                           }}
                           className={cn(

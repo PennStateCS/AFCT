@@ -30,6 +30,7 @@ import { GET, PUT, PATCH, POST, DELETE } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  prismaMock.roster.findFirst.mockResolvedValue(null);
   toEndOfDayInTimezoneMock.mockReturnValue(new Date('2025-01-01T00:00:00.000Z'));
   toDateTimeInTimezoneMock.mockReturnValue(new Date('2025-01-02T00:00:00.000Z'));
 });
@@ -133,7 +134,7 @@ describe('GET /api/assignments/[id]', () => {
   });
 
   it('returns assignment when ADMIN', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.assignment.findUnique.mockResolvedValue({
       id: 'a1',
       courseId: 'c1',
@@ -159,7 +160,7 @@ describe('PUT /api/assignments/[id]', () => {
     });
     const res = await PUT(req, { params: Promise.resolve({ id: 'a1' }) });
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('returns 403 when student attempts to update', async () => {
@@ -176,6 +177,8 @@ describe('PUT /api/assignments/[id]', () => {
 
   it('returns 403 when unpublishing assignment with submissions', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.assignmentProblem.findFirst.mockResolvedValue({ assignmentId: 'a1' });
 
@@ -192,6 +195,8 @@ describe('PUT /api/assignments/[id]', () => {
 
   it('returns 403 when unpublishing assignment with grades', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
     prismaMock.assignmentProblemGrade.findFirst.mockResolvedValue({ assignmentId: 'a1' });
@@ -209,6 +214,7 @@ describe('PUT /api/assignments/[id]', () => {
 
   it('updates assignment and logs activity', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
     prismaMock.assignmentProblemGrade.findFirst.mockResolvedValue(null);
@@ -236,7 +242,7 @@ describe('PUT /api/assignments/[id]', () => {
   });
 
   it('uses system timezone when user timezone not available', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue(null);
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
@@ -264,6 +270,7 @@ describe('PUT /api/assignments/[id]', () => {
 
   it('returns 400 when enabling late submissions without cutoff (PUT)', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
     prismaMock.assignmentProblemGrade.findFirst.mockResolvedValue(null);
@@ -295,6 +302,7 @@ describe('PUT /api/assignments/[id]', () => {
 
   it('returns 400 when late cutoff is before due date (PUT)', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
     prismaMock.assignmentProblemGrade.findFirst.mockResolvedValue(null);
@@ -328,6 +336,8 @@ describe('PUT /api/assignments/[id]', () => {
 
   it('prevents changing group mode via PUT when submissions already exist', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.submission.count.mockResolvedValue(2);
 
@@ -353,7 +363,7 @@ describe('PATCH /api/assignments/[id]', () => {
     });
     const res = await PATCH(req, { params: Promise.resolve({ id: 'a1' }) });
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('returns 403 when student attempts to patch', async () => {
@@ -370,6 +380,8 @@ describe('PATCH /api/assignments/[id]', () => {
 
   it('returns 403 when unpublishing assignment with submissions', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.assignmentProblem.findFirst.mockResolvedValue({ assignmentId: 'a1' });
 
@@ -386,6 +398,8 @@ describe('PATCH /api/assignments/[id]', () => {
 
   it('prevents changing group mode if submissions exist', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.submission.count.mockResolvedValue(1);
 
@@ -414,6 +428,7 @@ describe('PATCH /api/assignments/[id]', () => {
 
   it('returns 400 when late cutoff is provided while late submissions are disabled (PATCH)', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.assignment.findUnique.mockResolvedValue({
       id: 'a1',
@@ -436,6 +451,7 @@ describe('PATCH /api/assignments/[id]', () => {
 
   it('updates assignment via PATCH and logs activity', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.assignment.findUnique.mockResolvedValue({
       id: 'a1',
@@ -472,6 +488,7 @@ describe('PATCH /api/assignments/[id]', () => {
 
   it('returns 500 when PATCH update fails', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.assignment.findUnique.mockResolvedValue({
       id: 'a1',
@@ -502,7 +519,7 @@ describe('POST /api/assignments/[id]', () => {
     });
     const res = await POST(req);
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('returns 403 when student attempts to create', async () => {
@@ -543,6 +560,7 @@ describe('POST /api/assignments/[id]', () => {
 
   it('creates assignment with defaults and logs activity', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.assignment.create.mockResolvedValue({
       id: 'a1',
@@ -575,7 +593,7 @@ describe('POST /api/assignments/[id]', () => {
   });
 
   it('creates assignment with all fields provided', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.assignment.create.mockResolvedValue({
       id: 'a2',
@@ -617,6 +635,7 @@ describe('POST /api/assignments/[id]', () => {
 
   it('returns 400 when enabling late submissions without cutoff (POST)', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
 
     const req = new NextRequest('http://localhost/api/assignments/a1', {
@@ -631,7 +650,7 @@ describe('POST /api/assignments/[id]', () => {
   });
 
   it('returns 400 when late cutoff is before due date (POST)', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     toEndOfDayInTimezoneMock.mockReturnValueOnce(new Date('2025-02-02T00:00:00.000Z'));
     toDateTimeInTimezoneMock.mockReturnValueOnce(new Date('2025-01-01T00:00:00.000Z'));
@@ -661,7 +680,7 @@ describe('DELETE /api/assignments/[id]', () => {
     const req = new NextRequest('http://localhost/api/assignments/a1', { method: 'DELETE' });
     const res = await DELETE(req, { params: Promise.resolve({ id: 'a1' }) });
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('returns 403 when student attempts to delete', async () => {
@@ -685,6 +704,7 @@ describe('DELETE /api/assignments/[id]', () => {
 
   it('returns 400 when assignment has submissions', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.assignment.findUnique.mockResolvedValue({ id: 'a1', courseId: 'c1' });
     prismaMock.submission.count.mockResolvedValue(5);
 
@@ -697,7 +717,7 @@ describe('DELETE /api/assignments/[id]', () => {
   });
 
   it('returns 400 when assignment has comments', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.assignment.findUnique.mockResolvedValue({ id: 'a1', courseId: 'c1' });
     prismaMock.submission.count.mockResolvedValue(0);
     prismaMock.comment.count.mockResolvedValue(3);
@@ -712,6 +732,7 @@ describe('DELETE /api/assignments/[id]', () => {
 
   it('deletes assignment and associated problems, then logs activity', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.assignment.findUnique.mockResolvedValue({
       id: 'a1',
       courseId: 'c1',
@@ -744,7 +765,7 @@ describe('DELETE /api/assignments/[id]', () => {
   });
 
   it('handles activity log errors gracefully', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.assignment.findUnique.mockResolvedValue({
       id: 'a1',
       courseId: 'c1',

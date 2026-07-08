@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
-import SystemLoggingClient from './SystemLoggingClient';
+import SystemLogsClient from './SystemLogsClient';
 
 export const metadata: Metadata = {
-  title: 'System Logging',
+  title: 'System Logs',
 };
 
-export default function SystemStatusPage() {
-  return <SystemLoggingClient />;
+export default function SystemLogsPage() {
+  return <SystemLogsClient />;
 }

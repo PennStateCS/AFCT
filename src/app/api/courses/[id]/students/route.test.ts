@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const prismaMock = vi.hoisted(() => ({
   roster: {
     findMany: vi.fn(),
+    findFirst: vi.fn(),
   },
 }));
 
@@ -15,6 +16,8 @@ import { GET } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Default: caller not enrolled (denied); authorized tests grant a course role.
+  prismaMock.roster.findFirst.mockResolvedValue(null);
 });
 
 describe('GET /api/courses/[id]/students', () => {
@@ -28,16 +31,12 @@ describe('GET /api/courses/[id]/students', () => {
     expect(res.status).toBe(403);
   });
 
-  it('returns only students', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+  it('returns only students (STUDENT filtered in the query)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.roster.findMany.mockResolvedValue([
       {
         role: 'STUDENT',
         user: { id: 's1', firstName: 'A', lastName: 'S', email: 's1@example.com', role: 'STUDENT' },
-      },
-      {
-        role: 'TA',
-        user: { id: 't1', firstName: 'T', lastName: 'A', email: 't1@example.com', role: 'TA' },
       },
     ]);
 
@@ -50,5 +49,9 @@ describe('GET /api/courses/[id]/students', () => {
     expect(body).toEqual([
       { id: 's1', firstName: 'A', lastName: 'S', email: 's1@example.com', role: 'STUDENT' },
     ]);
+    // The role filter must be in the query, not applied in JS after fetching all roles.
+    expect(prismaMock.roster.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { courseId: 'c1', role: 'STUDENT' } }),
+    );
   });
 });

@@ -13,14 +13,12 @@ import {
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import InputGroup from '@/components/ui/InputGroup';
-import SelectField from '@/components/ui/SelectField';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 import { CreateUserSchema, type CreateUserRaw, type CreateUserInput } from '@/schemas/user';
-import { roleOptions, formatRole } from '@/lib/roles';
 
 // For the checklist UI only
 const passwordRules = [
@@ -40,19 +38,15 @@ type CreateUserDialogProps = {
 export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogProps) {
   const { timezone } = useEffectiveTimezone();
   const defaults: CreateUserRaw = useMemo(() => {
-    const defaultRole = roleOptions.includes('STUDENT' as any)
-      ? 'STUDENT'
-      : (roleOptions[0] ?? 'STUDENT');
     return {
       firstName: '',
       lastName: '',
       email: '',
       password: '',
       confirmPassword: '',
-      role: defaultRole as 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT',
       timezone,
     };
-  }, [roleOptions, timezone]);
+  }, [timezone]);
 
   const {
     control,
@@ -94,7 +88,7 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { confirmPassword, ...payload } = parsed;
 
-    const res = await fetch('/api/users', {
+    const res = await fetch('/api/admin/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -205,23 +199,6 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
                 error={errors.confirmPassword?.message}
                 showStatus
                 isValid={!errors.confirmPassword && !!field.value && field.value === pw}
-              />
-            )}
-          />
-
-          {/* Role */}
-          <Controller
-            control={control}
-            name="role"
-            render={({ field }) => (
-              <SelectField
-                label="Default Role"
-                name="role"
-                value={field.value ?? ''}
-                onValueChange={(v) => field.onChange(v)}
-                placeholder="Select a role"
-                options={roleOptions.map((r) => ({ value: r, label: formatRole(r) }))}
-                error={errors.role?.message}
               />
             )}
           />

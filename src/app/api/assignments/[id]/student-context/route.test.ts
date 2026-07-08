@@ -16,6 +16,7 @@ import { GET } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  prismaMock.roster.findFirst.mockResolvedValue(null);
 });
 
 describe('GET /api/assignments/[id]/student-context', () => {
@@ -48,7 +49,7 @@ describe('GET /api/assignments/[id]/student-context', () => {
       isPublished: true,
       problems: [{ problemId: 'p1' }, { problemId: 'p2' }],
     });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1' });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
     prismaMock.submission.findMany.mockResolvedValue([
       {
         id: 's1',
@@ -130,7 +131,7 @@ describe('GET /api/assignments/[id]/student-context', () => {
       isPublished: true,
       problems: [{ problemId: 'p1' }],
     });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1' });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
     // Submission/comment reference 'p2', which was not pre-seeded from the problem list.
     prismaMock.submission.findMany.mockResolvedValue([
       {
@@ -175,7 +176,7 @@ describe('GET /api/assignments/[id]/student-context', () => {
       isPublished: true,
       problems: [{ problemId: 'p1' }],
     });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1' });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
     prismaMock.submission.findMany.mockRejectedValue(new Error('db down'));
 
     const res = await GET(new Request('http://localhost/api/assignments/a1/student-context'), {

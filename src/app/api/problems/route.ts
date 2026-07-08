@@ -1,23 +1,61 @@
-// /src/app/api/problems/route.ts
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import fs from 'fs';
 import path from 'path';
 import { auth } from '@/lib/auth';
+import { canManageCourse } from '@/lib/permissions';
 import { ProblemType } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 
-// POST /api/problems - Create a new problem with file upload
+/**
+ * Creates a problem from an uploaded solution file (multipart/form-data). Course
+ * staff (faculty or TAs) or a system admin. The file's XML structure is validated
+ * against the problem type before it's written to disk, and it's size-checked against
+ * the system upload limit. `maxStates` applies to FA/PDA and `isDeterministic` to FA.
+ * @openapi
+ * summary: Create a problem
+ * requestBody:
+ *   required: true
+ *   content:
+ *     multipart/form-data:
+ *       schema:
+ *         type: object
+ *         required: [title, type, courseId, file]
+ *         properties:
+ *           title: { type: string }
+ *           description: { type: string }
+ *           type: { type: string, description: "Problem type (e.g. FA, PDA, RE, CFG)" }
+ *           courseId: { type: string }
+ *           assignmentId: { type: string }
+ *           maxPoints: { type: string }
+ *           maxSubmissions: { type: string }
+ *           maxStates: { type: string, description: FA/PDA only }
+ *           isDeterministic: { type: string, enum: ['true', 'false'], description: FA only }
+ *           autograderEnabled: { type: string, enum: ['true', 'false'] }
+ *           file: { type: string, format: binary, description: Solution definition (XML) }
+ * responses:
+ *   200: { description: The created problem. }
+ *   400: { description: Missing fields or the solution file failed structure validation. }
+ *   403: { description: Caller is not course staff or a system admin. }
+ *   413: { description: File exceeds the system upload limit. }
+ *   500: { description: Server error. }
+ */
 export async function POST(req: Request) {
+  let actorId: string | null = null;
   try {
-    // Verify authenticated user
     const session = await auth();
     const user = session?.user;
+    actorId = user?.id ?? null;
 
-    if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    if (!user) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'PROBLEM_CREATE_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -42,6 +80,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    if (!(await canManageCourse(user, courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'PROBLEM_CREATE_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
     const { maxBytes, maxMb } = await getSystemUploadLimit();
     if (file.size > maxBytes) {
       return NextResponse.json(
@@ -58,6 +106,7 @@ export async function POST(req: Request) {
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,
         action: 'SUBMISSION_INVALID_FILE_STRUCTURE',
+        severity: 'WARNING',
         category: 'SUBMISSION',
         courseId,
         assignmentId,
@@ -103,6 +152,7 @@ export async function POST(req: Request) {
     await createEnhancedActivityLog(prisma, req, {
       userId: user.id,
       action: 'CREATE_PROBLEM',
+      severity: 'INFO',
       category: 'PROBLEM',
       courseId,
       problemId: problem.id,
@@ -110,7 +160,10 @@ export async function POST(req: Request) {
         userId: user.id,
         courseId: courseId,
         problemId: problem.id,
+        problemTitle: problem.title,
         problemType: type,
+        maxPoints: problem.maxPoints,
+        autograderEnabled: problem.autograderEnabled,
         fileName,
       },
     });
@@ -118,6 +171,12 @@ export async function POST(req: Request) {
     return NextResponse.json(problem);
   } catch (err) {
     console.error('Problem creation error:', err);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: actorId,
+      action: 'PROBLEM_CREATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }

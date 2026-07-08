@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { isAdmin } from '@/lib/permissions';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
+import { toEmptyStringNotation } from '@/lib/empty-string-notation';
 import type { Prisma } from '@prisma/client';
 
 const courseCodeRegex = /^[A-Z]{2,8}\s?\d{1,4}[A-Z]?$/;
 const normalizeCode = (v: string) => v.trim().replace(/\s+/g, ' ').toUpperCase();
 
-// Local copy of registration code generator to match POST /api/courses behavior
+// Mirrors the registration-code generator in POST /api/courses so duplicated
+// courses get a fresh, unique code the same way originals do.
 async function generateUniqueCourseCode() {
   const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   const numbers = '0123456789';
@@ -36,19 +40,70 @@ async function generateUniqueCourseCode() {
   return code;
 }
 
+/**
+ * Creates a new course modeled on an existing one, in a single transaction. The
+ * caller becomes faculty on the copy; faculty/TA rosters are copied only when
+ * asked. `copyMode` (or the legacy copyAssignments/copyProblems booleans) selects
+ * what carries over: assignments only, problems only, or assignments with their
+ * problems. The copy always starts unpublished with a fresh registration code.
+ * System administrators only. Dates are interpreted in the actor's timezone.
+ * @openapi
+ * summary: Duplicate a course
+ * parameters:
+ *   - { name: id, in: path, required: true, description: Source course id, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [title, code, semester, startDate, endDate, registrationOpenAt, registrationCloseAt, credits]
+ *         properties:
+ *           title: { type: string }
+ *           code: { type: string, description: Like "CMPSC 221" or "MATH220" }
+ *           semester: { type: string }
+ *           credits: { type: integer, minimum: 1, maximum: 6 }
+ *           startDate: { type: string }
+ *           endDate: { type: string }
+ *           registrationOpenAt: { type: string }
+ *           registrationCloseAt: { type: string }
+ *           emptyStringNotation: { type: string }
+ *           copyMode: { type: string, enum: [assignments, problems, assignments_with_problems] }
+ *           copyAssignments: { type: boolean, description: Legacy fallback for copyMode }
+ *           copyProblems: { type: boolean, description: Legacy fallback for copyMode }
+ *           copyFaculty: { type: boolean }
+ *           copyTAs: { type: boolean }
+ * responses:
+ *   201:
+ *     description: The new course id.
+ *     content:
+ *       application/json:
+ *         schema: { type: object, properties: { id: { type: string }, message: { type: string } } }
+ *   400: { description: "Missing fields, bad credits, bad code, or invalid dates." }
+ *   401: { description: Not signed in. }
+ *   403: { description: System administrators only (logged as a security event). }
+ *   500: { description: Server error. }
+ */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const resolved = await params;
   const courseId = resolved.id;
+  let actorId: string | null = null;
 
   try {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    actorId = session.user.id;
 
-    // Only allow faculty/admin/ta to duplicate
-    const role = session.user.role;
-    if (!['FACULTY', 'ADMIN', 'TA'].includes(role)) {
+    // Duplicating a course is an admin-only operation.
+    if (!isAdmin(session.user)) {
+      await createEnhancedActivityLog(prisma, req as unknown as Request, {
+        userId: session?.user?.id ?? null,
+        action: 'COURSE_DUPLICATE_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -62,6 +117,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       registrationOpenAt,
       registrationCloseAt,
       credits,
+      emptyStringNotation,
       copyAssignments: bodyCopyAssignments,
       copyProblems: bodyCopyProblems,
       copyMode,
@@ -170,6 +226,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           registrationCloseAt: toDateTimeInTimezone(registrationCloseAt, userTimezone),
           isPublished: false,
           isArchived: false,
+          emptyStringNotation: toEmptyStringNotation(emptyStringNotation),
           regCode,
         },
       });
@@ -287,9 +344,33 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return newCourse;
     });
 
+    await createEnhancedActivityLog(prisma, req as unknown as Request, {
+      userId: actorId,
+      action: 'COURSE_DUPLICATED',
+      severity: 'INFO',
+      category: 'COURSE',
+      courseId: result.id,
+      metadata: {
+        actorId,
+        sourceCourseId: courseId,
+        newCourseId: result.id,
+        newCourseName: result.name,
+        newCourseCode: result.code,
+        copyMode: mode,
+        copyFaculty: !!copyFaculty,
+        copyTAs: !!copyTAs,
+      },
+    });
+
     return NextResponse.json({ id: result.id, message: 'Course duplicated' }, { status: 201 });
   } catch (err) {
     console.error('Duplicate course error:', err);
+    await createEnhancedActivityLog(prisma, req as unknown as Request, {
+      userId: actorId,
+      action: 'COURSE_DUPLICATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

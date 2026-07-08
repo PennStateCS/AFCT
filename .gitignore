@@ -16,6 +16,9 @@ node_modules/
 out/
 build/
 
+# Generated API docs (built in CI, published to Pages)
+docs-dist/
+
 # Docker
 docker-compose.override.yml
 .docker/
@@ -58,13 +61,19 @@ Thumbs.db
 *.tsbuildinfo
 next-env.d.ts
 
-# SSL keys (never commit these)
+# TLS keys/certs (never commit these — nginx generates its own at runtime)
 *.pem
+*.key
+*.crt
+docker/nginx/certs/
 
 # IDE settings
 .vscode/
 .idea/
 *.sw?
+
+# Claude Code
+.claude/
 
 # Uploads and user content
 public/uploads/*
@@ -72,8 +81,9 @@ public/uploads/*
 private/uploads/*
 !private/uploads/.gitkeep
 
-# Logs
-logs/
+# Logs (runtime log output at the repo root). Anchored with a leading slash so it
+# matches only <root>/logs/ and not source directories like src/app/api/logs.
+/logs/
 *.log
 
 # Temporary files

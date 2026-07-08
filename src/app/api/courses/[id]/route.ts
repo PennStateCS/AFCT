@@ -1,19 +1,59 @@
-// /src/api/courses/[id]/route.ts
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canArchiveCourse, canUnpublishCourse } from '@/lib/course-status-checks';
+import { canAccessCourse, canManageCourse, isAdmin } from '@/lib/permissions';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
+import { toEmptyStringNotation } from '@/lib/empty-string-notation';
 
-// GET: Fetch a course by ID with view-based metadata
+// A prisma delegate whose aggregate methods are treated as optional, so the code
+// can fall back to count() when a partial test mock doesn't implement them.
+type CountRow = {
+  studentId?: string | null;
+  assignmentId?: string | null;
+  _count?: { _all?: number } | null;
+};
+type OptionalCountDelegate = {
+  groupBy?: (args: unknown) => Promise<CountRow[]>;
+  findMany?: (args: unknown) => Promise<CountRow[]>;
+};
+
+/**
+ * Fetches one course with derived metadata, shaped by the `view` query param to
+ * keep payloads lean (full/summary/roster/assignments/problems). Assignments come
+ * back with derived point totals and submission/comment counts; problems are
+ * tagged with whether an assignment uses them; the roster is flattened into a
+ * single `enrolled` array, and the caller's own course role is included. Access is
+ * restricted: any enrolled member of the course (any role) or a system admin.
+ * @openapi
+ * summary: Get a course
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - name: view
+ *     in: query
+ *     description: Controls which relations are included.
+ *     schema: { type: string, enum: [full, summary, roster, assignments, problems], default: full }
+ * responses:
+ *   200:
+ *     description: The course with metadata for the requested view.
+ *   400: { description: Missing course id. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Not enrolled in the course and not a system admin. }
+ *   404: { description: Course not found. }
+ *   500: { description: Server error. }
+ */
 export async function GET(req: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   const view = new URL(req.url).searchParams.get('view') ?? 'full';
 
   if (!id) {
     return NextResponse.json({ error: 'Missing course ID' }, { status: 400 });
+  }
+
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
@@ -41,7 +81,6 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
                       id: true,
                       firstName: true,
                       lastName: true,
-                      role: true,
                       email: true,
                       avatar: true,
                     },
@@ -74,12 +113,38 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
       return NextResponse.json({ error: 'Course not found' }, { status: 404 });
     }
 
-    const rosterRows = ((course as any).roster ?? []) as Array<{
-      role: string;
-      user: Record<string, unknown>;
-    }>;
-    const assignmentRows = ((course as any).assignments ?? []) as Array<any>;
-    const problemRows = ((course as any).problems ?? []) as Array<Record<string, unknown>>;
+    // Access: staff may view any course; everyone else must be enrolled in it.
+    // This roster lookup is reused below to report the viewer's course role.
+    const viewerRoster = await prisma.roster.findFirst({
+      where: { courseId: course.id, userId: session.user.id },
+      select: { role: true },
+    });
+    if (!(await canAccessCourse(session.user, course.id))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // The findUnique uses conditional includes, so widen to the relations and
+    // _count that may be present for the requested view.
+    type AssignmentRow = Record<string, unknown> & {
+      id: string;
+      problems?: Array<{ maxPoints?: number | null }>;
+      _count?: { problems?: number };
+    };
+    const courseData = course as unknown as Omit<
+      typeof course,
+      'roster' | 'assignments' | 'problems' | '_count'
+    > & {
+      roster?: Array<{ role: string; user: Record<string, unknown> }>;
+      assignments?: AssignmentRow[];
+      problems?: Array<Record<string, unknown>>;
+      _count?: { assignments?: number; problems?: number; roster?: number };
+    };
+    const submissionDelegate = prisma.submission as unknown as OptionalCountDelegate;
+    const commentDelegate = prisma.comment as unknown as OptionalCountDelegate;
+
+    const rosterRows = courseData.roster ?? [];
+    const assignmentRows = courseData.assignments ?? [];
+    const problemRows = courseData.problems ?? [];
 
     const assignmentIds = includeAssignments ? assignmentRows.map((a) => String(a.id)) : [];
 
@@ -91,16 +156,16 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
 
       const studentSubmissionRows =
         assignmentIds.length > 0 && studentIds.length > 0
-          ? (prisma.submission as any).groupBy
-            ? await (prisma.submission as any).groupBy({
+          ? submissionDelegate.groupBy
+            ? await submissionDelegate.groupBy({
                 by: ['studentId'],
                 where: {
                   studentId: { in: studentIds },
                   assignmentId: { in: assignmentIds },
                 },
               })
-            : (prisma.submission as any).findMany
-              ? await (prisma.submission as any).findMany({
+            : submissionDelegate.findMany
+              ? await submissionDelegate.findMany({
                   where: {
                     studentId: { in: studentIds },
                     assignmentId: { in: assignmentIds },
@@ -121,7 +186,7 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
                 ).then((rows) => rows.filter((row): row is { studentId: string } => !!row))
           : [];
       const studentsWithSubmissions = new Set(
-        studentSubmissionRows.map((row: { studentId: string }) => row.studentId),
+        studentSubmissionRows.map((row: CountRow) => String(row.studentId)),
       );
 
       enrolled = rosterRows.map((r) => ({
@@ -136,14 +201,14 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
     if (includeAssignments) {
       const submissionCounts =
         assignmentIds.length > 0
-          ? (prisma.submission as any).groupBy
-            ? await (prisma.submission as any).groupBy({
+          ? submissionDelegate.groupBy
+            ? await submissionDelegate.groupBy({
                 by: ['assignmentId'],
                 where: { assignmentId: { in: assignmentIds } },
                 _count: { _all: true },
               })
-            : (prisma.submission as any).findMany
-              ? await (prisma.submission as any).findMany({
+            : submissionDelegate.findMany
+              ? await submissionDelegate.findMany({
                   where: { assignmentId: { in: assignmentIds } },
                   select: { assignmentId: true },
                 })
@@ -156,14 +221,14 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
           : [];
       const commentCounts =
         assignmentIds.length > 0
-          ? (prisma.comment as any).groupBy
-            ? await (prisma.comment as any).groupBy({
+          ? commentDelegate.groupBy
+            ? await commentDelegate.groupBy({
                 by: ['assignmentId'],
                 where: { assignmentId: { in: assignmentIds } },
                 _count: { _all: true },
               })
-            : (prisma.comment as any).findMany
-              ? await (prisma.comment as any).findMany({
+            : commentDelegate.findMany
+              ? await commentDelegate.findMany({
                   where: { assignmentId: { in: assignmentIds } },
                   select: { assignmentId: true },
                 })
@@ -176,21 +241,21 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
           : [];
 
       const submissionCountMap = new Map<string, number>();
-      submissionCounts.forEach((row: any) => {
+      submissionCounts.forEach((row: CountRow) => {
         const key = String(row.assignmentId);
         const increment = row?._count?._all ?? 1;
         submissionCountMap.set(key, (submissionCountMap.get(key) ?? 0) + increment);
       });
 
       const commentCountMap = new Map<string, number>();
-      commentCounts.forEach((row: any) => {
+      commentCounts.forEach((row: CountRow) => {
         const key = String(row.assignmentId);
         const increment = row?._count?._all ?? 1;
         commentCountMap.set(key, (commentCountMap.get(key) ?? 0) + increment);
       });
 
       assignmentsWithProblemCount = assignmentRows.map((assignment) => {
-        const totalProblemPoints = (assignment.problems ?? []).reduce((sum: number, ap: any) => {
+        const totalProblemPoints = (assignment.problems ?? []).reduce((sum: number, ap) => {
           const value = typeof ap.maxPoints === 'number' ? ap.maxPoints : 0;
           return sum + (Number.isFinite(value) ? value : 0);
         }, 0);
@@ -236,18 +301,9 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
       }));
     }
 
-    // Determine viewer's course role if authenticated
-    const session = await auth();
-    let viewerRole: string | null = null;
-    let viewerDefaultRole: string | null = null;
-    if (session?.user) {
-      const viewerRoster = await prisma.roster.findFirst({
-        where: { courseId: course.id, userId: session.user.id },
-        select: { role: true },
-      });
-      viewerRole = viewerRoster?.role ?? null;
-      viewerDefaultRole = session.user.role ?? null;
-    }
+    // Viewer's roles, from the roster lookup already done during the access check.
+    const viewerRole: string | null = viewerRoster?.role ?? null;
+    const viewerIsAdmin = isAdmin(session.user);
 
     const response = {
       id: course.id,
@@ -262,26 +318,18 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
       registrationCloseAt: course.registrationCloseAt,
       isPublished: course.isPublished,
       isArchived: course.isArchived,
+      emptyStringNotation: course.emptyStringNotation,
       createdAt: course.createdAt,
       updatedAt: course.updatedAt,
       // Only include a single enrolled array (user objects with courseRole)
       enrolled: includeRoster ? enrolled : [],
       problems: includeProblems ? problemsWithLink : [],
       assignments: includeAssignments ? assignmentsWithProblemCount : [],
-      assignmentTotal:
-        typeof (course as any)._count?.assignments === 'number'
-          ? (course as any)._count.assignments
-          : assignmentRows.length,
-      problemTotal:
-        typeof (course as any)._count?.problems === 'number'
-          ? (course as any)._count.problems
-          : problemRows.length,
-      rosterTotal:
-        typeof (course as any)._count?.roster === 'number'
-          ? (course as any)._count.roster
-          : rosterRows.length,
+      assignmentTotal: courseData._count?.assignments ?? assignmentRows.length,
+      problemTotal: courseData._count?.problems ?? problemRows.length,
+      rosterTotal: courseData._count?.roster ?? rosterRows.length,
       viewerRole,
-      viewerDefaultRole,
+      viewerIsAdmin,
     };
 
     return NextResponse.json(response);
@@ -291,7 +339,43 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
   }
 }
 
-// PUT: Update a course (Faculty/Admin/TA only)
+/**
+ * Updates a course's details and, when `instructorIds` is supplied, reconciles its
+ * faculty roster (adds, promotes, or removes to match the desired set). Runs the
+ * same archive/unpublish safety checks as the dedicated toggles, requires a
+ * registration window, and records a before→after diff of changed fields.
+ * Course staff (faculty or TAs) or a system admin.
+ * @openapi
+ * summary: Update a course
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [name, code, semester, credits, startDate, endDate, registrationOpenAt, registrationCloseAt, isPublished, isArchived]
+ *         properties:
+ *           name: { type: string }
+ *           code: { type: string }
+ *           semester: { type: string }
+ *           credits: { type: number }
+ *           startDate: { type: string }
+ *           endDate: { type: string }
+ *           registrationOpenAt: { type: string }
+ *           registrationCloseAt: { type: string }
+ *           isPublished: { type: boolean }
+ *           isArchived: { type: boolean }
+ *           emptyStringNotation: { type: string }
+ *           instructorIds: { type: array, items: { type: string }, description: "If present, becomes the exact faculty set" }
+ * responses:
+ *   200:
+ *     description: The updated course with roster and assignments.
+ *   400: { description: "Missing id, invalid isArchived, empty instructor list, or missing registration window." }
+ *   403: { description: "Not course staff (faculty or TAs) or a system admin, or an archive/unpublish safety check failed." }
+ *   500: { description: Server error. }
+ */
 export async function PUT(req: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
 
@@ -299,12 +383,16 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
     return NextResponse.json({ error: 'Missing course ID' }, { status: 400 });
   }
 
-  // Get authenticated user session
   const session = await auth();
   const user = session?.user;
 
-  // Allow only ADMIN, FACULTY, or TA to edit courses
-  if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+  if (!user || !(await canManageCourse(user, id))) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'COURSE_UPDATE_DENIED',
+      severity: 'SECURITY',
+      metadata: {},
+    });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -335,6 +423,12 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
   if (body.isArchived) {
     const { canArchive, reason } = await canArchiveCourse(prisma, id, body.startDate, body.endDate);
     if (!canArchive) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'COURSE_ARCHIVE_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
       return NextResponse.json({ error: reason }, { status: 403 });
     }
   }
@@ -343,6 +437,12 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
   if (!body.isPublished) {
     const { canUnpublish, reason } = await canUnpublishCourse(prisma, id);
     if (!canUnpublish) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'COURSE_PUBLISH_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
       return NextResponse.json({ error: reason }, { status: 403 });
     }
   }
@@ -352,6 +452,10 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
   }
 
   try {
+    // Prior values are snapshotted inside the transaction (below) so the audit
+    // can record what actually changed.
+    let before: Record<string, unknown> | null = null;
+
     const instructorIds = Array.isArray(body.instructorIds) ? body.instructorIds : null;
     if (Array.isArray(instructorIds) && instructorIds.length === 0) {
       return NextResponse.json(
@@ -362,6 +466,23 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
 
     // Update the course and optionally sync faculty (ADMIN) roster entries
     const updatedCourse = await prisma.$transaction(async (tx) => {
+      before = await tx.course.findUnique({
+        where: { id },
+        select: {
+          name: true,
+          code: true,
+          semester: true,
+          credits: true,
+          isPublished: true,
+          isArchived: true,
+          emptyStringNotation: true,
+          startDate: true,
+          endDate: true,
+          registrationOpenAt: true,
+          registrationCloseAt: true,
+        },
+      });
+
       await tx.course.update({
         where: { id },
         data: {
@@ -379,6 +500,7 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
             : null,
           isPublished: body.isPublished,
           isArchived: body.isArchived,
+          emptyStringNotation: toEmptyStringNotation(body.emptyStringNotation),
         },
       });
 
@@ -457,7 +579,6 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
                   id: true,
                   firstName: true,
                   lastName: true,
-                  role: true,
                   email: true,
                   avatar: true,
                 },
@@ -473,23 +594,6 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
 
       return refreshed;
     });
-
-    // Group roster users by role (include ADMIN alongside FACULTY)
-    const instructors = updatedCourse.roster
-      .filter((r: (typeof updatedCourse.roster)[number]) => (r.role as string) === 'ADMIN')
-      .map((r: (typeof updatedCourse.roster)[number]) => ({ ...r.user, role: r.role }));
-    const faculty = updatedCourse.roster
-      .filter(
-        (r: (typeof updatedCourse.roster)[number]) =>
-          (r.role as string) === 'FACULTY' || (r.role as string) === 'ADMIN',
-      )
-      .map((r: (typeof updatedCourse.roster)[number]) => ({ ...r.user, role: r.role }));
-    const tas = updatedCourse.roster
-      .filter((r: (typeof updatedCourse.roster)[number]) => r.role === 'TA')
-      .map((r: (typeof updatedCourse.roster)[number]) => ({ ...r.user, role: r.role }));
-    const students = updatedCourse.roster
-      .filter((r: (typeof updatedCourse.roster)[number]) => r.role === 'STUDENT')
-      .map((r: (typeof updatedCourse.roster)[number]) => ({ ...r.user, role: r.role }));
 
     // Attach problem counts to assignments
     const assignmentsWithProblemCount = await Promise.all(
@@ -527,30 +631,59 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
       ),
     );
 
+    // Record what actually changed (before → after). Publish/archive status
+    // changes especially matter for a course's lifecycle.
+    const AUDITED_COURSE_FIELDS = [
+      'name',
+      'code',
+      'semester',
+      'credits',
+      'isPublished',
+      'isArchived',
+      'emptyStringNotation',
+      'startDate',
+      'endDate',
+      'registrationOpenAt',
+      'registrationCloseAt',
+    ] as const;
+    const toComparable = (v: unknown): string | number | boolean | null =>
+      v instanceof Date ? v.toISOString() : ((v as string | number | boolean | null) ?? null);
+    const changes: Record<
+      string,
+      { from: string | number | boolean | null; to: string | number | boolean | null }
+    > = {};
+    for (const field of AUDITED_COURSE_FIELDS) {
+      const from = toComparable((before as Record<string, unknown> | null)?.[field]);
+      const to = toComparable((updatedCourse as Record<string, unknown>)[field]);
+      if (from !== to) changes[field] = { from, to };
+    }
+
     // Log the update action to ActivityLog
     await createEnhancedActivityLog(prisma, req, {
       userId: user.id,
       action: 'UPDATE_COURSE',
+      severity: 'INFO',
       category: 'COURSE',
       courseId: updatedCourse.id,
       metadata: {
-        userId: user.id,
+        actorId: user.id,
         courseId: updatedCourse.id,
-        updatedFields: Object.keys(body),
+        changedFields: Object.keys(changes),
+        changes,
       },
     });
 
-    // Determine viewer's course role if authenticated
-    const session = await auth();
+    // Determine viewer's course role. Reuse the session/user already resolved at
+    // the top of PUT instead of calling auth() again.
     let viewerRole: string | null = null;
-    let viewerDefaultRole: string | null = null;
+    let viewerIsAdmin = false;
     if (session?.user) {
       const viewerRoster = await prisma.roster.findFirst({
         where: { courseId: updatedCourse.id, userId: session.user.id },
         select: { role: true },
       });
       viewerRole = viewerRoster?.role ?? null;
-      viewerDefaultRole = session.user.role ?? null;
+      viewerIsAdmin = isAdmin(session.user);
     }
 
     return NextResponse.json({
@@ -566,6 +699,7 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
       registrationCloseAt: updatedCourse.registrationCloseAt,
       isPublished: updatedCourse.isPublished,
       isArchived: updatedCourse.isArchived,
+      emptyStringNotation: updatedCourse.emptyStringNotation,
       createdAt: updatedCourse.createdAt,
       updatedAt: updatedCourse.updatedAt,
       // Only include a single enrolled array (user objects with courseRole)
@@ -576,15 +710,35 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
       problems: updatedCourse.problems,
       assignments: assignmentsWithProblemCount,
       viewerRole,
-      viewerDefaultRole,
+      viewerIsAdmin,
     });
   } catch (error) {
     console.error('PUT /api/courses/[id] error:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'COURSE_UPDATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Failed to update course' }, { status: 500 });
   }
 }
 
-// DELETE: Delete a course (Faculty/Admin/TA only, course must be archived)
+/**
+ * Permanently deletes a course. Course staff (faculty or TAs) or a system admin,
+ * and the course must already
+ * be archived — a guard against deleting a live course. The archived requirement
+ * is enforced both up front and again in the delete's `where` clause.
+ * @openapi
+ * summary: Delete a course
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: Course deleted.
+ *   403: { description: "Not course staff (faculty or TAs) or a system admin, or the course is not archived." }
+ *   500: { description: Server error. }
+ */
 export async function DELETE(req: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
 
@@ -592,11 +746,16 @@ export async function DELETE(req: Request, context: { params: Promise<{ id: stri
     return NextResponse.json({ error: 'Missing course ID' }, { status: 400 });
   }
 
-  // Get authenticated user session
   const session = await auth();
   const user = session?.user;
 
-  if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+  if (!user || !(await canManageCourse(user, id))) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'COURSE_DELETE_DENIED',
+      severity: 'SECURITY',
+      metadata: {},
+    });
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
@@ -607,13 +766,18 @@ export async function DELETE(req: Request, context: { params: Promise<{ id: stri
   });
 
   if (courseIsArchived === null || courseIsArchived.isArchived === false) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'COURSE_DELETE_DENIED',
+      severity: 'SECURITY',
+      metadata: {},
+    });
     return NextResponse.json({ error: 'Course must be archived' }, { status: 403 });
   }
 
-  const body = await req.json();
+  await req.json();
 
   try {
-    // Deleting course code
     const deletedCourse = await prisma.course.delete({
       where: {
         id,
@@ -621,16 +785,30 @@ export async function DELETE(req: Request, context: { params: Promise<{ id: stri
       },
     });
 
-    // Log the update action to ActivityLog
+    // Record which course was deleted. The course row is gone, so its id goes in
+    // metadata only (not the log's courseId FK, which would be nulled/rejected).
     await createEnhancedActivityLog(prisma, req, {
       userId: user.id,
       action: 'DELETE_COURSE',
+      severity: 'INFO',
       category: 'COURSE',
-      metadata: { courseName: deletedCourse.name },
+      metadata: {
+        actorId: user.id,
+        courseId: id,
+        courseName: deletedCourse.name,
+        courseCode: deletedCourse.code,
+        semester: deletedCourse.semester,
+      },
     });
     return NextResponse.json({ status: 204 });
   } catch (error) {
     console.error('DELETE /api/courses/[id] error:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'COURSE_DELETE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json({ error: error }, { status: 500 });
   }
 }

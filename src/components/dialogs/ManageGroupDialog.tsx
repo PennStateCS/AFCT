@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Dialog,
   DialogContent,
@@ -12,89 +13,120 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import InputGroup from '@/components/ui/InputGroup';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/RoleBadge';
 import { showToast } from '@/lib/toast';
+
+type RawStudent = {
+  id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+  avatar?: string | null;
+};
 
 type Member = {
   id: string;
   userId: string;
   addedAt: string;
-  user: {
-    id: string;
-    firstName?: string | null;
-    lastName?: string | null;
-    email?: string | null;
-    avatar?: string | null;
-  };
+  user: RawStudent;
 };
 
-export default function ManageGroupMembersDialog({ open, setOpen, courseId, group, onChanged, initialStudents }: { open: boolean; setOpen: (v: boolean) => void; courseId: string; group: { id: string; name: string } | null; onChanged?: () => void; initialStudents?: any[]; }) {
-  const [loading, setLoading] = useState(false);
-  const [students, setStudents] = useState<Member[]>([]);
+export default function ManageGroupMembersDialog({ open, setOpen, courseId, group, onChanged, initialStudents }: { open: boolean; setOpen: (v: boolean) => void; courseId: string; group: { id: string; name: string } | null; onChanged?: () => void; initialStudents?: RawStudent[]; }) {
+  const queryClient = useQueryClient();
+  const groupId = group?.id ?? null;
+
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [initialSelected, setInitialSelected] = useState<Record<string, boolean>>({});
   const [filter, setFilter] = useState('');
   const [selectedIdx, setSelectedIdx] = useState<number>(-1);
+  const [busy, setBusy] = useState(false);
   const itemRefs = React.useRef<(HTMLLIElement | null)[]>([]);
 
+  // Course students. Shared key with GroupsCard/AssignmentSubmissions so the
+  // read dedupes / serves warm across those consumers.
+  const studentsQuery = useQuery<RawStudent[]>({
+    queryKey: ['course', courseId, 'students'],
+    queryFn: async () => {
+      const res = await fetch(`/api/courses/${courseId}/students`);
+      if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load students');
+      return (await res.json()) as RawStudent[];
+    },
+    enabled: open && !!group,
+    staleTime: 30_000,
+  });
+
+  // Group members. Keyed per group so reopening the same group is served warm.
+  const membersQuery = useQuery<{ members: { userId: string }[] }>({
+    queryKey: ['course', courseId, 'group', groupId, 'members'],
+    queryFn: async () => {
+      const res = await fetch(`/api/courses/${courseId}/groups/${groupId}/members`);
+      if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load members');
+      return (await res.json()) as { members: { userId: string }[] };
+    },
+    enabled: open && !!group,
+    staleTime: 30_000,
+  });
+
+  // Prefer caller-preloaded students (fast-path), else the cached read.
+  const rawStudents: RawStudent[] | undefined =
+    initialStudents && initialStudents.length > 0 ? initialStudents : studentsQuery.data;
+
+  const students = useMemo<Member[]>(
+    () =>
+      (rawStudents ?? []).map((u) => ({
+        id: u.id,
+        userId: u.id,
+        addedAt: '',
+        user: {
+          id: u.id,
+          firstName: u.firstName,
+          lastName: u.lastName,
+          email: u.email,
+          avatar: u.avatar,
+        },
+      })),
+    [rawStudents],
+  );
+
+  // Blocking spinner off isLoading (not isFetching). When the caller preloads
+  // students, only the members read gates the spinner.
+  const studentsLoading = initialStudents && initialStudents.length > 0 ? false : studentsQuery.isLoading;
+  const loading = busy || (!!group && open && (studentsLoading || membersQuery.isLoading));
+
+  // Cache the reads, seed the local editable selection. Rebuilds the checkbox
+  // state whenever the roster or the member set changes.
   useEffect(() => {
-    if (open && group) fetchData();
+    if (!open || !group) return;
+    const members = membersQuery.data?.members;
+    if (!members) return;
+    const memberIds = new Set<string>(members.map((m) => m.userId));
+    const sel: Record<string, boolean> = {};
+    students.forEach((s) => {
+      if (memberIds.has(s.userId)) sel[s.userId] = true;
+    });
+    setSelected(sel);
+    setInitialSelected({ ...sel });
+  }, [open, group, students, membersQuery.data]);
+
+  // Surface a load error the way the old fetchData did.
+  useEffect(() => {
+    if (!open || !group) return;
+    if (studentsQuery.isError || membersQuery.isError) {
+      console.error('Fetch group members error:', studentsQuery.error ?? membersQuery.error);
+      showToast.error('Failed to load members');
+    }
+  }, [open, group, studentsQuery.isError, membersQuery.isError, studentsQuery.error, membersQuery.error]);
+
+  // Reset transient UI state when the dialog closes.
+  useEffect(() => {
     if (!open) {
-      setStudents([]);
       setSelected({});
       setInitialSelected({});
       setFilter('');
       setSelectedIdx(-1);
       itemRefs.current = [];
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, group]);
-
-  async function fetchData() {
-    if (!group) return;
-    setLoading(true);
-    try {
-      // If caller provided preloaded students, use them. Otherwise fetch students from the server.
-      let studs: Member[] = [];
-
-      if (initialStudents && initialStudents.length > 0) {
-        studs = initialStudents.map((u: any) => ({
-          id: u.id,
-          userId: u.id,
-          addedAt: '',
-          user: { id: u.id, firstName: u.firstName, lastName: u.lastName, email: u.email, avatar: u.avatar },
-        }));
-      } else {
-        const studentsRes = await fetch(`/api/courses/${courseId}/students`);
-        if (!studentsRes.ok) throw new Error((await studentsRes.json())?.error || 'Failed to load students');
-        const studentsBody = await studentsRes.json();
-        studs = studentsBody.map((u: any) => ({
-          id: u.id,
-          userId: u.id,
-          addedAt: '',
-          user: { id: u.id, firstName: u.firstName, lastName: u.lastName, email: u.email, avatar: u.avatar },
-        }));
-      }
-
-      const membersRes = await fetch(`/api/courses/${courseId}/groups/${group.id}/members`);
-      if (!membersRes.ok) throw new Error((await membersRes.json())?.error || 'Failed to load members');
-      const membersBody = await membersRes.json();
-
-      setStudents(studs);
-
-      const memberIds = new Set<string>((membersBody.members ?? []).map((m: any) => m.userId));
-      const sel: Record<string, boolean> = {};
-      studs.forEach((s) => { sel[s.userId] = memberIds.has(s.userId); });
-      setSelected(sel);
-      setInitialSelected({ ...sel });
-    } catch (err) {
-      console.error('Fetch group members error:', err);
-      showToast.error('Failed to load members');
-    } finally {
-      setLoading(false);
-    }
-  }
+  }, [open]);
 
   function toggle(userId: string) {
     setSelected((prev) => ({ ...prev, [userId]: !prev[userId] }));
@@ -138,7 +170,7 @@ export default function ManageGroupMembersDialog({ open, setOpen, courseId, grou
   async function handleSave() {
     if (!group) return;
     if (!isDirty(selected, initialSelected)) return setOpen(false);
-    setLoading(true);
+    setBusy(true);
     try {
       const toAdd: string[] = [];
       const toRemove: string[] = [];
@@ -150,7 +182,7 @@ export default function ManageGroupMembersDialog({ open, setOpen, courseId, grou
       }
 
       // Run adds and removes in parallel
-      const ops: Promise<any>[] = [];
+      const ops: Promise<Response>[] = [];
       for (const uid of toAdd) {
         ops.push(fetch(`/api/courses/${courseId}/groups/${group.id}/members`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: uid }) }));
       }
@@ -169,13 +201,19 @@ export default function ManageGroupMembersDialog({ open, setOpen, courseId, grou
 
       showToast.success('Members updated');
       setInitialSelected({ ...selected });
+      // Invalidate the members read so a reopen reflects the change, and the
+      // groups list (membership counts may render there).
+      queryClient.invalidateQueries({
+        queryKey: ['course', courseId, 'group', group.id, 'members'],
+      });
+      queryClient.invalidateQueries({ queryKey: ['course', courseId, 'groups'] });
       onChanged?.();
       setOpen(false);
     } catch (err) {
       console.error('Save members error:', err);
       showToast.error('Failed to save members');
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
   }
 

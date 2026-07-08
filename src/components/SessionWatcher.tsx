@@ -105,6 +105,9 @@ export default function SessionWatcher() {
       window.removeEventListener('scroll', handleActivity);
       if (inactivityRef.current) clearTimeout(inactivityRef.current);
     };
+    // triggerWarning is intentionally excluded: it is recreated each render, so
+    // depending on it would re-attach every activity listener on each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, session, inactivityLimitMs]);
 
   const triggerWarning = () => {

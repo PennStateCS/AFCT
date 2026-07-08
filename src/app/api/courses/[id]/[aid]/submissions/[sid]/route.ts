@@ -1,10 +1,9 @@
-// /src/api/courses/[id]/[aid]/submissions/[sid]/route.ts
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canAccessCourse, canManageCourse } from '@/lib/permissions';
 
 // Types
 interface Submission {
@@ -39,6 +38,31 @@ const submissionSelectWithoutEvaluation = {
   problemId: true,
 } as const;
 
+/**
+ * Returns a student's submissions for an assignment, grouped by problem and each
+ * annotated with that problem's metadata (falls back gracefully if the optional
+ * `evaluationRaw` column is absent). The `[sid]` segment is the student id.
+ *
+ * Access: the student themselves, course staff, or a system admin (`sid` must be the
+ * caller's id unless they are course staff or a system admin). Course membership is
+ * also required, except for global admins.
+ * @openapi
+ * summary: Get a student's submissions for an assignment
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: aid, in: path, required: true, schema: { type: string } }
+ *   - { name: sid, in: path, required: true, description: Student id, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: Submissions grouped by problem.
+ *     content:
+ *       application/json:
+ *         schema: { type: object }
+ *   401: { description: Not signed in. }
+ *   403: { description: "Requesting another student's submissions without being course staff or a system admin, or not an enrolled member of the course." }
+ *   404: { description: "Assignment not found, or it has no linked problems." }
+ *   500: { description: Server error. }
+ */
 export async function GET(
   req: Request,
   context: { params: Promise<{ id: string; aid: string; sid: string }> },
@@ -64,15 +88,26 @@ export async function GET(
       return NextResponse.json({ error: 'Assignment not found for this course' }, { status: 404 });
     }
 
-    // Ensure viewer is allowed (admin can view any, others must be on roster)
-    if (user.role !== 'ADMIN' && prisma.roster?.findFirst) {
-      const rosterEntry = await prisma.roster.findFirst({
-        where: { courseId, userId: user.id },
-        select: { id: true },
+    // Students may only read their own submissions; staff may read anyone's.
+    if (!(await canManageCourse(user, courseId)) && user.id !== studentId) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'SUBMISSIONS_ACCESS_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
       });
-      if (!rosterEntry) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // Course-membership requirement (global admins excepted), as before.
+    if (!(await canAccessCourse(user, courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'SUBMISSIONS_ACCESS_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // Get all problems linked to the assignment
@@ -175,6 +210,7 @@ export async function GET(
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,
         action: 'VIEW_ASSIGNMENT_SUBMISSIONS',
+        severity: 'INFO',
         category: 'SUBMISSION',
         courseId,
         assignmentId,

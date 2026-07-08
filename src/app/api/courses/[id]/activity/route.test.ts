@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server';
 const prismaMock = vi.hoisted(() => ({
   course: { findFirst: vi.fn() },
   activityLog: { findMany: vi.fn(), count: vi.fn() },
+  roster: { findFirst: vi.fn(), findMany: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -15,6 +16,10 @@ import { GET } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Default: caller not enrolled (denied); authorized tests grant a course role.
+  prismaMock.roster.findFirst.mockResolvedValue(null);
+  // Roster ids for the login-activity filter (empty by default).
+  prismaMock.roster.findMany.mockResolvedValue([]);
 });
 
 describe('GET /api/courses/[id]/activity', () => {
@@ -42,7 +47,7 @@ describe('GET /api/courses/[id]/activity', () => {
     prismaMock.course.findFirst.mockResolvedValue({ id: 'c1' });
     prismaMock.activityLog.findMany.mockResolvedValue([]);
     prismaMock.activityLog.count.mockResolvedValue(0);
-    (prismaMock as any).roster = { findFirst: vi.fn().mockResolvedValue(null) };
+    // roster.findFirst already defaults to null (denied) via beforeEach.
 
     const req = new NextRequest('http://localhost/api/courses/c1/activity');
     const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
@@ -53,6 +58,7 @@ describe('GET /api/courses/[id]/activity', () => {
   it('allows user when role is undefined and returns default pagination payload', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1' } });
     prismaMock.course.findFirst.mockResolvedValue({ id: 'c1' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
     prismaMock.activityLog.findMany.mockResolvedValue([{ id: 'log1' }]);
     prismaMock.activityLog.count.mockResolvedValue(80);
 
@@ -67,6 +73,7 @@ describe('GET /api/courses/[id]/activity', () => {
   it('returns activity logs', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1' } });
     prismaMock.course.findFirst.mockResolvedValue({ id: 'c1' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
     prismaMock.activityLog.findMany.mockResolvedValue([{ id: 'log1' }]);
     prismaMock.activityLog.count.mockResolvedValue(1);
 
@@ -80,7 +87,7 @@ describe('GET /api/courses/[id]/activity', () => {
   });
 
   it('returns 500 when activity query fails', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.course.findFirst.mockResolvedValue({ id: 'c1' });
     prismaMock.activityLog.findMany.mockRejectedValue(new Error('boom'));
 

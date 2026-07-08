@@ -1,12 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible';
 import { ChevronDown, ChevronRight, Loader2, Table } from 'lucide-react';
-import { formatDateInTimeZone, formatTimeInTimeZone } from '@/lib/date';
+import { formatDateInTimeZone } from '@/lib/date';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
 type StudentGradesResponse = {
@@ -30,38 +31,35 @@ type StudentGradesResponse = {
   }>;
 };
 
+// Stable empty default so the value derived from the query keeps a constant
+// identity between renders (keeps the memoized assignment rows stable).
+const EMPTY_ASSIGNMENTS: StudentGradesResponse['assignments'] = [];
+
 export function StudentGradesCard({ courseId }: { courseId: string }) {
   const router = useRouter();
   const { timezone } = useEffectiveTimezone();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [assignments, setAssignments] = useState<StudentGradesResponse['assignments']>([]);
   const [expandedAssignments, setExpandedAssignments] = useState<string[]>([]);
 
-  const fetchGrades = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
+  const gradesQuery = useQuery({
+    queryKey: ['course', courseId, 'student-grades'],
+    queryFn: async () => {
       const res = await fetch(`/api/courses/${courseId}/student-grades`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.error || 'Failed to load grades');
       }
+      return (await res.json()) as StudentGradesResponse;
+    },
+    staleTime: 30_000,
+  });
 
-      const body = (await res.json()) as StudentGradesResponse;
-      setAssignments(body.assignments);
-    } catch (err) {
-      console.error('Student grades load error:', err);
-      setError(err instanceof Error ? err.message : 'Unable to load grades');
-    } finally {
-      setLoading(false);
-    }
-  }, [courseId]);
-
-  useEffect(() => {
-    void fetchGrades();
-  }, [fetchGrades]);
+  const loading = gradesQuery.isPending;
+  const error = gradesQuery.isError
+    ? gradesQuery.error instanceof Error
+      ? gradesQuery.error.message
+      : 'Unable to load grades'
+    : null;
+  const assignments = gradesQuery.data?.assignments ?? EMPTY_ASSIGNMENTS;
 
   const assignmentRows = useMemo(() => {
     return assignments.map((assignment) => {
