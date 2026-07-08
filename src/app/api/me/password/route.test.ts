@@ -25,11 +25,11 @@ beforeEach(() => {
   bcryptMock.hash.mockReset();
 });
 
-describe('POST /api/users/change-password', () => {
+describe('POST /api/me/password', () => {
   it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
-    const req = new NextRequest('http://localhost/api/users/change-password', {
+    const req = new NextRequest('http://localhost/api/me/password', {
       method: 'POST',
       body: JSON.stringify({ oldPassword: 'old', newPassword: 'Newpassword1!' }),
     });
@@ -42,7 +42,7 @@ describe('POST /api/users/change-password', () => {
   it('returns 400 when missing fields', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
 
-    const req = new NextRequest('http://localhost/api/users/change-password', {
+    const req = new NextRequest('http://localhost/api/me/password', {
       method: 'POST',
       body: JSON.stringify({ oldPassword: 'old' }),
     });
@@ -55,7 +55,7 @@ describe('POST /api/users/change-password', () => {
   it('returns 400 when new password too short', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
 
-    const req = new NextRequest('http://localhost/api/users/change-password', {
+    const req = new NextRequest('http://localhost/api/me/password', {
       method: 'POST',
       body: JSON.stringify({ oldPassword: 'old', newPassword: 'short' }),
     });
@@ -68,7 +68,7 @@ describe('POST /api/users/change-password', () => {
   it('returns 400 when new password lacks a special character', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
 
-    const req = new NextRequest('http://localhost/api/users/change-password', {
+    const req = new NextRequest('http://localhost/api/me/password', {
       method: 'POST',
       body: JSON.stringify({ oldPassword: 'Oldpass1!', newPassword: 'Newpassword1' }),
     });
@@ -82,7 +82,7 @@ describe('POST /api/users/change-password', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
     prismaMock.user.findUnique.mockResolvedValue(null);
 
-    const req = new NextRequest('http://localhost/api/users/change-password', {
+    const req = new NextRequest('http://localhost/api/me/password', {
       method: 'POST',
       body: JSON.stringify({ oldPassword: 'oldpass', newPassword: 'Newpassword1!' }),
     });
@@ -97,7 +97,7 @@ describe('POST /api/users/change-password', () => {
     prismaMock.user.findUnique.mockResolvedValue({ password: 'hash' });
     bcryptMock.compare.mockResolvedValue(false);
 
-    const req = new NextRequest('http://localhost/api/users/change-password', {
+    const req = new NextRequest('http://localhost/api/me/password', {
       method: 'POST',
       body: JSON.stringify({ oldPassword: 'oldpass', newPassword: 'Newpassword1!' }),
     });
@@ -112,7 +112,7 @@ describe('POST /api/users/change-password', () => {
     prismaMock.user.findUnique.mockResolvedValue({ password: 'hash' });
     bcryptMock.compare.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
 
-    const req = new NextRequest('http://localhost/api/users/change-password', {
+    const req = new NextRequest('http://localhost/api/me/password', {
       method: 'POST',
       body: JSON.stringify({ oldPassword: 'oldpass', newPassword: 'oldpass' }),
     });
@@ -128,7 +128,7 @@ describe('POST /api/users/change-password', () => {
     bcryptMock.compare.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
     bcryptMock.hash.mockResolvedValue('newhash');
 
-    const req = new NextRequest('http://localhost/api/users/change-password', {
+    const req = new NextRequest('http://localhost/api/me/password', {
       method: 'POST',
       body: JSON.stringify({ oldPassword: 'oldpass', newPassword: 'Newpassword1!' }),
     });

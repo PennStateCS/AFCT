@@ -16,13 +16,13 @@ vi.mock('@/lib/courses-list', () => ({
 
 import { GET } from './route';
 
-const req = (url = 'http://localhost/api/courses/list') => new Request(url);
+const req = (url = 'http://localhost/api/me/courses') => new Request(url);
 
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('GET /api/courses/list', () => {
+describe('GET /api/me/courses', () => {
   it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
@@ -76,8 +76,8 @@ describe('GET /api/courses/list', () => {
   });
 });
 
-describe('GET /api/courses/list?view=nav', () => {
-  const navUrl = 'http://localhost/api/courses/list?view=nav';
+describe('GET /api/me/courses?view=nav', () => {
+  const navUrl = 'http://localhost/api/me/courses?view=nav';
 
   it('returns 401 when session is missing', async () => {
     authMock.mockResolvedValue(null);

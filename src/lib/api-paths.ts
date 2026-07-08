@@ -49,9 +49,12 @@ export const apiPaths = {
   courseAssignments: (id: string) => `/api/courses/${id}/assignments`,
   courseJoin: () => '/api/courses/join',
 
-  // --- "My" (self-scoped) --------------------------------------------------
-  myCourses: (opts?: { view?: 'nav' }) => `/api/courses/list${qs({ view: opts?.view })}`,
-  myEnrollments: () => '/api/debug/enrollments',
+  // --- "My" (self-scoped, /api/me/*) --------------------------------------
+  me: () => '/api/me',
+  myPassword: () => '/api/me/password',
+  myCourses: (opts?: { view?: 'nav' }) => `/api/me/courses${qs({ view: opts?.view })}`,
+  myEnrollments: () => '/api/me/enrollments',
+  myAssignments: (start?: string, end?: string) => `/api/me/assignments${qs({ start, end })}`,
 
   // --- Assignments (course-nested; bare `aid` segment for now) -------------
   assignment: (courseId: string, aid: string, opts?: { view?: string }) =>
@@ -76,7 +79,6 @@ export const apiPaths = {
   assignments: () => '/api/assignments',
   assignmentById: (id: string) => `/api/assignments/${id}`,
   assignmentByIdProblems: (id: string) => `/api/assignments/${id}/problems`,
-  assignmentsRange: (start?: string, end?: string) => `/api/assignments/range${qs({ start, end })}`,
   assignmentStudentContext: (id: string) => `/api/assignments/${id}/student-context`,
 
   // --- Problems ------------------------------------------------------------
@@ -92,8 +94,6 @@ export const apiPaths = {
   courseSubmissions: (cid: string) => `/api/course_submissions/${cid}`,
 
   // --- Account -------------------------------------------------------------
-  profile: () => '/api/profile',
-  changePassword: () => '/api/users/change-password',
   user: (id: string) => `/api/users/${id}`,
   sessionExtend: () => '/api/session/extend',
 

@@ -22,11 +22,11 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('POST /api/assignments/range', () => {
+describe('POST /api/me/assignments', () => {
   it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
-    const req = new NextRequest('http://localhost/api/assignments/range', {
+    const req = new NextRequest('http://localhost/api/me/assignments', {
       method: 'POST',
       body: JSON.stringify({ start: '2025-01-01', end: '2025-01-02' }),
     });
@@ -38,7 +38,7 @@ describe('POST /api/assignments/range', () => {
   it('returns 400 when missing dates', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1' } });
 
-    const req = new NextRequest('http://localhost/api/assignments/range', {
+    const req = new NextRequest('http://localhost/api/me/assignments', {
       method: 'POST',
       body: JSON.stringify({ start: '2025-01-01' }),
     });
@@ -51,7 +51,7 @@ describe('POST /api/assignments/range', () => {
     authMock.mockResolvedValue({ user: { id: 'u1' } });
     prismaMock.roster.findMany.mockResolvedValue([]);
 
-    const req = new NextRequest('http://localhost/api/assignments/range', {
+    const req = new NextRequest('http://localhost/api/me/assignments', {
       method: 'POST',
       body: JSON.stringify({ start: '2025-01-01', end: '2025-01-02' }),
     });
@@ -76,7 +76,7 @@ describe('POST /api/assignments/range', () => {
     prismaMock.submission.findMany.mockResolvedValue([{ assignmentId: 'a1' }]);
     prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
 
-    const req = new NextRequest('http://localhost/api/assignments/range', {
+    const req = new NextRequest('http://localhost/api/me/assignments', {
       method: 'POST',
       body: JSON.stringify({ start: '2025-01-01', end: '2025-01-03' }),
     });
@@ -104,7 +104,7 @@ describe('POST /api/assignments/range', () => {
       { assignmentId: 'a1', _count: { _all: 2 } },
     ]);
 
-    const req = new NextRequest('http://localhost/api/assignments/range', {
+    const req = new NextRequest('http://localhost/api/me/assignments', {
       method: 'POST',
       body: JSON.stringify({ start: '2020-01-01', end: '2020-01-03' }),
     });

@@ -12,8 +12,18 @@ describe('apiPaths', () => {
 
   it('omits empty query params', () => {
     expect(apiPaths.course('c1')).toBe('/api/courses/c1');
-    expect(apiPaths.myCourses()).toBe('/api/courses/list');
-    expect(apiPaths.myCourses({ view: 'nav' })).toBe('/api/courses/list?view=nav');
+    expect(apiPaths.myCourses()).toBe('/api/me/courses');
+    expect(apiPaths.myCourses({ view: 'nav' })).toBe('/api/me/courses?view=nav');
+  });
+
+  it('builds the /api/me account cluster', () => {
+    expect(apiPaths.me()).toBe('/api/me');
+    expect(apiPaths.myPassword()).toBe('/api/me/password');
+    expect(apiPaths.myEnrollments()).toBe('/api/me/enrollments');
+    expect(apiPaths.myAssignments()).toBe('/api/me/assignments');
+    expect(apiPaths.myAssignments('2026-01-01', '2026-02-01')).toBe(
+      '/api/me/assignments?start=2026-01-01&end=2026-02-01',
+    );
   });
 
   it('builds assignment paths', () => {
@@ -23,16 +33,12 @@ describe('apiPaths', () => {
     expect(apiPaths.assignmentProblemGrade('c1', 'a1', 'p1', 's1')).toBe(
       '/api/courses/c1/a1/problems/p1/grade/s1',
     );
-    expect(apiPaths.assignmentsRange('2026-01-01', '2026-02-01')).toBe(
-      '/api/assignments/range?start=2026-01-01&end=2026-02-01',
-    );
   });
 
   it('builds problem, submission, and account paths', () => {
     expect(apiPaths.problem('p1')).toBe('/api/problems/p1');
     expect(apiPaths.problemComments('p1')).toBe('/api/problems/p1/comments');
     expect(apiPaths.submissionRerun('s1')).toBe('/api/submissions/s1/rerun');
-    expect(apiPaths.profile()).toBe('/api/profile');
     expect(apiPaths.systemSettingsPublic()).toBe('/api/system-settings/public');
   });
 

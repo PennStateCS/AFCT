@@ -15,7 +15,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('GET /api/debug/enrollments', () => {
+describe('GET /api/me/enrollments', () => {
   it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
