@@ -1162,8 +1162,6 @@ export interface paths {
          * Delete a course problem
          * @description Deletes a problem within a course, unconditionally cascading its submissions and  assignment links first, then removing the solution file. Course staff (faculty or  TAs) or a system admin. The problem must belong to the course in the path. Unlike  DELETE /api/problems/[id], this does not refuse when the problem is used by an  assignment — it removes those links.
          *
-         *     **Auth:** required
-         *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/problems/[pid]/route.ts)
          */
         delete: operations["deleteCoursesByIdProblemsByPid"];
@@ -5932,6 +5930,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
             };
             /** @description Caller is not course staff (faculty or TA) or a system admin. */
             403: {
