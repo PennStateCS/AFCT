@@ -97,11 +97,17 @@ export function useCourseData(
       if (!courseId || isStudent) return;
       const section = tab as SectionKey;
       if (section !== 'assignments' && section !== 'problems' && section !== 'roster') return;
+      // Only show the section spinner on a COLD cache. When the entry is already
+      // cached, switching to the tab renders instantly (fetchQuery returns the
+      // cached data within staleTime with no refetch) — so flipping the loading
+      // flag would just flash a needless spinner on every tab switch.
+      const hasCached =
+        queryClient.getQueryData(courseQueryKey(courseId, section)) !== undefined;
       try {
-        setLoadingSections((prev) => ({ ...prev, [section]: true }));
+        if (!hasCached) setLoadingSections((prev) => ({ ...prev, [section]: true }));
         // Served from the query cache when fresh; refetched when stale/invalidated.
         const data = await fetchCourseByView(section);
-        setLoadingSections((prev) => ({ ...prev, [section]: false }));
+        if (!hasCached) setLoadingSections((prev) => ({ ...prev, [section]: false }));
         if (!data) return;
         setCourse((prev) =>
           prev
@@ -128,7 +134,7 @@ export function useCourseData(
         console.error('Error loading tab data:', error);
       }
     },
-    [courseId, isStudent, fetchCourseByView, setCourse],
+    [courseId, isStudent, fetchCourseByView, setCourse, queryClient],
   );
 
   // Invalidate the whole course (all views) then re-pull the base view. Section
