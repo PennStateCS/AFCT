@@ -1065,8 +1065,6 @@ export interface paths {
          * List all group memberships for a course
          * @description Lists every group membership for the course in one call — the aggregate that  replaces fetching each group's members separately when resolving which group a  student belongs to. Course staff (faculty or TAs) or a system admin. Returns the  raw (userId, groupId) pairs; callers that need a userId→group map build it in  their own preferred group order.
          *
-         *     **Auth:** required
-         *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/group-memberships/route.ts)
          */
         get: operations["getCoursesByIdGroupMemberships"];
@@ -1424,8 +1422,6 @@ export interface paths {
         /**
          * List a course's students
          * @description Returns just the STUDENT members of a course (user profiles). Course staff  (faculty or TAs) or a system admin.
-         *
-         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/students/route.ts)
          */
@@ -6596,6 +6592,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>[];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Not course staff (faculty or TAs) or a system admin. */
