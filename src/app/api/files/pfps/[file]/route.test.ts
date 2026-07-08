@@ -22,9 +22,9 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('GET /api/uploads/pfps/[file]', () => {
+describe('GET /api/files/pfps/[file]', () => {
   it('returns 400 for invalid file param (empty)', async () => {
-    const res = await GET(new Request('http://localhost/api/uploads/pfps/'), {
+    const res = await GET(new Request('http://localhost/api/files/pfps/'), {
       params: Promise.resolve({ file: '' }),
     });
 
@@ -34,7 +34,7 @@ describe('GET /api/uploads/pfps/[file]', () => {
   });
 
   it('returns 400 for invalid file param (path traversal)', async () => {
-    const res = await GET(new Request('http://localhost/api/uploads/pfps/..'), {
+    const res = await GET(new Request('http://localhost/api/files/pfps/..'), {
       params: Promise.resolve({ file: '../secret.txt' }),
     });
 
@@ -46,7 +46,7 @@ describe('GET /api/uploads/pfps/[file]', () => {
   it('returns 401 when not authenticated', async () => {
     authMock.mockResolvedValue(null);
 
-    const res = await GET(new Request('http://localhost/api/uploads/pfps/avatar.png'), {
+    const res = await GET(new Request('http://localhost/api/files/pfps/avatar.png'), {
       params: Promise.resolve({ file: 'avatar.png' }),
     });
 
@@ -58,7 +58,7 @@ describe('GET /api/uploads/pfps/[file]', () => {
   it('returns 401 when session has no user', async () => {
     authMock.mockResolvedValue({ user: null });
 
-    const res = await GET(new Request('http://localhost/api/uploads/pfps/avatar.png'), {
+    const res = await GET(new Request('http://localhost/api/files/pfps/avatar.png'), {
       params: Promise.resolve({ file: 'avatar.png' }),
     });
 
@@ -69,7 +69,7 @@ describe('GET /api/uploads/pfps/[file]', () => {
     authMock.mockResolvedValue({ user: { id: 'u1' } });
     fsMock.existsSync.mockReturnValue(false);
 
-    const res = await GET(new Request('http://localhost/api/uploads/pfps/missing.png'), {
+    const res = await GET(new Request('http://localhost/api/files/pfps/missing.png'), {
       params: Promise.resolve({ file: 'missing.png' }),
     });
 
@@ -82,7 +82,7 @@ describe('GET /api/uploads/pfps/[file]', () => {
     authMock.mockResolvedValue({ user: { id: 'u1' } });
     fsMock.existsSync.mockReturnValue(false);
 
-    const res = await GET(new Request('http://localhost/api/uploads/pfps/default-avatar.png'), {
+    const res = await GET(new Request('http://localhost/api/files/pfps/default-avatar.png'), {
       params: Promise.resolve({ file: 'default-avatar.png' }),
     });
 
@@ -97,7 +97,7 @@ describe('GET /api/uploads/pfps/[file]', () => {
     const mockBuffer = Buffer.from('fake image data');
     fsMock.promises.readFile.mockResolvedValue(mockBuffer);
 
-    const res = await GET(new Request('http://localhost/api/uploads/pfps/avatar.png'), {
+    const res = await GET(new Request('http://localhost/api/files/pfps/avatar.png'), {
       params: Promise.resolve({ file: 'avatar.png' }),
     });
 
@@ -113,7 +113,7 @@ describe('GET /api/uploads/pfps/[file]', () => {
     fsMock.existsSync.mockReturnValue(true);
     fsMock.promises.readFile.mockRejectedValue(new Error('Disk error'));
 
-    const res = await GET(new Request('http://localhost/api/uploads/pfps/avatar.png'), {
+    const res = await GET(new Request('http://localhost/api/files/pfps/avatar.png'), {
       params: Promise.resolve({ file: 'avatar.png' }),
     });
 
@@ -128,7 +128,7 @@ describe('GET /api/uploads/pfps/[file]', () => {
       throw new Error('FS error');
     });
 
-    const res = await GET(new Request('http://localhost/api/uploads/pfps/avatar.png'), {
+    const res = await GET(new Request('http://localhost/api/files/pfps/avatar.png'), {
       params: Promise.resolve({ file: 'avatar.png' }),
     });
 

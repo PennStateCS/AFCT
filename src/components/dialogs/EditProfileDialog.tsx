@@ -42,7 +42,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
   const { timezone: effectiveTimezone } = useEffectiveTimezone();
   const { maxMb, loading: loadingMaxSize } = useMaxUploadSize();
   const [avatarPreview, setAvatarPreview] = useState<string>(
-    user.avatar ? `/api/uploads/pfps/${user.avatar}` : '',
+    user.avatar ? apiPaths.files.pfp(user.avatar) : '',
   );
   const [serverTimezone, setServerTimezone] = useState('UTC');
 
@@ -83,7 +83,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
         keepValues: false,
       });
       // Reset preview from current user
-      setAvatarPreview(user.avatar ? `/api/uploads/pfps/${user.avatar}` : '');
+      setAvatarPreview(user.avatar ? apiPaths.files.pfp(user.avatar) : '');
     } else {
       reset(defaults, {
         keepDirty: false,

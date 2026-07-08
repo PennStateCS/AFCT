@@ -219,7 +219,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
           return (
             <Avatar className="h-10 w-10">
               <AvatarImage
-                src={user.avatar ? `/api/uploads/pfps/${user.avatar}` : undefined}
+                src={user.avatar ? apiPaths.files.pfp(String(user.avatar)) : undefined}
                 alt={`${user.firstName} ${user.lastName}`}
               />
               <AvatarFallback className="bg-secondary text-secondary-foreground">

@@ -113,7 +113,7 @@ export default function CourseEditUserDialog({
       setViewerCourseRole(initialViewerCourseRole ?? null);
       setViewerDefaultRole(initialViewerDefaultRole ?? null);
       setAvatarPreview(
-        initialRoster.user.avatar ? `/api/uploads/pfps/${initialRoster.user.avatar}` : '',
+        initialRoster.user.avatar ? apiPaths.files.pfp(initialRoster.user.avatar) : '',
       );
       originalRosterRef.current = JSON.parse(JSON.stringify(initialRoster));
       return;
@@ -124,9 +124,7 @@ export default function CourseEditUserDialog({
     setRoster(body.roster ?? null);
     setViewerCourseRole(body.viewerCourseRole ?? null);
     setViewerDefaultRole(body.viewerDefaultRole ?? null);
-    setAvatarPreview(
-      body.roster?.user.avatar ? `/api/uploads/pfps/${body.roster.user.avatar}` : '',
-    );
+    setAvatarPreview(body.roster?.user.avatar ? apiPaths.files.pfp(body.roster.user.avatar) : '');
     originalRosterRef.current = JSON.parse(JSON.stringify(body.roster ?? null));
   }, [open, initialRoster, initialViewerCourseRole, initialViewerDefaultRole, rosterQuery.data]);
 
@@ -203,7 +201,7 @@ export default function CourseEditUserDialog({
         if (!v && originalRosterRef.current) {
           const orig = JSON.parse(JSON.stringify(originalRosterRef.current));
           setRoster(orig);
-          setAvatarPreview(orig.user.avatar ? `/api/uploads/pfps/${orig.user.avatar}` : '');
+          setAvatarPreview(orig.user.avatar ? apiPaths.files.pfp(orig.user.avatar) : '');
           setConfirmOpen(false);
         }
       }}
