@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canManageCourse } from '@/lib/permissions';
+import { withCourseAuth } from '@/lib/api/with-auth';
+import { logDenial } from '@/lib/api/activity';
 
 /**
  * Returns a student's per-problem grades and feedback for one assignment, keyed by
@@ -26,63 +27,58 @@ import { canManageCourse } from '@/lib/permissions';
  *   404: { description: Assignment not found in this course. }
  *   500: { description: Server error. }
  */
-export async function GET(
-  _req: Request,
-  { params }: { params: Promise<{ id: string; aid: string; studentId: string }> },
-) {
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+export const GET = withCourseAuth(
+  async (req, ctx, { user, courseId }) => {
+    const { aid: assignmentId, studentId } = await ctx.params;
 
-    const { id: courseId, aid: assignmentId, studentId } = await params;
+    try {
+      // A student may read their own grades; staff may read anyone's. (The wrapper
+      // already enforced course membership via canAccessCourse.)
+      if (!(await canManageCourse(user, courseId)) && user.id !== studentId) {
+        return logDenial(req, {
+          userId: user.id,
+          action: 'PROBLEM_GRADES_ACCESS_DENIED',
+          courseId,
+        });
+      }
 
-    if (!(await canManageCourse(session.user, courseId)) && session.user.id !== studentId) {
-      await createEnhancedActivityLog(prisma, _req, {
-        userId: session?.user?.id ?? null,
-        action: 'PROBLEM_GRADES_ACCESS_DENIED',
-        severity: 'SECURITY',
-        metadata: {},
+      const assignment = await prisma.assignment.findFirst({
+        where: { id: assignmentId, courseId },
+        select: { id: true },
       });
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+      if (!assignment) {
+        return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+      }
+
+      const grades = await prisma.assignmentProblemGrade.findMany({
+        where: { assignmentId, studentId },
+        select: { problemId: true, grade: true, feedback: true, updatedAt: true },
+      });
+
+      if (grades.length === 0) {
+        return new NextResponse(null, { status: 204 });
+      }
+
+      const payload = grades.reduce<
+        Record<string, { grade: number | null; feedback: string | null; updatedAt: string }>
+      >((acc, record) => {
+        acc[record.problemId] = {
+          grade: record.grade ?? null,
+          feedback: record.feedback ?? null,
+          updatedAt: record.updatedAt.toISOString(),
+        };
+        return acc;
+      }, {});
+
+      return NextResponse.json(payload);
+    } catch (error) {
+      console.error('GET /api/courses/[id]/[aid]/problem-grades/[studentId] error:', error);
+      return NextResponse.json({ error: 'Failed to fetch problem grades' }, { status: 500 });
     }
-
-    const assignment = await prisma.assignment.findFirst({
-      where: { id: assignmentId, courseId },
-      select: { id: true },
-    });
-
-    if (!assignment) {
-      return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
-    }
-
-    const grades = await prisma.assignmentProblemGrade.findMany({
-      where: { assignmentId, studentId },
-      select: { problemId: true, grade: true, feedback: true, updatedAt: true },
-    });
-
-    if (grades.length === 0) {
-      return new NextResponse(null, { status: 204 });
-    }
-
-    const payload = grades.reduce<
-      Record<string, { grade: number | null; feedback: string | null; updatedAt: string }>
-    >((acc, record) => {
-      acc[record.problemId] = {
-        grade: record.grade ?? null,
-        feedback: record.feedback ?? null,
-        updatedAt: record.updatedAt.toISOString(),
-      };
-      return acc;
-    }, {});
-
-    return NextResponse.json(payload);
-  } catch (error) {
-    console.error('GET /api/courses/[id]/[aid]/problem-grades/[studentId] error:', error);
-    return NextResponse.json({ error: 'Failed to fetch problem grades' }, { status: 500 });
-  }
-}
+  },
+  { access: 'read', deniedAction: 'PROBLEM_GRADES_ACCESS_DENIED' },
+);
 
 /**
  * Batch-saves this student's problem grades for the assignment in a single request —
@@ -118,165 +114,149 @@ export async function GET(
  *   404: { description: Assignment not found in this course. }
  *   500: { description: Server error. }
  */
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string; aid: string; studentId: string }> },
-) {
-  let graderId: string | null = null;
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    graderId = session.user.id;
+export const POST = withCourseAuth(
+  async (req, ctx, { user, courseId }) => {
+    const graderId = user.id;
+    const { aid: assignmentId, studentId } = await ctx.params;
 
-    const { id: courseId, aid: assignmentId, studentId } = await params;
+    try {
+      const body = await req.json();
+      const grades = body?.grades;
+      if (typeof grades !== 'object' || grades === null || Array.isArray(grades)) {
+        return NextResponse.json({ error: 'A grades map is required' }, { status: 400 });
+      }
 
-    if (!(await canManageCourse(session.user, courseId))) {
-      await createEnhancedActivityLog(prisma, req, {
-        userId: session?.user?.id ?? null,
-        action: 'PROBLEM_GRADE_UPDATE_DENIED',
-        severity: 'SECURITY',
-        metadata: {},
+      // The assignment must belong to this course.
+      const assignment = await prisma.assignment.findFirst({
+        where: { id: assignmentId, courseId },
+        select: { id: true },
       });
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    const body = await req.json();
-    const grades = body?.grades;
-    if (typeof grades !== 'object' || grades === null || Array.isArray(grades)) {
-      return NextResponse.json({ error: 'A grades map is required' }, { status: 400 });
-    }
-
-    // The assignment must belong to this course.
-    const assignment = await prisma.assignment.findFirst({
-      where: { id: assignmentId, courseId },
-      select: { id: true },
-    });
-    if (!assignment) {
-      return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
-    }
-
-    // maxPoints per problem — used for validation and to reject problem ids that
-    // don't belong to the assignment.
-    const assignmentProblems = await prisma.assignmentProblem.findMany({
-      where: { assignmentId },
-      select: { problemId: true, maxPoints: true },
-    });
-    const maxByProblem = new Map(assignmentProblems.map((ap) => [ap.problemId, ap.maxPoints]));
-
-    const entries = Object.entries(grades) as Array<[string, unknown]>;
-    for (const [problemId, value] of entries) {
-      if (!maxByProblem.has(problemId)) {
-        return NextResponse.json(
-          { error: `Problem ${problemId} is not part of this assignment` },
-          { status: 400 },
-        );
+      if (!assignment) {
+        return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
       }
-      if (value !== null && value !== undefined) {
-        if (typeof value !== 'number' || Number.isNaN(value)) {
+
+      // maxPoints per problem — used for validation and to reject problem ids that
+      // don't belong to the assignment.
+      const assignmentProblems = await prisma.assignmentProblem.findMany({
+        where: { assignmentId },
+        select: { problemId: true, maxPoints: true },
+      });
+      const maxByProblem = new Map(assignmentProblems.map((ap) => [ap.problemId, ap.maxPoints]));
+
+      const entries = Object.entries(grades) as Array<[string, unknown]>;
+      for (const [problemId, value] of entries) {
+        if (!maxByProblem.has(problemId)) {
           return NextResponse.json(
-            { error: `Grade for problem ${problemId} must be a number or null` },
+            { error: `Problem ${problemId} is not part of this assignment` },
             { status: 400 },
           );
         }
-        const max = maxByProblem.get(problemId) ?? 0;
-        if (value < 0 || value > max) {
-          return NextResponse.json(
-            { error: `Grade for problem ${problemId} is out of range` },
-            { status: 400 },
-          );
+        if (value !== null && value !== undefined) {
+          if (typeof value !== 'number' || Number.isNaN(value)) {
+            return NextResponse.json(
+              { error: `Grade for problem ${problemId} must be a number or null` },
+              { status: 400 },
+            );
+          }
+          const max = maxByProblem.get(problemId) ?? 0;
+          if (value < 0 || value > max) {
+            return NextResponse.json(
+              { error: `Grade for problem ${problemId} is out of range` },
+              { status: 400 },
+            );
+          }
         }
       }
-    }
 
-    // Existing grades so we only write (and audit) what actually changed.
-    const existingRows = await prisma.assignmentProblemGrade.findMany({
-      where: { assignmentId, studentId },
-      select: { problemId: true, grade: true },
-    });
-    const existingByProblem = new Map(existingRows.map((r) => [r.problemId, r.grade ?? null]));
+      // Existing grades so we only write (and audit) what actually changed.
+      const existingRows = await prisma.assignmentProblemGrade.findMany({
+        where: { assignmentId, studentId },
+        select: { problemId: true, grade: true },
+      });
+      const existingByProblem = new Map(existingRows.map((r) => [r.problemId, r.grade ?? null]));
 
-    type Change = { problemId: string; previousGrade: number | null; grade: number | null };
-    const changes: Change[] = [];
-    for (const [problemId, rawValue] of entries) {
-      const nextGrade = rawValue === null || rawValue === undefined ? null : (rawValue as number);
-      const prevGrade = existingByProblem.get(problemId) ?? null;
-      if (nextGrade === prevGrade) continue; // no-op
-      changes.push({ problemId, previousGrade: prevGrade, grade: nextGrade });
-    }
+      type Change = { problemId: string; previousGrade: number | null; grade: number | null };
+      const changes: Change[] = [];
+      for (const [problemId, rawValue] of entries) {
+        const nextGrade = rawValue === null || rawValue === undefined ? null : (rawValue as number);
+        const prevGrade = existingByProblem.get(problemId) ?? null;
+        if (nextGrade === prevGrade) continue; // no-op
+        changes.push({ problemId, previousGrade: prevGrade, grade: nextGrade });
+      }
 
-    if (changes.length === 0) {
-      return NextResponse.json({ ok: true, changed: 0 });
-    }
+      if (changes.length === 0) {
+        return NextResponse.json({ ok: true, changed: 0 });
+      }
 
-    // Apply all changes atomically. Upserts set only `grade`, leaving any existing
-    // feedback intact (a grade-only edit must not erase written feedback).
-    await prisma.$transaction(
-      changes.map((change) =>
-        change.grade === null
-          ? prisma.assignmentProblemGrade.deleteMany({
-              where: { assignmentId, problemId: change.problemId, studentId },
-            })
-          : prisma.assignmentProblemGrade.upsert({
-              where: {
-                assignmentId_problemId_studentId: {
+      // Apply all changes atomically. Upserts set only `grade`, leaving any existing
+      // feedback intact (a grade-only edit must not erase written feedback).
+      await prisma.$transaction(
+        changes.map((change) =>
+          change.grade === null
+            ? prisma.assignmentProblemGrade.deleteMany({
+                where: { assignmentId, problemId: change.problemId, studentId },
+              })
+            : prisma.assignmentProblemGrade.upsert({
+                where: {
+                  assignmentId_problemId_studentId: {
+                    assignmentId,
+                    problemId: change.problemId,
+                    studentId,
+                  },
+                },
+                create: {
                   assignmentId,
                   problemId: change.problemId,
                   studentId,
+                  grade: change.grade,
+                  feedback: null,
                 },
-              },
-              create: {
-                assignmentId,
-                problemId: change.problemId,
-                studentId,
-                grade: change.grade,
-                feedback: null,
-              },
-              update: { grade: change.grade },
-            }),
-      ),
-    );
-
-    // Audit each applied change (best-effort; grades are already committed).
-    try {
-      await Promise.all(
-        changes.map((change) =>
-          createEnhancedActivityLog(prisma, req, {
-            userId: graderId,
-            action: change.grade === null ? 'PROBLEM_GRADE_CLEARED' : 'PROBLEM_GRADE_UPDATED',
-            severity: 'INFO',
-            category: 'SUBMISSION',
-            courseId,
-            assignmentId,
-            problemId: change.problemId,
-            metadata: {
-              studentId,
-              graderId,
-              previousGrade: change.previousGrade,
-              grade: change.grade,
-              maxPoints: maxByProblem.get(change.problemId) ?? null,
-              batch: true,
-            },
-          }),
+                update: { grade: change.grade },
+              }),
         ),
       );
-    } catch (logError) {
-      console.error(
-        'POST /api/courses/[id]/[aid]/problem-grades/[studentId] audit error:',
-        logError,
-      );
-    }
 
-    return NextResponse.json({ ok: true, changed: changes.length });
-  } catch (error) {
-    console.error('POST /api/courses/[id]/[aid]/problem-grades/[studentId] error:', error);
-    await createEnhancedActivityLog(prisma, req, {
-      userId: graderId,
-      action: 'PROBLEM_GRADE_UPDATE_ERROR',
-      severity: 'ERROR',
-      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
-    });
-    return NextResponse.json({ error: 'Failed to save grades' }, { status: 500 });
-  }
-}
+      // Audit each applied change (best-effort; grades are already committed).
+      try {
+        await Promise.all(
+          changes.map((change) =>
+            createEnhancedActivityLog(prisma, req, {
+              userId: graderId,
+              action: change.grade === null ? 'PROBLEM_GRADE_CLEARED' : 'PROBLEM_GRADE_UPDATED',
+              severity: 'INFO',
+              category: 'SUBMISSION',
+              courseId,
+              assignmentId,
+              problemId: change.problemId,
+              metadata: {
+                studentId,
+                graderId,
+                previousGrade: change.previousGrade,
+                grade: change.grade,
+                maxPoints: maxByProblem.get(change.problemId) ?? null,
+                batch: true,
+              },
+            }),
+          ),
+        );
+      } catch (logError) {
+        console.error(
+          'POST /api/courses/[id]/[aid]/problem-grades/[studentId] audit error:',
+          logError,
+        );
+      }
+
+      return NextResponse.json({ ok: true, changed: changes.length });
+    } catch (error) {
+      console.error('POST /api/courses/[id]/[aid]/problem-grades/[studentId] error:', error);
+      await createEnhancedActivityLog(prisma, req, {
+        userId: graderId,
+        action: 'PROBLEM_GRADE_UPDATE_ERROR',
+        severity: 'ERROR',
+        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+      });
+      return NextResponse.json({ error: 'Failed to save grades' }, { status: 500 });
+    }
+  },
+  { access: 'manage', deniedAction: 'PROBLEM_GRADE_UPDATE_DENIED' },
+);
