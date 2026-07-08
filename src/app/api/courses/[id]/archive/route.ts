@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canArchiveCourse } from '@/lib/course-status-checks';
-import { canManageCourse, COURSE_FACULTY_ROLES } from '@/lib/permissions';
+import { COURSE_FACULTY_ROLES } from '@/lib/permissions';
+import { withCourseAuth } from '@/lib/api/with-auth';
 
 /**
  * Toggles a course's archived state. Course faculty or a system admin (TAs
@@ -27,96 +27,83 @@ import { canManageCourse, COURSE_FACULTY_ROLES } from '@/lib/permissions';
  *   200:
  *     description: The updated course (id, name, code, isArchived, updatedAt).
  *   400: { description: isArchived must be a boolean. }
+ *   401: { description: Not signed in. }
  *   403: { description: "Not course faculty or a system admin (TAs excluded), or archiving is blocked by the safety check." }
  *   404: { description: Course not found. }
  *   500: { description: Server error. }
  */
-export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
-  let actorId: string | null = null;
-  try {
-    const { id: courseId } = await context.params;
-
-    const { isArchived } = await req.json();
-    if (typeof isArchived !== 'boolean') {
-      return NextResponse.json({ error: 'isArchived must be a boolean' }, { status: 400 });
-    }
-
-    const session = await auth();
-    const user = session?.user;
-    actorId = user?.id ?? null;
-
-    if (!user || !(await canManageCourse(user, courseId, COURSE_FACULTY_ROLES))) {
-      await createEnhancedActivityLog(prisma, req, {
-        userId: session?.user?.id ?? null,
-        action: 'COURSE_ARCHIVE_DENIED',
-        severity: 'SECURITY',
-        metadata: {},
-      });
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
-
-    // Centralized check for archiving (use DB dates to avoid client timezone drift)
-    if (isArchived) {
-      const courseDates = await prisma.course.findUnique({
-        where: { id: courseId },
-        select: { startDate: true, endDate: true },
-      });
-      if (!courseDates) {
-        return NextResponse.json({ error: 'Course not found' }, { status: 404 });
+export const PATCH = withCourseAuth(
+  async (req, _ctx, { user, courseId }) => {
+    try {
+      const { isArchived } = await req.json();
+      if (typeof isArchived !== 'boolean') {
+        return NextResponse.json({ error: 'isArchived must be a boolean' }, { status: 400 });
       }
 
-      const { canArchive, reason } = await canArchiveCourse(
-        prisma,
-        courseId,
-        courseDates.startDate.toISOString(),
-        courseDates.endDate.toISOString(),
-      );
-      if (!canArchive) {
-        await createEnhancedActivityLog(prisma, req, {
-          userId: session?.user?.id ?? null,
-          action: 'COURSE_ARCHIVE_DENIED',
-          severity: 'SECURITY',
-          metadata: {},
+      // Centralized check for archiving (use DB dates to avoid client timezone drift)
+      if (isArchived) {
+        const courseDates = await prisma.course.findUnique({
+          where: { id: courseId },
+          select: { startDate: true, endDate: true },
         });
-        return NextResponse.json({ error: reason }, { status: 403 });
+        if (!courseDates) {
+          return NextResponse.json({ error: 'Course not found' }, { status: 404 });
+        }
+
+        const { canArchive, reason } = await canArchiveCourse(
+          prisma,
+          courseId,
+          courseDates.startDate.toISOString(),
+          courseDates.endDate.toISOString(),
+        );
+        if (!canArchive) {
+          await createEnhancedActivityLog(prisma, req, {
+            userId: user.id,
+            action: 'COURSE_ARCHIVE_DENIED',
+            severity: 'SECURITY',
+            metadata: {},
+          });
+          return NextResponse.json({ error: reason }, { status: 403 });
+        }
       }
-    }
 
-    const updated = await prisma.course.update({
-      where: { id: courseId },
-      data: { isArchived },
-      select: {
-        id: true,
-        name: true,
-        code: true,
-        isArchived: true,
-        updatedAt: true,
-      },
-    });
+      const updated = await prisma.course.update({
+        where: { id: courseId },
+        data: { isArchived },
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          isArchived: true,
+          updatedAt: true,
+        },
+      });
 
-    await createEnhancedActivityLog(prisma, req, {
-      userId: user.id,
-      action: isArchived ? 'COURSE_ARCHIVED' : 'COURSE_NOT_ARCHIVED',
-      severity: 'INFO',
-      category: 'COURSE',
-      courseId,
-      metadata: {
+      await createEnhancedActivityLog(prisma, req, {
         userId: user.id,
-        courseId: courseId,
-        courseName: updated.name,
-        isArchived: isArchived,
-      },
-    });
+        action: isArchived ? 'COURSE_ARCHIVED' : 'COURSE_NOT_ARCHIVED',
+        severity: 'INFO',
+        category: 'COURSE',
+        courseId,
+        metadata: {
+          userId: user.id,
+          courseId: courseId,
+          courseName: updated.name,
+          isArchived: isArchived,
+        },
+      });
 
-    return NextResponse.json(updated);
-  } catch (error) {
-    console.error('Failed PATCH /api/courses/[id]/archive error:', error);
-    await createEnhancedActivityLog(prisma, req, {
-      userId: actorId,
-      action: 'COURSE_ARCHIVE_ERROR',
-      severity: 'ERROR',
-      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
-    });
-    return NextResponse.json('Failed to update archive status', { status: 500 });
-  }
-}
+      return NextResponse.json(updated);
+    } catch (error) {
+      console.error('Failed PATCH /api/courses/[id]/archive error:', error);
+      await createEnhancedActivityLog(prisma, req, {
+        userId: user.id,
+        action: 'COURSE_ARCHIVE_ERROR',
+        severity: 'ERROR',
+        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+      });
+      return NextResponse.json('Failed to update archive status', { status: 500 });
+    }
+  },
+  { access: 'manage', roles: COURSE_FACULTY_ROLES, deniedAction: 'COURSE_ARCHIVE_DENIED' },
+);
