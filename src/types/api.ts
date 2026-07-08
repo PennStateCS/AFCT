@@ -448,30 +448,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/assignments/range": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * List my assignments in a date range
-         * @description Returns the assignments visible to the signed-in user whose due dates fall in a  date range — the data behind the calendar view. Role-based visibility is applied  inside getAssignmentsForUserRange. Bare dates are widened to cover the whole day  in the user's timezone.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/assignments/range/route.ts)
-         */
-        post: operations["postAssignmentsRange"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/assignments": {
         parameters: {
             query?: never;
@@ -1356,30 +1332,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/courses/list": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List my courses
-         * @description Lists the courses visible to the signed-in user, in one of two shapes selected by  the `view` query param:    - default: the full role-scoped list (a student sees their published      enrollments; staff/admins see more), shaped by getCoursesListForUser.    - `view=nav`: a compact list for the sidebar navigation — only the caller's      enrolled courses (published-only for students), with just the fields the nav      needs (id, name, code, publish/archive flags), newest first.
-         *
-         *     **Auth:** requires FACULTY / TA / ADMIN / STUDENT
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/list/route.ts)
-         */
-        get: operations["getCoursesList"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/courses": {
         parameters: {
             query?: never;
@@ -1434,30 +1386,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/debug/enrollments": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Inspect my enrollments (debug)
-         * @description Debug helper: returns the signed-in user's own roster entries (with a little  course info) plus their id and role. Handy for diagnosing enrollment issues;  scoped to the caller, so it exposes nothing about other users.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/debug/enrollments/route.ts)
-         */
-        get: operations["getDebugEnrollments"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -1474,6 +1402,134 @@ export interface paths {
         get: operations["getHealth"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/assignments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * List my assignments in a date range
+         * @description Returns the assignments visible to the signed-in user whose due dates fall in a  date range — the data behind the calendar view. Role-based visibility is applied  inside getAssignmentsForUserRange. Bare dates are widened to cover the whole day  in the user's timezone.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/me/assignments/route.ts)
+         */
+        post: operations["postMeAssignments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/courses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List my courses
+         * @description Lists the courses visible to the signed-in user, in one of two shapes selected by  the `view` query param:    - default: the full role-scoped list (a student sees their published      enrollments; staff/admins see more), shaped by getCoursesListForUser.    - `view=nav`: a compact list for the sidebar navigation — only the caller's      enrolled courses (published-only for students), with just the fields the nav      needs (id, name, code, publish/archive flags), newest first.
+         *
+         *     **Auth:** requires FACULTY / TA / ADMIN / STUDENT
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/me/courses/route.ts)
+         */
+        get: operations["getMeCourses"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/enrollments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Inspect my enrollments (debug)
+         * @description Debug helper: returns the signed-in user's own roster entries (with a little  course info) plus their id and role. Handy for diagnosing enrollment issues;  scoped to the caller, so it exposes nothing about other users.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/me/enrollments/route.ts)
+         */
+        get: operations["getMeEnrollments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change my password
+         * @description Lets a signed-in user change their own password. Requires the current password,  enforces the strength policy, and forbids reusing the existing one. A correct  change also clears the `temporaryPassword` flag (used after admin resets).
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/me/password/route.ts)
+         */
+        post: operations["postMePassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get my profile
+         * @description Returns the signed-in user's own profile.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/me/route.ts)
+         */
+        get: operations["getMe"];
+        put?: never;
+        /**
+         * Update my profile
+         * @description Updates the signed-in user's own profile: names, timezone, and avatar. The  avatar is written to disk and any previous file is removed; `deleteAvatar`  clears it instead. Sent as multipart/form-data because it carries a file.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/me/route.ts)
+         */
+        post: operations["postMe"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1586,38 +1642,6 @@ export interface paths {
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/problems/route.ts)
          */
         post: operations["postProblems"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/profile": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get my profile
-         * @description Returns the signed-in user's own profile.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/profile/route.ts)
-         */
-        get: operations["getProfile"];
-        put?: never;
-        /**
-         * Update my profile
-         * @description Updates the signed-in user's own profile: names, timezone, and avatar. The  avatar is written to disk and any previous file is removed; `deleteAvatar`  clears it instead. Sent as multipart/form-data because it carries a file.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/profile/route.ts)
-         */
-        post: operations["postProfile"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1878,30 +1902,6 @@ export interface paths {
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/users/[id]/route.ts)
          */
         patch: operations["patchUsersById"];
-        trace?: never;
-    };
-    "/api/users/change-password": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Change my password
-         * @description Lets a signed-in user change their own password. Requires the current password,  enforces the strength policy, and forbids reusing the existing one. A correct  change also clears the `temporaryPassword` flag (used after admin resets).
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/users/change-password/route.ts)
-         */
-        post: operations["postUsersChangePassword"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
         trace?: never;
     };
 }
@@ -3317,62 +3317,6 @@ export interface operations {
             };
             /** @description Assignment not found, unpublished (for students), or caller not enrolled. */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    postAssignmentsRange: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @description Date or datetime; bare dates start at 00:00 */
-                    start: string;
-                    /** @description Date or datetime; bare dates end at 23:59 */
-                    end: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Assignments due within the range. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>[];
-                };
-            };
-            /** @description Missing start or end. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not signed in. */
-            401: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6666,47 +6610,6 @@ export interface operations {
             };
         };
     };
-    getCoursesList: {
-        parameters: {
-            query?: {
-                /** @description "nav" returns the compact sidebar shape; omit for the full list. */
-                view?: "nav";
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Courses visible to the caller (shape depends on `view`). */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>[];
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     getCourses: {
         parameters: {
             query?: never;
@@ -6855,7 +6758,139 @@ export interface operations {
             };
         };
     };
-    getDebugEnrollments: {
+    getHealth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Service is healthy. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example ok */
+                        status?: string;
+                        uptime?: number;
+                        environment?: string;
+                        version?: string;
+                    };
+                };
+            };
+            /** @description Health check failed. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postMeAssignments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Date or datetime; bare dates start at 00:00 */
+                    start: string;
+                    /** @description Date or datetime; bare dates end at 23:59 */
+                    end: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Assignments due within the range. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>[];
+                };
+            };
+            /** @description Missing start or end. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getMeCourses: {
+        parameters: {
+            query?: {
+                /** @description "nav" returns the compact sidebar shape; omit for the full list. */
+                view?: "nav";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Courses visible to the caller (shape depends on `view`). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>[];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getMeEnrollments: {
         parameters: {
             query?: never;
             header?: never;
@@ -6897,7 +6932,74 @@ export interface operations {
             };
         };
     };
-    getHealth: {
+    postMePassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    oldPassword: string;
+                    /** @description Must meet the strength policy and differ from the old one */
+                    newPassword: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Password updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success?: boolean;
+                        message?: string;
+                    };
+                };
+            };
+            /** @description Missing fields, weak password, wrong current password, or reused password. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description User record not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getMe: {
         parameters: {
             query?: never;
             header?: never;
@@ -6906,23 +7008,115 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Service is healthy. */
+            /** @description The current user's profile. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        /** @example ok */
-                        status?: string;
-                        uptime?: number;
-                        environment?: string;
-                        version?: string;
+                        id?: string;
+                        email?: string;
+                        firstName?: string;
+                        lastName?: string;
+                        avatar?: string | null;
+                        timezone?: string | null;
                     };
                 };
             };
-            /** @description Health check failed. */
-            503: {
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    firstName: string;
+                    lastName: string;
+                    /** @description One of the app's common timezones; blank clears it */
+                    timezone?: string;
+                    /**
+                     * Format: binary
+                     * @description New profile image
+                     */
+                    avatar?: string;
+                    /**
+                     * @description Remove the current avatar
+                     * @enum {string}
+                     */
+                    deleteAvatar?: "true";
+                };
+            };
+        };
+        responses: {
+            /** @description The updated profile. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id?: string;
+                        email?: string;
+                        firstName?: string;
+                        lastName?: string;
+                        avatar?: string | null;
+                        timezone?: string | null;
+                    };
+                };
+            };
+            /** @description Blank name or invalid timezone. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description User not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Avatar exceeds the system upload limit. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Update failed. */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7351,133 +7545,6 @@ export interface operations {
                 };
             };
             /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    getProfile: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The current user's profile. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        id?: string;
-                        email?: string;
-                        firstName?: string;
-                        lastName?: string;
-                        avatar?: string | null;
-                        timezone?: string | null;
-                    };
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    postProfile: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": {
-                    firstName: string;
-                    lastName: string;
-                    /** @description One of the app's common timezones; blank clears it */
-                    timezone?: string;
-                    /**
-                     * Format: binary
-                     * @description New profile image
-                     */
-                    avatar?: string;
-                    /**
-                     * @description Remove the current avatar
-                     * @enum {string}
-                     */
-                    deleteAvatar?: "true";
-                };
-            };
-        };
-        responses: {
-            /** @description The updated profile. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        id?: string;
-                        email?: string;
-                        firstName?: string;
-                        lastName?: string;
-                        avatar?: string | null;
-                        timezone?: string | null;
-                    };
-                };
-            };
-            /** @description Blank name or invalid timezone. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description User not found. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Avatar exceeds the system upload limit. */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Update failed. */
             500: {
                 headers: {
                     [name: string]: unknown;
@@ -8193,73 +8260,6 @@ export interface operations {
             };
             /** @description Avatar exceeds the system upload limit. */
             413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    postUsersChangePassword: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    oldPassword: string;
-                    /** @description Must meet the strength policy and differ from the old one */
-                    newPassword: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Password updated. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        success?: boolean;
-                        message?: string;
-                    };
-                };
-            };
-            /** @description Missing fields, weak password, wrong current password, or reused password. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description User record not found. */
-            404: {
                 headers: {
                     [name: string]: unknown;
                 };

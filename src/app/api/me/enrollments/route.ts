@@ -32,7 +32,7 @@ export async function GET() {
   try {
     const enrollments = await prisma.roster.findMany({
       where: {
-        userId: session.user.id
+        userId: session.user.id,
       },
       include: {
         course: {
@@ -40,16 +40,16 @@ export async function GET() {
             id: true,
             name: true,
             code: true,
-            isPublished: true
-          }
-        }
-      }
+            isPublished: true,
+          },
+        },
+      },
     });
 
     return NextResponse.json({
       userId: session.user.id,
       isAdmin: session.user.isAdmin,
-      enrollments
+      enrollments,
     });
   } catch (error) {
     console.error('Failed to fetch enrollments:', error);

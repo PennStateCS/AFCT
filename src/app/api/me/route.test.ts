@@ -39,7 +39,7 @@ const makeFile = (size = 1024, name = 'avatar.png') =>
     arrayBuffer: async () => new Uint8Array(size).buffer,
   });
 
-describe('GET /api/profile', () => {
+describe('GET /api/me', () => {
   it('returns 401 when not authenticated', async () => {
     authMock.mockResolvedValue(null);
 
@@ -75,7 +75,7 @@ describe('GET /api/profile', () => {
   });
 });
 
-describe('POST /api/profile', () => {
+describe('POST /api/me', () => {
   it('returns 401 when not authenticated', async () => {
     authMock.mockResolvedValue(null);
 
@@ -83,7 +83,7 @@ describe('POST /api/profile', () => {
     formData.set('firstName', 'A');
     formData.set('lastName', 'B');
 
-    const req = new Request('http://localhost/api/profile', {
+    const req = new Request('http://localhost/api/me', {
       method: 'POST',
       body: formData,
     });
@@ -100,7 +100,7 @@ describe('POST /api/profile', () => {
     formData.set('firstName', '');
     formData.set('lastName', '');
 
-    const req = new Request('http://localhost/api/profile', {
+    const req = new Request('http://localhost/api/me', {
       method: 'POST',
       body: formData,
     });
@@ -118,7 +118,7 @@ describe('POST /api/profile', () => {
     formData.set('lastName', 'B');
     formData.set('timezone', 'Invalid/Zone');
 
-    const req = new Request('http://localhost/api/profile', {
+    const req = new Request('http://localhost/api/me', {
       method: 'POST',
       body: formData,
     });
@@ -146,7 +146,7 @@ describe('POST /api/profile', () => {
     formData.set('lastName', 'B');
     formData.set('timezone', 'UTC');
 
-    const req = new Request('http://localhost/api/profile', {
+    const req = new Request('http://localhost/api/me', {
       method: 'POST',
       body: formData,
     });
@@ -166,7 +166,7 @@ describe('POST /api/profile', () => {
     formData.set('firstName', 'A');
     formData.set('lastName', 'B');
 
-    const req = new Request('http://localhost/api/profile', {
+    const req = new Request('http://localhost/api/me', {
       method: 'POST',
       body: formData,
     });
@@ -186,7 +186,7 @@ describe('POST /api/profile', () => {
     formData.set('lastName', 'B');
     formData.set('avatar', largeFile);
 
-    const req = new Request('http://localhost/api/profile', {
+    const req = new Request('http://localhost/api/me', {
       method: 'POST',
       body: formData,
     });
@@ -217,7 +217,7 @@ describe('POST /api/profile', () => {
     formData.set('lastName', 'B');
     formData.set('avatar', file);
 
-    const req = new Request('http://localhost/api/profile', {
+    const req = new Request('http://localhost/api/me', {
       method: 'POST',
       body: formData,
     });
@@ -247,7 +247,7 @@ describe('POST /api/profile', () => {
     formData.set('lastName', 'B');
     formData.set('deleteAvatar', 'true');
 
-    const req = new Request('http://localhost/api/profile', {
+    const req = new Request('http://localhost/api/me', {
       method: 'POST',
       body: formData,
     });
@@ -272,7 +272,7 @@ describe('POST /api/profile', () => {
     formData.set('firstName', 'A');
     formData.set('lastName', 'B');
 
-    const req = new Request('http://localhost/api/profile', {
+    const req = new Request('http://localhost/api/me', {
       method: 'POST',
       body: formData,
     });
