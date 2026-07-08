@@ -164,6 +164,42 @@ const formatBackupTs = (ts: string) => {
 const SETTINGS_TAB_KEY = 'afct.systemSettingsTab';
 const SETTINGS_TABS = ['general', 'queue', 'backups', 'captcha', 'tls'];
 
+// Normalize a raw settings response into the editable form snapshot (defaults,
+// clamping, ms→sec conversions). Shared so the form can be seeded both
+// synchronously from a warm cache and via the effect on a cold load.
+function buildSettingsSnapshot(data: SystemSettingsResponse): FormSnapshot {
+  return {
+    timezone: data.timezone || DEFAULT_SYSTEM_TIMEZONE,
+    maxUploadSizeMb: Number(data.maxUploadSizeMb) || DEFAULT_MAX_UPLOAD_SIZE_MB,
+    allowSignup: data.allowSignup ?? DEFAULT_ALLOW_SIGNUP,
+    sessionTimeoutMinutes: clampSessionTimeoutMinutes(
+      Number(data.sessionTimeoutMinutes) || DEFAULT_SESSION_TIMEOUT_MINUTES,
+    ),
+    evalTimeoutSec: msToSec(
+      Number(data.submissionEvalTimeoutMs) || DEFAULT_SUBMISSION_EVAL_TIMEOUT_MS,
+    ),
+    resubmitCooldownSec: msToSec(
+      Number(data.submissionResubmitCooldownMs) || DEFAULT_SUBMISSION_RESUBMIT_COOLDOWN_MS,
+    ),
+    evalMaxMemoryMb:
+      Number(data.submissionEvalMaxMemoryMb) || DEFAULT_SUBMISSION_EVAL_MAX_MEMORY_MB,
+    maxConcurrent: Number(data.submissionMaxConcurrent) || DEFAULT_SUBMISSION_MAX_CONCURRENT,
+    maxAttempts: Number(data.submissionMaxAttempts) || DEFAULT_SUBMISSION_MAX_ATTEMPTS,
+    analyzerLimit: Number(data.submissionAnalyzerLimit) || DEFAULT_SUBMISSION_ANALYZER_LIMIT,
+    loginMaxAttempts: Number(data.loginMaxAttempts) || DEFAULT_LOGIN_MAX_ATTEMPTS,
+    loginLockoutMinutes: Number(data.loginLockoutMinutes) || DEFAULT_LOGIN_LOCKOUT_MINUTES,
+    backupEnabled: data.backupEnabled ?? DEFAULT_BACKUP_ENABLED,
+    backupHour: clampBackupHour(Number(data.backupHour) || DEFAULT_BACKUP_HOUR),
+    backupRetentionDays: clampBackupRetentionDays(
+      Number(data.backupRetentionDays) || DEFAULT_BACKUP_RETENTION_DAYS,
+    ),
+    activityLogRetentionDays: clampActivityLogRetentionDays(
+      Number(data.activityLogRetentionDays) || DEFAULT_ACTIVITY_LOG_RETENTION_DAYS,
+    ),
+    hcaptchaSiteKey: data.hcaptchaSiteKey ?? '',
+  };
+}
+
 export default function SystemSettingsClient() {
   const queryClient = useQueryClient();
 
@@ -183,30 +219,57 @@ export default function SystemSettingsClient() {
     },
     staleTime: 30_000,
   });
+
+  // Seed the form synchronously from whatever the cache holds on the first render.
+  // On a warm remount `settingsData` is already present, so the fields initialize
+  // populated (and enabled) with no flash; a cold load leaves this null and the
+  // effect below seeds once the fetch resolves.
+  const [initialSeed] = useState<FormSnapshot | null>(() =>
+    settingsData ? buildSettingsSnapshot(settingsData) : null,
+  );
+
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState('general');
-  const [timezone, setTimezone] = useState('');
-  const [maxUploadSizeMb, setMaxUploadSizeMb] = useState<number | ''>('');
-  const [allowSignup, setAllowSignup] = useState(true);
-  const [sessionTimeoutMinutes, setSessionTimeoutMinutes] = useState<number | ''>('');
+  const [timezone, setTimezone] = useState(initialSeed?.timezone ?? '');
+  const [maxUploadSizeMb, setMaxUploadSizeMb] = useState<number | ''>(
+    initialSeed?.maxUploadSizeMb ?? '',
+  );
+  const [allowSignup, setAllowSignup] = useState(initialSeed?.allowSignup ?? true);
+  const [sessionTimeoutMinutes, setSessionTimeoutMinutes] = useState<number | ''>(
+    initialSeed?.sessionTimeoutMinutes ?? '',
+  );
 
   // Queue settings — durations held in seconds for display.
-  const [evalTimeoutSec, setEvalTimeoutSec] = useState<number | ''>('');
-  const [resubmitCooldownSec, setResubmitCooldownSec] = useState<number | ''>('');
-  const [evalMaxMemoryMb, setEvalMaxMemoryMb] = useState<number | ''>('');
-  const [maxConcurrent, setMaxConcurrent] = useState<number | ''>('');
-  const [maxAttempts, setMaxAttempts] = useState<number | ''>('');
-  const [analyzerLimit, setAnalyzerLimit] = useState<number | ''>('');
+  const [evalTimeoutSec, setEvalTimeoutSec] = useState<number | ''>(
+    initialSeed?.evalTimeoutSec ?? '',
+  );
+  const [resubmitCooldownSec, setResubmitCooldownSec] = useState<number | ''>(
+    initialSeed?.resubmitCooldownSec ?? '',
+  );
+  const [evalMaxMemoryMb, setEvalMaxMemoryMb] = useState<number | ''>(
+    initialSeed?.evalMaxMemoryMb ?? '',
+  );
+  const [maxConcurrent, setMaxConcurrent] = useState<number | ''>(initialSeed?.maxConcurrent ?? '');
+  const [maxAttempts, setMaxAttempts] = useState<number | ''>(initialSeed?.maxAttempts ?? '');
+  const [analyzerLimit, setAnalyzerLimit] = useState<number | ''>(initialSeed?.analyzerLimit ?? '');
 
   // Login lockout policy (per-account).
-  const [loginMaxAttempts, setLoginMaxAttempts] = useState<number | ''>('');
-  const [loginLockoutMinutes, setLoginLockoutMinutes] = useState<number | ''>('');
+  const [loginMaxAttempts, setLoginMaxAttempts] = useState<number | ''>(
+    initialSeed?.loginMaxAttempts ?? '',
+  );
+  const [loginLockoutMinutes, setLoginLockoutMinutes] = useState<number | ''>(
+    initialSeed?.loginLockoutMinutes ?? '',
+  );
 
   // Database backup schedule.
-  const [backupEnabled, setBackupEnabled] = useState(true);
-  const [backupHour, setBackupHour] = useState<number | ''>('');
-  const [backupRetentionDays, setBackupRetentionDays] = useState<number | ''>('');
-  const [activityLogRetentionDays, setActivityLogRetentionDays] = useState<number | ''>('');
+  const [backupEnabled, setBackupEnabled] = useState(initialSeed?.backupEnabled ?? true);
+  const [backupHour, setBackupHour] = useState<number | ''>(initialSeed?.backupHour ?? '');
+  const [backupRetentionDays, setBackupRetentionDays] = useState<number | ''>(
+    initialSeed?.backupRetentionDays ?? '',
+  );
+  const [activityLogRetentionDays, setActivityLogRetentionDays] = useState<number | ''>(
+    initialSeed?.activityLogRetentionDays ?? '',
+  );
 
   // Available backups (managed independently of the settings form's Save).
   const {
@@ -232,13 +295,16 @@ export default function SystemSettingsClient() {
   }, [refetchBackups]);
 
   // hCaptcha keys. The secret is write-only: we only know whether one is set.
-  const [hcaptchaSiteKey, setHcaptchaSiteKey] = useState('');
+  const [hcaptchaSiteKey, setHcaptchaSiteKey] = useState(initialSeed?.hcaptchaSiteKey ?? '');
   const [hcaptchaSecretKey, setHcaptchaSecretKey] = useState('');
-  const [hcaptchaSecretConfigured, setHcaptchaSecretConfigured] = useState(false);
+  const [hcaptchaSecretConfigured, setHcaptchaSecretConfigured] = useState(() =>
+    Boolean(settingsData?.hcaptchaSecretConfigured),
+  );
   const [hcaptchaSecretClear, setHcaptchaSecretClear] = useState(false);
 
-  // Baseline of saved values, for unsaved-changes detection.
-  const [baseline, setBaseline] = useState<FormSnapshot | null>(null);
+  // Baseline of saved values, for unsaved-changes detection. Seeded synchronously
+  // on a warm cache so `loading` (below) is false immediately — no disabled flash.
+  const [baseline, setBaseline] = useState<FormSnapshot | null>(initialSeed);
 
   // TLS certificate (managed independently of the settings form's Save). The
   // read is cached; every mutation writes the fresh info straight into the cache
@@ -273,38 +339,7 @@ export default function SystemSettingsClient() {
   // `baseline` so a later background refetch can't clobber in-progress edits.
   useEffect(() => {
     if (!settingsData || baseline) return;
-    const data = settingsData;
-
-    const norm: FormSnapshot = {
-      timezone: data.timezone || DEFAULT_SYSTEM_TIMEZONE,
-      maxUploadSizeMb: Number(data.maxUploadSizeMb) || DEFAULT_MAX_UPLOAD_SIZE_MB,
-      allowSignup: data.allowSignup ?? DEFAULT_ALLOW_SIGNUP,
-      sessionTimeoutMinutes: clampSessionTimeoutMinutes(
-        Number(data.sessionTimeoutMinutes) || DEFAULT_SESSION_TIMEOUT_MINUTES,
-      ),
-      evalTimeoutSec: msToSec(
-        Number(data.submissionEvalTimeoutMs) || DEFAULT_SUBMISSION_EVAL_TIMEOUT_MS,
-      ),
-      resubmitCooldownSec: msToSec(
-        Number(data.submissionResubmitCooldownMs) || DEFAULT_SUBMISSION_RESUBMIT_COOLDOWN_MS,
-      ),
-      evalMaxMemoryMb:
-        Number(data.submissionEvalMaxMemoryMb) || DEFAULT_SUBMISSION_EVAL_MAX_MEMORY_MB,
-      maxConcurrent: Number(data.submissionMaxConcurrent) || DEFAULT_SUBMISSION_MAX_CONCURRENT,
-      maxAttempts: Number(data.submissionMaxAttempts) || DEFAULT_SUBMISSION_MAX_ATTEMPTS,
-      analyzerLimit: Number(data.submissionAnalyzerLimit) || DEFAULT_SUBMISSION_ANALYZER_LIMIT,
-      loginMaxAttempts: Number(data.loginMaxAttempts) || DEFAULT_LOGIN_MAX_ATTEMPTS,
-      loginLockoutMinutes: Number(data.loginLockoutMinutes) || DEFAULT_LOGIN_LOCKOUT_MINUTES,
-      backupEnabled: data.backupEnabled ?? DEFAULT_BACKUP_ENABLED,
-      backupHour: clampBackupHour(Number(data.backupHour) || DEFAULT_BACKUP_HOUR),
-      backupRetentionDays: clampBackupRetentionDays(
-        Number(data.backupRetentionDays) || DEFAULT_BACKUP_RETENTION_DAYS,
-      ),
-      activityLogRetentionDays: clampActivityLogRetentionDays(
-        Number(data.activityLogRetentionDays) || DEFAULT_ACTIVITY_LOG_RETENTION_DAYS,
-      ),
-      hcaptchaSiteKey: data.hcaptchaSiteKey ?? '',
-    };
+    const norm = buildSettingsSnapshot(settingsData);
 
     setTimezone(norm.timezone);
     setMaxUploadSizeMb(norm.maxUploadSizeMb);
@@ -323,7 +358,7 @@ export default function SystemSettingsClient() {
     setBackupRetentionDays(norm.backupRetentionDays);
     setActivityLogRetentionDays(norm.activityLogRetentionDays);
     setHcaptchaSiteKey(norm.hcaptchaSiteKey);
-    setHcaptchaSecretConfigured(Boolean(data.hcaptchaSecretConfigured));
+    setHcaptchaSecretConfigured(Boolean(settingsData.hcaptchaSecretConfigured));
     setHcaptchaSecretKey('');
     setHcaptchaSecretClear(false);
     setBaseline(norm);
