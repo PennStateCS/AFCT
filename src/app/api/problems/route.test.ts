@@ -45,7 +45,7 @@ beforeEach(() => {
 });
 
 describe('POST /api/problems', () => {
-  it('returns 403 when not authorized', async () => {
+  it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
     const formData = new FormData();
@@ -61,7 +61,7 @@ describe('POST /api/problems', () => {
 
     const res = await POST(req);
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('returns 400 when required fields missing', async () => {
