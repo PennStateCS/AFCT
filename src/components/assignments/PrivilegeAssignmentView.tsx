@@ -22,7 +22,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -98,8 +98,6 @@ export default function AssignmentDashboardPage({
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  // Use a more flexible type for assignment to allow course details if available
-  const [assignment, setAssignment] = useState<AssignmentWithDetails | null>(initialAssignment);
   const queryClient = useQueryClient();
   const [problemToRemove, setProblemToRemove] = useState<Problem | null>(null);
   const [editAssignmentOpen, setEditAssignmentOpen] = useState(false);
@@ -107,9 +105,31 @@ export default function AssignmentDashboardPage({
   const [createProblemOpen, setCreateProblemOpen] = useState(false);
   const [editProblemDialogOpen, setEditProblemDialogOpen] = useState(false);
   const [problemToEdit, setProblemToEdit] = useState<Problem | null>(null);
-  const [loading, setLoading] = useState(!initialAssignment);
-  const [problemsTabLoading, setProblemsTabLoading] = useState(false);
   const [tab, setTab] = useState(searchParams.get('tab') || 'problems');
+
+  // Assignment shell — cached and keyed to this course/assignment. Seeded from the
+  // SSR-provided initialAssignment (view=problems shape) so there's no refetch on
+  // mount when the server already sent it, and back-navigation is warm. Mutations
+  // invalidate this key, triggering a background refetch that does NOT blank the
+  // page — the previous data stays visible until the new payload arrives.
+  const assignmentQuery = useQuery({
+    queryKey: ['course', id, 'assignment', aid, 'detail'],
+    queryFn: async () => {
+      const res = await fetch(`/api/courses/${id}/${aid}?view=problems`);
+      if (!res.ok) throw new Error('Failed to fetch assignment');
+      return (await res.json()) as AssignmentWithDetails;
+    },
+    initialData: initialAssignment ?? undefined,
+    enabled: !!id && !!aid,
+    staleTime: 30_000,
+  });
+  const assignment = assignmentQuery.data ?? null;
+  const loading = assignmentQuery.isPending;
+
+  const invalidateAssignment = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: ['course', id, 'assignment', aid, 'detail'] }),
+    [queryClient, id, aid],
+  );
 
   const [descOpen, setDescOpen] = useState(false);
   const [descText, setDescText] = useState<string | null>(null);
@@ -198,52 +218,6 @@ export default function AssignmentDashboardPage({
   const allAssignments = assignmentsQuery.data ?? [];
   const assignmentsLoading = assignmentsQuery.isFetching;
 
-  const refreshAssignment = useCallback(
-    async (
-      view: 'full' | 'problems' | 'submissions' = 'full',
-      surface: 'page' | 'inline' = 'page',
-    ) => {
-      if (!aid) return;
-      const useInlineLoading = surface === 'inline' && view === 'problems';
-      if (useInlineLoading) {
-        setProblemsTabLoading(true);
-        try {
-          const res = await fetch(`/api/courses/${id}/${aid}?view=${view}`);
-          if (!res.ok) throw new Error('Failed to fetch assignment');
-          const data = (await res.json()) as AssignmentWithDetails;
-          setAssignment(data);
-        } catch {
-        setAssignment(null);
-        } finally {
-          setProblemsTabLoading(false);
-        }
-      } else {
-        if (!assignment?.id) {
-          showToast.error("Failed to load assignment");
-        } else {
-          window.location.href = assignment?.id;
-        }
-      }
-    },
-    // assignment?.id is intentionally excluded: including it changes this callback's
-    // identity after each fetch, retriggering the hydration effect below and looping.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [aid, id],
-  );
-
-  useEffect(() => {
-    if (initialAssignment) {
-      setAssignment(initialAssignment);
-      setLoading(false);
-      return;
-    }
-    const initialView = tab === 'submissions' ? 'submissions' : 'problems';
-    void refreshAssignment(initialView);
-    // We intentionally avoid refetching assignment shell data on every tab switch.
-    // The submissions tab fetches its own review payloads.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialAssignment, refreshAssignment]);
-
   // Read 3 â€” for a group assignment, fetch groups and the mapping of
   // problems -> groups. Only runs for group assignments. TanStack Query cancels
   // in-flight fetches via the AbortSignal, so no manual AbortController plumbing.
@@ -311,7 +285,7 @@ export default function AssignmentDashboardPage({
     } catch {
       showToast.error('Failed to add problems');
     }
-    await refreshAssignment('problems', 'inline');
+    await invalidateAssignment();
   }
 
   async function handleConfirmRemoveProblem() {
@@ -327,7 +301,7 @@ export default function AssignmentDashboardPage({
     } catch {
       showToast.error(`Failed to remove "${problemToRemove.title}"`);
     }
-    await refreshAssignment('problems', 'inline');
+    await invalidateAssignment();
     setProblemToRemove(null);
   }
 
@@ -851,7 +825,7 @@ export default function AssignmentDashboardPage({
               <DataTable
                 columns={problemColumns}
                 data={problemTableData}
-                loading={problemsTabLoading || groupsLoading}
+                loading={groupsLoading}
                 tableLabel="Assignment problems table"
               />
             </CardContent>
@@ -977,7 +951,7 @@ export default function AssignmentDashboardPage({
               : null,
           }}
           onSave={() => {
-            void refreshAssignment('problems', 'inline');
+            void invalidateAssignment();
           }}
         />
       )}
@@ -1017,7 +991,7 @@ export default function AssignmentDashboardPage({
                 }
           }
           onSaved={() => {
-            void refreshAssignment('problems', 'inline');
+            void invalidateAssignment();
           }}
         />
       )}
