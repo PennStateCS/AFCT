@@ -1,14 +1,29 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, beforeEach, afterEach, expect, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const useSessionMock = vi.fn();
 const safeSignOutMock = vi.fn();
 const usePathnameMock = vi.fn();
 const useSidebarMock = vi.fn();
-const useSWRMock = vi.fn();
+
+// Render under a fresh QueryClient per test (retry off, no lingering cache) so the
+// nav courses query starts clean each time.
+const renderWithClient = (ui: React.ReactElement) => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+};
+
+// Set the response the /api/courses/nav fetch resolves to.
+const setNavCourses = (courses: unknown[]) => {
+  (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+    ok: true,
+    json: async () => courses,
+  });
+};
 
 vi.mock('next-auth/react', () => ({
   useSession: () => useSessionMock(),
@@ -31,13 +46,6 @@ vi.mock('next/link', () => {
     ),
   };
 });
-
-vi.mock('swr', () => ({
-  __esModule: true,
-  // useSWRMock is a test mock, not a React hook — the rules-of-hooks match here is a false positive.
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  default: (key: string, fetcher: unknown, options: unknown) => useSWRMock(key, fetcher, options),
-}));
 
 vi.mock('@/components/ui/sidebar', () => {
   const React = require('react');
@@ -119,12 +127,13 @@ import DashboardSidebarMenu from './DashboardSidebarMenu';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubGlobal('fetch', vi.fn());
   useSidebarMock.mockReturnValue({ state: 'expanded' });
   usePathnameMock.mockReturnValue('/dashboard');
   useSessionMock.mockReturnValue({
     data: { user: { id: 'user-1', email: 'user@example.com', role: 'ADMIN', isAdmin: true } },
   });
-  useSWRMock.mockReturnValue({ data: [] });
+  setNavCourses([]);
 });
 
 describe('DashboardSidebarMenu', () => {
@@ -137,7 +146,7 @@ describe('DashboardSidebarMenu', () => {
   });
 
   it('renders admin navigation links for privileged users', () => {
-    render(<DashboardSidebarMenu />);
+    renderWithClient(<DashboardSidebarMenu />);
 
     expect(screen.getByText('Admin Menu')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'User Accounts' })).toHaveAttribute(
@@ -161,34 +170,34 @@ describe('DashboardSidebarMenu', () => {
   it('hides Development Tests link in production mode', () => {
     vi.stubEnv('NODE_ENV', 'production');
 
-    render(<DashboardSidebarMenu />);
+    renderWithClient(<DashboardSidebarMenu />);
 
     expect(screen.queryByRole('link', { name: 'Development Tests' })).toBeNull();
   });
 
-  it('shows all non-archived courses passed in (server scopes visibility)', () => {
+  it('shows all non-archived courses passed in (server scopes visibility)', async () => {
     useSessionMock.mockReturnValue({
       data: { user: { id: 'student-1', email: 'stud@example.com', isAdmin: false } },
     });
-    useSWRMock.mockReturnValue({
-      data: [
-        { id: 'course-1', code: 'CS101', isPublished: true, isArchived: false },
-        { id: 'course-2', code: 'CS102', isPublished: false, isArchived: false },
-      ],
-    });
-    render(<DashboardSidebarMenu />);
+    setNavCourses([
+      { id: 'course-1', code: 'CS101', isPublished: true, isArchived: false },
+      { id: 'course-2', code: 'CS102', isPublished: false, isArchived: false },
+    ]);
+    renderWithClient(<DashboardSidebarMenu />);
 
-    expect(screen.getByRole('link', { name: 'CS101' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'CS102' })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: 'CS101' })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'CS102' })).toBeInTheDocument();
+    });
   });
 
   it('renders a placeholder message when no courses are visible', () => {
     useSessionMock.mockReturnValue({
       data: { user: { id: 'fac-1', email: 'fac@example.com', role: 'FACULTY' } },
     });
-    useSWRMock.mockReturnValue({ data: [] });
+    setNavCourses([]);
 
-    render(<DashboardSidebarMenu />);
+    renderWithClient(<DashboardSidebarMenu />);
 
     expect(screen.getByText('No courses')).toBeInTheDocument();
   });
@@ -198,26 +207,27 @@ describe('DashboardSidebarMenu', () => {
       data: { user: { id: 'student-1', email: 'stud@example.com', isAdmin: false } },
     });
 
-    render(<DashboardSidebarMenu />);
+    renderWithClient(<DashboardSidebarMenu />);
 
     expect(screen.queryByText('Admin Menu')).toBeNull();
   });
 
-  it('does not list archived courses', () => {
+  it('does not list archived courses', async () => {
     useSessionMock.mockReturnValue({
       data: { user: { id: 'user-1', email: 'user@example.com', role: 'FACULTY' } },
     });
-    useSWRMock.mockReturnValue({
-      data: [{ id: 'course-1', code: 'CS101', isPublished: true, isArchived: true }],
+    setNavCourses([{ id: 'course-1', code: 'CS101', isPublished: true, isArchived: true }]);
+
+    renderWithClient(<DashboardSidebarMenu />);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith('/api/courses/nav');
     });
-
-    render(<DashboardSidebarMenu />);
-
     expect(screen.queryByRole('link', { name: 'CS101' })).toBeNull();
   });
 
   it('calls safeSignOut when the user selects Sign out', () => {
-    render(<DashboardSidebarMenu />);
+    renderWithClient(<DashboardSidebarMenu />);
 
     fireEvent.click(screen.getByText('Sign out'));
 
@@ -227,7 +237,7 @@ describe('DashboardSidebarMenu', () => {
   it('renders nothing when the session is missing user data', () => {
     useSessionMock.mockReturnValue({ data: null });
 
-    const { container } = render(<DashboardSidebarMenu />);
+    const { container } = renderWithClient(<DashboardSidebarMenu />);
 
     expect(container).toBeEmptyDOMElement();
   });

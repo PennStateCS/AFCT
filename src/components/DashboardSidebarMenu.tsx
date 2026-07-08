@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useState } from 'react';
-import useSWR from 'swr';
+import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils';
@@ -83,15 +83,15 @@ export default function DashboardSidebarMenu() {
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
 
-  // Use SWR for client-side data fetching and revalidation
-  const fetcher = (url: string) =>
-    fetch(url).then((res) => {
+  // Cached courses list for sidebar nav, fetched client-side and revalidated.
+  const { data: courses = [] } = useQuery<Course[]>({
+    queryKey: ['courses', 'nav'],
+    queryFn: async () => {
+      const res = await fetch('/api/courses/nav');
       if (!res.ok) throw new Error('Failed to fetch courses');
-      return res.json();
-    });
-  const { data: courses = [] } = useSWR<Course[]>('/api/courses/nav', fetcher, {
-    refreshInterval: 0,
-    revalidateOnFocus: true, // revalidate when window/tab is focused
+      return (await res.json()) as Course[];
+    },
+    staleTime: 30_000,
   });
 
   const { state } = useSidebar();

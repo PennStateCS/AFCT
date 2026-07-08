@@ -210,7 +210,7 @@ export default async function DashboardPage() {
       {/* Left (Big Column) */}
       <div className="w-full lg:w-3/4">
         <DashboardClient
-          sessionUser={{ id, role: session.user.isAdmin ? 'ADMIN' : 'STUDENT' }}
+          sessionUser={{ id, isAdmin: session.user.isAdmin ?? false }}
           courses={courses}
           title={'Current Courses'}
         />

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
@@ -163,49 +164,165 @@ const formatBackupTs = (ts: string) => {
 const SETTINGS_TAB_KEY = 'afct.systemSettingsTab';
 const SETTINGS_TABS = ['general', 'queue', 'backups', 'captcha', 'tls'];
 
+// Normalize a raw settings response into the editable form snapshot (defaults,
+// clamping, ms→sec conversions). Shared so the form can be seeded both
+// synchronously from a warm cache and via the effect on a cold load.
+function buildSettingsSnapshot(data: SystemSettingsResponse): FormSnapshot {
+  return {
+    timezone: data.timezone || DEFAULT_SYSTEM_TIMEZONE,
+    maxUploadSizeMb: Number(data.maxUploadSizeMb) || DEFAULT_MAX_UPLOAD_SIZE_MB,
+    allowSignup: data.allowSignup ?? DEFAULT_ALLOW_SIGNUP,
+    sessionTimeoutMinutes: clampSessionTimeoutMinutes(
+      Number(data.sessionTimeoutMinutes) || DEFAULT_SESSION_TIMEOUT_MINUTES,
+    ),
+    evalTimeoutSec: msToSec(
+      Number(data.submissionEvalTimeoutMs) || DEFAULT_SUBMISSION_EVAL_TIMEOUT_MS,
+    ),
+    resubmitCooldownSec: msToSec(
+      Number(data.submissionResubmitCooldownMs) || DEFAULT_SUBMISSION_RESUBMIT_COOLDOWN_MS,
+    ),
+    evalMaxMemoryMb:
+      Number(data.submissionEvalMaxMemoryMb) || DEFAULT_SUBMISSION_EVAL_MAX_MEMORY_MB,
+    maxConcurrent: Number(data.submissionMaxConcurrent) || DEFAULT_SUBMISSION_MAX_CONCURRENT,
+    maxAttempts: Number(data.submissionMaxAttempts) || DEFAULT_SUBMISSION_MAX_ATTEMPTS,
+    analyzerLimit: Number(data.submissionAnalyzerLimit) || DEFAULT_SUBMISSION_ANALYZER_LIMIT,
+    loginMaxAttempts: Number(data.loginMaxAttempts) || DEFAULT_LOGIN_MAX_ATTEMPTS,
+    loginLockoutMinutes: Number(data.loginLockoutMinutes) || DEFAULT_LOGIN_LOCKOUT_MINUTES,
+    backupEnabled: data.backupEnabled ?? DEFAULT_BACKUP_ENABLED,
+    backupHour: clampBackupHour(Number(data.backupHour) || DEFAULT_BACKUP_HOUR),
+    backupRetentionDays: clampBackupRetentionDays(
+      Number(data.backupRetentionDays) || DEFAULT_BACKUP_RETENTION_DAYS,
+    ),
+    activityLogRetentionDays: clampActivityLogRetentionDays(
+      Number(data.activityLogRetentionDays) || DEFAULT_ACTIVITY_LOG_RETENTION_DAYS,
+    ),
+    hcaptchaSiteKey: data.hcaptchaSiteKey ?? '',
+  };
+}
+
 export default function SystemSettingsClient() {
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+
+  // Cached system-settings read. The response seeds the editable form once; the
+  // form's own local state is the source of truth after that, so navigating back
+  // to this page shows the cached values instantly instead of reloading.
+  const {
+    data: settingsData,
+    isLoading: settingsLoading,
+    isError: settingsError,
+  } = useQuery({
+    queryKey: ['admin', 'settings'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/settings', { cache: 'no-store' });
+      if (!res.ok) throw new Error('Failed to load system settings');
+      return (await res.json()) as SystemSettingsResponse;
+    },
+    staleTime: 30_000,
+  });
+
+  // Seed the form synchronously from whatever the cache holds on the first render.
+  // On a warm remount `settingsData` is already present, so the fields initialize
+  // populated (and enabled) with no flash; a cold load leaves this null and the
+  // effect below seeds once the fetch resolves.
+  const [initialSeed] = useState<FormSnapshot | null>(() =>
+    settingsData ? buildSettingsSnapshot(settingsData) : null,
+  );
+
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState('general');
-  const [timezone, setTimezone] = useState('');
-  const [maxUploadSizeMb, setMaxUploadSizeMb] = useState<number | ''>('');
-  const [allowSignup, setAllowSignup] = useState(true);
-  const [sessionTimeoutMinutes, setSessionTimeoutMinutes] = useState<number | ''>('');
+  const [timezone, setTimezone] = useState(initialSeed?.timezone ?? '');
+  const [maxUploadSizeMb, setMaxUploadSizeMb] = useState<number | ''>(
+    initialSeed?.maxUploadSizeMb ?? '',
+  );
+  const [allowSignup, setAllowSignup] = useState(initialSeed?.allowSignup ?? true);
+  const [sessionTimeoutMinutes, setSessionTimeoutMinutes] = useState<number | ''>(
+    initialSeed?.sessionTimeoutMinutes ?? '',
+  );
 
   // Queue settings — durations held in seconds for display.
-  const [evalTimeoutSec, setEvalTimeoutSec] = useState<number | ''>('');
-  const [resubmitCooldownSec, setResubmitCooldownSec] = useState<number | ''>('');
-  const [evalMaxMemoryMb, setEvalMaxMemoryMb] = useState<number | ''>('');
-  const [maxConcurrent, setMaxConcurrent] = useState<number | ''>('');
-  const [maxAttempts, setMaxAttempts] = useState<number | ''>('');
-  const [analyzerLimit, setAnalyzerLimit] = useState<number | ''>('');
+  const [evalTimeoutSec, setEvalTimeoutSec] = useState<number | ''>(
+    initialSeed?.evalTimeoutSec ?? '',
+  );
+  const [resubmitCooldownSec, setResubmitCooldownSec] = useState<number | ''>(
+    initialSeed?.resubmitCooldownSec ?? '',
+  );
+  const [evalMaxMemoryMb, setEvalMaxMemoryMb] = useState<number | ''>(
+    initialSeed?.evalMaxMemoryMb ?? '',
+  );
+  const [maxConcurrent, setMaxConcurrent] = useState<number | ''>(initialSeed?.maxConcurrent ?? '');
+  const [maxAttempts, setMaxAttempts] = useState<number | ''>(initialSeed?.maxAttempts ?? '');
+  const [analyzerLimit, setAnalyzerLimit] = useState<number | ''>(initialSeed?.analyzerLimit ?? '');
 
   // Login lockout policy (per-account).
-  const [loginMaxAttempts, setLoginMaxAttempts] = useState<number | ''>('');
-  const [loginLockoutMinutes, setLoginLockoutMinutes] = useState<number | ''>('');
+  const [loginMaxAttempts, setLoginMaxAttempts] = useState<number | ''>(
+    initialSeed?.loginMaxAttempts ?? '',
+  );
+  const [loginLockoutMinutes, setLoginLockoutMinutes] = useState<number | ''>(
+    initialSeed?.loginLockoutMinutes ?? '',
+  );
 
   // Database backup schedule.
-  const [backupEnabled, setBackupEnabled] = useState(true);
-  const [backupHour, setBackupHour] = useState<number | ''>('');
-  const [backupRetentionDays, setBackupRetentionDays] = useState<number | ''>('');
-  const [activityLogRetentionDays, setActivityLogRetentionDays] = useState<number | ''>('');
+  const [backupEnabled, setBackupEnabled] = useState(initialSeed?.backupEnabled ?? true);
+  const [backupHour, setBackupHour] = useState<number | ''>(initialSeed?.backupHour ?? '');
+  const [backupRetentionDays, setBackupRetentionDays] = useState<number | ''>(
+    initialSeed?.backupRetentionDays ?? '',
+  );
+  const [activityLogRetentionDays, setActivityLogRetentionDays] = useState<number | ''>(
+    initialSeed?.activityLogRetentionDays ?? '',
+  );
 
   // Available backups (managed independently of the settings form's Save).
-  const [backups, setBackups] = useState<BackupInfo[]>([]);
-  const [backupsLoading, setBackupsLoading] = useState(true);
+  const {
+    data: backups = [],
+    isLoading: backupsLoading,
+    refetch: refetchBackups,
+  } = useQuery({
+    queryKey: ['admin', 'settings', 'backups'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/settings/backups', { cache: 'no-store' });
+      if (!res.ok) throw new Error('Failed to load backups');
+      const data = (await res.json()) as { backups?: BackupInfo[] };
+      return Array.isArray(data.backups) ? data.backups : [];
+    },
+    staleTime: 30_000,
+  });
   const [backupNowBusy, setBackupNowBusy] = useState(false);
+  // Force-refresh helper used after "Back up now"; returns the new count so the
+  // caller can poll until the freshly-requested backup appears.
+  const reloadBackups = useCallback(async (): Promise<number> => {
+    const { data } = await refetchBackups();
+    return Array.isArray(data) ? data.length : 0;
+  }, [refetchBackups]);
 
   // hCaptcha keys. The secret is write-only: we only know whether one is set.
-  const [hcaptchaSiteKey, setHcaptchaSiteKey] = useState('');
+  const [hcaptchaSiteKey, setHcaptchaSiteKey] = useState(initialSeed?.hcaptchaSiteKey ?? '');
   const [hcaptchaSecretKey, setHcaptchaSecretKey] = useState('');
-  const [hcaptchaSecretConfigured, setHcaptchaSecretConfigured] = useState(false);
+  const [hcaptchaSecretConfigured, setHcaptchaSecretConfigured] = useState(() =>
+    Boolean(settingsData?.hcaptchaSecretConfigured),
+  );
   const [hcaptchaSecretClear, setHcaptchaSecretClear] = useState(false);
 
-  // Baseline of saved values, for unsaved-changes detection.
-  const [baseline, setBaseline] = useState<FormSnapshot | null>(null);
+  // Baseline of saved values, for unsaved-changes detection. Seeded synchronously
+  // on a warm cache so `loading` (below) is false immediately — no disabled flash.
+  const [baseline, setBaseline] = useState<FormSnapshot | null>(initialSeed);
 
-  // TLS certificate (managed independently of the settings form's Save).
-  const [tls, setTls] = useState<TlsInfo | null>(null);
+  // TLS certificate (managed independently of the settings form's Save). The
+  // read is cached; every mutation writes the fresh info straight into the cache
+  // via setTls, so the status card stays current without a refetch.
+  const { data: tlsData } = useQuery({
+    queryKey: ['admin', 'settings', 'tls'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/settings/tls', { cache: 'no-store' });
+      if (!res.ok) throw new Error('Failed to load TLS info');
+      return (await res.json()) as TlsInfo;
+    },
+    staleTime: 30_000,
+  });
+  const tls = tlsData ?? null;
+  const setTls = useCallback(
+    (info: TlsInfo) => queryClient.setQueryData(['admin', 'settings', 'tls'], info),
+    [queryClient],
+  );
   const [tlsBusy, setTlsBusy] = useState(false);
   const [tlsMethod, setTlsMethod] = useState<TlsMethod>(null);
   const [certFile, setCertFile] = useState<File | null>(null);
@@ -218,114 +335,45 @@ export default function SystemSettingsClient() {
   const [signedCertFile, setSignedCertFile] = useState<File | null>(null);
   const [signedChainFile, setSignedChainFile] = useState<File | null>(null);
 
+  // Seed the editable form from the cached settings response, once. Guarded on
+  // `baseline` so a later background refetch can't clobber in-progress edits.
   useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await fetch('/api/system-settings', { cache: 'no-store' });
-        if (!res.ok) throw new Error('Failed to load system settings');
-        const data = (await res.json()) as SystemSettingsResponse;
+    if (!settingsData || baseline) return;
+    const norm = buildSettingsSnapshot(settingsData);
 
-        const norm: FormSnapshot = {
-          timezone: data.timezone || DEFAULT_SYSTEM_TIMEZONE,
-          maxUploadSizeMb: Number(data.maxUploadSizeMb) || DEFAULT_MAX_UPLOAD_SIZE_MB,
-          allowSignup: data.allowSignup ?? DEFAULT_ALLOW_SIGNUP,
-          sessionTimeoutMinutes: clampSessionTimeoutMinutes(
-            Number(data.sessionTimeoutMinutes) || DEFAULT_SESSION_TIMEOUT_MINUTES,
-          ),
-          evalTimeoutSec: msToSec(
-            Number(data.submissionEvalTimeoutMs) || DEFAULT_SUBMISSION_EVAL_TIMEOUT_MS,
-          ),
-          resubmitCooldownSec: msToSec(
-            Number(data.submissionResubmitCooldownMs) || DEFAULT_SUBMISSION_RESUBMIT_COOLDOWN_MS,
-          ),
-          evalMaxMemoryMb:
-            Number(data.submissionEvalMaxMemoryMb) || DEFAULT_SUBMISSION_EVAL_MAX_MEMORY_MB,
-          maxConcurrent: Number(data.submissionMaxConcurrent) || DEFAULT_SUBMISSION_MAX_CONCURRENT,
-          maxAttempts: Number(data.submissionMaxAttempts) || DEFAULT_SUBMISSION_MAX_ATTEMPTS,
-          analyzerLimit: Number(data.submissionAnalyzerLimit) || DEFAULT_SUBMISSION_ANALYZER_LIMIT,
-          loginMaxAttempts: Number(data.loginMaxAttempts) || DEFAULT_LOGIN_MAX_ATTEMPTS,
-          loginLockoutMinutes: Number(data.loginLockoutMinutes) || DEFAULT_LOGIN_LOCKOUT_MINUTES,
-          backupEnabled: data.backupEnabled ?? DEFAULT_BACKUP_ENABLED,
-          backupHour: clampBackupHour(Number(data.backupHour) || DEFAULT_BACKUP_HOUR),
-          backupRetentionDays: clampBackupRetentionDays(
-            Number(data.backupRetentionDays) || DEFAULT_BACKUP_RETENTION_DAYS,
-          ),
-          activityLogRetentionDays: clampActivityLogRetentionDays(
-            Number(data.activityLogRetentionDays) || DEFAULT_ACTIVITY_LOG_RETENTION_DAYS,
-          ),
-          hcaptchaSiteKey: data.hcaptchaSiteKey ?? '',
-        };
+    setTimezone(norm.timezone);
+    setMaxUploadSizeMb(norm.maxUploadSizeMb);
+    setAllowSignup(norm.allowSignup);
+    setSessionTimeoutMinutes(norm.sessionTimeoutMinutes);
+    setEvalTimeoutSec(norm.evalTimeoutSec);
+    setResubmitCooldownSec(norm.resubmitCooldownSec);
+    setEvalMaxMemoryMb(norm.evalMaxMemoryMb);
+    setMaxConcurrent(norm.maxConcurrent);
+    setMaxAttempts(norm.maxAttempts);
+    setAnalyzerLimit(norm.analyzerLimit);
+    setLoginMaxAttempts(norm.loginMaxAttempts);
+    setLoginLockoutMinutes(norm.loginLockoutMinutes);
+    setBackupEnabled(norm.backupEnabled);
+    setBackupHour(norm.backupHour);
+    setBackupRetentionDays(norm.backupRetentionDays);
+    setActivityLogRetentionDays(norm.activityLogRetentionDays);
+    setHcaptchaSiteKey(norm.hcaptchaSiteKey);
+    setHcaptchaSecretConfigured(Boolean(settingsData.hcaptchaSecretConfigured));
+    setHcaptchaSecretKey('');
+    setHcaptchaSecretClear(false);
+    setBaseline(norm);
+  }, [settingsData, baseline]);
 
-        setTimezone(norm.timezone);
-        setMaxUploadSizeMb(norm.maxUploadSizeMb);
-        setAllowSignup(norm.allowSignup);
-        setSessionTimeoutMinutes(norm.sessionTimeoutMinutes);
-        setEvalTimeoutSec(norm.evalTimeoutSec);
-        setResubmitCooldownSec(norm.resubmitCooldownSec);
-        setEvalMaxMemoryMb(norm.evalMaxMemoryMb);
-        setMaxConcurrent(norm.maxConcurrent);
-        setMaxAttempts(norm.maxAttempts);
-        setAnalyzerLimit(norm.analyzerLimit);
-        setLoginMaxAttempts(norm.loginMaxAttempts);
-        setLoginLockoutMinutes(norm.loginLockoutMinutes);
-        setBackupEnabled(norm.backupEnabled);
-        setBackupHour(norm.backupHour);
-        setBackupRetentionDays(norm.backupRetentionDays);
-        setActivityLogRetentionDays(norm.activityLogRetentionDays);
-        setHcaptchaSiteKey(norm.hcaptchaSiteKey);
-        setHcaptchaSecretConfigured(Boolean(data.hcaptchaSecretConfigured));
-        setHcaptchaSecretKey('');
-        setHcaptchaSecretClear(false);
-        setBaseline(norm);
-      } catch {
-        showToast.error('Failed to load system settings.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, []);
-
+  // Surface a load failure the same way the imperative fetch did.
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch('/api/system-settings/tls', { cache: 'no-store' });
-        if (res.ok) {
-          const info = (await res.json()) as TlsInfo;
-          setTls(info);
-        }
-      } catch {
-        // non-fatal; TLS card just shows unknown state
-      }
-    })();
-  }, []);
-
-  const loadBackups = useCallback(async (): Promise<number> => {
-    try {
-      const res = await fetch('/api/system-settings/backups', { cache: 'no-store' });
-      if (res.ok) {
-        const data = (await res.json()) as { backups?: BackupInfo[] };
-        const list = Array.isArray(data.backups) ? data.backups : [];
-        setBackups(list);
-        setBackupsLoading(false);
-        return list.length;
-      }
-    } catch {
-      // non-fatal; the list just stays empty
-    }
-    setBackupsLoading(false);
-    return 0;
-  }, []);
-
-  useEffect(() => {
-    loadBackups();
-  }, [loadBackups]);
+    if (settingsError) showToast.error('Failed to load system settings.');
+  }, [settingsError]);
 
   const handleBackupNow = async () => {
     setBackupNowBusy(true);
     try {
-      const before = await loadBackups();
-      const res = await fetch('/api/system-settings/backups', { method: 'POST' });
+      const before = await reloadBackups();
+      const res = await fetch('/api/admin/settings/backups', { method: 'POST' });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
         throw new Error(body?.error || 'Failed to start backup');
@@ -336,7 +384,7 @@ export default function SystemSettingsClient() {
       let tries = 0;
       const poll = async () => {
         tries += 1;
-        const count = await loadBackups();
+        const count = await reloadBackups();
         if (count <= before && tries < 10) setTimeout(poll, 6000);
       };
       setTimeout(poll, 6000);
@@ -378,7 +426,7 @@ export default function SystemSettingsClient() {
         keyFile.text(),
         chainFile ? chainFile.text() : Promise.resolve(undefined),
       ]);
-      const res = await fetch('/api/system-settings/tls', {
+      const res = await fetch('/api/admin/settings/tls', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cert, key, chain }),
@@ -401,7 +449,7 @@ export default function SystemSettingsClient() {
   const resetCert = async () => {
     setTlsBusy(true);
     try {
-      const res = await fetch('/api/system-settings/tls', { method: 'DELETE' });
+      const res = await fetch('/api/admin/settings/tls', { method: 'DELETE' });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || 'Failed to reset certificate.');
       setTls(data as TlsInfo);
@@ -423,7 +471,7 @@ export default function SystemSettingsClient() {
   });
 
   const tlsAction = async (payload: Record<string, unknown>) => {
-    const res = await fetch('/api/system-settings/tls', {
+    const res = await fetch('/api/admin/settings/tls', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -538,7 +586,7 @@ export default function SystemSettingsClient() {
 
     setSaving(true);
     try {
-      const res = await fetch('/api/system-settings', {
+      const res = await fetch('/api/admin/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -609,6 +657,37 @@ export default function SystemSettingsClient() {
         activityLogRetentionDays: logRetention,
         hcaptchaSiteKey: savedSiteKey,
       });
+      // Keep the read cache consistent with what we just saved so a later revisit
+      // (served from cache) reflects the new values, not the pre-save response.
+      queryClient.setQueryData<SystemSettingsResponse>(['admin', 'settings'], (prev) =>
+        prev
+          ? {
+              ...prev,
+              timezone,
+              maxUploadSizeMb: clampedSize,
+              allowSignup,
+              sessionTimeoutMinutes: clampedTimeout,
+              submissionEvalTimeoutMs: evalTimeoutMs,
+              submissionResubmitCooldownMs: resubmitCooldownMs,
+              submissionEvalMaxMemoryMb: memoryMb,
+              submissionMaxConcurrent: concurrent,
+              submissionMaxAttempts: attempts,
+              submissionAnalyzerLimit: analyzer,
+              loginMaxAttempts: loginAttempts,
+              loginLockoutMinutes: lockoutMinutes,
+              backupEnabled,
+              backupHour: bkpHour,
+              backupRetentionDays: bkpRetention,
+              activityLogRetentionDays: logRetention,
+              hcaptchaSiteKey: savedSiteKey,
+              hcaptchaSecretConfigured: hcaptchaSecretClear
+                ? false
+                : hcaptchaSecretKey.trim()
+                  ? true
+                  : prev.hcaptchaSecretConfigured,
+            }
+          : prev,
+      );
       showToast.success('System settings updated successfully.');
     } catch (err) {
       showToast.error(err instanceof Error ? err.message : 'Failed to save settings.');
@@ -640,6 +719,9 @@ export default function SystemSettingsClient() {
     setHcaptchaSecretClear(false);
   };
 
+  // "Loading" until the cached response has seeded the form, so fields never
+  // flash empty on a cache-warm revisit (isLoading is already false then).
+  const loading = settingsLoading || (!!settingsData && !baseline);
   const disabled = loading || saving;
 
   const currentSnapshot: FormSnapshot = {
@@ -994,7 +1076,7 @@ export default function SystemSettingsClient() {
                             {b.dumpFile ? (
                               <a
                                 className="text-sky-600 underline"
-                                href={`/api/system-settings/backups/download?file=${encodeURIComponent(b.dumpFile)}`}
+                                href={`/api/admin/settings/backups/download?file=${encodeURIComponent(b.dumpFile)}`}
                               >
                                 Download ({formatBytes(b.dumpSize)})
                               </a>
@@ -1006,7 +1088,7 @@ export default function SystemSettingsClient() {
                             {b.filesFile ? (
                               <a
                                 className="text-sky-600 underline"
-                                href={`/api/system-settings/backups/download?file=${encodeURIComponent(b.filesFile)}`}
+                                href={`/api/admin/settings/backups/download?file=${encodeURIComponent(b.filesFile)}`}
                               >
                                 Download ({formatBytes(b.filesSize)})
                               </a>
