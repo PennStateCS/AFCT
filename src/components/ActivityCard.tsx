@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,6 +28,10 @@ interface ActivityCardProps {
 
 export function ActivityCard({ courseId }: ActivityCardProps) {
   const { timezone } = useEffectiveTimezone();
+
+  // Memoize columns so a re-render doesn't recreate the array (and its cell
+  // components), which would force DataTable and its rows to re-render.
+  const columns = useMemo(() => getActivityColumns(timezone), [timezone]);
 
   // Cached, offset-paginated activity log. Each page (offset) is cached
   // separately; useInfiniteQuery accumulates the pages into one list, preserving
@@ -136,7 +140,7 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
         ) : (
           <>
             <DataTable
-              columns={getActivityColumns(timezone)}
+              columns={columns}
               data={activities}
               tableLabel="Activity log table"
             />

@@ -36,8 +36,10 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
+    // Filter to STUDENT in the query (indexed) rather than fetching every roster
+    // row and filtering in JS.
     const rosterEntries = await prisma.roster.findMany({
-      where: { courseId },
+      where: { courseId, role: 'STUDENT' },
       include: {
         user: {
           select: {
@@ -50,7 +52,7 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
       },
     });
 
-    const students = rosterEntries.filter((r: (typeof rosterEntries)[number]) => r.role === 'STUDENT').map((r: (typeof rosterEntries)[number]) => r.user);
+    const students = rosterEntries.map((r: (typeof rosterEntries)[number]) => r.user);
 
     return NextResponse.json(students);
   } catch (err) {

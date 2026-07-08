@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
@@ -63,135 +64,59 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    // Get activities for this specific course using enhanced ActivityLog schema
-    const activityLogs = await prisma.activityLog.findMany({
-      where: {
-        OR: [
-          // Direct course activities (most efficient with foreign key)
-          { courseId: courseId },
-          // Assignment activities in this course
-          {
-            assignment: { courseId: courseId },
-          },
-          // Problem activities in this course
-          {
-            problem: { courseId: courseId },
-          },
-          // Submission activities for assignments in this course
-          {
-            submission: {
-              assignmentProblem: {
-                assignment: { courseId: courseId },
-              },
-            },
-          },
-          // Login activities from course members (last 24 hours for better context)
-          {
-            AND: [
-              { action: { contains: 'LOGIN' } },
-              {
-                timestamp: {
-                  gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
-                },
-              },
-              {
-                user: {
-                  rosterEntries: {
-                    some: { courseId: courseId },
-                  },
-                },
-              },
-            ],
-          },
-        ],
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            avatar: true,
-          },
-        },
-        course: {
-          select: {
-            id: true,
-            name: true,
-            code: true,
-          },
-        },
-        assignment: {
-          select: {
-            id: true,
-            title: true,
-          },
-        },
-        problem: {
-          select: {
-            id: true,
-            title: true,
-          },
-        },
-        submission: {
-          select: {
-            id: true,
-            assignmentProblem: {
-              select: {
-                assignment: {
-                  select: {
-                    title: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-      orderBy: { timestamp: 'desc' },
-      take: limit,
-      skip: offset,
-    });
+    // Precompute the 24h login window and the course's roster user ids once, then
+    // reuse a single WHERE for both the page query and the count. Previously the
+    // clause was duplicated verbatim and used a correlated per-row rosterEntries
+    // subquery to find member logins; an `userId IN (...)` on the precomputed set
+    // is a plain indexed lookup instead.
+    const loginSince = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const rosterUserIds = (
+      await prisma.roster.findMany({ where: { courseId }, select: { userId: true } })
+    ).map((r) => r.userId);
 
-    // Get total count for pagination using the same course-specific filter
-    const totalCount = await prisma.activityLog.count({
-      where: {
-        OR: [
-          { courseId: courseId },
-          {
-            assignment: { courseId: courseId },
+    const where: Prisma.ActivityLogWhereInput = {
+      OR: [
+        // Direct course activities (indexed foreign key).
+        { courseId },
+        // Assignment / problem / submission activities within this course.
+        { assignment: { courseId } },
+        { problem: { courseId } },
+        { submission: { assignmentProblem: { assignment: { courseId } } } },
+        // Recent logins by course members (last 24h).
+        {
+          AND: [
+            { action: { contains: 'LOGIN' } },
+            { timestamp: { gte: loginSince } },
+            { userId: { in: rosterUserIds } },
+          ],
+        },
+      ],
+    };
+
+    // Page query + count run in parallel (they were sequential awaits).
+    const [activityLogs, totalCount] = await Promise.all([
+      prisma.activityLog.findMany({
+        where,
+        include: {
+          user: {
+            select: { id: true, email: true, firstName: true, lastName: true, avatar: true },
           },
-          {
-            problem: { courseId: courseId },
-          },
-          {
-            submission: {
-              assignmentProblem: {
-                assignment: { courseId: courseId },
-              },
+          course: { select: { id: true, name: true, code: true } },
+          assignment: { select: { id: true, title: true } },
+          problem: { select: { id: true, title: true } },
+          submission: {
+            select: {
+              id: true,
+              assignmentProblem: { select: { assignment: { select: { title: true } } } },
             },
           },
-          {
-            AND: [
-              { action: { contains: 'LOGIN' } },
-              {
-                timestamp: {
-                  gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
-                },
-              },
-              {
-                user: {
-                  rosterEntries: {
-                    some: { courseId: courseId },
-                  },
-                },
-              },
-            ],
-          },
-        ],
-      },
-    });
+        },
+        orderBy: { timestamp: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+      prisma.activityLog.count({ where }),
+    ]);
 
     return NextResponse.json({
       activities: activityLogs,
