@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { auth } from '@/lib/auth';
-import { isAdmin } from '@/lib/permissions';
+import { withAdminAuth } from '@/lib/api/with-auth';
 import type { Prisma } from '@prisma/client';
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -51,13 +50,8 @@ function displayName(u: {
  *   403: { description: Caller is not a system administrator. }
  *   500: { description: Query failed. }
  */
-export async function GET(req: Request) {
+export const GET = withAdminAuth(async (req: Request) => {
   try {
-    const session = await auth();
-    if (!isAdmin(session?.user)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
-
     const url = new URL(req.url);
     // A missing param must fall back to the default — Number(null) is 0, which
     // would otherwise clamp up to the minimum, so guard on the raw value first.
@@ -102,8 +96,7 @@ export async function GET(req: Request) {
 
     // Sorting: only known columns are allowed. `userId` sorts by the author's
     // name (the column shows the resolved name, not the id). Default: newest first.
-    const sortDir: 'asc' | 'desc' =
-      url.searchParams.get('sortDir') === 'asc' ? 'asc' : 'desc';
+    const sortDir: 'asc' | 'desc' = url.searchParams.get('sortDir') === 'asc' ? 'asc' : 'desc';
     const sortBy = url.searchParams.get('sortBy') ?? '';
     const ORDER_BY: Record<string, Prisma.ActivityLogOrderByWithRelationInput> = {
       timestamp: { timestamp: sortDir },
@@ -159,4 +152,4 @@ export async function GET(req: Request) {
     console.error('[LOGS_LIST_GET_ERROR]', error);
     return NextResponse.json({ error: 'Failed to fetch logs' }, { status: 500 });
   }
-}
+});

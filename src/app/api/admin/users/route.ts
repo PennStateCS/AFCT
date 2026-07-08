@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
-import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { getUsersList } from '@/lib/users-list';
-import { isAdmin } from '@/lib/permissions';
+import { withAdminAuth } from '@/lib/api/with-auth';
 
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
@@ -32,23 +31,17 @@ const isStrongPassword = (pw: string) =>
  *   403: { description: System administrators only. }
  *   500: { description: Server error. }
  */
-export async function GET(req: Request) {
+export const GET = withAdminAuth(async (req, _ctx, { user }) => {
   try {
-    const session = await auth();
-    if (!session?.user || !isAdmin(session.user)) {
-      console.warn('[USERS_GET] Unauthorized access attempt');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
-
     const users = await getUsersList();
 
     await createEnhancedActivityLog(prisma, req, {
-      userId: session.user.id,
+      userId: user.id,
       action: 'VIEW_USERS',
       severity: 'INFO',
       category: 'USER',
       metadata: {
-        userId: session.user.id,
+        userId: user.id,
       },
     });
 
@@ -57,7 +50,7 @@ export async function GET(req: Request) {
     console.error('[USERS_GET_ERROR]', error);
     return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
   }
-}
+});
 
 /**
  * Creates a single user directly (admin-provisioned account), unlike self-service
@@ -87,97 +80,88 @@ export async function GET(req: Request) {
  *   409: { description: Email already in use. }
  *   500: { description: Server error. }
  */
-export async function POST(req: Request) {
-  try {
-    const session = await auth();
-    if (!session?.user || !isAdmin(session.user)) {
-      console.warn('[USERS_POST] Unauthorized access attempt');
-      await createEnhancedActivityLog(prisma, req, {
-        userId: session?.user?.id ?? null,
-        action: 'USER_CREATE_DENIED',
-        severity: 'SECURITY',
-        metadata: {},
-      });
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
+export const POST = withAdminAuth(
+  async (req, _ctx, { user }) => {
+    try {
+      const body = await req.json();
+      const { email, firstName, lastName, password, timezone } = body;
 
-    const body = await req.json();
-    const { email, firstName, lastName, password, timezone } = body;
+      if (!email || !firstName || !lastName || !password) {
+        console.warn('[USERS_POST] Missing required fields');
+        return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+      }
 
-    if (!email || !firstName || !lastName || !password) {
-      console.warn('[USERS_POST] Missing required fields');
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-    }
+      if (!isValidEmail(email)) {
+        console.warn(`[USERS_POST] Invalid email format: ${email}`);
+        return NextResponse.json({ error: 'Invalid email format' }, { status: 400 });
+      }
 
-    if (!isValidEmail(email)) {
-      console.warn(`[USERS_POST] Invalid email format: ${email}`);
-      return NextResponse.json({ error: 'Invalid email format' }, { status: 400 });
-    }
+      if (!isStrongPassword(password)) {
+        console.warn('[USERS_POST] Weak password provided');
+        return NextResponse.json(
+          {
+            error:
+              'Password must be at least 8 characters and include uppercase, lowercase, number, and special character.',
+          },
+          { status: 400 },
+        );
+      }
 
-    if (!isStrongPassword(password)) {
-      console.warn('[USERS_POST] Weak password provided');
-      return NextResponse.json(
-        {
-          error:
-            'Password must be at least 8 characters and include uppercase, lowercase, number, and special character.',
+      const existingUser = await prisma.user.findUnique({ where: { email } });
+      if (existingUser) {
+        console.warn(`[USERS_POST] Email already in use: ${email}`);
+        return NextResponse.json({ error: 'Email already in use' }, { status: 409 });
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      if (timezone && !COMMON_TIMEZONES.includes(timezone as (typeof COMMON_TIMEZONES)[number])) {
+        return NextResponse.json({ error: 'Invalid timezone' }, { status: 400 });
+      }
+
+      const systemSettings = await prisma.systemSettings.findUnique({ where: { id: 1 } });
+
+      const newUser = await prisma.user.create({
+        data: {
+          email,
+          firstName,
+          lastName,
+          password: hashedPassword,
+          timezone: timezone || systemSettings?.timezone || 'UTC',
         },
-        { status: 400 },
-      );
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          createdAt: true,
+          timezone: true,
+        },
+      });
+
+      await createEnhancedActivityLog(prisma, req, {
+        userId: user.id,
+        action: 'CREATE_USER',
+        severity: 'INFO',
+        category: 'USER',
+        metadata: {
+          userId: user.id,
+          createdUserId: newUser.id,
+          createdUserEmail: newUser.email,
+        },
+      });
+
+      return NextResponse.json(newUser, { status: 201 });
+    } catch (error) {
+      console.error('[USERS_POST_ERROR]', error);
+      await createEnhancedActivityLog(prisma, req, {
+        userId: null,
+        action: 'USER_CREATE_ERROR',
+        severity: 'ERROR',
+        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+      });
+      return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
-
-    const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) {
-      console.warn(`[USERS_POST] Email already in use: ${email}`);
-      return NextResponse.json({ error: 'Email already in use' }, { status: 409 });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    if (timezone && !COMMON_TIMEZONES.includes(timezone as (typeof COMMON_TIMEZONES)[number])) {
-      return NextResponse.json({ error: 'Invalid timezone' }, { status: 400 });
-    }
-
-    const systemSettings = await prisma.systemSettings.findUnique({ where: { id: 1 } });
-
-    const newUser = await prisma.user.create({
-      data: {
-        email,
-        firstName,
-        lastName,
-        password: hashedPassword,
-        timezone: timezone || systemSettings?.timezone || 'UTC',
-      },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        createdAt: true,
-        timezone: true,
-      },
-    });
-
-    await createEnhancedActivityLog(prisma, req, {
-      userId: session.user.id,
-      action: 'CREATE_USER',
-      severity: 'INFO',
-      category: 'USER',
-      metadata: {
-        userId: session.user.id,
-        createdUserId: newUser.id,
-        createdUserEmail: newUser.email,
-      },
-    });
-
-    return NextResponse.json(newUser, { status: 201 });
-  } catch (error) {
-    console.error('[USERS_POST_ERROR]', error);
-    await createEnhancedActivityLog(prisma, req, {
-      userId: null,
-      action: 'USER_CREATE_ERROR',
-      severity: 'ERROR',
-      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
-    });
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  { deniedAction: 'USER_CREATE_DENIED' },
+);
