@@ -79,7 +79,7 @@ describe('BulkEnrollDialog', () => {
     await waitFor(() => expect(screen.getByText('Enrollment complete')).toBeInTheDocument());
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[1]?.[0]).toBe('/api/courses/c1/bulk-enroll');
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('/api/courses/c1/roster/bulk');
     const [, secondInit] = fetchMock.mock.calls[1] as [string, RequestInit];
     expect(secondInit).toMatchObject({ method: 'POST' });
     expect(JSON.parse(secondInit.body as string)).toEqual({ userIds: ['u1'] });
