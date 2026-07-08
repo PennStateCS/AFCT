@@ -84,7 +84,9 @@ export default function CourseEditUserDialog({
       setRoster(initialRoster);
       setViewerCourseRole(initialViewerCourseRole ?? null);
       setViewerDefaultRole(initialViewerDefaultRole ?? null);
-      setAvatarPreview(`/api/uploads/pfps/${initialRoster.user.avatar}`);
+      setAvatarPreview(
+        initialRoster.user.avatar ? `/api/uploads/pfps/${initialRoster.user.avatar}` : '',
+      );
       originalRosterRef.current = JSON.parse(JSON.stringify(initialRoster));
       return;
     }
@@ -104,7 +106,9 @@ export default function CourseEditUserDialog({
         setRoster(body?.roster ?? null);
         setViewerCourseRole(body?.viewerCourseRole ?? null);
         setViewerDefaultRole(body?.viewerDefaultRole ?? null);
-        setAvatarPreview(`/api/uploads/pfps/${body.roster.user.avatar}`);
+        setAvatarPreview(
+          body.roster.user.avatar ? `/api/uploads/pfps/${body.roster.user.avatar}` : '',
+        );
 
         originalRosterRef.current = JSON.parse(JSON.stringify(body?.roster ?? null));
       } catch (err) {
@@ -186,7 +190,7 @@ export default function CourseEditUserDialog({
         if (!v && originalRosterRef.current) {
           const orig = JSON.parse(JSON.stringify(originalRosterRef.current));
           setRoster(orig);
-          setAvatarPreview(`/api/uploads/pfps/${orig.user.avatar}`);
+          setAvatarPreview(orig.user.avatar ? `/api/uploads/pfps/${orig.user.avatar}` : '');
           setConfirmOpen(false);
         }
       }}
@@ -209,7 +213,7 @@ export default function CourseEditUserDialog({
               <div className="flex items-center gap-4">
                 <Avatar className="h-20 w-20">
                   <AvatarImage
-                    src={avatarPreview || '/api/uploads/pfps/'}
+                    src={avatarPreview || undefined}
                     alt="User Avatar"
                   />
                   <AvatarFallback className="bg-secondary text-secondary-foreground">
