@@ -604,28 +604,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/courses/{id}/{aid}/add-problems": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Add problems to an assignment
-         * @description Attaches problems to an assignment with per-problem settings (points, submission  cap, autograder). Course staff (faculty or TAs) or a system admin. Adds only problems not already  linked — existing links, especially those with submissions, are preserved and  reported back. For group assignments, an optional `groupId` (or "ALL") maps the  given problems to specific groups, even ones already on the assignment. Only  problems belonging to this course are accepted.
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/add-problems/route.ts)
-         */
-        post: operations["postCoursesByIdByAidAddProblems"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/courses/{id}/{aid}/group-problems": {
         parameters: {
             query?: never;
@@ -754,7 +732,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/courses/{id}/{aid}/remove-problem": {
+    "/api/courses/{id}/{aid}/problems": {
         parameters: {
             query?: never;
             header?: never;
@@ -764,13 +742,19 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Remove a problem from an assignment
-         * @description Detaches a problem from an assignment (and clears any group→problem mappings for  it), leaving the problem itself intact in the course. Course staff (faculty or  TAs) or a system admin. Both the assignment and the problem must belong to the course  in the path. Uses POST rather than DELETE because the problem id travels in the body.
+         * Add problems to an assignment
+         * @description Attaches problems to an assignment with per-problem settings (points, submission  cap, autograder). Course staff (faculty or TAs) or a system admin. Adds only problems not already  linked — existing links, especially those with submissions, are preserved and  reported back. For group assignments, an optional `groupId` (or "ALL") maps the  given problems to specific groups, even ones already on the assignment. Only  problems belonging to this course are accepted.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/remove-problem/route.ts)
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/problems/route.ts)
          */
-        post: operations["postCoursesByIdByAidRemoveProblem"];
-        delete?: never;
+        post: operations["postCoursesByIdByAidProblems"];
+        /**
+         * Remove a problem from an assignment
+         * @description Detaches a problem from an assignment (and clears any group→problem mappings for  it), leaving the problem itself intact in the course. Course staff (faculty or  TAs) or a system admin. Both the assignment and the problem must belong to the  course in the path. The problem id travels in the request body.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/problems/route.ts)
+         */
+        delete: operations["deleteCoursesByIdByAidProblems"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3896,69 +3880,6 @@ export interface operations {
             };
         };
     };
-    postCoursesByIdByAidAddProblems: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                aid: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    problemIds?: string[];
-                    problemSettings?: {
-                        problemId: string;
-                        maxPoints: number;
-                        /** @description -1 for unlimited, else >= 1 */
-                        maxSubmissions: number;
-                        autograderEnabled: boolean;
-                    }[];
-                    /** @description A group id or "ALL" (group assignments only) */
-                    groupId?: string;
-                };
-            };
-        };
-        responses: {
-            /** @description The assignment's problem list plus a summary of what changed. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Empty/invalid body or invalid problemSettings. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Caller is not course staff (faculty or TA) or a system admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     getCoursesByIdByAidGroupProblems: {
         parameters: {
             query?: never;
@@ -4492,7 +4413,79 @@ export interface operations {
             };
         };
     };
-    postCoursesByIdByAidRemoveProblem: {
+    postCoursesByIdByAidProblems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    problemIds?: string[];
+                    problemSettings?: {
+                        problemId: string;
+                        maxPoints: number;
+                        /** @description -1 for unlimited, else >= 1 */
+                        maxSubmissions: number;
+                        autograderEnabled: boolean;
+                    }[];
+                    /** @description A group id or "ALL" (group assignments only) */
+                    groupId?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The assignment's problem list plus a summary of what changed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Empty/invalid body or invalid problemSettings. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not course staff (faculty or TA) or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteCoursesByIdByAidProblems: {
         parameters: {
             query?: never;
             header?: never;
@@ -4519,6 +4512,15 @@ export interface operations {
             };
             /** @description Missing problemId. */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

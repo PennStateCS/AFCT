@@ -296,7 +296,7 @@ export function AssociateProblemsDialog({
 
   // Keep the dialog in sync with external changes while it's open.
   // This covers cases where problems/group mappings are modified elsewhere
-  // (remove-problem, delete problem, admin actions) so the UI won't show
+  // (removing a problem, deleting a problem, admin actions) so the UI won't show
   // stale mappings or deleted problems while user has the dialog open.
   React.useEffect(() => {
     if (!internalOpen) return;

@@ -275,7 +275,7 @@ export function CreateProblemDialog({
               payload.groupId = selectedGroupId;
             }
 
-            const ar = await fetch(`/api/courses/${courseId}/${assignmentId}/add-problems`, {
+            const ar = await fetch(`/api/courses/${courseId}/${assignmentId}/problems`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload),
