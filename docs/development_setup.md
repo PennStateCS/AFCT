@@ -237,6 +237,32 @@ docker logs afct-dev | tail                              # Tail app logs
 docker exec -it afct-dev sh -lc 'ls -ld /private/uploads /app/public/uploads'
 ```
 
+### "Module not found" after adding an npm dependency
+
+`node_modules` lives in a named volume (`afct-dev-node-modules`) that is mounted
+over `/app/node_modules`. That volume persists across `--build`, so rebuilding the
+image does **not** pick up a newly added package — the old volume keeps shadowing
+it, and you get `Module not found: Can't resolve '<pkg>'`.
+
+Fix it one of two ways:
+
+```bash
+# Fast: install into the running container's volume, then restart the app.
+docker exec afct-dev npm install
+docker exec afct-dev sh -lc 'rm -rf .next/cache'
+docker restart afct-dev
+```
+
+```bash
+# Or recreate just the node_modules volume (keeps the database + uploads).
+npm run docker:dev:down            # stops without -v, so data is preserved
+docker volume rm afct_afct-dev-node-modules
+npm run docker:dev
+```
+
+Do **not** use `docker:dev:down:volumes` or `docker:dev:nuke` for this — they pass
+`-v` and also wipe Postgres data and uploads.
+
 ---
 
 ## Optional: Non-Docker Setup (Not Recommended)
