@@ -12,6 +12,7 @@ import { EditUserDialog } from '@/components/dialogs/EditUserDialog';
 import { AdminResetPasswordDialog } from '@/components/dialogs/AdminResetPasswordDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { showToast } from '@/lib/toast';
+import { apiPaths } from '@/lib/api-paths';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Pencil, Trash2, Lock, User2, ChevronDown } from 'lucide-react';
 import { formatDateTimeInTimeZone } from '@/lib/date';
@@ -89,9 +90,11 @@ export function getUserColumns(
       meta: { priority: 4 },
       cell: ({ row }) => {
         const inactive = row.getValue<boolean>('inactive');
-        return inactive
-          ? <StatusBadge variant="neutral">Inactive</StatusBadge>
-          : <StatusBadge variant="success">Active</StatusBadge>;
+        return inactive ? (
+          <StatusBadge variant="neutral">Inactive</StatusBadge>
+        ) : (
+          <StatusBadge variant="success">Active</StatusBadge>
+        );
       },
     },
     {
@@ -108,9 +111,11 @@ export function getUserColumns(
       meta: { priority: 3 },
       cell: ({ row }) => {
         const temporaryPassword = row.getValue<boolean>('temporaryPassword');
-        return temporaryPassword
-          ? <StatusBadge variant="warning">Temporary</StatusBadge>
-          : <StatusBadge variant="neutral">Normal</StatusBadge>;
+        return temporaryPassword ? (
+          <StatusBadge variant="warning">Temporary</StatusBadge>
+        ) : (
+          <StatusBadge variant="neutral">Normal</StatusBadge>
+        );
       },
     },
     {
@@ -133,7 +138,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
 
   async function handlePasswordReset(newPassword: string, isTemporary: boolean) {
     try {
-      const res = await fetch('/api/admin/reset-password', {
+      const res = await fetch(apiPaths.admin.resetPassword(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, newPassword, isTemporary }),
@@ -153,7 +158,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
 
   async function handleDelete() {
     try {
-      const res = await fetch(`/api/users/${user.id}`, {
+      const res = await fetch(apiPaths.user(user.id), {
         method: 'DELETE',
       });
 

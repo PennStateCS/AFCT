@@ -19,6 +19,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 import { CreateUserSchema, type CreateUserRaw, type CreateUserInput } from '@/schemas/user';
+import { apiPaths } from '@/lib/api-paths';
 
 // For the checklist UI only
 const passwordRules = [
@@ -88,7 +89,7 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { confirmPassword, ...payload } = parsed;
 
-    const res = await fetch('/api/admin/users', {
+    const res = await fetch(apiPaths.admin.users(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),

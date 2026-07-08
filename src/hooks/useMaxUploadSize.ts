@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { DEFAULT_MAX_UPLOAD_SIZE_MB } from '@/lib/system-settings';
+import { apiPaths } from '@/lib/api-paths';
 
 type UseMaxUploadSizeResult = {
   maxMb: number;
@@ -18,7 +19,7 @@ export function useMaxUploadSize(): UseMaxUploadSizeResult {
   const { data, isLoading, isError } = useQuery<PublicSystemSettings>({
     queryKey: ['system-settings', 'public'],
     queryFn: async () => {
-      const res = await fetch('/api/system-settings/public', { cache: 'no-store' });
+      const res = await fetch(apiPaths.systemSettingsPublic(), { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed to fetch settings');
       return (await res.json()) as PublicSystemSettings;
     },

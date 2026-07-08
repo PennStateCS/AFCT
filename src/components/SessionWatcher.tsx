@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { safeSignOut } from '@/lib/safe-signout';
 import { clampSessionTimeoutMinutes, DEFAULT_SESSION_TIMEOUT_MINUTES } from '@/lib/system-settings';
+import { apiPaths } from '@/lib/api-paths';
 
 type PublicSystemSettingsResponse = {
   sessionTimeoutMinutes?: number;
@@ -56,7 +57,7 @@ export default function SessionWatcher() {
 
     const loadSettings = async () => {
       try {
-        const res = await fetch('/api/system-settings/public', { cache: 'no-store' });
+        const res = await fetch(apiPaths.systemSettingsPublic(), { cache: 'no-store' });
         if (!res.ok) return;
         const data = (await res.json()) as PublicSystemSettingsResponse;
         if (!active) return;
@@ -139,7 +140,7 @@ export default function SessionWatcher() {
     setIsExtending(true);
 
     try {
-      const res = await fetch('/api/session/extend', { method: 'POST' });
+      const res = await fetch(apiPaths.sessionExtend(), { method: 'POST' });
       const data = (await res.json().catch(() => null)) as { ok?: boolean } | null;
 
       if (res.ok && data?.ok) {

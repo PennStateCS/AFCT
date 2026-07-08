@@ -19,6 +19,7 @@ import { Trash2, Delete } from 'lucide-react';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { courseRoleOptions, formatCourseRole } from '@/lib/roles';
 import SelectField from '@/components/ui/SelectField';
+import { apiPaths } from '@/lib/api-paths';
 
 type CourseRosterEntry = {
   role?: string | null;
@@ -89,7 +90,7 @@ export default function CourseEditUserDialog({
   const rosterQuery = useQuery<RosterReadResponse>({
     queryKey: ['course', courseId, 'roster', userId],
     queryFn: async () => {
-      const res = await fetch(`/api/courses/${courseId}/roster/${userId}`);
+      const res = await fetch(apiPaths.courseRosterEntry(courseId, userId));
       if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load roster entry');
       return (await res.json()) as RosterReadResponse;
     },
@@ -127,13 +128,7 @@ export default function CourseEditUserDialog({
       body.roster?.user.avatar ? `/api/uploads/pfps/${body.roster.user.avatar}` : '',
     );
     originalRosterRef.current = JSON.parse(JSON.stringify(body.roster ?? null));
-  }, [
-    open,
-    initialRoster,
-    initialViewerCourseRole,
-    initialViewerDefaultRole,
-    rosterQuery.data,
-  ]);
+  }, [open, initialRoster, initialViewerCourseRole, initialViewerDefaultRole, rosterQuery.data]);
 
   // On a failed roster read, surface the error and close (old fetch behavior).
   useEffect(() => {
@@ -148,7 +143,7 @@ export default function CourseEditUserDialog({
     if (!roster) return;
     setSaving(true);
     try {
-      const res = await fetch(`/api/courses/${courseId}/roster/${userId}`, {
+      const res = await fetch(apiPaths.courseRosterEntry(courseId, userId), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ role: roster.role }),
@@ -180,7 +175,7 @@ export default function CourseEditUserDialog({
   // Execute removal (called from ConfirmDialog onConfirm)
   const handleRemove = async () => {
     try {
-      const res = await fetch(`/api/courses/${courseId}/roster/${userId}`, { method: 'DELETE' });
+      const res = await fetch(apiPaths.courseRosterEntry(courseId, userId), { method: 'DELETE' });
       const body = await res.json();
       if (!res.ok) {
         showToast.error(body?.error || 'Failed to remove user');
@@ -230,10 +225,7 @@ export default function CourseEditUserDialog({
             <div className="space-y-4">
               <div className="flex items-center gap-4">
                 <Avatar className="h-20 w-20">
-                  <AvatarImage
-                    src={avatarPreview || undefined}
-                    alt="User Avatar"
-                  />
+                  <AvatarImage src={avatarPreview || undefined} alt="User Avatar" />
                   <AvatarFallback className="bg-secondary text-secondary-foreground">
                     {getInitials(
                       roster.user.firstName,
@@ -264,7 +256,7 @@ export default function CourseEditUserDialog({
                         try {
                           const form = new FormData();
                           form.append('deleteAvatar', 'true');
-                          const res = await fetch(`/api/users/${roster.user.id}`, {
+                          const res = await fetch(apiPaths.user(roster.user.id), {
                             method: 'PATCH',
                             body: form,
                           });

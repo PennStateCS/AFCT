@@ -14,13 +14,13 @@ import {
 
 import { formatDateTimeInTimeZone } from '@/lib/date';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import { apiPaths } from '@/lib/api-paths';
 
 export type StudentNavigatorStudent = {
   id: string;
   firstName?: string | null;
   lastName?: string | null;
 };
-
 
 export type StudentNavigatorProps = {
   students: StudentNavigatorStudent[];
@@ -57,7 +57,7 @@ export default function StudentNavigator({
   }>({
     queryKey: ['assignment', assignmentId],
     queryFn: async () => {
-      const res = await fetch(`/api/assignments/${assignmentId}`);
+      const res = await fetch(apiPaths.assignmentById(assignmentId));
       if (!res.ok) throw new Error('Failed to fetch assignment');
       return res.json();
     },
@@ -65,7 +65,7 @@ export default function StudentNavigator({
     staleTime: 30_000,
   });
 
-  const assignment = assignmentQuery.isError ? null : assignmentQuery.data ?? null;
+  const assignment = assignmentQuery.isError ? null : (assignmentQuery.data ?? null);
   // Only surface the loading label when a fetch is actually in flight; a disabled
   // query (no assignmentId) reports isPending but should render nothing here.
   const loadingAssignment = !!assignmentId && assignmentQuery.isPending;
@@ -137,7 +137,8 @@ export default function StudentNavigator({
           {assignmentTotals ? (
             <span>
               <span className="text-muted-foreground mx-2">•</span>
-              {formatPoints(assignmentTotals.earned)} / {formatPoints(assignmentTotals.available)} pts
+              {formatPoints(assignmentTotals.earned)} / {formatPoints(assignmentTotals.available)}{' '}
+              pts
             </span>
           ) : null}
         </span>
