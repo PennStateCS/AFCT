@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import { prisma } from '@/lib/prisma';
-import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { isAdmin } from '@/lib/permissions';
+import { withAdminAuth } from '@/lib/api/with-auth';
 import { listBackups, BACKUP_TRIGGER_DIR, BACKUP_TRIGGER_FILE } from '@/lib/backups';
 
 /**
@@ -22,13 +21,7 @@ import { listBackups, BACKUP_TRIGGER_DIR, BACKUP_TRIGGER_FILE } from '@/lib/back
  *             backups: { type: array, items: { type: object } }
  *   403: { description: Caller is not a system administrator. }
  */
-export async function GET() {
-  const session = await auth();
-  if (!isAdmin(session?.user)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-  }
-  return NextResponse.json({ backups: listBackups() });
-}
+export const GET = withAdminAuth(() => NextResponse.json({ backups: listBackups() }));
 
 /**
  * Requests an on-demand backup by dropping a trigger file the db-backup container
@@ -45,12 +38,7 @@ export async function GET() {
  *   403: { description: Caller is not a system administrator. }
  *   503: { description: The backup service (trigger volume) is not mounted. }
  */
-export async function POST(req: Request) {
-  const session = await auth();
-  if (!isAdmin(session?.user)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-  }
-
+export const POST = withAdminAuth(async (req, _ctx, { user }) => {
   try {
     fs.mkdirSync(BACKUP_TRIGGER_DIR, { recursive: true });
     fs.writeFileSync(BACKUP_TRIGGER_FILE, new Date().toISOString());
@@ -61,7 +49,7 @@ export async function POST(req: Request) {
 
   try {
     await createEnhancedActivityLog(prisma, req, {
-      userId: session?.user?.id,
+      userId: user.id,
       action: 'SYSTEM_BACKUP_REQUESTED',
       severity: 'INFO',
       category: 'SYSTEM',
@@ -72,4 +60,4 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ ok: true }, { status: 202 });
-}
+});
