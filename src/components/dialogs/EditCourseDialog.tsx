@@ -13,7 +13,8 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Course, User } from '@prisma/client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
 import SwitchField from '@/components/ui/SwitchField';
@@ -105,21 +106,23 @@ export function EditCourseDialog({
   // Keep min (end) in sync with start
   const startDateStr = watch('startDate');
 
-  const [facultyList, setFacultyList] = useState<User[]>([]);
-
+  // Fetch faculty list when dialog opens. Shared cache entry (identical query
+  // key) with CreateCourseDialog so the two dedupe onto one request.
+  const facultyQuery = useQuery({
+    queryKey: ['admin', 'users', 'faculty'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/users?role=FACULTY');
+      if (!res.ok) throw new Error('Failed to load faculty');
+      const data = await res.json();
+      return (Array.isArray(data) ? data : []) as Array<User & { role?: string }>;
+    },
+    enabled: open,
+    staleTime: 30_000,
+  });
+  const facultyList = (facultyQuery.data ?? []).filter((user) => user.role === 'FACULTY');
   useEffect(() => {
-    if (!open) return;
-    (async () => {
-      try {
-        const res = await fetch('/api/users?role=FACULTY');
-        if (!res.ok) throw new Error('Failed to load faculty');
-        const data = await res.json();
-        setFacultyList((Array.isArray(data) ? data : []).filter((user) => user.role === 'FACULTY'));
-      } catch {
-        toast.error('Failed to load faculty list.');
-      }
-    })();
-  }, [open]);
+    if (facultyQuery.isError) toast.error('Failed to load faculty list.');
+  }, [facultyQuery.isError]);
 
   // Reset to current course when opened; also clear on close from outside
   useEffect(() => {

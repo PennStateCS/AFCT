@@ -39,7 +39,9 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
   const { data: session } = useSession();
   const viewerIsAdmin = Boolean(session?.user?.isAdmin);
   // Local preview state (keep separate from RHF file)
-  const [avatarPreview, setAvatarPreview] = useState<string>(`/api/uploads/pfps/${user.avatar}`);
+  const [avatarPreview, setAvatarPreview] = useState<string>(
+    user.avatar ? `/api/uploads/pfps/${user.avatar}` : '',
+  );
   const [serverTimezone, setServerTimezone] = useState('UTC');
 
   // RHF defaults – email is read-only so it isn't in the schema
@@ -81,7 +83,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
         keepValues: true,
       });
       // Reset preview from current user
-      setAvatarPreview(`/api/uploads/pfps/${user.avatar}`);
+      setAvatarPreview(user.avatar ? `/api/uploads/pfps/${user.avatar}` : '');
     } else {
       reset(defaults, {
         keepDirty: false,
@@ -203,7 +205,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
           {/* Avatar block */}
           <div className="flex items-center gap-4">
             <Avatar className="h-20 w-20">
-              <AvatarImage src={avatarPreview} alt="User Avatar" />
+              <AvatarImage src={avatarPreview || undefined} alt="User Avatar" />
               <AvatarFallback className="bg-secondary text-secondary-foreground">
                 {(watch('firstName') || user.firstName || '?').charAt(0)}
                 {(watch('lastName') || user.lastName || '?').charAt(0)}

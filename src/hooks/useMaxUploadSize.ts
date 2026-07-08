@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { DEFAULT_MAX_UPLOAD_SIZE_MB } from '@/lib/system-settings';
 
 type UseMaxUploadSizeResult = {
@@ -7,46 +7,27 @@ type UseMaxUploadSizeResult = {
   error: string | null;
 };
 
+type PublicSystemSettings = {
+  sessionTimeoutMinutes?: number;
+  maxUploadSizeMb?: number;
+};
+
 export function useMaxUploadSize(): UseMaxUploadSizeResult {
-  const [maxMb, setMaxMb] = useState(DEFAULT_MAX_UPLOAD_SIZE_MB);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Deliberately shared key so multiple upload dialogs dedupe on this
+  // public-settings read.
+  const { data, isLoading, isError } = useQuery<PublicSystemSettings>({
+    queryKey: ['system-settings', 'public'],
+    queryFn: async () => {
+      const res = await fetch('/api/system-settings/public', { cache: 'no-store' });
+      if (!res.ok) throw new Error('Failed to fetch settings');
+      return (await res.json()) as PublicSystemSettings;
+    },
+    staleTime: 5 * 60_000,
+  });
 
-  useEffect(() => {
-    let ignore = false;
-
-    async function fetchMaxSize() {
-      try {
-        const res = await fetch('/api/system-settings/public', { cache: 'no-store' });
-        if (!res.ok) throw new Error('Failed to fetch settings');
-
-        const data = (await res.json()) as {
-          sessionTimeoutMinutes?: number;
-          maxUploadSizeMb?: number;
-        };
-        if (!ignore) {
-          setMaxMb(data.maxUploadSizeMb ?? DEFAULT_MAX_UPLOAD_SIZE_MB);
-          setError(null);
-        }
-      } catch (err) {
-        if (!ignore) {
-          console.error('Failed to fetch max upload size:', err);
-          setError('Could not load upload limit');
-          setMaxMb(DEFAULT_MAX_UPLOAD_SIZE_MB);
-        }
-      } finally {
-        if (!ignore) {
-          setLoading(false);
-        }
-      }
-    }
-
-    fetchMaxSize();
-
-    return () => {
-      ignore = true;
-    };
-  }, []);
-
-  return { maxMb, loading, error };
+  return {
+    maxMb: data?.maxUploadSizeMb ?? DEFAULT_MAX_UPLOAD_SIZE_MB,
+    loading: isLoading,
+    error: isError ? 'Could not load upload limit' : null,
+  };
 }

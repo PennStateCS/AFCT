@@ -4,6 +4,7 @@ import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { EditCourseDialog } from './EditCourseDialog';
 import type { Course } from '@prisma/client';
@@ -200,15 +201,20 @@ const renderDialog = (props: Partial<React.ComponentProps<typeof EditCourseDialo
   const setOpen = vi.fn();
   const onSave = vi.fn();
   const course = props.course ?? baseCourse;
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  });
   render(
-    <EditCourseDialog
-      course={course}
-      open
-      setOpen={setOpen}
-      onSave={onSave}
-      timeZone="America/New_York"
-      {...props}
-    />,
+    <QueryClientProvider client={queryClient}>
+      <EditCourseDialog
+        course={course}
+        open
+        setOpen={setOpen}
+        onSave={onSave}
+        timeZone="America/New_York"
+        {...props}
+      />
+    </QueryClientProvider>,
   );
   return { setOpen, onSave };
 };

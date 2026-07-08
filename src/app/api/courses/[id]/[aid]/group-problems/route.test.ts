@@ -14,7 +14,7 @@ vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 
-import { GET, POST, DELETE } from './route';
+import { GET, DELETE } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -51,52 +51,6 @@ describe('GET /api/courses/[id]/[aid]/group-problems', () => {
     const logArgs = activityLogMock.mock.calls[0][2];
     expect(logArgs.action).toBe('VIEW_GROUP_PROBLEMS');
     expect(logArgs.assignmentId).toBe('a1');
-  });
-
-  it('supports POST { action: "list" } to return groups+mapping (no-signal client)', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
-    prismaMock.group.findMany.mockResolvedValue([{ id: 'g1', name: 'G1' }]);
-    prismaMock.groupAssignmentProblem.findMany.mockResolvedValue([
-      { assignmentId: 'a1', problemId: 'p1', groupId: 'g1' },
-    ]);
-
-    const req = new NextRequest('http://localhost/api/courses/c1/a1/group-problems', {
-      method: 'POST',
-      body: JSON.stringify({ action: 'list' }),
-    });
-    const res = await POST(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) } as any);
-
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(Array.isArray(body.groups)).toBe(true);
-    expect(body.groups[0].problemIds).toEqual(['p1']);
-    expect(activityLogMock).toHaveBeenCalled();
-  });
-
-  it('returns 403 for POST when unauthenticated', async () => {
-    authMock.mockResolvedValue(null);
-
-    const req = new NextRequest('http://localhost/api/courses/c1/a1/group-problems', {
-      method: 'POST',
-      body: JSON.stringify({ action: 'list' }),
-    });
-    const res = await POST(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) } as any);
-
-    expect(res.status).toBe(403);
-  });
-
-  it('returns 400 for unsupported POST action', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
-
-    const req = new NextRequest('http://localhost/api/courses/c1/a1/group-problems', {
-      method: 'POST',
-      body: JSON.stringify({ action: 'noop' }),
-    });
-    const res = await POST(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) } as any);
-
-    expect(res.status).toBe(400);
   });
 
   it('still returns 200 when activity logging fails in GET', async () => {
