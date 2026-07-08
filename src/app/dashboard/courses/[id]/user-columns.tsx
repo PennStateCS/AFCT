@@ -228,7 +228,10 @@ export const userColumns = (
 
         return (
           <Avatar className="h-10 w-10">
-            <AvatarImage src={`/uploads/pfps/${user.avatar}`} alt={`${user.firstName} ${user.lastName}`} />
+            <AvatarImage
+              src={user.avatar ? `/api/uploads/pfps/${user.avatar}` : undefined}
+              alt={`${user.firstName} ${user.lastName}`}
+            />
             <AvatarFallback className="bg-secondary text-secondary-foreground">
               { getInitials(user.firstName, user.lastName, user.email) }
             </AvatarFallback>
