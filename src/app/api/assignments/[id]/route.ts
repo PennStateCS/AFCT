@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canAccessCourse, canManageCourse } from '@/lib/permissions';
+import { logDenial } from '@/lib/api/activity';
 import { toDateTimeInTimezone, toEndOfDayInTimezone } from '@/lib/date-utils';
 
 async function resolveUserTimezone(userId?: string | null) {
@@ -195,13 +196,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
   }
   if (!(await canManageCourse(session.user, existing.courseId))) {
-    await createEnhancedActivityLog(prisma, req, {
-      userId: session?.user?.id ?? null,
-      action: 'ASSIGNMENT_UPDATE_DENIED',
-      severity: 'SECURITY',
-      metadata: {},
-    });
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    return logDenial(req, { userId: session.user.id, action: 'ASSIGNMENT_UPDATE_DENIED' });
   }
 
   const data = await req.json();
@@ -373,13 +368,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
   }
   if (!(await canManageCourse(session.user, existing.courseId))) {
-    await createEnhancedActivityLog(prisma, req, {
-      userId: session?.user?.id ?? null,
-      action: 'ASSIGNMENT_UPDATE_DENIED',
-      severity: 'SECURITY',
-      metadata: {},
-    });
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    return logDenial(req, { userId: session.user.id, action: 'ASSIGNMENT_UPDATE_DENIED' });
   }
 
   const data = await req.json();
@@ -573,13 +562,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!(await canManageCourse(session.user, data.courseId))) {
-      await createEnhancedActivityLog(prisma, req, {
-        userId: session?.user?.id ?? null,
-        action: 'ASSIGNMENT_CREATE_DENIED',
-        severity: 'SECURITY',
-        metadata: {},
-      });
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+      return logDenial(req, { userId: session.user.id, action: 'ASSIGNMENT_CREATE_DENIED' });
     }
 
     const allowLateSubmissions =
@@ -687,13 +670,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
   }
   if (!(await canManageCourse(session.user, assignmentForAuth.courseId))) {
-    await createEnhancedActivityLog(prisma, req, {
-      userId: session?.user?.id ?? null,
-      action: 'ASSIGNMENT_DELETE_DENIED',
-      severity: 'SECURITY',
-      metadata: {},
-    });
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    return logDenial(req, { userId: session.user.id, action: 'ASSIGNMENT_DELETE_DENIED' });
   }
 
   try {

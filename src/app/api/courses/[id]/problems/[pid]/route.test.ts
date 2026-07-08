@@ -47,13 +47,25 @@ beforeEach(() => {
 });
 
 describe('DELETE /api/courses/[id]/problems/[pid]', () => {
-  it('returns 403 when unauthorized', async () => {
+  it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
     const req = new Request('http://localhost/api/courses/c1/problems/p1', { method: 'DELETE' });
     const res = await DELETE(req, { params: Promise.resolve({ id: 'c1', pid: 'p1' }) });
 
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 403 when a non-staff user attempts deletion', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue(null);
+
+    const req = new Request('http://localhost/api/courses/c1/problems/p1', { method: 'DELETE' });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'c1', pid: 'p1' }) });
+
     expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toBe('Forbidden');
   });
 
   it('returns 404 when problem not found', async () => {
