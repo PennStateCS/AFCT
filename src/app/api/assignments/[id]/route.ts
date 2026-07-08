@@ -5,18 +5,8 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canAccessCourse, canManageCourse } from '@/lib/permissions';
 import { logDenial } from '@/lib/api/activity';
 import { toDateTimeInTimezone, toEndOfDayInTimezone } from '@/lib/date-utils';
-
-async function resolveUserTimezone(userId?: string | null) {
-  const tz = 'America/New_York';
-  if (!userId) return tz;
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { timezone: true },
-  });
-  if (user?.timezone) return user.timezone;
-  const system = await prisma.systemSettings.findUnique({ where: { id: 1 } });
-  return system?.timezone || tz;
-}
+import { resolveUserTimezone } from '@/lib/user-timezone';
+import { sumProblemPoints } from '@/lib/course-format';
 
 type LateSubmissionStateResult =
   | { ok: true; allowLateSubmissions: boolean; lateCutoff: Date | null }
@@ -133,14 +123,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
-    const totalProblemPoints = (assignment.problems ?? []).reduce((sum, ap) => {
-      const value = typeof ap.maxPoints === 'number' ? ap.maxPoints : 0;
-      return sum + (Number.isFinite(value) ? value : 0);
-    }, 0);
-
     return NextResponse.json({
       ...assignment,
-      maxPoints: totalProblemPoints,
+      maxPoints: sumProblemPoints(assignment.problems),
     });
   } catch (error) {
     console.error('Failed to fetch assignment:', error);
