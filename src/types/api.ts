@@ -1084,6 +1084,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/courses/{id}/group-memberships": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List all group memberships for a course
+         * @description Lists every group membership for the course in one call — the aggregate that  replaces fetching each group's members separately when resolving which group a  student belongs to. Course staff (faculty or TAs) or a system admin. Returns the  raw (userId, groupId) pairs; callers that need a userId→group map build it in  their own preferred group order.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/group-memberships/route.ts)
+         */
+        get: operations["getCoursesByIdGroupMemberships"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/{id}/groups/{groupId}/members/{userId}": {
         parameters: {
             query?: never;
@@ -5458,6 +5482,60 @@ export interface operations {
                 };
             };
             /** @description Not course staff (faculty or TAs) or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getCoursesByIdGroupMemberships: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All (userId, groupId) membership pairs for the course. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        memberships?: {
+                            userId?: string;
+                            groupId?: string;
+                        }[];
+                    };
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
