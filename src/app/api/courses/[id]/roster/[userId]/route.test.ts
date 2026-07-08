@@ -87,7 +87,9 @@ describe('GET /api/courses/[id]/roster/[userId]', () => {
   });
 
   it('resolves "me" to current user', async () => {
+    // A non-staff member reading their OWN entry: allowed without staff rights.
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    canManageCourseMock.mockResolvedValue(false);
     prismaMock.roster.findFirst
       .mockResolvedValueOnce({
         id: 'r1',
@@ -104,8 +106,23 @@ describe('GET /api/courses/[id]/roster/[userId]', () => {
     expect(body.roster.user.id).toBe('u1');
   });
 
+  it('returns 403 when a non-staff member reads another member’s entry', async () => {
+    // Enrolled (wrapper passes) but not staff, targeting a different user.
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    canManageCourseMock.mockResolvedValue(false);
+
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/u2');
+    const res = await GET(req, { params: Promise.resolve({ id: 'c1', userId: 'u2' }) });
+
+    expect(res.status).toBe(403);
+    // Must not leak the target's profile.
+    expect(prismaMock.roster.findFirst).not.toHaveBeenCalled();
+  });
+
   it('handles server errors gracefully', async () => {
-    authMock.mockRejectedValue(new Error('DB error'));
+    // Authorized, but the roster lookup throws — the handler's catch returns 500.
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
+    prismaMock.roster.findFirst.mockRejectedValue(new Error('DB error'));
 
     const req = new NextRequest('http://localhost/api/courses/c1/roster/u1');
     const res = await GET(req, { params: Promise.resolve({ id: 'c1', userId: 'u1' }) });

@@ -1225,9 +1225,7 @@ export interface paths {
         };
         /**
          * Get a roster entry
-         * @description Returns one roster entry (with the user's profile) plus the viewer's own course  role and an `viewerIsAdmin` flag, so the UI can decide which actions to offer.  Any signed-in user may call it; `userId` may be the literal "me" to target the  caller.
-         *
-         *     **Auth:** requires FACULTY / TA / STUDENT
+         * @description Returns one roster entry (with the user's profile) plus the viewer's own course  role and an `viewerIsAdmin` flag, so the UI can decide which actions to offer.  Access is tiered: the caller must be a member of the course (the wrapper enforces  this), and a non-staff member may only read their OWN entry — course staff  (faculty/TA) and admins may read anyone's. `userId` may be the literal "me" to  target the caller.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/roster/[userId]/route.ts)
          */
@@ -1238,8 +1236,6 @@ export interface paths {
          * Remove a user from a course
          * @description Removes a user from a course roster. Permission is tiered: the shared wrapper  admits global admins and course faculty only (TAs and students are rejected up  front); the remaining rule — a faculty member may not remove another faculty  member — is enforced here (a global admin may). Two safety rules block the removal  outright: the user must have no submissions in the course, and a course can't lose  its last faculty member.
          *
-         *     **Auth:** requires FACULTY / TA / STUDENT
-         *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/roster/[userId]/route.ts)
          */
         delete: operations["deleteCoursesByIdRosterByUserId"];
@@ -1248,8 +1244,6 @@ export interface paths {
         /**
          * Change a user's course role
          * @description Changes a user's course role. Only a global admin or a course faculty member may  do this. The last faculty member can't be demoted, keeping every course with  someone in charge.
-         *
-         *     **Auth:** requires FACULTY / TA / STUDENT
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/roster/[userId]/route.ts)
          */
@@ -6144,6 +6138,15 @@ export interface operations {
             };
             /** @description Not signed in. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not a course member, or a non-staff member reading someone else's entry. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
