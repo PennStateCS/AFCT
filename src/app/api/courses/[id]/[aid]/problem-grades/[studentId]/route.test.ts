@@ -14,11 +14,15 @@ const prismaMock = vi.hoisted(() => ({
 
 const authMock = vi.hoisted(() => vi.fn());
 const canManageCourseMock = vi.hoisted(() => vi.fn());
+const canAccessCourseMock = vi.hoisted(() => vi.fn());
 const activityLogMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
-vi.mock('@/lib/permissions', () => ({ canManageCourse: canManageCourseMock }));
+vi.mock('@/lib/permissions', () => ({
+  canManageCourse: canManageCourseMock,
+  canAccessCourse: canAccessCourseMock,
+}));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 
 import { GET, POST } from './route';
@@ -29,6 +33,7 @@ describe('GET /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     canManageCourseMock.mockResolvedValue(true);
+    canAccessCourseMock.mockResolvedValue(true);
     authMock.mockResolvedValue({ user: { id: 'staff-1', role: 'FACULTY' } });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: defaultParams.aid });
     prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
@@ -106,6 +111,7 @@ describe('POST /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     canManageCourseMock.mockResolvedValue(true);
+    canAccessCourseMock.mockResolvedValue(true);
     authMock.mockResolvedValue({ user: { id: 'staff-1', role: 'FACULTY' } });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: defaultParams.aid });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
@@ -174,7 +180,7 @@ describe('POST /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
   });
 
   it('returns 400 for an unknown problem id', async () => {
-    const res = await POST(buildRequest({ grades: { 'nope': 5 } }), {
+    const res = await POST(buildRequest({ grades: { nope: 5 } }), {
       params: Promise.resolve(defaultParams),
     });
 
@@ -247,10 +253,9 @@ describe('POST /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
       { problemId: 'prob-2', grade: 8 },
     ]);
 
-    const res = await POST(
-      buildRequest({ grades: { 'prob-1': 5, 'prob-2': 8 } }),
-      { params: Promise.resolve(defaultParams) },
-    );
+    const res = await POST(buildRequest({ grades: { 'prob-1': 5, 'prob-2': 8 } }), {
+      params: Promise.resolve(defaultParams),
+    });
 
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({ ok: true, changed: 0 });
