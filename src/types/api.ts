@@ -943,8 +943,6 @@ export interface paths {
          * Duplicate a course
          * @description Creates a new course modeled on an existing one, in a single transaction. The  caller becomes faculty on the copy; faculty/TA rosters are copied only when  asked. `copyMode` (or the legacy copyAssignments/copyProblems booleans) selects  what carries over: assignments only, problems only, or assignments with their  problems. The copy always starts unpublished with a fresh registration code.  System administrators only. Dates are interpreted in the actor's timezone.
          *
-         *     **Auth:** requires FACULTY / ADMIN / TA
-         *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/duplicate/route.ts)
          */
         post: operations["postCoursesByIdDuplicate"];
@@ -1254,7 +1252,7 @@ export interface paths {
         post?: never;
         /**
          * Remove a user from a course
-         * @description Removes a user from a course roster. Permission is tiered: global admins and  course faculty may remove people, but TAs and students may not, and a faculty  member may not remove another faculty member. Two safety rules block the removal  outright — the user must have no submissions in the course, and a course can't  lose its last faculty member.
+         * @description Removes a user from a course roster. Permission is tiered: the shared wrapper  admits global admins and course faculty only (TAs and students are rejected up  front); the remaining rule — a faculty member may not remove another faculty  member — is enforced here (a global admin may). Two safety rules block the removal  outright: the user must have no submissions in the course, and a course can't lose  its last faculty member.
          *
          *     **Auth:** requires FACULTY / TA / STUDENT
          *
@@ -6480,6 +6478,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
             };
             /** @description Not course staff (faculty or TAs) or a system admin, or the course is not archived. */
             403: {
