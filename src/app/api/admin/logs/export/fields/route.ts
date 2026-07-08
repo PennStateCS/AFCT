@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
-import { isAdmin } from '@/lib/permissions';
 import { EXPORTABLE_LOG_FIELDS } from '@/lib/log-fields';
+import { withAdminAuth } from '@/lib/api/with-auth';
 
 /**
  * Lists the activity-log columns that may be included in a CSV export; drives the
@@ -17,10 +16,4 @@ import { EXPORTABLE_LOG_FIELDS } from '@/lib/log-fields';
  *         schema: { type: array, items: { type: string } }
  *   403: { description: Caller is not a system administrator. }
  */
-export async function GET() {
-  const session = await auth();
-  if (!isAdmin(session?.user)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-  }
-  return NextResponse.json([...EXPORTABLE_LOG_FIELDS]);
-}
+export const GET = withAdminAuth(() => NextResponse.json([...EXPORTABLE_LOG_FIELDS]));
