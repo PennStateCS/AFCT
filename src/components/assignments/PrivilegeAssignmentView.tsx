@@ -22,7 +22,8 @@ import {
   Plus,
 } from 'lucide-react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import SelectField from '@/components/ui/SelectField';
@@ -72,6 +73,11 @@ type AssignmentSummary = {
   title: string;
 };
 
+// Stable empty defaults so the values derived from the groups query keep a
+// constant identity between renders (keeps the memoized group-name map stable).
+const EMPTY_GROUPS: { id: string; name: string }[] = [];
+const EMPTY_GROUP_PROBLEMS_MAP: Record<string, string[]> = {};
+
 type PrivilegeAssignmentViewProps = {
   initialAssignment?: AssignmentWithDetails | null;
   initialAssignments?: AssignmentSummary[];
@@ -94,10 +100,7 @@ export default function AssignmentDashboardPage({
 
   // Use a more flexible type for assignment to allow course details if available
   const [assignment, setAssignment] = useState<AssignmentWithDetails | null>(initialAssignment);
-  const [allAssignments, setAllAssignments] = useState<AssignmentSummary[]>(initialAssignments ?? []);
-  const [assignmentsLoading, setAssignmentsLoading] = useState(false);
-  const [allProblems, setAllProblems] = useState<Problem[]>([]);
-  const [problemsLoading, setProblemsLoading] = useState(false);
+  const queryClient = useQueryClient();
   const [problemToRemove, setProblemToRemove] = useState<Problem | null>(null);
   const [editAssignmentOpen, setEditAssignmentOpen] = useState(false);
   const [addProblemDialogOpen, setAddProblemDialogOpen] = useState(false);
@@ -108,10 +111,6 @@ export default function AssignmentDashboardPage({
   const [problemsTabLoading, setProblemsTabLoading] = useState(false);
   const [tab, setTab] = useState(searchParams.get('tab') || 'problems');
 
-  // Group mapping support (for group assignments)
-  const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
-  const [groupsLoading, setGroupsLoading] = useState(false);
-  const [groupProblemsMap, setGroupProblemsMap] = useState<Record<string, string[]>>({});
   const [descOpen, setDescOpen] = useState(false);
   const [descText, setDescText] = useState<string | null>(null);
   const courseIsArchived = assignment?.course?.isArchived ?? false;
@@ -158,46 +157,42 @@ export default function AssignmentDashboardPage({
     [searchParams, router],
   );
 
-  const fetchProblems = useCallback(() => {
-    if (!id) return Promise.resolve();
-    setProblemsLoading(true);
-    return fetch(`/api/courses/${id}/problems`)
-      .then((res) => res.json())
-      .then((data) => setAllProblems(Array.isArray(data) ? data : []))
-      .catch(() => setAllProblems([]))
-      .finally(() => setProblemsLoading(false));
-  }, [id]);
+  // Read 1 — all course problems (used by the problems tab and the add/create
+  // dialogs). Only fetched when one of those surfaces needs it. On any failure
+  // the queryFn returns [] (no toast), matching the previous .catch behavior.
+  const problemsEnabled = tab === 'problems' || addProblemDialogOpen || createProblemOpen;
+  const problemsQuery = useQuery({
+    queryKey: ['course', id, 'problems-list'],
+    queryFn: () =>
+      fetch(`/api/courses/${id}/problems`)
+        .then((res) => res.json())
+        .then((data) => (Array.isArray(data) ? (data as Problem[]) : []))
+        .catch(() => [] as Problem[]),
+    enabled: !!id && problemsEnabled,
+    staleTime: 30_000,
+  });
+  const allProblems = problemsQuery.data ?? [];
+  const problemsLoading = problemsEnabled && problemsQuery.isFetching;
 
-  useEffect(() => {
-    const shouldLoadProblems = tab === 'problems' || addProblemDialogOpen || createProblemOpen;
-    if (!shouldLoadProblems) return;
-    void fetchProblems();
-  }, [fetchProblems, tab, addProblemDialogOpen, createProblemOpen]);
-
-  const fetchAssignments = useCallback(() => {
-    if (!id) return Promise.resolve();
-    setAssignmentsLoading(true);
-    return fetch(`/api/courses/${id}/assignments`)
-      .then((res) => res.json())
-      .then((data) =>
-        setAllAssignments(
+  // Read 2 — assignment list for the dropdown. Seeded from the SSR-provided
+  // initialAssignments so there's no refetch on mount when the server sent it.
+  const assignmentsQuery = useQuery({
+    queryKey: ['course', id, 'assignments-list'],
+    queryFn: () =>
+      fetch(`/api/courses/${id}/assignments`)
+        .then((res) => res.json())
+        .then((data) =>
           Array.isArray(data)
-            ? data.map((assignment: { id: string; title: string }) => ({
-                id: assignment.id,
-                title: assignment.title,
-              }))
+            ? data.map((a: { id: string; title: string }) => ({ id: a.id, title: a.title }))
             : [],
-        ),
-      )
-      .catch(() => setAllAssignments([]))
-      .finally(() => setAssignmentsLoading(false));
-  }, [id]);
-
-  useEffect(() => {
-    if (allAssignments.length === 0) {
-      void fetchAssignments();
-    }
-  }, [allAssignments.length, fetchAssignments]);
+        )
+        .catch(() => [] as AssignmentSummary[]),
+    initialData: initialAssignments,
+    enabled: !!id,
+    staleTime: 30_000,
+  });
+  const allAssignments = assignmentsQuery.data ?? [];
+  const assignmentsLoading = assignmentsQuery.isFetching;
 
   const refreshAssignment = useCallback(
     async (
@@ -245,62 +240,43 @@ export default function AssignmentDashboardPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialAssignment, refreshAssignment]);
 
-  // When this is a group assignment, fetch groups and the mapping of problems -> groups
-  useEffect(() => {
-    if (!id || !aid || !assignment?.isGroup) {
-      setGroups([]);
-      setGroupProblemsMap({});
-      return;
-    }
+  // Read 3 — for a group assignment, fetch groups and the mapping of
+  // problems -> groups. Only runs for group assignments. TanStack Query cancels
+  // in-flight fetches via the AbortSignal, so no manual AbortController plumbing.
+  const groupsEnabled = !!id && !!aid && !!assignment?.isGroup;
+  const groupsQuery = useQuery({
+    queryKey: ['course', id, 'assignment', aid, 'groups-and-mappings'],
+    queryFn: async ({ signal }) => {
+      const [grRes, gpRes] = await Promise.all([
+        fetch(`/api/courses/${id}/groups`, { signal }),
+        fetch(`/api/courses/${id}/${aid}/group-problems`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'list' }),
+          signal,
+        }),
+      ]);
 
-    let aborted = false;
-    const ac = new AbortController();
-    async function fetchGroupsAndMappings() {
-      setGroupsLoading(true);
-      try {
-        const [grRes, gpRes] = await Promise.all([
-          fetch(`/api/courses/${id}/groups`),
-          fetch(`/api/courses/${id}/${aid}/group-problems`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'list' }),
-          }),
-        ]);
-
-        if (!aborted) {
-          if (grRes.ok) {
-            const gr = await grRes.json();
-            setGroups(Array.isArray(gr) ? gr : (gr.groups ?? []));
-          } else {
-            setGroups([]);
-          }
-
-          if (gpRes.ok) {
-            const gp = await gpRes.json();
-            const map: Record<string, string[]> = {};
-            for (const g of gp.groups ?? []) map[g.id] = g.problemIds || [];
-            setGroupProblemsMap(map);
-          } else {
-            setGroupProblemsMap({});
-          }
-        }
-      } catch (err: unknown) {
-        if (err instanceof Error && err.name === 'AbortError') return;
-        console.error('Failed to fetch groups/mappings:', err);
-        setGroups([]);
-        setGroupProblemsMap({});
-      } finally {
-        if (!aborted) setGroupsLoading(false);
+      let nextGroups: { id: string; name: string }[] = [];
+      if (grRes.ok) {
+        const gr = await grRes.json();
+        nextGroups = Array.isArray(gr) ? gr : (gr.groups ?? []);
       }
-    }
 
-    fetchGroupsAndMappings();
-    return () => {
-      aborted = true;
-      ac.abort();
-      setGroupsLoading(false);
-    };
-  }, [id, aid, assignment?.isGroup]);
+      const groupProblemsMap: Record<string, string[]> = {};
+      if (gpRes.ok) {
+        const gp = await gpRes.json();
+        for (const g of gp.groups ?? []) groupProblemsMap[g.id] = g.problemIds || [];
+      }
+
+      return { groups: nextGroups, groupProblemsMap };
+    },
+    enabled: groupsEnabled,
+    staleTime: 30_000,
+  });
+  const groups = groupsQuery.data?.groups ?? EMPTY_GROUPS;
+  const groupProblemsMap = groupsQuery.data?.groupProblemsMap ?? EMPTY_GROUP_PROBLEMS_MAP;
+  const groupsLoading = groupsEnabled && groupsQuery.isFetching;
 
   async function handleAddProblems(
     problemIds: string[],
@@ -930,7 +906,7 @@ export default function AssignmentDashboardPage({
         courseIsArchived={courseIsArchived}
         assignmentId={aid}
         onCreated={async (created) => {
-          await fetchProblems();
+          await queryClient.invalidateQueries({ queryKey: ['course', id, 'problems-list'] });
           if (created?.id && !aid) {
             await handleAddProblems([created.id]);
           }
