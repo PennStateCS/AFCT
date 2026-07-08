@@ -1082,8 +1082,6 @@ export interface paths {
          * Remove a group member
          * @description Removes one member from a group. Course staff (faculty or TAs) or a system admin.  The group must belong to the course in the path and the membership must exist.
          *
-         *     **Auth:** required
-         *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/groups/[groupId]/members/[userId]/route.ts)
          */
         delete: operations["deleteCoursesByIdGroupsByGroupIdMembersByUserId"];
@@ -1103,8 +1101,6 @@ export interface paths {
          * List group members
          * @description Lists a group's members, oldest first. Course staff (faculty or TAs) or a system  admin. The group must belong to the course in the path.
          *
-         *     **Auth:** required
-         *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/groups/[groupId]/members/route.ts)
          */
         get: operations["getCoursesByIdGroupsByGroupIdMembers"];
@@ -1112,8 +1108,6 @@ export interface paths {
         /**
          * Add a group member
          * @description Adds one user to a group. Course staff (faculty or TAs) or a system admin. The  user must already be enrolled in the course; the upsert makes re-adding a no-op.
-         *
-         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/groups/[groupId]/members/route.ts)
          */
@@ -1124,8 +1118,6 @@ export interface paths {
         /**
          * Set group members in bulk
          * @description Replaces a group's membership with the given set of users in one call, computing  the adds and removes. Course staff (faculty or TAs) or a system admin. Every user  must be enrolled in the course, or the whole update is rejected.
-         *
-         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/groups/[groupId]/members/route.ts)
          */
@@ -1146,16 +1138,12 @@ export interface paths {
          * Delete a group
          * @description Deletes a group; its membership rows cascade away with it. Course staff (faculty  or TAs) or a system admin. The group must belong to the course in the path.
          *
-         *     **Auth:** required
-         *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/groups/[groupId]/route.ts)
          */
         delete: operations["deleteCoursesByIdGroupsByGroupId"];
         /**
          * CORS preflight
          * @description CORS preflight handler.
-         *
-         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/groups/[groupId]/route.ts)
          */
@@ -1164,8 +1152,6 @@ export interface paths {
         /**
          * Rename a group
          * @description Renames a group. Course staff (faculty or TAs) or a system admin. The group must  belong to the course in the path, and the new name must be unique within that course.
-         *
-         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/groups/[groupId]/route.ts)
          */
