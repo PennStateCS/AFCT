@@ -5,6 +5,8 @@ import { canArchiveCourse, canUnpublishCourse } from '@/lib/course-status-checks
 import { isAdmin } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
+import { resolveUserTimezone } from '@/lib/user-timezone';
+import { sumProblemPoints, toEnrolled } from '@/lib/course-format';
 import { toEmptyStringNotation } from '@/lib/empty-string-notation';
 
 // A prisma delegate whose aggregate methods are treated as optional, so the code
@@ -243,10 +245,7 @@ export const GET = withCourseAuth(
         });
 
         assignmentsWithProblemCount = assignmentRows.map((assignment) => {
-          const totalProblemPoints = (assignment.problems ?? []).reduce((sum: number, ap) => {
-            const value = typeof ap.maxPoints === 'number' ? ap.maxPoints : 0;
-            return sum + (Number.isFinite(value) ? value : 0);
-          }, 0);
+          const totalProblemPoints = sumProblemPoints(assignment.problems);
 
           const submissionCount = submissionCountMap.get(assignment.id) ?? 0;
           const commentCount = commentCountMap.get(assignment.id) ?? 0;
@@ -372,19 +371,7 @@ export const PUT = withCourseAuth(
     const body = await req.json();
 
     // Get user's timezone (DB user > system settings > default)
-    let userTimezone = 'America/New_York';
-    if (user?.id) {
-      const userRecord = await prisma.user.findUnique({
-        where: { id: user.id },
-        select: { timezone: true },
-      });
-      if (userRecord?.timezone) {
-        userTimezone = userRecord.timezone;
-      } else {
-        const system = await prisma.systemSettings.findUnique({ where: { id: 1 } });
-        userTimezone = system?.timezone || userTimezone;
-      }
-    }
+    const userTimezone = await resolveUserTimezone(user.id);
 
     // Validate input
     if (typeof body.isArchived !== 'boolean') {
@@ -576,10 +563,7 @@ export const PUT = withCourseAuth(
       const assignmentsWithProblemCount = await Promise.all(
         updatedCourse.assignments.map(
           async (assignment: (typeof updatedCourse.assignments)[number]) => {
-            const totalProblemPoints = (assignment.problems ?? []).reduce((sum, ap) => {
-              const value = typeof ap.maxPoints === 'number' ? ap.maxPoints : 0;
-              return sum + (Number.isFinite(value) ? value : 0);
-            }, 0);
+            const totalProblemPoints = sumProblemPoints(assignment.problems);
 
             const submissionCount = await prisma.submission.count({
               where: { assignmentId: assignment.id },
@@ -680,10 +664,7 @@ export const PUT = withCourseAuth(
         createdAt: updatedCourse.createdAt,
         updatedAt: updatedCourse.updatedAt,
         // Only include a single enrolled array (user objects with courseRole)
-        enrolled: updatedCourse.roster.map((r: (typeof updatedCourse.roster)[number]) => ({
-          ...r.user,
-          courseRole: r.role,
-        })),
+        enrolled: toEnrolled(updatedCourse.roster),
         problems: updatedCourse.problems,
         assignments: assignmentsWithProblemCount,
         viewerRole,

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { ProblemTypeEnum } from '@/schemas/problem';
 import { RoleEnum } from '@/schemas/user';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { sumProblemPoints } from '@/lib/course-format';
 import { z } from 'zod';
 
 // Types
@@ -146,10 +147,7 @@ export const GET = withCourseAuth(
         }),
       );
 
-      const totalProblemPoints = assignment.problems.reduce((sum, ap) => {
-        const value = typeof ap.maxPoints === 'number' ? ap.maxPoints : 0;
-        return sum + (Number.isFinite(value) ? value : 0);
-      }, 0);
+      const totalProblemPoints = sumProblemPoints(assignment.problems);
 
       // Extract the course roster and keep in the structure that the frontend expects
       const roster = assignment.course.roster || [];
