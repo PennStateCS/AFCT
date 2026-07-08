@@ -22,7 +22,7 @@ import { logDenial } from '@/lib/api/activity';
  *       application/json:
  *         schema: { type: array, items: { type: object } }
  *   401: { description: Not signed in. }
- *   403: { description: Not enrolled in the problem's course, or requesting another user's submissions without being course staff or a system admin. }
+ *   403: { description: "Not enrolled in the problem's course, or requesting another user's submissions without being course staff or a system admin." }
  *   404: { description: Problem not found. }
  *   500: { description: Server error. }
  */
