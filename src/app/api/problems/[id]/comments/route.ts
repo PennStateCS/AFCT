@@ -3,12 +3,14 @@ import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { prisma } from '@/lib/prisma';
 import { canAccessCourse } from '@/lib/permissions';
+import { apiError } from '@/lib/api/http';
+import { logDenial } from '@/lib/api/activity';
 
 /**
- * Fetches comments for a problem. Any signed-in user may call it. Note the problem
- * is identified by the `?problemId` query parameter — the `[id]` path segment is
- * ignored. An optional `studentId` narrows to comments about, or authored by, that
- * student.
+ * Fetches comments for a problem. The caller must be enrolled in the problem's
+ * course (or be a system admin). The problem is identified by the `?problemId`
+ * query parameter — the `[id]` path segment is ignored. An optional `studentId`
+ * narrows to comments about, or authored by, that student.
  * @openapi
  * summary: List comments for a problem
  * parameters:
@@ -23,13 +25,18 @@ import { canAccessCourse } from '@/lib/permissions';
  *         schema: { type: array, items: { type: object } }
  *   400: { description: Missing problemId. }
  *   401: { description: Not signed in. }
+ *   403: { description: Caller is not enrolled in the problem's course. }
+ *   404: { description: Problem not found. }
  *   500: { description: Server error. }
  */
-export async function GET(request: NextRequest, { params: _params }: { params: Promise<{ id: string }> }) {
+export async function GET(
+  request: NextRequest,
+  { params: _params }: { params: Promise<{ id: string }> },
+) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return apiError(401, 'Unauthorized');
     }
 
     const { searchParams } = new URL(request.url);
@@ -38,10 +45,25 @@ export async function GET(request: NextRequest, { params: _params }: { params: P
 
     // Throw error if problem id does not exist
     if (!problemId) {
-      return NextResponse.json(
-        { error: 'assignmentId and problemId are required' },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: 'assignmentId and problemId are required' }, { status: 400 });
+    }
+
+    // Authorize: the caller must be able to access the problem's course. Previously
+    // this route only required a session, so any signed-in user could read any
+    // problem's comment thread — an IDOR. The Problem carries its course directly.
+    const problem = await prisma.problem.findUnique({
+      where: { id: problemId },
+      select: { courseId: true },
+    });
+    if (!problem) {
+      return NextResponse.json({ error: 'Problem not found' }, { status: 404 });
+    }
+    if (!(await canAccessCourse(session.user, problem.courseId))) {
+      return logDenial(request, {
+        userId: session.user.id,
+        action: 'COMMENT_VIEW_DENIED',
+        courseId: problem.courseId,
+      });
     }
 
     // If studentId present, restrict to comments about that student OR authored by that student
@@ -118,7 +140,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return apiError(401, 'Unauthorized');
     }
     actorId = session.user.id;
 
@@ -155,13 +177,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // Authorize: any enrolled user (or admin) may comment.
     if (!(await canAccessCourse(session.user, assignment.course.id))) {
-      await createEnhancedActivityLog(prisma, request, {
-        userId: session?.user?.id ?? null,
+      return logDenial(request, {
+        userId: session.user.id,
         action: 'COMMENT_CREATE_DENIED',
-        severity: 'SECURITY',
-        metadata: {},
+        courseId: assignment.course.id,
       });
-      return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
     }
 
     // Obtain the author's roster row for the comment FK.
@@ -173,13 +193,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
 
     if (!rosterEntry) {
-      await createEnhancedActivityLog(prisma, request, {
-        userId: session?.user?.id ?? null,
+      return logDenial(request, {
+        userId: session.user.id,
         action: 'COMMENT_CREATE_DENIED',
-        severity: 'SECURITY',
-        metadata: {},
+        courseId: assignment.course.id,
       });
-      return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
     }
 
     // Create the comment
