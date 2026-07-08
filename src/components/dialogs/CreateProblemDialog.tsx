@@ -39,6 +39,7 @@ import {
 import { showToast } from '@/lib/toast';
 import FileUploadInput from '@/components/FileUploadInput';
 import { useMaxUploadSize } from '@/hooks/useMaxUploadSize';
+import { apiPaths } from '@/lib/api-paths';
 
 // Helper: extract a string message for the file error without using `any`
 
@@ -122,7 +123,6 @@ export function CreateProblemDialog({
 
   const { maxMb, loading: loadingMaxSize } = useMaxUploadSize();
 
-
   useEffect(() => {
     let aborted = false;
     const ac = new AbortController();
@@ -137,7 +137,7 @@ export function CreateProblemDialog({
 
       try {
         if (assignmentId) {
-          const res = await fetch(`/api/courses/${courseId}/${assignmentId}`, {
+          const res = await fetch(apiPaths.assignment(courseId, assignmentId), {
             signal: ac.signal,
           });
           if (!res.ok) {
@@ -149,7 +149,7 @@ export function CreateProblemDialog({
             if (data?.isGroup) {
               setGroupsLoading(true);
               try {
-                const gr = await fetch(`/api/courses/${courseId}/groups`);
+                const gr = await fetch(apiPaths.courseGroups(courseId));
                 if (gr.ok) {
                   const gdata = await gr.json();
                   setGroups(Array.isArray(gdata) ? gdata : []);
@@ -256,7 +256,7 @@ export function CreateProblemDialog({
       }
 
       formData.append('file', values.file);
-      const res = await fetch('/api/problems', { method: 'POST', body: formData });
+      const res = await fetch(apiPaths.problems(), { method: 'POST', body: formData });
 
       if (res.ok) {
         const created = await res.json().catch(() => null);
@@ -275,7 +275,7 @@ export function CreateProblemDialog({
               payload.groupId = selectedGroupId;
             }
 
-            const ar = await fetch(`/api/courses/${courseId}/${assignmentId}/problems`, {
+            const ar = await fetch(apiPaths.assignmentProblems(courseId, assignmentId), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload),

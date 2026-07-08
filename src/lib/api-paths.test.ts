@@ -38,6 +38,16 @@ describe('apiPaths', () => {
 
   it('builds admin paths', () => {
     expect(apiPaths.admin.users()).toBe('/api/admin/users');
+    expect(apiPaths.admin.users({ role: 'FACULTY' })).toBe('/api/admin/users?role=FACULTY');
+    expect(apiPaths.admin.status()).toBe('/api/admin/status');
+    expect(apiPaths.admin.status({ deep: true })).toBe('/api/admin/status?deep=1');
     expect(apiPaths.admin.logsExportFields()).toBe('/api/admin/logs/export/fields');
+  });
+
+  it('supports optional query params on comments and courseJoin', () => {
+    expect(apiPaths.comments()).toBe('/api/comments');
+    expect(apiPaths.comments({ commentId: 'x1' })).toBe('/api/comments?commentId=x1');
+    expect(apiPaths.courseJoin()).toBe('/api/courses/join');
+    expect(apiPaths.assignmentByIdProblems('a1')).toBe('/api/assignments/a1/problems');
   });
 });

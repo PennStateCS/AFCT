@@ -17,6 +17,7 @@ import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
 import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatDateTimeInTimeZone } from '@/lib/date';
+import { apiPaths } from '@/lib/api-paths';
 import {
   AssignmentWithDetails,
   StudentAssignmentContext,
@@ -56,7 +57,7 @@ export default function StudentAssignmentPage({
   const assignmentQuery = useQuery({
     queryKey: ['assignment', assignmentId],
     queryFn: async () => {
-      const res = await fetch(`/api/assignments/${assignmentId}`);
+      const res = await fetch(apiPaths.assignmentById(assignmentId));
       if (!res.ok) {
         const err = new Error('Failed to fetch assignment') as Error & { status?: number };
         err.status = res.status;
@@ -78,7 +79,7 @@ export default function StudentAssignmentPage({
   const contextQuery = useQuery({
     queryKey: ['assignment', assignmentId, 'student-context'],
     queryFn: async () => {
-      const res = await fetch(`/api/assignments/${assignmentId}/student-context`);
+      const res = await fetch(apiPaths.assignmentStudentContext(assignmentId));
       if (!res.ok) throw new Error('Failed to fetch assignment context');
       return (await res.json()) as StudentAssignmentContext;
     },
@@ -123,7 +124,7 @@ export default function StudentAssignmentPage({
       setSubmittingComment((prev) => ({ ...prev, [problemId]: true }));
 
       try {
-        const response = await fetch(`/api/problems/${problemId}/comments`, {
+        const response = await fetch(apiPaths.problemComments(problemId), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ content: text }),
@@ -149,7 +150,7 @@ export default function StudentAssignmentPage({
   const handleDeleteComment = useCallback(
     async (commentId: string) => {
       try {
-        const response = await fetch(`/api/comments?commentId=${encodeURIComponent(commentId)}`, {
+        const response = await fetch(apiPaths.comments({ commentId }), {
           method: 'DELETE',
         });
         if (!response.ok) {
@@ -194,7 +195,10 @@ export default function StudentAssignmentPage({
     }
 
     const preferredProblemId = searchParams.get('problem');
-    if (preferredProblemId && assignment.problems.some((ap) => ap.problem.id === preferredProblemId)) {
+    if (
+      preferredProblemId &&
+      assignment.problems.some((ap) => ap.problem.id === preferredProblemId)
+    ) {
       setSelectedProblemId(preferredProblemId);
       return;
     }
@@ -270,14 +274,15 @@ export default function StudentAssignmentPage({
   const selectedProblemSubmissions = selectedProblemId ? submissions[selectedProblemId] || [] : [];
   const selectedProblemComments = selectedProblemId ? comments[selectedProblemId] || [] : [];
   const selectedProblemGrade = selectedProblem
-    ? problemGrades[selectedProblem.problem.id] ?? selectedProblemSubmissions[0]?.grade ?? null
+    ? (problemGrades[selectedProblem.problem.id] ?? selectedProblemSubmissions[0]?.grade ?? null)
     : null;
   const selectedProblemDetails = selectedProblem
     ? {
         ...selectedProblem.problem,
         maxPoints: selectedProblem.maxPoints ?? selectedProblem.problem.maxPoints,
         maxSubmissions: selectedProblem.maxSubmissions ?? selectedProblem.problem.maxSubmissions,
-        autograderEnabled: selectedProblem.autograderEnabled ?? selectedProblem.problem.autograderEnabled,
+        autograderEnabled:
+          selectedProblem.autograderEnabled ?? selectedProblem.problem.autograderEnabled,
       }
     : null;
 
@@ -285,11 +290,13 @@ export default function StudentAssignmentPage({
     <div className="space-y-6 p-6">
       <Card>
         <CardHeader>
-          <CardTitle role="heading" aria-level={1} className="flex min-w-0 flex-wrap items-start gap-2 text-2xl break-words">
+          <CardTitle
+            role="heading"
+            aria-level={1}
+            className="flex min-w-0 flex-wrap items-start gap-2 text-2xl break-words"
+          >
             <span className="font-semibold">Assignment:</span>
-            <span className="min-w-0 break-words [overflow-wrap:anywhere]">
-              {assignment.title}
-            </span>
+            <span className="min-w-0 [overflow-wrap:anywhere] break-words">{assignment.title}</span>
           </CardTitle>
           <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm">
             {assignment.course || assignment.courseName ? (
@@ -311,7 +318,7 @@ export default function StudentAssignmentPage({
           {assignment.description && (
             <div>
               <h3 className="mb-2 font-semibold">Description</h3>
-              <p className="text-muted-foreground max-h-auto overflow-y-auto resize-y rounded-md border p-3 break-words whitespace-pre-wrap">
+              <p className="text-muted-foreground max-h-auto resize-y overflow-y-auto rounded-md border p-3 break-words whitespace-pre-wrap">
                 {assignment.description}
               </p>
             </div>
@@ -326,36 +333,38 @@ export default function StudentAssignmentPage({
             <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch lg:justify-between">
               <div className="flex flex-1 flex-wrap gap-2">
                 <div className="inline-flex min-h-10 items-center rounded-full border border-slate-200 bg-transparent px-3 py-2 text-sm leading-none text-slate-700 dark:border-slate-200 dark:text-slate-200">
-                  <span className="mr-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em]">
+                  <span className="mr-2 shrink-0 text-[11px] font-semibold tracking-[0.16em] uppercase">
                     Due
                   </span>
-                  <span className="font-semibold leading-none">{dueDisplay}</span>
+                  <span className="leading-none font-semibold">{dueDisplay}</span>
                 </div>
                 <div className="inline-flex min-h-10 items-center rounded-full border border-slate-200 bg-transparent px-3 py-2 text-sm leading-none text-slate-700 dark:border-slate-200 dark:text-slate-200">
-                  <span className="mr-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em]">
+                  <span className="mr-2 shrink-0 text-[11px] font-semibold tracking-[0.16em] uppercase">
                     Points
                   </span>
-                  <span className="font-semibold leading-none">{assignment.maxPoints}</span>
+                  <span className="leading-none font-semibold">{assignment.maxPoints}</span>
                 </div>
                 <div className="inline-flex min-h-10 items-center rounded-full border border-slate-200 bg-transparent px-3 py-2 text-sm leading-none text-slate-700 dark:border-slate-200 dark:text-slate-200">
-                  <span className="mr-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em]">
+                  <span className="mr-2 shrink-0 text-[11px] font-semibold tracking-[0.16em] uppercase">
                     Problems
                   </span>
-                  <span className="font-semibold leading-none">{assignment.problems.length}</span>
+                  <span className="leading-none font-semibold">{assignment.problems.length}</span>
                 </div>
                 <div className="inline-flex min-h-10 items-center rounded-full border border-slate-200 bg-transparent px-3 py-2 text-sm leading-none text-slate-700 dark:border-slate-200 dark:text-slate-200">
-                  <span className="mr-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em]">
+                  <span className="mr-2 shrink-0 text-[11px] font-semibold tracking-[0.16em] uppercase">
                     Late Policy
                   </span>
-                  <span className="font-semibold leading-none">{latePolicyDisplay}</span>
+                  <span className="leading-none font-semibold">{latePolicyDisplay}</span>
                 </div>
               </div>
-              <div className="inline-flex min-h-10 items-center rounded-full border border-slate-200 bg-transparent px-4 py-2 text-right lg:self-start text-slate-700 dark:border-slate-200 dark:text-slate-200">
-                <span className="mr-2 shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em]">
+              <div className="inline-flex min-h-10 items-center rounded-full border border-slate-200 bg-transparent px-4 py-2 text-right text-slate-700 lg:self-start dark:border-slate-200 dark:text-slate-200">
+                <span className="mr-2 shrink-0 text-[11px] font-semibold tracking-[0.16em] uppercase">
                   Grade
                 </span>
-                <span className="ml-1 text-sm font-medium leading-none">{gradeDisplay}</span>
-                <span className="ml-1 text-sm font-medium leading-none">/ {assignment.maxPoints}</span>
+                <span className="ml-1 text-sm leading-none font-medium">{gradeDisplay}</span>
+                <span className="ml-1 text-sm leading-none font-medium">
+                  / {assignment.maxPoints}
+                </span>
               </div>
             </div>
           </CardHeader>
