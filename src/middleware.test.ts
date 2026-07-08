@@ -54,6 +54,42 @@ describe('middleware', () => {
     });
   });
 
+  describe('public API allowlist', () => {
+    it.each([
+      '/api/auth/session',
+      '/api/auth/signup',
+      '/api/health',
+      '/api/system-settings/public',
+      '/api/public/login',
+    ])('lets %s through without reading a token', async (path) => {
+      const res = await middleware(req(path));
+      expect(res.status).toBe(200);
+      // Public routes short-circuit before the JWT read.
+      expect(getTokenMock).not.toHaveBeenCalled();
+    });
+
+    it('does not treat a lookalike prefix as public (/api/healthz)', async () => {
+      getTokenMock.mockResolvedValue(null);
+      const res = await middleware(req('/api/healthz'));
+      expect(res.status).toBe(401);
+    });
+  });
+
+  describe('deny-by-default (fail-closed)', () => {
+    it('401s an unauthenticated request to a route not on the allowlist', async () => {
+      // A brand-new authed route family is gated automatically — no matcher edit.
+      getTokenMock.mockResolvedValue(null);
+      const res = await middleware(req('/api/reports/monthly'));
+      expect(res.status).toBe(401);
+    });
+
+    it('passes it through once signed in', async () => {
+      getTokenMock.mockResolvedValue({ id: 'u1' });
+      const res = await middleware(req('/api/reports/monthly'));
+      expect(res.status).toBe(200);
+    });
+  });
+
   describe('/dashboard/* pages', () => {
     it('redirects an unauthenticated visitor to /login with a callbackUrl', async () => {
       getTokenMock.mockResolvedValue(null);
