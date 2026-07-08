@@ -1373,37 +1373,13 @@ export interface paths {
         };
         /**
          * List my courses
-         * @description Returns the course list scoped to the signed-in user and their role (e.g. a  student sees their published enrollments; staff see more). The role-based  shaping lives in getCoursesListForUser.
+         * @description Lists the courses visible to the signed-in user, in one of two shapes selected by  the `view` query param:    - default: the full role-scoped list (a student sees their published      enrollments; staff/admins see more), shaped by getCoursesListForUser.    - `view=nav`: a compact list for the sidebar navigation — only the caller's      enrolled courses (published-only for students), with just the fields the nav      needs (id, name, code, publish/archive flags), newest first.
          *
-         *     **Auth:** required
+         *     **Auth:** requires FACULTY / TA / ADMIN / STUDENT
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/list/route.ts)
          */
         get: operations["getCoursesList"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/courses/nav": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List courses for navigation
-         * @description Compact course list for the sidebar navigation — only the caller's enrolled  courses, and for students only the published ones. Returns just the fields the  nav needs (id, name, code, publish/archive flags).
-         *
-         *     **Auth:** requires FACULTY / TA
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/nav/route.ts)
-         */
-        get: operations["getCoursesNav"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6682,52 +6658,17 @@ export interface operations {
     };
     getCoursesList: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description "nav" returns the compact sidebar shape; omit for the full list. */
+                view?: "nav";
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Courses visible to the caller. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>[];
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    getCoursesNav: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The caller's courses, newest first. */
+            /** @description Courses visible to the caller (shape depends on `view`). */
             200: {
                 headers: {
                     [name: string]: unknown;

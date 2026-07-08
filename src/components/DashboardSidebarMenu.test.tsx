@@ -17,7 +17,7 @@ const renderWithClient = (ui: React.ReactElement) => {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 };
 
-// Set the response the /api/courses/nav fetch resolves to.
+// Set the response the /api/courses/list?view=nav fetch resolves to.
 const setNavCourses = (courses: unknown[]) => {
   (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
     ok: true,
@@ -221,7 +221,7 @@ describe('DashboardSidebarMenu', () => {
     renderWithClient(<DashboardSidebarMenu />);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/courses/nav');
+      expect(global.fetch).toHaveBeenCalledWith('/api/courses/list?view=nav');
     });
     expect(screen.queryByRole('link', { name: 'CS101' })).toBeNull();
   });

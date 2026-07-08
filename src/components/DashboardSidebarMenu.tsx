@@ -87,7 +87,7 @@ export default function DashboardSidebarMenu() {
   const { data: courses = [] } = useQuery<Course[]>({
     queryKey: ['courses', 'nav'],
     queryFn: async () => {
-      const res = await fetch('/api/courses/nav');
+      const res = await fetch('/api/courses/list?view=nav');
       if (!res.ok) throw new Error('Failed to fetch courses');
       return (await res.json()) as Course[];
     },
