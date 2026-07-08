@@ -1,7 +1,6 @@
-import { NextResponse } from 'next/server';
-import path from 'path';
-import fs from 'fs';
 import { auth } from '@/lib/auth';
+import { apiError } from '@/lib/api/http';
+import { isSafeUploadName, serveUploadedFile } from '@/lib/api/serve-file';
 
 /**
  * Serves an avatar image from private storage, inline. Any signed-in user may fetch
@@ -25,31 +24,19 @@ import { auth } from '@/lib/auth';
 export async function GET(_: Request, { params }: { params: Promise<{ file: string }> }) {
   try {
     const { file } = await params;
-    if (!file || file.includes('..')) {
-      return NextResponse.json({ error: 'Invalid file' }, { status: 400 });
+    if (!isSafeUploadName(file)) {
+      return apiError(400, 'Invalid file');
     }
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return apiError(401, 'Unauthorized');
     }
 
-    const uploadsDir = path.join('/private', 'uploads', 'pfps');
-    const filePath = path.join(uploadsDir, file);
-    if (!fs.existsSync(filePath)) {
-      return NextResponse.json({ error: 'File not found on disk' }, { status: 404 });
-    }
-
-    const buffer = await fs.promises.readFile(filePath);
-
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/octet-stream',
-      'Content-Disposition': `inline; filename="${file}"`,
-    };
-
-    return new NextResponse(buffer as unknown as BodyInit, { status: 200, headers });
+    // Any signed-in user may fetch any avatar; no per-file authorization.
+    return await serveUploadedFile(file, 'pfps');
   } catch (err) {
     console.error('Error serving avatar file:', err);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return apiError(500, 'Internal server error');
   }
 }
