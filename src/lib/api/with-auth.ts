@@ -15,32 +15,36 @@ export type AdminAuthContext = {
 };
 
 /**
- * Wraps a system-admin route handler with the shared gate: resolve the session,
- * require `isAdmin`, and on failure record an optional SECURITY denial and return
- * 403. The handler runs only for a confirmed admin and receives the resolved
- * session/user so it needn't call `auth()` again.
+ * Wraps a system-admin route handler with the shared gate, following the app-wide
+ * auth-response standard:
+ *   - no signed-in session            -> 401 `{ error: 'Unauthorized' }` (not logged;
+ *                                        unauthenticated hits are unattributable noise)
+ *   - signed in but not an admin      -> 403 `{ error: 'Forbidden' }` + a SECURITY
+ *                                        `deniedAction` audit event (a known user
+ *                                        exceeding their permissions is worth a trail)
+ * The handler runs only for a confirmed admin and receives the resolved session/user
+ * so it needn't call `auth()` again.
  *
  * This is the authoritative check; `src/middleware.ts` is only a coarse edge-level
- * backstop over `/api/admin/*`. Behavior matches what every admin route did by hand
- * (403 with `{ error: 'Unauthorized' }`); pass `deniedAction` for the routes that
- * additionally logged a `*_DENIED` audit event.
+ * backstop over `/api/admin/*`.
  */
 export function withAdminAuth<Ctx = unknown, R extends Response = Response>(
   handler: (req: Request, ctx: Ctx, auth: AdminAuthContext) => Promise<R> | R,
-  opts: { deniedAction?: string } = {},
+  opts: { deniedAction: string },
 ): (req: Request, ctx: Ctx) => Promise<R | NextResponse> {
   return async (req: Request, ctx: Ctx) => {
     const session = await auth();
-    if (!session?.user || !isAdmin(session.user)) {
-      if (opts.deniedAction) {
-        await createEnhancedActivityLog(prisma, req, {
-          userId: session?.user?.id ?? null,
-          action: opts.deniedAction,
-          severity: 'SECURITY',
-          metadata: {},
-        });
-      }
-      return apiError(403, 'Unauthorized');
+    if (!session?.user) {
+      return apiError(401, 'Unauthorized');
+    }
+    if (!isAdmin(session.user)) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session.user.id,
+        action: opts.deniedAction,
+        severity: 'SECURITY',
+        metadata: {},
+      });
+      return apiError(403, 'Forbidden');
     }
     return handler(req, ctx, { session, user: session.user });
   };

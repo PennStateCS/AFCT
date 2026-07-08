@@ -2,10 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { isAdmin } from '@/lib/permissions';
 import { prisma } from '@/lib/prisma';
-import {
-  createEnhancedActivityLog,
-  type EnhancedActivityLogData,
-} from '@/lib/activity-log-utils';
+import { createEnhancedActivityLog, type EnhancedActivityLogData } from '@/lib/activity-log-utils';
 import {
   readCertInfo,
   installCert,

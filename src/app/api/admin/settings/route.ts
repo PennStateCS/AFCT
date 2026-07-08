@@ -3,10 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { isAdmin } from '@/lib/permissions';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
-import {
-  createEnhancedActivityLog,
-  type EnhancedActivityLogData,
-} from '@/lib/activity-log-utils';
+import { createEnhancedActivityLog, type EnhancedActivityLogData } from '@/lib/activity-log-utils';
 import {
   clampSessionTimeoutMinutes,
   clampSubmissionEvalTimeoutMs,
@@ -140,12 +137,9 @@ export async function GET() {
       settings?.submissionEvalMaxMemoryMb ?? DEFAULT_SUBMISSION_EVAL_MAX_MEMORY_MB,
     submissionResubmitCooldownMs:
       settings?.submissionResubmitCooldownMs ?? DEFAULT_SUBMISSION_RESUBMIT_COOLDOWN_MS,
-    submissionMaxConcurrent:
-      settings?.submissionMaxConcurrent ?? DEFAULT_SUBMISSION_MAX_CONCURRENT,
-    submissionMaxAttempts:
-      settings?.submissionMaxAttempts ?? DEFAULT_SUBMISSION_MAX_ATTEMPTS,
-    submissionAnalyzerLimit:
-      settings?.submissionAnalyzerLimit ?? DEFAULT_SUBMISSION_ANALYZER_LIMIT,
+    submissionMaxConcurrent: settings?.submissionMaxConcurrent ?? DEFAULT_SUBMISSION_MAX_CONCURRENT,
+    submissionMaxAttempts: settings?.submissionMaxAttempts ?? DEFAULT_SUBMISSION_MAX_ATTEMPTS,
+    submissionAnalyzerLimit: settings?.submissionAnalyzerLimit ?? DEFAULT_SUBMISSION_ANALYZER_LIMIT,
     loginMaxAttempts: settings?.loginMaxAttempts ?? DEFAULT_LOGIN_MAX_ATTEMPTS,
     loginLockoutMinutes: settings?.loginLockoutMinutes ?? DEFAULT_LOGIN_LOCKOUT_MINUTES,
     backupEnabled: settings?.backupEnabled ?? DEFAULT_BACKUP_ENABLED,
@@ -263,17 +257,29 @@ export async function PUT(req: Request) {
   // a partial update can't reset the others.
   const queueData: Record<string, number> = {};
   if (body.submissionEvalTimeoutMs !== undefined)
-    queueData.submissionEvalTimeoutMs = clampSubmissionEvalTimeoutMs(Number(body.submissionEvalTimeoutMs));
+    queueData.submissionEvalTimeoutMs = clampSubmissionEvalTimeoutMs(
+      Number(body.submissionEvalTimeoutMs),
+    );
   if (body.submissionEvalMaxMemoryMb !== undefined)
-    queueData.submissionEvalMaxMemoryMb = clampSubmissionEvalMaxMemoryMb(Number(body.submissionEvalMaxMemoryMb));
+    queueData.submissionEvalMaxMemoryMb = clampSubmissionEvalMaxMemoryMb(
+      Number(body.submissionEvalMaxMemoryMb),
+    );
   if (body.submissionResubmitCooldownMs !== undefined)
-    queueData.submissionResubmitCooldownMs = clampSubmissionResubmitCooldownMs(Number(body.submissionResubmitCooldownMs));
+    queueData.submissionResubmitCooldownMs = clampSubmissionResubmitCooldownMs(
+      Number(body.submissionResubmitCooldownMs),
+    );
   if (body.submissionMaxConcurrent !== undefined)
-    queueData.submissionMaxConcurrent = clampSubmissionMaxConcurrent(Number(body.submissionMaxConcurrent));
+    queueData.submissionMaxConcurrent = clampSubmissionMaxConcurrent(
+      Number(body.submissionMaxConcurrent),
+    );
   if (body.submissionMaxAttempts !== undefined)
-    queueData.submissionMaxAttempts = clampSubmissionMaxAttempts(Number(body.submissionMaxAttempts));
+    queueData.submissionMaxAttempts = clampSubmissionMaxAttempts(
+      Number(body.submissionMaxAttempts),
+    );
   if (body.submissionAnalyzerLimit !== undefined)
-    queueData.submissionAnalyzerLimit = clampSubmissionAnalyzerLimit(Number(body.submissionAnalyzerLimit));
+    queueData.submissionAnalyzerLimit = clampSubmissionAnalyzerLimit(
+      Number(body.submissionAnalyzerLimit),
+    );
 
   // Login lockout policy — only persist the fields provided, clamped to safe bounds.
   const loginData: Record<string, number> = {};
