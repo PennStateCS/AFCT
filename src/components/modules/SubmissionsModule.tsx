@@ -35,7 +35,7 @@ export function SubmissionsModule({ assignments }: SubmissionsModuleProps) {
           processedCourses.add(item.courseId);
 
           // Trigger the API request for the course
-          await fetch(apiPaths.courseSubmissions(item.courseId), {
+          await fetch(apiPaths.courseSubmissionsRerun(item.courseId), {
             method: 'POST',
           });
         }

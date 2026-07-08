@@ -93,7 +93,7 @@ export const apiPaths = {
   comments: (opts?: { commentId?: string }) => `/api/comments${qs({ commentId: opts?.commentId })}`,
   submissions: () => '/api/submissions',
   submissionRerun: (id: string) => `/api/submissions/${id}/rerun`,
-  courseSubmissions: (cid: string) => `/api/course_submissions/${cid}`,
+  courseSubmissionsRerun: (id: string) => `/api/courses/${id}/submissions/rerun`,
 
   // --- Account -------------------------------------------------------------
   user: (id: string) => `/api/users/${id}`,
