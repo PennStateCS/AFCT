@@ -17,7 +17,7 @@ import { apiPaths } from '@/lib/api-paths';
 
 // Fetch assignments for courses the current user is enrolled in between given ISO start/end
 async function fetchAssignmentsInRange(startIso: string, endIso: string, signal?: AbortSignal) {
-  const res = await fetch(apiPaths.assignmentsRange(), {
+  const res = await fetch(apiPaths.myAssignments(), {
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },

@@ -1,4 +1,4 @@
-// /src/app/api/profile/route.ts
+// /src/app/api/me/route.ts
 
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';

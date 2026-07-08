@@ -38,7 +38,7 @@ export function ForcedPasswordChangeForm() {
 
   const onSubmit = async (values: ChangePasswordInput) => {
     setSubmitError(null);
-    const res = await fetch(apiPaths.changePassword(), {
+    const res = await fetch(apiPaths.myPassword(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ oldPassword: values.oldPassword, newPassword: values.newPassword }),

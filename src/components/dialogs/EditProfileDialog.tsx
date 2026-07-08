@@ -139,7 +139,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
 
     try {
       // Post new profile data to database
-      const res = await fetch(apiPaths.profile(), { method: 'POST', body: formData });
+      const res = await fetch(apiPaths.me(), { method: 'POST', body: formData });
       if (!res.ok) throw new Error('Failed to update profile');
 
       // Use NextAuth's update function to immediately update the session

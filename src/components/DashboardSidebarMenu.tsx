@@ -468,7 +468,7 @@ export default function DashboardSidebarMenu() {
         open={changePasswordOpen}
         setOpen={setChangePasswordOpen}
         onChangePassword={async (oldPassword, newPassword) => {
-          const res = await fetch(apiPaths.changePassword(), {
+          const res = await fetch(apiPaths.myPassword(), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ oldPassword, newPassword }),
