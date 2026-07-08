@@ -1,9 +1,10 @@
 import { FullCourse, DeleteTarget } from '@/types/course';
 import { Assignment, Problem, Course } from '@prisma/client';
+import { apiPaths } from '@/lib/api-paths';
 
 export async function deleteItem(target: DeleteTarget): Promise<void> {
   if (target.type === 'assignment') {
-    const res = await fetch(`/api/assignments/${target.id}`, { method: 'DELETE' });
+    const res = await fetch(apiPaths.assignmentById(target.id), { method: 'DELETE' });
     if (!res.ok) {
       let msg = 'Failed to delete assignment';
       try {
@@ -15,7 +16,7 @@ export async function deleteItem(target: DeleteTarget): Promise<void> {
       throw new Error(msg);
     }
   } else if (target.type === 'problem') {
-    const res = await fetch(`/api/problems/${target.id}`, { method: 'DELETE' });
+    const res = await fetch(apiPaths.problem(target.id), { method: 'DELETE' });
     if (!res.ok) {
       let msg = 'Failed to delete problem';
       try {
@@ -111,7 +112,7 @@ export async function updateAssignmentPublishStatus(
   assignmentId: string,
   isPublished: boolean,
 ): Promise<void> {
-  const res = await fetch(`/api/assignments/${assignmentId}`, {
+  const res = await fetch(apiPaths.assignmentById(assignmentId), {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ isPublished }),
@@ -134,7 +135,7 @@ export async function updateCoursePublishStatus(
   courseId: string,
   isPublished: boolean,
 ): Promise<Course> {
-  const res = await fetch(`/api/courses/${courseId}/publish`, {
+  const res = await fetch(apiPaths.coursePublish(courseId), {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ isPublished }),
@@ -159,7 +160,7 @@ export async function updateCourseArchiveStatus(
   endDate: Date,
   isArchived: boolean,
 ): Promise<Course> {
-  const res = await fetch(`/api/courses/${courseId}/archive`, {
+  const res = await fetch(apiPaths.courseArchive(courseId), {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ isArchived: isArchived, startDate: startDate, endDate: endDate }),
@@ -179,7 +180,7 @@ export async function updateCourseArchiveStatus(
 }
 
 export async function saveCourse(course: Course): Promise<Course> {
-  const res = await fetch(`/api/courses/${course.id}`, {
+  const res = await fetch(apiPaths.course(course.id), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(course),
