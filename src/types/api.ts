@@ -811,7 +811,7 @@ export interface paths {
         };
         /**
          * Get a course assignment
-         * @description Returns the assignment with its problems and, in the full view, the course roster. Requires a session; the caller must be an enrolled member of the course (any role) or a system admin.
+         * @description Returns the assignment with its problems. Staff/admins also get the course roster in the full view; non-staff members see published assignments only (unpublished are masked as 404) and no roster.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/route.ts)
          */
@@ -4672,7 +4672,7 @@ export interface operations {
     getCoursesByIdAssignmentsByAid: {
         parameters: {
             query?: {
-                /** @description "full" (default) includes the roster; any other value omits it. */
+                /** @description "full" (default) includes the roster for staff; any other value omits it. */
                 view?: string;
             };
             header?: never;
@@ -4684,7 +4684,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The assignment with problems (and roster in full view). */
+            /** @description The assignment with problems (and, for staff in full view, the roster). */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4709,7 +4709,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Assignment not found in this course. */
+            /** @description Assignment not found in this course, or not visible to the caller. */
             404: {
                 headers: {
                     [name: string]: unknown;

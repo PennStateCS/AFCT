@@ -23,11 +23,13 @@ import {
 
 // Lazily fetches the assignment's max points when the row doesn't already have it.
 // Shares the ['assignment', id] cache entry with StudentAssignmentView/StudentNavigator,
-// so multiple rows (and other views) hitting /api/assignments/{id} dedupe to one request.
+// so multiple rows (and other views) hitting the assignment endpoint dedupe to one request.
 export function MaxPointsCell({
+  courseId,
   assignmentId,
   maxPoints,
 }: {
+  courseId: string;
   assignmentId: string;
   maxPoints: number | null;
 }) {
@@ -36,7 +38,7 @@ export function MaxPointsCell({
   const { data } = useQuery({
     queryKey: ['assignment', assignmentId],
     queryFn: async () => {
-      const res = await fetch(apiPaths.assignmentById(assignmentId));
+      const res = await fetch(apiPaths.assignment(courseId, assignmentId, { view: 'problems' }));
       if (!res.ok) throw new Error('Failed to fetch assignment');
       return (await res.json()) as { maxPoints: number | null };
     },
@@ -134,7 +136,11 @@ export function useAssignmentColumns(
       header: () => 'Points',
       meta: { priority: 2 },
       cell: ({ row }) => (
-        <MaxPointsCell assignmentId={row.original.id} maxPoints={row.original.maxPoints ?? null} />
+        <MaxPointsCell
+          courseId={row.original.courseId}
+          assignmentId={row.original.id}
+          maxPoints={row.original.maxPoints ?? null}
+        />
       ),
     },
     {

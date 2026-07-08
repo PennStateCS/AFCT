@@ -57,7 +57,7 @@ export default function StudentAssignmentPage({
   const assignmentQuery = useQuery({
     queryKey: ['assignment', assignmentId],
     queryFn: async () => {
-      const res = await fetch(apiPaths.assignmentById(assignmentId));
+      const res = await fetch(apiPaths.assignment(params.id, assignmentId, { view: 'problems' }));
       if (!res.ok) {
         const err = new Error('Failed to fetch assignment') as Error & { status?: number };
         err.status = res.status;

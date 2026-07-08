@@ -40,12 +40,13 @@ describe('GET /api/courses/[id]/[aid]', () => {
     expect(res.status).toBe(403);
   });
 
-  it('allows an enrolled student', async () => {
+  it('allows an enrolled student to view a published assignment', async () => {
     authMock.mockResolvedValue({ user: { id: 'stu-1', role: 'STUDENT' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
     prismaMock.assignment.findFirst.mockResolvedValue({
       id: 'a1',
       title: 'Assignment',
+      isPublished: true,
       problems: [],
       course: { name: 'Course', code: 'C1', isArchived: false },
     });
@@ -56,6 +57,44 @@ describe('GET /api/courses/[id]/[aid]', () => {
         params: Promise.resolve({ id: 'c1', aid: 'a1' }),
       },
     );
+
+    expect(res.status).toBe(200);
+  });
+
+  it('404-masks an unpublished assignment from a non-staff student', async () => {
+    authMock.mockResolvedValue({ user: { id: 'stu-1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      title: 'Draft',
+      isPublished: false,
+      problems: [],
+      course: { name: 'Course', code: 'C1', isArchived: false },
+    });
+
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/assignments/a1?view=problems'),
+      {
+        params: Promise.resolve({ id: 'c1', aid: 'a1' }),
+      },
+    );
+
+    expect(res.status).toBe(404);
+  });
+
+  it('lets staff view an unpublished assignment', async () => {
+    // Admin (staff) is unaffected by the published masking.
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      title: 'Draft',
+      isPublished: false,
+      problems: [],
+      course: { name: 'Course', code: 'C1', isArchived: false },
+    });
+
+    const res = await GET(new Request('http://localhost/api/courses/c1/assignments/a1'), {
+      params: Promise.resolve({ id: 'c1', aid: 'a1' }),
+    });
 
     expect(res.status).toBe(200);
   });
