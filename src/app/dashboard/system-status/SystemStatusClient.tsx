@@ -253,14 +253,17 @@ function useTrends(sample: HistoryPoint | null, keepHours: number) {
     const hist = readHistory();
     const now = Date.now();
 
-    // Push latest sample and trim (max 24h kept)
+    // Push latest sample and trim (max 24h kept). Reuse the freshly-built array as
+    // the source for windowing instead of reading history from storage a second time.
+    let source = hist;
     if (sample) {
       const withNew = [...hist.filter((p) => now - p.ts <= keepHours * 3600_000), sample];
       writeHistory(withNew);
+      source = withNew;
     }
 
     const windowMs = windowHours * 3600_000;
-    const windowHist = (sample ? [...readHistory()] : hist).filter((p) => now - p.ts <= windowMs);
+    const windowHist = source.filter((p) => now - p.ts <= windowMs);
     if (windowHist.length < 2) {
       return {
         cpuDelta: 0,
@@ -520,6 +523,27 @@ export default function SystemStatusClient() {
   // Trends (keep 24h, window selectable)
   const { windowHours, setHours, trends } = useTrends(sample, 24);
 
+  // Sparkline series: read history once (localStorage + JSON.parse), filter to the
+  // selected window, then derive all four series. Recomputed only when the window
+  // changes or a new sample is persisted (`status` poll), instead of reading and
+  // filtering history four separate times on every render.
+  const sparklines = useMemo(() => {
+    const windowMs = windowHours * 3600_000;
+    const now = Date.now();
+    const windowHist = readHistory().filter((p) => now - p.ts <= windowMs);
+    return {
+      cpu: windowHist.map((p) => p.cpuPct ?? 0),
+      latency: windowHist.map((p) => p.latencyMs ?? 0),
+      mem: windowHist.map((p) => p.memPct ?? 0),
+      diskIo: windowHist.map((p) => (p.diskIoBps ?? 0) / 1024 / 1024),
+    };
+    // Depend on `sample` (rebuilt each poll) so the series recompute after each new
+    // history point is persisted by useTrends. `sample` isn't read directly, so
+    // exhaustive-deps can't infer the dependency — flag it explicitly rather than
+    // dropping it (which would freeze the sparklines between window changes).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [windowHours, sample]);
+
   const sessionSummary = status?.sessionSummary;
 
   // Summary tiles w/ trend deltas
@@ -581,10 +605,7 @@ export default function SystemStatusClient() {
             <CardTitle role="heading" aria-level={1} className="text-2xl">
               System Status
             </CardTitle>
-            <Badge
-              variant={dbOk ? 'success' : 'danger'}
-              title={status?.database?.message || ''}
-            >
+            <Badge variant={dbOk ? 'success' : 'danger'} title={status?.database?.message || ''}>
               DB {dbOk ? 'OK' : 'DOWN'}
             </Badge>
             <Badge variant="info" title="Database provider">
@@ -737,25 +758,13 @@ export default function SystemStatusClient() {
                     <div className="text-muted-foreground text-xs font-semibold">
                       CPU % (last {windowHours}h)
                     </div>
-                    <Sparkline
-                      points={readHistory()
-                        .filter((p) => Date.now() - p.ts <= windowHours * 3600_000)
-                        .map((p) => p.cpuPct ?? 0)}
-                      width={100}
-                      height={30}
-                    />
+                    <Sparkline points={sparklines.cpu} width={100} height={30} />
                   </div>
                   <div className="space-y-2 rounded border p-3">
                     <div className="text-muted-foreground text-xs font-semibold">
                       Latency (ms) (last {windowHours}h)
                     </div>
-                    <Sparkline
-                      points={readHistory()
-                        .filter((p) => Date.now() - p.ts <= windowHours * 3600_000)
-                        .map((p) => p.latencyMs ?? 0)}
-                      width={100}
-                      height={30}
-                    />
+                    <Sparkline points={sparklines.latency} width={100} height={30} />
                   </div>
                 </div>
                 <div className="space-y-4">
@@ -763,25 +772,13 @@ export default function SystemStatusClient() {
                     <div className="text-muted-foreground text-xs font-semibold">
                       Mem % (last {windowHours}h)
                     </div>
-                    <Sparkline
-                      points={readHistory()
-                        .filter((p) => Date.now() - p.ts <= windowHours * 3600_000)
-                        .map((p) => p.memPct ?? 0)}
-                      width={100}
-                      height={30}
-                    />
+                    <Sparkline points={sparklines.mem} width={100} height={30} />
                   </div>
                   <div className="space-y-2 rounded border p-3">
                     <div className="text-muted-foreground text-xs font-semibold">
                       Disk IO (MB/s) (last {windowHours}h)
                     </div>
-                    <Sparkline
-                      points={readHistory()
-                        .filter((p) => Date.now() - p.ts <= windowHours * 3600_000)
-                        .map((p) => (p.diskIoBps ?? 0) / 1024 / 1024)}
-                      width={100}
-                      height={30}
-                    />
+                    <Sparkline points={sparklines.diskIo} width={100} height={30} />
                   </div>
                 </div>
               </div>
@@ -823,9 +820,7 @@ export default function SystemStatusClient() {
               <CardTitle role="heading" aria-level={2} className="text-lg">
                 Database Overview
               </CardTitle>
-              <Badge variant={dbOk ? 'success' : 'danger'}>
-                {dbOk ? 'OK' : 'DOWN'}
-              </Badge>
+              <Badge variant={dbOk ? 'success' : 'danger'}>{dbOk ? 'OK' : 'DOWN'}</Badge>
             </CardHeader>
             <CardContent>
               <div className="mb-3 text-sm">
@@ -1050,9 +1045,7 @@ export default function SystemStatusClient() {
               <CardTitle role="heading" aria-level={2} className="text-lg">
                 Abandoned Files
               </CardTitle>
-              <Badge variant="neutral">
-                Total: {status.abandonedFiles?.total ?? 0}
-              </Badge>
+              <Badge variant="neutral">Total: {status.abandonedFiles?.total ?? 0}</Badge>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -1163,21 +1156,11 @@ export default function SystemStatusClient() {
               Sessions
               {sessionSummary ? (
                 <span className="ml-2 space-x-2">
-                  <Badge variant="neutral">
-                    24h: {sessionSummary.total24h}
-                  </Badge>
-                  <Badge variant="neutral">
-                    Users: {sessionSummary.uniqUsers24h}
-                  </Badge>
-                  <Badge variant="neutral">
-                    5m: {sessionSummary.last5m}
-                  </Badge>
-                  <Badge variant="neutral">
-                    15m: {sessionSummary.last15m}
-                  </Badge>
-                  <Badge variant="neutral">
-                    60m: {sessionSummary.last60m}
-                  </Badge>
+                  <Badge variant="neutral">24h: {sessionSummary.total24h}</Badge>
+                  <Badge variant="neutral">Users: {sessionSummary.uniqUsers24h}</Badge>
+                  <Badge variant="neutral">5m: {sessionSummary.last5m}</Badge>
+                  <Badge variant="neutral">15m: {sessionSummary.last15m}</Badge>
+                  <Badge variant="neutral">60m: {sessionSummary.last60m}</Badge>
                 </span>
               ) : null}
             </CardTitle>
@@ -1214,7 +1197,7 @@ export default function SystemStatusClient() {
                     </thead>
                     <tbody>
                       {status.activeSessions!.map((s, i) => (
-                        <tr key={i} className="border-b last:border-0">
+                        <tr key={s.userId ?? s.email ?? i} className="border-b last:border-0">
                           <td className="py-2 pr-3">
                             <div className="font-medium">{s.email ?? s.userId ?? 'Unknown'}</div>
                           </td>
