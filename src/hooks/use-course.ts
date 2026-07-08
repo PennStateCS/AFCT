@@ -256,13 +256,21 @@ export function useDialogStates() {
 }
 
 export function useEnrollment(course: FullCourse | null) {
+  const queryClient = useQueryClient();
   const [allUsers, setAllUsers] = useState<EnrollableUser[]>([]);
 
   const fetchAvailableUsers = useCallback(async () => {
     try {
-      const res = await fetch('/api/admin/users');
-      if (!res.ok) throw new Error('Failed to fetch users');
-      const users: User[] = await res.json();
+      // Cached so reopening the enroll dialog doesn't refetch the full user list.
+      const users = await queryClient.fetchQuery({
+        queryKey: ['admin', 'users', 'all'],
+        queryFn: async () => {
+          const res = await fetch('/api/admin/users');
+          if (!res.ok) throw new Error('Failed to fetch users');
+          return (await res.json()) as User[];
+        },
+        staleTime: 30_000,
+      });
 
       if (course) {
         const inCourseIds = new Set(getEnrolledIds(course.enrolled as EnrolledUser[]));
@@ -277,7 +285,7 @@ export function useEnrollment(course: FullCourse | null) {
       console.error('Error fetching users:', error);
       return [] as EnrollableUser[];
     }
-  }, [course]);
+  }, [course, queryClient]);
 
   const handleEnrollUser = useCallback(
     async (user: EnrollableUser, courseId: string, refetchCourse: () => void) => {

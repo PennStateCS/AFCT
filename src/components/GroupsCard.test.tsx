@@ -7,10 +7,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GroupsCard } from './GroupsCard';
 
 // Render with a fresh QueryClient per test (retry off, no lingering cache) so
-// the groups/students queries start clean each time.
+// the groups/students queries start clean each time. Returns the client too so
+// tests can pre-seed course cache entries.
 const renderWithClient = (ui: React.ReactElement) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
-  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+  return { client, ...render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>) };
 };
 
 vi.mock('@/hooks/use-effective-timezone', () => ({
@@ -110,6 +111,45 @@ describe('GroupsCard', () => {
     });
     // Students GET fired.
     expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/students');
+  });
+
+  it('seeds students from the cached course roster and skips the /students fetch', async () => {
+    const fetchMock = routeFetch({
+      groups: [{ id: 'g1', name: 'Team Alpha', createdAt: new Date().toISOString() }],
+      // If the seed works, students is never requested; this would be an error if hit.
+      students: [{ id: 'should-not-be-used' }],
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+    // Pre-seed the course cache the way the course page does (base `summary` view
+    // carries the enrolled roster with courseRole tags).
+    client.setQueryData(['course', 'c1', 'summary'], {
+      id: 'c1',
+      enrolled: [
+        { id: 's1', firstName: 'Ada', lastName: 'L', email: 'ada@x.io', courseRole: 'STUDENT' },
+        { id: 'f1', firstName: 'Fac', lastName: 'Ulty', email: 'f@x.io', courseRole: 'FACULTY' },
+      ],
+    });
+
+    render(
+      <QueryClientProvider client={client}>
+        <GroupsCard courseId="c1" />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Team Alpha')).toBeInTheDocument();
+    });
+
+    // Groups still fetched, but students came from the seed — no GET /students.
+    expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/groups', expect.anything());
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/courses/c1/students');
+
+    // Only the STUDENT-role member is seeded into the students query cache.
+    expect(client.getQueryData(['course', 'c1', 'students'])).toEqual([
+      { id: 's1', firstName: 'Ada', lastName: 'L', email: 'ada@x.io', avatar: null },
+    ]);
   });
 
   it('shows a loading state until the groups query resolves', async () => {

@@ -68,7 +68,38 @@ export function GroupsCard({
   const groups = groupsQuery.data ?? EMPTY_GROUPS;
   const loading = groupsQuery.isPending;
 
-  // Cached course students (a plain GET).
+  // Seed the students query from a course view already in the cache. The course
+  // page caches the course under ['course', courseId, <view>] with an `enrolled`
+  // array of user objects tagged with `courseRole`; the STUDENT-role subset maps
+  // exactly onto what GET /api/courses/{id}/students returns (id/first/last/email,
+  // plus the harmless optional avatar). Both the base `summary` view (always warm
+  // on mount) and the `roster` view carry `enrolled`, so we check both. Returns
+  // undefined when no roster-bearing view is cached, so the query fetches normally.
+  const seededStudents = useMemo<CourseStudent[] | undefined>(() => {
+    for (const view of ['roster', 'summary'] as const) {
+      const cached = queryClient.getQueryData(['course', courseId, view]) as
+        | { enrolled?: Array<Record<string, unknown>> }
+        | undefined;
+      const enrolled = cached?.enrolled;
+      if (!Array.isArray(enrolled)) continue;
+      return enrolled
+        .filter((u) => u.courseRole === 'STUDENT')
+        .map((u) => ({
+          id: String(u.id),
+          firstName: (u.firstName ?? null) as string | null,
+          lastName: (u.lastName ?? null) as string | null,
+          email: (u.email ?? null) as string | null,
+          avatar: (u.avatar ?? null) as string | null,
+        }));
+    }
+    return undefined;
+    // courseId is the only input that changes the cache lookup; the cache itself
+    // isn't reactive, so we intentionally read it once per courseId.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courseId]);
+
+  // Cached course students (a plain GET). When the roster is already in the
+  // course cache we seed from it (initialData) and skip the network round-trip.
   const studentsQuery = useQuery({
     queryKey: ['course', courseId, 'students'],
     queryFn: async () => {
@@ -76,6 +107,7 @@ export function GroupsCard({
       if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load students');
       return (await res.json()) as CourseStudent[];
     },
+    initialData: seededStudents,
     staleTime: 30_000,
   });
   const students = studentsQuery.data ?? EMPTY_STUDENTS;

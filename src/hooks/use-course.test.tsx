@@ -152,7 +152,7 @@ describe('useEnrollment', () => {
   it('filters out users already enrolled in the course', async () => {
     const course = { enrolled: [{ id: 'u1' }] } as never;
     fetchMock.mockResolvedValue({ ok: true, json: async () => [{ id: 'u1' }, { id: 'u2' }] });
-    const { result } = renderHook(() => useEnrollment(course));
+    const { result } = renderHook(() => useEnrollment(course), { wrapper: createWrapper() });
     let available: Array<{ id: string }> = [];
     await act(async () => {
       available = await result.current.fetchAvailableUsers();
@@ -163,7 +163,7 @@ describe('useEnrollment', () => {
   it('posts an enrollment and refetches on success', async () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) });
     const refetch = vi.fn();
-    const { result } = renderHook(() => useEnrollment(null));
+    const { result } = renderHook(() => useEnrollment(null), { wrapper: createWrapper() });
     await act(async () => {
       await result.current.handleEnrollUser({ id: 'u9' } as never, 'c1', refetch);
     });
@@ -177,7 +177,7 @@ describe('useEnrollment', () => {
 
   it('toasts an error when enrollment fails', async () => {
     fetchMock.mockResolvedValue({ ok: false });
-    const { result } = renderHook(() => useEnrollment(null));
+    const { result } = renderHook(() => useEnrollment(null), { wrapper: createWrapper() });
     await act(async () => {
       await result.current.handleEnrollUser({ id: 'u9' } as never, 'c1', vi.fn());
     });
