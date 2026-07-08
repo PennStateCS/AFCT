@@ -665,8 +665,6 @@ export interface paths {
          * Get a student's problem grades for an assignment
          * @description Returns a student's per-problem grades and feedback for one assignment, keyed by  problem id. A student may read their own; staff may read anyone's. Responds 204  when nothing has been graded yet.
          *
-         *     **Auth:** required
-         *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/problem-grades/[studentId]/route.ts)
          */
         get: operations["getCoursesByIdByAidProblemGradesByStudentId"];
@@ -674,8 +672,6 @@ export interface paths {
         /**
          * Batch set/clear a student's problem grades for an assignment
          * @description Batch-saves this student's problem grades for the assignment in a single request —  the write counterpart to the GET above (co-located as the same resource). The body  maps problemId → grade (a number within [0, maxPoints], or null to clear). Course  staff (faculty or TAs) or a system admin. Only problems whose grade actually changed  are written: a null for a graded problem deletes it, a number upserts it (existing  feedback is left untouched), and unchanged problems are skipped. Every applied change  is audited with its previous value, mirroring the single-problem grade route.
-         *
-         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/problem-grades/[studentId]/route.ts)
          */
@@ -719,8 +715,6 @@ export interface paths {
          * Get a single problem grade
          * @description Reads one student's grade and feedback for a specific problem within an  assignment. The student themselves, course staff, or a system admin. Returns nulls  (not 404) when the problem exists but hasn't been graded.
          *
-         *     **Auth:** required
-         *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]/route.ts)
          */
         get: operations["getCoursesByIdByAidProblemsByPidGradeByStudentId"];
@@ -728,8 +722,6 @@ export interface paths {
         /**
          * Set or clear a problem grade
          * @description Sets or clears a student's grade (and optional feedback) for one problem. Course  staff (faculty or TAs) or a system admin. A numeric grade must be within [0, maxPoints]; sending  a null grade deletes the record. Every change is audited with the previous value.
-         *
-         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]/route.ts)
          */
@@ -751,8 +743,6 @@ export interface paths {
         /**
          * Update an assignment problem's settings
          * @description Updates the per-assignment settings for one problem: its point value, submission  cap, and whether the autograder runs. Course staff (faculty or TAs) or a system  admin. The problem  must already be linked to the assignment, and the assignment must belong to the  course in the path.
-         *
-         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/problems/[pid]/route.ts)
          */
@@ -4459,6 +4449,15 @@ export interface operations {
             };
             /** @description Invalid JSON or settings. */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
