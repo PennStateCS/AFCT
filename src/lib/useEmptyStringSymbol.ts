@@ -2,6 +2,7 @@
 
 import useSWR from 'swr';
 import { emptyStringSymbol } from '@/lib/empty-string-notation';
+import { apiPaths } from '@/lib/api-paths';
 
 const fetcher = (url: string): Promise<{ emptyStringNotation?: string } | null> =>
   fetch(url).then((r) => (r.ok ? r.json() : null));
@@ -13,6 +14,6 @@ const fetcher = (url: string): Promise<{ emptyStringNotation?: string } | null> 
  * the same course share a single request.
  */
 export function useEmptyStringSymbol(courseId?: string | null): string {
-  const { data } = useSWR(courseId ? `/api/courses/${courseId}?view=basic` : null, fetcher);
+  const { data } = useSWR(courseId ? apiPaths.course(courseId, { view: 'basic' }) : null, fetcher);
   return emptyStringSymbol(data?.emptyStringNotation);
 }

@@ -73,9 +73,7 @@ export function GradeBreakdownDialog({
   const gradesQuery = useQuery({
     queryKey: ['course', courseId, 'assignment', assignmentId, 'problem-grades', studentId],
     queryFn: async () => {
-      const res = await fetch(
-        `/api/courses/${courseId}/${assignmentId}/problem-grades/${studentId}`,
-      );
+      const res = await fetch(apiPaths.assignmentProblemGrades(courseId, assignmentId, studentId));
       // 204 means nothing graded yet — treat as an empty map.
       if (res.status === 204) return {} as Record<string, { grade: number | null }>;
       if (!res.ok) throw new Error('Failed to fetch problem grades');
@@ -143,14 +141,11 @@ export function GradeBreakdownDialog({
         acc[r.problemId] = r.grade;
         return acc;
       }, {});
-      const res = await fetch(
-        `/api/courses/${courseId}/${assignmentId}/problem-grades/${studentId}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ grades: gradesPayload }),
-        },
-      );
+      const res = await fetch(apiPaths.assignmentProblemGrades(courseId, assignmentId, studentId), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ grades: gradesPayload }),
+      });
       if (!res.ok) throw new Error('save');
       // Refresh this student's cached grades so reopening reflects the save; the
       // parent (grades matrix) refreshes via onSaved.

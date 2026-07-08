@@ -301,7 +301,11 @@ export function EditProblemDialog({
       if (assignmentSettings && assignmentDirty) {
         const assignmentMaxPoints = Math.max(0, assignmentConfig.maxPoints ?? 0);
         const assignmentRes = await fetch(
-          `/api/courses/${assignmentSettings.courseId}/${assignmentSettings.assignmentId}/problems/${problem.id}`,
+          apiPaths.assignmentProblem(
+            assignmentSettings.courseId,
+            assignmentSettings.assignmentId,
+            problem.id,
+          ),
           {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },

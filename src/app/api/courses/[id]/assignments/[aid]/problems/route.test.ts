@@ -54,7 +54,7 @@ describe('POST /api/courses/[id]/[aid]/problems (add problems)', () => {
   it('returns 403 when user is not authorized', async () => {
     authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
 
-    const req = new Request('http://localhost/api/courses/c1/a1/problems', {
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ problemIds: ['p1'] }),
@@ -65,7 +65,7 @@ describe('POST /api/courses/[id]/[aid]/problems (add problems)', () => {
   });
 
   it('returns 400 for empty body', async () => {
-    const req = new Request('http://localhost/api/courses/c1/a1/problems', {
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: '',
@@ -77,7 +77,7 @@ describe('POST /api/courses/[id]/[aid]/problems (add problems)', () => {
 
   it('returns 400 for invalid JSON', async () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const req = new Request('http://localhost/api/courses/c1/a1/problems', {
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: '{bad',
@@ -99,7 +99,7 @@ describe('POST /api/courses/[id]/[aid]/problems (add problems)', () => {
       problems: [{ problem: { id: 'p1', title: 'P1' } }, { problem: { id: 'p2', title: 'P2' } }],
     });
 
-    const req = new Request('http://localhost/api/courses/c1/a1/problems', {
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ problemIds: ['p1', 'p2'] }),
@@ -132,7 +132,7 @@ describe('POST /api/courses/[id]/[aid]/problems (add problems)', () => {
     prismaMock.group.findMany.mockResolvedValue([{ id: 'g1' }, { id: 'g2' }]);
     prismaMock.groupAssignmentProblem.createMany.mockResolvedValue({ count: 2 });
 
-    const req = new Request('http://localhost/api/courses/c1/a1/problems', {
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ problemIds: ['p3'], groupId: 'ALL' }),
@@ -160,7 +160,7 @@ describe('POST /api/courses/[id]/[aid]/problems (add problems)', () => {
     prismaMock.group.findUnique.mockResolvedValue({ id: 'g-x', courseId: 'c1' });
     prismaMock.groupAssignmentProblem.createMany.mockResolvedValue({ count: 1 });
 
-    const req = new Request('http://localhost/api/courses/c1/a1/problems', {
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ problemIds: ['p4'], groupId: 'g-x' }),
@@ -187,7 +187,7 @@ describe('POST /api/courses/[id]/[aid]/problems (add problems)', () => {
     prismaMock.group.findUnique.mockResolvedValue({ id: 'g-y', courseId: 'c1' });
     prismaMock.groupAssignmentProblem.createMany.mockResolvedValue({ count: 1 });
 
-    const req = new Request('http://localhost/api/courses/c1/a1/problems', {
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ problemIds: ['p5'], groupId: 'g-y' }),
@@ -208,7 +208,7 @@ describe('POST /api/courses/[id]/[aid]/problems (add problems)', () => {
     prismaMock.assignmentProblem.findMany.mockResolvedValue([]);
     prismaMock.assignmentProblem.createMany.mockResolvedValue({ count: 1 });
 
-    const req = new Request('http://localhost/api/courses/c1/a1/problems', {
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ problemIds: ['p1', 'p999'] }),
@@ -233,7 +233,7 @@ describe('POST /api/courses/[id]/[aid]/problems (add problems)', () => {
     prismaMock.problem.findMany.mockResolvedValue([{ id: 'p2' }]);
     prismaMock.assignmentProblem.findMany.mockResolvedValue([]);
 
-    const req = new Request('http://localhost/api/courses/c1/a1/problems', {
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -269,7 +269,7 @@ describe('DELETE /api/courses/[id]/[aid]/problems (remove a problem)', () => {
   it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
-    const req = new Request('http://localhost/api/courses/c1/a1/problems', {
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
       method: 'DELETE',
       body: JSON.stringify({ problemId: 'p1' }),
     });
@@ -281,7 +281,7 @@ describe('DELETE /api/courses/[id]/[aid]/problems (remove a problem)', () => {
   it('returns 400 when missing problemId', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
 
-    const req = new Request('http://localhost/api/courses/c1/a1/problems', {
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
       method: 'DELETE',
       body: JSON.stringify({}),
     });
@@ -294,7 +294,7 @@ describe('DELETE /api/courses/[id]/[aid]/problems (remove a problem)', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.assignment.findFirst.mockResolvedValue(null);
 
-    const req = new Request('http://localhost/api/courses/c1/a1/problems', {
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
       method: 'DELETE',
       body: JSON.stringify({ problemId: 'p1' }),
     });
@@ -308,7 +308,7 @@ describe('DELETE /api/courses/[id]/[aid]/problems (remove a problem)', () => {
     prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
     prismaMock.problem.findFirst.mockResolvedValue(null);
 
-    const req = new Request('http://localhost/api/courses/c1/a1/problems', {
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
       method: 'DELETE',
       body: JSON.stringify({ problemId: 'p1' }),
     });
@@ -336,7 +336,7 @@ describe('DELETE /api/courses/[id]/[aid]/problems (remove a problem)', () => {
       ],
     });
 
-    const req = new Request('http://localhost/api/courses/c1/a1/problems', {
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
       method: 'DELETE',
       body: JSON.stringify({ problemId: 'p1' }),
     });

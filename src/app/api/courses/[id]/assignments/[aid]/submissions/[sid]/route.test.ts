@@ -25,9 +25,12 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
   it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
-    const res = await GET(new Request('http://localhost/api/courses/c1/a1/submissions/s1'), {
-      params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 's1' }),
-    });
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/assignments/a1/submissions/s1'),
+      {
+        params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 's1' }),
+      },
+    );
 
     expect(res.status).toBe(401);
   });
@@ -37,9 +40,12 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     prismaMock.assignment.findFirst.mockResolvedValue(null);
 
-    const res = await GET(new Request('http://localhost/api/courses/c1/a1/submissions/s1'), {
-      params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 's1' }),
-    });
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/assignments/a1/submissions/s1'),
+      {
+        params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 's1' }),
+      },
+    );
 
     expect(res.status).toBe(404);
   });
@@ -49,9 +55,12 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
     prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([]);
 
-    const res = await GET(new Request('http://localhost/api/courses/c1/a1/submissions/s1'), {
-      params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 's1' }),
-    });
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/assignments/a1/submissions/s1'),
+      {
+        params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 's1' }),
+      },
+    );
 
     expect(res.status).toBe(404);
   });
@@ -84,9 +93,12 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
       },
     ]);
 
-    const res = await GET(new Request('http://localhost/api/courses/c1/a1/submissions/s1'), {
-      params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 's1' }),
-    });
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/assignments/a1/submissions/s1'),
+      {
+        params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 's1' }),
+      },
+    );
 
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -99,9 +111,12 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
     prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
     prismaMock.roster.findFirst.mockResolvedValue(null);
 
-    const res = await GET(new Request('http://localhost/api/courses/c1/a1/submissions/s1'), {
-      params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 's1' }),
-    });
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/assignments/a1/submissions/s1'),
+      {
+        params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 's1' }),
+      },
+    );
 
     expect(res.status).toBe(403);
     const body = await res.json();
@@ -127,9 +142,12 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
     ]);
     prismaMock.submission.findMany.mockResolvedValue([]);
 
-    const res = await GET(new Request('http://localhost/api/courses/c1/a1/submissions/s1'), {
-      params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 's1' }),
-    });
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/assignments/a1/submissions/s1'),
+      {
+        params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 's1' }),
+      },
+    );
 
     expect(res.status).toBe(200);
   });
@@ -138,9 +156,12 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
     authMock.mockResolvedValue({ user: { id: 'student-a', role: 'STUDENT' } });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
 
-    const res = await GET(new Request('http://localhost/api/courses/c1/a1/submissions/student-b'), {
-      params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 'student-b' }),
-    });
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/assignments/a1/submissions/student-b'),
+      {
+        params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 'student-b' }),
+      },
+    );
 
     expect(res.status).toBe(403);
   });
@@ -164,9 +185,12 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
     ]);
     prismaMock.submission.findMany.mockResolvedValue([]);
 
-    const res = await GET(new Request('http://localhost/api/courses/c1/a1/submissions/student-a'), {
-      params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 'student-a' }),
-    });
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/assignments/a1/submissions/student-a'),
+      {
+        params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 'student-a' }),
+      },
+    );
 
     expect(res.status).toBe(200);
   });
@@ -207,9 +231,12 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
       },
     ]);
 
-    const res = await GET(new Request('http://localhost/api/courses/c1/a1/submissions/s1'), {
-      params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 's1' }),
-    });
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/assignments/a1/submissions/s1'),
+      {
+        params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 's1' }),
+      },
+    );
 
     expect(res.status).toBe(200);
     expect(prismaMock.submission.findMany).toHaveBeenCalledTimes(2);
@@ -242,9 +269,12 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
 
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    const res = await GET(new Request('http://localhost/api/courses/c1/a1/submissions/s1'), {
-      params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 's1' }),
-    });
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/assignments/a1/submissions/s1'),
+      {
+        params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 's1' }),
+      },
+    );
 
     expect(res.status).toBe(500);
     const body = await res.json();
@@ -274,9 +304,12 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
 
     const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    const res = await GET(new Request('http://localhost/api/courses/c1/a1/submissions/s1'), {
-      params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 's1' }),
-    });
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/assignments/a1/submissions/s1'),
+      {
+        params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 's1' }),
+      },
+    );
 
     expect(res.status).toBe(200);
     expect(consoleSpy).toHaveBeenCalledWith('Failed to log activity:', expect.any(Error));
@@ -290,9 +323,12 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
 
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    const res = await GET(new Request('http://localhost/api/courses/c1/a1/submissions/s1'), {
-      params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 's1' }),
-    });
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/assignments/a1/submissions/s1'),
+      {
+        params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 's1' }),
+      },
+    );
 
     expect(res.status).toBe(500);
     const body = await res.json();

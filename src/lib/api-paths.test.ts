@@ -27,11 +27,18 @@ describe('apiPaths', () => {
   });
 
   it('builds assignment paths', () => {
-    expect(apiPaths.assignment('c1', 'a1')).toBe('/api/courses/c1/a1');
-    expect(apiPaths.assignment('c1', 'a1', { view: 'full' })).toBe('/api/courses/c1/a1?view=full');
-    expect(apiPaths.assignmentProblem('c1', 'a1', 'p1')).toBe('/api/courses/c1/a1/problems/p1');
+    expect(apiPaths.assignment('c1', 'a1')).toBe('/api/courses/c1/assignments/a1');
+    expect(apiPaths.assignment('c1', 'a1', { view: 'full' })).toBe(
+      '/api/courses/c1/assignments/a1?view=full',
+    );
+    expect(apiPaths.assignmentProblem('c1', 'a1', 'p1')).toBe(
+      '/api/courses/c1/assignments/a1/problems/p1',
+    );
     expect(apiPaths.assignmentProblemGrade('c1', 'a1', 'p1', 's1')).toBe(
-      '/api/courses/c1/a1/problems/p1/grade/s1',
+      '/api/courses/c1/assignments/a1/problems/p1/grade/s1',
+    );
+    expect(apiPaths.assignmentGroupProblems('c1', 'a1')).toBe(
+      '/api/courses/c1/assignments/a1/group-problems',
     );
   });
 

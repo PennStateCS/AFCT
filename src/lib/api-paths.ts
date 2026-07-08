@@ -29,7 +29,8 @@ export const apiPaths = {
   courseDuplicate: (id: string) => `/api/courses/${id}/duplicate`,
   coursePublish: (id: string) => `/api/courses/${id}/publish`,
   courseArchive: (id: string) => `/api/courses/${id}/archive`,
-  courseActivity: (id: string) => `/api/courses/${id}/activity`,
+  courseActivity: (id: string, opts?: { limit?: number; offset?: number }) =>
+    `/api/courses/${id}/activity${qs({ limit: opts?.limit, offset: opts?.offset })}`,
   courseStudents: (id: string) => `/api/courses/${id}/students`,
   courseGrades: (id: string) => `/api/courses/${id}/grades`,
   courseStudentGrades: (id: string) => `/api/courses/${id}/student-grades`,
@@ -56,24 +57,25 @@ export const apiPaths = {
   myEnrollments: () => '/api/me/enrollments',
   myAssignments: (start?: string, end?: string) => `/api/me/assignments${qs({ start, end })}`,
 
-  // --- Assignments (course-nested; bare `aid` segment for now) -------------
+  // --- Assignments (course-nested under /assignments/[aid]) ----------------
   assignment: (courseId: string, aid: string, opts?: { view?: string }) =>
-    `/api/courses/${courseId}/${aid}${qs({ view: opts?.view })}`,
-  assignmentProblems: (courseId: string, aid: string) => `/api/courses/${courseId}/${aid}/problems`,
+    `/api/courses/${courseId}/assignments/${aid}${qs({ view: opts?.view })}`,
+  assignmentProblems: (courseId: string, aid: string) =>
+    `/api/courses/${courseId}/assignments/${aid}/problems`,
   assignmentProblem: (courseId: string, aid: string, pid: string) =>
-    `/api/courses/${courseId}/${aid}/problems/${pid}`,
+    `/api/courses/${courseId}/assignments/${aid}/problems/${pid}`,
   assignmentProblemGrade: (courseId: string, aid: string, pid: string, studentId: string) =>
-    `/api/courses/${courseId}/${aid}/problems/${pid}/grade/${studentId}`,
+    `/api/courses/${courseId}/assignments/${aid}/problems/${pid}/grade/${studentId}`,
   assignmentProblemGrades: (courseId: string, aid: string, studentId: string) =>
-    `/api/courses/${courseId}/${aid}/problem-grades/${studentId}`,
+    `/api/courses/${courseId}/assignments/${aid}/problem-grades/${studentId}`,
   assignmentProblemGradesSummary: (courseId: string, aid: string) =>
-    `/api/courses/${courseId}/${aid}/problem-grades/summary`,
+    `/api/courses/${courseId}/assignments/${aid}/problem-grades/summary`,
   assignmentReviewData: (courseId: string, aid: string, studentId: string) =>
-    `/api/courses/${courseId}/${aid}/review-data/${studentId}`,
+    `/api/courses/${courseId}/assignments/${aid}/review-data/${studentId}`,
   assignmentSubmissions: (courseId: string, aid: string, sid: string) =>
-    `/api/courses/${courseId}/${aid}/submissions/${sid}`,
+    `/api/courses/${courseId}/assignments/${aid}/submissions/${sid}`,
   assignmentGroupProblems: (courseId: string, aid: string) =>
-    `/api/courses/${courseId}/${aid}/group-problems`,
+    `/api/courses/${courseId}/assignments/${aid}/group-problems`,
 
   // --- Global assignment routes -------------------------------------------
   assignments: () => '/api/assignments',

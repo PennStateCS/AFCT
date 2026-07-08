@@ -119,7 +119,7 @@ describe('AssignmentSubmissions', () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        '/api/courses/c1/a1/review-data/s1',
+        '/api/courses/c1/assignments/a1/review-data/s1',
         expect.objectContaining({ signal: expect.anything() }),
       );
     });
@@ -188,7 +188,7 @@ describe('AssignmentSubmissions', () => {
     // The per-problem POST fires.
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        '/api/courses/c1/a1/problems/p1/grade/s1',
+        '/api/courses/c1/assignments/a1/problems/p1/grade/s1',
         expect.objectContaining({ method: 'POST' }),
       );
     });

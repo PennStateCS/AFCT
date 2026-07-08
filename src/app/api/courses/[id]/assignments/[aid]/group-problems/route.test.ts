@@ -26,9 +26,12 @@ beforeEach(() => {
 describe('GET /api/courses/[id]/[aid]/group-problems', () => {
   it('returns 401 when not authenticated', async () => {
     authMock.mockResolvedValue(null);
-    const res = await GET(new NextRequest('http://localhost/api/courses/c1/a1/group-problems'), {
-      params: Promise.resolve({ id: 'c1', aid: 'a1' }),
-    } as any);
+    const res = await GET(
+      new NextRequest('http://localhost/api/courses/c1/assignments/a1/group-problems'),
+      {
+        params: Promise.resolve({ id: 'c1', aid: 'a1' }),
+      } as any,
+    );
     expect(res.status).toBe(401);
   });
 
@@ -40,9 +43,12 @@ describe('GET /api/courses/[id]/[aid]/group-problems', () => {
       { assignmentId: 'a1', problemId: 'p1', groupId: 'g1' },
     ]);
 
-    const res = await GET(new NextRequest('http://localhost/api/courses/c1/a1/group-problems'), {
-      params: Promise.resolve({ id: 'c1', aid: 'a1' }),
-    } as any);
+    const res = await GET(
+      new NextRequest('http://localhost/api/courses/c1/assignments/a1/group-problems'),
+      {
+        params: Promise.resolve({ id: 'c1', aid: 'a1' }),
+      } as any,
+    );
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(Array.isArray(body.groups)).toBe(true);
@@ -60,9 +66,12 @@ describe('GET /api/courses/[id]/[aid]/group-problems', () => {
     prismaMock.groupAssignmentProblem.findMany.mockResolvedValue([]);
     activityLogMock.mockRejectedValue(new Error('log failed'));
 
-    const res = await GET(new NextRequest('http://localhost/api/courses/c1/a1/group-problems'), {
-      params: Promise.resolve({ id: 'c1', aid: 'a1' }),
-    } as any);
+    const res = await GET(
+      new NextRequest('http://localhost/api/courses/c1/assignments/a1/group-problems'),
+      {
+        params: Promise.resolve({ id: 'c1', aid: 'a1' }),
+      } as any,
+    );
 
     expect(res.status).toBe(200);
   });
@@ -71,7 +80,7 @@ describe('GET /api/courses/[id]/[aid]/group-problems', () => {
 describe('DELETE /api/courses/[id]/[aid]/group-problems', () => {
   it('returns 403 when unauthorized role', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    const req = new NextRequest('http://localhost/api/courses/c1/a1/group-problems', {
+    const req = new NextRequest('http://localhost/api/courses/c1/assignments/a1/group-problems', {
       method: 'DELETE',
       body: JSON.stringify({ problemIds: ['p1'], groupId: 'g1' }),
     });
@@ -85,7 +94,7 @@ describe('DELETE /api/courses/[id]/[aid]/group-problems', () => {
     prismaMock.group.findUnique.mockResolvedValue({ id: 'g1', courseId: 'c1' });
     prismaMock.groupAssignmentProblem.deleteMany.mockResolvedValue({ count: 1 });
 
-    const req = new NextRequest('http://localhost/api/courses/c1/a1/group-problems', {
+    const req = new NextRequest('http://localhost/api/courses/c1/assignments/a1/group-problems', {
       method: 'DELETE',
       body: JSON.stringify({ problemIds: ['p1'], groupId: 'g1' }),
     });
@@ -104,7 +113,7 @@ describe('DELETE /api/courses/[id]/[aid]/group-problems', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
 
-    const req = new NextRequest('http://localhost/api/courses/c1/a1/group-problems', {
+    const req = new NextRequest('http://localhost/api/courses/c1/assignments/a1/group-problems', {
       method: 'DELETE',
       body: '',
     });
@@ -117,7 +126,7 @@ describe('DELETE /api/courses/[id]/[aid]/group-problems', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
 
-    const req = new NextRequest('http://localhost/api/courses/c1/a1/group-problems', {
+    const req = new NextRequest('http://localhost/api/courses/c1/assignments/a1/group-problems', {
       method: 'DELETE',
       body: '{bad',
     });
@@ -130,7 +139,7 @@ describe('DELETE /api/courses/[id]/[aid]/group-problems', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
 
-    const req = new NextRequest('http://localhost/api/courses/c1/a1/group-problems', {
+    const req = new NextRequest('http://localhost/api/courses/c1/assignments/a1/group-problems', {
       method: 'DELETE',
       body: JSON.stringify({ groupId: 'g1' }),
     });
@@ -144,7 +153,7 @@ describe('DELETE /api/courses/[id]/[aid]/group-problems', () => {
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.group.findUnique.mockResolvedValue(null);
 
-    const req = new NextRequest('http://localhost/api/courses/c1/a1/group-problems', {
+    const req = new NextRequest('http://localhost/api/courses/c1/assignments/a1/group-problems', {
       method: 'DELETE',
       body: JSON.stringify({ groupId: 'g1', problemIds: ['p1'] }),
     });
@@ -157,7 +166,7 @@ describe('DELETE /api/courses/[id]/[aid]/group-problems', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
 
-    const req = new NextRequest('http://localhost/api/courses/c1/a1/group-problems', {
+    const req = new NextRequest('http://localhost/api/courses/c1/assignments/a1/group-problems', {
       method: 'DELETE',
       body: JSON.stringify({ problemIds: ['p1'] }),
     });
@@ -170,7 +179,7 @@ describe('DELETE /api/courses/[id]/[aid]/group-problems', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
 
-    const req = new NextRequest('http://localhost/api/courses/c1/a1/group-problems', {
+    const req = new NextRequest('http://localhost/api/courses/c1/assignments/a1/group-problems', {
       method: 'DELETE',
       body: JSON.stringify({ groupId: 'ALL', problemIds: ['p1', 'p2'] }),
     });
@@ -188,7 +197,7 @@ describe('DELETE /api/courses/[id]/[aid]/group-problems', () => {
     prismaMock.group.findUnique.mockResolvedValue({ id: 'g1', courseId: 'c1' });
     activityLogMock.mockRejectedValue(new Error('log failed'));
 
-    const req = new NextRequest('http://localhost/api/courses/c1/a1/group-problems', {
+    const req = new NextRequest('http://localhost/api/courses/c1/assignments/a1/group-problems', {
       method: 'DELETE',
       body: JSON.stringify({ groupId: 'g1', problemIds: ['p1'] }),
     });
