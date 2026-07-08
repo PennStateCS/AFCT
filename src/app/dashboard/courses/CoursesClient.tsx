@@ -26,7 +26,7 @@ export default function CoursesClient({ initialCourses }: { initialCourses: Cour
   // fresh, so navigating back to Courses is instant with no refetch on mount.
   const {
     data: courses = [],
-    isFetching,
+    isLoading,
     isError,
     refetch,
   } = useQuery({
@@ -88,7 +88,7 @@ export default function CoursesClient({ initialCourses }: { initialCourses: Cour
         <DataTable
           columns={columnsMemo}
           data={courses}
-          loading={isFetching}
+          loading={isLoading}
           tableLabel="Courses table"
         />
       </CardContent>
