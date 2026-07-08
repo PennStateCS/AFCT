@@ -88,7 +88,7 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { confirmPassword, ...payload } = parsed;
 
-    const res = await fetch('/api/users', {
+    const res = await fetch('/api/admin/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),

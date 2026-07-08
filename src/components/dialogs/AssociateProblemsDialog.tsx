@@ -166,16 +166,8 @@ export function AssociateProblemsDialog({
         if (isGroup) {
           setGroupsLoading(true);
           const [grRes, gpRes] = await Promise.all([
-            fetch(`/api/courses/${courseId}/groups`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'list' }),
-            }),
-            fetch(`/api/courses/${courseId}/${assignmentId}/group-problems`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'list' }),
-            }),
+            fetch(`/api/courses/${courseId}/groups`),
+            fetch(`/api/courses/${courseId}/${assignmentId}/group-problems`),
           ]);
 
           if (grRes.ok) {
@@ -199,10 +191,10 @@ export function AssociateProblemsDialog({
         // Refresh the authoritative problem list for this course when the dialog
         // opens so deleted problems don't remain selectable in the UI.
         try {
-          const pRes = await fetch(`/api/courses/${courseId}/problems`, { signal: ac.signal });
+          const pRes = await fetch(`/api/courses/${courseId}?view=problems`, { signal: ac.signal });
           if (pRes.ok) {
             const pData = await pRes.json();
-            const list = Array.isArray(pData) ? pData : [];
+            const list = Array.isArray(pData?.problems) ? pData.problems : [];
             setLocalAllProblems(list);
           } else {
             setLocalAllProblems(allProblems);
@@ -314,14 +306,10 @@ export function AssociateProblemsDialog({
     async function syncExternal() {
       try {
         // Fetch latest course problems
-        const pReq = fetch(`/api/courses/${courseId}/problems`, { signal: ac.signal });
-        // Fetch group->problem mappings only for assignments that support groups (use POST body instead of signal)
+        const pReq = fetch(`/api/courses/${courseId}?view=problems`, { signal: ac.signal });
+        // Fetch group->problem mappings only for assignments that support groups.
         const gpReq = assignmentId
-          ? fetch(`/api/courses/${courseId}/${assignmentId}/group-problems`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'list' }),
-            })
+          ? fetch(`/api/courses/${courseId}/${assignmentId}/group-problems`, { signal: ac.signal })
           : Promise.resolve(null);
 
         const [pRes, gpRes] = await Promise.all([pReq, gpReq]);
@@ -329,7 +317,7 @@ export function AssociateProblemsDialog({
         if (!aborted) {
           if (pRes && pRes.ok) {
             const pData = await pRes.json();
-            const list = Array.isArray(pData) ? pData : [];
+            const list = Array.isArray(pData?.problems) ? pData.problems : [];
             setLocalAllProblems(list);
           }
 

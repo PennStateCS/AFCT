@@ -1,8 +1,9 @@
 'use client';
 
 import React from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import { getUserColumns } from './user-columns';
 import { DataTable } from '@/components/ui/data-table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -17,41 +18,39 @@ import type { UserListItem } from '@/lib/users-list';
 export default function UsersClient({ initialUsers }: { initialUsers?: UserListItem[] }) {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const hasInitialUsers = Array.isArray(initialUsers);
 
-  const [users, setUsers] = useState<UserListItem[]>(initialUsers ?? []);
-  const [activeUsers, setActiveUsers] = useState<UserListItem[]>(initialUsers ?? []);
-  const [loading, setLoading] = useState(!hasInitialUsers);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [open, setOpen] = useState(searchParams.get('create') === 'open');
   const [importOpen, setImportOpen] = useState(false);
   const [onlyActive, setOnlyActive] = useState(false);
   const { timezone } = useEffectiveTimezone();
 
-  const fetchUsers = useCallback(async () => {
-    try {
-      setLoading(true);
-      setLoadError(null);
-      const res = await fetch('/api/users/list', { cache: 'no-store' });
+  // Cached user list — survives navigation and dedupes across the dashboard. The
+  // SSR-provided list seeds the cache and is treated as fresh, so there's no
+  // refetch on mount when the server already sent the data.
+  const {
+    data: users = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
+    queryKey: ['admin', 'users'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/users/list', { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed to fetch users');
-      const data: UserListItem[] = await res.json();
-      setUsers(data);
-	  setActiveUsers(data.filter(item => !item.inactive));
-    } catch (error) {
-      setLoadError('Failed to load users. Please try again.');
-      console.error('Error loading users:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      return (await res.json()) as UserListItem[];
+    },
+    initialData: initialUsers,
+    staleTime: 30_000,
+  });
 
-  useEffect(() => {
-    if (!hasInitialUsers) {
-      void fetchUsers();
-    }
-  }, [fetchUsers, hasInitialUsers]);
+  const activeUsers = useMemo(() => users.filter((item) => !item.inactive), [users]);
+  // Stable refresh handler passed to the table + dialogs (refetch is referentially
+  // stable, so table columns stay memoized across unrelated re-renders).
+  const refresh = useCallback(() => {
+    void refetch();
+  }, [refetch]);
 
-  const columns = useMemo(() => getUserColumns(fetchUsers, timezone), [fetchUsers, timezone]);
+  const columns = useMemo(() => getUserColumns(refresh, timezone), [refresh, timezone]);
 
   const handleDialogClose = (value: boolean) => {
     setOpen(value);
@@ -88,12 +87,12 @@ export default function UsersClient({ initialUsers }: { initialUsers?: UserListI
       </CardHeader>
 
       <CardContent>
-        {loadError ? (
+        {isError ? (
           <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-red-300 bg-red-50 px-3 py-2">
             <p role="alert" className="text-sm text-red-700">
-              {loadError}
+              Failed to load users. Please try again.
             </p>
-            <Button variant="outline" size="sm" onClick={() => void fetchUsers()}>
+            <Button variant="outline" size="sm" onClick={refresh}>
               Retry
             </Button>
           </div>
@@ -102,14 +101,14 @@ export default function UsersClient({ initialUsers }: { initialUsers?: UserListI
         <DataTable
           columns={columns}
           data={onlyActive ? activeUsers : users}
-          loading={loading}
+          loading={isLoading}
           tableLabel="Users table"
           defaultColumnVisibility={{ createdAt: false }}
         />
       </CardContent>
 
-      <CreateUserDialog open={open} setOpen={handleDialogClose} onSuccess={fetchUsers} />
-      <ImportUsersDialog open={importOpen} setOpen={setImportOpen} onSuccess={fetchUsers} />
+      <CreateUserDialog open={open} setOpen={handleDialogClose} onSuccess={refresh} />
+      <ImportUsersDialog open={importOpen} setOpen={setImportOpen} onSuccess={refresh} />
     </Card>
   );
 }

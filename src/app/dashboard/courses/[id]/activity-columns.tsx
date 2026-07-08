@@ -251,7 +251,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
       return (
         <Avatar className="h-10 w-10">
           <AvatarImage
-            src={`/api/uploads/pfps/${activity.user?.avatar}`}
+            src={activity.user?.avatar ? `/api/uploads/pfps/${activity.user.avatar}` : undefined}
             alt={`${activity.user?.firstName} ${activity.user?.lastName}`}
           />
           <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">

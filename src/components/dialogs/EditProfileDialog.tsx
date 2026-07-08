@@ -40,7 +40,9 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
   // Local preview state (keep separate from RHF file)
   const { timezone: effectiveTimezone } = useEffectiveTimezone();
   const { maxMb, loading: loadingMaxSize } = useMaxUploadSize();
-  const [avatarPreview, setAvatarPreview] = useState<string>(`/api/uploads/pfps/${user.avatar}`);
+  const [avatarPreview, setAvatarPreview] = useState<string>(
+    user.avatar ? `/api/uploads/pfps/${user.avatar}` : '',
+  );
   const [serverTimezone, setServerTimezone] = useState('UTC');
 
   // RHF defaults – email is read-only so it isn't in the schema
@@ -80,7 +82,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
         keepValues: false,
       });
       // Reset preview from current user
-      setAvatarPreview(`/api/uploads/pfps/${user.avatar}`);
+      setAvatarPreview(user.avatar ? `/api/uploads/pfps/${user.avatar}` : '');
     } else {
       reset(defaults, {
         keepDirty: false,
@@ -179,7 +181,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
           <div className="flex flex-col gap-4">
             <div className="flex items-center gap-4">
               <Avatar className="h-20 w-20">
-                <AvatarImage src={avatarPreview} alt="User Avatar" />
+                <AvatarImage src={avatarPreview || undefined} alt="User Avatar" />
                 <AvatarFallback className="bg-secondary text-secondary-foreground">
                   {getInitials(user.firstName, user.lastName, user.email)}
                 </AvatarFallback>
