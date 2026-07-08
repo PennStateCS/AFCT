@@ -3,6 +3,8 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canManageCourse } from '@/lib/permissions';
+import { apiError } from '@/lib/api/http';
+import { logDenial } from '@/lib/api/activity';
 import { toDateTimeInTimezone, toEndOfDayInTimezone } from '@/lib/date-utils';
 
 async function resolveUserTimezone(userId?: string | null) {
@@ -55,7 +57,7 @@ export async function POST(req: NextRequest) {
     actorId = session?.user?.id ?? null;
 
     if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return apiError(401, 'Unauthorized');
     }
 
     const data = await req.json();
@@ -64,13 +66,11 @@ export async function POST(req: NextRequest) {
     }
 
     if (!(await canManageCourse(session.user, data.courseId))) {
-      await createEnhancedActivityLog(prisma, req, {
-        userId: session?.user?.id ?? null,
+      return logDenial(req, {
+        userId: session.user.id,
         action: 'ASSIGNMENT_CREATE_DENIED',
-        severity: 'SECURITY',
-        metadata: {},
+        courseId: data.courseId,
       });
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     const userTimezone = await resolveUserTimezone(session.user.id);
