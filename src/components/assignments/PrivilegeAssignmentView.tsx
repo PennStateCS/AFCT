@@ -274,7 +274,10 @@ export default function AssignmentDashboardPage({
   });
   const groups = groupsQuery.data?.groups ?? EMPTY_GROUPS;
   const groupProblemsMap = groupsQuery.data?.groupProblemsMap ?? EMPTY_GROUP_PROBLEMS_MAP;
-  const groupsLoading = groupsEnabled && groupsQuery.isFetching;
+  // Cold-load only. The problem rows come from `assignment` (not this query), so a
+  // background groups refetch must not flip the DataTable to its blocking "Loading
+  // data" state and hide every row; only the initial group fetch should.
+  const groupsLoading = groupsEnabled && groupsQuery.isLoading;
 
   async function handleAddProblems(
     problemIds: string[],
