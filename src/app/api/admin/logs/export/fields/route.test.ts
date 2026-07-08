@@ -10,7 +10,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('GET /api/logs/getFields', () => {
+describe('GET /api/admin/logs/export/fields', () => {
   it('returns 403 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
     expect((await GET()).status).toBe(403);

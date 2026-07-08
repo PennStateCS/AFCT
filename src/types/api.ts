@@ -4,6 +4,30 @@
  */
 
 export interface paths {
+    "/api/admin/logs/export/fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List exportable log fields
+         * @description Lists the activity-log columns that may be included in a CSV export; drives the  Download dialog's field picker. Nested under `export` because it describes what  the sibling `POST /admin/logs/export` accepts. System administrators only.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/logs/export/fields/route.ts)
+         */
+        get: operations["getAdminLogsExportFields"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/logs/export": {
         parameters: {
             query?: never;
@@ -22,30 +46,6 @@ export interface paths {
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/logs/export/route.ts)
          */
         post: operations["postAdminLogsExport"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/admin/logs/fields": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List exportable log fields
-         * @description Lists the activity-log columns that may be included in a CSV export; drives the  Download dialog's field picker. System administrators only.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/logs/fields/route.ts)
-         */
-        get: operations["getAdminLogsFields"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2074,6 +2074,35 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    getAdminLogsExportFields: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The exportable field names. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            /** @description Caller is not a system administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     postAdminLogsExport: {
         parameters: {
             query?: never;
@@ -2123,35 +2152,6 @@ export interface operations {
             };
             /** @description Export failed. */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    getAdminLogsFields: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The exportable field names. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": string[];
-                };
-            };
-            /** @description Caller is not a system administrator. */
-            403: {
                 headers: {
                     [name: string]: unknown;
                 };

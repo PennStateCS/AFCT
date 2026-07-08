@@ -5,7 +5,8 @@ import { EXPORTABLE_LOG_FIELDS } from '@/lib/log-fields';
 
 /**
  * Lists the activity-log columns that may be included in a CSV export; drives the
- * Download dialog's field picker. System administrators only.
+ * Download dialog's field picker. Nested under `export` because it describes what
+ * the sibling `POST /admin/logs/export` accepts. System administrators only.
  * @openapi
  * summary: List exportable log fields
  * responses:
