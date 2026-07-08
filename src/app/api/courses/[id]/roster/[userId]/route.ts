@@ -1,7 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { auth } from '@/lib/auth';
-import { isAdmin } from '@/lib/permissions';
+import { canManageCourse, isAdmin } from '@/lib/permissions';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { logDenial } from '@/lib/api/activity';
@@ -117,8 +116,10 @@ export const DELETE = withCourseAuth(
 /**
  * Returns one roster entry (with the user's profile) plus the viewer's own course
  * role and an `viewerIsAdmin` flag, so the UI can decide which actions to offer.
- * Any signed-in user may call it; `userId` may be the literal "me" to target the
- * caller.
+ * Access is tiered: the caller must be a member of the course (the wrapper enforces
+ * this), and a non-staff member may only read their OWN entry — course staff
+ * (faculty/TA) and admins may read anyone's. `userId` may be the literal "me" to
+ * target the caller.
  * @openapi
  * summary: Get a roster entry
  * parameters:
@@ -128,58 +129,61 @@ export const DELETE = withCourseAuth(
  *   200:
  *     description: The roster entry, the viewer's course role, and viewerIsAdmin.
  *   401: { description: Not signed in. }
+ *   403: { description: "Not a course member, or a non-staff member reading someone else's entry." }
  *   404: { description: No roster entry for that user in this course. }
  *   500: { description: Server error. }
  */
-export async function GET(
-  req: NextRequest,
-  context: { params: Promise<{ id: string; userId: string }> },
-) {
-  const { id: courseId, userId } = await context.params;
+export const GET = withCourseAuth(
+  async (req, ctx, { user, courseId }) => {
+    const { userId } = await ctx.params;
 
-  try {
-    const session = await auth();
-    const currentUser = session?.user;
-    if (!currentUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    try {
+      const targetUserId = userId === 'me' ? user.id : userId;
 
-    const targetUserId = userId === 'me' ? currentUser.id : userId;
+      // Course membership was enforced by the wrapper. A non-staff member may only
+      // read their own entry; staff (faculty/TA) and admins may read anyone's.
+      if (targetUserId !== user.id && !(await canManageCourse(user, courseId))) {
+        return logDenial(req, { userId: user.id, action: 'ROSTER_VIEW_DENIED', courseId });
+      }
 
-    // Fetch roster entry and include the user profile info for display in the dialog
-    const rosterEntry = await prisma.roster.findFirst({
-      where: { courseId, userId: targetUserId },
-      include: {
-        user: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            avatar: true,
+      // Fetch roster entry and include the user profile info for display in the dialog
+      const rosterEntry = await prisma.roster.findFirst({
+        where: { courseId, userId: targetUserId },
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              avatar: true,
+            },
           },
         },
-      },
-    });
-    if (!rosterEntry) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      });
+      if (!rosterEntry) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    // Also return the viewer's admin flag and course role so the UI can decide which actions to show
-    const viewerRoster = await prisma.roster.findFirst({
-      where: { courseId, userId: currentUser.id },
-      select: { role: true },
-    });
-    const viewerCourseRole = viewerRoster?.role ?? null;
-    const viewerIsAdmin = isAdmin(currentUser);
+      // Also return the viewer's admin flag and course role so the UI can decide which actions to show
+      const viewerRoster = await prisma.roster.findFirst({
+        where: { courseId, userId: user.id },
+        select: { role: true },
+      });
+      const viewerCourseRole = viewerRoster?.role ?? null;
+      const viewerIsAdmin = isAdmin(user);
 
-    return NextResponse.json({
-      success: true,
-      roster: rosterEntry,
-      viewerCourseRole,
-      viewerIsAdmin,
-    });
-  } catch (err) {
-    console.error('GET /api/courses/[id]/roster/[userId] error:', err);
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
-  }
-}
+      return NextResponse.json({
+        success: true,
+        roster: rosterEntry,
+        viewerCourseRole,
+        viewerIsAdmin,
+      });
+    } catch (err) {
+      console.error('GET /api/courses/[id]/roster/[userId] error:', err);
+      return NextResponse.json({ error: 'Server error' }, { status: 500 });
+    }
+  },
+  { access: 'read', deniedAction: 'ROSTER_VIEW_DENIED' },
+);
 
 /**
  * Changes a user's course role. Only a global admin or a course faculty member may
