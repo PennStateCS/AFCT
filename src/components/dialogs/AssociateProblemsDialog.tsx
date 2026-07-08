@@ -166,11 +166,7 @@ export function AssociateProblemsDialog({
         if (isGroup) {
           setGroupsLoading(true);
           const [grRes, gpRes] = await Promise.all([
-            fetch(`/api/courses/${courseId}/groups`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'list' }),
-            }),
+            fetch(`/api/courses/${courseId}/groups`),
             fetch(`/api/courses/${courseId}/${assignmentId}/group-problems`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },

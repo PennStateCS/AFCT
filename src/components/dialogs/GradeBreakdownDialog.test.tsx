@@ -165,14 +165,14 @@ describe('GradeBreakdownDialog', () => {
       if (url === '/api/courses/c1/a1') {
         return Promise.resolve({ ok: true, json: async () => assignmentPayload });
       }
+      if (url === '/api/courses/c1/a1/problem-grades/s1' && init?.method === 'POST') {
+        return Promise.resolve({ ok: true, json: async () => ({ ok: true, changed: 1 }) });
+      }
       if (url === '/api/courses/c1/a1/problem-grades/s1') {
         return Promise.resolve({
           ok: true,
           json: async () => ({ p1: { grade: 7 }, p2: { grade: null } }),
         });
-      }
-      if (url === '/api/courses/c1/a1/grades' && init?.method === 'POST') {
-        return Promise.resolve({ ok: true, json: async () => ({}) });
       }
       throw new Error(`Unexpected fetch: ${url} ${init?.method ?? ''}`);
     });
@@ -198,14 +198,17 @@ describe('GradeBreakdownDialog', () => {
 
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
 
-    // Exactly one POST to the bulk grades endpoint.
+    // Exactly one POST to the bulk problem-grades endpoint (studentId in the URL).
     const postCalls = fetchMock.mock.calls.filter(
-      (c) => c[0] === '/api/courses/c1/a1/grades' && (c[1] as RequestInit)?.method === 'POST',
+      (c) =>
+        c[0] === '/api/courses/c1/a1/problem-grades/s1' &&
+        (c[1] as RequestInit)?.method === 'POST',
     );
     expect(postCalls).toHaveLength(1);
 
     const body = JSON.parse((postCalls[0][1] as RequestInit).body as string);
-    expect(body.studentId).toBe('s1');
+    // studentId is no longer in the body — it lives in the URL path.
+    expect(body).not.toHaveProperty('studentId');
     expect(body.grades).toMatchObject({ p1: 9 });
 
     // No per-problem fan-out requests.
