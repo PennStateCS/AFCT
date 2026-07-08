@@ -1,12 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
-import { canManageCourse } from '@/lib/permissions';
+import { withCourseAuth } from '@/lib/api/with-auth';
 
 type ProblemType = 'PDA' | 'RE' | 'CFG' | 'FA';
 
@@ -48,111 +47,99 @@ const uploadDir = path.join('/private', 'uploads', 'solutions');
  * responses:
  *   201: { description: The created problem. }
  *   400: { description: Missing fields or file. }
+ *   401: { description: Not signed in. }
  *   403: { description: Caller is not course staff (faculty or TA) or a system admin. }
  *   404: { description: Course not found. }
  *   413: { description: File exceeds the system upload limit. }
  *   500: { description: Server error. }
  */
-export async function POST(req: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const { id: courseId } = await context.params;
+export const POST = withCourseAuth(
+  async (req, _ctx, { user, courseId }) => {
+    try {
+      // Parse multipart form data
+      const formData = await req.formData();
+      const title = formData.get('title') as string;
+      const description = formData.get('description') as string | null;
+      const type = formData.get('type') as string;
+      const maxStates = formData.get('maxStates')
+        ? parseInt(formData.get('maxStates') as string, 10)
+        : null;
+      const isDeterministic = formData.get('isDeterministic') === 'true';
+      const file = formData.get('file') as File | null;
 
-  try {
-    const session = await auth();
-    const user = session?.user;
+      if (!title || !type) {
+        return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+      }
 
-    if (!user || !(await canManageCourse(user, courseId))) {
-      await createEnhancedActivityLog(prisma, req, {
-        userId: session?.user?.id ?? null,
-        action: 'PROBLEM_CREATE_DENIED',
-        severity: 'SECURITY',
-        metadata: {},
+      if (!file || typeof file === 'string') {
+        return NextResponse.json({ error: 'Missing or invalid file' }, { status: 400 });
+      }
+
+      const { maxBytes, maxMb } = await getSystemUploadLimit();
+      if (file.size > maxBytes) {
+        return NextResponse.json(
+          { error: `File exceeds max upload size (${maxMb} MB).` },
+          { status: 413 },
+        );
+      }
+
+      // Ensure course exists
+      const course = await prisma.course.findUnique({ where: { id: courseId } });
+      if (!course) {
+        return NextResponse.json({ error: 'Course not found' }, { status: 404 });
+      }
+
+      // Save the uploaded file to disk
+      await ensureDirExists(uploadDir);
+      const originalFileName = file.name;
+      const ext = path.extname(originalFileName);
+      const fileName = `${uuidv4()}${ext}`;
+      const buffer = Buffer.from(await file.arrayBuffer());
+      await writeFile(path.join(uploadDir, fileName), buffer);
+
+      // Create the new problem in the database
+      const problem = await prisma.problem.create({
+        data: {
+          title,
+          description,
+          type: type as ProblemType,
+          fileName,
+          originalFileName,
+          courseId,
+          maxStates: type === 'FA' || type === 'PDA' ? maxStates : null,
+          isDeterministic: type === 'FA' ? isDeterministic : null,
+        },
       });
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
 
-    // Step 2: Parse multipart form data
-    const formData = await req.formData();
-    const title = formData.get('title') as string;
-    const description = formData.get('description') as string | null;
-    const type = formData.get('type') as string;
-    const maxStates = formData.get('maxStates')
-      ? parseInt(formData.get('maxStates') as string, 10)
-      : null;
-    const isDeterministic = formData.get('isDeterministic') === 'true';
-    const file = formData.get('file') as File | null;
-
-    if (!title || !type || !courseId) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-    }
-
-    if (!file || typeof file === 'string') {
-      return NextResponse.json({ error: 'Missing or invalid file' }, { status: 400 });
-    }
-
-    const { maxBytes, maxMb } = await getSystemUploadLimit();
-    if (file.size > maxBytes) {
-      return NextResponse.json(
-        { error: `File exceeds max upload size (${maxMb} MB).` },
-        { status: 413 },
-      );
-    }
-
-    // Step 3: Ensure course exists
-    const course = await prisma.course.findUnique({ where: { id: courseId } });
-    if (!course) {
-      return NextResponse.json({ error: 'Course not found' }, { status: 404 });
-    }
-
-    // Step 4: Save the uploaded file to disk
-    await ensureDirExists(uploadDir);
-    const originalFileName = file.name;
-    const ext = path.extname(originalFileName);
-    const fileName = `${uuidv4()}${ext}`;
-    const buffer = Buffer.from(await file.arrayBuffer());
-    await writeFile(path.join(uploadDir, fileName), buffer);
-
-    // Step 5: Create the new problem in the database
-    const problem = await prisma.problem.create({
-      data: {
-        title,
-        description,
-        type: type as ProblemType,
-        fileName,
-        originalFileName,
-        courseId,
-        maxStates: type === 'FA' || type === 'PDA' ? maxStates : null,
-        isDeterministic: type === 'FA' ? isDeterministic : null,
-      },
-    });
-
-    // Step 6: Log the problem creation
-    await createEnhancedActivityLog(prisma, req, {
-      userId: user.id,
-      action: 'CREATE_PROBLEM',
-      severity: 'INFO',
-      category: 'PROBLEM',
-      courseId,
-      problemId: problem.id,
-      metadata: {
+      await createEnhancedActivityLog(prisma, req, {
         userId: user.id,
-        courseId: courseId,
-        probleId: problem.id,
-        problemTitle: problem.title,
-        fileName: fileName,
-        originalFileName: originalFileName,
-        type: type,
-      },
-    });
+        action: 'CREATE_PROBLEM',
+        severity: 'INFO',
+        category: 'PROBLEM',
+        courseId,
+        problemId: problem.id,
+        metadata: {
+          userId: user.id,
+          courseId: courseId,
+          probleId: problem.id,
+          problemTitle: problem.title,
+          fileName: fileName,
+          originalFileName: originalFileName,
+          type: type,
+        },
+      });
 
-    return NextResponse.json(problem, { status: 201 });
-  } catch (error) {
-    console.error('Error creating problem:', error);
-    await createEnhancedActivityLog(prisma, req, {
-      userId: null,
-      action: 'PROBLEM_CREATE_ERROR',
-      severity: 'ERROR',
-      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
-    });
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-  }
-}
+      return NextResponse.json(problem, { status: 201 });
+    } catch (error) {
+      console.error('Error creating problem:', error);
+      await createEnhancedActivityLog(prisma, req, {
+        userId: null,
+        action: 'PROBLEM_CREATE_ERROR',
+        severity: 'ERROR',
+        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+      });
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    }
+  },
+  { access: 'manage', deniedAction: 'PROBLEM_CREATE_DENIED' },
+);
