@@ -42,9 +42,9 @@ beforeEach(() => {
   prismaMock.roster.findFirst.mockResolvedValue(null);
 });
 
-describe('GET /api/uploads/submissions/[file]', () => {
+describe('GET /api/files/submissions/[file]', () => {
   it('returns 400 for invalid file param', async () => {
-    const res = await GET(new Request('http://localhost/api/uploads/submissions/..'), {
+    const res = await GET(new Request('http://localhost/api/files/submissions/..'), {
       params: Promise.resolve({ file: '../secret.txt' }),
     });
 
@@ -54,7 +54,7 @@ describe('GET /api/uploads/submissions/[file]', () => {
   it('returns 401 when not authenticated', async () => {
     authMock.mockResolvedValue(null);
 
-    const res = await GET(new Request('http://localhost/api/uploads/submissions/file.txt'), {
+    const res = await GET(new Request('http://localhost/api/files/submissions/file.txt'), {
       params: Promise.resolve({ file: 'file.txt' }),
     });
 
@@ -65,7 +65,7 @@ describe('GET /api/uploads/submissions/[file]', () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', role: 'STUDENT' } });
     prismaMock.submission.findFirst.mockResolvedValue(null);
 
-    const res = await GET(new Request('http://localhost/api/uploads/submissions/file.txt'), {
+    const res = await GET(new Request('http://localhost/api/files/submissions/file.txt'), {
       params: Promise.resolve({ file: 'file.txt' }),
     });
 
@@ -81,7 +81,7 @@ describe('GET /api/uploads/submissions/[file]', () => {
       courseId: 'course-1',
     });
 
-    const res = await GET(new Request('http://localhost/api/uploads/submissions/file.txt'), {
+    const res = await GET(new Request('http://localhost/api/files/submissions/file.txt'), {
       params: Promise.resolve({ file: 'file.txt' }),
     });
 
@@ -99,7 +99,7 @@ describe('GET /api/uploads/submissions/[file]', () => {
     });
     vi.mocked(fs.existsSync).mockReturnValue(true);
 
-    const res = await GET(new Request('http://localhost/api/uploads/submissions/file.txt'), {
+    const res = await GET(new Request('http://localhost/api/files/submissions/file.txt'), {
       params: Promise.resolve({ file: 'file.txt' }),
     });
 
@@ -120,7 +120,7 @@ describe('GET /api/uploads/submissions/[file]', () => {
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     vi.mocked(fs.existsSync).mockReturnValue(true);
 
-    const res = await GET(new Request('http://localhost/api/uploads/submissions/file.txt'), {
+    const res = await GET(new Request('http://localhost/api/files/submissions/file.txt'), {
       params: Promise.resolve({ file: 'file.txt' }),
     });
 
@@ -139,7 +139,7 @@ describe('GET /api/uploads/submissions/[file]', () => {
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'TA' });
     vi.mocked(fs.existsSync).mockReturnValue(true);
 
-    const res = await GET(new Request('http://localhost/api/uploads/submissions/file.txt'), {
+    const res = await GET(new Request('http://localhost/api/files/submissions/file.txt'), {
       params: Promise.resolve({ file: 'file.txt' }),
     });
 
@@ -156,7 +156,7 @@ describe('GET /api/uploads/submissions/[file]', () => {
     });
     vi.mocked(fs.existsSync).mockReturnValue(true);
 
-    const res = await GET(new Request('http://localhost/api/uploads/submissions/file.txt'), {
+    const res = await GET(new Request('http://localhost/api/files/submissions/file.txt'), {
       params: Promise.resolve({ file: 'file.txt' }),
     });
 
@@ -174,7 +174,7 @@ describe('GET /api/uploads/submissions/[file]', () => {
     });
     vi.mocked(fs.existsSync).mockReturnValue(false);
 
-    const res = await GET(new Request('http://localhost/api/uploads/submissions/file.txt'), {
+    const res = await GET(new Request('http://localhost/api/files/submissions/file.txt'), {
       params: Promise.resolve({ file: 'file.txt' }),
     });
 
@@ -194,7 +194,7 @@ describe('GET /api/uploads/submissions/[file]', () => {
     });
     vi.mocked(fs.existsSync).mockReturnValue(true);
 
-    const res = await GET(new Request('http://localhost/api/uploads/submissions/file.txt'), {
+    const res = await GET(new Request('http://localhost/api/files/submissions/file.txt'), {
       params: Promise.resolve({ file: 'file.txt' }),
     });
 

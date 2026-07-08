@@ -157,7 +157,7 @@ export default function AssignmentDashboardPage({
       showToast.error('No file available to render');
       return;
     }
-    const src = `/api/solutions/${encodeURIComponent(fileName)}`;
+    const src = apiPaths.files.solution(encodeURIComponent(fileName));
     setViewerSrc(src);
     setViewerTitle(`${original || fileName} - ${problem.title}`);
     setViewerOpen(true);
@@ -535,7 +535,7 @@ export default function AssignmentDashboardPage({
         header: 'Solution File',
         cell: ({ row }: { row: { original: Problem } }) => {
           const fileUrl = row.original.fileName
-            ? `/api/solutions/${row.original.fileName}?download=1`
+            ? apiPaths.files.solution(row.original.fileName, { download: true })
             : null;
           const fileName = row.original.originalFileName || 'Download';
           return fileUrl ? (
@@ -605,7 +605,7 @@ export default function AssignmentDashboardPage({
                 disabled={!row.original.fileName}
                 onClick={() => {
                   const url = row.original.fileName
-                    ? `/api/solutions/${row.original.fileName}?download=1`
+                    ? apiPaths.files.solution(row.original.fileName, { download: true })
                     : null;
                   if (!url) return;
                   window.open(url, '_blank', 'noopener,noreferrer');

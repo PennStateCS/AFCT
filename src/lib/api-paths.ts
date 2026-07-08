@@ -100,6 +100,17 @@ export const apiPaths = {
   // --- Public / settings ---------------------------------------------------
   systemSettingsPublic: () => '/api/system-settings/public',
 
+  // --- Served files (avatars, uploads, solutions) --------------------------
+  // Callers pass the filename already encoded where they previously did so; these
+  // builders only interpolate, to preserve the existing (mixed) encoding behavior.
+  files: {
+    pfp: (file: string) => `/api/files/pfps/${file}`,
+    problem: (file: string) => `/api/files/problems/${file}`,
+    submission: (file: string) => `/api/files/submissions/${file}`,
+    solution: (file: string, opts?: { download?: boolean }) =>
+      `/api/files/solutions/${file}${opts?.download ? '?download=1' : ''}`,
+  },
+
   // --- Admin ---------------------------------------------------------------
   admin: {
     users: (opts?: { role?: string }) => `/api/admin/users${qs({ role: opts?.role })}`,

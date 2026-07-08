@@ -407,7 +407,7 @@ export default function DashboardSidebarMenu() {
                 <SidebarMenuButton className="hover:bg-secondary data-[state=open]:bg-secondary/70 data-[state=open]:text-secondary-foreground h-14 bg-[#525252] px-3 py-3 transition-colors">
                   <Avatar className="h-8 w-8 shrink-0">
                     <AvatarImage
-                      src={user.avatar ? `/api/uploads/pfps/${user.avatar}` : undefined}
+                      src={user.avatar ? apiPaths.files.pfp(user.avatar) : undefined}
                       alt={user.name}
                     />
                     <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">

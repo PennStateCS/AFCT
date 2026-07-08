@@ -5,6 +5,7 @@ import { useState } from 'react';
 import JffViewerDialog from './JffViewerDialog';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
+import { apiPaths } from '@/lib/api-paths';
 
 type Problem = {
   id: string;
@@ -124,7 +125,7 @@ export default function ProblemDetails({
                   <JffViewerDialog
                     open={open}
                     onOpenChange={setOpen}
-                    src={`/api/solutions/${encodeURIComponent(problem.fileName ?? '')}`}
+                    src={apiPaths.files.solution(encodeURIComponent(problem.fileName ?? ''))}
                     title={`${problem.originalFileName || problem.fileName} - ${problem.title}`}
                     width="70vw"
                     height="70vh"

@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ConfirmDialog } from './dialogs/ConfirmDialog';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatDateTimeInTimeZone } from '@/lib/date';
+import { apiPaths } from '@/lib/api-paths';
 
 export type Comment = {
   id: string;
@@ -61,7 +62,7 @@ const authorAvatarSrc = (author: Comment['author']) => {
   if (!raw) return undefined;
   if (/^https?:\/\//i.test(raw)) return raw;
   if (raw.startsWith('/')) return raw;
-  return `/api/uploads/pfps/${raw}`;
+  return apiPaths.files.pfp(raw);
 };
 
 export default function DiscussionPanel({
@@ -152,7 +153,11 @@ export default function DiscussionPanel({
                             className="text-muted-foreground absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full text-xs opacity-70 transition-colors hover:bg-red-100 hover:text-red-600 hover:opacity-100"
                             title="Delete comment"
                             disabled={deletingComments[comment.id]}
-                            hidden={courseIsArchived || !myId || String(comment.author.id) !== String(myId)}
+                            hidden={
+                              courseIsArchived ||
+                              !myId ||
+                              String(comment.author.id) !== String(myId)
+                            }
                           >
                             <X className="h-3 w-3 stroke-2" />
                           </button>

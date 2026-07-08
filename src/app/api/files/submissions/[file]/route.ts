@@ -44,7 +44,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
 
     const submission = await prisma.submission.findFirst({
       where: { fileName: file },
-      select: { id: true, originalFileName: true, studentId: true, assignmentId: true, courseId: true },
+      select: {
+        id: true,
+        originalFileName: true,
+        studentId: true,
+        assignmentId: true,
+        courseId: true,
+      },
     });
 
     if (!submission) {

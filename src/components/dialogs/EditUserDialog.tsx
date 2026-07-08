@@ -41,7 +41,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
   const viewerIsAdmin = Boolean(session?.user?.isAdmin);
   // Local preview state (keep separate from RHF file)
   const [avatarPreview, setAvatarPreview] = useState<string>(
-    user.avatar ? `/api/uploads/pfps/${user.avatar}` : '',
+    user.avatar ? apiPaths.files.pfp(user.avatar) : '',
   );
   const [serverTimezone, setServerTimezone] = useState('UTC');
 
@@ -84,7 +84,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
         keepValues: true,
       });
       // Reset preview from current user
-      setAvatarPreview(user.avatar ? `/api/uploads/pfps/${user.avatar}` : '');
+      setAvatarPreview(user.avatar ? apiPaths.files.pfp(user.avatar) : '');
     } else {
       reset(defaults, {
         keepDirty: false,
