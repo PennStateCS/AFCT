@@ -31,26 +31,29 @@ const isStrongPassword = (pw: string) =>
  *   403: { description: System administrators only. }
  *   500: { description: Server error. }
  */
-export const GET = withAdminAuth(async (req, _ctx, { user }) => {
-  try {
-    const users = await getUsersList();
+export const GET = withAdminAuth(
+  async (req, _ctx, { user }) => {
+    try {
+      const users = await getUsersList();
 
-    await createEnhancedActivityLog(prisma, req, {
-      userId: user.id,
-      action: 'VIEW_USERS',
-      severity: 'INFO',
-      category: 'USER',
-      metadata: {
+      await createEnhancedActivityLog(prisma, req, {
         userId: user.id,
-      },
-    });
+        action: 'VIEW_USERS',
+        severity: 'INFO',
+        category: 'USER',
+        metadata: {
+          userId: user.id,
+        },
+      });
 
-    return NextResponse.json(users);
-  } catch (error) {
-    console.error('[USERS_GET_ERROR]', error);
-    return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
-  }
-});
+      return NextResponse.json(users);
+    } catch (error) {
+      console.error('[USERS_GET_ERROR]', error);
+      return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
+    }
+  },
+  { deniedAction: 'ADMIN_USERS_VIEW_DENIED' },
+);
 
 /**
  * Creates a single user directly (admin-provisioned account), unlike self-service

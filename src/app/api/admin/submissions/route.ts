@@ -134,7 +134,10 @@ export async function POST(req: NextRequest) {
       status: submission.status,
       correct: submission.correct,
       feedback: submission.feedback,
-      grade: gradeMap.get(`${submission.studentId}:${submission.assignmentId}:${submission.problemId}`) ?? null,
+      grade:
+        gradeMap.get(
+          `${submission.studentId}:${submission.assignmentId}:${submission.problemId}`,
+        ) ?? null,
       maxPoints: submission.assignmentProblem.maxPoints,
       avatar: submission.student.avatar,
       fileName: submission.fileName,
@@ -150,9 +153,6 @@ export async function POST(req: NextRequest) {
       severity: 'ERROR',
       metadata: { error: error instanceof Error ? error.message : 'unknown error' },
     });
-    return NextResponse.json(
-      { error: 'Failed to fetch submissions' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to fetch submissions' }, { status: 500 });
   }
 }

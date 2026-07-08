@@ -10,6 +10,8 @@ vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: createLo
 
 import { withAdminAuth } from './with-auth';
 
+const DENIED = { deniedAction: 'THING_DENIED' };
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -20,53 +22,37 @@ describe('withAdminAuth', () => {
     authMock.mockResolvedValue(session);
     const handler = vi.fn().mockResolvedValue(new Response('ok'));
 
-    const wrapped = withAdminAuth(handler);
     const req = new Request('http://localhost/x');
-    const res = await wrapped(req, { params: 1 });
+    const res = await withAdminAuth(handler, DENIED)(req, { params: 1 });
 
     expect(await (res as Response).text()).toBe('ok');
     expect(handler).toHaveBeenCalledWith(req, { params: 1 }, { session, user: session.user });
   });
 
-  it('returns 403 when there is no session', async () => {
+  it('returns 401 (not logged) when there is no session', async () => {
     authMock.mockResolvedValue(null);
     const handler = vi.fn();
 
-    const res = await withAdminAuth(handler)(new Request('http://localhost/x'), {});
+    const res = await withAdminAuth(handler, DENIED)(new Request('http://localhost/x'), {});
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
     await expect((res as Response).json()).resolves.toEqual({ error: 'Unauthorized' });
     expect(handler).not.toHaveBeenCalled();
+    expect(createLogMock).not.toHaveBeenCalled();
   });
 
-  it('returns 403 when the caller is signed in but not an admin', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
-    const handler = vi.fn();
-
-    const res = await withAdminAuth(handler)(new Request('http://localhost/x'), {});
-
-    expect(res.status).toBe(403);
-    expect(handler).not.toHaveBeenCalled();
-  });
-
-  it('records a SECURITY denial when deniedAction is set', async () => {
+  it('returns 403 Forbidden + logs a SECURITY denial for a signed-in non-admin', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
     const req = new Request('http://localhost/x');
 
-    await withAdminAuth(vi.fn(), { deniedAction: 'THING_DENIED' })(req, {});
+    const res = await withAdminAuth(vi.fn(), DENIED)(req, {});
 
+    expect(res.status).toBe(403);
+    await expect((res as Response).json()).resolves.toEqual({ error: 'Forbidden' });
     expect(createLogMock).toHaveBeenCalledWith(
       prismaMock,
       req,
       expect.objectContaining({ userId: 'u1', action: 'THING_DENIED', severity: 'SECURITY' }),
     );
-  });
-
-  it('does not log a denial when deniedAction is omitted', async () => {
-    authMock.mockResolvedValue(null);
-
-    await withAdminAuth(vi.fn())(new Request('http://localhost/x'), {});
-
-    expect(createLogMock).not.toHaveBeenCalled();
   });
 });
