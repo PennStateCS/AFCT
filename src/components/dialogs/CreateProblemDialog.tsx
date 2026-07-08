@@ -149,11 +149,7 @@ export function CreateProblemDialog({
             if (data?.isGroup) {
               setGroupsLoading(true);
               try {
-                const gr = await fetch(`/api/courses/${courseId}/groups`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ action: 'list' }),
-                });
+                const gr = await fetch(`/api/courses/${courseId}/groups`);
                 if (gr.ok) {
                   const gdata = await gr.json();
                   setGroups(Array.isArray(gdata) ? gdata : []);

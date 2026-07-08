@@ -259,11 +259,7 @@ export default function AssignmentDashboardPage({
       setGroupsLoading(true);
       try {
         const [grRes, gpRes] = await Promise.all([
-          fetch(`/api/courses/${id}/groups`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'list' }),
-          }),
+          fetch(`/api/courses/${id}/groups`),
           fetch(`/api/courses/${id}/${aid}/group-problems`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
