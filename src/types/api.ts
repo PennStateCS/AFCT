@@ -1569,7 +1569,7 @@ export interface paths {
         };
         /**
          * List comments for a problem
-         * @description Fetches comments for a problem. Any signed-in user may call it. Note the problem  is identified by the `?problemId` query parameter — the `[id]` path segment is  ignored. An optional `studentId` narrows to comments about, or authored by, that  student.
+         * @description Fetches comments for a problem. The caller must be enrolled in the problem's  course (or be a system admin). The problem is identified by the `?problemId`  query parameter — the `[id]` path segment is ignored. An optional `studentId`  narrows to comments about, or authored by, that student.
          *
          *     **Auth:** required
          *
@@ -1633,7 +1633,7 @@ export interface paths {
         };
         /**
          * List a user's submissions for a problem
-         * @description Lists a user's submissions for one problem, newest first. Callers see their own  by default; course staff (faculty or TAs) or a system admin may pass `?userId=`  to view another user's.
+         * @description Lists a user's submissions for one problem, newest first. Callers see their own  by default; course staff (faculty or TAs) or a system admin may pass `?userId=`  to view another user's. Either way the caller must be able to access the  problem's course.
          *
          *     **Auth:** required
          *
@@ -7036,6 +7036,24 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Caller is not enrolled in the problem's course. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Problem not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Server error. */
             500: {
                 headers: {
@@ -7294,7 +7312,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Requesting another user's submissions without being course staff or a system admin. */
+            /** @description Not enrolled in the problem's course, or requesting another user's submissions without being course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7303,7 +7321,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Problem not found (when fetching another user's submissions). */
+            /** @description Problem not found. */
             404: {
                 headers: {
                     [name: string]: unknown;
