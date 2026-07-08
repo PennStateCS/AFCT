@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useEffect } from 'react';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +13,8 @@ import {
 import { Loader2, RefreshCw, Activity } from 'lucide-react';
 import { toast } from 'sonner';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+
+const PAGE_SIZE = 50;
 
 interface ActivityResponse {
   activities: ActivityLog[];
@@ -25,67 +28,65 @@ interface ActivityCardProps {
 
 export function ActivityCard({ courseId }: ActivityCardProps) {
   const { timezone } = useEffectiveTimezone();
-  const [activities, setActivities] = useState<ActivityLog[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
-  const [totalCount, setTotalCount] = useState(0);
 
-  const fetchActivities = useCallback(
-    async (offset = 0, append = false) => {
-      try {
-        if (offset === 0) setLoading(true);
-        else setLoadingMore(true);
-
-        const url = `/api/courses/${courseId}/activity?limit=50&offset=${offset}`;
-
-        const response = await fetch(url);
-
-        if (!response.ok) {
-          throw new Error(`Failed to fetch activities: ${response.status} ${response.statusText}`);
-        }
-
-        const data: ActivityResponse = await response.json();
-
-        if (append) {
-          setActivities((prev) => [...prev, ...data.activities]);
-        } else {
-          setActivities(data.activities);
-        }
-
-        setHasMore(data.hasMore);
-        setTotalCount(data.totalCount);
-      } catch (error) {
-        toast.error(
-          `Failed to load activity data: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        );
-      } finally {
-        setLoading(false);
-        setLoadingMore(false);
+  // Cached, offset-paginated activity log. Each page (offset) is cached
+  // separately; useInfiniteQuery accumulates the pages into one list, preserving
+  // the existing "Load More" append behavior while adding caching between visits.
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+    isFetching,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+    refetch,
+  } = useInfiniteQuery({
+    queryKey: ['course', courseId, 'activity', { limit: PAGE_SIZE }],
+    queryFn: async ({ pageParam }) => {
+      const offset = pageParam as number;
+      const url = `/api/courses/${courseId}/activity?limit=${PAGE_SIZE}&offset=${offset}`;
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch activities: ${response.status} ${response.statusText}`);
       }
+      return (await response.json()) as ActivityResponse;
     },
-    [courseId],
-  );
+    initialPageParam: 0,
+    // Next offset is the running total of rows loaded so far; undefined when the
+    // server reports there is no more data.
+    getNextPageParam: (lastPage, allPages) => {
+      if (!lastPage.hasMore) return undefined;
+      return allPages.reduce((sum, page) => sum + page.activities.length, 0);
+    },
+    staleTime: 30_000,
+  });
 
+  // Surface fetch failures as a toast, matching the prior UX.
   useEffect(() => {
-    fetchActivities();
-  }, [fetchActivities]);
-  <DataTable
-    columns={getActivityColumns(timezone)}
-    data={activities}
-    tableLabel="Activity log table"
-  />;
+    if (isError) {
+      toast.error(
+        `Failed to load activity data: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+    }
+  }, [isError, error]);
+
+  const activities = data?.pages.flatMap((page) => page.activities) ?? [];
+  const totalCount = data?.pages[0]?.totalCount ?? 0;
+  const hasMore = hasNextPage;
+
   const loadMore = () => {
-    if (!loadingMore && hasMore) {
-      fetchActivities(activities.length, true);
+    if (!isFetchingNextPage && hasNextPage) {
+      void fetchNextPage();
     }
   };
 
   const refresh = () => {
-    fetchActivities();
+    void refetch();
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <Card>
         <CardHeader>
@@ -120,10 +121,10 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
           variant="ghost"
           size="sm"
           onClick={refresh}
-          disabled={loading}
+          disabled={isFetching}
           aria-label="Refresh activity"
         >
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
         </Button>
       </CardHeader>
       <CardContent className="overflow-x-auto">
@@ -142,8 +143,13 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
 
             {hasMore && (
               <div className="flex justify-center pt-4">
-                <Button variant="outline" size="sm" onClick={loadMore} disabled={loadingMore}>
-                  {loadingMore ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={loadMore}
+                  disabled={isFetchingNextPage}
+                >
+                  {isFetchingNextPage ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Loading...

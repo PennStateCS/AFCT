@@ -1,0 +1,162 @@
+/** @vitest-environment jsdom */
+
+import React from 'react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { GroupsCard } from './GroupsCard';
+
+// Render with a fresh QueryClient per test (retry off, no lingering cache) so
+// the groups/students queries start clean each time.
+const renderWithClient = (ui: React.ReactElement) => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+};
+
+vi.mock('@/hooks/use-effective-timezone', () => ({
+  useEffectiveTimezone: () => ({ timezone: 'UTC' }),
+}));
+
+vi.mock('@/lib/toast', () => ({
+  showToast: { success: vi.fn(), error: vi.fn() },
+}));
+
+// Render the group rows so we can assert on rendered group content.
+vi.mock('@/components/ui/data-table', () => ({
+  DataTable: ({ data, loading }: { data: Array<{ id: string; name: string }>; loading?: boolean }) => (
+    <div>
+      <div data-testid="table-loading">{String(!!loading)}</div>
+      <div data-testid="table-rows">{data.length}</div>
+      <ul>
+        {data.map((g) => (
+          <li key={g.id}>{g.name}</li>
+        ))}
+      </ul>
+    </div>
+  ),
+}));
+
+// Heavy dialogs — expose their success callback via a button so we can trigger
+// the post-mutation invalidation path.
+vi.mock('@/components/dialogs/CreateGroupsDialog', () => ({
+  CreateGroupDialog: ({ onSuccess }: { onSuccess: () => void }) => (
+    <button type="button" onClick={onSuccess}>
+      Trigger Create Success
+    </button>
+  ),
+}));
+vi.mock('@/components/dialogs/EditGroupsDialog', () => ({
+  EditGroupDialog: () => null,
+}));
+vi.mock('@/components/dialogs/ManageGroupDialog', () => ({
+  default: () => null,
+}));
+vi.mock('@/components/dialogs/RandomGroupsDialog', () => ({
+  default: () => null,
+}));
+vi.mock('@/components/dialogs/ConfirmDialog', () => ({
+  ConfirmDialog: () => null,
+}));
+
+type FetchMock = ReturnType<typeof vi.fn>;
+
+const jsonResponse = (body: unknown, ok = true) => ({
+  ok,
+  json: async () => body,
+});
+
+// URL/method router — the groups endpoint is a POST-used-as-a-read, students is
+// a plain GET, so we branch on both method and path.
+const routeFetch = (opts: {
+  groups?: unknown;
+  students?: unknown;
+  onGroupsList?: () => void;
+}): FetchMock =>
+  vi.fn(async (url: string, init?: RequestInit) => {
+    const method = init?.method ?? 'GET';
+    if (url === '/api/courses/c1/groups' && method === 'POST') {
+      opts.onGroupsList?.();
+      return jsonResponse(opts.groups ?? []);
+    }
+    if (url === '/api/courses/c1/students' && method === 'GET') {
+      return jsonResponse(opts.students ?? []);
+    }
+    throw new Error(`Unexpected fetch: ${method} ${url}`);
+  });
+
+describe('GroupsCard', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('fetches both groups and students on mount and renders group content', async () => {
+    const fetchMock = routeFetch({
+      groups: [{ id: 'g1', name: 'Team Alpha', createdAt: new Date().toISOString() }],
+      students: [{ id: 's1', firstName: 'Ada' }],
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderWithClient(<GroupsCard courseId="c1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Team Alpha')).toBeInTheDocument();
+    });
+
+    // Groups POST-as-read fired with the exact action:'list' body.
+    expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/groups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'list' }),
+    });
+    // Students GET fired.
+    expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/students');
+  });
+
+  it('shows a loading state until the groups query resolves', async () => {
+    let resolveGroups!: (v: unknown) => void;
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? 'GET';
+      if (url === '/api/courses/c1/groups' && method === 'POST') {
+        return new Promise((resolve) => {
+          resolveGroups = () => resolve(jsonResponse([]));
+        });
+      }
+      return jsonResponse([]);
+    });
+    vi.stubGlobal('fetch', fetchMock as unknown as FetchMock);
+
+    renderWithClient(<GroupsCard courseId="c1" />);
+
+    // Groups query is pending -> loading true.
+    expect(screen.getByTestId('table-loading').textContent).toBe('true');
+
+    resolveGroups(null);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('table-loading').textContent).toBe('false');
+    });
+  });
+
+  it('re-fetches the groups list after a create mutation succeeds', async () => {
+    const onGroupsList = vi.fn();
+    const fetchMock = routeFetch({
+      groups: [{ id: 'g1', name: 'Team Alpha', createdAt: new Date().toISOString() }],
+      students: [],
+      onGroupsList,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderWithClient(<GroupsCard courseId="c1" />);
+
+    await waitFor(() => {
+      expect(onGroupsList).toHaveBeenCalledTimes(1);
+    });
+
+    // A successful create triggers invalidation -> the active groups query refetches.
+    fireEvent.click(screen.getByRole('button', { name: 'Trigger Create Success' }));
+
+    await waitFor(() => {
+      expect(onGroupsList).toHaveBeenCalledTimes(2);
+    });
+  });
+});
