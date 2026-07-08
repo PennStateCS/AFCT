@@ -29,13 +29,15 @@ const submissionSelectWithEvaluation = {
   problemId: true,
 } as const;
 
+// Deliberately omits `evaluationRaw`: this is the fallback used when that optional
+// column is absent (P2022), so it must NOT select it — otherwise the retry re-runs
+// the identical failing query.
 const submissionSelectWithoutEvaluation = {
   id: true,
   submittedAt: true,
   status: true,
   feedback: true,
   correct: true,
-  evaluationRaw: true,
   fileName: true,
   originalFileName: true,
   problemId: true,

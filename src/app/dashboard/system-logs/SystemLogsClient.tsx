@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import type { OnChangeFn, PaginationState, SortingState } from '@tanstack/react-table';
 import { DataTable } from '@/components/ui/data-table';
@@ -88,12 +88,7 @@ export default function SystemLogsClient() {
 
   // Cached, server-paginated log list. keepPreviousData keeps the current page
   // visible while the next one loads, so the table doesn't flash empty.
-  const {
-    data,
-    isLoading,
-    isError,
-    refetch,
-  } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['admin', 'logs', queryParams],
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -118,7 +113,7 @@ export default function SystemLogsClient() {
   // previous page visible (keepPreviousData) instead of flashing "loading".
   const loading = isLoading;
 
-  const handleViewerOpen = (row: LogRow) => {
+  const handleViewerOpen = useCallback((row: LogRow) => {
     setSelectedData(JSON.stringify(row, null, 2));
     const formatted = new Date(row.timestamp).toLocaleString(undefined, {
       dateStyle: 'medium',
@@ -126,7 +121,7 @@ export default function SystemLogsClient() {
     });
     setTitle(formatted);
     setViewerOpen(true);
-  };
+  }, []);
 
   const handlePaginationChange: OnChangeFn<PaginationState> = (updater) => {
     const next = typeof updater === 'function' ? updater({ pageIndex, pageSize }) : updater;
@@ -142,69 +137,74 @@ export default function SystemLogsClient() {
   };
 
   // Columns sort server-side (see the API's orderBy). The Full Log action isn't sortable.
-  const columns = [
-    {
-      accessorKey: 'timestamp',
-      header: 'Time',
-      cell: ({ getValue }: { getValue: () => unknown }) => {
-        const value = getValue();
-        return value
-          ? new Date(value as string).toLocaleString(undefined, {
-              dateStyle: 'medium',
-              timeStyle: 'short',
-            })
-          : '';
+  // Memoized so the array keeps a stable identity across renders (otherwise the
+  // DataTable re-renders every time). Only `handleViewerOpen` is closed over.
+  const columns = useMemo(
+    () => [
+      {
+        accessorKey: 'timestamp',
+        header: 'Time',
+        cell: ({ getValue }: { getValue: () => unknown }) => {
+          const value = getValue();
+          return value
+            ? new Date(value as string).toLocaleString(undefined, {
+                dateStyle: 'medium',
+                timeStyle: 'short',
+              })
+            : '';
+        },
       },
-    },
-    {
-      accessorKey: 'severity',
-      header: 'Severity',
-      cell: ({ getValue }: { getValue: () => unknown }) => {
-        const s = ((getValue() as string) || 'INFO') as Severity;
-        return <Badge variant={SEVERITY_VARIANT[s] ?? 'neutral'}>{s}</Badge>;
+      {
+        accessorKey: 'severity',
+        header: 'Severity',
+        cell: ({ getValue }: { getValue: () => unknown }) => {
+          const s = ((getValue() as string) || 'INFO') as Severity;
+          return <Badge variant={SEVERITY_VARIANT[s] ?? 'neutral'}>{s}</Badge>;
+        },
       },
-    },
-    {
-      accessorKey: 'category',
-      header: 'Category',
-      cell: ({ getValue }: { getValue: () => unknown }) => (
-        <CategoryBadge category={getValue() as string | null} />
-      ),
-    },
-    {
-      accessorKey: 'action',
-      header: 'Action',
-      cell: ({ getValue }: { getValue: () => unknown }) =>
-        ((getValue() as string) || '').replace(/_/g, ' '),
-    },
-    {
-      accessorKey: 'userLastName',
-      header: 'Last Name',
-      cell: ({ getValue }: { getValue: () => unknown }) => (getValue() as string) || '—',
-    },
-    {
-      accessorKey: 'userFirstName',
-      header: 'First Name',
-      cell: ({ getValue }: { getValue: () => unknown }) => (getValue() as string) || '—',
-    },
-    {
-      accessorKey: 'ipAddress',
-      header: 'IP Address',
-      cell: ({ getValue }: { getValue: () => unknown }) => {
-        const ip = getValue() as string | null;
-        // Strip the IPv4-mapped IPv6 prefix for readability (e.g. ::ffff:1.2.3.4).
-        return ip ? ip.replace(/^::ffff:(?=\d{1,3}(?:\.\d{1,3}){3}$)/i, '') : '—';
+      {
+        accessorKey: 'category',
+        header: 'Category',
+        cell: ({ getValue }: { getValue: () => unknown }) => (
+          <CategoryBadge category={getValue() as string | null} />
+        ),
       },
-    },
-    {
-      id: 'viewer',
-      header: 'Logs',
-      enableSorting: false,
-      cell: ({ row }: { row: { original: LogRow } }) => (
-        <Button onClick={() => handleViewerOpen(row.original)}>Full Log</Button>
-      ),
-    },
-  ];
+      {
+        accessorKey: 'action',
+        header: 'Action',
+        cell: ({ getValue }: { getValue: () => unknown }) =>
+          ((getValue() as string) || '').replace(/_/g, ' '),
+      },
+      {
+        accessorKey: 'userLastName',
+        header: 'Last Name',
+        cell: ({ getValue }: { getValue: () => unknown }) => (getValue() as string) || '—',
+      },
+      {
+        accessorKey: 'userFirstName',
+        header: 'First Name',
+        cell: ({ getValue }: { getValue: () => unknown }) => (getValue() as string) || '—',
+      },
+      {
+        accessorKey: 'ipAddress',
+        header: 'IP Address',
+        cell: ({ getValue }: { getValue: () => unknown }) => {
+          const ip = getValue() as string | null;
+          // Strip the IPv4-mapped IPv6 prefix for readability (e.g. ::ffff:1.2.3.4).
+          return ip ? ip.replace(/^::ffff:(?=\d{1,3}(?:\.\d{1,3}){3}$)/i, '') : '—';
+        },
+      },
+      {
+        id: 'viewer',
+        header: 'Logs',
+        enableSorting: false,
+        cell: ({ row }: { row: { original: LogRow } }) => (
+          <Button onClick={() => handleViewerOpen(row.original)}>Full Log</Button>
+        ),
+      },
+    ],
+    [handleViewerOpen],
+  );
 
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 

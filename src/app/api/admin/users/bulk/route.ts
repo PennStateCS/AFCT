@@ -106,6 +106,24 @@ export async function POST(req: Request) {
 
     const seenInBatch = new Set<string>();
 
+    // Pre-fetch which of the submitted emails already exist in ONE query, instead
+    // of a findUnique per row (an N+1 that scaled with the CSV size).
+    const candidateEmails = Array.from(
+      new Set(
+        rows.map((r) => (r?.email ?? '').trim().toLowerCase()).filter((e) => e.length > 0),
+      ),
+    );
+    const existingEmails = new Set(
+      candidateEmails.length > 0
+        ? (
+            await prisma.user.findMany({
+              where: { email: { in: candidateEmails } },
+              select: { email: true },
+            })
+          ).map((u) => u.email)
+        : [],
+    );
+
     for (let index = 0; index < rows.length; index += 1) {
       const row = rows[index] ?? {};
       const rowNumber = typeof row.rowNumber === 'number' ? row.rowNumber : index + 2;
@@ -151,8 +169,7 @@ export async function POST(req: Request) {
         continue;
       }
 
-      const existingUser = await prisma.user.findUnique({ where: { email } });
-      if (existingUser) {
+      if (existingEmails.has(email)) {
         failed.push({
           row: rowNumber,
           email,
