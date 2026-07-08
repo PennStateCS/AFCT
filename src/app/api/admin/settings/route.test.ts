@@ -21,12 +21,12 @@ beforeEach(() => {
 });
 
 describe('GET /api/system-settings', () => {
-  it('returns 403 when not authorized', async () => {
+  it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
     const res = await GET();
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('returns 403 for a non-privileged role', async () => {
@@ -112,7 +112,7 @@ describe('GET /api/system-settings', () => {
 });
 
 describe('PUT /api/system-settings', () => {
-  it('returns 403 when not authorized', async () => {
+  it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
     const req = new Request('http://localhost/api/system-settings', {
@@ -122,7 +122,7 @@ describe('PUT /api/system-settings', () => {
 
     const res = await PUT(req);
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('returns 400 for invalid JSON body', async () => {
