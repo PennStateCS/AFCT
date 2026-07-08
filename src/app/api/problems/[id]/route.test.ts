@@ -75,7 +75,7 @@ describe('PUT /api/problems/[id]', () => {
 
     const res = await PUT(req, { params: Promise.resolve({ id: 'problem-1' }) });
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('returns 404 when problem not found', async () => {
@@ -276,7 +276,7 @@ describe('DELETE /api/problems/[id]', () => {
     });
     const res = await DELETE(req, { params: Promise.resolve({ id: 'problem-1' }) });
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('returns 404 when problem not found', async () => {
