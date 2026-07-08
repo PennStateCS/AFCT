@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Dialog,
   DialogContent,
@@ -68,21 +69,23 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
 
   const startDateStr = watch('startDate'); // string (YYYY-MM-DDTHH:MM)
 
-  // Fetch faculty list when dialog opens
-  const [facultyList, setFacultyList] = useState<User[]>([]);
+  // Fetch faculty list when dialog opens. Shared cache entry (identical query
+  // key) with EditCourseDialog so the two dedupe onto one request.
+  const facultyQuery = useQuery({
+    queryKey: ['admin', 'users', 'faculty'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/users?role=FACULTY');
+      if (!res.ok) throw new Error('Failed to load faculty');
+      const data = await res.json();
+      return (Array.isArray(data) ? data : []) as Array<User & { role?: string }>;
+    },
+    enabled: open,
+    staleTime: 30_000,
+  });
+  const facultyList = facultyQuery.data ?? [];
   useEffect(() => {
-    if (!open) return;
-    (async () => {
-      try {
-        const res = await fetch('/api/admin/users?role=FACULTY');
-        if (!res.ok) throw new Error('Failed to load faculty');
-        const data = await res.json();
-        setFacultyList(Array.isArray(data) ? data : []);
-      } catch {
-        toast.error('Failed to load faculty list.');
-      }
-    })();
-  }, [open]);
+    if (facultyQuery.isError) toast.error('Failed to load faculty list.');
+  }, [facultyQuery.isError]);
 
   const resetForm = () =>
     reset(defaults, {
