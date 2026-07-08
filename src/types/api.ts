@@ -679,15 +679,7 @@ export interface paths {
          */
         get: operations["getCoursesByIdByAidGroupProblems"];
         put?: never;
-        /**
-         * Get group→problem mappings (via POST)
-         * @description Same group→problem mapping data as GET, exposed over POST so clients can request  it without a GET's AbortController plumbing. Requires `{ action: 'list' }`. Any  enrolled member of the course (any role) or a system admin.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/group-problems/route.ts)
-         */
-        post: operations["postCoursesByIdByAidGroupProblems"];
+        post?: never;
         /**
          * Remove group→problem mappings
          * @description Removes group→problem mappings for an assignment. Course staff (faculty or TAs) or  a system admin. A `groupId` is required — pass a specific group id, or "ALL" to clear the given  problems from every group. The problems themselves stay on the assignment.
@@ -4192,61 +4184,6 @@ export interface operations {
                         success?: boolean;
                         groups?: Record<string, never>[];
                     };
-                };
-            };
-            /** @description Not an enrolled member of the course and not a system admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    postCoursesByIdByAidGroupProblems: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-                aid: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @enum {string} */
-                    action: "list";
-                };
-            };
-        };
-        responses: {
-            /** @description Groups with their mapped problemIds. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Unsupported action. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Not an enrolled member of the course and not a system admin. */

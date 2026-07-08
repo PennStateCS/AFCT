@@ -167,11 +167,7 @@ export function AssociateProblemsDialog({
           setGroupsLoading(true);
           const [grRes, gpRes] = await Promise.all([
             fetch(`/api/courses/${courseId}/groups`),
-            fetch(`/api/courses/${courseId}/${assignmentId}/group-problems`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'list' }),
-            }),
+            fetch(`/api/courses/${courseId}/${assignmentId}/group-problems`),
           ]);
 
           if (grRes.ok) {
@@ -311,13 +307,9 @@ export function AssociateProblemsDialog({
       try {
         // Fetch latest course problems
         const pReq = fetch(`/api/courses/${courseId}/problems`, { signal: ac.signal });
-        // Fetch group->problem mappings only for assignments that support groups (use POST body instead of signal)
+        // Fetch group->problem mappings only for assignments that support groups.
         const gpReq = assignmentId
-          ? fetch(`/api/courses/${courseId}/${assignmentId}/group-problems`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'list' }),
-            })
+          ? fetch(`/api/courses/${courseId}/${assignmentId}/group-problems`, { signal: ac.signal })
           : Promise.resolve(null);
 
         const [pRes, gpRes] = await Promise.all([pReq, gpReq]);

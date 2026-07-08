@@ -249,12 +249,7 @@ export default function AssignmentDashboardPage({
     queryFn: async ({ signal }) => {
       const [grRes, gpRes] = await Promise.all([
         fetch(`/api/courses/${id}/groups`, { signal }),
-        fetch(`/api/courses/${id}/${aid}/group-problems`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'list' }),
-          signal,
-        }),
+        fetch(`/api/courses/${id}/${aid}/group-problems`, { signal }),
       ]);
 
       let nextGroups: { id: string; name: string }[] = [];

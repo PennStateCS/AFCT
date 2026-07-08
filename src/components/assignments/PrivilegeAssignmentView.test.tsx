@@ -179,10 +179,12 @@ describe('AssignmentDashboardPage (PrivilegeAssignmentView)', () => {
       expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/groups', expect.anything());
     });
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        '/api/courses/c1/a1/group-problems',
-        expect.objectContaining({ method: 'POST' }),
-      );
+      expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/a1/group-problems', expect.anything());
     });
+    // The list read is now a GET — no POST body.
+    const groupProblemsCall = fetchMock.mock.calls.find(
+      (c) => (c[0] as string) === '/api/courses/c1/a1/group-problems',
+    );
+    expect((groupProblemsCall?.[1] as { method?: string } | undefined)?.method).toBeUndefined();
   });
 });
