@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 import CourseClient from './CourseClient';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -45,7 +46,7 @@ export default async function AdminCoursePage({ params }: Props) {
   });
 
   if (!course) {
-    return <CourseClient initialCourse={null} />;
+    notFound();
   }
 
   const viewerRoster = viewerId
