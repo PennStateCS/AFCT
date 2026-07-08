@@ -188,14 +188,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const assignmentForAuth = await prisma.assignment.findUnique({
-    where: { id },
-    select: { courseId: true },
-  });
-  if (!assignmentForAuth) {
+  // One read of the assignment row, reused for auth and the late-window computation
+  // below (this handler previously re-queried the same row two or three times).
+  const existing = await prisma.assignment.findUnique({ where: { id } });
+  if (!existing) {
     return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
   }
-  if (!(await canManageCourse(session.user, assignmentForAuth.courseId))) {
+  if (!(await canManageCourse(session.user, existing.courseId))) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session?.user?.id ?? null,
       action: 'ASSIGNMENT_UPDATE_DENIED',
@@ -208,9 +207,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const data = await req.json();
   const userTimezone = await resolveUserTimezone(session.user.id);
 
-  // Make sure the assignment does not have any submissions or grades when unpublishing
+  // `data.isPublished` is the requested NEXT state, so `=== false` means "unpublish".
+  // Block unpublishing an assignment that already has submissions or grades.
   if (data.isPublished === false) {
-    // Note logic appears swapped for isPublished, but that is because isPublished is the next state
     const hasSubmission = !!(await prisma.assignmentProblem.findFirst({
       where: { assignmentId: id, submissions: { some: {} } },
       select: { assignmentId: true },
@@ -245,15 +244,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
   }
 
-  const result = await prisma.assignment.findFirst({
-    where: { id },
-	select: { isGroup: true },
-  });
-
-  const curGroup = result?.isGroup;
-
   // Prevent changing the assignment's group mode if submissions exist
-  if (data.isGroup !== undefined && data.isGroup !== curGroup) {
+  if (data.isGroup !== undefined && data.isGroup !== existing.isGroup) {
     const hasAnySubmission = (await prisma.submission.count({ where: { assignmentId: id } })) > 0;
     if (hasAnySubmission) {
       await createEnhancedActivityLog(prisma, req, {
@@ -270,11 +262,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   try {
-    const existing = await prisma.assignment.findUnique({ where: { id } });
-    if (!existing) {
-      return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
-    }
-
     const dueDate = data.dueDate
       ? toEndOfDayInTimezone(data.dueDate, userTimezone)
       : existing.dueDate;
@@ -379,14 +366,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const assignmentForAuth = await prisma.assignment.findUnique({
-    where: { id },
-    select: { courseId: true },
-  });
-  if (!assignmentForAuth) {
+  // One read of the assignment row, reused for auth and the late-window computation
+  // below (this handler previously re-queried the same row two or three times).
+  const existing = await prisma.assignment.findUnique({ where: { id } });
+  if (!existing) {
     return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
   }
-  if (!(await canManageCourse(session.user, assignmentForAuth.courseId))) {
+  if (!(await canManageCourse(session.user, existing.courseId))) {
     await createEnhancedActivityLog(prisma, req, {
       userId: session?.user?.id ?? null,
       action: 'ASSIGNMENT_UPDATE_DENIED',
@@ -399,9 +385,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const data = await req.json();
   const userTimezone = await resolveUserTimezone(session.user.id);
 
-  // Make sure the assignment does not have any submissions or grades when unpublishing
+  // `data.isPublished` is the requested NEXT state, so `=== false` means "unpublish".
+  // Block unpublishing an assignment that already has submissions or grades.
   if (data.isPublished === false) {
-    // Note logic appears swapped for isPublished, but that is because isPublished is the next state
     const hasSubmission = !!(await prisma.assignmentProblem.findFirst({
       where: { assignmentId: id, submissions: { some: {} } },
       select: { assignmentId: true },
@@ -454,11 +440,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   try {
-    const existing = await prisma.assignment.findUnique({ where: { id } });
-    if (!existing) {
-      return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
-    }
-
     const effectiveDueDate =
       data.dueDate !== undefined
         ? toEndOfDayInTimezone(data.dueDate, userTimezone)
@@ -716,13 +697,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   }
 
   try {
-    // Find the assignment to get courseId
-    const assignment = await prisma.assignment.findUnique({ where: { id } });
-    if (!assignment) {
-      return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
-    }
-
-    // Check for any submissions associated with this assignment via AssignmentProblem -> Submission
+    // Existence + authorization were checked above. Confirm it's safe to delete:
+    // no submissions and no comments.
     const submissionCount = await prisma.submission.count({ where: { assignmentId: id } });
     if (submissionCount > 0) {
       return NextResponse.json(
