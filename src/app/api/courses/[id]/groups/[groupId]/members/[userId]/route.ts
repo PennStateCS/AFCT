@@ -1,8 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { canManageCourse } from '@/lib/permissions';
+import { withCourseAuth } from '@/lib/api/with-auth';
 
 /**
  * Removes one member from a group. Course staff (faculty or TAs) or a system admin.
@@ -20,53 +19,51 @@ import { canManageCourse } from '@/lib/permissions';
  *   404: { description: Group or membership not found. }
  *   500: { description: Server error. }
  */
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string; groupId: string; userId: string }> }) {
-  const { id, groupId, userId } = await params;
+export const DELETE = withCourseAuth(
+  async (req, ctx, { user, courseId }) => {
+    const { groupId, userId } = await ctx.params;
 
-  if (!id || !groupId || !userId) return NextResponse.json({ error: 'Missing params' }, { status: 400 });
+    if (!groupId || !userId) {
+      return NextResponse.json({ error: 'Missing params' }, { status: 400 });
+    }
 
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    try {
+      // Ensure group belongs to course
+      const group = await prisma.group.findUnique({ where: { id: groupId } });
+      if (!group || group.courseId !== courseId) {
+        return NextResponse.json({ error: 'Group not found for course' }, { status: 404 });
+      }
 
-  if (!(await canManageCourse(session.user, id))) {
-    await createEnhancedActivityLog(prisma, req, {
-      userId: session?.user?.id ?? null,
-      action: 'GROUP_MEMBER_REMOVE_DENIED',
-      severity: 'SECURITY',
-      metadata: {},
-    });
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+      // Ensure membership exists
+      const membership = await prisma.groupRoster.findUnique({
+        where: { groupId_userId: { groupId, userId } },
+      });
+      if (!membership) {
+        return NextResponse.json({ error: 'Membership not found' }, { status: 404 });
+      }
 
-  try {
-    // Ensure group belongs to course
-    const group = await prisma.group.findUnique({ where: { id: groupId } });
-    if (!group || group.courseId !== id) return NextResponse.json({ error: 'Group not found for course' }, { status: 404 });
+      // Delete the group roster entry
+      await prisma.groupRoster.deleteMany({ where: { groupId, userId } });
 
-    // Ensure membership exists
-    const membership = await prisma.groupRoster.findUnique({ where: { groupId_userId: { groupId, userId } } });
-    if (!membership) return NextResponse.json({ error: 'Membership not found' }, { status: 404 });
+      await createEnhancedActivityLog(prisma, req, {
+        userId: user.id,
+        action: 'REMOVE_GROUP_MEMBER',
+        severity: 'INFO',
+        category: 'COURSE',
+        metadata: { courseId, groupId, userId },
+      });
 
-    // Delete the group roster entry
-    await prisma.groupRoster.deleteMany({ where: { groupId, userId } });
-
-    await createEnhancedActivityLog(prisma, req, {
-      userId: session.user.id,
-      action: 'REMOVE_GROUP_MEMBER',
-      severity: 'INFO',
-      category: 'COURSE',
-      metadata: { courseId: id, groupId, userId },
-    });
-
-    return NextResponse.json({ success: true });
-  } catch (err) {
-    console.error('[GROUP_MEMBERS_DELETE_ERROR]', err);
-    await createEnhancedActivityLog(prisma, req, {
-      userId: session?.user?.id ?? null,
-      action: 'GROUP_MEMBER_REMOVE_ERROR',
-      severity: 'ERROR',
-      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
-    });
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+      return NextResponse.json({ success: true });
+    } catch (err) {
+      console.error('[GROUP_MEMBERS_DELETE_ERROR]', err);
+      await createEnhancedActivityLog(prisma, req, {
+        userId: user.id,
+        action: 'GROUP_MEMBER_REMOVE_ERROR',
+        severity: 'ERROR',
+        metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+      });
+      return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    }
+  },
+  { access: 'manage', deniedAction: 'GROUP_MEMBER_REMOVE_DENIED' },
+);
