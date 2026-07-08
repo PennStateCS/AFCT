@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canManageCourse } from '@/lib/permissions';
+import { withCourseAuth } from '@/lib/api/with-auth';
+import { logDenial } from '@/lib/api/activity';
 
 /**
  * Reads one student's grade and feedback for a specific problem within an
@@ -23,72 +24,63 @@ import { canManageCourse } from '@/lib/permissions';
  *   404: { description: Problem not found in this assignment/course. }
  *   500: { description: Server error. }
  */
-export async function GET(
-  _req: NextRequest,
-  {
-    params,
-  }: {
-    params: Promise<{ id: string; aid: string; pid: string; studentId: string }>;
-  },
-) {
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+export const GET = withCourseAuth(
+  async (req, ctx, { user, courseId }) => {
+    const { aid: assignmentId, pid: problemId, studentId } = await ctx.params;
 
-    const { id: courseId, aid: assignmentId, pid: problemId, studentId } = await params;
+    try {
+      // A student may read their own grade; staff may read anyone's. (The wrapper
+      // already enforced course membership via canAccessCourse.)
+      if (!(await canManageCourse(user, courseId)) && user.id !== studentId) {
+        return logDenial(req, {
+          userId: user.id,
+          action: 'PROBLEM_GRADE_ACCESS_DENIED',
+          courseId,
+        });
+      }
 
-    if (!(await canManageCourse(session.user, courseId)) && session.user.id !== studentId) {
-      await createEnhancedActivityLog(prisma, _req, {
-        userId: session?.user?.id ?? null,
-        action: 'PROBLEM_GRADE_ACCESS_DENIED',
-        severity: 'SECURITY',
-        metadata: {},
+      const assignmentProblem = await prisma.assignmentProblem.findUnique({
+        where: {
+          assignmentId_problemId: {
+            assignmentId,
+            problemId,
+          },
+        },
+        select: {
+          assignment: { select: { courseId: true } },
+        },
       });
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
 
-    const assignmentProblem = await prisma.assignmentProblem.findUnique({
-      where: {
-        assignmentId_problemId: {
-          assignmentId,
-          problemId,
+      if (!assignmentProblem || assignmentProblem.assignment.courseId !== courseId) {
+        return NextResponse.json({ error: 'Problem not found' }, { status: 404 });
+      }
+
+      const grade = await prisma.assignmentProblemGrade.findUnique({
+        where: {
+          assignmentId_problemId_studentId: {
+            assignmentId,
+            problemId,
+            studentId,
+          },
         },
-      },
-      select: {
-        assignment: { select: { courseId: true } },
-      },
-    });
+      });
 
-    if (!assignmentProblem || assignmentProblem.assignment.courseId !== courseId) {
-      return NextResponse.json({ error: 'Problem not found' }, { status: 404 });
+      if (!grade) {
+        return NextResponse.json({ grade: null, feedback: null });
+      }
+
+      return NextResponse.json({
+        grade: grade.grade ?? null,
+        feedback: grade.feedback ?? null,
+        updatedAt: grade.updatedAt,
+      });
+    } catch (error) {
+      console.error('GET /api/courses/[id]/[aid]/problems/[pid]/grade/[studentId] error:', error);
+      return NextResponse.json({ error: 'Failed to fetch problem grade' }, { status: 500 });
     }
-
-    const grade = await prisma.assignmentProblemGrade.findUnique({
-      where: {
-        assignmentId_problemId_studentId: {
-          assignmentId,
-          problemId,
-          studentId,
-        },
-      },
-    });
-
-    if (!grade) {
-      return NextResponse.json({ grade: null, feedback: null });
-    }
-
-    return NextResponse.json({
-      grade: grade.grade ?? null,
-      feedback: grade.feedback ?? null,
-      updatedAt: grade.updatedAt,
-    });
-  } catch (error) {
-    console.error('GET /api/courses/[id]/[aid]/problems/[pid]/grade/[studentId] error:', error);
-    return NextResponse.json({ error: 'Failed to fetch problem grade' }, { status: 500 });
-  }
-}
+  },
+  { access: 'read', deniedAction: 'PROBLEM_GRADE_ACCESS_DENIED' },
+);
 
 /**
  * Sets or clears a student's grade (and optional feedback) for one problem. Course
@@ -118,145 +110,128 @@ export async function GET(
  *   404: { description: Problem not found in this assignment/course. }
  *   500: { description: Server error. }
  */
-export async function POST(
-  req: NextRequest,
-  {
-    params,
-  }: {
-    params: Promise<{ id: string; aid: string; pid: string; studentId: string }>;
-  },
-) {
-  let graderId: string | null = null;
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    graderId = session.user.id;
+export const POST = withCourseAuth(
+  async (req, ctx, { user, courseId }) => {
+    const graderId = user.id;
+    const { aid: assignmentId, pid: problemId, studentId } = await ctx.params;
 
-    const { id: courseId, aid: assignmentId, pid: problemId, studentId } = await params;
-
-    if (!(await canManageCourse(session.user, courseId))) {
-      await createEnhancedActivityLog(prisma, req, {
-        userId: session?.user?.id ?? null,
-        action: 'PROBLEM_GRADE_UPDATE_DENIED',
-        severity: 'SECURITY',
-        metadata: {},
+    try {
+      const assignmentProblem = await prisma.assignmentProblem.findUnique({
+        where: {
+          assignmentId_problemId: {
+            assignmentId,
+            problemId,
+          },
+        },
+        select: {
+          assignment: { select: { courseId: true } },
+          maxPoints: true,
+        },
       });
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
 
-    const assignmentProblem = await prisma.assignmentProblem.findUnique({
-      where: {
-        assignmentId_problemId: {
+      if (!assignmentProblem || assignmentProblem.assignment.courseId !== courseId) {
+        return NextResponse.json({ error: 'Problem not found' }, { status: 404 });
+      }
+
+      const body = await req.json();
+      const grade = body?.grade as number | null | undefined;
+      const feedback = typeof body?.feedback === 'string' ? body.feedback : null;
+
+      if (grade !== null && grade !== undefined) {
+        if (typeof grade !== 'number' || Number.isNaN(grade)) {
+          return NextResponse.json({ error: 'Grade must be a number or null' }, { status: 400 });
+        }
+        if (grade < 0 || grade > assignmentProblem.maxPoints) {
+          return NextResponse.json(
+            { error: 'Grade out of range for this problem' },
+            { status: 400 },
+          );
+        }
+      }
+
+      // Capture the prior grade so the audit records the before → after change.
+      const existing = await prisma.assignmentProblemGrade.findUnique({
+        where: {
+          assignmentId_problemId_studentId: { assignmentId, problemId, studentId },
+        },
+        select: { grade: true, feedback: true },
+      });
+
+      if (grade === null || grade === undefined) {
+        await prisma.assignmentProblemGrade.deleteMany({
+          where: {
+            assignmentId,
+            problemId,
+            studentId,
+          },
+        });
+        await createEnhancedActivityLog(prisma, req, {
+          userId: graderId,
+          action: 'PROBLEM_GRADE_CLEARED',
+          severity: 'INFO',
+          category: 'SUBMISSION',
+          courseId,
           assignmentId,
           problemId,
-        },
-      },
-      select: {
-        assignment: { select: { courseId: true } },
-        maxPoints: true,
-      },
-    });
-
-    if (!assignmentProblem || assignmentProblem.assignment.courseId !== courseId) {
-      return NextResponse.json({ error: 'Problem not found' }, { status: 404 });
-    }
-
-    const body = await req.json();
-    const grade = body?.grade as number | null | undefined;
-    const feedback = typeof body?.feedback === 'string' ? body.feedback : null;
-
-    if (grade !== null && grade !== undefined) {
-      if (typeof grade !== 'number' || Number.isNaN(grade)) {
-        return NextResponse.json({ error: 'Grade must be a number or null' }, { status: 400 });
+          metadata: { studentId, graderId, previousGrade: existing?.grade ?? null },
+        });
+        return NextResponse.json({ grade: null, feedback: null });
       }
-      if (grade < 0 || grade > assignmentProblem.maxPoints) {
-        return NextResponse.json({ error: 'Grade out of range for this problem' }, { status: 400 });
-      }
-    }
 
-    // Capture the prior grade so the audit records the before → after change.
-    const existing = await prisma.assignmentProblemGrade.findUnique({
-      where: {
-        assignmentId_problemId_studentId: { assignmentId, problemId, studentId },
-      },
-      select: { grade: true, feedback: true },
-    });
-
-    if (grade === null || grade === undefined) {
-      await prisma.assignmentProblemGrade.deleteMany({
+      const saved = await prisma.assignmentProblemGrade.upsert({
         where: {
+          assignmentId_problemId_studentId: {
+            assignmentId,
+            problemId,
+            studentId,
+          },
+        },
+        create: {
           assignmentId,
           problemId,
           studentId,
+          grade,
+          feedback,
+        },
+        update: {
+          grade,
+          feedback,
         },
       });
+
       await createEnhancedActivityLog(prisma, req, {
         userId: graderId,
-        action: 'PROBLEM_GRADE_CLEARED',
+        action: 'PROBLEM_GRADE_UPDATED',
         severity: 'INFO',
         category: 'SUBMISSION',
         courseId,
         assignmentId,
         problemId,
-        metadata: { studentId, graderId, previousGrade: existing?.grade ?? null },
-      });
-      return NextResponse.json({ grade: null, feedback: null });
-    }
-
-    const saved = await prisma.assignmentProblemGrade.upsert({
-      where: {
-        assignmentId_problemId_studentId: {
-          assignmentId,
-          problemId,
+        metadata: {
           studentId,
+          graderId,
+          previousGrade: existing?.grade ?? null,
+          grade,
+          maxPoints: assignmentProblem.maxPoints,
+          feedbackChanged: (existing?.feedback ?? null) !== feedback,
         },
-      },
-      create: {
-        assignmentId,
-        problemId,
-        studentId,
-        grade,
-        feedback,
-      },
-      update: {
-        grade,
-        feedback,
-      },
-    });
+      });
 
-    await createEnhancedActivityLog(prisma, req, {
-      userId: graderId,
-      action: 'PROBLEM_GRADE_UPDATED',
-      severity: 'INFO',
-      category: 'SUBMISSION',
-      courseId,
-      assignmentId,
-      problemId,
-      metadata: {
-        studentId,
-        graderId,
-        previousGrade: existing?.grade ?? null,
-        grade,
-        maxPoints: assignmentProblem.maxPoints,
-        feedbackChanged: (existing?.feedback ?? null) !== feedback,
-      },
-    });
-
-    return NextResponse.json({
-      grade: saved.grade ?? null,
-      feedback: saved.feedback ?? null,
-      updatedAt: saved.updatedAt,
-    });
-  } catch (error) {
-    console.error('POST /api/courses/[id]/[aid]/problems/[pid]/grade/[studentId] error:', error);
-    await createEnhancedActivityLog(prisma, req, {
-      userId: graderId,
-      action: 'PROBLEM_GRADE_UPDATE_ERROR',
-      severity: 'ERROR',
-      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
-    });
-    return NextResponse.json({ error: 'Failed to save problem grade' }, { status: 500 });
-  }
-}
+      return NextResponse.json({
+        grade: saved.grade ?? null,
+        feedback: saved.feedback ?? null,
+        updatedAt: saved.updatedAt,
+      });
+    } catch (error) {
+      console.error('POST /api/courses/[id]/[aid]/problems/[pid]/grade/[studentId] error:', error);
+      await createEnhancedActivityLog(prisma, req, {
+        userId: graderId,
+        action: 'PROBLEM_GRADE_UPDATE_ERROR',
+        severity: 'ERROR',
+        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+      });
+      return NextResponse.json({ error: 'Failed to save problem grade' }, { status: 500 });
+    }
+  },
+  { access: 'manage', deniedAction: 'PROBLEM_GRADE_UPDATE_DENIED' },
+);
