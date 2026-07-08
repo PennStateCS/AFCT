@@ -331,7 +331,7 @@ export interface paths {
         };
         /**
          * List users (lightweight)
-         * @description Lightweight user list used to refresh the users table without the audit-logging  side effect of the main `/api/users` GET. Same staff-role restriction and role  filter, but read-only.
+         * @description Lightweight user list used to refresh the users table without the audit-logging  side effect of the main `/api/users` GET. Same admin restriction, but read-only.
          *
          *     **Auth:** required
          *
@@ -1447,7 +1447,7 @@ export interface paths {
          * List a course's students
          * @description Returns just the STUDENT members of a course (user profiles). Course staff  (faculty or TAs) or a system admin.
          *
-         *     **Auth:** requires STUDENT
+         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/students/route.ts)
          */
@@ -2984,17 +2984,14 @@ export interface operations {
     };
     getAdminUsersList: {
         parameters: {
-            query?: {
-                /** @description Filter to a single role */
-                role?: "STUDENT" | "TA" | "FACULTY" | "ADMIN";
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Users (optionally filtered by role). */
+            /** @description The users. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3003,7 +3000,7 @@ export interface operations {
                     "application/json": Record<string, never>[];
                 };
             };
-            /** @description Caller lacks a staff role. */
+            /** @description Caller is not a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
