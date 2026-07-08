@@ -70,7 +70,7 @@ export function DownloadLogsDialog({
     } = useQuery({
         queryKey: ['admin', 'logs', 'fields'],
         queryFn: async (): Promise<string[]> => {
-            const res = await fetch(`/api/admin/logs/fields`, {
+            const res = await fetch(`/api/admin/logs/export/fields`, {
                 method: 'GET',
                 headers: { 'Content-Type': 'application/json' },
             });
