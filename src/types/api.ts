@@ -15,8 +15,6 @@ export interface paths {
          * List exportable log fields
          * @description Lists the activity-log columns that may be included in a CSV export; drives the  Download dialog's field picker. Nested under `export` because it describes what  the sibling `POST /admin/logs/export` accepts. System administrators only.
          *
-         *     **Auth:** required
-         *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/logs/export/fields/route.ts)
          */
         get: operations["getAdminLogsExportFields"];
@@ -63,8 +61,6 @@ export interface paths {
          * List activity (audit) logs
          * @description A single page of activity (audit) logs, newest first, with `userId` resolved to  the author's display name. Search, severity filter, and sort all run server-side.
          *
-         *     **Auth:** required
-         *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/logs/route.ts)
          */
         get: operations["getAdminLogs"];
@@ -88,8 +84,6 @@ export interface paths {
         /**
          * Reset a user's password (admin)
          * @description Sets another user's password on their behalf (an admin-initiated reset).  System administrators only; the new password still has to meet the strength  policy. Pass `isTemporary` to force a change at next login. The plaintext  password is never logged — only who reset whom.
-         *
-         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/reset-password/route.ts)
          */
@@ -333,8 +327,6 @@ export interface paths {
          * List users (lightweight)
          * @description Lightweight user list used to refresh the users table without the audit-logging  side effect of the main `/api/users` GET. Same admin restriction, but read-only.
          *
-         *     **Auth:** required
-         *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/users/list/route.ts)
          */
         get: operations["getAdminUsersList"];
@@ -357,8 +349,6 @@ export interface paths {
          * List users
          * @description Lists users for the admin-facing users table. System administrators only; the  access itself is audited.
          *
-         *     **Auth:** required
-         *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/users/route.ts)
          */
         get: operations["getAdminUsers"];
@@ -366,8 +356,6 @@ export interface paths {
         /**
          * Create a user
          * @description Creates a single user directly (admin-provisioned account), unlike self-service  signup. System administrators only. Validates email, password strength, and  timezone, and rejects a duplicate email. The account is created with no global  role; admin rights are granted separately via the isAdmin flag.
-         *
-         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/users/route.ts)
          */
