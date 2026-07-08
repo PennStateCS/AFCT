@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const prismaMock = vi.hoisted(() => ({
   user: {
-    findUnique: vi.fn(),
+    findMany: vi.fn(),
     create: vi.fn(),
   },
   systemSettings: {
@@ -35,6 +35,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   bcryptMock.hash.mockResolvedValue('hashed-password');
   prismaMock.systemSettings.findUnique.mockResolvedValue({ id: 1, timezone: 'UTC' });
+  // No pre-existing emails by default; the batched existence check returns none.
+  prismaMock.user.findMany.mockResolvedValue([]);
 });
 
 describe('POST /api/users/bulk', () => {
@@ -109,10 +111,8 @@ describe('POST /api/users/bulk', () => {
   it('creates valid users and reports row failures', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
 
-    prismaMock.user.findUnique
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ id: 'existing-user' })
-      .mockResolvedValueOnce(null);
+    // One batched existence check: only exists@example.com is already taken.
+    prismaMock.user.findMany.mockResolvedValue([{ email: 'exists@example.com' }]);
 
     prismaMock.user.create
       .mockResolvedValueOnce({ id: 'new-1', email: 'ada@example.com' })

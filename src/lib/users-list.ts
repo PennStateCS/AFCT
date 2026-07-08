@@ -14,7 +14,7 @@ export type UserListItem = {
   updatedAt: Date;
 };
 
-export async function getUsersList(_role?: string | null): Promise<UserListItem[]> {
+export async function getUsersList(): Promise<UserListItem[]> {
   return prisma.user.findMany({
     orderBy: [{ lastName: 'asc' }],
     select: {

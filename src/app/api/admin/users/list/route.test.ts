@@ -16,7 +16,7 @@ describe('GET /api/users/list', () => {
   it('returns 403 when unauthorized', async () => {
     authMock.mockResolvedValue(null);
 
-    const res = await GET(new Request('http://localhost/api/users/list'));
+    const res = await GET();
 
     expect(res.status).toBe(403);
   });
@@ -25,10 +25,10 @@ describe('GET /api/users/list', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     getUsersListMock.mockResolvedValue([{ id: 'u2', email: 'u2@example.com' }]);
 
-    const res = await GET(new Request('http://localhost/api/users/list?role=STUDENT'));
+    const res = await GET();
 
     expect(res.status).toBe(200);
-    expect(getUsersListMock).toHaveBeenCalledWith('STUDENT');
+    expect(getUsersListMock).toHaveBeenCalled();
     await expect(res.json()).resolves.toEqual([{ id: 'u2', email: 'u2@example.com' }]);
   });
 
@@ -36,7 +36,7 @@ describe('GET /api/users/list', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     getUsersListMock.mockRejectedValue(new Error('db error'));
 
-    const res = await GET(new Request('http://localhost/api/users/list'));
+    const res = await GET();
 
     expect(res.status).toBe(500);
     await expect(res.json()).resolves.toEqual({ error: 'Failed to fetch users' });
