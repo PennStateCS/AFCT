@@ -1,8 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { auth } from '@/lib/auth';
-import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { canManageCourse } from '@/lib/permissions';
+import { withCourseAuth } from '@/lib/api/with-auth';
 
 /**
  * Lists every group membership for the course in one call — the aggregate that
@@ -33,33 +31,19 @@ import { canManageCourse } from '@/lib/permissions';
  *   403: { description: Not course staff or a system admin. }
  *   500: { description: Server error. }
  */
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-
-  if (!id) return NextResponse.json({ error: 'Missing course id' }, { status: 400 });
-
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  if (!(await canManageCourse(session.user, id))) {
-    await createEnhancedActivityLog(prisma, req, {
-      userId: session?.user?.id ?? null,
-      action: 'GROUP_MEMBERSHIPS_VIEW_DENIED',
-      severity: 'SECURITY',
-      metadata: {},
-    });
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
-  try {
-    const memberships = await prisma.groupRoster.findMany({
-      where: { courseId: id },
-      select: { userId: true, groupId: true },
-      orderBy: { createdAt: 'asc' },
-    });
-    return NextResponse.json({ memberships });
-  } catch (err) {
-    console.error('GET /api/courses/[id]/group-memberships error:', err);
-    return NextResponse.json({ error: 'Failed to fetch group memberships' }, { status: 500 });
-  }
-}
+export const GET = withCourseAuth(
+  async (_req, _ctx, { courseId }) => {
+    try {
+      const memberships = await prisma.groupRoster.findMany({
+        where: { courseId },
+        select: { userId: true, groupId: true },
+        orderBy: { createdAt: 'asc' },
+      });
+      return NextResponse.json({ memberships });
+    } catch (err) {
+      console.error('GET /api/courses/[id]/group-memberships error:', err);
+      return NextResponse.json({ error: 'Failed to fetch group memberships' }, { status: 500 });
+    }
+  },
+  { access: 'manage', deniedAction: 'GROUP_MEMBERSHIPS_VIEW_DENIED' },
+);
