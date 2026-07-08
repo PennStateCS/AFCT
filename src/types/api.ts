@@ -1191,9 +1191,7 @@ export interface paths {
         put?: never;
         /**
          * Look up users by email
-         * @description Resolves a list of emails to user records, splitting them into `found` and  `notFound` — used by the roster importer to preview who exists before enrolling.  Matching is case-insensitive regardless of DB collation. Requires a signed-in  user (the courseId in the path isn't used to scope results).
-         *
-         *     **Auth:** required
+         * @description Resolves a list of emails to user records, splitting them into `found` and  `notFound` — used by the roster importer to preview who exists before enrolling.  Matching is case-insensitive regardless of DB collation. Restricted to course  staff (faculty or TAs) or a system admin: only someone who can manage the course  in the path may resolve emails to accounts.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/lookup-users/route.ts)
          */
@@ -5928,6 +5926,15 @@ export interface operations {
             };
             /** @description Not signed in. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff (faculty or TAs) or a system admin. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
