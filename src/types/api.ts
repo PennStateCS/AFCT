@@ -1291,15 +1291,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * List a course's problems
-         * @description Lists all problems in a course, newest first. Course staff (faculty or TAs) or a  system admin — the rows include stored solution filenames, which students must not  see. The solution  files themselves are served by a separate, access-controlled route.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/problems/route.ts)
-         */
-        get: operations["getCoursesByIdProblems"];
+        get?: never;
         put?: never;
         /**
          * Create a problem in a course
@@ -6130,46 +6122,6 @@ export interface operations {
             };
             /** @description Problem not found in this course. */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    getCoursesByIdProblems: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The course's problems. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": Record<string, never>[];
-                };
-            };
-            /** @description Caller is not course staff (faculty or TA) or a system admin. */
-            403: {
                 headers: {
                     [name: string]: unknown;
                 };
