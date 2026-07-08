@@ -153,16 +153,12 @@ export interface paths {
          * Get system settings
          * @description Returns the singleton system settings, falling back to defaults for any unset  field. The hCaptcha secret is never returned — only `hcaptchaSecretConfigured`  reports whether one is stored. System administrators only.
          *
-         *     **Auth:** required
-         *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/route.ts)
          */
         get: operations["getAdminSettings"];
         /**
          * Update system settings
          * @description Updates the singleton system settings (upsert). Every field is optional, so a  partial payload only touches the fields it includes; numeric fields are clamped  to safe bounds and an invalid timezone is rejected. The hCaptcha secret is  write-only: send a non-empty `hcaptchaSecretKey` to set it, or  `hcaptchaSecretClear: true` to remove it. Changes are audited (never the secret  value). System administrators only.
-         *
-         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/route.ts)
          */
@@ -185,8 +181,6 @@ export interface paths {
          * Get TLS certificate status
          * @description Returns metadata about the currently installed TLS certificate and whether a  CSR is awaiting a signed cert. Admin only. Never returns key or PEM material.
          *
-         *     **Auth:** required
-         *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/tls/route.ts)
          */
         get: operations["getAdminSettingsTls"];
@@ -195,16 +189,12 @@ export interface paths {
          * Install or generate a TLS certificate
          * @description Performs a certificate operation, chosen by the `action` field. Admin only;  unauthorized-but-authenticated attempts are recorded as a security event. Cert  bodies and keys are accepted in the request but never echoed back or logged.
          *
-         *     **Auth:** required
-         *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/tls/route.ts)
          */
         post: operations["postAdminSettingsTls"];
         /**
          * Reset TLS to a self-signed certificate
          * @description Removes the installed certificate and reverts to a self-signed one. Admin only.
-         *
-         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/tls/route.ts)
          */
@@ -272,8 +262,6 @@ export interface paths {
         /**
          * List submissions for problems (admin)
          * @description Returns every submission across a set of problems, flattened for the admin  grading view — student, course, assignment/problem titles, status, and the  recorded grade (joined from AssignmentProblemGrade). System administrators only.  Takes the problem ids in the body rather than the query string since the list  can be long.
-         *
-         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/submissions/route.ts)
          */
