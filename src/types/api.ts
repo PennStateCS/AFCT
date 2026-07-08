@@ -1029,8 +1029,6 @@ export interface paths {
          * Get the course grade matrix
          * @description Returns the full gradebook matrix for a course: students × assignments with each  cell holding the student's summed assignment grade (problem grades collapsed  into one total). Course staff (faculty or TAs) or a system admin.
          *
-         *     **Auth:** required
-         *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/grades/route.ts)
          */
         get: operations["getCoursesByIdGrades"];
@@ -1038,8 +1036,6 @@ export interface paths {
         /**
          * Log a gradebook export
          * @description Records a gradebook export in the audit log. The CSV itself is built and  downloaded client-side, so this endpoint just captures that an export happened  (and a little about its scope). Course staff (faculty or TAs) or a system admin.
-         *
-         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/grades/route.ts)
          */
@@ -1187,8 +1183,6 @@ export interface paths {
          * List course groups
          * @description Lists a course's groups, alphabetically. Course staff (faculty or TAs) or a  system admin.
          *
-         *     **Auth:** required
-         *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/groups/route.ts)
          */
         get: operations["getCoursesByIdGroups"];
@@ -1196,8 +1190,6 @@ export interface paths {
         /**
          * Create a course group
          * @description Creates a group in the course. Course staff (faculty or TAs) or a system admin.  Group names are unique per course.
-         *
-         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/groups/route.ts)
          */
@@ -1392,8 +1384,6 @@ export interface paths {
         /**
          * Get my grades for a course
          * @description Returns the signed-in student's own grade breakdown for a course — published  assignments, their problems, and per-problem grade, latest submission status,  and attempt count. Available to enrolled members (viewing their own data) and  to staff.
-         *
-         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/student-grades/route.ts)
          */
