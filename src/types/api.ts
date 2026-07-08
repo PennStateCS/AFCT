@@ -797,8 +797,6 @@ export interface paths {
          * Get a student's review data for an assignment
          * @description Assembles the grading/review view for one student on one assignment: their  submissions (grouped by problem, with evaluation output), the comments about  them, and their per-problem grades. Falls back gracefully if the optional  `evaluationRaw` column is absent.   Access: the student themselves, course staff, or a system admin (`studentId` must  be the caller's id unless they are course staff or a system admin). Course  membership is also required, except for global admins.
          *
-         *     **Auth:** required
-         *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/review-data/[studentId]/route.ts)
          */
         get: operations["getCoursesByIdByAidReviewDataByStudentId"];
@@ -842,8 +840,6 @@ export interface paths {
         /**
          * Get a student's submissions for an assignment
          * @description Returns a student's submissions for an assignment, grouped by problem and each  annotated with that problem's metadata (falls back gracefully if the optional  `evaluationRaw` column is absent). The `[sid]` segment is the student id.   Access: the student themselves, course staff, or a system admin (`sid` must be the  caller's id unless they are course staff or a system admin). Course membership is  also required, except for global admins.
-         *
-         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/submissions/[sid]/route.ts)
          */
