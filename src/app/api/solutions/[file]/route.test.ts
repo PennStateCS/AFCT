@@ -40,6 +40,7 @@ import { GET } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  prismaMock.roster.findFirst.mockResolvedValue(null);
 });
 
 describe('GET /api/solutions/[file]', () => {
@@ -88,7 +89,7 @@ describe('GET /api/solutions/[file]', () => {
   });
 
   it('returns 404 when file does not exist on disk', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: true } });
     prismaMock.problem.findFirst.mockResolvedValue({
       id: 'problem-1',
       courseId: 'course-1',
@@ -107,7 +108,7 @@ describe('GET /api/solutions/[file]', () => {
   });
 
   it('serves solution file for admin user', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: true } });
     prismaMock.problem.findFirst.mockResolvedValue({
       id: 'problem-1',
       courseId: 'course-1',
@@ -126,13 +127,14 @@ describe('GET /api/solutions/[file]', () => {
   });
 
   it('serves solution file for faculty user', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'FACULTY' } });
+    authMock.mockResolvedValue({ user: { id: 'user-1' } });
     prismaMock.problem.findFirst.mockResolvedValue({
       id: 'problem-1',
       courseId: 'course-1',
       fileName: 'file.txt',
       originalFileName: 'solution.txt',
     });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     vi.mocked(fs.existsSync).mockReturnValue(true);
 
     const res = await GET(new NextRequest('http://localhost/api/solutions/file.txt'), {
@@ -143,13 +145,14 @@ describe('GET /api/solutions/[file]', () => {
   });
 
   it('serves solution file for TA user', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'TA' } });
+    authMock.mockResolvedValue({ user: { id: 'user-1' } });
     prismaMock.problem.findFirst.mockResolvedValue({
       id: 'problem-1',
       courseId: 'course-1',
       fileName: 'file.txt',
       originalFileName: 'solution.txt',
     });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'TA' });
     vi.mocked(fs.existsSync).mockReturnValue(true);
 
     const res = await GET(new NextRequest('http://localhost/api/solutions/file.txt'), {
@@ -160,7 +163,7 @@ describe('GET /api/solutions/[file]', () => {
   });
 
   it('logs download activity when download=1 param is present', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: true } });
     prismaMock.problem.findFirst.mockResolvedValue({
       id: 'problem-1',
       courseId: 'course-1',
@@ -188,8 +191,8 @@ describe('GET /api/solutions/[file]', () => {
     );
   });
 
-  it('does not log download when download param is absent', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN' } });
+  it('logs an inline serve when the download param is absent', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: true } });
     prismaMock.problem.findFirst.mockResolvedValue({
       id: 'problem-1',
       courseId: 'course-1',
@@ -203,11 +206,19 @@ describe('GET /api/solutions/[file]', () => {
     });
 
     expect(res.status).toBe(200);
-    expect(activityLogMock).not.toHaveBeenCalled();
+    // Every successful solution serve is now audited, including inline views.
+    expect(activityLogMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        action: 'DOWNLOAD_SOLUTION_FILE',
+        metadata: expect.objectContaining({ mode: 'inline' }),
+      }),
+    );
   });
 
   it('uses fileName when originalFileName is null', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: true } });
     prismaMock.problem.findFirst.mockResolvedValue({
       id: 'problem-1',
       courseId: 'course-1',

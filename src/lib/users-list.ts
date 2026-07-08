@@ -1,5 +1,4 @@
 import { prisma } from '@/lib/prisma';
-import { Role } from '@prisma/client';
 
 export type UserListItem = {
   id: string;
@@ -7,7 +6,7 @@ export type UserListItem = {
   firstName: string | null;
   lastName: string | null;
   temporaryPassword: boolean;
-  role: Role;
+  isAdmin: boolean;
   avatar: string | null;
   timezone: string | null;
   inactive: boolean;
@@ -15,17 +14,16 @@ export type UserListItem = {
   updatedAt: Date;
 };
 
-export async function getUsersList(role?: string | null): Promise<UserListItem[]> {
+export async function getUsersList(): Promise<UserListItem[]> {
   return prisma.user.findMany({
-    where: role ? { role: role as Role } : undefined,
-    orderBy: [{ role: 'asc' }, { lastName: 'asc' }],
+    orderBy: [{ lastName: 'asc' }],
     select: {
       id: true,
       email: true,
       firstName: true,
       lastName: true,
       temporaryPassword: true,
-      role: true,
+      isAdmin: true,
       avatar: true,
       timezone: true,
       inactive: true,

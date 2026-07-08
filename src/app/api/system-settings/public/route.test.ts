@@ -20,7 +20,12 @@ describe('GET /api/system-settings/public', () => {
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toEqual({ timezone: 'UTC', allowSignup: true, sessionTimeoutMinutes: 20 });
+    expect(body).toEqual({
+      timezone: 'UTC',
+      allowSignup: true,
+      sessionTimeoutMinutes: 20,
+      hcaptchaSiteKey: null,
+    });
   });
 
   it('returns stored timezone', async () => {
@@ -39,6 +44,21 @@ describe('GET /api/system-settings/public', () => {
       timezone: 'America/New_York',
       allowSignup: false,
       sessionTimeoutMinutes: 45,
+      hcaptchaSiteKey: null,
     });
+  });
+
+  it('exposes the stored hcaptcha site key', async () => {
+    prismaMock.systemSettings.findUnique.mockResolvedValue({
+      id: 1,
+      timezone: 'UTC',
+      allowSignup: true,
+      sessionTimeoutMinutes: 20,
+      hcaptchaSiteKey: 'site-123',
+    });
+
+    const res = await GET();
+    const body = await res.json();
+    expect(body.hcaptchaSiteKey).toBe('site-123');
   });
 });

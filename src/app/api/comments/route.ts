@@ -4,7 +4,8 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { RoleEnum, CourseRoleEnum } from '@/schemas/user';
+import { CourseRoleEnum } from '@/schemas/user';
+import { canAccessCourse, canManageCourse } from '@/lib/permissions';
 
 // ---- Types ----
 interface CommentUser {
@@ -12,7 +13,6 @@ interface CommentUser {
   firstName?: string | null;
   lastName?: string | null;
   avatar?: string | null;
-  role?: z.infer<typeof RoleEnum> | null;
 }
 
 interface CommentRoster {
@@ -51,10 +51,39 @@ const createCommentSchema = z.object({
   studentId: z.string().optional(), // the student this thread is about (optional)
 });
 
+/**
+ * Creates a comment on an assignment problem, optionally scoped to a particular
+ * student's thread (`studentId`). The author must be an enrolled member of the course
+ * (any role) or a system admin; a system admin who isn't on the roster is auto-added
+ * as FACULTY. Both the problem and any named student must belong to the course.
+ * @openapi
+ * summary: Create a comment
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [content, assignmentId, problemId]
+ *         properties:
+ *           content: { type: string, maxLength: 5000 }
+ *           assignmentId: { type: string }
+ *           problemId: { type: string }
+ *           studentId: { type: string, description: The student this thread is about }
+ * responses:
+ *   201: { description: The created comment with its author. }
+ *   400: { description: Validation failed. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Author is not an enrolled member of the course or a system admin. }
+ *   404: { description: "Assignment, problem, or named student not found." }
+ *   500: { description: Server error. }
+ */
 export async function POST(request: NextRequest) {
+  let actorId: string | null = null;
   try {
     const session = await auth();
     const user = session?.user;
+    actorId = user?.id ?? null;
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -71,22 +100,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 
-    // Verify author is in this course (admins can be added automatically)
-    let rosterEntry = await prisma.roster.findUnique({
-      where: { courseId_userId: { courseId: assignment.courseId, userId: user.id } },
+    // Authorize: any enrolled user (or admin) may comment.
+    if (!(await canAccessCourse(user, assignment.courseId))) {
+      await createEnhancedActivityLog(prisma, request, {
+        userId: session?.user?.id ?? null,
+        action: 'COMMENT_CREATE_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
+      return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
+    }
+
+    // Obtain the author's roster row for the comment FK. Admins who aren't on the
+    // roster are auto-added as faculty so they can comment.
+    let rosterEntry = await prisma.roster.findFirst({
+      where: { courseId: assignment.courseId, userId: user.id },
     });
     if (!rosterEntry) {
-      if (user.role === 'ADMIN') {
-        rosterEntry = await prisma.roster.create({
-          data: {
-            courseId: assignment.courseId,
-            userId: user.id,
-            role: 'INSTRUCTOR',
-          },
-        });
-      } else {
-        return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
-      }
+      rosterEntry = await prisma.roster.create({
+        data: {
+          courseId: assignment.courseId,
+          userId: user.id,
+          role: 'FACULTY',
+        },
+      });
     }
 
     // Verify problem belongs to course
@@ -126,7 +163,6 @@ export async function POST(request: NextRequest) {
                 firstName: true,
                 lastName: true,
                 avatar: true,
-                role: true, // global role if you want it too
               },
             },
           },
@@ -137,6 +173,7 @@ export async function POST(request: NextRequest) {
     await createEnhancedActivityLog(prisma, request, {
       userId: user.id,
       action: 'CREATE_COMMENT',
+      severity: 'INFO',
       category: 'ASSIGNMENT',
       courseId: assignment.courseId,
       assignmentId,
@@ -163,14 +200,19 @@ export async function POST(request: NextRequest) {
           firstName: comment.roster.user.firstName ?? null,
           lastName: comment.roster.user.lastName ?? null,
           avatar: comment.roster.user.avatar ?? null,
-          // prefer course role (FACULTY/TA/STUDENT); fall back to global
-          role: comment.roster.role ?? comment.roster.user.role ?? null,
+          role: comment.roster.role ?? null,
         },
       },
       { status: 201 },
     );
   } catch (error) {
     console.error('Error creating comment:', error);
+    await createEnhancedActivityLog(prisma, request, {
+      userId: actorId,
+      action: 'COMMENT_CREATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: 'Invalid request data', details: error.issues },
@@ -181,6 +223,29 @@ export async function POST(request: NextRequest) {
   }
 }
 
+/**
+ * Lists comments for an assignment problem, or for a whole assignment when
+ * `scope=assignment`. Any enrolled member of the course (any role) or a system admin
+ * may read; an optional `studentId` narrows to a single student's thread.
+ * @openapi
+ * summary: List comments
+ * parameters:
+ *   - { name: assignmentId, in: query, required: true, schema: { type: string } }
+ *   - { name: problemId, in: query, description: Required unless scope=assignment, schema: { type: string } }
+ *   - { name: scope, in: query, description: Set to "assignment" to list across the whole assignment, schema: { type: string, enum: [assignment] } }
+ *   - { name: studentId, in: query, description: Narrow to a student's thread, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: The matching comments, oldest first.
+ *     content:
+ *       application/json:
+ *         schema: { type: array, items: { type: object } }
+ *   400: { description: Missing assignmentId (or problemId when not in assignment scope). }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller is not an enrolled member of the course or a system admin. }
+ *   404: { description: Assignment not found. }
+ *   500: { description: Server error. }
+ */
 export async function GET(request: NextRequest) {
   try {
     const session = await auth();
@@ -212,13 +277,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Verify caller access: enrolled users can read; global admins can always read.
-    if (user.role !== 'ADMIN') {
-      const rosterEntry = await prisma.roster.findUnique({
-        where: { courseId_userId: { courseId: assignment.courseId, userId: user.id } },
+    if (!(await canAccessCourse(user, assignment.courseId))) {
+      await createEnhancedActivityLog(prisma, request, {
+        userId: session?.user?.id ?? null,
+        action: 'COMMENT_VIEW_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
       });
-      if (!rosterEntry) {
-        return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
-      }
+      return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
     }
 
     // If studentId present, restrict to comments about that student OR authored by that student
@@ -253,7 +319,6 @@ export async function GET(request: NextRequest) {
                 firstName: true,
                 lastName: true,
                 avatar: true,
-                role: true, // global role (optional)
               },
             },
           },
@@ -272,7 +337,7 @@ export async function GET(request: NextRequest) {
         firstName: c.roster.user.firstName,
         lastName: c.roster.user.lastName,
         avatar: c.roster.user.avatar ?? null,
-        role: c.roster.role ?? c.roster.user.role ?? null,
+        role: c.roster.role ?? null,
       },
     })) as CommentResponse[];
 
@@ -283,10 +348,27 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/**
+ * Deletes a comment by id. The comment's author may delete their own; otherwise
+ * only course staff (faculty or TAs) or a system admin may remove it.
+ * @openapi
+ * summary: Delete a comment
+ * parameters:
+ *   - { name: commentId, in: query, required: true, schema: { type: string } }
+ * responses:
+ *   200: { description: Comment deleted. }
+ *   400: { description: Missing commentId. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Not allowed to delete this comment. }
+ *   404: { description: Comment not found. }
+ *   500: { description: Server error. }
+ */
 export async function DELETE(request: NextRequest) {
+  let actorId: string | null = null;
   try {
     const session = await auth();
     const user = session?.user;
+    actorId = user?.id ?? null;
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -308,23 +390,24 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Comment not found' }, { status: 404 });
     }
 
-    // Owner or ADMIN/FACULTY can delete; otherwise check course role via roster
+    // The author may delete their own comment; otherwise course staff (admin bypasses).
     const isOwner = comment.roster.user.id === user.id;
-    const isAdminFaculty = ['ADMIN', 'FACULTY'].includes(user.role as string);
-    if (!isOwner && !isAdminFaculty) {
-      const userRosterEntry = await prisma.roster.findUnique({
-        where: {
-          courseId_userId: { courseId: comment.assignment.courseId, userId: user.id },
-        },
+    if (!isOwner && !(await canManageCourse(user, comment.assignment.courseId))) {
+      await createEnhancedActivityLog(prisma, request, {
+        userId: session?.user?.id ?? null,
+        action: 'COMMENT_DELETE_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
       });
-      if (!userRosterEntry || userRosterEntry.role === 'STUDENT') {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+
+    await prisma.comment.delete({ where: { id: commentId } });
 
     await createEnhancedActivityLog(prisma, request, {
       userId: user.id,
       action: 'DELETE_COMMENT',
+      severity: 'INFO',
       category: 'ASSIGNMENT',
       courseId: comment.assignment.courseId,
       assignmentId: comment.assignmentId,
@@ -342,10 +425,15 @@ export async function DELETE(request: NextRequest) {
       },
     });
 
-    await prisma.comment.delete({ where: { id: commentId } });
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting comment:', error);
+    await createEnhancedActivityLog(prisma, request, {
+      userId: actorId,
+      action: 'COMMENT_DELETE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

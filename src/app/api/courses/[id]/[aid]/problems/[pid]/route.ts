@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
 const AssignmentProblemSettingsSchema = z.object({
   maxPoints: z.number().min(0),
@@ -18,6 +19,36 @@ const AssignmentProblemSettingsSchema = z.object({
 
 type AssignmentProblemSettingsInput = z.infer<typeof AssignmentProblemSettingsSchema>;
 
+/**
+ * Updates the per-assignment settings for one problem: its point value, submission
+ * cap, and whether the autograder runs. Course staff (faculty or TAs) or a system
+ * admin. The problem
+ * must already be linked to the assignment, and the assignment must belong to the
+ * course in the path.
+ * @openapi
+ * summary: Update an assignment problem's settings
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: aid, in: path, required: true, schema: { type: string } }
+ *   - { name: pid, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [maxPoints, maxSubmissions, autograderEnabled]
+ *         properties:
+ *           maxPoints: { type: number, minimum: 0 }
+ *           maxSubmissions: { type: integer, description: "-1 for unlimited, else >= 1" }
+ *           autograderEnabled: { type: boolean }
+ * responses:
+ *   200: { description: The updated assignment-problem settings. }
+ *   400: { description: Invalid JSON or settings. }
+ *   403: { description: Caller is not course staff (faculty or TA) or a system admin. }
+ *   404: { description: The problem isn't linked to this assignment/course. }
+ *   500: { description: Server error. }
+ */
 export async function PUT(
   req: Request,
   { params }: { params: Promise<{ id: string; aid: string; pid: string }> },
@@ -28,7 +59,13 @@ export async function PUT(
     const session = await auth();
     const user = session?.user;
 
-    if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    if (!user?.id || !(await canManageCourse(user, courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'ASSIGNMENT_PROBLEM_SETTINGS_UPDATE_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -93,6 +130,7 @@ export async function PUT(
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,
         action: 'UPDATE_ASSIGNMENT_PROBLEM_SETTINGS',
+        severity: 'INFO',
         category: 'ASSIGNMENT',
         courseId,
         assignmentId,
@@ -115,6 +153,12 @@ export async function PUT(
     return NextResponse.json({ success: true, assignmentProblem: updated });
   } catch (error) {
     console.error('Failed to update assignment problem settings:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: null,
+      action: 'ASSIGNMENT_PROBLEM_SETTINGS_UPDATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json(
       { error: 'Failed to update assignment problem settings.' },
       { status: 500 },

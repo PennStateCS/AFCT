@@ -25,7 +25,7 @@ describe('GET /api/debug/enrollments', () => {
   });
 
   it('returns enrollments when authenticated', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
     prismaMock.roster.findMany.mockResolvedValue([
       { course: { id: 'c1', name: 'Course', code: 'C1', isPublished: true } },
     ]);
@@ -34,12 +34,12 @@ describe('GET /api/debug/enrollments', () => {
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toMatchObject({ userId: 'u1', userRole: 'STUDENT' });
+    expect(body).toMatchObject({ userId: 'u1', isAdmin: false });
     expect(body.enrollments).toHaveLength(1);
   });
 
   it('returns 500 when the lookup fails', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
     prismaMock.roster.findMany.mockRejectedValue(new Error('db down'));
 
     const res = await GET();

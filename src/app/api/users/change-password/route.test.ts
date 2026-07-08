@@ -39,19 +39,6 @@ describe('POST /api/users/change-password', () => {
     expect(res.status).toBe(401);
   });
 
-  it('returns 403 when role forbidden', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'GUEST' } });
-
-    const req = new NextRequest('http://localhost/api/users/change-password', {
-      method: 'POST',
-      body: JSON.stringify({ oldPassword: 'old', newPassword: 'Newpassword1!' }),
-    });
-
-    const res = await POST(req);
-
-    expect(res.status).toBe(403);
-  });
-
   it('returns 400 when missing fields', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
 
@@ -161,7 +148,6 @@ describe('POST /api/users/change-password', () => {
         action: 'CHANGE_PASSWORD',
         metadata: expect.objectContaining({
           userId: 'u1',
-          role: 'STUDENT',
           wasTemporaryPassword: true,
           clearedTemporaryPassword: true,
         }),

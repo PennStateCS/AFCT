@@ -1,7 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
+/**
+ * Reads one student's grade and feedback for a specific problem within an
+ * assignment. The student themselves, course staff, or a system admin. Returns nulls
+ * (not 404) when the problem exists but hasn't been graded.
+ * @openapi
+ * summary: Get a single problem grade
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: aid, in: path, required: true, schema: { type: string } }
+ *   - { name: pid, in: path, required: true, schema: { type: string } }
+ *   - { name: studentId, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: The grade, feedback, and updatedAt (grade/feedback null if ungraded).
+ *   401: { description: Not signed in. }
+ *   403: { description: "Not the student themselves, course staff, or a system admin." }
+ *   404: { description: Problem not found in this assignment/course. }
+ *   500: { description: Server error. }
+ */
 export async function GET(
   _req: NextRequest,
   {
@@ -18,8 +39,13 @@ export async function GET(
 
     const { id: courseId, aid: assignmentId, pid: problemId, studentId } = await params;
 
-    const isStaff = ['ADMIN', 'FACULTY', 'TA'].includes(session.user.role);
-    if (session.user.id !== studentId && !isStaff) {
+    if (!(await canManageCourse(session.user, courseId)) && session.user.id !== studentId) {
+      await createEnhancedActivityLog(prisma, _req, {
+        userId: session?.user?.id ?? null,
+        action: 'PROBLEM_GRADE_ACCESS_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -64,6 +90,34 @@ export async function GET(
   }
 }
 
+/**
+ * Sets or clears a student's grade (and optional feedback) for one problem. Course
+ * staff (faculty or TAs) or a system admin. A numeric grade must be within [0, maxPoints]; sending
+ * a null grade deletes the record. Every change is audited with the previous value.
+ * @openapi
+ * summary: Set or clear a problem grade
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: aid, in: path, required: true, schema: { type: string } }
+ *   - { name: pid, in: path, required: true, schema: { type: string } }
+ *   - { name: studentId, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         properties:
+ *           grade: { type: number, nullable: true, description: "0..maxPoints, or null to clear" }
+ *           feedback: { type: string, nullable: true }
+ * responses:
+ *   200: { description: The saved (or cleared) grade and feedback. }
+ *   400: { description: "Grade not a number/null, or out of range." }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller is not course staff (faculty or TA) or a system admin. }
+ *   404: { description: Problem not found in this assignment/course. }
+ *   500: { description: Server error. }
+ */
 export async function POST(
   req: NextRequest,
   {
@@ -72,17 +126,25 @@ export async function POST(
     params: Promise<{ id: string; aid: string; pid: string; studentId: string }>;
   },
 ) {
+  let graderId: string | null = null;
   try {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    graderId = session.user.id;
 
     const { id: courseId, aid: assignmentId, pid: problemId, studentId } = await params;
+
+    if (!(await canManageCourse(session.user, courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'PROBLEM_GRADE_UPDATE_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const assignmentProblem = await prisma.assignmentProblem.findUnique({
       where: {
@@ -114,6 +176,14 @@ export async function POST(
       }
     }
 
+    // Capture the prior grade so the audit records the before → after change.
+    const existing = await prisma.assignmentProblemGrade.findUnique({
+      where: {
+        assignmentId_problemId_studentId: { assignmentId, problemId, studentId },
+      },
+      select: { grade: true, feedback: true },
+    });
+
     if (grade === null || grade === undefined) {
       await prisma.assignmentProblemGrade.deleteMany({
         where: {
@@ -121,6 +191,16 @@ export async function POST(
           problemId,
           studentId,
         },
+      });
+      await createEnhancedActivityLog(prisma, req, {
+        userId: graderId,
+        action: 'PROBLEM_GRADE_CLEARED',
+        severity: 'INFO',
+        category: 'SUBMISSION',
+        courseId,
+        assignmentId,
+        problemId,
+        metadata: { studentId, graderId, previousGrade: existing?.grade ?? null },
       });
       return NextResponse.json({ grade: null, feedback: null });
     }
@@ -146,6 +226,24 @@ export async function POST(
       },
     });
 
+    await createEnhancedActivityLog(prisma, req, {
+      userId: graderId,
+      action: 'PROBLEM_GRADE_UPDATED',
+      severity: 'INFO',
+      category: 'SUBMISSION',
+      courseId,
+      assignmentId,
+      problemId,
+      metadata: {
+        studentId,
+        graderId,
+        previousGrade: existing?.grade ?? null,
+        grade,
+        maxPoints: assignmentProblem.maxPoints,
+        feedbackChanged: (existing?.feedback ?? null) !== feedback,
+      },
+    });
+
     return NextResponse.json({
       grade: saved.grade ?? null,
       feedback: saved.feedback ?? null,
@@ -153,6 +251,12 @@ export async function POST(
     });
   } catch (error) {
     console.error('POST /api/courses/[id]/[aid]/problems/[pid]/grade/[studentId] error:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: graderId,
+      action: 'PROBLEM_GRADE_UPDATE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Failed to save problem grade' }, { status: 500 });
   }
 }

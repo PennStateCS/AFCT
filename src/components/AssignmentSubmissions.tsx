@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FileText } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,6 +15,7 @@ import ProblemWorkspace from '@/components/assignments/ProblemWorkspace';
 import type { ProblemSubmission } from '@/lib/problem-submission';
 import StudentNavigator from './StudentNavigator';
 import JffViewerDialog from './JffViewerDialog';
+import { useEmptyStringSymbol } from '@/lib/useEmptyStringSymbol';
 import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
 import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
 
@@ -48,8 +50,12 @@ type Props = {
 };
 
 // Helpers
-const hasSubmissions = (obj: any): obj is { submissions: Submission[] } => {
-  return obj && typeof obj === 'object' && Array.isArray(obj.submissions);
+const hasSubmissions = (obj: unknown): obj is { submissions: Submission[] } => {
+  return (
+    !!obj &&
+    typeof obj === 'object' &&
+    Array.isArray((obj as { submissions?: unknown }).submissions)
+  );
 };
 
 const extractSubs = (raw?: SubmissionData): Submission[] => {
@@ -75,15 +81,14 @@ export default function AssignmentSubmissions({
   groupProblemsMap = {},
 }: Props) {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const epsSymbol = useEmptyStringSymbol(courseId);
   const searchParams = useSearchParams();
   const searchParamsString = searchParams.toString();
   const selectedStudentIdParam = searchParams.get('studentId');
-  const [students, setStudents] = useState<Person[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [submissions, setSubmissions] = useState<Record<string, SubmissionData>>({});
-  const [loadingSubmissions, setLoadingSubmissions] = useState(false);
   const [comments, setComments] = useState<Record<string, DiscussionComment[]>>({});
-  const [loadingComments, setLoadingComments] = useState(false);
   const [commentTexts, setCommentTexts] = useState<Record<string, string>>({});
   const [savingComments, setSavingComments] = useState<Record<string, boolean>>({});
   const [deletingComments, setDeletingComments] = useState<Record<string, boolean>>({});
@@ -95,25 +100,54 @@ export default function AssignmentSubmissions({
   const [selectedStudentGroupId, setSelectedStudentGroupId] = useState<string | null | undefined>(
     undefined,
   );
-  const [groupMembershipByStudent, setGroupMembershipByStudent] = useState<Record<string, string>>(
-    {},
-  );
-  const [loadingGroupMemberships, setLoadingGroupMemberships] = useState(false);
 
   // Grade editing state (robust, GradesCard style)
   const [problemGrades, setProblemGrades] = useState<Record<string, number | null>>({});
   const [gradeInputs, setGradeInputs] = useState<Record<string, string>>({});
   const [problemGradeErrors, setProblemGradeErrors] = useState<Record<string, string | null>>({});
   const [savingProblemGrades, setSavingProblemGrades] = useState<Record<string, boolean>>({});
-  const [loadingProblemGrades, setLoadingProblemGrades] = useState(false);
   const [showStudentDataLoading, setShowStudentDataLoading] = useState(false);
   const [studentGradeStatuses, setStudentGradeStatuses] = useState<Record<string, boolean>>({});
   const [openDialog, setOpenDialog] = useState<{
     open: boolean;
     submission: Submission | ProblemSubmission | null;
   }>({ open: false, submission: null });
-  const reviewDataAbortRef = useRef<AbortController | null>(null);
-  const reviewRequestSeqRef = useRef(0);
+
+  // Students — cached read shared with GroupsCard via the same query key.
+  const studentsQuery = useQuery({
+    queryKey: ['course', courseId, 'students'],
+    queryFn: async () => {
+      const res = await fetch(`/api/courses/${courseId}/students`);
+      if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load students');
+      return (await res.json()) as Person[];
+    },
+    staleTime: 30_000,
+  });
+
+  // Derived, sorted students list (replaces the old `students` useState). Sort
+  // alphabetically by last name, then first name (case-insensitive).
+  const students = useMemo<Person[]>(() => {
+    return [...(studentsQuery.data ?? [])].sort((a, b) => {
+      const aLast = (a.lastName ?? '').toLowerCase();
+      const bLast = (b.lastName ?? '').toLowerCase();
+      if (aLast < bLast) return -1;
+      if (aLast > bLast) return 1;
+      const aFirst = (a.firstName ?? '').toLowerCase();
+      const bFirst = (b.firstName ?? '').toLowerCase();
+      if (aFirst < bFirst) return -1;
+      if (aFirst > bFirst) return 1;
+      return 0;
+    });
+  }, [studentsQuery.data]);
+
+  // Surface a load failure the same way the imperative catch did.
+  const studentsQueryIsError = studentsQuery.isError;
+  useEffect(() => {
+    if (studentsQueryIsError) {
+      console.error('Fetch students error:', studentsQuery.error);
+      showToast.error('Failed to load students');
+    }
+  }, [studentsQueryIsError, studentsQuery.error]);
 
   const updateQuery = useCallback(
     (problemId: string) => {
@@ -243,52 +277,43 @@ export default function AssignmentSubmissions({
     return { earned: totalEarned, available: totalAvailable };
   }, [assignmentProblems, problemGrades, selectedStudent]);
 
-  // Preload group membership once per course/group set to avoid repeated network calls
-  // when navigating between students.
-  useEffect(() => {
-    let cancelled = false;
-    async function loadGroupMemberships() {
-      if (!assignmentIsGroup || !groups || groups.length === 0) {
-        setGroupMembershipByStudent({});
-        setLoadingGroupMemberships(false);
-        return;
-      }
+  // Preload group membership once per course to avoid repeated network calls when
+  // navigating between students. A single consolidated endpoint returns every
+  // (userId, groupId) pair for the course.
+  const groupMembershipsQuery = useQuery({
+    queryKey: ['course', courseId, 'group-memberships'],
+    queryFn: async () => {
+      const res = await fetch(`/api/courses/${courseId}/group-memberships`);
+      if (!res.ok) throw new Error('Failed to load group memberships');
+      return (await res.json()) as { memberships: Array<{ userId: string; groupId: string }> };
+    },
+    enabled: assignmentIsGroup && groups.length > 0,
+    staleTime: 30_000,
+  });
 
-      setLoadingGroupMemberships(true);
+  // Cold-load only: on a warm cache a background refetch of memberships must not
+  // blank the student panel or reset the resolved group (isFetching would).
+  const loadingGroupMemberships = groupMembershipsQuery.isLoading;
 
-      try {
-        const ops = groups.map((g) =>
-          fetch(`/api/courses/${courseId}/groups/${g.id}/members`)
-            .then((res) => (res.ok ? res.json() : Promise.resolve({ members: [] })))
-            .then((data) => ({ id: g.id, members: data?.members ?? [] }))
-            .catch(() => ({ id: g.id, members: [] })),
-        );
-        const results = await Promise.all(ops);
-        if (cancelled) return;
-
-        const membershipMap: Record<string, string> = {};
-        for (const result of results) {
-          for (const member of result.members as Array<{ userId: string }>) {
-            if (!membershipMap[member.userId]) {
-              membershipMap[member.userId] = result.id;
-            }
-          }
+  // Build the userId→groupId map by iterating groups IN ORDER and assigning the
+  // consolidated memberships that match each group, first-write-wins per user —
+  // this preserves the exact "first group in array order wins" semantics of the
+  // previous per-group fan-out. Empty when not a group assignment / no data.
+  const groupMembershipByStudent = useMemo<Record<string, string>>(() => {
+    if (!assignmentIsGroup || !groups || groups.length === 0) return {};
+    const memberships = groupMembershipsQuery.data?.memberships;
+    if (!memberships) return {};
+    const membershipMap: Record<string, string> = {};
+    for (const group of groups) {
+      for (const member of memberships) {
+        if (member.groupId !== group.id) continue;
+        if (!membershipMap[member.userId]) {
+          membershipMap[member.userId] = group.id;
         }
-
-        setGroupMembershipByStudent(membershipMap);
-      } catch (err) {
-        console.error('Failed to preload group memberships:', err);
-        if (!cancelled) setGroupMembershipByStudent({});
-      } finally {
-        if (!cancelled) setLoadingGroupMemberships(false);
       }
     }
-
-    loadGroupMemberships();
-    return () => {
-      cancelled = true;
-    };
-  }, [assignmentIsGroup, groups, courseId]);
+    return membershipMap;
+  }, [assignmentIsGroup, groups, groupMembershipsQuery.data]);
 
   // Determine selected student's group from preloaded membership data.
   useEffect(() => {
@@ -314,35 +339,6 @@ export default function AssignmentSubmissions({
     [updateQuery],
   );
 
-  // Fetch students
-  useEffect(() => {
-    const fetchStudents = async () => {
-      try {
-        const res = await fetch(`/api/courses/${courseId}/students`);
-        if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load students');
-        const data: Person[] = await res.json();
-        // Sort students alphabetically by last name, then first name (case-insensitive)
-        data.sort((a, b) => {
-          const aLast = (a.lastName ?? '').toLowerCase();
-          const bLast = (b.lastName ?? '').toLowerCase();
-          if (aLast < bLast) return -1;
-          if (aLast > bLast) return 1;
-          const aFirst = (a.firstName ?? '').toLowerCase();
-          const bFirst = (b.firstName ?? '').toLowerCase();
-          if (aFirst < bFirst) return -1;
-          if (aFirst > bFirst) return 1;
-          return 0;
-        });
-        setStudents(data);
-      } catch (err) {
-        console.error('Fetch students error:', err);
-        showToast.error('Failed to load students');
-        setStudents([]);
-      }
-    };
-    fetchStudents();
-  }, [courseId]);
-
   useEffect(() => {
     if (students.length === 0) {
       setSelectedIndex(-1);
@@ -366,165 +362,164 @@ export default function AssignmentSubmissions({
     }
   }, [selectedStudentIdParam, selectedStudent, updateStudentQuery]);
 
+  // Grade summary — cached read of which students have all problems graded.
+  const gradeSummaryQuery = useQuery({
+    queryKey: ['course', courseId, 'assignment', assignmentId, 'problem-grades', 'summary'],
+    queryFn: async () => {
+      const res = await fetch(`/api/courses/${courseId}/${assignmentId}/problem-grades/summary`);
+      if (!res.ok) {
+        // Match the previous silent handling of auth/not-found responses.
+        if ([401, 403, 404].includes(res.status)) return {} as Record<string, boolean>;
+        throw new Error((await res.json())?.error || 'Failed to load grade summary');
+      }
+      return ((await res.json()) ?? {}) as Record<string, boolean>;
+    },
+    enabled: students.length > 0,
+    staleTime: 30_000,
+  });
+
+  const gradeSummaryQueryIsError = gradeSummaryQuery.isError;
   useEffect(() => {
-    const fetchGradeSummary = async () => {
-      if (students.length === 0) {
-        setStudentGradeStatuses({});
-        return;
-      }
-      try {
-        const res = await fetch(`/api/courses/${courseId}/${assignmentId}/problem-grades/summary`);
-        if (!res.ok) {
-          if ([401, 403, 404].includes(res.status)) {
-            setStudentGradeStatuses({});
-            return;
-          }
-          throw new Error((await res.json())?.error || 'Failed to load grade summary');
-        }
-        const data = ((await res.json()) ?? {}) as Record<string, boolean>;
-        const normalized: Record<string, boolean> = {};
-        students.forEach((student) => {
-          normalized[student.id] = Boolean(data?.[student.id]);
-        });
-        setStudentGradeStatuses(normalized);
-      } catch (error) {
-        console.error('Failed to load grade summary:', error);
-      }
-    };
+    if (gradeSummaryQueryIsError) {
+      console.error('Failed to load grade summary:', gradeSummaryQuery.error);
+    }
+  }, [gradeSummaryQueryIsError, gradeSummaryQuery.error]);
 
-    fetchGradeSummary();
-  }, [assignmentId, courseId, students]);
+  // Seed the base studentGradeStatuses from the summary, normalized over students
+  // exactly as the previous effect did. This local state is also updated by grade
+  // saves and review-data seeding, so we do NOT invalidate the summary on save.
+  const gradeSummaryData = gradeSummaryQuery.data;
+  useEffect(() => {
+    if (students.length === 0) {
+      setStudentGradeStatuses({});
+      return;
+    }
+    if (gradeSummaryData === undefined) return;
+    const normalized: Record<string, boolean> = {};
+    students.forEach((student) => {
+      normalized[student.id] = Boolean(gradeSummaryData?.[student.id]);
+    });
+    setStudentGradeStatuses(normalized);
+  }, [students, gradeSummaryData]);
 
-  const fetchReviewData = useCallback(async () => {
+  // Review data (submissions + comments + problem grades) for the selected student.
+  // TanStack Query owns the fetch, cancellation (via signal), and dedupe — the old
+  // AbortController / request-sequence plumbing is gone.
+  type ReviewDataResponse = {
+    submissions?: Record<string, SubmissionData>;
+    comments?: Array<DiscussionComment & { problemId?: string | null }>;
+    problemGrades?: Record<string, { grade: number | null; feedback: string | null }>;
+  };
+
+  const EMPTY_REVIEW_DATA: ReviewDataResponse = { submissions: {}, comments: [], problemGrades: {} };
+
+  const reviewQuery = useQuery({
+    queryKey: ['course', courseId, 'assignment', assignmentId, 'review-data', selectedStudentId],
+    queryFn: async ({ signal }): Promise<ReviewDataResponse> => {
+      const res = await fetch(
+        `/api/courses/${courseId}/${assignmentId}/review-data/${selectedStudentId}`,
+        { signal },
+      );
+      if (!res.ok) {
+        // Match the previous silent handling of auth/not-found responses.
+        if ([401, 403, 404].includes(res.status)) return EMPTY_REVIEW_DATA;
+        throw new Error((await res.json())?.error || 'Failed to load review data');
+      }
+      return ((await res.json()) ?? {}) as ReviewDataResponse;
+    },
+    enabled: !!selectedStudentId,
+    staleTime: 30_000,
+  });
+
+  // Stable refresher used by the rerun helpers (they previously took fetchReviewData).
+  const refreshReview = useCallback(async () => {
+    await queryClient.invalidateQueries({
+      queryKey: ['course', courseId, 'assignment', assignmentId, 'review-data', selectedStudentId],
+    });
+  }, [queryClient, courseId, assignmentId, selectedStudentId]);
+
+  // All three loading flags previously flipped together; derive them from the query.
+  // isPending (not isFetching) so the spinner shows only on the cold load of a
+  // student's data. After a grade/comment save invalidates review-data, the
+  // background refetch must NOT blank the whole workspace back to a spinner.
+  const reviewFetching = !!selectedStudentId && reviewQuery.isPending;
+  const loadingSubmissions = reviewFetching;
+  const loadingComments = reviewFetching;
+  const loadingProblemGrades = reviewFetching;
+
+  // Seed the local editable state from the cached review data. This carries the
+  // EXACT seeding logic from the old fetchReviewData success block. When there is
+  // no selected student, clear the local state (the old null-branch behavior).
+  const reviewData = reviewQuery.data;
+  const reviewQueryIsError = reviewQuery.isError;
+  useEffect(() => {
     if (!selectedStudentId) {
-      reviewDataAbortRef.current?.abort();
-      reviewDataAbortRef.current = null;
       setSubmissions({});
       setComments({});
       setProblemGrades({});
       setGradeInputs({});
       setProblemGradeErrors({});
-      setLoadingSubmissions(false);
-      setLoadingComments(false);
-      setLoadingProblemGrades(false);
       return;
     }
 
-    setLoadingSubmissions(true);
-    setLoadingComments(true);
-    setLoadingProblemGrades(true);
-
-    reviewDataAbortRef.current?.abort();
-    const controller = new AbortController();
-    reviewDataAbortRef.current = controller;
-    const requestSeq = ++reviewRequestSeqRef.current;
-
-    try {
-      const res = await fetch(
-        `/api/courses/${courseId}/${assignmentId}/review-data/${selectedStudentId}`,
-        { signal: controller.signal },
-      );
-
-      if (requestSeq !== reviewRequestSeqRef.current) return;
-
-      if (!res.ok) {
-        if ([401, 403, 404].includes(res.status)) {
-          if (requestSeq !== reviewRequestSeqRef.current) return;
-          setSubmissions({});
-          setComments(
-            Object.fromEntries(
-              assignmentProblems.map((problem) => [problem.id, [] as DiscussionComment[]]),
-            ),
-          );
-          setProblemGrades({});
-          setGradeInputs({});
-          setProblemGradeErrors({});
-          return;
-        }
-        throw new Error((await res.json())?.error || 'Failed to load review data');
-      }
-
-      type ReviewDataResponse = {
-        submissions?: Record<string, SubmissionData>;
-        comments?: Array<DiscussionComment & { problemId?: string | null }>;
-        problemGrades?: Record<string, { grade: number | null; feedback: string | null }>;
-      };
-
-      const data = ((await res.json()) ?? {}) as ReviewDataResponse;
-      if (requestSeq !== reviewRequestSeqRef.current) return;
-      setSubmissions(data.submissions || {});
-
-      const groupedComments = Object.fromEntries(
-        assignmentProblems.map((problem) => [problem.id, [] as DiscussionComment[]]),
-      ) as Record<string, DiscussionComment[]>;
-
-      for (const comment of data.comments ?? []) {
-        const problemId = comment.problemId;
-        if (problemId && groupedComments[problemId]) {
-          groupedComments[problemId].push(comment);
-        }
-      }
-      setComments(groupedComments);
-
-      const gradeData = data.problemGrades ?? {};
-      const normalizedGrades: Record<string, number | null> = {};
-      const normalizedInputs: Record<string, string> = {};
-      assignmentProblems.forEach((problem) => {
-        const entry = gradeData?.[problem.id];
-        const value = typeof entry?.grade === 'number' ? entry.grade : null;
-        normalizedGrades[problem.id] = value;
-        normalizedInputs[problem.id] = value === null || value === undefined ? '' : String(value);
-      });
-
-      setProblemGrades(normalizedGrades);
-      setGradeInputs(normalizedInputs);
-      setProblemGradeErrors({});
-
-      const hasAllGrades =
-        assignmentProblems.length === 0
-          ? true
-          : assignmentProblems.every((problem) => {
-              const value = normalizedGrades[problem.id];
-              return value !== null && value !== undefined;
-            });
-      setStudentGradeStatuses((prev) => ({
-        ...prev,
-        [selectedStudentId]: hasAllGrades,
-      }));
-    } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') return;
-      if (requestSeq !== reviewRequestSeqRef.current) return;
-      console.error('Fetch review data error:', err);
+    if (reviewQueryIsError) {
+      console.error('Fetch review data error:', reviewQuery.error);
       showToast.error('Failed to load review data');
       setSubmissions({});
       setComments({});
       setProblemGrades({});
       setGradeInputs({});
-    } finally {
-      if (requestSeq !== reviewRequestSeqRef.current) return;
-      setLoadingSubmissions(false);
-      setLoadingComments(false);
-      setLoadingProblemGrades(false);
+      return;
     }
-  }, [courseId, assignmentId, selectedStudentId, assignmentProblems]);
 
-  useEffect(() => {
-    return () => {
-      reviewDataAbortRef.current?.abort();
-      reviewDataAbortRef.current = null;
-    };
-  }, []);
+    if (reviewData === undefined) return;
 
-  // Fetch review data for selected student
-  useEffect(() => {
-    fetchReviewData();
-  }, [fetchReviewData]);
+    setSubmissions(reviewData.submissions || {});
+
+    const groupedComments = Object.fromEntries(
+      assignmentProblems.map((problem) => [problem.id, [] as DiscussionComment[]]),
+    ) as Record<string, DiscussionComment[]>;
+
+    for (const comment of reviewData.comments ?? []) {
+      const problemId = comment.problemId;
+      if (problemId && groupedComments[problemId]) {
+        groupedComments[problemId].push(comment);
+      }
+    }
+    setComments(groupedComments);
+
+    const gradeData = reviewData.problemGrades ?? {};
+    const normalizedGrades: Record<string, number | null> = {};
+    const normalizedInputs: Record<string, string> = {};
+    assignmentProblems.forEach((problem) => {
+      const entry = gradeData?.[problem.id];
+      const value = typeof entry?.grade === 'number' ? entry.grade : null;
+      normalizedGrades[problem.id] = value;
+      normalizedInputs[problem.id] = value === null || value === undefined ? '' : String(value);
+    });
+
+    setProblemGrades(normalizedGrades);
+    setGradeInputs(normalizedInputs);
+    setProblemGradeErrors({});
+
+    const hasAllGrades =
+      assignmentProblems.length === 0
+        ? true
+        : assignmentProblems.every((problem) => {
+            const value = normalizedGrades[problem.id];
+            return value !== null && value !== undefined;
+          });
+    setStudentGradeStatuses((prev) => ({
+      ...prev,
+      [selectedStudentId]: hasAllGrades,
+    }));
+  }, [selectedStudentId, reviewData, reviewQueryIsError, reviewQuery.error, assignmentProblems]);
 
   const handleRerunSubmission = useCallback(
     async (submission: Submission) => {
-      await rerunSubmission({ submission, setRerunning, fetchReviewData });
+      await rerunSubmission({ submission, setRerunning, fetchReviewData: refreshReview });
     },
-    [fetchReviewData],
+    [refreshReview],
   );
 
   const handleRerunVisibleSubmissions = useCallback(
@@ -532,10 +527,10 @@ export default function AssignmentSubmissions({
       await rerunVisibleSubmissions({
         visibleSubmissions,
         setRerunning,
-        fetchReviewData,
+        fetchReviewData: refreshReview,
       });
     },
-    [fetchReviewData],
+    [refreshReview],
   );
 
   const saveComment = useCallback(
@@ -565,6 +560,17 @@ export default function AssignmentSubmissions({
           [problemId]: [...(prev[problemId] || []), newComment],
         }));
         setCommentTexts((prev) => ({ ...prev, [problemId]: '' }));
+        // Keep the cached review data fresh after the optimistic local update.
+        queryClient.invalidateQueries({
+          queryKey: [
+            'course',
+            courseId,
+            'assignment',
+            assignmentId,
+            'review-data',
+            selectedStudentId,
+          ],
+        });
         showToast.success('Comment saved successfully');
       } catch (err) {
         console.error('Save comment error:', err);
@@ -573,7 +579,7 @@ export default function AssignmentSubmissions({
         setSavingComments((prev) => ({ ...prev, [problemId]: false }));
       }
     },
-    [commentTexts, selectedStudent, assignmentId],
+    [commentTexts, selectedStudent, assignmentId, courseId, selectedStudentId, queryClient],
   );
 
   const deleteComment = useCallback(async (commentId: string, problemId: string) => {
@@ -590,6 +596,17 @@ export default function AssignmentSubmissions({
         ...prev,
         [problemId]: prev[problemId]?.filter((c) => c.id !== commentId) || [],
       }));
+      // Keep the cached review data fresh after the optimistic local update.
+      queryClient.invalidateQueries({
+        queryKey: [
+          'course',
+          courseId,
+          'assignment',
+          assignmentId,
+          'review-data',
+          selectedStudentId,
+        ],
+      });
       showToast.success('Comment deleted successfully');
     } catch (err) {
       console.error('Delete comment error:', err);
@@ -597,7 +614,7 @@ export default function AssignmentSubmissions({
     } finally {
       setDeletingComments((prev) => ({ ...prev, [commentId]: false }));
     }
-  }, []);
+  }, [courseId, assignmentId, selectedStudentId, queryClient]);
 
   const handleGradeInputChange = useCallback((problemId: string, value: string) => {
     setGradeInputs((prev) => ({ ...prev, [problemId]: value }));
@@ -680,6 +697,19 @@ export default function AssignmentSubmissions({
           [problemId]:
             numericValue === null || numericValue === undefined ? '' : String(numericValue),
         }));
+        // Keep the cached review data fresh after the optimistic local updates.
+        // NOTE: deliberately NOT invalidating the summary query, which would
+        // clobber the optimistic studentGradeStatuses update above.
+        queryClient.invalidateQueries({
+          queryKey: [
+            'course',
+            courseId,
+            'assignment',
+            assignmentId,
+            'review-data',
+            selectedStudent.id,
+          ],
+        });
         showToast.success(
           `Grade ${numericValue ?? 'cleared'} saved for ${selectedStudent.firstName} ${selectedStudent.lastName} on ${problem.title}`,
         );
@@ -700,6 +730,7 @@ export default function AssignmentSubmissions({
       assignmentProblems,
       selectedStudent,
       setProblemGrades,
+      queryClient,
     ],
   );
 
@@ -817,7 +848,9 @@ export default function AssignmentSubmissions({
                         isSaving={selectedProblem ? savingComments[selectedProblem.id] : false}
                         deletingComments={deletingComments}
                         onViewSubmission={(submission: ProblemSubmission) => setOpenDialog({ open: true, submission })}
-                        onRerunSubmission={handleRerunSubmission}
+                        onRerunSubmission={(submission) =>
+                          handleRerunSubmission(submission as unknown as Submission)
+                        }
                         onRerunVisibleSubmissions={handleRerunVisibleSubmissions}
                         rerunning={rerunning}
                         courseIsArchived={courseIsArchived}
@@ -860,6 +893,7 @@ export default function AssignmentSubmissions({
             title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
             width="70vw"
             height="70vh"
+            epsSymbol={epsSymbol}
           />
         )}
       {openDialog.submission &&

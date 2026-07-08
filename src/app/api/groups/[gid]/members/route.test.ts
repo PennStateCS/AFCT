@@ -17,11 +17,14 @@ vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activity
 
 import { GET, POST } from './route';
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  prismaMock.roster.findFirst.mockResolvedValue(null);
+});
 
 describe('GET /api/groups/[gid]/members', () => {
   it('returns 400 when missing ids', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
 
     const res = await GET(new NextRequest('http://localhost/api/groups//members'), {
       params: Promise.resolve({ id: '', gid: '' }),
@@ -42,6 +45,7 @@ describe('GET /api/groups/[gid]/members', () => {
 
   it('returns 403 for non-staff', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.group.findUnique.mockResolvedValue({ id: 'g1', courseId: 'c1' });
 
     const res = await GET(new NextRequest('http://localhost/api/groups/g1/members'), {
       params: Promise.resolve({ id: 'c1', gid: 'g1' }),
@@ -51,7 +55,7 @@ describe('GET /api/groups/[gid]/members', () => {
   });
 
   it('returns members', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.group.findUnique.mockResolvedValue({ id: 'g1', courseId: 'c1' });
     prismaMock.groupRoster.findMany.mockResolvedValue([
       {
@@ -72,7 +76,7 @@ describe('GET /api/groups/[gid]/members', () => {
   });
 
   it('returns 404 when group not found', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.group.findUnique.mockResolvedValue(null);
 
     const res = await GET(new NextRequest('http://localhost/api/groups/g1/members'), {
@@ -83,7 +87,7 @@ describe('GET /api/groups/[gid]/members', () => {
   });
 
   it('returns 404 when group does not match provided course', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.group.findUnique.mockResolvedValue({ id: 'g1', courseId: 'other' });
 
     const res = await GET(new NextRequest('http://localhost/api/groups/g1/members'), {
@@ -94,7 +98,7 @@ describe('GET /api/groups/[gid]/members', () => {
   });
 
   it('returns 500 when fetching members fails', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.group.findUnique.mockResolvedValue({ id: 'g1', courseId: 'c1' });
     prismaMock.groupRoster.findMany.mockRejectedValue(new Error('db fail'));
 
@@ -108,7 +112,7 @@ describe('GET /api/groups/[gid]/members', () => {
 
 describe('POST /api/groups/[gid]/members', () => {
   it('returns 400 when missing ids', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
 
     const res = await POST(
       new NextRequest('http://localhost/api/groups//members', { method: 'POST' }),
@@ -132,6 +136,7 @@ describe('POST /api/groups/[gid]/members', () => {
 
   it('returns 403 when non-staff user attempts add', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.group.findUnique.mockResolvedValue({ id: 'g1', courseId: 'c1' });
 
     const req = new NextRequest('http://localhost/api/groups/g1/members', {
       method: 'POST',
@@ -143,7 +148,7 @@ describe('POST /api/groups/[gid]/members', () => {
   });
 
   it('returns 404 when group not found', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.group.findUnique.mockResolvedValue(null);
 
     const req = new NextRequest('http://localhost/api/groups/g1/members', {
@@ -156,7 +161,7 @@ describe('POST /api/groups/[gid]/members', () => {
   });
 
   it('returns 404 when group course mismatch', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.group.findUnique.mockResolvedValue({ id: 'g1', courseId: 'other' });
 
     const req = new NextRequest('http://localhost/api/groups/g1/members', {
@@ -169,7 +174,7 @@ describe('POST /api/groups/[gid]/members', () => {
   });
 
   it('returns 404 when user not found', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.group.findUnique.mockResolvedValue({ id: 'g1', courseId: 'c1' });
     prismaMock.user.findUnique.mockResolvedValue(null);
 
@@ -183,7 +188,7 @@ describe('POST /api/groups/[gid]/members', () => {
   });
 
   it('finds user by email when userId is absent', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.group.findUnique.mockResolvedValue({ id: 'g1', courseId: 'c1' });
     prismaMock.user.findUnique.mockResolvedValue({ id: 'u2', email: 'user@example.com' });
     prismaMock.roster.findFirst.mockResolvedValue({ userId: 'u2' });
@@ -201,7 +206,7 @@ describe('POST /api/groups/[gid]/members', () => {
   });
 
   it('returns 422 when not enrolled', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.group.findUnique.mockResolvedValue({ id: 'g1', courseId: 'c1' });
     prismaMock.user.findUnique.mockResolvedValue({ id: 'u2' });
     prismaMock.roster.findFirst.mockResolvedValue(null);
@@ -216,7 +221,7 @@ describe('POST /api/groups/[gid]/members', () => {
   });
 
   it('creates and logs', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.group.findUnique.mockResolvedValue({ id: 'g1', courseId: 'c1' });
     prismaMock.user.findUnique.mockResolvedValue({ id: 'u2' });
     prismaMock.roster.findFirst.mockResolvedValue({ userId: 'u2' });
@@ -236,7 +241,7 @@ describe('POST /api/groups/[gid]/members', () => {
   });
 
   it('returns 409 when user already in group', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.group.findUnique.mockResolvedValue({ id: 'g1', courseId: 'c1' });
     prismaMock.user.findUnique.mockResolvedValue({ id: 'u2' });
     prismaMock.roster.findFirst.mockResolvedValue({ userId: 'u2' });
@@ -252,7 +257,7 @@ describe('POST /api/groups/[gid]/members', () => {
   });
 
   it('returns 500 on unexpected errors', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.group.findUnique.mockRejectedValue(new Error('boom'));
 
     const req = new NextRequest('http://localhost/api/groups/g1/members', {

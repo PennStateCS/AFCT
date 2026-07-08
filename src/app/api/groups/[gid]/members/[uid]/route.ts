@@ -2,8 +2,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
-// DELETE: remove a user from a group
+/**
+ * Removes a user from a group, addressed by the group's and user's global ids.
+ * Course staff (faculty or TAs) or a system admin.
+ * @openapi
+ * summary: Remove a group member by ids
+ * parameters:
+ *   - { name: gid, in: path, required: true, schema: { type: string } }
+ *   - { name: uid, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200: { description: Member removed. }
+ *   400: { description: Missing ids. }
+ *   401: { description: Not signed in. }
+ *   403: { description: Not course staff or a system admin. }
+ *   404: { description: Group or membership not found. }
+ *   500: { description: Server error. }
+ */
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ gid: string; uid: string; id?: string }> },
@@ -14,8 +30,6 @@ export async function DELETE(
 
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!['ADMIN', 'FACULTY', 'TA'].includes(session.user.role))
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   try {
     const group = await prisma.group.findUnique({ where: { id: groupId } });
@@ -23,6 +37,16 @@ export async function DELETE(
     if (providedCourseId && group.courseId !== providedCourseId)
       return NextResponse.json({ error: 'Group not found' }, { status: 404 });
     const courseId = group.courseId;
+
+    if (!(await canManageCourse(session.user, courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'GROUP_MEMBER_REMOVE_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const entry = await prisma.groupRoster.findUnique({
       where: { groupId_userId: { groupId, userId } },
@@ -34,6 +58,7 @@ export async function DELETE(
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,
       action: 'REMOVE_GROUP_MEMBER',
+      severity: 'INFO',
       category: 'COURSE',
       metadata: { courseId, groupId, removedUserId: userId },
     });
@@ -41,6 +66,12 @@ export async function DELETE(
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('[GROUP_MEMBERS_DELETE_ERROR]', err);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session?.user?.id ?? null,
+      action: 'GROUP_MEMBER_REMOVE_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

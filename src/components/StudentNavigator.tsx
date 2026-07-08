@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useRef, useState, useEffect } from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -47,31 +48,27 @@ export default function StudentNavigator({
   const [studentFilter, setStudentFilter] = useState('');
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const [assignment, setAssignment] = useState<{
+  // Assignment shell — cached and shared with StudentAssignmentView via the same
+  // ['assignment', assignmentId] key, so the two dedupe/share this read.
+  const assignmentQuery = useQuery<{
     dueDate?: string | Date;
     allowLateSubmissions?: boolean;
     lateCutoff?: string | Date | null;
-  } | null>(null);
-  const [loadingAssignment, setLoadingAssignment] = useState(false);
+  }>({
+    queryKey: ['assignment', assignmentId],
+    queryFn: async () => {
+      const res = await fetch(`/api/assignments/${assignmentId}`);
+      if (!res.ok) throw new Error('Failed to fetch assignment');
+      return res.json();
+    },
+    enabled: !!assignmentId,
+    staleTime: 30_000,
+  });
 
-  useEffect(() => {
-    if (!assignmentId) return;
-    setLoadingAssignment(true);
-    fetch(`/api/assignments/${assignmentId}`)
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed to fetch assignment');
-        return res.json();
-      })
-      .then((data) => {
-        setAssignment({
-          dueDate: data.dueDate,
-          allowLateSubmissions: data.allowLateSubmissions,
-          lateCutoff: data.lateCutoff,
-        });
-      })
-      .catch(() => setAssignment(null))
-      .finally(() => setLoadingAssignment(false));
-  }, [assignmentId]);
+  const assignment = assignmentQuery.isError ? null : assignmentQuery.data ?? null;
+  // Only surface the loading label when a fetch is actually in flight; a disabled
+  // query (no assignmentId) reports isPending but should render nothing here.
+  const loadingAssignment = !!assignmentId && assignmentQuery.isPending;
 
   const selectedStudent = students[selectedIndex] ?? null;
   const selectedStatus = selectedStudent ? (gradeStatuses?.[selectedStudent.id] ?? false) : false;

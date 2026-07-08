@@ -18,6 +18,7 @@ const prismaMock = vi.hoisted(() => ({
   groupAssignmentProblem: {
     createMany: vi.fn(),
   },
+  roster: { findFirst: vi.fn() },
 
 }));
 
@@ -32,7 +33,8 @@ import { POST } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN' } });
+  prismaMock.roster.findFirst.mockResolvedValue(null);
+  authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
   prismaMock.assignmentProblem.findMany.mockResolvedValue([]);
   prismaMock.assignmentProblem.createMany.mockResolvedValue({ count: 0 });
   prismaMock.assignment.findUnique.mockResolvedValue({

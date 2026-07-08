@@ -4,6 +4,9 @@ const prismaMock = vi.hoisted(() => ({
   problem: {
     create: vi.fn(),
   },
+  roster: {
+    findFirst: vi.fn(),
+  },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -37,6 +40,7 @@ import { POST } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  prismaMock.roster.findFirst.mockResolvedValue(null);
   uploadLimitMock.mockResolvedValue({ maxBytes: 5 * 1024 * 1024, maxMb: 5 });
 });
 
@@ -78,6 +82,7 @@ describe('POST /api/problems', () => {
 
   it('returns 413 when file exceeds limit', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     uploadLimitMock.mockResolvedValue({ maxBytes: 1, maxMb: 0.000001 });
 
     const file = new File([new Uint8Array([1, 2, 3])], 'file.jff');
@@ -100,6 +105,7 @@ describe('POST /api/problems', () => {
 
   it('creates problem and logs activity', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.problem.create.mockResolvedValue({ id: 'problem-1' });
 
     const file = new File([new Uint8Array([1, 2, 3])], 'file.jff');

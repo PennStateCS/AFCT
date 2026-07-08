@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
-import SystemSubmissionClient from './SystemSubmissionClient';
+import SubmissionsClient from './SubmissionsClient';
 
 export const metadata: Metadata = {
-  title: 'System Submissions',
+  title: 'Submissions',
 };
 
-export default function SystemSubmissionPage() {
-  return <SystemSubmissionClient />;
+export default function SubmissionsPage() {
+  return <SubmissionsClient />;
 }

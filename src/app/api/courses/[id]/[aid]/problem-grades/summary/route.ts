@@ -1,7 +1,29 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 
+/**
+ * Per-student completion summary for one assignment: maps each student to whether
+ * every problem in the assignment has been graded (used to flag fully-graded
+ * students in the grading UI). Course staff (faculty or TAs) or a system admin.
+ * @openapi
+ * summary: Get an assignment's grading-completion summary
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: aid, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: A map of studentId → fully-graded boolean (empty object if the assignment has no problems).
+ *     content:
+ *       application/json:
+ *         schema: { type: object, additionalProperties: { type: boolean } }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller is not course staff (faculty or TA) or a system admin. }
+ *   404: { description: Assignment not found in this course. }
+ *   500: { description: Server error. }
+ */
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string; aid: string }> },
@@ -13,8 +35,13 @@ export async function GET(
     }
 
     const { id: courseId, aid: assignmentId } = await params;
-    const isStaff = ['ADMIN', 'FACULTY', 'TA'].includes(session.user.role);
-    if (!isStaff) {
+    if (!(await canManageCourse(session.user, courseId))) {
+      await createEnhancedActivityLog(prisma, _req, {
+        userId: session?.user?.id ?? null,
+        action: 'PROBLEM_GRADES_SUMMARY_ACCESS_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

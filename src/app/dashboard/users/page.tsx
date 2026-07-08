@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default async function UsersPage() {
   const session = await auth();
-  const canViewUsers = !!session?.user && ['ADMIN', 'FACULTY', 'TA'].includes(session.user.role);
+  const canViewUsers = Boolean(session?.user?.isAdmin);
 
   const initialUsers = canViewUsers ? await getUsersList() : [];
 

@@ -109,7 +109,7 @@ describe('Navbar', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('shows user details and breadcrumb labels from provider sources', () => {
+  it('shows the Admin badge for admins and breadcrumb labels from provider sources', () => {
     useSessionMock.mockReturnValue({
       status: 'authenticated',
       data: {
@@ -117,8 +117,7 @@ describe('Navbar', () => {
           firstName: 'Ada',
           lastName: 'Lovelace',
           name: 'Ada Lovelace',
-          role: 'ADMIN',
-          avatar: 'ada.png',
+          isAdmin: true,
         },
       },
     });
@@ -131,15 +130,16 @@ describe('Navbar', () => {
 
     expect(screen.getByText('Course Alpha')).toBeInTheDocument();
     expect(screen.getByText('Assignment Beta')).toBeInTheDocument();
-    expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
+    // The name and profile picture are no longer shown; only the Admin badge.
+    expect(screen.queryByText('Ada Lovelace')).toBeNull();
+    expect(screen.queryByLabelText('User avatar')).toBeNull();
     expect(screen.getByText('Admin')).toBeInTheDocument();
-    expect(screen.getByLabelText('User avatar')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Dark'));
     expect(setThemeMock).toHaveBeenCalledWith('dark');
   });
 
-  it('falls back to title-cased route segments when labels are unavailable', () => {
+  it('does not show an Admin badge for non-admin users', () => {
     useSessionMock.mockReturnValue({
       status: 'authenticated',
       data: {
@@ -147,8 +147,7 @@ describe('Navbar', () => {
           firstName: 'Ada',
           lastName: 'Lovelace',
           name: 'Ada Lovelace',
-          role: 'ADMIN',
-          avatar: 'ada.png',
+          isAdmin: false,
         },
       },
     });
@@ -156,8 +155,7 @@ describe('Navbar', () => {
 
     renderNavbar();
 
-    expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
-    expect(screen.getByText('Admin')).toBeInTheDocument();
+    expect(screen.queryByText('Admin')).toBeNull();
     expect(screen.getByText('System Settings')).toBeInTheDocument();
     expect(screen.getByLabelText('Breadcrumb')).toBeInTheDocument();
   });
@@ -187,23 +185,20 @@ describe('Navbar', () => {
     expect(screen.getByText('Homework 1')).toBeInTheDocument();
   });
 
-  it('uses first/last fallback name and supports all theme actions', () => {
+  it('supports all theme actions', () => {
     useSessionMock.mockReturnValue({
       status: 'authenticated',
       data: {
         user: {
           firstName: 'Bruce',
           lastName: 'Wayne',
-          role: 'FACULTY',
-          avatar: 'bruce.png',
+          isAdmin: false,
         },
       },
     });
     usePathnameMock.mockReturnValue('/dashboard/users');
 
     renderNavbar();
-
-    expect(screen.getByText('Bruce Wayne')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Light'));
     fireEvent.click(screen.getByText('Dark'));

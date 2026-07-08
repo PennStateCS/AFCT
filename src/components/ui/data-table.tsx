@@ -12,6 +12,8 @@ import {
   useReactTable,
   VisibilityState,
   SortingState,
+  PaginationState,
+  OnChangeFn,
 } from '@tanstack/react-table';
 import {
   Table,
@@ -80,6 +82,26 @@ interface DataTableProps<TData, TValue> {
   showExportButton?: boolean;
   actionButtons?: React.ReactNode;
   defaultColumnVisibility?: VisibilityState;
+
+  // ---- Server-side ("manual") mode — all optional; omit for client-side. ----
+  // When a controlled value + handler is provided, the table hands that concern
+  // (pagination / sorting / filtering) to the parent instead of computing it
+  // over `data`. Existing callers pass none of these and keep client behavior.
+  manualPagination?: boolean;
+  /** Total page count, required when manualPagination is on. */
+  pageCount?: number;
+  /** Total row count across all pages (for the footer summary). */
+  rowCount?: number;
+  pagination?: PaginationState;
+  onPaginationChange?: OnChangeFn<PaginationState>;
+
+  manualSorting?: boolean;
+  sorting?: SortingState;
+  onSortingChange?: OnChangeFn<SortingState>;
+
+  manualFiltering?: boolean;
+  globalFilter?: string;
+  onGlobalFilterChange?: (value: string) => void;
 }
 
 export function DataTable<TData, TValue>({
@@ -92,11 +114,50 @@ export function DataTable<TData, TValue>({
   showExportButton = true,
   actionButtons,
   defaultColumnVisibility = {},
+  manualPagination = false,
+  pageCount,
+  rowCount,
+  pagination: paginationProp,
+  onPaginationChange,
+  manualSorting = false,
+  sorting: sortingProp,
+  onSortingChange,
+  manualFiltering = false,
+  globalFilter: globalFilterProp,
+  onGlobalFilterChange,
 }: DataTableProps<TData, TValue>) {
-  const [globalFilter, setGlobalFilter] = useState('');
   const [columnVisibility, setColumnVisibility] =
     useState<VisibilityState>(defaultColumnVisibility);
-  const [sorting, setSorting] = useState<SortingState>([]);
+
+  // Each of filtering / sorting / pagination is controlled by the parent when a
+  // value is supplied, otherwise held internally (the original client behavior).
+  const [internalGlobalFilter, setInternalGlobalFilter] = useState('');
+  const globalFilter = globalFilterProp ?? internalGlobalFilter;
+  const setGlobalFilter = onGlobalFilterChange ?? setInternalGlobalFilter;
+
+  const [internalSorting, setInternalSorting] = useState<SortingState>([]);
+  const sorting = sortingProp ?? internalSorting;
+
+  const [internalPagination, setInternalPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 10,
+  });
+  const pagination = paginationProp ?? internalPagination;
+
+  // Normalize react-table's value-or-updater callbacks down to a plain value so
+  // both internal setState and the parent's (value) => void handlers work.
+  const handleSortingChange: OnChangeFn<SortingState> = (updater) => {
+    const next = typeof updater === 'function' ? updater(sorting) : updater;
+    (onSortingChange ?? setInternalSorting)(next);
+  };
+  const handlePaginationChange: OnChangeFn<PaginationState> = (updater) => {
+    const next = typeof updater === 'function' ? updater(pagination) : updater;
+    (onPaginationChange ?? setInternalPagination)(next);
+  };
+  const handleGlobalFilterChange: OnChangeFn<string> = (updater) => {
+    const next = typeof updater === 'function' ? updater(globalFilter) : updater;
+    setGlobalFilter(next);
+  };
 
   useEffect(() => {
     try {
@@ -111,6 +172,9 @@ export function DataTable<TData, TValue>({
     } catch {
       // localStorage may not be available in all environments
     }
+    // defaultColumnVisibility is only the hydration baseline; re-running when its
+    // object identity changes on a parent re-render would clobber user column choices.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey]);
 
   useEffect(() => {
@@ -142,14 +206,21 @@ export function DataTable<TData, TValue>({
       globalFilter,
       columnVisibility,
       sorting,
+      pagination,
     },
-    onGlobalFilterChange: setGlobalFilter,
+    manualPagination,
+    manualSorting,
+    manualFiltering,
+    pageCount: manualPagination ? (pageCount ?? -1) : undefined,
+    rowCount: manualPagination ? rowCount : undefined,
+    onGlobalFilterChange: handleGlobalFilterChange,
     onColumnVisibilityChange: setColumnVisibility,
-    onSortingChange: setSorting,
+    onSortingChange: handleSortingChange,
+    onPaginationChange: handlePaginationChange,
     getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
+    getSortedRowModel: manualSorting ? undefined : getSortedRowModel(),
+    getFilteredRowModel: manualFiltering ? undefined : getFilteredRowModel(),
+    getPaginationRowModel: manualPagination ? undefined : getPaginationRowModel(),
   });
 
   const resetColumns = () => {
@@ -283,7 +354,7 @@ export function DataTable<TData, TValue>({
       <div className="overflow-x-auto rounded-md border">
         <Table className="w-full" role="table" aria-label={tableLabel} aria-busy={loading}>
           <TableHeader role="rowgroup">
-            {table.getHeaderGroups().map((headerGroup, hgIndex) => (
+            {table.getHeaderGroups().map((headerGroup) => (
               <TableRow
                 key={headerGroup.id}
                 className={loading ? 'hover:bg-transparent' : undefined}
@@ -303,11 +374,11 @@ export function DataTable<TData, TValue>({
                     const currentSort = sorting.find((s) => s.id === header.column.id);
 
                     if (!currentSort) {
-                      setSorting([{ id: header.column.id, desc: false }]);
+                      handleSortingChange([{ id: header.column.id, desc: false }]);
                     } else if (!currentSort.desc) {
-                      setSorting([{ id: header.column.id, desc: true }]);
+                      handleSortingChange([{ id: header.column.id, desc: true }]);
                     } else {
-                      setSorting([{ id: header.column.id, desc: false }]);
+                      handleSortingChange([{ id: header.column.id, desc: false }]);
                     }
                   };
 
@@ -432,12 +503,37 @@ export function DataTable<TData, TValue>({
             >
               <TableCell colSpan={columns.length}>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="bg-header-background text-foreground flex items-center gap-2 font-normal">
-                    <span>
-                      Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
-                      &nbsp;&nbsp;&nbsp;
+                  <div className="text-foreground flex items-center gap-1 font-normal">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => table.previousPage()}
+                      disabled={!table.getCanPreviousPage()}
+                      aria-label="Previous page"
+                    >
+                      <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                    <span className="px-2 whitespace-nowrap">
+                      Page {table.getState().pagination.pageIndex + 1} of{' '}
+                      {Math.max(1, table.getPageCount())}
                     </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => table.nextPage()}
+                      disabled={!table.getCanNextPage()}
+                      aria-label="Next page"
+                    >
+                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  </div>
 
+                  <div className="text-foreground flex items-center gap-3 font-normal">
+                    {typeof rowCount === 'number' ? (
+                      <span className="text-muted-foreground text-sm whitespace-nowrap">
+                        {rowCount} total
+                      </span>
+                    ) : null}
                     <Select
                       value={String(table.getState().pagination.pageSize)}
                       onValueChange={(value) => table.setPageSize(Number(value))}

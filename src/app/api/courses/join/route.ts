@@ -5,32 +5,42 @@
  * - Accept a 6-character registration code
  * - Validate course visibility (published + not archived)
  * - Prevent duplicate enrollment
- * - Create a roster entry using the user's global role
+ * - Create a roster entry as STUDENT
  *
  * Notes:
  * - Admins cannot join courses via this route.
- * - For students, unpublished/archived courses are masked as "not found".
- * - For faculty/admin, unpublished/archived courses return 403 with explicit errors.
+ * - Unpublished/archived courses are masked as "not found".
  */
 
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { NextResponse } from 'next/server';
-
-type Role = 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { isAdmin } from '@/lib/permissions';
 
 /**
- * POST /api/courses/join
- *
- * Body:
- * - code: string (6 chars)
- *
- * Responses:
- * - 200: { success: true, message, course }
- * - 400: invalid code, admin join attempt, or registration not currently open
- * - 401: not authenticated
- * - 403: course unpublished/archived (faculty/admin only)
- * - 404: course not found (or hidden from students)
+ * Enrolls the signed-in user in a course via its 6-character registration code,
+ * as a STUDENT. Users never learn that an unpublished/archived course exists
+ * (masked as 404). Global admins can't self-enroll, and the registration window
+ * must be open.
+ * @openapi
+ * summary: Join a course by registration code
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [code]
+ *         properties:
+ *           code: { type: string, description: 6-character course registration code }
+ * responses:
+ *   200:
+ *     description: Joined; returns a message and the course.
+ *   400: { description: "Invalid code, admin join attempt, already enrolled, or registration not open." }
+ *   401: { description: Not signed in. }
+ *   404: { description: "Course not found (also returned for unpublished/archived courses)." }
+ *   500: { description: Server error. }
  */
 export async function POST(req: Request) {
   const session = await auth();
@@ -52,9 +62,7 @@ export async function POST(req: Request) {
   }
 
   const userId = session.user.id;
-  const role = session.user.role as Role;
 
-  // Check if user is already in roster
   const existing = await prisma.roster.findUnique({
     where: {
       courseId_userId: {
@@ -64,23 +72,12 @@ export async function POST(req: Request) {
     },
   });
 
-  // Handle courses not published or archived
-  if (!course.isPublished && (role == 'ADMIN' || role == 'FACULTY')) {
-    // Notify admin or faculty that the course was not publihsed
-    return NextResponse.json({ error: 'Course not published' }, { status: 403 });
-  }
-
-  if (course.isArchived && (role === 'ADMIN' || role == 'FACULTY')) {
-    // Notify admin or faculty that the course is archived)
-    return NextResponse.json({ error: 'Course archived' }, { status: 403 });
-  }
-
   if (!course.isPublished || course.isArchived) {
-    // Do not tell student course was not published, say it does not exist
+    // Do not reveal that an unpublished/archived course exists; say it does not exist.
     return NextResponse.json({ error: 'Course not found' }, { status: 404 });
   }
 
-  if (role === 'ADMIN') {
+  if (isAdmin(session.user)) {
     return NextResponse.json({ error: 'Admins cannot register for courses' }, { status: 400 });
   }
 
@@ -116,18 +113,42 @@ export async function POST(req: Request) {
   }
 
   // Create roster entry
-  await prisma.roster.create({
-    data: {
-      courseId: course.id,
-      userId,
-      role: role, // use user's global role as course role
-    },
-  });
+  try {
+    await prisma.roster.create({
+      data: {
+        courseId: course.id,
+        userId,
+        role: 'STUDENT', // self-service join always enrolls as a student
+      },
+    });
 
-  let message = '';
-  if (role === 'STUDENT') message = `You have successfully joined ${course.name} as a Student.`;
-  if (role === 'FACULTY') message = `You have been added as Faculty for ${course.name}.`;
-  if (role === 'TA') message = `You have been added as a Teaching Assistant for ${course.name}.`;
+    await createEnhancedActivityLog(prisma, req, {
+      userId,
+      action: 'COURSE_JOINED',
+      severity: 'INFO',
+      category: 'COURSE',
+      courseId: course.id,
+      metadata: {
+        userId,
+        courseId: course.id,
+        courseCode: course.code,
+        courseName: course.name,
+        role: 'STUDENT',
+      },
+    });
+  } catch (error) {
+    console.error('POST /api/courses/join error:', error);
+    await createEnhancedActivityLog(prisma, req, {
+      userId,
+      action: 'COURSE_JOIN_ERROR',
+      severity: 'ERROR',
+      category: 'COURSE',
+      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+    });
+    return NextResponse.json({ error: 'Failed to join the course.' }, { status: 500 });
+  }
+
+  const message = `You have successfully joined ${course.name} as a Student.`;
 
   return NextResponse.json({ success: true, message, course });
 }

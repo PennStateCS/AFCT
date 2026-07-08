@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { getInitials } from '@/app/utils/initials';
+import { CategoryBadge } from '@/components/ui/category-badge';
 import { Clock, Info } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { formatDateTimeInTimeZone } from '@/lib/date';
@@ -250,7 +251,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
       return (
         <Avatar className="h-10 w-10">
           <AvatarImage
-            src={`/api/uploads/pfps/${activity.user?.avatar}`}
+            src={activity.user?.avatar ? `/api/uploads/pfps/${activity.user.avatar}` : undefined}
             alt={`${activity.user?.firstName} ${activity.user?.lastName}`}
           />
           <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
@@ -290,41 +291,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
     header: 'Category',
     enableSorting: true,
     accessorFn: (row) => row.category || '',
-    cell: ({ row }) => {
-      const activity = row.original;
-
-      if (!activity.category) {
-        return <span className="text-muted-foreground text-xs italic">N/A</span>;
-      }
-
-      // Get category-specific styling
-      const getCategoryStyle = (category: string) => {
-        switch (category) {
-          case 'SYSTEM':
-            return 'bg-gray-100 text-gray-800 border-gray-200';
-          case 'USER':
-            return 'bg-blue-100 text-blue-800 border-blue-200';
-          case 'COURSE':
-            return 'bg-indigo-100 text-indigo-800 border-indigo-200';
-          case 'ASSIGNMENT':
-            return 'bg-purple-100 text-purple-800 border-purple-200';
-          case 'PROBLEM':
-            return 'bg-green-100 text-green-800 border-green-200';
-          case 'SUBMISSION':
-            return 'bg-orange-100 text-orange-800 border-orange-200';
-          default:
-            return 'bg-gray-100 text-gray-800 border-gray-200';
-        }
-      };
-
-      return (
-        <span
-          className={`inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium ${getCategoryStyle(activity.category)}`}
-        >
-          {activity.category}
-        </span>
-      );
-    },
+    cell: ({ row }) => <CategoryBadge category={row.original.category} />,
   },
   {
     id: 'assignment',

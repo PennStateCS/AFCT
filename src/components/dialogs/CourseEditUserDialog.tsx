@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getInitials } from '@/app/utils/initials';
 import {
   Dialog,
@@ -19,13 +20,33 @@ import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { courseRoleOptions, formatCourseRole } from '@/lib/roles';
 import SelectField from '@/components/ui/SelectField';
 
+type CourseRosterEntry = {
+  role?: string | null;
+  hasSubmissions?: boolean;
+  user: {
+    id: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    email?: string | null;
+    avatar?: string | null;
+    role?: string | null;
+  };
+};
+
+// Shape of GET /api/courses/{courseId}/roster/{userId}.
+type RosterReadResponse = {
+  roster: CourseRosterEntry | null;
+  viewerCourseRole?: string | null;
+  viewerDefaultRole?: string | null;
+};
+
 type Props = {
   open: boolean;
   setOpen: (v: boolean) => void;
   courseId: string;
   userId: string;
   onSaved?: () => void;
-  initialRoster?: any | null;
+  initialRoster?: CourseRosterEntry | null;
   initialViewerCourseRole?: string | null;
   initialViewerDefaultRole?: string | null;
 };
@@ -40,15 +61,15 @@ export default function CourseEditUserDialog({
   initialViewerCourseRole = null,
   initialViewerDefaultRole = null,
 }: Props) {
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
-  const [roster, setRoster] = useState<any | null>(null);
+  const [roster, setRoster] = useState<CourseRosterEntry | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [viewerCourseRole, setViewerCourseRole] = useState<string | null>(null);
   const [viewerDefaultRole, setViewerDefaultRole] = useState<string | null>(null);
 
   // Keep an immutable copy of the originally loaded roster entry so we can compute isDirty
-  const originalRosterRef = useRef<any | null>(null);
+  const originalRosterRef = useRef<CourseRosterEntry | null>(null);
 
   const isDirty = useMemo(() => {
     if (!roster || !originalRosterRef.current) return false;
@@ -62,58 +83,66 @@ export default function CourseEditUserDialog({
     return false;
   }, [roster]);
 
+  // Cache the roster read. The fetch only runs when the dialog is open and the
+  // caller didn't hand us the entry via initialRoster (the fast-path prop).
+  // Reopening the same user is served warm from the cache within staleTime.
+  const rosterQuery = useQuery<RosterReadResponse>({
+    queryKey: ['course', courseId, 'roster', userId],
+    queryFn: async () => {
+      const res = await fetch(`/api/courses/${courseId}/roster/${userId}`);
+      if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load roster entry');
+      return (await res.json()) as RosterReadResponse;
+    },
+    enabled: open && !initialRoster,
+    staleTime: 30_000,
+  });
+
+  // Blocking spinner: only while we're actually waiting on the network for a
+  // dialog with no fast-path data (mirrors the old `loading` flag).
+  const loading = open && !initialRoster && rosterQuery.isPending;
+
+  // Cache the read, seed the local editable state. Either the fast-path prop or
+  // the query result feeds the same local states the dialog edits.
   useEffect(() => {
     if (!open) return;
 
-    // Fast-path: if caller provided roster and viewer info, use it immediately to avoid a network fetch
+    // Fast-path: caller provided roster and viewer info directly.
     if (initialRoster) {
-      setLoading(false);
       setRoster(initialRoster);
       setViewerCourseRole(initialViewerCourseRole ?? null);
       setViewerDefaultRole(initialViewerDefaultRole ?? null);
-      setAvatarPreview(`/api/uploads/pfps/${initialRoster.user.avatar}`);
+      setAvatarPreview(
+        initialRoster.user.avatar ? `/api/uploads/pfps/${initialRoster.user.avatar}` : '',
+      );
       originalRosterRef.current = JSON.parse(JSON.stringify(initialRoster));
       return;
     }
 
-    let mounted = true;
-    setLoading(true);
-    (async () => {
-      try {
-        const res = await fetch(`/api/courses/${courseId}/roster/${userId}`);
-        if (!mounted) return;
-        if (!res.ok) {
-          showToast.error('Failed to load roster entry');
-          setOpen(false);
-          return;
-        }
-        const body = await res.json();
-        setRoster(body?.roster ?? null);
-        setViewerCourseRole(body?.viewerCourseRole ?? null);
-        setViewerDefaultRole(body?.viewerDefaultRole ?? null);
-        setAvatarPreview(`/api/uploads/pfps/${body.roster.user.avatar}`);
-
-        originalRosterRef.current = JSON.parse(JSON.stringify(body?.roster ?? null));
-      } catch (err) {
-        console.error('Error loading roster entry', err);
-        showToast.error('Failed to load roster entry');
-        setOpen(false);
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
+    const body = rosterQuery.data;
+    if (!body) return;
+    setRoster(body.roster ?? null);
+    setViewerCourseRole(body.viewerCourseRole ?? null);
+    setViewerDefaultRole(body.viewerDefaultRole ?? null);
+    setAvatarPreview(
+      body.roster?.user.avatar ? `/api/uploads/pfps/${body.roster.user.avatar}` : '',
+    );
+    originalRosterRef.current = JSON.parse(JSON.stringify(body.roster ?? null));
   }, [
     open,
-    courseId,
-    userId,
-    setOpen,
     initialRoster,
     initialViewerCourseRole,
     initialViewerDefaultRole,
+    rosterQuery.data,
   ]);
+
+  // On a failed roster read, surface the error and close (old fetch behavior).
+  useEffect(() => {
+    if (open && !initialRoster && rosterQuery.isError) {
+      console.error('Error loading roster entry', rosterQuery.error);
+      showToast.error('Failed to load roster entry');
+      setOpen(false);
+    }
+  }, [open, initialRoster, rosterQuery.isError, rosterQuery.error, setOpen]);
 
   const handleSave = async () => {
     if (!roster) return;
@@ -131,6 +160,10 @@ export default function CourseEditUserDialog({
       }
       // Update original copy so the dialog reflects the saved state
       originalRosterRef.current = JSON.parse(JSON.stringify(roster));
+      // Invalidate the cached read so a reopen reflects the change; the role
+      // edit also changes the course roster list view.
+      queryClient.invalidateQueries({ queryKey: ['course', courseId, 'roster', userId] });
+      queryClient.invalidateQueries({ queryKey: ['course', courseId, 'roster'] });
       showToast.success('Roster updated');
       onSaved?.();
       setOpen(false);
@@ -153,6 +186,8 @@ export default function CourseEditUserDialog({
         showToast.error(body?.error || 'Failed to remove user');
         return;
       }
+      queryClient.invalidateQueries({ queryKey: ['course', courseId, 'roster', userId] });
+      queryClient.invalidateQueries({ queryKey: ['course', courseId, 'roster'] });
       showToast.success('User removed from course');
       onSaved?.();
       setOpen(false);
@@ -173,7 +208,7 @@ export default function CourseEditUserDialog({
         if (!v && originalRosterRef.current) {
           const orig = JSON.parse(JSON.stringify(originalRosterRef.current));
           setRoster(orig);
-          setAvatarPreview(`/api/uploads/pfps/${orig.user.avatar}`);
+          setAvatarPreview(orig.user.avatar ? `/api/uploads/pfps/${orig.user.avatar}` : '');
           setConfirmOpen(false);
         }
       }}
@@ -196,11 +231,15 @@ export default function CourseEditUserDialog({
               <div className="flex items-center gap-4">
                 <Avatar className="h-20 w-20">
                   <AvatarImage
-                    src={avatarPreview || '/api/uploads/pfps/'}
+                    src={avatarPreview || undefined}
                     alt="User Avatar"
                   />
                   <AvatarFallback className="bg-secondary text-secondary-foreground">
-                    {getInitials(roster.user.firstName, roster.user.lastName, roster.user.email)}
+                    {getInitials(
+                      roster.user.firstName,
+                      roster.user.lastName,
+                      roster.user.email ?? undefined,
+                    )}
                   </AvatarFallback>
                 </Avatar>
 
@@ -235,6 +274,9 @@ export default function CourseEditUserDialog({
                             return;
                           }
                           setRoster({ ...roster, user: { ...roster.user, avatar: null } });
+                          queryClient.invalidateQueries({
+                            queryKey: ['course', courseId, 'roster', userId],
+                          });
                           showToast.success('Profile photo removed');
                           onSaved?.();
                         } catch (err) {
@@ -255,7 +297,7 @@ export default function CourseEditUserDialog({
               <SelectField
                 label="Course Role"
                 name="courseRole"
-                value={roster.role}
+                value={roster.role ?? undefined}
                 onValueChange={(v) => setRoster({ ...roster, role: v })}
                 placeholder="Select role"
                 options={courseRoleOptions.map((r) => ({

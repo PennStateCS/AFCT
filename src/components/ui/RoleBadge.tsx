@@ -3,13 +3,12 @@ import React from 'react';
 
 export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   variant?: 'default' | 'destructive' | 'outline';
-  role?: 'ADMIN' | 'FACULTY' | 'INSTRUCTOR' | 'TA' | 'STUDENT';
+  role?: 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT';
 }
 
 const roleStyles: Record<string, string> = {
   ADMIN: 'bg-red-800 text-white',
   FACULTY: 'bg-blue-800 text-white',
-  INSTRUCTOR: 'bg-blue-800 text-white',
   TA: 'bg-slate-800 text-white',
   STUDENT: 'bg-green-800 text-white',
 };
@@ -34,11 +33,9 @@ export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
     const defaultLabel =
       normalizedRole === 'TA'
         ? 'TA'
-        : normalizedRole === 'INSTRUCTOR'
-          ? 'Faculty'
-          : normalizedRole
-            ? normalizedRole.charAt(0) + normalizedRole.slice(1).toLowerCase()
-            : '';
+        : normalizedRole
+          ? normalizedRole.charAt(0) + normalizedRole.slice(1).toLowerCase()
+          : '';
 
     return (
       <span

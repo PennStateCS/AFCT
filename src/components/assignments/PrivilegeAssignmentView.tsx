@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import LoadingSpinner from '@/components/ui/loading-spinner';
@@ -22,8 +22,8 @@ import {
   Plus,
 } from 'lucide-react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import SelectField from '@/components/ui/SelectField';
@@ -49,6 +49,7 @@ import AssignmentSubmissions from '@/components/AssignmentSubmissions';
 import Link from 'next/link';
 import { Problem } from '@prisma/client';
 import JffViewerDialog from '@/components/JffViewerDialog';
+import { useEmptyStringSymbol } from '@/lib/useEmptyStringSymbol';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { AssignmentWithDetails } from '@/lib/assignment-details';
 
@@ -72,6 +73,11 @@ type AssignmentSummary = {
   title: string;
 };
 
+// Stable empty defaults so the values derived from the groups query keep a
+// constant identity between renders (keeps the memoized group-name map stable).
+const EMPTY_GROUPS: { id: string; name: string }[] = [];
+const EMPTY_GROUP_PROBLEMS_MAP: Record<string, string[]> = {};
+
 type PrivilegeAssignmentViewProps = {
   initialAssignment?: AssignmentWithDetails | null;
   initialAssignments?: AssignmentSummary[];
@@ -86,36 +92,51 @@ export default function AssignmentDashboardPage({
       assignmentSelect: initialAssignment?.id || '',
     },
   });
-  const { data: session } = useSession();
   const { timezone } = useEffectiveTimezone();
   const { id, aid } = useParams<{ id: string; aid: string }>();
+  const epsSymbol = useEmptyStringSymbol(id);
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  // Use a more flexible type for assignment to allow course details if available
-  const [assignment, setAssignment] = useState<AssignmentWithDetails | null>(initialAssignment);
-  const [allAssignments, setAllAssignments] = useState<AssignmentSummary[]>(initialAssignments ?? []);
-  const [assignmentsLoading, setAssignmentsLoading] = useState(false);
-  const [allProblems, setAllProblems] = useState<Problem[]>([]);
-  const [problemsLoading, setProblemsLoading] = useState(false);
+  const queryClient = useQueryClient();
   const [problemToRemove, setProblemToRemove] = useState<Problem | null>(null);
   const [editAssignmentOpen, setEditAssignmentOpen] = useState(false);
   const [addProblemDialogOpen, setAddProblemDialogOpen] = useState(false);
   const [createProblemOpen, setCreateProblemOpen] = useState(false);
   const [editProblemDialogOpen, setEditProblemDialogOpen] = useState(false);
   const [problemToEdit, setProblemToEdit] = useState<Problem | null>(null);
-  const [loading, setLoading] = useState(!initialAssignment);
-  const [problemsTabLoading, setProblemsTabLoading] = useState(false);
   const [tab, setTab] = useState(searchParams.get('tab') || 'problems');
 
-  // Group mapping support (for group assignments)
-  const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
-  const [groupsLoading, setGroupsLoading] = useState(false);
-  const [groupProblemsMap, setGroupProblemsMap] = useState<Record<string, string[]>>({});
+  // Assignment shell — cached and keyed to this course/assignment. Seeded from the
+  // SSR-provided initialAssignment (view=problems shape) so there's no refetch on
+  // mount when the server already sent it, and back-navigation is warm. Mutations
+  // invalidate this key, triggering a background refetch that does NOT blank the
+  // page — the previous data stays visible until the new payload arrives.
+  const assignmentQuery = useQuery({
+    queryKey: ['course', id, 'assignment', aid, 'detail'],
+    queryFn: async () => {
+      const res = await fetch(`/api/courses/${id}/${aid}?view=problems`);
+      if (!res.ok) throw new Error('Failed to fetch assignment');
+      return (await res.json()) as AssignmentWithDetails;
+    },
+    initialData: initialAssignment ?? undefined,
+    enabled: !!id && !!aid,
+    staleTime: 30_000,
+  });
+  const assignment = assignmentQuery.data ?? null;
+  const loading = assignmentQuery.isPending;
+
+  const invalidateAssignment = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: ['course', id, 'assignment', aid, 'detail'] }),
+    [queryClient, id, aid],
+  );
+
   const [descOpen, setDescOpen] = useState(false);
   const [descText, setDescText] = useState<string | null>(null);
   const courseIsArchived = assignment?.course?.isArchived ?? false;
-  const canManageProblems = ['ADMIN', 'FACULTY', 'TA'].includes(session?.user?.role ?? '');
+  // This privileged view is only rendered for course staff (admin or the course's
+  // FACULTY/TA), so anyone who reaches it may manage problems.
+  const canManageProblems = true;
 
   // JFLAP viewer dialog state
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -126,7 +147,8 @@ export default function AssignmentDashboardPage({
   // Allow optional file fields even if not in generated Prisma type
   type ProblemFileFields = Problem & { fileName?: string | null; originalFileName?: string | null };
 
-  const openRenderViewer = (problem: Problem) => {
+  // Stable identities so the memoized column defs below don't rebuild each render.
+  const openRenderViewer = useCallback((problem: Problem) => {
     const p = problem as ProblemFileFields;
     const fileName = p.fileName ?? null;
     const original = p.originalFileName ?? null;
@@ -139,12 +161,12 @@ export default function AssignmentDashboardPage({
     setViewerTitle(`${original || fileName} - ${problem.title}`);
     setViewerOpen(true);
     setJffType(problem.type);
-  };
+  }, []);
 
-  const openDescription = (text: string | null) => {
+  const openDescription = useCallback((text: string | null) => {
     setDescText(text);
     setDescOpen(true);
-  };
+  }, []);
 
   const handleTabChange = useCallback(
     (value: string) => {
@@ -156,150 +178,81 @@ export default function AssignmentDashboardPage({
     [searchParams, router],
   );
 
-  const fetchProblems = useCallback(() => {
-    if (!id) return Promise.resolve();
-    setProblemsLoading(true);
-    return fetch(`/api/courses/${id}/problems`)
-      .then((res) => res.json())
-      .then((data) => setAllProblems(Array.isArray(data) ? data : []))
-      .catch(() => setAllProblems([]))
-      .finally(() => setProblemsLoading(false));
-  }, [id]);
-
-  useEffect(() => {
-    const shouldLoadProblems = tab === 'problems' || addProblemDialogOpen || createProblemOpen;
-    if (!shouldLoadProblems) return;
-    void fetchProblems();
-  }, [fetchProblems, tab, addProblemDialogOpen, createProblemOpen]);
-
-  const fetchAssignments = useCallback(() => {
-    if (!id) return Promise.resolve();
-    setAssignmentsLoading(true);
-    return fetch(`/api/courses/${id}/assignments`)
-      .then((res) => res.json())
-      .then((data) =>
-        setAllAssignments(
-          Array.isArray(data)
-            ? data.map((assignment: { id: string; title: string }) => ({
-                id: assignment.id,
-                title: assignment.title,
-              }))
-            : [],
-        ),
-      )
-      .catch(() => setAllAssignments([]))
-      .finally(() => setAssignmentsLoading(false));
-  }, [id]);
-
-  useEffect(() => {
-    if (allAssignments.length === 0) {
-      void fetchAssignments();
-    }
-  }, [allAssignments.length, fetchAssignments]);
-
-  const refreshAssignment = useCallback(
-    async (
-      view: 'full' | 'problems' | 'submissions' = 'full',
-      surface: 'page' | 'inline' = 'page',
-    ) => {
-      if (!aid) return;
-      const useInlineLoading = surface === 'inline' && view === 'problems';
-      if (useInlineLoading) {
-        setProblemsTabLoading(true);
-        try {
-          const res = await fetch(`/api/courses/${id}/${aid}?view=${view}`);
-          if (!res.ok) throw new Error('Failed to fetch assignment');
-          const data = (await res.json()) as AssignmentWithDetails;
-          setAssignment(data);
-        } catch {
-        setAssignment(null);
-        } finally {
-          setProblemsTabLoading(false);
-        }
-      } else {
-        if (!assignment?.id) {
-          showToast.error("Failed to load assignment");
-        } else {
-          window.location.href = assignment?.id;
-        }
-      }
+  // Read 1 â€” all course problems (used by the problems tab and the add/create
+  // dialogs). Only fetched when one of those surfaces needs it. On any failure
+  // the queryFn returns [] (no toast), matching the previous .catch behavior.
+  const problemsEnabled = tab === 'problems' || addProblemDialogOpen || createProblemOpen;
+  // Reads the course's problems via ?view=problems and shares the course-detail
+  // hook's ['course', id, 'problems'] cache entry, so the ProblemsCard and this
+  // picker dedupe (one canonical way to list a course's problems).
+  const problemsQuery = useQuery({
+    queryKey: ['course', id, 'problems'],
+    queryFn: async () => {
+      const res = await fetch(`/api/courses/${id}?view=problems`);
+      if (!res.ok) throw new Error('Failed to fetch problems');
+      return (await res.json()) as { problems?: Problem[] };
     },
-    [aid, id],
-  );
+    enabled: !!id && problemsEnabled,
+    staleTime: 30_000,
+  });
+  const allProblems = problemsQuery.data?.problems ?? [];
+  const problemsLoading = problemsEnabled && problemsQuery.isFetching;
 
-  useEffect(() => {
-    if (initialAssignment) {
-      setAssignment(initialAssignment);
-      setLoading(false);
-      return;
-    }
-    const initialView = tab === 'submissions' ? 'submissions' : 'problems';
-    void refreshAssignment(initialView);
-    // We intentionally avoid refetching assignment shell data on every tab switch.
-    // The submissions tab fetches its own review payloads.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialAssignment, refreshAssignment]);
+  // Read 2 â€” assignment list for the dropdown. Seeded from the SSR-provided
+  // initialAssignments so there's no refetch on mount when the server sent it.
+  const assignmentsQuery = useQuery({
+    queryKey: ['course', id, 'assignments-list'],
+    queryFn: () =>
+      fetch(`/api/courses/${id}/assignments`)
+        .then((res) => res.json())
+        .then((data) =>
+          Array.isArray(data)
+            ? data.map((a: { id: string; title: string }) => ({ id: a.id, title: a.title }))
+            : [],
+        )
+        .catch(() => [] as AssignmentSummary[]),
+    initialData: initialAssignments,
+    enabled: !!id,
+    staleTime: 30_000,
+  });
+  const allAssignments = assignmentsQuery.data ?? [];
+  const assignmentsLoading = assignmentsQuery.isFetching;
 
-  // When this is a group assignment, fetch groups and the mapping of problems -> groups
-  useEffect(() => {
-    if (!id || !aid || !assignment?.isGroup) {
-      setGroups([]);
-      setGroupProblemsMap({});
-      return;
-    }
+  // Read 3 â€” for a group assignment, fetch groups and the mapping of
+  // problems -> groups. Only runs for group assignments. TanStack Query cancels
+  // in-flight fetches via the AbortSignal, so no manual AbortController plumbing.
+  const groupsEnabled = !!id && !!aid && !!assignment?.isGroup;
+  const groupsQuery = useQuery({
+    queryKey: ['course', id, 'assignment', aid, 'groups-and-mappings'],
+    queryFn: async ({ signal }) => {
+      const [grRes, gpRes] = await Promise.all([
+        fetch(`/api/courses/${id}/groups`, { signal }),
+        fetch(`/api/courses/${id}/${aid}/group-problems`, { signal }),
+      ]);
 
-    let aborted = false;
-    const ac = new AbortController();
-    async function fetchGroupsAndMappings() {
-      setGroupsLoading(true);
-      try {
-        const [grRes, gpRes] = await Promise.all([
-          fetch(`/api/courses/${id}/groups`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'list' }),
-          }),
-          fetch(`/api/courses/${id}/${aid}/group-problems`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'list' }),
-          }),
-        ]);
-
-        if (!aborted) {
-          if (grRes.ok) {
-            const gr = await grRes.json();
-            setGroups(Array.isArray(gr) ? gr : (gr.groups ?? []));
-          } else {
-            setGroups([]);
-          }
-
-          if (gpRes.ok) {
-            const gp = await gpRes.json();
-            const map: Record<string, string[]> = {};
-            for (const g of gp.groups ?? []) map[g.id] = g.problemIds || [];
-            setGroupProblemsMap(map);
-          } else {
-            setGroupProblemsMap({});
-          }
-        }
-      } catch (err: unknown) {
-        if (err instanceof Error && err.name === 'AbortError') return;
-        console.error('Failed to fetch groups/mappings:', err);
-        setGroups([]);
-        setGroupProblemsMap({});
-      } finally {
-        if (!aborted) setGroupsLoading(false);
+      let nextGroups: { id: string; name: string }[] = [];
+      if (grRes.ok) {
+        const gr = await grRes.json();
+        nextGroups = Array.isArray(gr) ? gr : (gr.groups ?? []);
       }
-    }
 
-    fetchGroupsAndMappings();
-    return () => {
-      aborted = true;
-      ac.abort();
-      setGroupsLoading(false);
-    };
-  }, [id, aid, assignment?.isGroup]);
+      const groupProblemsMap: Record<string, string[]> = {};
+      if (gpRes.ok) {
+        const gp = await gpRes.json();
+        for (const g of gp.groups ?? []) groupProblemsMap[g.id] = g.problemIds || [];
+      }
+
+      return { groups: nextGroups, groupProblemsMap };
+    },
+    enabled: groupsEnabled,
+    staleTime: 30_000,
+  });
+  const groups = groupsQuery.data?.groups ?? EMPTY_GROUPS;
+  const groupProblemsMap = groupsQuery.data?.groupProblemsMap ?? EMPTY_GROUP_PROBLEMS_MAP;
+  // Cold-load only. The problem rows come from `assignment` (not this query), so a
+  // background groups refetch must not flip the DataTable to its blocking "Loading
+  // data" state and hide every row; only the initial group fetch should.
+  const groupsLoading = groupsEnabled && groupsQuery.isLoading;
 
   async function handleAddProblems(
     problemIds: string[],
@@ -332,7 +285,7 @@ export default function AssignmentDashboardPage({
     } catch {
       showToast.error('Failed to add problems');
     }
-    await refreshAssignment('problems', 'inline');
+    await invalidateAssignment();
   }
 
   async function handleConfirmRemoveProblem() {
@@ -348,25 +301,26 @@ export default function AssignmentDashboardPage({
     } catch {
       showToast.error(`Failed to remove "${problemToRemove.title}"`);
     }
-    await refreshAssignment('problems', 'inline');
+    await invalidateAssignment();
     setProblemToRemove(null);
   }
 
   const handleEditAssignment = () => setEditAssignmentOpen(true);
   const handleAddExistingProblem = () => setAddProblemDialogOpen(true);
   const handleCreateProblem = () => setCreateProblemOpen(true);
-  const handleEditProblem = (problem: Problem) => {
-    const problemWithCourseId = {
-      ...problem,
-      courseId: id,
-    };
-    setProblemToEdit(problemWithCourseId);
-    setEditProblemDialogOpen(true);
-  };
+  const handleEditProblem = useCallback(
+    (problem: Problem) => {
+      const problemWithCourseId = {
+        ...problem,
+        courseId: id,
+      };
+      setProblemToEdit(problemWithCourseId);
+      setEditProblemDialogOpen(true);
+    },
+    [id],
+  );
 
-  if (loading) return <LoadingSpinner label="Loading" />;
-  if (!assignment) return <div className="p-6 text-red-500">Assignment not found.</div>;
-
+  // All hooks must run before any early return so their call order is stable.
   const groupNamesByProblemId = useMemo(() => {
     const namesById = new Map(groups.map((group) => [group.id, group.name]));
     const map: Record<string, string[]> = {};
@@ -383,20 +337,20 @@ export default function AssignmentDashboardPage({
 
   const problemTableData = useMemo(
     () =>
-      (assignment.problems ?? []).map((ap) => ({
+      (assignment?.problems ?? []).map((ap) => ({
         ...ap.problem,
         description: ap.problem.description ?? null,
         assignmentMaxPoints: ap.maxPoints,
         assignmentMaxSubmissions: ap.maxSubmissions,
         assignmentAutograderEnabled: ap.autograderEnabled,
       })),
-    [assignment.problems],
+    [assignment?.problems],
   );
 
 
   const submissionTabProblems = useMemo(
     () =>
-      (assignment.problems ?? []).map((ap) => ({
+      (assignment?.problems ?? []).map((ap) => ({
         id: ap.problem.id,
         title: ap.problem.title,
         description: ap.problem.description ?? undefined,
@@ -409,25 +363,293 @@ export default function AssignmentDashboardPage({
         maxSubmissions: ap.maxSubmissions,
         autograderEnabled: ap.autograderEnabled,
       })),
-    [assignment.problems],
+    [assignment?.problems],
   );
 
 
   const usedProblems = useMemo(
     () =>
-      (assignment.problems ?? []).map((ap) => ({
+      (assignment?.problems ?? []).map((ap) => ({
         ...ap.problem,
         description: ap.problem.description ?? undefined,
         type: typeof ap.problem.type === 'string' ? ap.problem.type : undefined,
       })),
-    [assignment.problems],
+    [assignment?.problems],
   );
 
+  // Memoized so the DataTable isn't handed a fresh column model on every render
+  // (this view re-renders on tab/dialog state and every query settle). All closed-
+  // over handlers are useCallback-stable; the group column depends on isGroup.
+  const problemColumns = useMemo(
+    () => [
+      {
+        id: 'number',
+        header: '#',
+        cell: ({ row }: { row: { index: number } }) => row.index + 1,
+        meta: { priority: 1 },
+        enableSorting: false,
+      },
+      {
+        accessorKey: 'title',
+        header: 'Title',
+        cell: ({ row }: { row: { original: Problem } }) => row.original.title,
+        meta: { priority: 1 },
+        enableSorting: true,
+      },
+      {
+        id: 'description_col',
+        header: 'Description',
+        cell: ({ row }: { row: { original: Problem } }) => {
+          const desc = row.original.description;
+          return desc ? (
+            <button
+              type="button"
+              onClick={() => openDescription(desc)}
+              className="text-blue-600 underline hover:text-blue-800"
+              title="View description"
+            >
+              View Description
+            </button>
+          ) : (
+            <span className="text-muted-foreground text-xs">â€”</span>
+          );
+        },
+        meta: { priority: 2 },
+        enableSorting: false,
+      },
+      // Group column: only present for group assignments
+      ...(assignment?.isGroup
+        ? [
+            {
+              id: 'group',
+              header: 'Group',
+              cell: ({ row }: { row: { original: Problem } }) => {
+                const pid = row.original.id;
+                const names = groupNamesByProblemId[pid] ?? [];
 
-  const estimatedProblemPoints = Math.max(
-    1,
-    Math.round((assignment.maxPoints || 100) / Math.max((assignment.problems?.length ?? 1), 1)),
+                if (names.length === 0)
+                  return <span title="All students">All students</span>;
+
+                if (names.length === 1)
+                  return (
+                    <span className="truncate" title={names[0]}>
+                      {names[0]}
+                    </span>
+                  );
+                return (
+                  <span className="truncate" title={names.join(', ')}>
+                    {names[0]} (+{names.length - 1})
+                  </span>
+                );
+              },
+              meta: { priority: 2 },
+              enableSorting: false,
+            },
+          ]
+        : []),
+      {
+        accessorKey: 'type',
+        header: 'Type',
+        cell: ({ row }: { row: { original: Problem } }) =>
+          problemTypeLabels[row.original.type as string] || row.original.type,
+        meta: { priority: 1 },
+        enableSorting: true,
+      },
+      {
+        accessorKey: 'maxStates',
+        header: 'Max States',
+        cell: ({ row }: { row: { original: Problem } }) =>
+          row.original.maxStates === -1 ? 'Unlimited' : row.original.maxStates,
+        meta: { priority: 2 },
+        enableSorting: true,
+      },
+      {
+        accessorKey: 'assignmentMaxPoints',
+        header: 'Max Points',
+        cell: ({
+          row,
+        }: {
+          row: { original: Problem & { assignmentMaxPoints?: number } };
+        }) =>
+          typeof row.original.assignmentMaxPoints === 'number'
+            ? row.original.assignmentMaxPoints
+            : 'â€”',
+        meta: { priority: 1 },
+        enableSorting: true,
+      },
+      {
+        accessorKey: 'assignmentMaxSubmissions',
+        header: 'Max Submissions',
+        cell: ({
+          row,
+        }: {
+          row: { original: Problem & { assignmentMaxSubmissions?: number } };
+        }) => {
+          const value = row.original.assignmentMaxSubmissions;
+          if (typeof value !== 'number') return 'â€”';
+          return value === -1 ? 'Unlimited' : value;
+        },
+        meta: { priority: 1 },
+        enableSorting: true,
+        sortingFn: (
+          rowA: { getValue: (id: string) => unknown },
+          rowB: { getValue: (id: string) => unknown },
+          columnId: string,
+        ) => {
+          const normalize = (val: unknown) => {
+            if (typeof val !== 'number') return Number.POSITIVE_INFINITY;
+            return val === -1 ? Number.POSITIVE_INFINITY : val;
+          };
+          const a = normalize(rowA.getValue(columnId));
+          const b = normalize(rowB.getValue(columnId));
+          return a === b ? 0 : a > b ? 1 : -1;
+        },
+      },
+      {
+        accessorKey: 'assignmentAutograderEnabled',
+        header: 'Autograder',
+        cell: ({
+          row,
+        }: {
+          row: { original: Problem & { assignmentAutograderEnabled?: boolean } };
+        }) => {
+          const value = row.original.assignmentAutograderEnabled;
+          if (typeof value !== 'boolean') return 'â€”';
+          return value ? 'On' : 'Off';
+        },
+        meta: { priority: 2 },
+        enableSorting: true,
+        sortingFn: (
+          rowA: { getValue: (id: string) => unknown },
+          rowB: { getValue: (id: string) => unknown },
+          columnId: string,
+        ) => {
+          const toNumber = (val: unknown) => {
+            if (typeof val === 'boolean') return val ? 1 : 0;
+            return -1;
+          };
+          const a = toNumber(rowA.getValue(columnId));
+          const b = toNumber(rowB.getValue(columnId));
+          return a === b ? 0 : a > b ? 1 : -1;
+        },
+      },
+      {
+        accessorKey: 'isDeterministic',
+        header: 'Deterministic',
+        cell: ({ row }: { row: { original: Problem } }) =>
+          row.original.isDeterministic ? 'Yes' : 'No',
+        meta: { priority: 2 },
+        enableSorting: true,
+      },
+      {
+        id: 'answerFile',
+        header: 'Solution File',
+        cell: ({ row }: { row: { original: Problem } }) => {
+          const fileUrl = row.original.fileName
+            ? `/api/solutions/${row.original.fileName}?download=1`
+            : null;
+          const fileName = row.original.originalFileName || 'Download';
+          return fileUrl ? (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => openRenderViewer(row.original)}
+                title="Render file"
+                aria-label={`Render file for ${row.original.title}`}
+              >
+                <Eye className="h-4 w-4" />
+              </Button>
+              <Button asChild variant="secondary" size="sm">
+                <a
+                  href={fileUrl}
+                  download={fileName}
+                  title={`Download ${fileName}`}
+                  aria-label={`Download ${fileName} for ${row.original.title}`}
+                >
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                </a>
+              </Button>
+            </div>
+          ) : (
+            <span className="text-muted-foreground">No file</span>
+          );
+        },
+        meta: { priority: 2 },
+        enableSorting: false,
+      },
+      {
+        id: 'actions',
+        header: 'Actions',
+        cell: ({ row }: { row: { original: Problem } }) => (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="secondary"
+                size="sm"
+                aria-label={`Manage problem ${row.original.title}`}
+              >
+                <ChevronDown className="mr-1 h-4 w-4" /> Manage
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel className="flex items-center gap-2">
+                <NotebookText className="h-4 w-4" />
+                {row.original.title}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => handleEditProblem(row.original)}
+                className="flex items-center gap-2"
+                hidden={courseIsArchived}
+              >
+                <Pencil className="mr-2 h-4 w-4" /> Edit Problem
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => openRenderViewer(row.original)}
+                className="flex items-center gap-2"
+              >
+                <Eye className="mr-2 h-4 w-4" /> View File
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="flex items-center gap-2"
+                disabled={!row.original.fileName}
+                onClick={() => {
+                  const url = row.original.fileName
+                    ? `/api/solutions/${row.original.fileName}?download=1`
+                    : null;
+                  if (!url) return;
+                  window.open(url, '_blank', 'noopener,noreferrer');
+                }}
+              >
+                <Download className="mr-2 h-4 w-4" /> Download File
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => setProblemToRemove(row.original)}
+                className="flex items-center gap-2 text-red-600 focus:text-red-600"
+                hidden={courseIsArchived}
+              >
+                <Trash2 className="mr-2 h-4 w-4" /> Remove Problem
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ),
+        meta: { priority: 1 },
+      },
+    ],
+    [
+      assignment?.isGroup,
+      groupNamesByProblemId,
+      courseIsArchived,
+      openDescription,
+      openRenderViewer,
+      handleEditProblem,
+    ],
   );
+
+  if (loading) return <LoadingSpinner label="Loading" />;
+  if (!assignment) return <div className="p-6 text-red-500">Assignment not found.</div>;
 
 
   const assignmentProblemForDialog = problemToEdit
@@ -601,257 +823,9 @@ export default function AssignmentDashboardPage({
             </CardHeader>
             <CardContent>
               <DataTable
-                columns={[
-                  {
-                    id: 'number',
-                    header: '#',
-                    cell: ({ row }: { row: { index: number } }) => row.index + 1,
-                    meta: { priority: 1 },
-                    enableSorting: false,
-                  },
-                  {
-                    accessorKey: 'title',
-                    header: 'Title',
-                    cell: ({ row }: { row: { original: Problem } }) => row.original.title,
-                    meta: { priority: 1 },
-                    enableSorting: true,
-                  },
-                  {
-                    id: 'description_col',
-                    header: 'Description',
-                    cell: ({ row }: { row: { original: Problem } }) => {
-                      const desc = row.original.description;
-                      return desc ? (
-                        <button
-                          type="button"
-                          onClick={() => openDescription(desc)}
-                          className="text-blue-600 underline hover:text-blue-800"
-                          title="View description"
-                        >
-                          View Description
-                        </button>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">—</span>
-                      );
-                    },
-                    meta: { priority: 2 },
-                    enableSorting: false,
-                  },
-                  // Group column: only present for group assignments
-                  ...(assignment.isGroup
-                    ? [
-                        {
-                          id: 'group',
-                          header: 'Group',
-                          cell: ({ row }: { row: { original: Problem } }) => {
-                            const pid = row.original.id;
-                            const names = groupNamesByProblemId[pid] ?? [];
-
-                            if (names.length === 0)
-                              return <span title="All students">All students</span>;
-
-                            if (names.length === 1)
-                              return (
-                                <span className="truncate" title={names[0]}>
-                                  {names[0]}
-                                </span>
-                              );
-                            return (
-                              <span className="truncate" title={names.join(', ')}>
-                                {names[0]} (+{names.length - 1})
-                              </span>
-                            );
-                          },
-                          meta: { priority: 2 },
-                          enableSorting: false,
-                        },
-                      ]
-                    : []),
-                  {
-                    accessorKey: 'type',
-                    header: 'Type',
-                    cell: ({ row }: { row: { original: Problem } }) =>
-                      problemTypeLabels[row.original.type as string] || row.original.type,
-                    meta: { priority: 1 },
-                    enableSorting: true,
-                  },
-                  {
-                    accessorKey: 'maxStates',
-                    header: 'Max States',
-                    cell: ({ row }: { row: { original: Problem } }) =>
-                      row.original.maxStates === -1 ? 'Unlimited' : row.original.maxStates,
-                    meta: { priority: 2 },
-                    enableSorting: true,
-                  },
-                  {
-                    accessorKey: 'assignmentMaxPoints',
-                    header: 'Max Points',
-                    cell: ({
-                      row,
-                    }: {
-                      row: { original: Problem & { assignmentMaxPoints?: number } };
-                    }) =>
-                      typeof row.original.assignmentMaxPoints === 'number'
-                        ? row.original.assignmentMaxPoints
-                        : '—',
-                    meta: { priority: 1 },
-                    enableSorting: true,
-                  },
-                  {
-                    accessorKey: 'assignmentMaxSubmissions',
-                    header: 'Max Submissions',
-                    cell: ({
-                      row,
-                    }: {
-                      row: { original: Problem & { assignmentMaxSubmissions?: number } };
-                    }) => {
-                      const value = row.original.assignmentMaxSubmissions;
-                      if (typeof value !== 'number') return '—';
-                      return value === -1 ? 'Unlimited' : value;
-                    },
-                    meta: { priority: 1 },
-                    enableSorting: true,
-                    sortingFn: (rowA, rowB, columnId) => {
-                      const normalize = (val: unknown) => {
-                        if (typeof val !== 'number') return Number.POSITIVE_INFINITY;
-                        return val === -1 ? Number.POSITIVE_INFINITY : val;
-                      };
-                      const a = normalize(rowA.getValue(columnId));
-                      const b = normalize(rowB.getValue(columnId));
-                      return a === b ? 0 : a > b ? 1 : -1;
-                    },
-                  },
-                  {
-                    accessorKey: 'assignmentAutograderEnabled',
-                    header: 'Autograder',
-                    cell: ({
-                      row,
-                    }: {
-                      row: { original: Problem & { assignmentAutograderEnabled?: boolean } };
-                    }) => {
-                      const value = row.original.assignmentAutograderEnabled;
-                      if (typeof value !== 'boolean') return '—';
-                      return value ? 'On' : 'Off';
-                    },
-                    meta: { priority: 2 },
-                    enableSorting: true,
-                    sortingFn: (rowA, rowB, columnId) => {
-                      const toNumber = (val: unknown) => {
-                        if (typeof val === 'boolean') return val ? 1 : 0;
-                        return -1;
-                      };
-                      const a = toNumber(rowA.getValue(columnId));
-                      const b = toNumber(rowB.getValue(columnId));
-                      return a === b ? 0 : a > b ? 1 : -1;
-                    },
-                  },
-                  {
-                    accessorKey: 'isDeterministic',
-                    header: 'Deterministic',
-                    cell: ({ row }: { row: { original: Problem } }) =>
-                      row.original.isDeterministic ? 'Yes' : 'No',
-                    meta: { priority: 2 },
-                    enableSorting: true,
-                  },
-                  {
-                    id: 'answerFile',
-                    header: 'Solution File',
-                    cell: ({ row }: { row: { original: Problem } }) => {
-                      const fileUrl = row.original.fileName
-                        ? `/api/solutions/${row.original.fileName}?download=1`
-                        : null;
-                      const fileName = row.original.originalFileName || 'Download';
-                      return fileUrl ? (
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => openRenderViewer(row.original)}
-                            title="Render file"
-                            aria-label={`Render file for ${row.original.title}`}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button asChild variant="secondary" size="sm">
-                            <a
-                              href={fileUrl}
-                              download={fileName}
-                              title={`Download ${fileName}`}
-                              aria-label={`Download ${fileName} for ${row.original.title}`}
-                            >
-                              <Download className="h-4 w-4" aria-hidden="true" />
-                            </a>
-                          </Button>
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">No file</span>
-                      );
-                    },
-                    meta: { priority: 2 },
-                    enableSorting: false,
-                  },
-                  {
-                    id: 'actions',
-                    header: 'Actions',
-                    cell: ({ row }: { row: { original: Problem } }) => (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            aria-label={`Manage problem ${row.original.title}`}
-                          >
-                            <ChevronDown className="mr-1 h-4 w-4" /> Manage
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel className="flex items-center gap-2">
-                            <NotebookText className="h-4 w-4" />
-                            {row.original.title}
-                          </DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() => handleEditProblem(row.original)}
-                            className="flex items-center gap-2"
-                            hidden={courseIsArchived}
-                          >
-                            <Pencil className="mr-2 h-4 w-4" /> Edit Problem
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => openRenderViewer(row.original)}
-                            className="flex items-center gap-2"
-                          >
-                            <Eye className="mr-2 h-4 w-4" /> View File
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="flex items-center gap-2"
-                            disabled={!row.original.fileName}
-                            onClick={() => {
-                              const url = row.original.fileName
-                                ? `/api/solutions/${row.original.fileName}?download=1`
-                                : null;
-                              if (!url) return;
-                              window.open(url, '_blank', 'noopener,noreferrer');
-                            }}
-                          >
-                            <Download className="mr-2 h-4 w-4" /> Download File
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() => setProblemToRemove(row.original)}
-                            className="flex items-center gap-2 text-red-600 focus:text-red-600"
-                            hidden={courseIsArchived}
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" /> Remove Problem
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    ),
-                    meta: { priority: 1 },
-                  },
-                ]}
+                columns={problemColumns}
                 data={problemTableData}
-                loading={problemsTabLoading || groupsLoading}
+                loading={groupsLoading}
                 tableLabel="Assignment problems table"
               />
             </CardContent>
@@ -880,6 +854,7 @@ export default function AssignmentDashboardPage({
           width="80vw"
           height="80vh"
           showGridDefault={true}
+          epsSymbol={epsSymbol}
         />
       )}
       {viewerOpen && viewerSrc && 'RE' === jffType && (
@@ -933,7 +908,7 @@ export default function AssignmentDashboardPage({
         courseIsArchived={courseIsArchived}
         assignmentId={aid}
         onCreated={async (created) => {
-          await fetchProblems();
+          await queryClient.invalidateQueries({ queryKey: ['course', id, 'problems'] });
           if (created?.id && !aid) {
             await handleAddProblems([created.id]);
           }
@@ -976,7 +951,7 @@ export default function AssignmentDashboardPage({
               : null,
           }}
           onSave={() => {
-            void refreshAssignment('problems', 'inline');
+            void invalidateAssignment();
           }}
         />
       )}
@@ -1016,7 +991,7 @@ export default function AssignmentDashboardPage({
                 }
           }
           onSaved={() => {
-            void refreshAssignment('problems', 'inline');
+            void invalidateAssignment();
           }}
         />
       )}

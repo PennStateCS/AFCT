@@ -1,9 +1,8 @@
-// /src/api/courses/[id]/[aid]/add-problems/route.ts
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { canManageCourse } from '@/lib/permissions';
 import { z } from 'zod';
 
 // Types
@@ -33,7 +32,43 @@ const ProblemSettingsSchema = z.object({
 
 type ProblemSettingsInput = z.infer<typeof ProblemSettingsSchema>;
 
-// POST: Replace problems for a given assignment in a specific course
+/**
+ * Attaches problems to an assignment with per-problem settings (points, submission
+ * cap, autograder). Course staff (faculty or TAs) or a system admin. Adds only problems not already
+ * linked — existing links, especially those with submissions, are preserved and
+ * reported back. For group assignments, an optional `groupId` (or "ALL") maps the
+ * given problems to specific groups, even ones already on the assignment. Only
+ * problems belonging to this course are accepted.
+ * @openapi
+ * summary: Add problems to an assignment
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: aid, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         properties:
+ *           problemIds: { type: array, items: { type: string } }
+ *           problemSettings:
+ *             type: array
+ *             items:
+ *               type: object
+ *               required: [problemId, maxPoints, maxSubmissions, autograderEnabled]
+ *               properties:
+ *                 problemId: { type: string }
+ *                 maxPoints: { type: number, minimum: 0 }
+ *                 maxSubmissions: { type: integer, description: "-1 for unlimited, else >= 1" }
+ *                 autograderEnabled: { type: boolean }
+ *           groupId: { type: string, description: A group id or "ALL" (group assignments only) }
+ * responses:
+ *   200: { description: The assignment's problem list plus a summary of what changed. }
+ *   400: { description: Empty/invalid body or invalid problemSettings. }
+ *   403: { description: Caller is not course staff (faculty or TA) or a system admin. }
+ *   500: { description: Server error. }
+ */
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string; aid: string }> },
@@ -45,7 +80,13 @@ export async function POST(
     const session = await auth();
     const user = session?.user;
 
-    if (!user || !['ADMIN', 'FACULTY', 'TA'].includes(user.role)) {
+    if (!user || !(await canManageCourse(user, courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session?.user?.id ?? null,
+        action: 'ASSIGNMENT_ADD_PROBLEMS_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -53,7 +94,6 @@ export async function POST(
     let body;
     try {
       const requestText = await req.text();
-      // Request body text received
       if (!requestText || requestText.trim() === '') {
         return NextResponse.json({ error: 'Empty request body' }, { status: 400 });
       }
@@ -76,35 +116,35 @@ export async function POST(
     );
     // Optional group assignment: either a specific group id or 'ALL' for all groups
     const groupId: string | undefined = typeof body.groupId === 'string' ? body.groupId : undefined;
-    // parsed problemIds available
 
-    // Validate that all problems exist and belong to the specified course
-    const validProblems = (await prisma.problem.findMany({
-      where: {
-        id: { in: problemIds },
-        courseId,
-      },
-      select: { id: true },
-    })) as Id[];
-
-    const validIds = validProblems.map((p: (typeof validProblems)[number]) => p.id);
-
-    // Get existing assignment-problem links
-    const existingLinks = (await prisma.assignmentProblem.findMany({
-      where: {
-        assignmentId,
-        assignment: {
+    // Only accept problems that actually belong to this course, and load the
+    // existing assignment-problem links. Independent reads → run concurrently.
+    const [validProblems, existingLinks] = (await Promise.all([
+      prisma.problem.findMany({
+        where: {
+          id: { in: problemIds },
           courseId,
         },
-      },
-      include: {
-        _count: {
-          select: {
-            submissions: true,
+        select: { id: true },
+      }),
+      prisma.assignmentProblem.findMany({
+        where: {
+          assignmentId,
+          assignment: {
+            courseId,
           },
         },
-      },
-    })) as AssignmentProblemCount[];
+        include: {
+          _count: {
+            select: {
+              submissions: true,
+            },
+          },
+        },
+      }),
+    ])) as [Id[], AssignmentProblemCount[]];
+
+    const validIds = validProblems.map((p: (typeof validProblems)[number]) => p.id);
 
     // Separate links with submissions (for reporting only)
     const linksWithSubmissions = existingLinks.filter(
@@ -195,6 +235,7 @@ export async function POST(
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,
         action: 'UPDATE_ASSIGNMENT_PROBLEMS',
+        severity: 'INFO',
         category: 'ASSIGNMENT',
         courseId,
         assignmentId,
@@ -234,6 +275,12 @@ export async function POST(
   } catch (err) {
     // Handle unexpected errors
     console.error('Failed to update assignment problems:', err);
+    await createEnhancedActivityLog(prisma, req, {
+      userId: null,
+      action: 'ASSIGNMENT_ADD_PROBLEMS_ERROR',
+      severity: 'ERROR',
+      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+    });
     return NextResponse.json({ error: 'Failed to update assignment problems.' }, { status: 500 });
   }
 }

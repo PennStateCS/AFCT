@@ -3,7 +3,15 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import CalendarClient from './CalendarClient';
+
+// Render with a fresh QueryClient per test (retry off, no lingering cache) so the
+// assignment-range query starts clean each time.
+const renderWithClient = (ui: React.ReactElement) => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+};
 
 vi.mock('@/hooks/use-effective-timezone', () => ({
   useEffectiveTimezone: () => ({ timezone: 'UTC' }),
@@ -44,7 +52,7 @@ describe('CalendarClient', () => {
       json: async () => [],
     });
 
-    render(<CalendarClient />);
+    renderWithClient(<CalendarClient />);
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledTimes(1);
@@ -63,7 +71,7 @@ describe('CalendarClient', () => {
       },
     ];
 
-    render(
+    renderWithClient(
       <CalendarClient
         initialAssignments={initialAssignments}
         initialMonth={new Date('2026-03-01T00:00:00.000Z').toISOString()}
@@ -80,7 +88,7 @@ describe('CalendarClient', () => {
       json: async () => [],
     });
 
-    render(<CalendarClient />);
+    renderWithClient(<CalendarClient />);
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledTimes(1);
@@ -99,7 +107,7 @@ describe('CalendarClient', () => {
       .mockRejectedValueOnce(new Error('network error'))
       .mockResolvedValueOnce({ ok: true, json: async () => [] });
 
-    render(<CalendarClient />);
+    renderWithClient(<CalendarClient />);
 
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent(
@@ -123,7 +131,7 @@ describe('CalendarClient', () => {
 
     (global.fetch as ReturnType<typeof vi.fn>).mockReturnValue(pending);
 
-    render(<CalendarClient />);
+    renderWithClient(<CalendarClient />);
 
     expect(screen.getByText('Loading assignments...')).toBeInTheDocument();
 

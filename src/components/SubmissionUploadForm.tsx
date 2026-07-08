@@ -71,7 +71,7 @@ export default function SubmissionUploadForm({
         return;
       }
 
-      const result = await res.json();
+      await res.json();
 
       showToast.success('Solution submitted successfully!');
       setFile(undefined);

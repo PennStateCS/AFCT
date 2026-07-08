@@ -44,7 +44,10 @@ export function toEndOfDayInTimezone(
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-    hour12: false,
+    // h23 keeps midnight as "00"; en-US with hour12:false reports it as "24",
+    // which throws the offset math off by a full day when the guess lands on
+    // midnight in the target zone (e.g. UTC).
+    hourCycle: 'h23',
   });
 
   const parts = formatter.formatToParts(guess);
@@ -105,7 +108,10 @@ export function toDateTimeInTimezone(
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-    hour12: false,
+    // h23 keeps midnight as "00"; en-US with hour12:false reports it as "24",
+    // which throws the offset math off by a full day when the guess lands on
+    // midnight in the target zone (e.g. UTC).
+    hourCycle: 'h23',
   });
 
   const parts = formatter.formatToParts(guess);
