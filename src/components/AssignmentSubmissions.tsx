@@ -796,6 +796,7 @@ export default function AssignmentSubmissions({
                 onNext={goNext}
                 gradeStatuses={studentGradeStatuses}
                 assignmentTotals={assignmentTotals ?? undefined}
+                courseId={courseId}
                 assignmentId={assignmentId}
               />
             </div>

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { ProblemTypeEnum } from '@/schemas/problem';
 import { RoleEnum } from '@/schemas/user';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { canManageCourse } from '@/lib/permissions';
 import { sumProblemPoints } from '@/lib/course-format';
 import { z } from 'zod';
 
@@ -40,36 +41,42 @@ interface AssignmentWithProblemsAndCourse {
 }
 
 /**
- * Fetches one assignment (scoped to the course) with its problems, a derived
- * `maxPoints`, and — in the `full` view — the course roster. Shaped for the
- * assignment detail page. Access: any enrolled member of the course (any role) or a
- * system admin.
+ * Fetches one assignment (scoped to the course) with its problems and a derived
+ * `maxPoints`. This is the single canonical assignment read (it absorbed the former
+ * global `GET /api/assignments/[id]`). Access: the caller must be an enrolled member
+ * of the course or a system admin. Course staff (faculty/TA) and admins see any
+ * assignment and — in the `full` view — the course roster; non-staff members see only
+ * published assignments (unpublished are 404-masked) and never receive the roster.
  * @openapi
  * summary: Get a course assignment
  * description: >-
- *   Returns the assignment with its problems and, in the full view, the course
- *   roster. Requires a session; the caller must be an enrolled member of the course
- *   (any role) or a system admin.
+ *   Returns the assignment with its problems. Staff/admins also get the course roster
+ *   in the full view; non-staff members see published assignments only (unpublished
+ *   are masked as 404) and no roster.
  * parameters:
  *   - { name: id, in: path, required: true, schema: { type: string } }
  *   - { name: aid, in: path, required: true, schema: { type: string } }
  *   - name: view
  *     in: query
- *     description: '"full" (default) includes the roster; any other value omits it.'
+ *     description: '"full" (default) includes the roster for staff; any other value omits it.'
  *     schema: { type: string, default: full }
  * responses:
- *   200: { description: The assignment with problems (and roster in full view). }
+ *   200: { description: "The assignment with problems (and, for staff in full view, the roster)." }
  *   401: { description: Not signed in. }
  *   403: { description: Not an enrolled member of the course and not a system admin. }
- *   404: { description: Assignment not found in this course. }
+ *   404: { description: "Assignment not found in this course, or not visible to the caller." }
  *   500: { description: Server error. }
  */
 export const GET = withCourseAuth(
-  async (req, ctx, { courseId }) => {
+  async (req, ctx, { user, courseId }) => {
     const { aid: assignmentId } = await ctx.params;
     const { searchParams } = new URL(req.url);
     const view = searchParams.get('view') ?? 'full';
-    const includeRoster = view === 'full';
+    // Course staff (faculty/TA) or admins see everything; the roster is staff-only
+    // and unpublished assignments are hidden from non-staff members (404-masked),
+    // matching the access rules of the retired global GET /api/assignments/[id].
+    const isStaff = await canManageCourse(user, courseId);
+    const includeRoster = view === 'full' && isStaff;
 
     try {
       const assignment = (await prisma.assignment.findFirst({
@@ -125,6 +132,11 @@ export const GET = withCourseAuth(
 
       // Return 404 if no matching assignment was found
       if (!assignment) {
+        return NextResponse.json({ error: 'Assignment not found.' }, { status: 404 });
+      }
+
+      // Non-staff members may only see published assignments; hide the rest as 404.
+      if (!isStaff && !(assignment as { isPublished?: boolean }).isPublished) {
         return NextResponse.json({ error: 'Assignment not found.' }, { status: 404 });
       }
 

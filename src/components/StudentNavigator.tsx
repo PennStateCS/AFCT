@@ -30,6 +30,7 @@ export type StudentNavigatorProps = {
   onNext: () => void;
   gradeStatuses?: Record<string, boolean | undefined>;
   assignmentTotals?: { earned: number; available: number };
+  courseId: string;
   assignmentId: string;
 };
 
@@ -41,6 +42,7 @@ export default function StudentNavigator({
   onNext,
   gradeStatuses,
   assignmentTotals,
+  courseId,
   assignmentId,
 }: StudentNavigatorProps) {
   const { timezone } = useEffectiveTimezone();
@@ -57,7 +59,7 @@ export default function StudentNavigator({
   }>({
     queryKey: ['assignment', assignmentId],
     queryFn: async () => {
-      const res = await fetch(apiPaths.assignmentById(assignmentId));
+      const res = await fetch(apiPaths.assignment(courseId, assignmentId, { view: 'problems' }));
       if (!res.ok) throw new Error('Failed to fetch assignment');
       return res.json();
     },
