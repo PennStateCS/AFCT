@@ -275,7 +275,7 @@ export default function AssignmentDashboardPage({
       if (groupId) payload.groupId = groupId;
       if (problemSettings && problemSettings.length > 0) payload.problemSettings = problemSettings;
 
-      const res = await fetch(`/api/courses/${id}/${aid}/add-problems`, {
+      const res = await fetch(`/api/courses/${id}/${aid}/problems`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -291,8 +291,8 @@ export default function AssignmentDashboardPage({
   async function handleConfirmRemoveProblem() {
     if (!id || !aid || !problemToRemove) return;
     try {
-      const res = await fetch(`/api/courses/${id}/${aid}/remove-problem`, {
-        method: 'POST',
+      const res = await fetch(`/api/courses/${id}/${aid}/problems`, {
+        method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ problemId: problemToRemove.id }),
       });
