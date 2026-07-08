@@ -25,6 +25,7 @@ import { z } from 'zod';
 import type { Problem } from '@prisma/client';
 import { ProblemFormSchema, UpdateProblemSchema, ProblemTypeEnum } from '@/schemas/problem';
 import { showToast } from '@/lib/toast';
+import { apiPaths } from '@/lib/api-paths';
 
 type AssignmentProblemSettings = {
   assignmentId: string;
@@ -274,7 +275,7 @@ export function EditProblemDialog({
         });
       }
 
-      const res = await fetch(`/api/problems/${problem.id}`, {
+      const res = await fetch(apiPaths.problem(problem.id), {
         method: 'PUT',
         body: formData,
       });
@@ -672,7 +673,9 @@ export function EditProblemDialog({
             render={({ field }) => (
               <div>
                 <InputGroup
-                  label={problem.type === type ? 'Replace Answer File (optional)' : 'Replace Answer File'}
+                  label={
+                    problem.type === type ? 'Replace Answer File (optional)' : 'Replace Answer File'
+                  }
                   name="answer-file"
                   type="file"
                   accept=".txt,.fa,.pda,.cfg,.re,.jff"
@@ -709,9 +712,9 @@ export function EditProblemDialog({
                     ? 'Fix assignment settings to save'
                     : assignmentMaxSubmissionsInvalid
                       ? 'Fix assignment settings to save'
-                        : isSubmitting
-                          ? 'Submitting...'
-                          : undefined
+                      : isSubmitting
+                        ? 'Submitting...'
+                        : undefined
               }
             >
               {isSubmitting ? 'Saving…' : 'Save Changes'}

@@ -11,6 +11,7 @@ import { ChangePasswordSchema, type ChangePasswordInput } from '@/schemas/passwo
 import { PasswordRulesHelper } from '@/components/auth/PasswordRulesHelper';
 import { passwordRules } from '@/lib/password-policy';
 import { safeSignOut } from '@/lib/safe-signout';
+import { apiPaths } from '@/lib/api-paths';
 
 export function ForcedPasswordChangeForm() {
   const router = useRouter();
@@ -37,7 +38,7 @@ export function ForcedPasswordChangeForm() {
 
   const onSubmit = async (values: ChangePasswordInput) => {
     setSubmitError(null);
-    const res = await fetch('/api/users/change-password', {
+    const res = await fetch(apiPaths.changePassword(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ oldPassword: values.oldPassword, newPassword: values.newPassword }),

@@ -11,6 +11,7 @@ import { NotebookText, Pencil, Trash2, ChevronDown, BookOpen } from 'lucide-reac
 import Link from 'next/link';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { formatDateTimeInTimeZone } from '@/lib/date';
+import { apiPaths } from '@/lib/api-paths';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -35,7 +36,7 @@ export function MaxPointsCell({
   const { data } = useQuery({
     queryKey: ['assignment', assignmentId],
     queryFn: async () => {
-      const res = await fetch(`/api/assignments/${assignmentId}`);
+      const res = await fetch(apiPaths.assignmentById(assignmentId));
       if (!res.ok) throw new Error('Failed to fetch assignment');
       return (await res.json()) as { maxPoints: number | null };
     },
@@ -43,7 +44,7 @@ export function MaxPointsCell({
     staleTime: 30_000,
   });
 
-  const pts = needsFetch ? (data ? data.maxPoints ?? 0 : null) : maxPoints;
+  const pts = needsFetch ? (data ? (data.maxPoints ?? 0) : null) : maxPoints;
 
   return <div>{pts !== null ? pts : '...'}</div>;
 }
@@ -242,7 +243,7 @@ export function useAssignmentColumns(
                   className={`flex items-center gap-2 ${disabled ? 'cursor-not-allowed text-gray-500 opacity-50' : 'text-red-600 focus:text-red-600'}`}
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
-                                  Delete Assignment
+                  Delete Assignment
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react';
 import type { ProblemSubmission } from '@/lib/problem-submission';
 import { showToast } from '@/lib/toast';
+import { apiPaths } from '@/lib/api-paths';
 
 export type RerunVisibleSubmissionsOptions = {
   visibleSubmissions: ProblemSubmission[];
@@ -34,7 +35,7 @@ export async function rerunVisibleSubmissions({
   try {
     const results = await Promise.allSettled(
       uniqueSubmissions.map((submission) =>
-        fetch(`/api/submissions/${submission.id}/rerun`, {
+        fetch(apiPaths.submissionRerun(submission.id), {
           method: 'POST',
         }),
       ),
@@ -42,8 +43,7 @@ export async function rerunVisibleSubmissions({
 
     const failures = results.filter(
       (result) =>
-        result.status === 'rejected' ||
-        (result.status === 'fulfilled' && !result.value.ok),
+        result.status === 'rejected' || (result.status === 'fulfilled' && !result.value.ok),
     );
 
     if (failures.length > 0) {
@@ -59,11 +59,7 @@ export async function rerunVisibleSubmissions({
     await fetchReviewData();
   } catch (err) {
     console.error('Bulk rerun submission error:', err);
-    showToast.error(
-      err instanceof Error
-        ? err.message
-        : 'Failed to rerun visible submissions',
-    );
+    showToast.error(err instanceof Error ? err.message : 'Failed to rerun visible submissions');
   } finally {
     setRerunning((prev) => {
       const next = { ...prev };

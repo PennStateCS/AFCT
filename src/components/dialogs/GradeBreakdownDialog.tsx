@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { showToast } from '@/lib/toast';
 import { Loader2 } from 'lucide-react';
+import { apiPaths } from '@/lib/api-paths';
 
 type Row = {
   // the DataTable needs a stable `id` field (or `_id`) for its row
@@ -59,7 +60,7 @@ export function GradeBreakdownDialog({
   const assignmentQuery = useQuery({
     queryKey: ['course', courseId, 'assignment', assignmentId],
     queryFn: async () => {
-      const res = await fetch(`/api/courses/${courseId}/${assignmentId}`);
+      const res = await fetch(apiPaths.assignment(courseId, assignmentId));
       if (!res.ok) throw new Error('Failed to fetch assignment');
       return (await res.json()) as {
         problems?: Array<{ problem: { id: string; title?: string | null }; maxPoints: number }>;
@@ -113,15 +114,10 @@ export function GradeBreakdownDialog({
     setOriginalRows(newRows);
   }, [open, assignmentQuery.data, gradesQuery.data]);
 
-  const handleGradeChange = useCallback(
-    (problemId: string, value: string) => {
-      const num = value === '' ? null : parseFloat(value);
-      setRows((prev) =>
-        prev.map((r) => (r.problemId === problemId ? { ...r, grade: num } : r)),
-      );
-    },
-    [],
-  );
+  const handleGradeChange = useCallback((problemId: string, value: string) => {
+    const num = value === '' ? null : parseFloat(value);
+    setRows((prev) => prev.map((r) => (r.problemId === problemId ? { ...r, grade: num } : r)));
+  }, []);
 
   const totals = useMemo(() => {
     const earned = rows.reduce((sum, r) => sum + (r.grade ?? 0), 0);
@@ -212,16 +208,14 @@ export function GradeBreakdownDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       {/* widen the content for better data table fit */}
       {/* expanded max width to accommodate more content without wrapping */}
-      <DialogContent className="sm:max-w-3xl lg:max-w-4xl bg-card">
+      <DialogContent className="bg-card sm:max-w-3xl lg:max-w-4xl">
         <DialogHeader>
           <DialogTitle>
             {studentName} &ndash; {assignmentTitle}
           </DialogTitle>
-          <DialogDescription>
-            Edit individual problem scores for this assignment.
-          </DialogDescription>
+          <DialogDescription>Edit individual problem scores for this assignment.</DialogDescription>
           {/* current score summary */}
-          <div className="mt-1 text-sm font-medium text-right">
+          <div className="mt-1 text-right text-sm font-medium">
             Score:{' '}
             {totals.hasAny ? `${totals.earned} / ${totals.possible}` : `- / ${totals.possible}`}
           </div>

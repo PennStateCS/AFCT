@@ -47,6 +47,7 @@ export const apiPaths = {
   courseProblem: (id: string, pid: string) => `/api/courses/${id}/problems/${pid}`,
   courseRosterEntry: (id: string, userId: string) => `/api/courses/${id}/roster/${userId}`,
   courseAssignments: (id: string) => `/api/courses/${id}/assignments`,
+  courseJoin: () => '/api/courses/join',
 
   // --- "My" (self-scoped) --------------------------------------------------
   myCourses: (opts?: { view?: 'nav' }) => `/api/courses/list${qs({ view: opts?.view })}`,
@@ -74,7 +75,8 @@ export const apiPaths = {
   // --- Global assignment routes -------------------------------------------
   assignments: () => '/api/assignments',
   assignmentById: (id: string) => `/api/assignments/${id}`,
-  assignmentsRange: (start: string, end: string) => `/api/assignments/range${qs({ start, end })}`,
+  assignmentByIdProblems: (id: string) => `/api/assignments/${id}/problems`,
+  assignmentsRange: (start?: string, end?: string) => `/api/assignments/range${qs({ start, end })}`,
   assignmentStudentContext: (id: string) => `/api/assignments/${id}/student-context`,
 
   // --- Problems ------------------------------------------------------------
@@ -84,7 +86,7 @@ export const apiPaths = {
   problemSubmissions: (id: string) => `/api/problems/${id}/submissions`,
 
   // --- Comments / submissions ---------------------------------------------
-  comments: () => '/api/comments',
+  comments: (opts?: { commentId?: string }) => `/api/comments${qs({ commentId: opts?.commentId })}`,
   submissions: () => '/api/submissions',
   submissionRerun: (id: string) => `/api/submissions/${id}/rerun`,
   courseSubmissions: (cid: string) => `/api/course_submissions/${cid}`,
@@ -100,7 +102,7 @@ export const apiPaths = {
 
   // --- Admin ---------------------------------------------------------------
   admin: {
-    users: () => '/api/admin/users',
+    users: (opts?: { role?: string }) => `/api/admin/users${qs({ role: opts?.role })}`,
     user: (id: string) => `/api/admin/users/${id}`,
     usersBulk: () => '/api/admin/users/bulk',
     usersList: () => '/api/admin/users/list',
@@ -111,8 +113,9 @@ export const apiPaths = {
     settings: () => '/api/admin/settings',
     settingsTls: () => '/api/admin/settings/tls',
     backups: () => '/api/admin/settings/backups',
-    backupDownload: () => '/api/admin/settings/backups/download',
-    status: () => '/api/admin/status',
+    backupDownload: (opts?: { file?: string }) =>
+      `/api/admin/settings/backups/download${qs({ file: opts?.file })}`,
+    status: (opts?: { deep?: boolean }) => `/api/admin/status${opts?.deep ? qs({ deep: 1 }) : ''}`,
     abandonedFiles: () => '/api/admin/status/abandoned-files',
     submissions: () => '/api/admin/submissions',
   },

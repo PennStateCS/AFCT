@@ -7,6 +7,7 @@ import { FileText } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Submission, User } from '@prisma/client';
 import { showToast } from '@/lib/toast';
+import { apiPaths } from '@/lib/api-paths';
 import { rerunSubmission } from '@/app/utils/rerunSubmission';
 import { rerunVisibleSubmissions } from '@/app/utils/rerunVisibleSubmissions';
 import type { Comment as DiscussionComment } from './DiscussionPanel';
@@ -61,14 +62,14 @@ const hasSubmissions = (obj: unknown): obj is { submissions: Submission[] } => {
 const extractSubs = (raw?: SubmissionData): Submission[] => {
   if (!raw) return [];
   if (Array.isArray(raw)) return raw;
-  
+
   // TypeScript now automatically knows 'raw' has the submissions array
   if (hasSubmissions(raw)) {
-    return raw.submissions; 
+    return raw.submissions;
   }
-  
+
   return [];
-};;
+};
 
 export default function AssignmentSubmissions({
   courseIsArchived,
@@ -117,7 +118,7 @@ export default function AssignmentSubmissions({
   const studentsQuery = useQuery({
     queryKey: ['course', courseId, 'students'],
     queryFn: async () => {
-      const res = await fetch(`/api/courses/${courseId}/students`);
+      const res = await fetch(apiPaths.courseStudents(courseId));
       if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load students');
       return (await res.json()) as Person[];
     },
@@ -218,9 +219,7 @@ export default function AssignmentSubmissions({
     () =>
       visibleProblems.map((problem, index) => ({
         id: problem.id,
-        title: problem.title
-          ? limitText(problem.title, 25)
-          : `Problem ${index + 1}`,
+        title: problem.title ? limitText(problem.title, 25) : `Problem ${index + 1}`,
         grade: problemGrades[problem.id] ?? null,
         maxGrade: problem.maxPoints ?? null,
         submissionsCount: extractSubs(submissions[problem.id]).length,
@@ -283,7 +282,7 @@ export default function AssignmentSubmissions({
   const groupMembershipsQuery = useQuery({
     queryKey: ['course', courseId, 'group-memberships'],
     queryFn: async () => {
-      const res = await fetch(`/api/courses/${courseId}/group-memberships`);
+      const res = await fetch(apiPaths.courseGroupMemberships(courseId));
       if (!res.ok) throw new Error('Failed to load group memberships');
       return (await res.json()) as { memberships: Array<{ userId: string; groupId: string }> };
     },
@@ -366,7 +365,7 @@ export default function AssignmentSubmissions({
   const gradeSummaryQuery = useQuery({
     queryKey: ['course', courseId, 'assignment', assignmentId, 'problem-grades', 'summary'],
     queryFn: async () => {
-      const res = await fetch(`/api/courses/${courseId}/${assignmentId}/problem-grades/summary`);
+      const res = await fetch(apiPaths.assignmentProblemGradesSummary(courseId, assignmentId));
       if (!res.ok) {
         // Match the previous silent handling of auth/not-found responses.
         if ([401, 403, 404].includes(res.status)) return {} as Record<string, boolean>;
@@ -411,7 +410,11 @@ export default function AssignmentSubmissions({
     problemGrades?: Record<string, { grade: number | null; feedback: string | null }>;
   };
 
-  const EMPTY_REVIEW_DATA: ReviewDataResponse = { submissions: {}, comments: [], problemGrades: {} };
+  const EMPTY_REVIEW_DATA: ReviewDataResponse = {
+    submissions: {},
+    comments: [],
+    problemGrades: {},
+  };
 
   const reviewQuery = useQuery({
     queryKey: ['course', courseId, 'assignment', assignmentId, 'review-data', selectedStudentId],
@@ -540,7 +543,7 @@ export default function AssignmentSubmissions({
 
       setSavingComments((prev) => ({ ...prev, [problemId]: true }));
       try {
-        const response = await fetch('/api/comments', {
+        const response = await fetch(apiPaths.comments(), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -582,39 +585,42 @@ export default function AssignmentSubmissions({
     [commentTexts, selectedStudent, assignmentId, courseId, selectedStudentId, queryClient],
   );
 
-  const deleteComment = useCallback(async (commentId: string, problemId: string) => {
-    setDeletingComments((prev) => ({ ...prev, [commentId]: true }));
-    try {
-      const response = await fetch(`/api/comments?commentId=${commentId}`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error?.error || 'Failed to delete comment');
+  const deleteComment = useCallback(
+    async (commentId: string, problemId: string) => {
+      setDeletingComments((prev) => ({ ...prev, [commentId]: true }));
+      try {
+        const response = await fetch(apiPaths.comments({ commentId }), {
+          method: 'DELETE',
+        });
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error?.error || 'Failed to delete comment');
+        }
+        setComments((prev) => ({
+          ...prev,
+          [problemId]: prev[problemId]?.filter((c) => c.id !== commentId) || [],
+        }));
+        // Keep the cached review data fresh after the optimistic local update.
+        queryClient.invalidateQueries({
+          queryKey: [
+            'course',
+            courseId,
+            'assignment',
+            assignmentId,
+            'review-data',
+            selectedStudentId,
+          ],
+        });
+        showToast.success('Comment deleted successfully');
+      } catch (err) {
+        console.error('Delete comment error:', err);
+        showToast.error(err instanceof Error ? err.message : 'Failed to delete comment');
+      } finally {
+        setDeletingComments((prev) => ({ ...prev, [commentId]: false }));
       }
-      setComments((prev) => ({
-        ...prev,
-        [problemId]: prev[problemId]?.filter((c) => c.id !== commentId) || [],
-      }));
-      // Keep the cached review data fresh after the optimistic local update.
-      queryClient.invalidateQueries({
-        queryKey: [
-          'course',
-          courseId,
-          'assignment',
-          assignmentId,
-          'review-data',
-          selectedStudentId,
-        ],
-      });
-      showToast.success('Comment deleted successfully');
-    } catch (err) {
-      console.error('Delete comment error:', err);
-      showToast.error(err instanceof Error ? err.message : 'Failed to delete comment');
-    } finally {
-      setDeletingComments((prev) => ({ ...prev, [commentId]: false }));
-    }
-  }, [courseId, assignmentId, selectedStudentId, queryClient]);
+    },
+    [courseId, assignmentId, selectedStudentId, queryClient],
+  );
 
   const handleGradeInputChange = useCallback((problemId: string, value: string) => {
     setGradeInputs((prev) => ({ ...prev, [problemId]: value }));
@@ -810,7 +816,7 @@ export default function AssignmentSubmissions({
                 const selectedProblem = selectedProblemId
                   ? visibleProblems.find((p) => p.id === selectedProblemId) || null
                   : visibleProblems[0] || null;
-                  const selectedSubs = selectedProblem
+                const selectedSubs = selectedProblem
                   ? extractSubs(submissions[selectedProblem.id])
                   : [];
                 const selectedComments = selectedProblem ? comments[selectedProblem.id] || [] : [];
@@ -847,7 +853,9 @@ export default function AssignmentSubmissions({
                         }
                         isSaving={selectedProblem ? savingComments[selectedProblem.id] : false}
                         deletingComments={deletingComments}
-                        onViewSubmission={(submission: ProblemSubmission) => setOpenDialog({ open: true, submission })}
+                        onViewSubmission={(submission: ProblemSubmission) =>
+                          setOpenDialog({ open: true, submission })
+                        }
                         onRerunSubmission={(submission) =>
                           handleRerunSubmission(submission as unknown as Submission)
                         }

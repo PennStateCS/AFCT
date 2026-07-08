@@ -28,6 +28,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { CourseFormSchema } from '@/schemas/course';
 import { toast } from 'sonner';
 import { getInstructors, EnrolledUser } from '@/lib/course-utils';
+import { apiPaths } from '@/lib/api-paths';
 
 type EditCourseDialogProps = {
   course: Course & { enrolled?: EnrolledUser[] };
@@ -111,7 +112,7 @@ export function EditCourseDialog({
   const facultyQuery = useQuery({
     queryKey: ['admin', 'users', 'faculty'],
     queryFn: async () => {
-      const res = await fetch('/api/admin/users?role=FACULTY');
+      const res = await fetch(apiPaths.admin.users({ role: 'FACULTY' }));
       if (!res.ok) throw new Error('Failed to load faculty');
       const data = await res.json();
       return (Array.isArray(data) ? data : []) as Array<User & { role?: string }>;
@@ -141,7 +142,7 @@ export function EditCourseDialog({
     };
 
     try {
-      const res = await fetch(`/api/courses/${course.id}`, {
+      const res = await fetch(apiPaths.course(course.id), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -431,11 +432,7 @@ export function EditCourseDialog({
             <Button
               type="submit"
               disabled={!isValid || isSubmitting || course.isArchived}
-              title={
-                !isValid
-                  ? 'Fix validation errors to save'
-                    : 'Course is not archived'
-              }
+              title={!isValid ? 'Fix validation errors to save' : 'Course is not archived'}
             >
               {isSubmitting ? 'Saving...' : 'Save Changes'}
             </Button>

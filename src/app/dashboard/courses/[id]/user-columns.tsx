@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/RoleBadge';
 import { roleSortingFn } from '@/lib/roles';
 import { showToast } from '@/lib/toast';
+import { apiPaths } from '@/lib/api-paths';
 import { useState } from 'react';
 
 type RosterUser = User & { role?: string; hasSubmissions?: boolean };
@@ -53,7 +54,7 @@ function ActionsCell({
   const handleDelete = async () => {
     try {
       // remove user from the course roster instead of deleting the user record
-      const res = await fetch(`/api/courses/${courseId}/roster/${user.id}`, {
+      const res = await fetch(apiPaths.courseRosterEntry(courseId, user.id), {
         method: 'DELETE',
         credentials: 'same-origin',
       });
@@ -75,7 +76,7 @@ function ActionsCell({
   };
 
   const handleSave = async (updatedUser: Partial<User>) => {
-    const res = await fetch(`/api/users/${updatedUser.id}`, {
+    const res = await fetch(apiPaths.user(String(updatedUser.id)), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updatedUser),
@@ -233,7 +234,7 @@ export const userColumns = (
               alt={`${user.firstName} ${user.lastName}`}
             />
             <AvatarFallback className="bg-secondary text-secondary-foreground">
-              { getInitials(user.firstName, user.lastName, user.email) }
+              {getInitials(user.firstName, user.lastName, user.email)}
             </AvatarFallback>
           </Avatar>
         );

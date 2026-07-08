@@ -20,6 +20,7 @@ import { z } from 'zod';
 import { DuplicateFormSchema } from '@/schemas/course';
 import { FullCourse } from '@/types/course';
 import { toast } from 'sonner';
+import { apiPaths } from '@/lib/api-paths';
 
 function toDateTimeLocalInTimeZone(date: Date | string, timeZone: string): string {
   const d = new Date(date);
@@ -152,7 +153,7 @@ export default function DuplicateCourseDialog({
     };
 
     try {
-      const res = await fetch(`/api/courses/${courseId}/duplicate`, {
+      const res = await fetch(apiPaths.courseDuplicate(courseId), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

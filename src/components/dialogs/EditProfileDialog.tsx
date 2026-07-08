@@ -29,6 +29,7 @@ import {
 import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { useMaxUploadSize } from '@/hooks/useMaxUploadSize';
+import { apiPaths } from '@/lib/api-paths';
 
 type EditProfileDialog = {
   user: SessionUser;
@@ -138,7 +139,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
 
     try {
       // Post new profile data to database
-      const res = await fetch('/api/profile', { method: 'POST', body: formData });
+      const res = await fetch(apiPaths.profile(), { method: 'POST', body: formData });
       if (!res.ok) throw new Error('Failed to update profile');
 
       // Use NextAuth's update function to immediately update the session
@@ -300,11 +301,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
             <Button
               type="submit"
               disabled={!isValid || isSubmitting}
-              title={
-                !isValid
-                  ? 'Fix validation errors to save'
-                    : undefined
-              }
+              title={!isValid ? 'Fix validation errors to save' : undefined}
             >
               {isSubmitting ? 'Saving...' : 'Save Changes'}
             </Button>
