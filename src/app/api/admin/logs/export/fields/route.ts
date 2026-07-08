@@ -16,4 +16,6 @@ import { withAdminAuth } from '@/lib/api/with-auth';
  *         schema: { type: array, items: { type: string } }
  *   403: { description: Caller is not a system administrator. }
  */
-export const GET = withAdminAuth(() => NextResponse.json([...EXPORTABLE_LOG_FIELDS]));
+export const GET = withAdminAuth(() => NextResponse.json([...EXPORTABLE_LOG_FIELDS]), {
+  deniedAction: 'ADMIN_LOG_FIELDS_VIEW_DENIED',
+});

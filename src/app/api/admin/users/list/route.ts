@@ -16,12 +16,15 @@ import { withAdminAuth } from '@/lib/api/with-auth';
  *   403: { description: Caller is not a system admin. }
  *   500: { description: Server error. }
  */
-export const GET = withAdminAuth(async () => {
-  try {
-    const users = await getUsersList();
-    return NextResponse.json(users);
-  } catch (error) {
-    console.error('[USERS_LIST_GET_ERROR]', error);
-    return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
-  }
-});
+export const GET = withAdminAuth(
+  async () => {
+    try {
+      const users = await getUsersList();
+      return NextResponse.json(users);
+    } catch (error) {
+      console.error('[USERS_LIST_GET_ERROR]', error);
+      return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
+    }
+  },
+  { deniedAction: 'ADMIN_USERS_LIST_DENIED' },
+);
