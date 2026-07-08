@@ -673,8 +673,8 @@ export async function PUT(req: Request, context: { params: Promise<{ id: string 
       },
     });
 
-    // Determine viewer's course role if authenticated
-    const session = await auth();
+    // Determine viewer's course role. Reuse the session/user already resolved at
+    // the top of PUT instead of calling auth() again.
     let viewerRole: string | null = null;
     let viewerIsAdmin = false;
     if (session?.user) {
