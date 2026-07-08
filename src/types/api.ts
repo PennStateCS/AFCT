@@ -662,6 +662,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/courses/{id}/{aid}/grades": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Batch set/clear a student's problem grades for an assignment
+         * @description Batch-saves one student's problem grades for an assignment in a single request —  the replacement for firing one POST per problem. The body maps problemId → grade  (a number within [0, maxPoints], or null to clear). Course staff (faculty or TAs)  or a system admin. Only problems whose grade actually changed are written: a null  for a graded problem deletes it, a number upserts it (existing feedback is left  untouched), and unchanged problems are skipped. Every applied change is audited  with its previous value, mirroring the single-problem grade route.
+         *
+         *     **Auth:** required
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/grades/route.ts)
+         */
+        post: operations["postCoursesByIdByAidGrades"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/{id}/{aid}/group-problems": {
         parameters: {
             query?: never;
@@ -4120,6 +4144,82 @@ export interface operations {
             };
             /** @description Caller is not course staff (faculty or TA) or a system admin. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postCoursesByIdByAidGrades: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    studentId: string;
+                    /** @description Map of problemId to grade (0..maxPoints) or null to clear. */
+                    grades: {
+                        [key: string]: number | null;
+                    };
+                };
+            };
+        };
+        responses: {
+            /** @description Batch applied; returns the number of problems changed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad body, unknown problem id, or a grade out of range. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not course staff (faculty or TA) or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Assignment not found in this course. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
