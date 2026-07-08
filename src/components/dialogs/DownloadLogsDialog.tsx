@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 import {
   Dialog,
@@ -58,8 +59,32 @@ export function DownloadLogsDialog({
         reValidateMode: 'onChange',
     });
 
-    const [colList, setColList] = useState<string[]>([]);
     const watchedBegTime = watch('begTime');
+
+    // Available log column names. Fetched lazily via TanStack Query — only when the
+    // dialog is open (enabled: open preserves the original lazy-on-open behavior).
+    // Field lists rarely change, so a 5-minute staleTime avoids refetching each open.
+    const {
+        data: fields,
+        isError: fieldsError,
+    } = useQuery({
+        queryKey: ['admin', 'logs', 'fields'],
+        queryFn: async (): Promise<string[]> => {
+            const res = await fetch(`/api/admin/logs/fields`, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' },
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data?.message || res.statusText || 'Failed to duplicate');
+            }
+            return res.json();
+        },
+        enabled: open,
+        staleTime: 5 * 60_000,
+    });
+
+    const colList = useMemo(() => fields ?? [], [fields]);
 
     // Select All: Set the form value to contain every ID from colList
     const handleSelectAll = () => {
@@ -71,46 +96,24 @@ export function DownloadLogsDialog({
         setValue("cols", [], { shouldValidate: true, shouldDirty: true });
     };
 
-    // Run on open
+    // Reset the form to defaults whenever the dialog opens.
     useEffect(() => {
-        async function init() {
-            try {
-                const res = await fetch(`/api/admin/logs/fields`, {
-                    method: 'GET',
-                    headers: { 'Content-Type': 'application/json' },
-                });
-                if (!res.ok) {
-                    const data = await res.json().catch(() => ({}));
-                    throw new Error(data?.message || res.statusText || 'Failed to duplicate');
-                }
-                const currFields = await res.json();
-                setColList(currFields);
-            } catch (e) {
-                console.error(e);
-                showToast.error('Failed to get log fields');
-            }
-        }
-
         if (!open) return;
 
-        if (open) {
-            reset(defaults, {
+        reset(defaults, {
             keepDirty: false,
             keepTouched: false,
             keepErrors: false,
             keepValues: false,
-            });
-        } else {
-            reset(defaults, {
-            keepDirty: false,
-            keepTouched: false,
-            keepErrors: false,
-            keepValues: false,
-            });
-        }
-
-        init();
+        });
     }, [open, defaults, reset]);
+
+    // Surface a fetch failure the same way the original init() did.
+    useEffect(() => {
+        if (fieldsError) {
+            showToast.error('Failed to get log fields');
+        }
+    }, [fieldsError]);
 
     // Run after colList is available
     useEffect(() => {

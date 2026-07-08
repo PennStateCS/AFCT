@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { ColumnDef } from '@tanstack/react-table';
 import { Assignment } from '@prisma/client';
 import type { AssignmentWithProblemCount } from '@/types/course';
@@ -20,29 +21,29 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 // Lazily fetches the assignment's max points when the row doesn't already have it.
-function MaxPointsCell({
+// Shares the ['assignment', id] cache entry with StudentAssignmentView/StudentNavigator,
+// so multiple rows (and other views) hitting /api/assignments/{id} dedupe to one request.
+export function MaxPointsCell({
   assignmentId,
   maxPoints,
 }: {
   assignmentId: string;
   maxPoints: number | null;
 }) {
-  const [pts, setPts] = useState<number | null>(maxPoints ?? null);
+  const needsFetch = maxPoints === null || maxPoints === undefined;
 
-  useEffect(() => {
-    if (pts === null) {
-      (async () => {
-        try {
-          const res = await fetch(`/api/assignments/${assignmentId}`);
-          if (!res.ok) return;
-          const json = await res.json();
-          setPts(json.maxPoints ?? 0);
-        } catch {
-          setPts(0);
-        }
-      })();
-    }
-  }, [assignmentId, pts]);
+  const { data } = useQuery({
+    queryKey: ['assignment', assignmentId],
+    queryFn: async () => {
+      const res = await fetch(`/api/assignments/${assignmentId}`);
+      if (!res.ok) throw new Error('Failed to fetch assignment');
+      return (await res.json()) as { maxPoints: number | null };
+    },
+    enabled: needsFetch,
+    staleTime: 30_000,
+  });
+
+  const pts = needsFetch ? (data ? data.maxPoints ?? 0 : null) : maxPoints;
 
   return <div>{pts !== null ? pts : '...'}</div>;
 }
