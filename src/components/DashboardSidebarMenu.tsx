@@ -11,6 +11,7 @@ import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils';
+import { apiPaths } from '@/lib/api-paths';
 import { safeSignOut } from '@/lib/safe-signout';
 
 import { ChangePasswordDialog } from './dialogs/ChangePasswordDialog';
@@ -87,7 +88,7 @@ export default function DashboardSidebarMenu() {
   const { data: courses = [] } = useQuery<Course[]>({
     queryKey: ['courses', 'nav'],
     queryFn: async () => {
-      const res = await fetch('/api/courses/list?view=nav');
+      const res = await fetch(apiPaths.myCourses({ view: 'nav' }));
       if (!res.ok) throw new Error('Failed to fetch courses');
       return (await res.json()) as Course[];
     },
@@ -480,7 +481,7 @@ export default function DashboardSidebarMenu() {
           toast.success('Password changed!');
         }}
       />
-      
+
       <EditProfileDialog user={user} open={editProfileOpen} setOpen={setEditProfileOpen} />
     </>
   );

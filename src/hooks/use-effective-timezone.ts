@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { apiPaths } from '@/lib/api-paths';
 
 /**
  * Resolves the timezone to display dates in: the user's own profile timezone,
@@ -15,7 +16,7 @@ export function useEffectiveTimezone() {
   const profileQuery = useQuery({
     queryKey: ['profile'],
     queryFn: async () => {
-      const res = await fetch('/api/profile', { cache: 'no-store' });
+      const res = await fetch(apiPaths.profile(), { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed to load profile');
       return (await res.json()) as { timezone?: string | null };
     },
@@ -25,7 +26,7 @@ export function useEffectiveTimezone() {
   const publicSettingsQuery = useQuery({
     queryKey: ['system-settings', 'public'],
     queryFn: async () => {
-      const res = await fetch('/api/system-settings/public', { cache: 'no-store' });
+      const res = await fetch(apiPaths.systemSettingsPublic(), { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed to load public settings');
       return (await res.json()) as { timezone?: string | null };
     },
