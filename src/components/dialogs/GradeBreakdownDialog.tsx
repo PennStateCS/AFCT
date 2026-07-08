@@ -147,11 +147,14 @@ export function GradeBreakdownDialog({
         acc[r.problemId] = r.grade;
         return acc;
       }, {});
-      const res = await fetch(`/api/courses/${courseId}/${assignmentId}/grades`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId, grades: gradesPayload }),
-      });
+      const res = await fetch(
+        `/api/courses/${courseId}/${assignmentId}/problem-grades/${studentId}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ grades: gradesPayload }),
+        },
+      );
       if (!res.ok) throw new Error('save');
       // Refresh this student's cached grades so reopening reflects the save; the
       // parent (grades matrix) refreshes via onSaved.

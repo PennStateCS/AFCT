@@ -66,8 +66,8 @@ const jsonResponse = (body: unknown, ok = true) => ({
   json: async () => body,
 });
 
-// URL/method router — the groups endpoint is a POST-used-as-a-read, students is
-// a plain GET, so we branch on both method and path.
+// URL/method router — both the groups and students endpoints are plain GETs, so
+// we branch on both method and path.
 const routeFetch = (opts: {
   groups?: unknown;
   students?: unknown;
@@ -75,7 +75,7 @@ const routeFetch = (opts: {
 }): FetchMock =>
   vi.fn(async (url: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET';
-    if (url === '/api/courses/c1/groups' && method === 'POST') {
+    if (url === '/api/courses/c1/groups' && method === 'GET') {
       opts.onGroupsList?.();
       return jsonResponse(opts.groups ?? []);
     }
@@ -103,12 +103,8 @@ describe('GroupsCard', () => {
       expect(screen.getByText('Team Alpha')).toBeInTheDocument();
     });
 
-    // Groups POST-as-read fired with the exact action:'list' body.
-    expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/groups', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'list' }),
-    });
+    // Groups list fired as a plain GET.
+    expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/groups');
     // Students GET fired.
     expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/students');
   });
@@ -143,7 +139,7 @@ describe('GroupsCard', () => {
     });
 
     // Groups still fetched, but students came from the seed — no GET /students.
-    expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/groups', expect.anything());
+    expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/groups');
     expect(fetchMock).not.toHaveBeenCalledWith('/api/courses/c1/students');
 
     // Only the STUDENT-role member is seeded into the students query cache.
@@ -156,7 +152,7 @@ describe('GroupsCard', () => {
     let resolveGroups!: (v: unknown) => void;
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       const method = init?.method ?? 'GET';
-      if (url === '/api/courses/c1/groups' && method === 'POST') {
+      if (url === '/api/courses/c1/groups' && method === 'GET') {
         return new Promise((resolve) => {
           resolveGroups = () => resolve(jsonResponse([]));
         });

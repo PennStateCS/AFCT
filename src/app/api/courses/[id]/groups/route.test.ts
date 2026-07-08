@@ -117,39 +117,6 @@ describe('POST /api/courses/[id]/groups', () => {
     expect(res.status).toBe(403);
   });
 
-  it('supports POST { action: "list" } to return groups (no-signal client)', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
-    prismaMock.group.findMany.mockResolvedValue([{ id: 'g1', name: 'A' }]);
-
-    const res = await POST(
-      new NextRequest('http://localhost/api/courses/c1/groups', {
-        method: 'POST',
-        body: JSON.stringify({ action: 'list' }),
-      }),
-      { params: { id: 'c1' } } as any,
-    );
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body).toEqual([{ id: 'g1', name: 'A' }]);
-    expect(activityLogMock).toHaveBeenCalled();
-  });
-
-  it('returns 500 when list action query fails', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
-    prismaMock.group.findMany.mockRejectedValue(new Error('list fail'));
-
-    const res = await POST(
-      new NextRequest('http://localhost/api/courses/c1/groups', {
-        method: 'POST',
-        body: JSON.stringify({ action: 'list' }),
-      }),
-      { params: { id: 'c1' } } as any,
-    );
-    expect(res.status).toBe(500);
-  });
-
   it('returns 422 when name missing', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });

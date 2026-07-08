@@ -67,12 +67,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
 /**
  * Creates a group in the course. Course staff (faculty or TAs) or a system admin.
- * Also doubles as a
- * "list" endpoint: a body of `{ action: 'list' }` returns the groups instead of
- * creating one — a workaround so the client can list without needing a GET's
- * AbortController plumbing. Group names are unique per course.
+ * Group names are unique per course.
  * @openapi
- * summary: Create a course group (or list via body)
+ * summary: Create a course group
  * parameters:
  *   - { name: id, in: path, required: true, schema: { type: string } }
  * requestBody:
@@ -82,10 +79,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
  *       schema:
  *         type: object
  *         properties:
- *           name: { type: string, description: New group name (create mode) }
- *           action: { type: string, enum: [list], description: Return the group list instead of creating }
+ *           name: { type: string, description: New group name }
  * responses:
- *   200: { description: The group list (when action is "list"). }
  *   201: { description: The created group. }
  *   401: { description: Not signed in. }
  *   403: { description: Not course staff or a system admin. }
@@ -119,34 +114,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const data = await req.json();
 
-    // Support a POST body { action: 'list' } so clients don't need to use AbortController.signal
-    if (data?.action === 'list') {
-      try {
-        const groups = await prisma.group.findMany({
-          where: { courseId: id },
-          orderBy: { name: 'asc' },
-        });
-        await createEnhancedActivityLog(prisma, req, {
-          userId: session.user.id,
-          action: 'VIEW_GROUPS',
-          severity: 'INFO',
-          category: 'COURSE',
-          metadata: { courseId: id },
-        });
-        return NextResponse.json(groups);
-      } catch (err) {
-        console.error('[COURSE_GROUPS_POST_LIST_ERROR]', err);
-        await createEnhancedActivityLog(prisma, req, {
-          userId: session?.user?.id ?? null,
-          action: 'GROUP_LIST_ERROR',
-          severity: 'ERROR',
-          metadata: { error: err instanceof Error ? err.message : 'unknown error' },
-        });
-        return NextResponse.json({ error: 'Failed to fetch groups' }, { status: 500 });
-      }
-    }
-
-    // Otherwise treat as create
     const name = (data.name ?? '').trim();
 
     if (!name) return NextResponse.json({ error: 'Name not found' }, { status: 422 });

@@ -49,16 +49,11 @@ export function GroupsCard({
   const [manageOpen, setManageOpen] = useState(false);
   const [managingGroup, setManagingGroup] = useState<Group | null>(null);
 
-  // Cached groups list. This endpoint is a POST used as a read: the server
-  // returns the group list in response to an { action: 'list' } body.
+  // Cached groups list, read via GET /api/courses/{id}/groups.
   const groupsQuery = useQuery({
     queryKey: ['course', courseId, 'groups'],
     queryFn: async () => {
-      const res = await fetch(`/api/courses/${courseId}/groups`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'list' }),
-      });
+      const res = await fetch(`/api/courses/${courseId}/groups`);
       if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load groups');
       const data = await res.json();
       return (Array.isArray(data) ? data : (data?.groups ?? [])) as Group[];
