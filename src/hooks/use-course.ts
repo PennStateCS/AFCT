@@ -296,7 +296,7 @@ export function useEnrollment(course: FullCourse | null) {
   const handleEnrollUser = useCallback(
     async (user: EnrollableUser, courseId: string, refetchCourse: () => void) => {
       try {
-        const res = await fetch(apiPaths.courseEnroll(courseId), {
+        const res = await fetch(apiPaths.courseRoster(courseId), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: user.id }),

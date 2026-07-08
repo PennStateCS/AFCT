@@ -24,7 +24,12 @@ vi.mock('next/navigation', () => ({
 const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('@/lib/toast', () => ({ showToast: toastMock }));
 
-import { useCourseData, useTabNavigation, useDialogStates, useEnrollment } from '@/hooks/use-course';
+import {
+  useCourseData,
+  useTabNavigation,
+  useDialogStates,
+  useEnrollment,
+} from '@/hooks/use-course';
 
 const fetchMock = vi.fn();
 
@@ -89,7 +94,13 @@ describe('useCourseData', () => {
   });
 
   it('does not fetch when an initial course is supplied', async () => {
-    const initialCourse = { id: 'c1', name: 'X', assignments: [{}], problems: [], enrolled: [] } as never;
+    const initialCourse = {
+      id: 'c1',
+      name: 'X',
+      assignments: [{}],
+      problems: [],
+      enrolled: [],
+    } as never;
     renderHook(() => useCourseData('c1', { initialCourse }), { wrapper: createWrapper() });
     await Promise.resolve();
     expect(fetchMock).not.toHaveBeenCalled();
@@ -102,7 +113,13 @@ describe('useCourseData', () => {
   });
 
   it('lazily loads the assignments section and merges it into the course', async () => {
-    const initialCourse = { id: 'c1', name: 'X', assignments: [], problems: [], enrolled: [] } as never;
+    const initialCourse = {
+      id: 'c1',
+      name: 'X',
+      assignments: [],
+      problems: [],
+      enrolled: [],
+    } as never;
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({ assignments: [{ id: 'a1' }] }) });
     const { result } = renderHook(() => useCourseData('c1', { initialCourse }), {
       wrapper: createWrapper(),
@@ -115,7 +132,13 @@ describe('useCourseData', () => {
   });
 
   it('lazily loads the roster tab', async () => {
-    const initialCourse = { id: 'c1', name: 'X', assignments: [], problems: [], enrolled: [] } as never;
+    const initialCourse = {
+      id: 'c1',
+      name: 'X',
+      assignments: [],
+      problems: [],
+      enrolled: [],
+    } as never;
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({ enrolled: [{ id: 'u1' }] }) });
     const { result } = renderHook(() => useCourseData('c1', { initialCourse }), {
       wrapper: createWrapper(),
@@ -137,7 +160,13 @@ describe('useCourseData', () => {
   });
 
   it('does not lazily load tabs for a student (they already have full data)', async () => {
-    const initialCourse = { id: 'c1', name: 'X', assignments: [{}], problems: [], enrolled: [] } as never;
+    const initialCourse = {
+      id: 'c1',
+      name: 'X',
+      assignments: [{}],
+      problems: [],
+      enrolled: [],
+    } as never;
     const { result } = renderHook(() => useCourseData('c1', { initialCourse, isStudent: true }), {
       wrapper: createWrapper(),
     });
@@ -168,7 +197,7 @@ describe('useEnrollment', () => {
       await result.current.handleEnrollUser({ id: 'u9' } as never, 'c1', refetch);
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/courses/c1/enroll',
+      '/api/courses/c1/roster',
       expect.objectContaining({ method: 'POST' }),
     );
     expect(toastMock.success).toHaveBeenCalledWith('User enrolled!');
