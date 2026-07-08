@@ -617,8 +617,6 @@ export interface paths {
          * Add problems to an assignment
          * @description Attaches problems to an assignment with per-problem settings (points, submission  cap, autograder). Course staff (faculty or TAs) or a system admin. Adds only problems not already  linked — existing links, especially those with submissions, are preserved and  reported back. For group assignments, an optional `groupId` (or "ALL") maps the  given problems to specific groups, even ones already on the assignment. Only  problems belonging to this course are accepted.
          *
-         *     **Auth:** required
-         *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/add-problems/route.ts)
          */
         post: operations["postCoursesByIdByAidAddProblems"];
@@ -778,8 +776,6 @@ export interface paths {
         /**
          * Remove a problem from an assignment
          * @description Detaches a problem from an assignment (and clears any group→problem mappings for  it), leaving the problem itself intact in the course. Course staff (faculty or  TAs) or a system admin. Both the assignment and the problem must belong to the course  in the path. Uses POST rather than DELETE because the problem id travels in the body.
-         *
-         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/[aid]/remove-problem/route.ts)
          */

@@ -23,7 +23,7 @@ beforeEach(() => {
 });
 
 describe('POST /api/courses/[id]/[aid]/remove-problem', () => {
-  it('returns 403 when unauthorized', async () => {
+  it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
     const req = new Request('http://localhost/api/courses/c1/a1/remove-problem', {
@@ -32,7 +32,7 @@ describe('POST /api/courses/[id]/[aid]/remove-problem', () => {
     });
     const res = await POST(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('returns 400 when missing problemId', async () => {
