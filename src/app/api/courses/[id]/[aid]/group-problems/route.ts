@@ -42,11 +42,12 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    // Fetch groups for the course and their assignment problem mappings
-    const groups = await prisma.group.findMany({ where: { courseId }, select: { id: true, name: true } });
-
-    // Fetch groupAssignmentProblem rows for this assignment
-    const mappings = await prisma.groupAssignmentProblem.findMany({ where: { assignmentId } });
+    // Fetch the course's groups and this assignment's group→problem mappings.
+    // Independent reads, so run them concurrently.
+    const [groups, mappings] = await Promise.all([
+      prisma.group.findMany({ where: { courseId }, select: { id: true, name: true } }),
+      prisma.groupAssignmentProblem.findMany({ where: { assignmentId } }),
+    ]);
 
     const mapByGroup: Record<string, string[]> = {};
     for (const m of mappings) {
