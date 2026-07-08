@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { ProblemTypeEnum } from '@/schemas/problem';
-import { canManageCourse } from '@/lib/permissions';
+import { withCourseAuth } from '@/lib/api/with-auth';
 import { z } from 'zod';
 
 // Types
@@ -16,8 +15,8 @@ interface AssignmentWithProblems {
       type: z.infer<typeof ProblemTypeEnum> | null;
       maxStates: number | null;
       isDeterministic: boolean | null;
-    }
-  }[]
+    };
+  }[];
 }
 
 /**
@@ -42,113 +41,103 @@ interface AssignmentWithProblems {
  *   404: { description: Assignment or problem not found in this course. }
  *   500: { description: Server error. }
  */
-export async function POST(
-  req: Request,
-  context: { params: Promise<{ id: string; aid: string }> },
-) {
-  const { id: courseId, aid: assignmentId } = await context.params;
+export const POST = withCourseAuth(
+  async (req, ctx, { user, courseId }) => {
+    const { aid: assignmentId } = await ctx.params;
 
-  const session = await auth();
-  const user = session?.user;
+    try {
+      // Parse the problemId from the request body
+      const { problemId } = await req.json();
 
-  if (!user || !(await canManageCourse(user, courseId))) {
-    await createEnhancedActivityLog(prisma, req, {
-      userId: session?.user?.id ?? null,
-      action: 'ASSIGNMENT_REMOVE_PROBLEM_DENIED',
-      severity: 'SECURITY',
-      metadata: {},
-    });
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-  }
+      if (!problemId) {
+        return NextResponse.json({ error: 'Missing problemId.' }, { status: 400 });
+      }
 
-  try {
-    // Parse the problemId from the request body
-    const { problemId } = await req.json();
+      // Validate that both the assignment and the problem exist and belong to the
+      // course. Independent reads → run concurrently; the assignment is still
+      // checked first so its 404 takes precedence, preserving prior behavior.
+      const [assignment, problem] = await Promise.all([
+        prisma.assignment.findFirst({ where: { id: assignmentId, courseId } }),
+        prisma.problem.findFirst({ where: { id: problemId, courseId } }),
+      ]);
 
-    if (!problemId) {
-      return NextResponse.json({ error: 'Missing problemId.' }, { status: 400 });
-    }
+      if (!assignment) {
+        return NextResponse.json({ error: 'Assignment not found.' }, { status: 404 });
+      }
 
-    // Validate that both the assignment and the problem exist and belong to the
-    // course. Independent reads → run concurrently; the assignment is still
-    // checked first so its 404 takes precedence, preserving prior behavior.
-    const [assignment, problem] = await Promise.all([
-      prisma.assignment.findFirst({ where: { id: assignmentId, courseId } }),
-      prisma.problem.findFirst({ where: { id: problemId, courseId } }),
-    ]);
+      if (!problem) {
+        return NextResponse.json({ error: 'Problem not found in this course.' }, { status: 404 });
+      }
 
-    if (!assignment) {
-      return NextResponse.json({ error: 'Assignment not found.' }, { status: 404 });
-    }
+      // Delete the link between the assignment and the problem
+      await prisma.assignmentProblem.deleteMany({
+        where: {
+          assignmentId,
+          problemId,
+        },
+      });
 
-    if (!problem) {
-      return NextResponse.json({ error: 'Problem not found in this course.' }, { status: 404 });
-    }
+      // Also remove any group-specific mappings for this assignment/problem so
+      // the problem is fully unassigned from groups when removed from the
+      // assignment.
+      await prisma.groupAssignmentProblem.deleteMany({ where: { assignmentId, problemId } });
 
-    // Delete the link between the assignment and the problem
-    await prisma.assignmentProblem.deleteMany({
-      where: {
-        assignmentId,
-        problemId,
-      },
-    });
-
-    // Also remove any group-specific mappings for this assignment/problem so
-    // the problem is fully unassigned from groups when removed from the
-    // assignment.
-    await prisma.groupAssignmentProblem.deleteMany({ where: { assignmentId, problemId } });
-
-    // Retrieve updated problem list for this assignment
-    const updated = await prisma.assignment.findUnique({
-      where: { id: assignmentId },
-      select: {
-        problems: {
-          select: {
-            problem: {           
-              select: {
-                id: true,
-                title: true,
-                description: true,
-                type: true,
-                maxStates: true,
-                isDeterministic: true,
-              }
-            }
+      // Retrieve updated problem list for this assignment
+      const updated = (await prisma.assignment.findUnique({
+        where: { id: assignmentId },
+        select: {
+          problems: {
+            select: {
+              problem: {
+                select: {
+                  id: true,
+                  title: true,
+                  description: true,
+                  type: true,
+                  maxStates: true,
+                  isDeterministic: true,
+                },
+              },
+            },
           },
         },
-      },
-    }) as AssignmentWithProblems | null;
+      })) as AssignmentWithProblems | null;
 
-    const problems = updated?.problems.map((ap: NonNullable<typeof updated>['problems'][number]) => ap.problem) || [];
+      const problems =
+        updated?.problems.map(
+          (ap: NonNullable<typeof updated>['problems'][number]) => ap.problem,
+        ) || [];
 
-    // Log the removal action
-    await createEnhancedActivityLog(prisma, req, {
-      userId: user.id,
-      action: 'REMOVE_ASSIGNMENT_PROBLEM',
-      severity: 'INFO',
-      category: 'ASSIGNMENT',
-      courseId,
-      assignmentId,
-      problemId,
-      metadata: {
+      // Log the removal action
+      await createEnhancedActivityLog(prisma, req, {
         userId: user.id,
-        courseId: courseId,
-        assignmentId: assignmentId,
-        problemId: problemId,
-        problemTitle: problem.title,
-      },
-    });
+        action: 'REMOVE_ASSIGNMENT_PROBLEM',
+        severity: 'INFO',
+        category: 'ASSIGNMENT',
+        courseId,
+        assignmentId,
+        problemId,
+        metadata: {
+          userId: user.id,
+          courseId: courseId,
+          assignmentId: assignmentId,
+          problemId: problemId,
+          problemTitle: problem.title,
+        },
+      });
 
-    // Return the updated list of problems
-    return NextResponse.json({ success: true, problems });
-  } catch (error) {
-    console.error('Error removing problem from assignment:', error);
-    await createEnhancedActivityLog(prisma, req, {
-      userId: session?.user?.id ?? null,
-      action: 'ASSIGNMENT_REMOVE_PROBLEM_ERROR',
-      severity: 'ERROR',
-      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
-    });
-    return NextResponse.json({ error: 'Failed to remove problem.' }, { status: 500 });
-  }
-}
+      // Return the updated list of problems
+      return NextResponse.json({ success: true, problems });
+    } catch (error) {
+      console.error('Error removing problem from assignment:', error);
+      await createEnhancedActivityLog(prisma, req, {
+        userId: user.id,
+        action: 'ASSIGNMENT_REMOVE_PROBLEM_ERROR',
+        severity: 'ERROR',
+        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+      });
+      return NextResponse.json({ error: 'Failed to remove problem.' }, { status: 500 });
+    }
+  },
+  { access: 'manage', deniedAction: 'ASSIGNMENT_REMOVE_PROBLEM_DENIED' },
+);
