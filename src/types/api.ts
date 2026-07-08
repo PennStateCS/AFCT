@@ -39,8 +39,6 @@ export interface paths {
          * Export activity logs
          * @description Returns the selected activity-log columns within a time range, for CSV export.  System administrators only. Column names are validated against the exportable allow-list  before reaching the Prisma select (guards field injection), and the result is  capped at MAX_EXPORT_ROWS so one export can't page the whole table into memory.
          *
-         *     **Auth:** required
-         *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/logs/export/route.ts)
          */
         post: operations["postAdminLogsExport"];
@@ -105,8 +103,6 @@ export interface paths {
          * Download a backup file
          * @description Streams a single backup file to the caller as an attachment. System administrators only.  A database dump contains the entire database (password hashes and all PII), so  the download is always recorded as a SECURITY audit event. The filename is  checked against a strict allow-list and the resolved path must stay inside the  backup directory — two independent guards against path traversal.
          *
-         *     **Auth:** required
-         *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/backups/download/route.ts)
          */
         get: operations["getAdminSettingsBackupsDownload"];
@@ -129,8 +125,6 @@ export interface paths {
          * List backups
          * @description Lists available backups, newest first, each pairing a database dump with its  matching upload-files archive. System administrators only.
          *
-         *     **Auth:** required
-         *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/backups/route.ts)
          */
         get: operations["getAdminSettingsBackups"];
@@ -138,8 +132,6 @@ export interface paths {
         /**
          * Trigger a backup now
          * @description Requests an on-demand backup by dropping a trigger file the db-backup container  polls for. System administrators only. Returns 202 (accepted) — the backup runs  asynchronously in that container, not in this request.
-         *
-         *     **Auth:** required
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/settings/backups/route.ts)
          */

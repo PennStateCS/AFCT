@@ -3,9 +3,8 @@ import fs from 'fs';
 import path from 'path';
 import { Readable } from 'stream';
 import { prisma } from '@/lib/prisma';
-import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { isAdmin } from '@/lib/permissions';
+import { withAdminAuth } from '@/lib/api/with-auth';
 import { BACKUP_DIR, isValidBackupName } from '@/lib/backups';
 
 /**
@@ -32,12 +31,7 @@ import { BACKUP_DIR, isValidBackupName } from '@/lib/backups';
  *   403: { description: Caller is not a system administrator. }
  *   404: { description: The backup file does not exist. }
  */
-export async function GET(req: Request) {
-  const session = await auth();
-  if (!isAdmin(session?.user)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-  }
-
+export const GET = withAdminAuth(async (req, _ctx, { user }) => {
   const file = new URL(req.url).searchParams.get('file') ?? '';
   // Strict allow-list of exact backup filenames — also blocks path traversal.
   if (!isValidBackupName(file)) {
@@ -60,7 +54,7 @@ export async function GET(req: Request) {
   // A dump is the entire database (password hashes, all PII) — always audit it.
   try {
     await createEnhancedActivityLog(prisma, req, {
-      userId: session?.user?.id,
+      userId: user.id,
       action: 'SYSTEM_BACKUP_DOWNLOADED',
       severity: 'SECURITY',
       category: 'SYSTEM',
@@ -79,4 +73,4 @@ export async function GET(req: Request) {
       'Content-Length': String(size),
     },
   });
-}
+});
