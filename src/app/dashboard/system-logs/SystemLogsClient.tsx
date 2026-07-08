@@ -91,7 +91,6 @@ export default function SystemLogsClient() {
   const {
     data,
     isLoading,
-    isFetching,
     isError,
     refetch,
   } = useQuery({
@@ -115,7 +114,9 @@ export default function SystemLogsClient() {
 
   const logs = data?.rows ?? [];
   const total = data?.total ?? 0;
-  const loading = isLoading || isFetching;
+  // Blocking spinner only on the cold first load; page/search/sort changes keep the
+  // previous page visible (keepPreviousData) instead of flashing "loading".
+  const loading = isLoading;
 
   const handleViewerOpen = (row: LogRow) => {
     setSelectedData(JSON.stringify(row, null, 2));
