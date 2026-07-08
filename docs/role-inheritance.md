@@ -23,7 +23,7 @@
 
 - `GET /api/courses/:id` now returns `viewerRole` (the viewer's role in the course) and `viewerDefaultRole` (the viewer's global role) to let the UI make permission-based decisions.
 - `GET /api/courses/:id/roster/:userId` now returns the roster entry with the related `user` profile and also the viewer's `viewerCourseRole` and `viewerDefaultRole` when requested by an authenticated viewer.
-- Enrollment endpoints (`POST /api/courses/:id/enroll` and `POST /api/courses/:id/bulk-enroll`) assign the roster role according to the mapping above.
+- Enrollment endpoints (`POST /api/courses/:id/roster` and `POST /api/courses/:id/roster/bulk`) assign the roster role according to the mapping above.
 
 ## UI / UX
 

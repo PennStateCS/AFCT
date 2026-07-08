@@ -6,7 +6,8 @@ describe('apiPaths', () => {
     expect(apiPaths.courses()).toBe('/api/courses');
     expect(apiPaths.course('c1')).toBe('/api/courses/c1');
     expect(apiPaths.course('c1', { view: 'summary' })).toBe('/api/courses/c1?view=summary');
-    expect(apiPaths.courseEnroll('c1')).toBe('/api/courses/c1/enroll');
+    expect(apiPaths.courseRoster('c1')).toBe('/api/courses/c1/roster');
+    expect(apiPaths.courseRosterBulk('c1')).toBe('/api/courses/c1/roster/bulk');
     expect(apiPaths.courseRosterEntry('c1', 'u2')).toBe('/api/courses/c1/roster/u2');
   });
 

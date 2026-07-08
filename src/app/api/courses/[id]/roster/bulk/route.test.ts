@@ -21,11 +21,11 @@ beforeEach(() => {
   prismaMock.roster.findFirst.mockResolvedValue(null);
 });
 
-describe('POST /api/courses/[id]/bulk-enroll', () => {
+describe('POST /api/courses/[id]/roster/bulk', () => {
   it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
-    const req = new NextRequest('http://localhost/api/courses/c1/bulk-enroll', {
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/bulk', {
       method: 'POST',
       body: JSON.stringify({ userIds: ['u1'] }),
     });
@@ -38,7 +38,7 @@ describe('POST /api/courses/[id]/bulk-enroll', () => {
   it('returns 403 when forbidden', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
 
-    const req = new NextRequest('http://localhost/api/courses/c1/bulk-enroll', {
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/bulk', {
       method: 'POST',
       body: JSON.stringify({ userIds: ['u1'] }),
     });
@@ -52,7 +52,7 @@ describe('POST /api/courses/[id]/bulk-enroll', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
 
-    const req = new NextRequest('http://localhost/api/courses/c1/bulk-enroll', {
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/bulk', {
       method: 'POST',
       body: JSON.stringify({ userIds: [] }),
     });
@@ -76,7 +76,7 @@ describe('POST /api/courses/[id]/bulk-enroll', () => {
       cb(tx),
     );
 
-    const req = new NextRequest('http://localhost/api/courses/c1/bulk-enroll', {
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/bulk', {
       method: 'POST',
       body: JSON.stringify({ userIds: ['u1'] }),
     });
@@ -109,7 +109,7 @@ describe('POST /api/courses/[id]/bulk-enroll', () => {
       cb(tx),
     );
 
-    const req = new NextRequest('http://localhost/api/courses/c1/bulk-enroll', {
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/bulk', {
       method: 'POST',
       body: JSON.stringify({ userIds: ['u1', 'u2', 'u3', 'u4'] }),
     });
@@ -136,7 +136,7 @@ describe('POST /api/courses/[id]/bulk-enroll', () => {
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.$transaction.mockRejectedValue(new Error('tx failed'));
 
-    const req = new NextRequest('http://localhost/api/courses/c1/bulk-enroll', {
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/bulk', {
       method: 'POST',
       body: JSON.stringify({ userIds: ['u1'] }),
     });

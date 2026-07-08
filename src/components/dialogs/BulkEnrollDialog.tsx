@@ -88,7 +88,7 @@ export default function BulkEnrollDialog({
     if (found.length === 0) return;
     setIsEnrolling(true);
     try {
-      const res = await fetch(apiPaths.courseBulkEnroll(courseId), {
+      const res = await fetch(apiPaths.courseRosterBulk(courseId), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userIds: found.map((u) => u.id) }),

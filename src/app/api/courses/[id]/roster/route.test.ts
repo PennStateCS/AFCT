@@ -22,11 +22,11 @@ beforeEach(() => {
   prismaMock.roster.findFirst.mockResolvedValue(null);
 });
 
-describe('POST /api/courses/[id]/enroll', () => {
+describe('POST /api/courses/[id]/roster', () => {
   it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
-    const req = new Request('http://localhost/api/courses/c1/enroll', {
+    const req = new Request('http://localhost/api/courses/c1/roster', {
       method: 'POST',
       body: JSON.stringify({ userId: 'u1' }),
     });
@@ -41,7 +41,7 @@ describe('POST /api/courses/[id]/enroll', () => {
     authMock.mockResolvedValue({ user: { id: 'stu', isAdmin: false } });
     // roster.findFirst defaults to null in beforeEach → caller has no course role.
 
-    const req = new Request('http://localhost/api/courses/c1/enroll', {
+    const req = new Request('http://localhost/api/courses/c1/roster', {
       method: 'POST',
       body: JSON.stringify({ userId: 'u1' }),
     });
@@ -59,7 +59,7 @@ describe('POST /api/courses/[id]/enroll', () => {
 
   it('returns 400 when userId missing', async () => {
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
-    const req = new Request('http://localhost/api/courses/c1/enroll', {
+    const req = new Request('http://localhost/api/courses/c1/roster', {
       method: 'POST',
       body: JSON.stringify({}),
     });
@@ -73,7 +73,7 @@ describe('POST /api/courses/[id]/enroll', () => {
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.user.findUnique.mockResolvedValue(null);
 
-    const req = new Request('http://localhost/api/courses/c1/enroll', {
+    const req = new Request('http://localhost/api/courses/c1/roster', {
       method: 'POST',
       body: JSON.stringify({ userId: 'u1' }),
     });
@@ -87,7 +87,7 @@ describe('POST /api/courses/[id]/enroll', () => {
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.user.findUnique.mockResolvedValue({ id: 'u1', inactive: true });
 
-    const req = new Request('http://localhost/api/courses/c1/enroll', {
+    const req = new Request('http://localhost/api/courses/c1/roster', {
       method: 'POST',
       body: JSON.stringify({ userId: 'u1' }),
     });
@@ -101,7 +101,7 @@ describe('POST /api/courses/[id]/enroll', () => {
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.user.findUnique.mockResolvedValue({ id: 'u1', inactive: false });
 
-    const req = new Request('http://localhost/api/courses/c1/enroll', {
+    const req = new Request('http://localhost/api/courses/c1/roster', {
       method: 'POST',
       body: JSON.stringify({ userId: 'u1' }),
     });
@@ -117,7 +117,7 @@ describe('POST /api/courses/[id]/enroll', () => {
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.user.findUnique.mockResolvedValue({ id: 'u1', inactive: false });
 
-    const req = new Request('http://localhost/api/courses/c1/enroll', {
+    const req = new Request('http://localhost/api/courses/c1/roster', {
       method: 'POST',
       body: JSON.stringify({ userId: 'u1' }),
     });
@@ -138,7 +138,7 @@ describe('POST /api/courses/[id]/enroll', () => {
     prismaMock.user.findUnique.mockResolvedValue({ id: 'u1', inactive: false });
     prismaMock.roster.upsert.mockRejectedValue(new Error('db down'));
 
-    const req = new Request('http://localhost/api/courses/c1/enroll', {
+    const req = new Request('http://localhost/api/courses/c1/roster', {
       method: 'POST',
       body: JSON.stringify({ userId: 'u1' }),
     });
