@@ -217,7 +217,7 @@ export default function SubmissionsClient() {
   const handleViewSubmission = (submission: SubmissionItem) => {
     if (!submission.fileName) return;
 
-    setJffViewerSrc(`/api/uploads/submissions/${encodeURIComponent(submission.fileName)}`);
+    setJffViewerSrc(apiPaths.files.submission(encodeURIComponent(submission.fileName)));
     setJffViewerTitle(submission.originalFileName || submission.fileName);
     setJffViewerCourseId(submission.courseId ?? null);
     setJffViewerOpen(true);
@@ -226,7 +226,7 @@ export default function SubmissionsClient() {
   const handleDownloadSubmission = (submission: SubmissionItem) => {
     if (!submission.fileName) return;
 
-    const url = `/api/uploads/submissions/${encodeURIComponent(submission.fileName)}`;
+    const url = apiPaths.files.submission(encodeURIComponent(submission.fileName));
     const link = document.createElement('a');
     link.href = url;
     link.download = submission.originalFileName || 'Download';
@@ -590,7 +590,7 @@ export default function SubmissionsClient() {
                               <AvatarImage
                                 src={
                                   submission.avatar
-                                    ? `/api/uploads/pfps/${submission.avatar}`
+                                    ? apiPaths.files.pfp(submission.avatar)
                                     : undefined
                                 }
                                 alt={submission.studentEmail || submission.studentId || 'User'}

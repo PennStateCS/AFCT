@@ -431,7 +431,9 @@ export default function StudentAssignmentPage({
           <JffViewerDialog
             open={openDialog.open}
             onOpenChange={(open) => setOpenDialog({ open, submission: null })}
-            src={`/api/uploads/submissions/${encodeURIComponent(openDialog.submission.fileName ?? '')}`}
+            src={apiPaths.files.submission(
+              encodeURIComponent(openDialog.submission.fileName ?? ''),
+            )}
             title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
             width="70vw"
             height="70vh"
@@ -444,7 +446,9 @@ export default function StudentAssignmentPage({
           <RegexViewerDialog
             open={openDialog.open}
             onOpenChange={(open) => setOpenDialog({ open, submission: null })}
-            src={`/api/uploads/submissions/${encodeURIComponent(openDialog.submission.fileName ?? '')}`}
+            src={apiPaths.files.submission(
+              encodeURIComponent(openDialog.submission.fileName ?? ''),
+            )}
             title={`${openDialog.submission.originalFileName || openDialog?.submission?.fileName} - Submission`}
           />
         )}
@@ -454,7 +458,9 @@ export default function StudentAssignmentPage({
           <CfgViewerDialog
             open={openDialog.open}
             onOpenChange={(open) => setOpenDialog({ open, submission: null })}
-            src={`/api/uploads/submissions/${encodeURIComponent(openDialog.submission.fileName ?? '')}`}
+            src={apiPaths.files.submission(
+              encodeURIComponent(openDialog.submission.fileName ?? ''),
+            )}
             title={`${openDialog.submission.originalFileName || openDialog?.submission?.fileName} - Submission`}
           />
         )}

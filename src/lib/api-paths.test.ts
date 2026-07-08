@@ -42,6 +42,16 @@ describe('apiPaths', () => {
     expect(apiPaths.systemSettingsPublic()).toBe('/api/system-settings/public');
   });
 
+  it('builds served-file paths', () => {
+    expect(apiPaths.files.pfp('a.png')).toBe('/api/files/pfps/a.png');
+    expect(apiPaths.files.submission('s.jff')).toBe('/api/files/submissions/s.jff');
+    expect(apiPaths.files.problem('p.jff')).toBe('/api/files/problems/p.jff');
+    expect(apiPaths.files.solution('x.jff')).toBe('/api/files/solutions/x.jff');
+    expect(apiPaths.files.solution('x.jff', { download: true })).toBe(
+      '/api/files/solutions/x.jff?download=1',
+    );
+  });
+
   it('builds admin paths', () => {
     expect(apiPaths.admin.users()).toBe('/api/admin/users');
     expect(apiPaths.admin.users({ role: 'FACULTY' })).toBe('/api/admin/users?role=FACULTY');
