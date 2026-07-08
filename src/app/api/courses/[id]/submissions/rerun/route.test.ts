@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
-// POST /api/course_submissions/[cid] requeues every submission in a course by
+// POST /api/courses/[id]/submissions/rerun requeues every submission in a course by
 // resetting it to PENDING and logging a rerun for each one.
 
 const prismaMock = vi.hoisted(() => ({
@@ -19,16 +19,16 @@ vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activity
 import { POST } from './route';
 
 const makeRequest = () =>
-  new NextRequest('http://localhost/api/course_submissions/c1', { method: 'POST' });
+  new NextRequest('http://localhost/api/courses/c1/submissions/rerun', { method: 'POST' });
 
-const params = (cid = 'c1') => ({ params: Promise.resolve({ cid }) });
+const params = (id = 'c1') => ({ params: Promise.resolve({ id }) });
 
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
 });
 
-describe('POST /api/course_submissions/[cid]', () => {
+describe('POST /api/courses/[id]/submissions/rerun', () => {
   it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
@@ -38,7 +38,7 @@ describe('POST /api/course_submissions/[cid]', () => {
     expect(prismaMock.submission.update).not.toHaveBeenCalled();
   });
 
-  it('returns 403 when the user role is not allowed', async () => {
+  it('returns 403 when the user is not course staff', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
 
     const res = await POST(makeRequest(), params());

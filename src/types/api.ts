@@ -556,30 +556,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/course_submissions/{cid}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Rerun all submissions in a course
-         * @description Re-queues every submission in a course, resetting each to PENDING and clearing its  feedback/result — the bulk counterpart to the single-submission rerun. Course staff  (faculty or TAs) or a system admin. Logs each submission plus one batch-summary  event, and returns the count re-queued.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/course_submissions/[cid]/route.ts)
-         */
-        post: operations["postCourseSubmissionsByCid"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/courses/{id}/activity": {
         parameters: {
             query?: never;
@@ -1302,6 +1278,28 @@ export interface paths {
         get: operations["getCoursesByIdStudents"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/{id}/submissions/rerun": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rerun all submissions in a course
+         * @description Re-queues every submission in a course, resetting each to PENDING and clearing its  feedback/result — the bulk counterpart to the single-submission rerun. Course staff  (faculty or TAs) or a system admin. Logs each submission plus one batch-summary  event, and returns the count re-queued.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/submissions/rerun/route.ts)
+         */
+        post: operations["postCoursesByIdSubmissionsRerun"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3721,59 +3719,6 @@ export interface operations {
             };
             /** @description Comment not found. */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    postCourseSubmissionsByCid: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Course id */
-                cid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Submissions re-queued; returns the count. */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        success?: boolean;
-                        count?: number;
-                    };
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Caller is not course staff or a system admin. */
-            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6530,6 +6475,59 @@ export interface operations {
                 };
             };
             /** @description Not course staff (faculty or TAs) or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postCoursesByIdSubmissionsRerun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Course id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Submissions re-queued; returns the count. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success?: boolean;
+                        count?: number;
+                    };
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
