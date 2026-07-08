@@ -48,8 +48,22 @@ describe('GET /api/problems/[id]/comments', () => {
     expect(res.status).toBe(400);
   });
 
+  it('returns 403 when the caller cannot access the problem course', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: false } });
+    prismaMock.problem.findUnique.mockResolvedValue({ courseId: 'c1' });
+    prismaMock.roster.findFirst.mockResolvedValue(null); // not enrolled
+
+    const req = new NextRequest(
+      'http://localhost/api/problems/problem-1/comments?problemId=problem-1',
+    );
+    const res = await GET(req, { params: Promise.resolve({ id: 'problem-1' }) });
+
+    expect(res.status).toBe(403);
+  });
+
   it('returns transformed comments', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1' } });
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: true } });
+    prismaMock.problem.findUnique.mockResolvedValue({ courseId: 'c1' });
     prismaMock.comment.findMany.mockResolvedValue([
       {
         id: 'c1',
