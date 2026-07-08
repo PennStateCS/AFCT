@@ -22,7 +22,7 @@ describe('GET /api/courses/[id]/[aid]', () => {
   it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
-    const res = await GET(new Request('http://localhost/api/courses/c1/a1'), {
+    const res = await GET(new Request('http://localhost/api/courses/c1/assignments/a1'), {
       params: Promise.resolve({ id: 'c1', aid: 'a1' }),
     });
 
@@ -33,7 +33,7 @@ describe('GET /api/courses/[id]/[aid]', () => {
     authMock.mockResolvedValue({ user: { id: 'stranger', role: 'STUDENT' } });
     prismaMock.roster.findFirst.mockResolvedValue(null);
 
-    const res = await GET(new Request('http://localhost/api/courses/c1/a1'), {
+    const res = await GET(new Request('http://localhost/api/courses/c1/assignments/a1'), {
       params: Promise.resolve({ id: 'c1', aid: 'a1' }),
     });
 
@@ -50,9 +50,12 @@ describe('GET /api/courses/[id]/[aid]', () => {
       course: { name: 'Course', code: 'C1', isArchived: false },
     });
 
-    const res = await GET(new Request('http://localhost/api/courses/c1/a1?view=problems'), {
-      params: Promise.resolve({ id: 'c1', aid: 'a1' }),
-    });
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/assignments/a1?view=problems'),
+      {
+        params: Promise.resolve({ id: 'c1', aid: 'a1' }),
+      },
+    );
 
     expect(res.status).toBe(200);
   });
@@ -60,7 +63,7 @@ describe('GET /api/courses/[id]/[aid]', () => {
   it('returns 404 when assignment not found', async () => {
     prismaMock.assignment.findFirst.mockResolvedValue(null);
 
-    const res = await GET(new Request('http://localhost/api/courses/c1/a1'), {
+    const res = await GET(new Request('http://localhost/api/courses/c1/assignments/a1'), {
       params: Promise.resolve({ id: 'c1', aid: 'a1' }),
     });
 
@@ -93,7 +96,7 @@ describe('GET /api/courses/[id]/[aid]', () => {
       },
     });
 
-    const res = await GET(new Request('http://localhost/api/courses/c1/a1'), {
+    const res = await GET(new Request('http://localhost/api/courses/c1/assignments/a1'), {
       params: Promise.resolve({ id: 'c1', aid: 'a1' }),
     });
 
@@ -116,9 +119,12 @@ describe('GET /api/courses/[id]/[aid]', () => {
       },
     });
 
-    const res = await GET(new Request('http://localhost/api/courses/c1/a1?view=problems'), {
-      params: Promise.resolve({ id: 'c1', aid: 'a1' }),
-    });
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/assignments/a1?view=problems'),
+      {
+        params: Promise.resolve({ id: 'c1', aid: 'a1' }),
+      },
+    );
 
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -154,7 +160,7 @@ describe('GET /api/courses/[id]/[aid]', () => {
       },
     });
 
-    const res = await GET(new Request('http://localhost/api/courses/c1/a1'), {
+    const res = await GET(new Request('http://localhost/api/courses/c1/assignments/a1'), {
       params: Promise.resolve({ id: 'c1', aid: 'a1' }),
     });
 
@@ -166,7 +172,7 @@ describe('GET /api/courses/[id]/[aid]', () => {
   it('returns 500 when assignment query throws', async () => {
     prismaMock.assignment.findFirst.mockRejectedValue(new Error('db down'));
 
-    const res = await GET(new Request('http://localhost/api/courses/c1/a1'), {
+    const res = await GET(new Request('http://localhost/api/courses/c1/assignments/a1'), {
       params: Promise.resolve({ id: 'c1', aid: 'a1' }),
     });
 

@@ -420,7 +420,7 @@ export default function AssignmentSubmissions({
     queryKey: ['course', courseId, 'assignment', assignmentId, 'review-data', selectedStudentId],
     queryFn: async ({ signal }): Promise<ReviewDataResponse> => {
       const res = await fetch(
-        `/api/courses/${courseId}/${assignmentId}/review-data/${selectedStudentId}`,
+        apiPaths.assignmentReviewData(courseId, assignmentId, selectedStudentId),
         { signal },
       );
       if (!res.ok) {
@@ -668,7 +668,7 @@ export default function AssignmentSubmissions({
 
       try {
         const res = await fetch(
-          `/api/courses/${courseId}/${assignmentId}/problems/${problemId}/grade/${selectedStudent.id}`,
+          apiPaths.assignmentProblemGrade(courseId, assignmentId, problemId, selectedStudent.id),
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
