@@ -2,42 +2,14 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withAdminAuth } from '@/lib/api/with-auth';
+import { generateUniqueCourseCode } from '@/lib/course-code';
+import { resolveUserTimezone } from '@/lib/user-timezone';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
 import { toEmptyStringNotation } from '@/lib/empty-string-notation';
 import type { Prisma } from '@prisma/client';
 
 const courseCodeRegex = /^[A-Z]{2,8}\s?\d{1,4}[A-Z]?$/;
 const normalizeCode = (v: string) => v.trim().replace(/\s+/g, ' ').toUpperCase();
-
-// Mirrors the registration-code generator in POST /api/courses so duplicated
-// courses get a fresh, unique code the same way originals do.
-async function generateUniqueCourseCode() {
-  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  const numbers = '0123456789';
-
-  function randomCode() {
-    const part1 = Array.from(
-      { length: 3 },
-      () => letters[Math.floor(Math.random() * letters.length)],
-    ).join('');
-    const part2 = Array.from(
-      { length: 3 },
-      () => numbers[Math.floor(Math.random() * numbers.length)],
-    ).join('');
-    return `${part1}${part2}`.toUpperCase();
-  }
-
-  let code: string;
-  let exists = true;
-
-  do {
-    code = randomCode();
-    const existing = await prisma.course.findUnique({ where: { regCode: code } });
-    exists = !!existing;
-  } while (exists);
-
-  return code;
-}
 
 /**
  * Creates a new course modeled on an existing one, in a single transaction. The
@@ -176,20 +148,7 @@ export const POST = withAdminAuth(
         );
       }
 
-      // Get user's timezone (DB user > system settings > default)
-      let userTimezone = 'America/New_York';
-      {
-        const userRecord = await prisma.user.findUnique({
-          where: { id: actorId },
-          select: { timezone: true },
-        });
-        if (userRecord?.timezone) {
-          userTimezone = userRecord.timezone;
-        } else {
-          const system = await prisma.systemSettings.findUnique({ where: { id: 1 } });
-          userTimezone = system?.timezone || userTimezone;
-        }
-      }
+      const userTimezone = await resolveUserTimezone(actorId);
 
       // Begin transaction
       const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {

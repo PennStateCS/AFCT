@@ -6,18 +6,7 @@ import { canManageCourse } from '@/lib/permissions';
 import { apiError } from '@/lib/api/http';
 import { logDenial } from '@/lib/api/activity';
 import { toDateTimeInTimezone, toEndOfDayInTimezone } from '@/lib/date-utils';
-
-async function resolveUserTimezone(userId?: string | null) {
-  const tz = 'America/New_York';
-  if (!userId) return tz;
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { timezone: true },
-  });
-  if (user?.timezone) return user.timezone;
-  const system = await prisma.systemSettings.findUnique({ where: { id: 1 } });
-  return system?.timezone || tz;
-}
+import { resolveUserTimezone } from '@/lib/user-timezone';
 
 /**
  * Creates an assignment in a course. Course staff (faculty or TAs) or a system

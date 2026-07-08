@@ -1,20 +1,9 @@
 import { prisma } from '@/lib/prisma';
 import type { CalendarAssignment } from '@/lib/calendar-shared';
 export { getDateKeyInTimeZone, getMonthRangeIso } from '@/lib/calendar-shared';
-
-export async function resolveUserTimezone(userId?: string | null) {
-  const tz = 'America/New_York';
-  if (!userId) return tz;
-
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { timezone: true },
-  });
-  if (user?.timezone) return user.timezone;
-
-  const system = await prisma.systemSettings.findUnique({ where: { id: 1 } });
-  return system?.timezone || tz;
-}
+// Re-exported so existing importers keep working; the implementation now lives in
+// one place (`@/lib/user-timezone`).
+export { resolveUserTimezone } from '@/lib/user-timezone';
 
 export async function getAssignmentsForUserRange(params: {
   userId: string;
