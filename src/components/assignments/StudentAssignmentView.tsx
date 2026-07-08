@@ -89,8 +89,11 @@ export default function StudentAssignmentPage({
   const comments = contextQuery.data?.commentsByProblem ?? EMPTY_COMMENTS;
   const problemGrades = contextQuery.data?.problemGrades ?? EMPTY_GRADES;
   const assignmentGrade = contextQuery.data?.assignmentGrade ?? null;
-  const submissionsLoading = contextQuery.isFetching;
-  const commentsLoading = contextQuery.isFetching;
+  // Cold-load only: after the student adds/deletes a comment the context query is
+  // invalidated and refetches; isFetching would blank the submissions/comments
+  // panels on every such refetch. isPending is true only before the first load.
+  const submissionsLoading = contextQuery.isPending;
+  const commentsLoading = contextQuery.isPending;
 
   const [newComment, setNewComment] = useState<Record<string, string>>({});
   const [submittingComment, setSubmittingComment] = useState<Record<string, boolean>>({});
