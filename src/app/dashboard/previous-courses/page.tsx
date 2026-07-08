@@ -77,7 +77,7 @@ export default async function AllCoursesPage() {
   return (
     <div className="h-full w-full flex-col lg:flex-row">
       <DashboardClient
-        sessionUser={{ id, role: session.user.isAdmin ? 'ADMIN' : 'STUDENT' }}
+        sessionUser={{ id, isAdmin: session.user.isAdmin ?? false }}
         courses={courses}
         title={'Previous Courses'}
       />
