@@ -117,33 +117,34 @@ export async function POST(
     // Optional group assignment: either a specific group id or 'ALL' for all groups
     const groupId: string | undefined = typeof body.groupId === 'string' ? body.groupId : undefined;
 
-    // Only accept problems that actually belong to this course.
-    const validProblems = (await prisma.problem.findMany({
-      where: {
-        id: { in: problemIds },
-        courseId,
-      },
-      select: { id: true },
-    })) as Id[];
-
-    const validIds = validProblems.map((p: (typeof validProblems)[number]) => p.id);
-
-    // Get existing assignment-problem links
-    const existingLinks = (await prisma.assignmentProblem.findMany({
-      where: {
-        assignmentId,
-        assignment: {
+    // Only accept problems that actually belong to this course, and load the
+    // existing assignment-problem links. Independent reads → run concurrently.
+    const [validProblems, existingLinks] = (await Promise.all([
+      prisma.problem.findMany({
+        where: {
+          id: { in: problemIds },
           courseId,
         },
-      },
-      include: {
-        _count: {
-          select: {
-            submissions: true,
+        select: { id: true },
+      }),
+      prisma.assignmentProblem.findMany({
+        where: {
+          assignmentId,
+          assignment: {
+            courseId,
           },
         },
-      },
-    })) as AssignmentProblemCount[];
+        include: {
+          _count: {
+            select: {
+              submissions: true,
+            },
+          },
+        },
+      }),
+    ])) as [Id[], AssignmentProblemCount[]];
+
+    const validIds = validProblems.map((p: (typeof validProblems)[number]) => p.id);
 
     // Separate links with submissions (for reporting only)
     const linksWithSubmissions = existingLinks.filter(

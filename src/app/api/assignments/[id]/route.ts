@@ -106,7 +106,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const assignment = await prisma.assignment.findUnique({
       where: { id },
       include: {
-        course: true,
+        // Only the fields the client reads (matches the SSR shape and
+        // AssignmentCourseSummary); avoids leaking regCode and other course
+        // columns into a student-facing payload.
+        course: {
+          select: { id: true, name: true, code: true, isArchived: true },
+        },
         problems: {
           include: {
             problem: true,

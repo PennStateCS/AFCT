@@ -18,12 +18,7 @@ beforeEach(() => {
 const args = () => prismaMock.user.findMany.mock.calls[0][0];
 
 describe('getUsersList', () => {
-  it('does not filter by role (global role removed)', async () => {
-    await getUsersList('FACULTY');
-    expect(args().where).toBeUndefined();
-  });
-
-  it('returns all users (no where filter)', async () => {
+  it('returns all users (no where filter; global role was removed)', async () => {
     await getUsersList();
     expect(args().where).toBeUndefined();
   });
