@@ -39,7 +39,7 @@ export function getUserColumns(
         return (
           <Avatar className="h-12 w-12">
             <AvatarImage
-              src={`/api/uploads/pfps/${user.avatar}`}
+              src={user.avatar ? `/api/uploads/pfps/${user.avatar}` : undefined}
               alt={`${user.firstName} ${user.lastName}`}
             />
             <AvatarFallback className="bg-secondary text-secondary-foreground">
