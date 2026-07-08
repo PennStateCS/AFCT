@@ -3,25 +3,48 @@ import type { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 
 /**
- * Coarse, edge-level authentication net (see `config.matcher`).
+ * Coarse, edge-level authentication net.
  *
- * This is defense-in-depth, NOT the source of truth: every route and page still
- * runs its own authoritative check (route handlers call `auth()` + the permission
- * helpers; the dashboard layout redirects unauthenticated users). Here we only read
- * the signed JWT — no DB, since this runs on the edge — and reject early:
+ * This is defense-in-depth, NOT the source of truth: every route and page still runs
+ * its own authoritative check (route handlers use `withAdminAuth`/`withCourseAuth` or
+ * call `auth()` + the permission helpers; the dashboard layout redirects
+ * unauthenticated users). Here we only read the signed JWT — no DB, since this runs on
+ * the edge — and reject early.
  *
+ * Deny-by-default: the matcher covers ALL of `/api/*` and `/dashboard/*`, and only the
+ * small, stable {@link PUBLIC_API_PREFIXES} allowlist is let through unauthenticated.
+ * This means a newly added authed API route is gated automatically (fail-closed) — the
+ * matcher never needs editing when routes move or are added.
+ *
+ *  - Public API routes: bypass the net (no token read).
  *  - `/api/admin/*`: positively confirm a NON-admin out with 403. A missing or
- *    undecodable token falls through to the route's authoritative `isAdmin` check,
- *    so a decode hiccup can never lock admins out.
- *  - other matched `/api/*`: require a signed-in session; no token -> 401. Per-course
+ *    undecodable token falls through to the route's authoritative `isAdmin` check, so a
+ *    decode hiccup can never lock admins out.
+ *  - any other `/api/*`: require a signed-in session; no token -> 401. Per-course
  *    role/authorization still happens in the handler (the edge can't reach Prisma).
  *  - `/dashboard/*` pages: require a session; no token -> redirect to /login.
- *
- * Public API routes (`/api/auth/*`, `/api/health`, `/api/system-settings/public`,
- * `/api/public/*`) are intentionally NOT matched.
  */
+const PUBLIC_API_PREFIXES = [
+  '/api/auth', // NextAuth handler, signup, check-email
+  '/api/health',
+  '/api/system-settings/public',
+  '/api/public',
+] as const;
+
+function isPublicApi(pathname: string): boolean {
+  return PUBLIC_API_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // Public API routes bypass the net entirely (and skip the token read).
+  if (pathname.startsWith('/api/') && isPublicApi(pathname)) {
+    return NextResponse.next();
+  }
+
   const token = await getToken({
     req,
     secret: process.env.NEXTAUTH_SECRET,
@@ -51,19 +74,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    // Admin: coarse isAdmin gate.
-    '/api/admin/:path*',
-    // Dashboard pages: must be signed in.
-    '/dashboard/:path*',
-    // Authenticated data APIs: must be signed in (authorization stays in the route).
-    '/api/courses/:path*',
-    '/api/assignments/:path*',
-    '/api/problems/:path*',
-    '/api/comments/:path*',
-    '/api/submissions/:path*',
-    '/api/course_submissions/:path*',
-    '/api/profile/:path*',
-    '/api/users/:path*',
-  ],
+  matcher: ['/api/:path*', '/dashboard/:path*'],
 };
