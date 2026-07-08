@@ -51,6 +51,8 @@ describe('GET /api/problems/[id]/submissions', () => {
 
   it('returns formatted submissions for the requesting user', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', role: 'STUDENT' } });
+    prismaMock.problem.findUnique.mockResolvedValue({ courseId: 'c1' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' }); // enrolled
     prismaMock.submission.findMany.mockResolvedValue([
       {
         id: 's1',
