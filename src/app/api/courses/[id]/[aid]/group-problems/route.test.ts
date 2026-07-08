@@ -24,12 +24,12 @@ beforeEach(() => {
 });
 
 describe('GET /api/courses/[id]/[aid]/group-problems', () => {
-  it('returns 403 when not authenticated', async () => {
+  it('returns 401 when not authenticated', async () => {
     authMock.mockResolvedValue(null);
     const res = await GET(new NextRequest('http://localhost/api/courses/c1/a1/group-problems'), {
       params: Promise.resolve({ id: 'c1', aid: 'a1' }),
     } as any);
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('returns groups + mappings and logs the view', async () => {
