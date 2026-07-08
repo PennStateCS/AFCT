@@ -291,7 +291,9 @@ export default function AssignmentSubmissions({
     staleTime: 30_000,
   });
 
-  const loadingGroupMemberships = groupMembershipsQuery.isFetching;
+  // Cold-load only: on a warm cache a background refetch of memberships must not
+  // blank the student panel or reset the resolved group (isFetching would).
+  const loadingGroupMemberships = groupMembershipsQuery.isLoading;
 
   // Build the userId→groupId map by iterating groups IN ORDER and assigning the
   // consolidated memberships that match each group, first-write-wins per user —
@@ -437,7 +439,10 @@ export default function AssignmentSubmissions({
   }, [queryClient, courseId, assignmentId, selectedStudentId]);
 
   // All three loading flags previously flipped together; derive them from the query.
-  const reviewFetching = !!selectedStudentId && reviewQuery.isFetching;
+  // isPending (not isFetching) so the spinner shows only on the cold load of a
+  // student's data. After a grade/comment save invalidates review-data, the
+  // background refetch must NOT blank the whole workspace back to a spinner.
+  const reviewFetching = !!selectedStudentId && reviewQuery.isPending;
   const loadingSubmissions = reviewFetching;
   const loadingComments = reviewFetching;
   const loadingProblemGrades = reviewFetching;
