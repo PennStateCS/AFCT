@@ -1,14 +1,13 @@
 'use client';
 
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatDateTimeInTimeZone } from '@/lib/date';
 import type { SessionsStatusResponse } from '@/lib/status/types';
-import { Skel, Stat, useStatusQuery, copy } from '../status-ui';
+import { Skel, Stat, Section, useStatusQuery, copy } from '../status-ui';
 
 export default function SessionsTab({
   active,
@@ -26,32 +25,22 @@ export default function SessionsTab({
   });
 
   if (isLoading || !data) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <Skel w="w-40" />
-        </CardContent>
-      </Card>
-    );
+    return <Skel w="w-40" />;
   }
 
   const summary = data.summary;
 
+  const badges = (
+    <span className="space-x-2">
+      <Badge variant="neutral">5m: {summary.last5m}</Badge>
+      <Badge variant="neutral">15m: {summary.last15m}</Badge>
+      <Badge variant="neutral">60m: {summary.last60m}</Badge>
+    </span>
+  );
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle role="heading" aria-level={2} className="text-lg">
-          Sessions
-          <span className="ml-2 space-x-2">
-            <Badge variant="neutral">24h: {summary.total24h}</Badge>
-            <Badge variant="neutral">Users: {summary.uniqUsers24h}</Badge>
-            <Badge variant="neutral">5m: {summary.last5m}</Badge>
-            <Badge variant="neutral">15m: {summary.last15m}</Badge>
-            <Badge variant="neutral">60m: {summary.last60m}</Badge>
-          </span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-6">
+    <Section title="Sessions" action={badges}>
+      <div className="space-y-6">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
           <Stat label="Total (24h)" value={summary.total24h} />
           <Stat label="Unique users" value={summary.uniqUsers24h} />
@@ -109,7 +98,7 @@ export default function SessionsTab({
         ) : (
           <div className="text-sm">No active sessions found.</div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </Section>
   );
 }

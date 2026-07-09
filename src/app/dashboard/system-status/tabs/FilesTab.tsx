@@ -2,14 +2,13 @@
 
 import React, { useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { fetchJson } from '@/lib/query-fetch';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import type { FilesStatusResponse } from '@/lib/status/types';
-import { Skel, Stat, useStatusQuery } from '../status-ui';
+import { Skel, Stat, Section, useStatusQuery } from '../status-ui';
 
 export default function FilesTab({
   active,
@@ -56,26 +55,14 @@ export default function FilesTab({
   );
 
   if (isLoading || !data) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <Skel w="w-40" />
-        </CardContent>
-      </Card>
-    );
+    return <Skel w="w-40" />;
   }
 
   const files = data.abandonedFiles;
 
   return (
-    <Card>
-      <CardHeader className="flex items-center justify-between">
-        <CardTitle role="heading" aria-level={2} className="text-lg">
-          Abandoned Files
-        </CardTitle>
-        <Badge variant="neutral">Total: {files.total}</Badge>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <Section title="Abandoned Files" action={<Badge variant="neutral">Total: {files.total}</Badge>}>
+      <div className="space-y-4">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {Object.entries(files.byCategory).map(([k, v]) => (
             <Stat key={k} label={k} value={v} />
@@ -121,7 +108,7 @@ export default function FilesTab({
         ) : (
           <div className="text-sm">No abandoned files found.</div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </Section>
   );
 }
