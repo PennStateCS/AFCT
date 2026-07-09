@@ -119,8 +119,7 @@ export const apiPaths = {
     // Per-domain status endpoints (tabbed status dashboard).
     statusSummary: () => '/api/admin/status/summary',
     statusServer: () => '/api/admin/status/server',
-    statusDatabase: (opts?: { deep?: boolean }) =>
-      `/api/admin/status/database${opts?.deep ? qs({ deep: 1 }) : ''}`,
+    statusDatabase: () => '/api/admin/status/database',
     statusDocker: () => '/api/admin/status/docker',
     statusNetwork: () => '/api/admin/status/network',
     statusSessions: () => '/api/admin/status/sessions',

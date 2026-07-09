@@ -8,7 +8,7 @@ import { fetchJson } from '@/lib/query-fetch';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import type { FilesStatusResponse } from '@/lib/status/types';
-import { Skel, Stat, Section, useStatusQuery } from '../status-ui';
+import { Loading, Stat, Section, useStatusQuery } from '../status-ui';
 
 export default function FilesTab({
   active,
@@ -55,15 +55,22 @@ export default function FilesTab({
   );
 
   if (isLoading || !data) {
-    return <Skel w="w-40" />;
+    return <Loading />;
   }
 
   const files = data.abandonedFiles;
 
   return (
-    <Section title="Abandoned Files" action={<Badge variant="neutral">Total: {files.total}</Badge>}>
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+    <Section
+      title={
+        <>
+          Abandoned Files
+          <Badge variant="neutral">Total: {files.total}</Badge>
+        </>
+      }
+    >
+      <div className="max-w-xl space-y-4">
+        <div className="space-y-2">
           {Object.entries(files.byCategory).map(([k, v]) => (
             <Stat key={k} label={k} value={v} />
           ))}
@@ -86,7 +93,7 @@ export default function FilesTab({
                     className="mb-1 flex items-start justify-between gap-2 last:mb-0"
                   >
                     <div className="min-w-0">
-                      <span className="mr-2 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] uppercase">
+                      <span className="bg-muted mr-2 rounded px-1.5 py-0.5 text-[10px] uppercase">
                         {f.category}
                       </span>
                       <span className="break-all">{f.path}</span>
