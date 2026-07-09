@@ -24,11 +24,11 @@ export function detectProvider(url: string): 'sqlite' | 'postgres' | 'unknown' {
 
 /**
  * Database reachability, engine details, and per-engine stats (Postgres or
- * SQLite), plus the last applied migration. `deep` adds the most expensive probe
- * (Postgres top active queries). Every sub-probe is best-effort: a failure is
- * simply omitted, and total DB unreachability yields `{ ok: false, message }`.
+ * SQLite), plus the last applied migration. Every sub-probe is best-effort: a
+ * failure is simply omitted, and total DB unreachability yields
+ * `{ ok: false, message }`.
  */
-export async function collectDatabase(deep: boolean): Promise<DatabaseStatusResponse> {
+export async function collectDatabase(): Promise<DatabaseStatusResponse> {
   const dbDetails: DatabaseDetails = {};
   const dbStats: DatabaseStats = {};
   const dbUrl = process.env.DATABASE_URL ?? '';
@@ -184,26 +184,6 @@ export async function collectDatabase(deep: boolean): Promise<DatabaseStatusResp
         `) as Array<{ cnt?: number }>;
         dbStats.pg.connections_idle_in_xact = getNum(idleX?.[0] ?? {}, 'cnt') ?? null;
       } catch {}
-
-      if (deep) {
-        try {
-          const top = (await prisma.$queryRaw`
-            SELECT pid, state,
-                   EXTRACT(EPOCH FROM (now() - query_start)) * 1000 AS age_ms,
-                   left(query, 200) AS query_trunc
-            FROM pg_stat_activity
-            WHERE state IN ('active','idle in transaction')
-              AND query NOT ILIKE '%pg_stat_activity%'
-            ORDER BY age_ms DESC LIMIT 5
-          `) as Array<{ pid?: number; state?: string; age_ms?: number; query_trunc?: string }>;
-          dbStats.pg.top_queries = top.map((r) => ({
-            pid: r.pid ?? 0,
-            state: r.state ?? null,
-            age_ms: Math.round(r.age_ms ?? 0),
-            query_trunc: r.query_trunc ?? '',
-          }));
-        } catch {}
-      }
     }
 
     // ---------- SQLite ----------

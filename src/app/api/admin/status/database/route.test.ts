@@ -24,8 +24,7 @@ beforeEach(() => {
   prismaMock.$queryRawUnsafe.mockResolvedValue([]);
 });
 
-const req = (deep = false) =>
-  new Request(`http://localhost/api/admin/status/database${deep ? '?deep=1' : ''}`);
+const req = () => new Request('http://localhost/api/admin/status/database');
 
 describe('GET /api/admin/status/database', () => {
   it('401 / 403 gates', async () => {
@@ -50,16 +49,6 @@ describe('GET /api/admin/status/database', () => {
     const body = await res.json();
     expect(body.ok).toBe(false);
     expect(body.message).toContain('failed');
-  });
-
-  it('includes postgres top queries on a deep probe', async () => {
-    process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/db';
-    prismaMock.$queryRaw.mockResolvedValue([
-      { pid: 42, state: 'active', age_ms: 1234.6, query_trunc: 'SELECT 1' },
-    ]);
-    const res = await GET(req(true));
-    const body = await res.json();
-    expect(body.stats.pg.top_queries[0]).toMatchObject({ pid: 42, age_ms: 1235 });
   });
 
   it('enumerates sqlite tables across attached databases', async () => {

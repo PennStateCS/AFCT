@@ -87,7 +87,7 @@ export const queryKeys = {
     /** Per-domain status endpoints for the tabbed status dashboard. */
     statusSummary: () => ['admin', 'status', 'summary'] as const,
     statusServer: () => ['admin', 'status', 'server'] as const,
-    statusDatabase: (deep: boolean) => ['admin', 'status', 'database', deep] as const,
+    statusDatabase: () => ['admin', 'status', 'database'] as const,
     statusDocker: () => ['admin', 'status', 'docker'] as const,
     statusNetwork: () => ['admin', 'status', 'network'] as const,
     statusSessions: () => ['admin', 'status', 'sessions'] as const,

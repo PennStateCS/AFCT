@@ -7,7 +7,7 @@ import { queryKeys } from '@/lib/query-keys';
 import pkg from '../../../../../package.json';
 import type { ServerStatusResponse, IpAddr } from '@/lib/status/types';
 import {
-  Skel,
+  Loading,
   Stat,
   Meter,
   Section,
@@ -52,24 +52,18 @@ export default function ServerTab({
   }, [windowHours]);
 
   if (isLoading || !system) {
-    return (
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Skel w="w-40" />
-        <Skel w="w-32" />
-        <Skel w="w-28" />
-        <Skel w="w-24" />
-      </div>
-    );
+    return <Loading />;
   }
 
   return (
-    <div className="space-y-8">
+    <div className="max-w-xl space-y-8">
       <Section title="Performance">
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
           <Stat
             label="Arch / CPUs"
             value={`${system.arch ?? '—'} / ${system.cpuCount ?? system.cpus?.length ?? '—'}`}
           />
+          <Stat label="Uptime" value={formatUptime(system.uptime)} />
           <Stat
             label="Memory"
             value={
@@ -78,7 +72,6 @@ export default function ServerTab({
                 : '—'
             }
           />
-          <Stat label="Uptime" value={formatUptime(system.uptime)} />
           <Stat
             label="Disk IO"
             value={
@@ -89,7 +82,7 @@ export default function ServerTab({
           />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-4">
           <div className="space-y-1">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">CPU (process)</span>
@@ -106,7 +99,7 @@ export default function ServerTab({
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="space-y-3">
           <div className="space-y-2 rounded border p-3">
             <div className="text-muted-foreground text-xs font-semibold">
               CPU % (last {windowHours}h)
@@ -129,17 +122,17 @@ export default function ServerTab({
       </Section>
 
       <Section title="Software">
-        <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
+        <div className="space-y-2">
           <Stat label="AFCT Dashboard" value={pkg.version} />
-          <Stat label="AFCT Evaluator" value={software?.evaluatorVersion ?? '—'} />
           <Stat label="Deployment Environment" value={toTitleCase(software?.deployEnv)} />
-          <Stat label="Node" value={software?.nodeVersion ?? '—'} />
           <Stat label="Next.js" value={software?.nextVersion ?? '—'} />
-          <Stat label="Java" value={software?.javaVersion ?? '—'} />
           <Stat
             label="OS / Arch"
             value={`${system.platform ?? '—'}${system.release ? ` ${system.release}` : ''} / ${system.arch ?? '—'}`}
           />
+          <Stat label="AFCT Evaluator" value={software?.evaluatorVersion ?? '—'} />
+          <Stat label="Node" value={software?.nodeVersion ?? '—'} />
+          <Stat label="Java" value={software?.javaVersion ?? '—'} />
           {software?.buildHash && <Stat label="Build" value={software.buildHash} />}
           {software?.imageTag && <Stat label="Image" value={software.imageTag} />}
         </div>
