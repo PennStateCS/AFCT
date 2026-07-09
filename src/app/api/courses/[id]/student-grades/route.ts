@@ -38,62 +38,63 @@ export const GET = withCourseAuth(
 
       const assignmentIds = assignments.map((assignment) => assignment.id);
 
-      const problems = await prisma.assignmentProblem.findMany({
-        where: { assignmentId: { in: assignmentIds } },
-        select: {
-          assignmentId: true,
-          maxPoints: true,
-          maxSubmissions: true,
-          problem: {
-            select: {
-              id: true,
-              title: true,
-              autograderEnabled: true,
+      // These four reads all depend only on `assignmentIds` (not on each other),
+      // so run them concurrently instead of sequentially.
+      const [problems, grades, submissionCounts, latestSubmissions] = await Promise.all([
+        prisma.assignmentProblem.findMany({
+          where: { assignmentId: { in: assignmentIds } },
+          select: {
+            assignmentId: true,
+            maxPoints: true,
+            maxSubmissions: true,
+            problem: {
+              select: {
+                id: true,
+                title: true,
+                autograderEnabled: true,
+              },
             },
           },
-        },
-        orderBy: { assignmentId: 'asc' },
-      });
-
-      const grades = await prisma.assignmentProblemGrade.findMany({
-        where: {
-          assignmentId: { in: assignmentIds },
-          studentId: user.id,
-        },
-        select: {
-          assignmentId: true,
-          problemId: true,
-          grade: true,
-        },
-      });
-
-      const submissionCounts = await prisma.submission.groupBy({
-        by: ['assignmentId', 'problemId'],
-        where: {
-          assignmentId: { in: assignmentIds },
-          studentId: user.id,
-        },
-        _count: {
-          id: true,
-        },
-      });
-
-      // Get most recent status
-      const latestSubmissions = await prisma.submission.findMany({
-        where: {
-          assignmentId: { in: assignmentIds },
-          studentId: user.id,
-        },
-        distinct: ['assignmentId', 'problemId'],
-        orderBy: {
-          createdAt: 'desc',
-        },
-        select: {
-          assignmentId: true,
-          problemId: true,
-          status: true,
-        },
-      });
+          orderBy: { assignmentId: 'asc' },
+        }),
+        prisma.assignmentProblemGrade.findMany({
+          where: {
+            assignmentId: { in: assignmentIds },
+            studentId: user.id,
+          },
+          select: {
+            assignmentId: true,
+            problemId: true,
+            grade: true,
+          },
+        }),
+        prisma.submission.groupBy({
+          by: ['assignmentId', 'problemId'],
+          where: {
+            assignmentId: { in: assignmentIds },
+            studentId: user.id,
+          },
+          _count: {
+            id: true,
+          },
+        }),
+        // Most recent status per (assignment, problem) for this student.
+        prisma.submission.findMany({
+          where: {
+            assignmentId: { in: assignmentIds },
+            studentId: user.id,
+          },
+          distinct: ['assignmentId', 'problemId'],
+          orderBy: {
+            createdAt: 'desc',
+          },
+          select: {
+            assignmentId: true,
+            problemId: true,
+            status: true,
+          },
+        }),
+      ]);
 
       const gradeMap = new Map<string, number | null>();
       grades.forEach((grade) => {
