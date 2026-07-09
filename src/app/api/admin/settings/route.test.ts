@@ -50,7 +50,7 @@ describe('GET /api/system-settings', () => {
       timezone: 'UTC',
       maxUploadSizeMb: 25,
       allowSignup: true,
-      sessionTimeoutMinutes: 20,
+      sessionTimeoutMinutes: 60,
       submissionEvalTimeoutMs: 30000,
       submissionEvalMaxMemoryMb: 256,
       submissionResubmitCooldownMs: 10000,
@@ -159,7 +159,7 @@ describe('PUT /api/system-settings', () => {
       timezone: 'UTC',
       maxUploadSizeMb: 1,
       allowSignup: true,
-      sessionTimeoutMinutes: 20,
+      sessionTimeoutMinutes: 60,
     });
 
     const req = new Request('http://localhost/api/system-settings', {
@@ -172,8 +172,8 @@ describe('PUT /api/system-settings', () => {
     expect(res.status).toBe(200);
     expect(prismaMock.systemSettings.upsert).toHaveBeenCalledWith({
       where: { id: 1 },
-      update: { timezone: 'UTC', maxUploadSizeMb: 1, sessionTimeoutMinutes: 20 },
-      create: { id: 1, timezone: 'UTC', maxUploadSizeMb: 1, sessionTimeoutMinutes: 20 },
+      update: { timezone: 'UTC', maxUploadSizeMb: 1, sessionTimeoutMinutes: 60 },
+      create: { id: 1, timezone: 'UTC', maxUploadSizeMb: 1, sessionTimeoutMinutes: 60 },
     });
   });
 
@@ -244,7 +244,7 @@ describe('PUT /api/system-settings', () => {
       timezone: 'UTC',
       maxUploadSizeMb: 25,
       allowSignup: true,
-      sessionTimeoutMinutes: 20,
+      sessionTimeoutMinutes: 60,
       submissionEvalTimeoutMs: 600000,
       submissionEvalMaxMemoryMb: 64,
       submissionResubmitCooldownMs: 10000,
@@ -283,7 +283,7 @@ describe('PUT /api/system-settings', () => {
       timezone: 'UTC',
       maxUploadSizeMb: 25,
       allowSignup: true,
-      sessionTimeoutMinutes: 20,
+      sessionTimeoutMinutes: 60,
       submissionEvalTimeoutMs: 30000,
       submissionEvalMaxMemoryMb: 256,
       submissionResubmitCooldownMs: 10000,
@@ -447,13 +447,13 @@ describe('PUT /api/system-settings', () => {
       id: 1,
       timezone: 'UTC',
       maxUploadSizeMb: 25,
-      sessionTimeoutMinutes: 20,
+      sessionTimeoutMinutes: 60,
     });
     prismaMock.systemSettings.upsert.mockResolvedValue({
       id: 1,
       timezone: 'America/New_York',
       maxUploadSizeMb: 25,
-      sessionTimeoutMinutes: 20,
+      sessionTimeoutMinutes: 60,
     });
 
     const res = await PUT(putBody({ timezone: 'America/New_York' }));
@@ -496,7 +496,7 @@ describe('PUT /api/system-settings', () => {
       timezone: 'UTC',
       maxUploadSizeMb: 25,
       allowSignup: true,
-      sessionTimeoutMinutes: 20,
+      sessionTimeoutMinutes: 60,
     };
     prismaMock.systemSettings.findUnique.mockResolvedValue(row);
     prismaMock.systemSettings.upsert.mockResolvedValue(row);

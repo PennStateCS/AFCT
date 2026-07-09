@@ -23,7 +23,7 @@ describe('GET /api/system-settings/public', () => {
     expect(body).toEqual({
       timezone: 'UTC',
       allowSignup: true,
-      sessionTimeoutMinutes: 20,
+      sessionTimeoutMinutes: 60,
       hcaptchaSiteKey: null,
     });
   });
@@ -53,7 +53,7 @@ describe('GET /api/system-settings/public', () => {
       id: 1,
       timezone: 'UTC',
       allowSignup: true,
-      sessionTimeoutMinutes: 20,
+      sessionTimeoutMinutes: 60,
       hcaptchaSiteKey: 'site-123',
     });
 
