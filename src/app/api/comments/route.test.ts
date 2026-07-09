@@ -13,6 +13,9 @@ const prismaMock = vi.hoisted(() => ({
   problem: {
     findFirst: vi.fn(),
   },
+  assignmentProblem: {
+    findUnique: vi.fn(),
+  },
   comment: {
     create: vi.fn(),
     findMany: vi.fn(),
@@ -32,6 +35,9 @@ import { POST, DELETE } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Default: the problem is linked to the assignment. Tests that need the
+  // "not linked" path override this.
+  prismaMock.assignmentProblem.findUnique.mockResolvedValue({ assignmentId: 'a1' });
 });
 
 describe('POST /api/comments', () => {
@@ -164,6 +170,24 @@ describe('POST /api/comments', () => {
 
     const res = await POST(req);
     expect(res.status).toBe(404);
+  });
+
+  it('returns 400 when the problem is not linked to the assignment', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1', isPublished: true });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
+    prismaMock.problem.findFirst.mockResolvedValue({ id: 'p1', courseId: 'c1' });
+    prismaMock.assignmentProblem.findUnique.mockResolvedValue(null); // no link
+
+    const req = new NextRequest('http://localhost/api/comments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: 'Hello', assignmentId: 'a1', problemId: 'p1' }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    expect(prismaMock.comment.create).not.toHaveBeenCalled();
   });
 
   it('returns 404 when student not enrolled', async () => {
