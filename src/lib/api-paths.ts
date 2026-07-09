@@ -79,7 +79,6 @@ export const apiPaths = {
 
   // --- Global assignment routes -------------------------------------------
   assignments: () => '/api/assignments',
-  assignmentById: (id: string) => `/api/assignments/${id}`,
   assignmentByIdProblems: (id: string) => `/api/assignments/${id}/problems`,
   assignmentStudentContext: (id: string) => `/api/assignments/${id}/student-context`,
 
