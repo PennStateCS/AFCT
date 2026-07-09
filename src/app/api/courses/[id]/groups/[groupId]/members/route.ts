@@ -34,9 +34,12 @@ export const GET = withCourseAuth(
       if (!group || group.courseId !== courseId)
         return NextResponse.json({ error: 'Group not found for course' }, { status: 404 });
 
+      // The client only reads member userIds (ManageGroupDialog maps m.userId),
+      // so select just that field instead of returning whole roster rows.
       const members = await prisma.groupRoster.findMany({
         where: { groupId },
         orderBy: { createdAt: 'asc' },
+        select: { userId: true },
       });
 
       await createEnhancedActivityLog(prisma, req, {
