@@ -131,6 +131,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Problem not found in this course' }, { status: 404 });
     }
 
+    // Verify the problem is actually linked to THIS assignment (not merely present
+    // in the course) — otherwise a comment could be created against an
+    // assignment/problem pair that doesn't exist.
+    const link = await prisma.assignmentProblem.findUnique({
+      where: { assignmentId_problemId: { assignmentId, problemId } },
+      select: { assignmentId: true },
+    });
+    if (!link) {
+      return NextResponse.json(
+        { error: 'Problem is not part of this assignment' },
+        { status: 400 },
+      );
+    }
+
     // If filtering by a specific student, verify they’re enrolled
     if (studentId) {
       const studentRosterEntry = await prisma.roster.findUnique({
