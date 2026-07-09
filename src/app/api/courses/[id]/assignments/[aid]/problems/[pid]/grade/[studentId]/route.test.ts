@@ -103,6 +103,65 @@ describe('/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]', () => {
         updatedAt: '2026-02-16T12:00:00.000Z',
       });
     });
+
+    it('lets the student read their own grade even without manage rights', async () => {
+      // Student is enrolled (passes read access) and is the owner of the grade,
+      // so canManageCourse is false but user.id === studentId keeps them allowed.
+      authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
+      prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+
+      const res = await GET(new Request('http://localhost'), {
+        params: Promise.resolve(defaultParams),
+      });
+
+      expect(res.status).toBe(200);
+      expect(prismaMock.assignmentProblem.findUnique).toHaveBeenCalled();
+    });
+
+    it('returns 403 when an enrolled student reads someone else grade', async () => {
+      // Enrolled as a plain student (read access granted) but not the owner and
+      // not a manager -> hits the in-handler denial.
+      authMock.mockResolvedValue({ user: { id: 'other-student', role: 'STUDENT' } });
+      prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+
+      const res = await GET(new Request('http://localhost'), {
+        params: Promise.resolve(defaultParams),
+      });
+
+      expect(res.status).toBe(403);
+      expect(prismaMock.assignmentProblem.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('coerces null grade and feedback fields to null', async () => {
+      prismaMock.assignmentProblemGrade.findUnique.mockResolvedValue({
+        grade: null,
+        feedback: null,
+        updatedAt: new Date('2026-02-16T12:00:00.000Z'),
+      });
+
+      const res = await GET(new Request('http://localhost'), {
+        params: Promise.resolve(defaultParams),
+      });
+
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toEqual({
+        grade: null,
+        feedback: null,
+        updatedAt: '2026-02-16T12:00:00.000Z',
+      });
+    });
+
+    it('returns 500 when the grade lookup throws', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      prismaMock.assignmentProblem.findUnique.mockRejectedValueOnce(new Error('db down'));
+
+      const res = await GET(new Request('http://localhost'), {
+        params: Promise.resolve(defaultParams),
+      });
+
+      expect(res.status).toBe(500);
+      consoleSpy.mockRestore();
+    });
   });
 
   describe('POST', () => {
@@ -208,6 +267,63 @@ describe('/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]', () => {
         feedback: 'Updated',
         updatedAt: '2026-02-17T12:00:00.000Z',
       });
+    });
+
+    it('clears a grade when there was no prior record', async () => {
+      // existing is null -> previousGrade falls back to null in the audit metadata.
+      prismaMock.assignmentProblemGrade.findUnique.mockResolvedValue(null);
+
+      const res = await POST(buildRequest({ grade: null }), {
+        params: Promise.resolve(defaultParams),
+      });
+
+      expect(res.status).toBe(200);
+      expect(prismaMock.assignmentProblemGrade.deleteMany).toHaveBeenCalled();
+    });
+
+    it('saves a grade when there was no prior record and coerces null fields', async () => {
+      // existing null -> previousGrade/feedbackChanged branches use the null fallback.
+      prismaMock.assignmentProblemGrade.findUnique.mockResolvedValue(null);
+      prismaMock.assignmentProblemGrade.upsert.mockResolvedValue({
+        grade: null,
+        feedback: null,
+        updatedAt: new Date('2026-02-17T12:00:00.000Z'),
+      });
+
+      const res = await POST(buildRequest({ grade: 50 }), {
+        params: Promise.resolve(defaultParams),
+      });
+
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toEqual({
+        grade: null,
+        feedback: null,
+        updatedAt: '2026-02-17T12:00:00.000Z',
+      });
+    });
+
+    it('returns 500 when saving the grade throws', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      prismaMock.assignmentProblemGrade.upsert.mockRejectedValueOnce(new Error('db down'));
+
+      const res = await POST(buildRequest({ grade: 90 }), {
+        params: Promise.resolve(defaultParams),
+      });
+
+      expect(res.status).toBe(500);
+      consoleSpy.mockRestore();
+    });
+
+    it('returns 500 when saving throws a non-Error value', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      prismaMock.assignmentProblemGrade.upsert.mockRejectedValueOnce('boom');
+
+      const res = await POST(buildRequest({ grade: 90 }), {
+        params: Promise.resolve(defaultParams),
+      });
+
+      expect(res.status).toBe(500);
+      consoleSpy.mockRestore();
     });
   });
 });

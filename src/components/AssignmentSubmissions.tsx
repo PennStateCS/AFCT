@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Submission, User } from '@prisma/client';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
+import { queryKeys } from '@/lib/query-keys';
 import { rerunSubmission } from '@/app/utils/rerunSubmission';
 import { rerunVisibleSubmissions } from '@/app/utils/rerunVisibleSubmissions';
 import type { Comment as DiscussionComment } from './DiscussionPanel';
@@ -410,14 +411,8 @@ export default function AssignmentSubmissions({
     problemGrades?: Record<string, { grade: number | null; feedback: string | null }>;
   };
 
-  const EMPTY_REVIEW_DATA: ReviewDataResponse = {
-    submissions: {},
-    comments: [],
-    problemGrades: {},
-  };
-
   const reviewQuery = useQuery({
-    queryKey: ['course', courseId, 'assignment', assignmentId, 'review-data', selectedStudentId],
+    queryKey: queryKeys.assignment.reviewData(courseId, assignmentId, selectedStudentId),
     queryFn: async ({ signal }): Promise<ReviewDataResponse> => {
       const res = await fetch(
         apiPaths.assignmentReviewData(courseId, assignmentId, selectedStudentId),
@@ -425,7 +420,9 @@ export default function AssignmentSubmissions({
       );
       if (!res.ok) {
         // Match the previous silent handling of auth/not-found responses.
-        if ([401, 403, 404].includes(res.status)) return EMPTY_REVIEW_DATA;
+        if ([401, 403, 404].includes(res.status)) {
+          return { submissions: {}, comments: [], problemGrades: {} };
+        }
         throw new Error((await res.json())?.error || 'Failed to load review data');
       }
       return ((await res.json()) ?? {}) as ReviewDataResponse;
@@ -437,7 +434,7 @@ export default function AssignmentSubmissions({
   // Stable refresher used by the rerun helpers (they previously took fetchReviewData).
   const refreshReview = useCallback(async () => {
     await queryClient.invalidateQueries({
-      queryKey: ['course', courseId, 'assignment', assignmentId, 'review-data', selectedStudentId],
+      queryKey: queryKeys.assignment.reviewData(courseId, assignmentId, selectedStudentId),
     });
   }, [queryClient, courseId, assignmentId, selectedStudentId]);
 

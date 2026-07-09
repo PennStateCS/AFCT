@@ -32,6 +32,7 @@ import {
 import type { ProblemSubmission } from '@/lib/problem-submission';
 import { statusToneClass, getTimingStatusChip, getReviewStatusChip } from '@/lib/submission-status';
 import { apiPaths } from '@/lib/api-paths';
+import { queryKeys } from '@/lib/query-keys';
 
 type CourseItem = Pick<Course, 'id' | 'name' | 'code'>;
 
@@ -195,7 +196,7 @@ export default function SubmissionsClient() {
     isError: submissionsError,
     refetch: refetchSubmissions,
   } = useQuery({
-    queryKey: ['admin', 'submissions', selectedProblems],
+    queryKey: queryKeys.admin.submissions(selectedProblems),
     queryFn: () => fetchSubmissions(selectedProblems),
   });
 

@@ -8,6 +8,7 @@ import { showToast } from '@/lib/toast';
 import { FullCourse, DeleteTarget, EnrollableUser, TabType } from '@/types/course';
 import { getEnrolledIds, type EnrolledUser } from '@/lib/course-utils';
 import { apiPaths } from '@/lib/api-paths';
+import { fetchJson } from '@/lib/query-fetch';
 import { Assignment, Problem, User } from '@prisma/client';
 
 type CourseSectionView = 'summary' | 'full' | 'assignments' | 'problems' | 'roster';
@@ -66,11 +67,7 @@ export function useCourseData(
       if (!courseId) return null;
       return queryClient.fetchQuery({
         queryKey: courseQueryKey(courseId, view),
-        queryFn: async () => {
-          const res = await fetch(apiPaths.course(courseId, { view }));
-          if (!res.ok) throw new Error('Failed to fetch course');
-          return (await res.json()) as FullCourse;
-        },
+        queryFn: () => fetchJson<FullCourse>(apiPaths.course(courseId, { view })),
       });
     },
     [courseId, queryClient],

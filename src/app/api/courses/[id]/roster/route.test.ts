@@ -147,4 +147,28 @@ describe('POST /api/courses/[id]/roster', () => {
 
     expect(res.status).toBe(500);
   });
+
+  it('returns 500 and logs "unknown error" when a non-Error is thrown', async () => {
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'u1', inactive: false });
+    // Throw a non-Error value to exercise the `: 'unknown error'` branch (line 97).
+    prismaMock.roster.upsert.mockRejectedValueOnce('boom');
+
+    const req = new Request('http://localhost/api/courses/c1/roster', {
+      method: 'POST',
+      body: JSON.stringify({ userId: 'u1' }),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        action: 'COURSE_ENROLL_ERROR',
+        metadata: expect.objectContaining({ error: 'unknown error' }),
+      }),
+    );
+  });
 });

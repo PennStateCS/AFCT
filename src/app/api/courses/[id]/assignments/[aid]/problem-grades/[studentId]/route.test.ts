@@ -99,6 +99,18 @@ describe('GET /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
       'prob-2': { grade: null, feedback: null, updatedAt: updatedAt.toISOString() },
     });
   });
+
+  it('returns 500 when the grade lookup throws', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    prismaMock.assignmentProblemGrade.findMany.mockRejectedValueOnce(new Error('db down'));
+
+    const res = await GET(new Request('http://localhost'), {
+      params: Promise.resolve(defaultParams),
+    });
+
+    expect(res.status).toBe(500);
+    consoleSpy.mockRestore();
+  });
 });
 
 describe('POST /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
@@ -195,6 +207,94 @@ describe('POST /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
 
     expect(res.status).toBe(400);
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when a grade value is not a number', async () => {
+    const res = await POST(buildRequest({ grades: { 'prob-1': 'ten' } }), {
+      params: Promise.resolve(defaultParams),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain('must be a number or null');
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('upserts a grade for a problem with no existing record', async () => {
+    // No existing rows -> existingByProblem is empty, exercising the null fallback
+    // when looking up the previous grade for a brand new grade.
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
+
+    const res = await POST(buildRequest({ grades: { 'prob-1': 7 } }), {
+      params: Promise.resolve(defaultParams),
+    });
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ ok: true, changed: 1 });
+    expect(prismaMock.assignmentProblemGrade.upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads existing grades that are stored as null', async () => {
+    // Existing row with a null grade -> `r.grade ?? null` maps to null; setting a
+    // number is therefore a change.
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([
+      { problemId: 'prob-1', grade: null },
+    ]);
+
+    const res = await POST(buildRequest({ grades: { 'prob-1': 4 } }), {
+      params: Promise.resolve(defaultParams),
+    });
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ ok: true, changed: 1 });
+  });
+
+  it('still returns 200 when auditing the batch fails', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
+    activityLogMock.mockRejectedValueOnce(new Error('log down'));
+
+    const res = await POST(buildRequest({ grades: { 'prob-1': 7 } }), {
+      params: Promise.resolve(defaultParams),
+    });
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ ok: true, changed: 1 });
+    consoleSpy.mockRestore();
+  });
+
+  it('returns 500 when the transaction throws', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
+    prismaMock.$transaction.mockRejectedValueOnce(new Error('db down'));
+
+    const res = await POST(buildRequest({ grades: { 'prob-1': 7 } }), {
+      params: Promise.resolve(defaultParams),
+    });
+
+    expect(res.status).toBe(500);
+    consoleSpy.mockRestore();
+  });
+
+  it('returns 500 when a non-Error value is thrown', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
+    prismaMock.$transaction.mockRejectedValueOnce('boom');
+
+    const res = await POST(buildRequest({ grades: { 'prob-1': 7 } }), {
+      params: Promise.resolve(defaultParams),
+    });
+
+    expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        action: 'PROBLEM_GRADE_UPDATE_ERROR',
+        metadata: { error: 'unknown error' },
+      }),
+    );
+    consoleSpy.mockRestore();
   });
 
   it('applies only the changed problems, preserving feedback and unchanged grades', async () => {

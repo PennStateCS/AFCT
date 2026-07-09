@@ -31,6 +31,31 @@ describe('DELETE /api/courses/[id]/groups/[groupId]/members/[userId]', () => {
     expect(res.status).toBe(400);
   });
 
+  // With a valid courseId the wrapper guard passes, so the handler's own
+  // `!groupId || !userId` guard (line 27) is reached. These two cases cover both
+  // sides of that OR (branch 26): empty groupId, then empty userId.
+  it('returns 400 from the handler when only groupId is missing', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+
+    const res = await DELETE(
+      new NextRequest('http://localhost/api/courses/c1/groups//members/u2'),
+      { params: Promise.resolve({ id: 'c1', groupId: '', userId: 'u2' }) } as any,
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 from the handler when only userId is missing', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+
+    const res = await DELETE(
+      new NextRequest('http://localhost/api/courses/c1/groups/g1/members/'),
+      { params: Promise.resolve({ id: 'c1', groupId: 'g1', userId: '' }) } as any,
+    );
+    expect(res.status).toBe(400);
+  });
+
   it('returns 404 when membership not found', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
@@ -109,5 +134,25 @@ describe('DELETE /api/courses/[id]/groups/[groupId]/members/[userId]', () => {
     const body = await res.json();
     expect(body).toEqual({ success: true });
     expect(activityLogMock).toHaveBeenCalled();
+  });
+
+  // Covers the false side of `err instanceof Error` in the catch log (branch 63).
+  it('returns 500 and logs unknown error when delete throws a non-Error', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.group.findUnique.mockResolvedValue({ id: 'g1', courseId: 'c1' });
+    prismaMock.groupRoster.findUnique.mockResolvedValue({ id: 'r1' });
+    prismaMock.groupRoster.deleteMany.mockRejectedValueOnce('boom');
+
+    const res = await DELETE(
+      new NextRequest('http://localhost/api/courses/c1/groups/g1/members/u2'),
+      { params: Promise.resolve({ id: 'c1', groupId: 'g1', userId: 'u2' }) } as any,
+    );
+    expect(res.status).toBe(500);
+
+    const errorLog = activityLogMock.mock.calls.find(
+      (call) => call[2]?.action === 'GROUP_MEMBER_REMOVE_ERROR',
+    );
+    expect(errorLog?.[2]?.metadata?.error).toBe('unknown error');
   });
 });

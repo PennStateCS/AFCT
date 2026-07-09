@@ -189,6 +189,99 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
     expect(logMock).toHaveBeenCalled();
   });
 
+  it('returns 403 when an enrolled student requests another student’s data', async () => {
+    // Enrolled as a plain student (read access granted by the wrapper) but neither
+    // the owner nor a manager -> hits the in-handler denial after the 404 check.
+    authMock.mockResolvedValue({ user: { id: 'student-2', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-2', role: 'STUDENT' });
+
+    const res = await GET(new Request('http://localhost'), { params: Promise.resolve(params) });
+
+    expect(res.status).toBe(403);
+    // Reaches the handler (assignment lookup) before denying.
+    expect(prismaMock.assignment.findFirst).toHaveBeenCalled();
+  });
+
+  it('coerces null author fields and null grade/feedback to null', async () => {
+    prismaMock.comment.findMany.mockResolvedValue([
+      {
+        id: 'comment-1',
+        content: 'note',
+        createdAt: new Date('2026-03-01T12:00:00.000Z'),
+        problemId: 'p1',
+        roster: {
+          role: null,
+          user: {
+            id: 'u-9',
+            firstName: null,
+            lastName: null,
+            avatar: null,
+          },
+        },
+      },
+    ]);
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([
+      {
+        problemId: 'p1',
+        grade: null,
+        feedback: null,
+        updatedAt: new Date('2026-03-01T11:00:00.000Z'),
+      },
+    ]);
+
+    const res = await GET(new Request('http://localhost'), { params: Promise.resolve(params) });
+
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.comments[0].author).toEqual({
+      id: 'u-9',
+      firstName: null,
+      lastName: null,
+      avatar: null,
+      role: null,
+    });
+    expect(json.problemGrades.p1).toMatchObject({ grade: null, feedback: null });
+  });
+
+  it('still returns 200 when activity logging fails', async () => {
+    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    logMock.mockRejectedValueOnce(new Error('log down'));
+
+    const res = await GET(new Request('http://localhost'), { params: Promise.resolve(params) });
+
+    expect(res.status).toBe(200);
+    consoleSpy.mockRestore();
+  });
+
+  it('returns 500 when a submission error is not the evaluationRaw fallback case', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    // A non-P2022 error must be rethrown and surface as a 500.
+    prismaMock.submission.findMany.mockRejectedValueOnce(new Error('db down'));
+
+    const res = await GET(new Request('http://localhost'), { params: Promise.resolve(params) });
+
+    expect(res.status).toBe(500);
+    // Only the original query ran; the fallback was not attempted.
+    expect(prismaMock.submission.findMany).toHaveBeenCalledTimes(1);
+    consoleSpy.mockRestore();
+  });
+
+  it('rethrows a P2022 for a different column (no fallback)', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const p2022 = new Prisma.PrismaClientKnownRequestError('missing column', {
+      code: 'P2022',
+      clientVersion: 'test',
+      meta: { column: 'Submission.someOtherColumn' },
+    });
+    prismaMock.submission.findMany.mockRejectedValueOnce(p2022);
+
+    const res = await GET(new Request('http://localhost'), { params: Promise.resolve(params) });
+
+    expect(res.status).toBe(500);
+    expect(prismaMock.submission.findMany).toHaveBeenCalledTimes(1);
+    consoleSpy.mockRestore();
+  });
+
   it('falls back when evaluationRaw column is unavailable', async () => {
     const p2022 = new Prisma.PrismaClientKnownRequestError('missing column', {
       code: 'P2022',

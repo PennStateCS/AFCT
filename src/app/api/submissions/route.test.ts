@@ -17,17 +17,20 @@ const prismaMock = vi.hoisted(() => ({
 const authMock = vi.hoisted(() => vi.fn());
 const activityLogMock = vi.hoisted(() => vi.fn());
 const uploadLimitMock = vi.hoisted(() => vi.fn());
+const queueSettingsMock = vi.hoisted(() => vi.fn());
 const validateStructureXMLMock = vi.hoisted(() => vi.fn());
 const fsMock = vi.hoisted(() => ({
   existsSync: vi.fn().mockReturnValue(true),
   mkdirSync: vi.fn(),
   writeFileSync: vi.fn(),
+  unlinkSync: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 vi.mock('@/lib/upload-limits', () => ({ getSystemUploadLimit: uploadLimitMock }));
+vi.mock('@/lib/eval-config', () => ({ getQueueSettings: queueSettingsMock }));
 vi.mock('@/app/utils/xmlStructureValidate', () => ({
   validateStructureXML: validateStructureXMLMock,
 }));
@@ -75,6 +78,7 @@ beforeEach(() => {
   fsMock.existsSync.mockReturnValue(true);
   authMock.mockResolvedValue({ user: { id: 'user-1' } });
   uploadLimitMock.mockResolvedValue({ maxBytes: 5 * 1024 * 1024, maxMb: 5 });
+  queueSettingsMock.mockResolvedValue({ resubmitCooldownMs: 10_000 });
   validateStructureXMLMock.mockReturnValue({ isValid: true });
   prismaMock.assignmentProblem.findUnique.mockResolvedValue({
     problem: {
@@ -203,6 +207,112 @@ describe('POST /api/submissions', () => {
     expect(res.headers.get('Retry-After')).toBeTruthy();
     expect(logActions()).toContain('SUBMISSION_RATE_LIMITED');
     expect(prismaMock.submission.create).not.toHaveBeenCalled();
+  });
+
+  // Branch 194 false side: a zero cooldown skips the rate-limit block entirely, so
+  // a prior submission within any window is never consulted.
+  it('skips the resubmit cooldown check when the cooldown is disabled', async () => {
+    queueSettingsMock.mockResolvedValue({ resubmitCooldownMs: 0 });
+    prismaMock.submission.findFirst.mockResolvedValue({ submittedAt: new Date() });
+
+    const res = await POST(makeRequest(makeFormData()));
+
+    expect(res.status).toBe(202);
+    expect(prismaMock.submission.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.submission.create).toHaveBeenCalled();
+  });
+
+  // Branch 203 false side: a prior submission exists but the cooldown has already
+  // elapsed, so the request proceeds instead of being rate-limited.
+  it('allows resubmission when the cooldown has already elapsed', async () => {
+    prismaMock.submission.findFirst.mockResolvedValue({
+      submittedAt: new Date('2000-01-01T00:00:00.000Z'),
+    });
+
+    const res = await POST(makeRequest(makeFormData()));
+
+    expect(res.status).toBe(202);
+    expect(logActions()).not.toContain('SUBMISSION_RATE_LIMITED');
+    expect(prismaMock.submission.create).toHaveBeenCalled();
+  });
+
+  // Branch 252 true side: the SUBMISSION_REJECTED_LATE log serialises a present
+  // lateCutoff (rather than the null used elsewhere).
+  it('returns 403 with a serialised lateCutoff when late submissions are disabled', async () => {
+    prismaMock.assignment.findUnique.mockResolvedValue({
+      id: 'assignment-1',
+      courseId: 'course-1',
+      dueDate: PAST,
+      allowLateSubmissions: false,
+      lateCutoff: PAST,
+    });
+
+    const res = await POST(makeRequest(makeFormData()));
+
+    expect(res.status).toBe(403);
+    const rejectedLog = activityLogMock.mock.calls.find(
+      (call) => call[2]?.action === 'SUBMISSION_REJECTED_LATE',
+    );
+    expect(rejectedLog?.[2]?.metadata?.lateCutoff).toBe(PAST.toISOString());
+    expect(prismaMock.submission.create).not.toHaveBeenCalled();
+  });
+
+  // Branch 263 false side: past due, late submissions allowed, and no cutoff set, so
+  // the late submission is accepted.
+  it('accepts a late submission when allowed and no cutoff is set', async () => {
+    prismaMock.assignment.findUnique.mockResolvedValue({
+      id: 'assignment-1',
+      courseId: 'course-1',
+      dueDate: PAST,
+      allowLateSubmissions: true,
+      lateCutoff: null,
+    });
+
+    const res = await POST(makeRequest(makeFormData()));
+
+    expect(res.status).toBe(202);
+    expect(logActions()).not.toContain('SUBMISSION_REJECTED_LATE_CUTOFF');
+    expect(prismaMock.submission.create).toHaveBeenCalled();
+  });
+
+  // Branch 374 true side / line 375: the upload directory does not yet exist, so it
+  // is created before the file is written.
+  it('creates the upload directory when it does not exist', async () => {
+    fsMock.existsSync.mockReturnValue(false);
+
+    const res = await POST(makeRequest(makeFormData(undefined, makeFile())));
+
+    expect(res.status).toBe(202);
+    expect(fsMock.mkdirSync).toHaveBeenCalledWith(expect.any(String), { recursive: true });
+    expect(fsMock.writeFileSync).toHaveBeenCalled();
+  });
+
+  // Branch 445 false side: create fails with no file uploaded, so there is no
+  // orphaned file to clean up.
+  it('returns 500 without attempting file cleanup when no file was uploaded', async () => {
+    prismaMock.submission.create.mockRejectedValue(new Error('db down'));
+
+    const res = await POST(makeRequest(makeFormData()));
+
+    expect(res.status).toBe(500);
+    expect(fsMock.unlinkSync).not.toHaveBeenCalled();
+    expect(logActions()).toContain('SUBMISSION_ERROR');
+  });
+
+  // Branch 466 false side: a thrown non-Error is stringified via String(error) in
+  // the SUBMISSION_ERROR log.
+  it('returns 500 and stringifies a non-Error thrown while creating the submission', async () => {
+    prismaMock.submission.create.mockRejectedValueOnce('boom');
+
+    const res = await POST(makeRequest(makeFormData(undefined, makeFile())));
+
+    expect(res.status).toBe(500);
+    const errorLog = activityLogMock.mock.calls.find(
+      (call) => call[2]?.action === 'SUBMISSION_ERROR',
+    );
+    expect(errorLog?.[2]?.metadata?.error).toBe('boom');
+    // The orphaned upload is cleaned up since a file was written.
+    expect(fsMock.unlinkSync).toHaveBeenCalled();
   });
 
   it('returns 400 when the uploaded file fails structure validation', async () => {

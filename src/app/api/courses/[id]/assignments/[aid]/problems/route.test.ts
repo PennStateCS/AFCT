@@ -88,6 +88,163 @@ describe('POST /api/courses/[id]/[aid]/problems (add problems)', () => {
     consoleSpy.mockRestore();
   });
 
+  it('returns 400 for invalid problemSettings', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        problemIds: ['p1'],
+        // maxSubmissions 0 violates the refine (must be -1 or >= 1)
+        problemSettings: [
+          { problemId: 'p1', maxPoints: 5, maxSubmissions: 0, autograderEnabled: true },
+        ],
+      }),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('Invalid problemSettings in request body');
+    consoleSpy.mockRestore();
+  });
+
+  it('treats a non-array problemIds as empty', async () => {
+    prismaMock.problem.findMany.mockResolvedValue([]);
+    prismaMock.assignmentProblem.findMany.mockResolvedValue([]);
+
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ problemIds: 'not-an-array' }),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
+    expect(res.status).toBe(200);
+    expect(prismaMock.problem.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ id: { in: [] } }) }),
+    );
+    expect(prismaMock.assignmentProblem.createMany).not.toHaveBeenCalled();
+  });
+
+  it('reports protected problems that already have submissions', async () => {
+    prismaMock.problem.findMany.mockResolvedValue([{ id: 'p1' }]);
+    // Existing link with submissions > 0 -> reported as protected, not re-added.
+    prismaMock.assignmentProblem.findMany.mockResolvedValue([
+      { problemId: 'p1', _count: { submissions: 3 } },
+    ]);
+    prismaMock.assignment.findUnique.mockResolvedValue({
+      id: 'assignment-1',
+      problems: [{ problem: { id: 'p1', title: 'P1' } }],
+    });
+
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ problemIds: ['p1'] }),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.metadata.protectedProblems).toBe(1);
+    expect(body.metadata.message).toContain('preserved');
+    expect(prismaMock.assignmentProblem.createMany).not.toHaveBeenCalled();
+  });
+
+  it('skips group mapping when the assignment is not a group assignment', async () => {
+    prismaMock.problem.findMany.mockResolvedValue([{ id: 'p1' }]);
+    prismaMock.assignmentProblem.findMany.mockResolvedValue([]);
+    prismaMock.assignment.findUnique.mockResolvedValue({ id: 'assignment-1', isGroup: false });
+
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ problemIds: ['p1'], groupId: 'ALL' }),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
+    expect(res.status).toBe(200);
+    expect(prismaMock.group.findMany).not.toHaveBeenCalled();
+    expect(prismaMock.groupAssignmentProblem.createMany).not.toHaveBeenCalled();
+  });
+
+  it('skips group mapping when the specified group is not in the course', async () => {
+    prismaMock.problem.findMany.mockResolvedValue([{ id: 'p1' }]);
+    prismaMock.assignmentProblem.findMany.mockResolvedValue([]);
+    prismaMock.assignment.findUnique.mockResolvedValue({ id: 'assignment-1', isGroup: true });
+    // Group belongs to a different course -> not mapped.
+    prismaMock.group.findUnique.mockResolvedValue({ id: 'g-other', courseId: 'other' });
+
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ problemIds: ['p1'], groupId: 'g-other' }),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
+    expect(res.status).toBe(200);
+    expect(prismaMock.groupAssignmentProblem.createMany).not.toHaveBeenCalled();
+  });
+
+  it('skips group mapping when there are no valid problems to map', async () => {
+    // No valid problems -> validIds is empty, so no mappings are created even for a real group.
+    prismaMock.problem.findMany.mockResolvedValue([]);
+    prismaMock.assignmentProblem.findMany.mockResolvedValue([]);
+    prismaMock.assignment.findUnique.mockResolvedValue({ id: 'assignment-1', isGroup: true });
+    prismaMock.group.findMany.mockResolvedValue([{ id: 'g1' }]);
+
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ problemIds: ['p999'], groupId: 'ALL' }),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
+    expect(res.status).toBe(200);
+    expect(prismaMock.groupAssignmentProblem.createMany).not.toHaveBeenCalled();
+  });
+
+  it('still succeeds when activity logging fails', async () => {
+    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    prismaMock.problem.findMany.mockResolvedValue([{ id: 'p1' }]);
+    prismaMock.assignmentProblem.findMany.mockResolvedValue([]);
+    activityLogMock.mockRejectedValueOnce(new Error('log down'));
+
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ problemIds: ['p1'] }),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
+    expect(res.status).toBe(200);
+    consoleSpy.mockRestore();
+  });
+
+  it('returns 500 when a non-Error is thrown', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    prismaMock.problem.findMany.mockRejectedValueOnce('boom');
+
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ problemIds: ['p1'] }),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
+    expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        action: 'ASSIGNMENT_ADD_PROBLEMS_ERROR',
+        metadata: { error: 'unknown error' },
+      }),
+    );
+    consoleSpy.mockRestore();
+  });
+
   it('adds new problems without removing existing ones', async () => {
     prismaMock.problem.findMany.mockResolvedValue([{ id: 'p1' }, { id: 'p2' }]);
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
@@ -350,5 +507,47 @@ describe('DELETE /api/courses/[id]/[aid]/problems (remove a problem)', () => {
       where: { assignmentId: 'a1', problemId: 'p1' },
     });
     expect(activityLogMock).toHaveBeenCalled();
+  });
+
+  it('returns an empty problem list when the reload comes back null', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
+    prismaMock.problem.findFirst.mockResolvedValue({ id: 'p1', title: 'Problem' });
+    prismaMock.assignment.findUnique.mockResolvedValue(null);
+
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
+      method: 'DELETE',
+      body: JSON.stringify({ problemId: 'p1' }),
+    });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.problems).toEqual([]);
+  });
+
+  it('returns 500 and logs when removal throws a non-Error', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
+    prismaMock.problem.findFirst.mockResolvedValue({ id: 'p1', title: 'Problem' });
+    prismaMock.assignmentProblem.deleteMany.mockRejectedValueOnce('boom');
+
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
+      method: 'DELETE',
+      body: JSON.stringify({ problemId: 'p1' }),
+    });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
+
+    expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        action: 'ASSIGNMENT_REMOVE_PROBLEM_ERROR',
+        metadata: { error: 'unknown error' },
+      }),
+    );
+    consoleSpy.mockRestore();
   });
 });

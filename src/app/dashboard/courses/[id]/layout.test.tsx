@@ -6,8 +6,12 @@ const prismaMock = vi.hoisted(() => ({
     findUnique: vi.fn(),
   },
 }));
+const authMock = vi.hoisted(() => vi.fn());
+const canAccessCourseMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
+vi.mock('@/lib/auth', () => ({ auth: authMock }));
+vi.mock('@/lib/permissions', () => ({ canAccessCourse: canAccessCourseMock }));
 vi.mock('@/components/navbar/CourseBreadcrumbSource', () => ({
   __esModule: true,
   default: ({ courseId, courseName }: { courseId: string; courseName: string }) => (
@@ -23,6 +27,8 @@ import CourseLayout from './layout';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
+  canAccessCourseMock.mockResolvedValue(true);
 });
 
 describe('CourseLayout', () => {
@@ -58,6 +64,24 @@ describe('CourseLayout', () => {
       params: Promise.resolve({ id: 'missing' }),
       children: <div data-testid="children">Child</div>,
     });
+
+    const element = result as React.ReactElement;
+    expect(element.props.children[0]).toBeNull();
+    expect(element.props.children[1].props['data-testid']).toBe('children');
+  });
+
+  it('does not query or expose the course name to a non-member', async () => {
+    // A signed-in user who cannot access the course must not learn its name via
+    // the breadcrumb — and we never even query for it.
+    canAccessCourseMock.mockResolvedValue(false);
+
+    const result = await CourseLayout({
+      params: Promise.resolve({ id: 'c1' }),
+      children: <div data-testid="children">Child</div>,
+    });
+
+    expect(canAccessCourseMock).toHaveBeenCalledWith({ id: 'u1', isAdmin: false }, 'c1');
+    expect(prismaMock.course.findUnique).not.toHaveBeenCalled();
 
     const element = result as React.ReactElement;
     expect(element.props.children[0]).toBeNull();

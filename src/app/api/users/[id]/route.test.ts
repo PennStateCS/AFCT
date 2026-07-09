@@ -120,6 +120,12 @@ describe('PATCH /api/users/[id]', () => {
 
     expect(res.status).toBe(403);
     expect(prismaMock.user.update).not.toHaveBeenCalled();
+    // The forbidden attempt is recorded as a SECURITY event.
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      req,
+      expect.objectContaining({ action: 'USER_UPDATE_DENIED', severity: 'SECURITY' }),
+    );
   });
 
   it('denies a non-admin TA editing another user', async () => {
@@ -214,6 +220,86 @@ describe('PATCH /api/users/[id]', () => {
     // The self-editing student's admin flag must be left untouched (undefined).
     expect(prismaMock.user.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ isAdmin: undefined }) }),
+    );
+  });
+
+  it('handles a request with an empty content-type header (JSON fallback path)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.user.findUnique.mockResolvedValue({ avatar: null });
+    prismaMock.user.update.mockResolvedValue({
+      id: 'u1',
+      email: 'u1@example.com',
+      firstName: 'A',
+      lastName: 'B',
+      role: 'ADMIN',
+      inactive: false,
+      avatar: null,
+      timezone: null,
+    });
+
+    const req = new NextRequest('http://localhost/api/users/u1', {
+      method: 'PATCH',
+      headers: { 'content-type': '' },
+      body: JSON.stringify({ firstName: 'A' }),
+    });
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'u1' }) });
+
+    expect(res.status).toBe(200);
+  });
+
+  it('applies the isAdmin flag sent via multipart form data (admin actor)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
+    prismaMock.user.findUnique.mockResolvedValue({ avatar: null, isAdmin: false });
+    prismaMock.user.update.mockResolvedValue({
+      id: 'u1',
+      email: 'u1@example.com',
+      firstName: 'A',
+      lastName: 'B',
+      role: 'FACULTY',
+      isAdmin: true,
+      inactive: false,
+      avatar: null,
+      timezone: null,
+    });
+
+    const formData = new FormData();
+    formData.append('isAdmin', 'true');
+    formData.append('firstName', 'A');
+
+    const req = new NextRequest('http://localhost/api/users/u1', {
+      method: 'PATCH',
+      body: formData,
+    });
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'u1' }) });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ isAdmin: true }) }),
+    );
+  });
+
+  it('returns 500 with "unknown error" when a non-Error value is thrown', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.user.findUnique.mockResolvedValue({ avatar: null });
+    prismaMock.user.update.mockRejectedValue('a plain string');
+
+    const req = new NextRequest('http://localhost/api/users/u1', {
+      method: 'PATCH',
+      body: JSON.stringify({ firstName: 'A' }),
+    });
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'u1' }) });
+
+    expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      req,
+      expect.objectContaining({
+        action: 'USER_UPDATE_ERROR',
+        metadata: expect.objectContaining({ error: 'unknown error' }),
+      }),
     );
   });
 
@@ -705,7 +791,7 @@ describe('DELETE /api/users/[id]', () => {
     expect(unlinkMock).not.toHaveBeenCalled();
   });
 
-  it('preserves the deleted user\'s activity logs (audit trail)', async () => {
+  it("preserves the deleted user's activity logs (audit trail)", async () => {
     authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ avatar: null });
     prismaMock.user.delete.mockResolvedValue({
@@ -767,6 +853,25 @@ describe('DELETE /api/users/[id]', () => {
     expect(res.status).toBe(500);
     const body = await res.json();
     expect(body.error).toBe('Failed to delete user');
+  });
+
+  it('returns 500 with "unknown error" when a non-Error value is thrown', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
+    prismaMock.user.findUnique.mockResolvedValue({ avatar: null });
+    prismaMock.user.delete.mockRejectedValue('a plain string');
+
+    const req = new NextRequest('http://localhost/api/users/u1', { method: 'DELETE' });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'u1' }) });
+
+    expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      req,
+      expect.objectContaining({
+        action: 'USER_DELETE_ERROR',
+        metadata: expect.objectContaining({ error: 'unknown error' }),
+      }),
+    );
   });
 });
 

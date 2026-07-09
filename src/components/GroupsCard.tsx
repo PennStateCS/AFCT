@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useMemo, useState, useCallback } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { fetchJson } from '@/lib/query-fetch';
+import { queryKeys } from '@/lib/query-keys';
 import { DataTable } from '@/components/ui/data-table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -52,11 +54,9 @@ export function GroupsCard({
 
   // Cached groups list, read via GET /api/courses/{id}/groups.
   const groupsQuery = useQuery({
-    queryKey: ['course', courseId, 'groups'],
+    queryKey: queryKeys.course.groups(courseId),
     queryFn: async () => {
-      const res = await fetch(apiPaths.courseGroups(courseId));
-      if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load groups');
-      const data = await res.json();
+      const data = await fetchJson<Group[] | { groups?: Group[] }>(apiPaths.courseGroups(courseId));
       return (Array.isArray(data) ? data : (data?.groups ?? [])) as Group[];
     },
     staleTime: 30_000,
@@ -73,7 +73,7 @@ export function GroupsCard({
   // undefined when no roster-bearing view is cached, so the query fetches normally.
   const seededStudents = useMemo<CourseStudent[] | undefined>(() => {
     for (const view of ['roster', 'summary'] as const) {
-      const cached = queryClient.getQueryData(['course', courseId, view]) as
+      const cached = queryClient.getQueryData(queryKeys.course.view(courseId, view)) as
         | { enrolled?: Array<Record<string, unknown>> }
         | undefined;
       const enrolled = cached?.enrolled;
@@ -97,12 +97,8 @@ export function GroupsCard({
   // Cached course students (a plain GET). When the roster is already in the
   // course cache we seed from it (initialData) and skip the network round-trip.
   const studentsQuery = useQuery({
-    queryKey: ['course', courseId, 'students'],
-    queryFn: async () => {
-      const res = await fetch(apiPaths.courseStudents(courseId));
-      if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load students');
-      return (await res.json()) as CourseStudent[];
-    },
+    queryKey: queryKeys.course.students(courseId),
+    queryFn: () => fetchJson<CourseStudent[]>(apiPaths.courseStudents(courseId)),
     initialData: seededStudents,
     staleTime: 30_000,
   });
@@ -111,29 +107,27 @@ export function GroupsCard({
   // Re-pull the groups list after a mutation succeeds; the query refetches
   // because it's active.
   const refreshGroups = useCallback(
-    () => queryClient.invalidateQueries({ queryKey: ['course', courseId, 'groups'] }),
+    () => queryClient.invalidateQueries({ queryKey: queryKeys.course.groups(courseId) }),
     [queryClient, courseId],
   );
 
-  const handleDelete = async () => {
-    if (!deletingGroup) return;
-    try {
-      const res = await fetch(apiPaths.courseGroup(courseId, deletingGroup.id), {
-        method: 'DELETE',
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        showToast.error(body.error || 'Failed to delete group');
-        return;
-      }
+  const { mutate: deleteGroup } = useMutation({
+    mutationFn: (group: Group) =>
+      fetchJson(apiPaths.courseGroup(courseId, group.id), { method: 'DELETE' }),
+    onSuccess: () => {
       showToast.success('Group deleted');
       setConfirmOpen(false);
       setDeletingGroup(null);
-      refreshGroups();
-    } catch (err) {
+      void refreshGroups();
+    },
+    onError: (err) => {
       console.error('Delete group error:', err);
-      showToast.error('Failed to delete group');
-    }
+      showToast.error(err instanceof Error ? err.message : 'Failed to delete group');
+    },
+  });
+
+  const handleDelete = () => {
+    if (deletingGroup) deleteGroup(deletingGroup);
   };
 
   const columns = useMemo<ColumnDef<Group>[]>(

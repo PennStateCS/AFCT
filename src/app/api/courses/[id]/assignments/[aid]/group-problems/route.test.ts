@@ -59,6 +59,41 @@ describe('GET /api/courses/[id]/[aid]/group-problems', () => {
     expect(logArgs.assignmentId).toBe('a1');
   });
 
+  it('groups multiple problems mapped to the same group', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+    prismaMock.group.findMany.mockResolvedValue([{ id: 'g1', name: 'G1' }]);
+    // Two mappings for the same group exercises the "already-seen group" branch.
+    prismaMock.groupAssignmentProblem.findMany.mockResolvedValue([
+      { assignmentId: 'a1', problemId: 'p1', groupId: 'g1' },
+      { assignmentId: 'a1', problemId: 'p2', groupId: 'g1' },
+    ]);
+
+    const res = await GET(
+      new NextRequest('http://localhost/api/courses/c1/assignments/a1/group-problems'),
+      { params: Promise.resolve({ id: 'c1', aid: 'a1' }) } as any,
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.groups[0].problemIds).toEqual(['p1', 'p2']);
+  });
+
+  it('returns 500 when fetching group problems throws', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+    prismaMock.group.findMany.mockRejectedValueOnce(new Error('db down'));
+
+    const res = await GET(
+      new NextRequest('http://localhost/api/courses/c1/assignments/a1/group-problems'),
+      { params: Promise.resolve({ id: 'c1', aid: 'a1' }) } as any,
+    );
+
+    expect(res.status).toBe(500);
+    consoleSpy.mockRestore();
+  });
+
   it('still returns 200 when activity logging fails in GET', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
@@ -189,6 +224,23 @@ describe('DELETE /api/courses/[id]/[aid]/group-problems', () => {
     expect(prismaMock.groupAssignmentProblem.deleteMany).toHaveBeenCalledWith({
       where: { assignmentId: 'a1', problemId: { in: ['p1', 'p2'] } },
     });
+  });
+
+  it('returns 500 when deleting mappings throws', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.group.findUnique.mockResolvedValue({ id: 'g1', courseId: 'c1' });
+    prismaMock.groupAssignmentProblem.deleteMany.mockRejectedValueOnce(new Error('db down'));
+
+    const req = new NextRequest('http://localhost/api/courses/c1/assignments/a1/group-problems', {
+      method: 'DELETE',
+      body: JSON.stringify({ groupId: 'g1', problemIds: ['p1'] }),
+    });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) } as any);
+
+    expect(res.status).toBe(500);
+    consoleSpy.mockRestore();
   });
 
   it('still succeeds when removal activity logging fails', async () => {
