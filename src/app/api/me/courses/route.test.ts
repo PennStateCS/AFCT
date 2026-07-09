@@ -120,6 +120,8 @@ describe('GET /api/me/courses?view=nav', () => {
         code: true,
         isPublished: true,
         isArchived: true,
+        startDate: true,
+        endDate: true,
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -153,6 +155,8 @@ describe('GET /api/me/courses?view=nav', () => {
         code: true,
         isPublished: true,
         isArchived: true,
+        startDate: true,
+        endDate: true,
       },
       orderBy: { createdAt: 'desc' },
     });
