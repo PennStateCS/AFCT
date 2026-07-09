@@ -7,6 +7,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
 
 // Solution files are written here; the URL to serve them is /api/files/solutions/[file].
 const uploadsDir = path.join('/private', 'uploads', 'solutions');
@@ -106,12 +107,14 @@ export const POST = withCourseAuth(
         return NextResponse.json({ error: 'Course not found' }, { status: 404 });
       }
 
-      // Write uploaded file to disk
+      // Write uploaded file to disk under a random UUID + sanitized extension —
+      // never a path derived from the client-supplied file.name. Written
+      // non-executable; the original name is kept only as display metadata below.
       fs.mkdirSync(uploadsDir, { recursive: true });
       const buffer = Buffer.from(await file.arrayBuffer());
-      const fileName = `${Date.now()}-${file.name}`;
-      const fullPath = path.join(uploadsDir, fileName);
-      fs.writeFileSync(fullPath, buffer, { mode: 0o755 });
+      const fileName = safeStoredFilename(file.name);
+      const fullPath = resolveInsideDir(uploadsDir, fileName);
+      fs.writeFileSync(fullPath, buffer, { mode: 0o644 });
 
       // Create the problem record in the database
       const problem = await prisma.problem.create({
