@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { formatDateTimeInTimeZone } from '@/lib/date';
 import { apiPaths } from '@/lib/api-paths';
+import { queryKeys } from '@/lib/query-keys';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -36,7 +37,7 @@ export function MaxPointsCell({
   const needsFetch = maxPoints === null || maxPoints === undefined;
 
   const { data } = useQuery({
-    queryKey: ['assignment', assignmentId],
+    queryKey: queryKeys.assignment.shell(courseId, assignmentId),
     queryFn: async () => {
       const res = await fetch(apiPaths.assignment(courseId, assignmentId, { view: 'problems' }));
       if (!res.ok) throw new Error('Failed to fetch assignment');
