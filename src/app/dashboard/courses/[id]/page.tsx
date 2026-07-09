@@ -65,6 +65,13 @@ export default async function AdminCoursePage({ params }: Props) {
     notFound();
   }
 
+  // A student may only open a PUBLISHED course; staff/admin may open theirs while
+  // unpublished. 404-mask an unpublished course from a student (matches the API's
+  // canAccessCourse rule and keeps its existence hidden).
+  if (!isStaff && !course.isPublished) {
+    notFound();
+  }
+
   const enrolledMembers = course.roster.map((r) => ({ ...r.user, courseRole: r.role }));
   const enrolled = isStaff
     ? enrolledMembers.map((member) => ({ ...member, hasSubmissions: false }))
@@ -74,7 +81,8 @@ export default async function AdminCoursePage({ params }: Props) {
     id: course.id,
     name: course.name,
     code: course.code,
-    regCode: course.regCode,
+    // Registration/join code is staff-only; never send it to a student's client.
+    regCode: isStaff ? course.regCode : null,
     semester: course.semester,
     credits: course.credits,
     startDate: course.startDate,
