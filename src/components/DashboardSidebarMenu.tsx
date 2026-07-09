@@ -11,6 +11,7 @@ import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils';
+import { apiPaths } from '@/lib/api-paths';
 import { safeSignOut } from '@/lib/safe-signout';
 
 import { ChangePasswordDialog } from './dialogs/ChangePasswordDialog';
@@ -87,7 +88,7 @@ export default function DashboardSidebarMenu() {
   const { data: courses = [] } = useQuery<Course[]>({
     queryKey: ['courses', 'nav'],
     queryFn: async () => {
-      const res = await fetch('/api/courses/nav');
+      const res = await fetch(apiPaths.myCourses({ view: 'nav' }));
       if (!res.ok) throw new Error('Failed to fetch courses');
       return (await res.json()) as Course[];
     },
@@ -406,7 +407,7 @@ export default function DashboardSidebarMenu() {
                 <SidebarMenuButton className="hover:bg-secondary data-[state=open]:bg-secondary/70 data-[state=open]:text-secondary-foreground h-14 bg-[#525252] px-3 py-3 transition-colors">
                   <Avatar className="h-8 w-8 shrink-0">
                     <AvatarImage
-                      src={user.avatar ? `/api/uploads/pfps/${user.avatar}` : undefined}
+                      src={user.avatar ? apiPaths.files.pfp(user.avatar) : undefined}
                       alt={user.name}
                     />
                     <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
@@ -467,7 +468,7 @@ export default function DashboardSidebarMenu() {
         open={changePasswordOpen}
         setOpen={setChangePasswordOpen}
         onChangePassword={async (oldPassword, newPassword) => {
-          const res = await fetch('/api/users/change-password', {
+          const res = await fetch(apiPaths.myPassword(), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ oldPassword, newPassword }),
@@ -480,7 +481,7 @@ export default function DashboardSidebarMenu() {
           toast.success('Password changed!');
         }}
       />
-      
+
       <EditProfileDialog user={user} open={editProfileOpen} setOpen={setEditProfileOpen} />
     </>
   );

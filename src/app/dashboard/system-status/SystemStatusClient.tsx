@@ -9,6 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import pkg from '../../../../package.json';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatDateTimeInTimeZone, formatTimeInTimeZone } from '@/lib/date';
+import { apiPaths } from '@/lib/api-paths';
 
 type IpAddr = { iface?: string; address?: string; family?: string };
 type CpuInfo = { model?: string; speed?: number };
@@ -423,7 +424,7 @@ export default function SystemStatusClient() {
   } = useQuery({
     queryKey: ['admin', 'status', deep],
     queryFn: async () => {
-      const r = await fetch(`/api/admin/status${deep ? '?deep=1' : ''}`, { cache: 'no-store' });
+      const r = await fetch(apiPaths.admin.status({ deep }), { cache: 'no-store' });
       if (!r.ok) throw new Error('Failed to fetch status');
       return (await r.json()) as StatusResponse;
     },
@@ -447,7 +448,7 @@ export default function SystemStatusClient() {
 
       setDeletingFiles((prev) => ({ ...prev, [key]: true }));
       try {
-        const res = await fetch('/api/admin/status/abandoned-files', {
+        const res = await fetch(apiPaths.admin.abandonedFiles(), {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ category, fileName }),

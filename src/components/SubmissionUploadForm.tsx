@@ -7,6 +7,7 @@ import FileUploadInput from '@/components/FileUploadInput';
 import { useMaxUploadSize } from '@/hooks/useMaxUploadSize';
 import { showToast } from '@/lib/toast';
 import { Upload, AlertCircle } from 'lucide-react';
+import { apiPaths } from '@/lib/api-paths';
 
 export type SubmissionUploadFormProps = {
   courseId: string;
@@ -53,7 +54,7 @@ export default function SubmissionUploadForm({
       formData.append('problemId', problemId);
       formData.append('file', file);
 
-      const res = await fetch('/api/submissions', {
+      const res = await fetch(apiPaths.submissions(), {
         method: 'POST',
         body: formData,
         headers: {

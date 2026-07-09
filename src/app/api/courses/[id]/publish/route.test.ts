@@ -27,6 +27,7 @@ beforeEach(() => {
 
 describe('PATCH /api/courses/[id]/publish', () => {
   it('returns 400 when isPublished is invalid', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     const req = new Request('http://localhost/api/courses/c1/publish', {
       method: 'PATCH',
       body: JSON.stringify({ isPublished: 'yes' }),
@@ -37,7 +38,7 @@ describe('PATCH /api/courses/[id]/publish', () => {
     expect(res.status).toBe(400);
   });
 
-  it('returns 403 when unauthorized', async () => {
+  it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
     const req = new Request('http://localhost/api/courses/c1/publish', {
@@ -47,7 +48,7 @@ describe('PATCH /api/courses/[id]/publish', () => {
 
     const res = await PATCH(req, { params: Promise.resolve({ id: 'c1' }) });
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('returns 403 when cannot unpublish', async () => {

@@ -106,7 +106,7 @@ const installFetchRouter = (
 ) => {
   const fetchMock = global.fetch as FetchMock;
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
-    if (url === '/api/courses/list') return jsonResponse(COURSES);
+    if (url === '/api/me/courses') return jsonResponse(COURSES);
     if (url === '/api/courses/course-1/assignments') return jsonResponse(ASSIGNMENTS);
     if (url === '/api/assignments/assign-1/problems') return jsonResponse(PROBLEMS);
     if (url === '/api/admin/submissions' && init?.method === 'POST') {
@@ -120,7 +120,8 @@ const installFetchRouter = (
 
 const submissionsPostCalls = (fetchMock: FetchMock) =>
   fetchMock.mock.calls.filter(
-    ([url, init]) => url === '/api/admin/submissions' && (init as RequestInit | undefined)?.method === 'POST',
+    ([url, init]) =>
+      url === '/api/admin/submissions' && (init as RequestInit | undefined)?.method === 'POST',
   );
 
 describe('SubmissionsClient', () => {
@@ -139,7 +140,7 @@ describe('SubmissionsClient', () => {
     // never reaches the submissions POST.
     const fetchMock = global.fetch as FetchMock;
     fetchMock.mockImplementation(async (url: string) => {
-      if (url === '/api/courses/list') return new Promise(() => {}); // pending forever
+      if (url === '/api/me/courses') return new Promise(() => {}); // pending forever
       throw new Error(`Unexpected fetch: ${String(url)}`);
     });
 
@@ -183,7 +184,7 @@ describe('SubmissionsClient', () => {
 
     const fetchMock = global.fetch as FetchMock;
     fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
-      if (url === '/api/courses/list') return jsonResponse(COURSES);
+      if (url === '/api/me/courses') return jsonResponse(COURSES);
       if (url === '/api/courses/course-1/assignments') return jsonResponse(ASSIGNMENTS);
       if (url === '/api/assignments/assign-1/problems') return jsonResponse(PROBLEMS);
       if (url === '/api/admin/submissions' && init?.method === 'POST') {

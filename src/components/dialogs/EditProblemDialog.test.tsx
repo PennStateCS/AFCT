@@ -181,7 +181,7 @@ describe('EditProblemDialog assignment settings', () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      '/api/problems/problem-1',
+      '/api/courses/course-1/problems/problem-1',
       expect.objectContaining({ method: 'PUT' }),
     );
     // ensure updated fields are sent in form data
@@ -192,7 +192,7 @@ describe('EditProblemDialog assignment settings', () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      '/api/courses/course-1/assignment-1/problems/problem-1',
+      '/api/courses/course-1/assignments/assignment-1/problems/problem-1',
       expect.objectContaining({
         method: 'PUT',
         body: JSON.stringify({
@@ -223,7 +223,7 @@ describe('EditProblemDialog assignment settings', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/problems/problem-1',
+      '/api/courses/course-1/problems/problem-1',
       expect.objectContaining({ method: 'PUT' }),
     );
     // when only title changed, max fields remain untouched (they use defaults)

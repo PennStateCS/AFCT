@@ -32,8 +32,9 @@ describe('GET /api/courses/[id]/activity', () => {
     expect(res.status).toBe(401);
   });
 
-  it('returns 404 when course not found', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1' } });
+  it('returns 404 when a permitted caller hits a missing course', async () => {
+    // Admin passes the access gate, then the handler's existence check returns 404.
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     prismaMock.course.findFirst.mockResolvedValue(null);
 
     const req = new NextRequest('http://localhost/api/courses/c1/activity');

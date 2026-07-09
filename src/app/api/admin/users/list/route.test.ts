@@ -18,7 +18,7 @@ describe('GET /api/users/list', () => {
 
     const res = await GET();
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('returns users list for authorized roles', async () => {

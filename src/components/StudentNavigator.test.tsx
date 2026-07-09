@@ -29,6 +29,7 @@ const baseProps: StudentNavigatorProps = {
   onSelectStudent: vi.fn(),
   onPrev: vi.fn(),
   onNext: vi.fn(),
+  courseId: 'c1',
   assignmentId: 'a1',
 };
 
@@ -52,7 +53,7 @@ describe('StudentNavigator', () => {
     renderWithClient(<StudentNavigator {...baseProps} />);
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith('/api/assignments/a1');
+      expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/assignments/a1?view=problems');
     });
 
     // Derived from the response: allowLateSubmissions -> "Yes", and the formatted
@@ -82,7 +83,7 @@ describe('StudentNavigator', () => {
     renderWithClient(<StudentNavigator {...baseProps} />);
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith('/api/assignments/a1');
+      expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/assignments/a1?view=problems');
     });
 
     // On error the component renders no assignment block and no loading label.

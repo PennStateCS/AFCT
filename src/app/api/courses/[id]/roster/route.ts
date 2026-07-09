@@ -1,0 +1,103 @@
+import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { withCourseAuth } from '@/lib/api/with-auth';
+
+/**
+ * Adds (or re-roles) a single user on a course roster. Course staff (faculty or
+ * TAs) or a system admin. The user is always added as a STUDENT — callers don't
+ * pick the role directly. Upserts, so re-enrolling just resets the role to STUDENT.
+ * @openapi
+ * summary: Enroll a user in a course
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [userId]
+ *         properties:
+ *           userId: { type: string }
+ * responses:
+ *   200:
+ *     description: Enrolled.
+ *     content:
+ *       application/json:
+ *         schema: { type: object, properties: { success: { type: boolean } } }
+ *   400: { description: Missing userId. }
+ *   401: { description: "Not signed in, or the target user is inactive." }
+ *   403: { description: Not course staff (faculty or TAs) or a system admin. }
+ *   404: { description: Target user not found. }
+ *   500: { description: Server error. }
+ */
+export const POST = withCourseAuth(
+  async (req, _ctx, { user, courseId }) => {
+    try {
+      const { userId } = await req.json();
+      if (!userId) {
+        return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
+      }
+
+      const targetUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, inactive: true },
+      });
+
+      if (!targetUser) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
+
+      if (targetUser.inactive == true) {
+        return NextResponse.json({ error: 'User is inactive' }, { status: 401 });
+      }
+
+      const roleToAssign = 'STUDENT';
+
+      await prisma.roster.upsert({
+        where: {
+          courseId_userId: {
+            courseId,
+            userId,
+          },
+        },
+        create: {
+          courseId,
+          userId,
+          role: roleToAssign,
+        },
+        update: {
+          role: roleToAssign,
+        },
+      });
+
+      await createEnhancedActivityLog(prisma, req, {
+        userId: user.id,
+        action: 'ENROLL_USER',
+        severity: 'INFO',
+        category: 'COURSE',
+        courseId,
+        metadata: {
+          userId: user.id,
+          courseId: courseId,
+          enrolledUserId: userId,
+          role: roleToAssign,
+        },
+      });
+
+      return NextResponse.json({ success: true });
+    } catch (error) {
+      console.error('Enrollment error:', error);
+      await createEnhancedActivityLog(prisma, req, {
+        userId: user.id,
+        action: 'COURSE_ENROLL_ERROR',
+        severity: 'ERROR',
+        courseId,
+        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+      });
+      return NextResponse.json({ error: 'Failed to enroll user' }, { status: 500 });
+    }
+  },
+  { access: 'manage', deniedAction: 'COURSE_ENROLL_DENIED' },
+);

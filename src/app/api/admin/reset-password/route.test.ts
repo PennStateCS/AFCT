@@ -31,7 +31,7 @@ beforeEach(() => {
 });
 
 describe('POST /api/admin/reset-password', () => {
-  it('returns 403 when unauthorized', async () => {
+  it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
     const req = new Request('http://localhost/api/admin/reset-password', {
@@ -41,7 +41,7 @@ describe('POST /api/admin/reset-password', () => {
 
     const res = await POST(req);
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('returns 400 when fields missing', async () => {

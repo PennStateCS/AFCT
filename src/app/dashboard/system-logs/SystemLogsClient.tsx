@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select';
 import { LogViewerDialog } from '@/components/dialogs/LogViewerDialog';
 import { DownloadLogsDialog } from '@/components/dialogs/DownloadLogsDialog';
+import { apiPaths } from '@/lib/api-paths';
 
 type Severity = 'INFO' | 'WARNING' | 'ERROR' | 'SECURITY';
 
@@ -100,7 +101,9 @@ export default function SystemLogsClient() {
       if (queryParams.sortBy) params.set('sortBy', queryParams.sortBy);
       if (queryParams.sortDir) params.set('sortDir', queryParams.sortDir);
 
-      const res = await fetch(`/api/admin/logs?${params.toString()}`, { cache: 'no-store' });
+      const res = await fetch(`${apiPaths.admin.logs()}?${params.toString()}`, {
+        cache: 'no-store',
+      });
       if (!res.ok) throw new Error('Failed to fetch logs');
       return (await res.json()) as { rows: LogRow[]; total: number };
     },
