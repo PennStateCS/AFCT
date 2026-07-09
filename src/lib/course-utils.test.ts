@@ -43,7 +43,9 @@ describe('course-utils', () => {
       const target: DeleteTarget = { type: 'assignment', id: 'assignment-1' };
       await deleteItem(target, 'course-1');
 
-      expect(mockFetch).toHaveBeenCalledWith('/api/courses/course-1/assignments/assignment-1', { method: 'DELETE' });
+      expect(mockFetch).toHaveBeenCalledWith('/api/courses/course-1/assignments/assignment-1', {
+        method: 'DELETE',
+      });
     });
 
     it('should delete a problem successfully', async () => {
@@ -55,7 +57,9 @@ describe('course-utils', () => {
       const target: DeleteTarget = { type: 'problem', id: 'problem-1' };
       await deleteItem(target, 'course-1');
 
-      expect(mockFetch).toHaveBeenCalledWith('/api/problems/problem-1', { method: 'DELETE' });
+      expect(mockFetch).toHaveBeenCalledWith('/api/courses/course-1/problems/problem-1', {
+        method: 'DELETE',
+      });
     });
 
     it('should throw error when assignment deletion fails with JSON error', async () => {

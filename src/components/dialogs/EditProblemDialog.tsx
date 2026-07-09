@@ -275,7 +275,7 @@ export function EditProblemDialog({
         });
       }
 
-      const res = await fetch(apiPaths.problem(problem.id), {
+      const res = await fetch(apiPaths.courseProblem(problem.courseId, problem.id), {
         method: 'PUT',
         body: formData,
       });
