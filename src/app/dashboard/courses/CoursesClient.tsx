@@ -9,6 +9,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { CreateCourseDialog } from '@/components/dialogs/CreateCourseDialog';
 import { BookPlus } from 'lucide-react';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import { apiPaths } from '@/lib/api-paths';
 import type { CourseListItem } from '@/lib/courses-list';
 
 type CourseWithRoster = CourseListItem;
@@ -32,7 +33,7 @@ export default function CoursesClient({ initialCourses }: { initialCourses: Cour
   } = useQuery({
     queryKey: coursesListQueryKey,
     queryFn: async () => {
-      const res = await fetch('/api/courses/list', { cache: 'no-store' });
+      const res = await fetch(apiPaths.myCourses(), { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed to fetch courses');
       return (await res.json()) as CourseWithRoster[];
     },
@@ -61,7 +62,7 @@ export default function CoursesClient({ initialCourses }: { initialCourses: Cour
   );
 
   const columnsMemo = useMemo(
-    () => columns(patchCourse, refresh, timezone),
+    () => columns(patchCourse, refresh, refresh, timezone),
     [patchCourse, refresh, timezone],
   );
 

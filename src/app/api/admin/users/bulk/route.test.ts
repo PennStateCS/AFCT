@@ -50,7 +50,7 @@ describe('POST /api/users/bulk', () => {
 
     const res = await POST(req);
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('returns 403 for disallowed roles', async () => {
@@ -193,5 +193,190 @@ describe('POST /api/users/bulk', () => {
     );
     expect(bcryptMock.hash).toHaveBeenCalledTimes(2);
     expect(activityLogMock).toHaveBeenCalled();
+  });
+
+  it('rejects a row with an invalid email format', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+
+    const req = new Request('http://localhost/api/users/bulk', {
+      method: 'POST',
+      body: JSON.stringify({
+        rows: [
+          {
+            rowNumber: 9,
+            firstName: 'Bad',
+            lastName: 'Email',
+            email: 'not-an-email',
+            password: 'StrongPass1!',
+          },
+        ],
+      }),
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.summary).toEqual({ total: 1, created: 0, failed: 1 });
+    expect(body.failed).toEqual([
+      { row: 9, email: 'not-an-email', reason: 'Invalid email format' },
+    ]);
+    expect(prismaMock.user.create).not.toHaveBeenCalled();
+  });
+
+  it('records a per-row failure when user creation throws', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.user.create.mockRejectedValueOnce(new Error('unique constraint'));
+
+    const req = new Request('http://localhost/api/users/bulk', {
+      method: 'POST',
+      body: JSON.stringify({
+        rows: [
+          {
+            firstName: 'Ada',
+            lastName: 'Lovelace',
+            email: 'ada@example.com',
+            password: 'StrongPass1!',
+          },
+        ],
+      }),
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.summary).toEqual({ total: 1, created: 0, failed: 1 });
+    expect(body.failed).toEqual([
+      { row: 2, email: 'ada@example.com', reason: 'Failed to create user' },
+    ]);
+  });
+
+  it('returns 400 when the body omits the rows key entirely', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+
+    const req = new Request('http://localhost/api/users/bulk', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(400);
+  });
+
+  it('falls back to UTC and tolerates null/blank rows when settings are missing', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    // No system settings row -> defaultTimezone falls back to UTC.
+    prismaMock.systemSettings.findUnique.mockResolvedValue(null);
+    prismaMock.user.create.mockResolvedValueOnce({ id: 'new-1', email: 'good@example.com' });
+
+    const req = new Request('http://localhost/api/users/bulk', {
+      method: 'POST',
+      body: JSON.stringify({
+        rows: [
+          // A null row element -> coalesced to {}, then fails on missing data.
+          null,
+          // Every field absent -> nullish fallbacks kick in; email becomes null.
+          {},
+          {
+            firstName: 'Good',
+            lastName: 'User',
+            email: 'good@example.com',
+            password: 'StrongPass1!',
+          },
+        ],
+      }),
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.summary).toEqual({ total: 3, created: 1, failed: 2 });
+    // The blank rows report email: null (the `email || null` false branch).
+    expect(body.failed).toEqual([
+      { row: 2, email: null, reason: 'Missing required data' },
+      { row: 3, email: null, reason: 'Missing required data' },
+    ]);
+    expect(prismaMock.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ timezone: 'UTC' }),
+      }),
+    );
+  });
+
+  it('skips the existence query when no row carries a usable email', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+
+    const req = new Request('http://localhost/api/users/bulk', {
+      method: 'POST',
+      body: JSON.stringify({
+        rows: [{ firstName: 'No', lastName: 'Email', password: 'StrongPass1!' }],
+      }),
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.summary).toEqual({ total: 1, created: 0, failed: 1 });
+    // With no candidate emails, the batched existence query is never run.
+    expect(prismaMock.user.findMany).not.toHaveBeenCalled();
+  });
+
+  it('returns 500 with "unknown error" when a non-Error value is thrown', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.systemSettings.findUnique.mockRejectedValueOnce('a plain string');
+
+    const req = new Request('http://localhost/api/users/bulk', {
+      method: 'POST',
+      body: JSON.stringify({
+        rows: [
+          {
+            firstName: 'Ada',
+            lastName: 'Lovelace',
+            email: 'ada@example.com',
+            password: 'StrongPass1!',
+          },
+        ],
+      }),
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      req,
+      expect.objectContaining({
+        action: 'USER_BULK_CREATE_ERROR',
+        metadata: expect.objectContaining({ error: 'unknown error' }),
+      }),
+    );
+  });
+
+  it('returns 500 and logs an error when the request body is not valid JSON', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+
+    const req = new Request('http://localhost/api/users/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: 'not-json',
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).toBe('Internal Server Error');
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      req,
+      expect.objectContaining({
+        action: 'USER_BULK_CREATE_ERROR',
+        severity: 'ERROR',
+      }),
+    );
   });
 });

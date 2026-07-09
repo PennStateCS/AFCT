@@ -11,6 +11,7 @@ import {
   InputOTPSlot,
   InputOTPSeparator,
 } from '@/components/ui/input-otp';
+import { apiPaths } from '@/lib/api-paths';
 
 export function JoinCourseModule() {
   const [code, setCode] = useState('');
@@ -24,7 +25,7 @@ export function JoinCourseModule() {
 
     setLoading(true);
     try {
-      const res = await fetch('/api/courses/join', {
+      const res = await fetch(apiPaths.courseJoin(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code }),

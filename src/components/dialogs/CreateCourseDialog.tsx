@@ -25,6 +25,7 @@ import {
   CreateCourseFormSchema, // Form schema (no transformations)
 } from '@/schemas/course';
 import { z } from 'zod';
+import { apiPaths } from '@/lib/api-paths';
 
 // RHF form state = Zod INPUT (strings for datetime-local)
 type FormValues = z.infer<typeof CreateCourseFormSchema>;
@@ -74,7 +75,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
   const facultyQuery = useQuery({
     queryKey: ['admin', 'users', 'faculty'],
     queryFn: async () => {
-      const res = await fetch('/api/admin/users?role=FACULTY');
+      const res = await fetch(apiPaths.admin.users({ role: 'FACULTY' }));
       if (!res.ok) throw new Error('Failed to load faculty');
       const data = await res.json();
       return (Array.isArray(data) ? data : []) as Array<User & { role?: string }>;
@@ -102,7 +103,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
       credits: Number(raw.credits),
     };
 
-    const res = await fetch('/api/courses', {
+    const res = await fetch(apiPaths.courses(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),

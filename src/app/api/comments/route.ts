@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
@@ -28,20 +27,6 @@ interface CommentDB {
   assignmentId?: string;
   problemId?: string;
   aboutStudentId?: string | null;
-}
-
-interface CommentResponse {
-  id: string;
-  content: string;
-  createdAt: string | Date;
-  problemId?: string;
-  author: {
-    id: string;
-    firstName: string | null;
-    lastName: string | null;
-    avatar: string | null;
-    role: string | null;
-  };
 }
 
 const createCommentSchema = z.object({
@@ -94,7 +79,7 @@ export async function POST(request: NextRequest) {
     // Verify assignment & course
     const assignment = await prisma.assignment.findUnique({
       where: { id: assignmentId },
-      select: { courseId: true },
+      select: { courseId: true, isPublished: true },
     });
     if (!assignment) {
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
@@ -109,6 +94,33 @@ export async function POST(request: NextRequest) {
         metadata: {},
       });
       return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
+    }
+
+    const isStaff = await canManageCourse(user, assignment.courseId);
+
+    // A student must not comment on an unpublished assignment (they can't see it);
+    // only course staff may. Mask it as 404 so the assignment stays invisible.
+    if (!assignment.isPublished && !isStaff) {
+      await createEnhancedActivityLog(prisma, request, {
+        userId: session?.user?.id ?? null,
+        action: 'COMMENT_CREATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { reason: 'unpublished assignment' },
+      });
+      return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+    }
+
+    // Students may only comment on their own thread. `studentId` (aboutStudentId)
+    // names whose feedback thread the comment belongs to; a non-staff author may
+    // only target themselves. Staff/admin may file into any student's thread.
+    if (studentId && studentId !== user.id && !isStaff) {
+      await createEnhancedActivityLog(prisma, request, {
+        userId: session?.user?.id ?? null,
+        action: 'COMMENT_CREATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { reason: "another student's thread" },
+      });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // Obtain the author's roster row for the comment FK. Admins who aren't on the
@@ -132,6 +144,20 @@ export async function POST(request: NextRequest) {
     });
     if (!problem) {
       return NextResponse.json({ error: 'Problem not found in this course' }, { status: 404 });
+    }
+
+    // Verify the problem is actually linked to THIS assignment (not merely present
+    // in the course) — otherwise a comment could be created against an
+    // assignment/problem pair that doesn't exist.
+    const link = await prisma.assignmentProblem.findUnique({
+      where: { assignmentId_problemId: { assignmentId, problemId } },
+      select: { assignmentId: true },
+    });
+    if (!link) {
+      return NextResponse.json(
+        { error: 'Problem is not part of this assignment' },
+        { status: 400 },
+      );
     }
 
     // If filtering by a specific student, verify they’re enrolled
@@ -219,131 +245,6 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-  }
-}
-
-/**
- * Lists comments for an assignment problem, or for a whole assignment when
- * `scope=assignment`. Any enrolled member of the course (any role) or a system admin
- * may read; an optional `studentId` narrows to a single student's thread.
- * @openapi
- * summary: List comments
- * parameters:
- *   - { name: assignmentId, in: query, required: true, schema: { type: string } }
- *   - { name: problemId, in: query, description: Required unless scope=assignment, schema: { type: string } }
- *   - { name: scope, in: query, description: Set to "assignment" to list across the whole assignment, schema: { type: string, enum: [assignment] } }
- *   - { name: studentId, in: query, description: Narrow to a student's thread, schema: { type: string } }
- * responses:
- *   200:
- *     description: The matching comments, oldest first.
- *     content:
- *       application/json:
- *         schema: { type: array, items: { type: object } }
- *   400: { description: Missing assignmentId (or problemId when not in assignment scope). }
- *   401: { description: Not signed in. }
- *   403: { description: Caller is not an enrolled member of the course or a system admin. }
- *   404: { description: Assignment not found. }
- *   500: { description: Server error. }
- */
-export async function GET(request: NextRequest) {
-  try {
-    const session = await auth();
-    const user = session?.user;
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { searchParams } = new URL(request.url);
-    const assignmentId = searchParams.get('assignmentId');
-    const problemId = searchParams.get('problemId');
-    const studentId = searchParams.get('studentId');
-    const scope = searchParams.get('scope');
-    const isAssignmentScope = scope === 'assignment';
-
-    if (!assignmentId || (!problemId && !isAssignmentScope)) {
-      return NextResponse.json(
-        { error: 'assignmentId and problemId are required' },
-        { status: 400 },
-      );
-    }
-
-    const assignment = await prisma.assignment.findUnique({
-      where: { id: assignmentId },
-      select: { courseId: true },
-    });
-    if (!assignment) {
-      return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
-    }
-
-    // Verify caller access: enrolled users can read; global admins can always read.
-    if (!(await canAccessCourse(user, assignment.courseId))) {
-      await createEnhancedActivityLog(prisma, request, {
-        userId: session?.user?.id ?? null,
-        action: 'COMMENT_VIEW_DENIED',
-        severity: 'SECURITY',
-        metadata: {},
-      });
-      return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
-    }
-
-    // If studentId present, restrict to comments about that student OR authored by that student
-    let whereClause: Prisma.CommentWhereInput;
-    if (isAssignmentScope) {
-      whereClause = studentId
-        ? {
-            assignmentId,
-            OR: [{ aboutStudentId: studentId }, { roster: { userId: studentId } }],
-          }
-        : { assignmentId };
-    } else {
-      const requiredProblemId = problemId as string;
-      whereClause = studentId
-        ? {
-            assignmentId,
-            problemId: requiredProblemId,
-            OR: [{ aboutStudentId: studentId }, { roster: { userId: studentId } }],
-          }
-        : { assignmentId, problemId: requiredProblemId };
-    }
-
-    const comments = (await prisma.comment.findMany({
-      where: whereClause,
-      include: {
-        roster: {
-          select: {
-            role: true, // course role
-            user: {
-              select: {
-                id: true, // needed for right/left alignment on client
-                firstName: true,
-                lastName: true,
-                avatar: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: { createdAt: 'asc' },
-    })) as unknown as CommentDB[];
-
-    const formatted: CommentResponse[] = comments.map((c) => ({
-      id: c.id,
-      content: c.content,
-      createdAt: c.createdAt,
-      problemId: c.problemId,
-      author: {
-        id: c.roster.user.id,
-        firstName: c.roster.user.firstName,
-        lastName: c.roster.user.lastName,
-        avatar: c.roster.user.avatar ?? null,
-        role: c.roster.role ?? null,
-      },
-    })) as CommentResponse[];
-
-    return NextResponse.json(formatted);
-  } catch (error) {
-    console.error('Error fetching comments:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

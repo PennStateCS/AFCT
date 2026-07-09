@@ -52,7 +52,11 @@ vi.mock('@/components/ui/data-table', () => ({
 // Render the candidate problems this dialog receives so we can assert the
 // course-problems read (Read 1) flows through to it.
 vi.mock('@/components/dialogs/AssociateProblemsDialog', () => ({
-  AssociateProblemsDialog: ({ allProblems }: { allProblems: Array<{ id: string; title: string }> }) => (
+  AssociateProblemsDialog: ({
+    allProblems,
+  }: {
+    allProblems: Array<{ id: string; title: string }>;
+  }) => (
     <ul data-testid="associate-problems">
       {allProblems.map((p) => (
         <li key={p.id}>{p.title}</li>
@@ -160,7 +164,10 @@ describe('AssignmentDashboardPage (PrivilegeAssignmentView)', () => {
     const fetchMock = routeFetch({
       'view=problems': () => ({ ok: true, json: async () => ({ problems: [] }) }),
       '/assignments': () => ({ ok: true, json: async () => [] }),
-      '/groups': () => ({ ok: true, json: async () => ({ groups: [{ id: 'g1', name: 'Team A' }] }) }),
+      '/groups': () => ({
+        ok: true,
+        json: async () => ({ groups: [{ id: 'g1', name: 'Team A' }] }),
+      }),
       '/group-problems': () => ({
         ok: true,
         json: async () => ({ groups: [{ id: 'g1', problemIds: ['p1'] }] }),
@@ -179,11 +186,14 @@ describe('AssignmentDashboardPage (PrivilegeAssignmentView)', () => {
       expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/groups', expect.anything());
     });
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/a1/group-problems', expect.anything());
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/courses/c1/assignments/a1/group-problems',
+        expect.anything(),
+      );
     });
     // The list read is now a GET — no POST body.
     const groupProblemsCall = fetchMock.mock.calls.find(
-      (c) => (c[0] as string) === '/api/courses/c1/a1/group-problems',
+      (c) => (c[0] as string) === '/api/courses/c1/assignments/a1/group-problems',
     );
     expect((groupProblemsCall?.[1] as { method?: string } | undefined)?.method).toBeUndefined();
   });

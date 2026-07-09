@@ -11,6 +11,9 @@ import { NotebookText, Pencil, Trash2, ChevronDown, BookOpen } from 'lucide-reac
 import Link from 'next/link';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { formatDateTimeInTimeZone } from '@/lib/date';
+import { apiPaths } from '@/lib/api-paths';
+import { queryKeys } from '@/lib/query-keys';
+import { fetchJson } from '@/lib/query-fetch';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -22,28 +25,29 @@ import {
 
 // Lazily fetches the assignment's max points when the row doesn't already have it.
 // Shares the ['assignment', id] cache entry with StudentAssignmentView/StudentNavigator,
-// so multiple rows (and other views) hitting /api/assignments/{id} dedupe to one request.
+// so multiple rows (and other views) hitting the assignment endpoint dedupe to one request.
 export function MaxPointsCell({
+  courseId,
   assignmentId,
   maxPoints,
 }: {
+  courseId: string;
   assignmentId: string;
   maxPoints: number | null;
 }) {
   const needsFetch = maxPoints === null || maxPoints === undefined;
 
   const { data } = useQuery({
-    queryKey: ['assignment', assignmentId],
-    queryFn: async () => {
-      const res = await fetch(`/api/assignments/${assignmentId}`);
-      if (!res.ok) throw new Error('Failed to fetch assignment');
-      return (await res.json()) as { maxPoints: number | null };
-    },
+    queryKey: queryKeys.assignment.shell(courseId, assignmentId),
+    queryFn: () =>
+      fetchJson<{ maxPoints: number | null }>(
+        apiPaths.assignment(courseId, assignmentId, { view: 'problems' }),
+      ),
     enabled: needsFetch,
     staleTime: 30_000,
   });
 
-  const pts = needsFetch ? (data ? data.maxPoints ?? 0 : null) : maxPoints;
+  const pts = needsFetch ? (data ? (data.maxPoints ?? 0) : null) : maxPoints;
 
   return <div>{pts !== null ? pts : '...'}</div>;
 }
@@ -133,7 +137,11 @@ export function useAssignmentColumns(
       header: () => 'Points',
       meta: { priority: 2 },
       cell: ({ row }) => (
-        <MaxPointsCell assignmentId={row.original.id} maxPoints={row.original.maxPoints ?? null} />
+        <MaxPointsCell
+          courseId={row.original.courseId}
+          assignmentId={row.original.id}
+          maxPoints={row.original.maxPoints ?? null}
+        />
       ),
     },
     {
@@ -242,7 +250,7 @@ export function useAssignmentColumns(
                   className={`flex items-center gap-2 ${disabled ? 'cursor-not-allowed text-gray-500 opacity-50' : 'text-red-600 focus:text-red-600'}`}
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
-                                  Delete Assignment
+                  Delete Assignment
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

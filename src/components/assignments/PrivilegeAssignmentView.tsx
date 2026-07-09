@@ -52,6 +52,8 @@ import JffViewerDialog from '@/components/JffViewerDialog';
 import { useEmptyStringSymbol } from '@/lib/useEmptyStringSymbol';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { AssignmentWithDetails } from '@/lib/assignment-details';
+import { apiPaths } from '@/lib/api-paths';
+import { queryKeys } from '@/lib/query-keys';
 
 const problemTypeLabels: Record<string, string> = {
   FA: 'Finite Automaton',
@@ -107,15 +109,19 @@ export default function AssignmentDashboardPage({
   const [problemToEdit, setProblemToEdit] = useState<Problem | null>(null);
   const [tab, setTab] = useState(searchParams.get('tab') || 'problems');
 
-  // Assignment shell — cached and keyed to this course/assignment. Seeded from the
-  // SSR-provided initialAssignment (view=problems shape) so there's no refetch on
-  // mount when the server already sent it, and back-navigation is warm. Mutations
-  // invalidate this key, triggering a background refetch that does NOT blank the
-  // page — the previous data stays visible until the new payload arrives.
+  // Assignment shell — cached and keyed to this course/assignment via the shared
+  // queryKeys.assignment.shell key, so this privileged view and the embedded
+  // StudentNavigator (plus StudentAssignmentView / the max-points cell) dedupe onto
+  // one read of the same ?view=problems payload instead of fetching it twice.
+  // Seeded from the SSR-provided initialAssignment (view=problems shape) so there's
+  // no refetch on mount when the server already sent it, and back-navigation is
+  // warm. Mutations invalidate this key, triggering a background refetch that does
+  // NOT blank the page — the previous data stays visible until the new payload
+  // arrives.
   const assignmentQuery = useQuery({
-    queryKey: ['course', id, 'assignment', aid, 'detail'],
+    queryKey: queryKeys.assignment.shell(id, aid),
     queryFn: async () => {
-      const res = await fetch(`/api/courses/${id}/${aid}?view=problems`);
+      const res = await fetch(apiPaths.assignment(id, aid, { view: 'problems' }));
       if (!res.ok) throw new Error('Failed to fetch assignment');
       return (await res.json()) as AssignmentWithDetails;
     },
@@ -127,7 +133,7 @@ export default function AssignmentDashboardPage({
   const loading = assignmentQuery.isPending;
 
   const invalidateAssignment = useCallback(
-    () => queryClient.invalidateQueries({ queryKey: ['course', id, 'assignment', aid, 'detail'] }),
+    () => queryClient.invalidateQueries({ queryKey: queryKeys.assignment.shell(id, aid) }),
     [queryClient, id, aid],
   );
 
@@ -156,7 +162,7 @@ export default function AssignmentDashboardPage({
       showToast.error('No file available to render');
       return;
     }
-    const src = `/api/solutions/${encodeURIComponent(fileName)}`;
+    const src = apiPaths.files.solution(encodeURIComponent(fileName));
     setViewerSrc(src);
     setViewerTitle(`${original || fileName} - ${problem.title}`);
     setViewerOpen(true);
@@ -188,7 +194,7 @@ export default function AssignmentDashboardPage({
   const problemsQuery = useQuery({
     queryKey: ['course', id, 'problems'],
     queryFn: async () => {
-      const res = await fetch(`/api/courses/${id}?view=problems`);
+      const res = await fetch(apiPaths.course(id, { view: 'problems' }));
       if (!res.ok) throw new Error('Failed to fetch problems');
       return (await res.json()) as { problems?: Problem[] };
     },
@@ -203,7 +209,7 @@ export default function AssignmentDashboardPage({
   const assignmentsQuery = useQuery({
     queryKey: ['course', id, 'assignments-list'],
     queryFn: () =>
-      fetch(`/api/courses/${id}/assignments`)
+      fetch(apiPaths.courseAssignments(id))
         .then((res) => res.json())
         .then((data) =>
           Array.isArray(data)
@@ -226,8 +232,8 @@ export default function AssignmentDashboardPage({
     queryKey: ['course', id, 'assignment', aid, 'groups-and-mappings'],
     queryFn: async ({ signal }) => {
       const [grRes, gpRes] = await Promise.all([
-        fetch(`/api/courses/${id}/groups`, { signal }),
-        fetch(`/api/courses/${id}/${aid}/group-problems`, { signal }),
+        fetch(apiPaths.courseGroups(id), { signal }),
+        fetch(apiPaths.assignmentGroupProblems(id, aid), { signal }),
       ]);
 
       let nextGroups: { id: string; name: string }[] = [];
@@ -275,7 +281,7 @@ export default function AssignmentDashboardPage({
       if (groupId) payload.groupId = groupId;
       if (problemSettings && problemSettings.length > 0) payload.problemSettings = problemSettings;
 
-      const res = await fetch(`/api/courses/${id}/${aid}/add-problems`, {
+      const res = await fetch(apiPaths.assignmentProblems(id, aid), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -291,8 +297,8 @@ export default function AssignmentDashboardPage({
   async function handleConfirmRemoveProblem() {
     if (!id || !aid || !problemToRemove) return;
     try {
-      const res = await fetch(`/api/courses/${id}/${aid}/remove-problem`, {
-        method: 'POST',
+      const res = await fetch(apiPaths.assignmentProblems(id, aid), {
+        method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ problemId: problemToRemove.id }),
       });
@@ -334,7 +340,6 @@ export default function AssignmentDashboardPage({
     return map;
   }, [groupProblemsMap, groups]);
 
-
   const problemTableData = useMemo(
     () =>
       (assignment?.problems ?? []).map((ap) => ({
@@ -346,7 +351,6 @@ export default function AssignmentDashboardPage({
       })),
     [assignment?.problems],
   );
-
 
   const submissionTabProblems = useMemo(
     () =>
@@ -365,7 +369,6 @@ export default function AssignmentDashboardPage({
       })),
     [assignment?.problems],
   );
-
 
   const usedProblems = useMemo(
     () =>
@@ -427,8 +430,7 @@ export default function AssignmentDashboardPage({
                 const pid = row.original.id;
                 const names = groupNamesByProblemId[pid] ?? [];
 
-                if (names.length === 0)
-                  return <span title="All students">All students</span>;
+                if (names.length === 0) return <span title="All students">All students</span>;
 
                 if (names.length === 1)
                   return (
@@ -466,11 +468,7 @@ export default function AssignmentDashboardPage({
       {
         accessorKey: 'assignmentMaxPoints',
         header: 'Max Points',
-        cell: ({
-          row,
-        }: {
-          row: { original: Problem & { assignmentMaxPoints?: number } };
-        }) =>
+        cell: ({ row }: { row: { original: Problem & { assignmentMaxPoints?: number } } }) =>
           typeof row.original.assignmentMaxPoints === 'number'
             ? row.original.assignmentMaxPoints
             : 'â€”',
@@ -480,11 +478,7 @@ export default function AssignmentDashboardPage({
       {
         accessorKey: 'assignmentMaxSubmissions',
         header: 'Max Submissions',
-        cell: ({
-          row,
-        }: {
-          row: { original: Problem & { assignmentMaxSubmissions?: number } };
-        }) => {
+        cell: ({ row }: { row: { original: Problem & { assignmentMaxSubmissions?: number } } }) => {
           const value = row.original.assignmentMaxSubmissions;
           if (typeof value !== 'number') return 'â€”';
           return value === -1 ? 'Unlimited' : value;
@@ -546,7 +540,7 @@ export default function AssignmentDashboardPage({
         header: 'Solution File',
         cell: ({ row }: { row: { original: Problem } }) => {
           const fileUrl = row.original.fileName
-            ? `/api/solutions/${row.original.fileName}?download=1`
+            ? apiPaths.files.solution(row.original.fileName, { download: true })
             : null;
           const fileName = row.original.originalFileName || 'Download';
           return fileUrl ? (
@@ -616,7 +610,7 @@ export default function AssignmentDashboardPage({
                 disabled={!row.original.fileName}
                 onClick={() => {
                   const url = row.original.fileName
-                    ? `/api/solutions/${row.original.fileName}?download=1`
+                    ? apiPaths.files.solution(row.original.fileName, { download: true })
                     : null;
                   if (!url) return;
                   window.open(url, '_blank', 'noopener,noreferrer');
@@ -651,7 +645,6 @@ export default function AssignmentDashboardPage({
   if (loading) return <LoadingSpinner label="Loading" />;
   if (!assignment) return <div className="p-6 text-red-500">Assignment not found.</div>;
 
-
   const assignmentProblemForDialog = problemToEdit
     ? ((assignment.problems ?? []).find((ap) => ap.problem.id === problemToEdit.id) ?? null)
     : null;
@@ -680,15 +673,21 @@ export default function AssignmentDashboardPage({
           Edit Assignment
         </Button>
         <CardHeader>
-          <CardTitle role="heading" aria-level={1} className="flex min-w-0 flex-wrap items-start gap-2 text-2xl break-words">
+          <CardTitle
+            role="heading"
+            aria-level={1}
+            className="flex min-w-0 flex-wrap items-start gap-2 text-2xl break-words"
+          >
             <span className="font-semibold">Assignment:</span>{' '}
-            <span className="min-w-0 break-words [overflow-wrap:anywhere]">
-              {assignment.title}
-            </span>
+            <span className="min-w-0 [overflow-wrap:anywhere] break-words">{assignment.title}</span>
             {(() => {
               const pastDue = assignment.isPublished && new Date(assignment.dueDate) <= new Date();
               const variant = !assignment.isPublished ? 'warning' : pastDue ? 'danger' : 'success';
-              const status = !assignment.isPublished ? 'Not Published' : pastDue ? 'Past Due' : 'Published';
+              const status = !assignment.isPublished
+                ? 'Not Published'
+                : pastDue
+                  ? 'Past Due'
+                  : 'Published';
               return <Badge variant={variant}>{status}</Badge>;
             })()}
           </CardTitle>
@@ -710,46 +709,47 @@ export default function AssignmentDashboardPage({
         <CardContent className="space-y-4">
           <div className="min-w-0">
             <span className="font-semibold">Description:</span>
-            <p className="text-muted-foreground max-h-auto overflow-y-auto resize-y rounded-md border p-3 break-words whitespace-pre-wrap">
+            <p className="text-muted-foreground max-h-auto resize-y overflow-y-auto rounded-md border p-3 break-words whitespace-pre-wrap">
               {assignment.description ?? 'No description.'}
             </p>
           </div>
           <div className="max-w-xs">
-          <Controller
-            control={control}
-            name="assignmentSelect"
-            render={({ field }) => (
-              <SelectField
-                label="Assignment"
-                name="assignmentSelect"
-                id="assignmentSelect"
-                value={field.value}
-                onValueChange={(assignmentId) => {
-                  field.onChange(assignmentId);
-                  const selectedAssignment = allAssignments.find((a) => a.id === assignmentId) ?? null;
+            <Controller
+              control={control}
+              name="assignmentSelect"
+              render={({ field }) => (
+                <SelectField
+                  label="Assignment"
+                  name="assignmentSelect"
+                  id="assignmentSelect"
+                  value={field.value}
+                  onValueChange={(assignmentId) => {
+                    field.onChange(assignmentId);
+                    const selectedAssignment =
+                      allAssignments.find((a) => a.id === assignmentId) ?? null;
 
-                  if (!selectedAssignment) {
-                    showToast.error('Selected assignment not found');
-                    return;
-                  }
+                    if (!selectedAssignment) {
+                      showToast.error('Selected assignment not found');
+                      return;
+                    }
 
-                  if (id) {
-                    router.push(`/dashboard/courses/${id}/${selectedAssignment.id}`);
-                  } else {
-                    window.location.href = selectedAssignment.id;
-                  }
-                }}
-                placeholder={assignmentsLoading ? 'Loading...' : 'Choose assignment'}
-                disabled={assignmentsLoading}
-                options={allAssignments.map((assignOption) => ({
-                  value: assignOption.id,
-                  label: assignOption.title,
-                }))}
-                className="w-full"
-                triggerClassName="!h-8 text-xs"
-              />
-            )}
-          />
+                    if (id) {
+                      router.push(`/dashboard/courses/${id}/${selectedAssignment.id}`);
+                    } else {
+                      window.location.href = selectedAssignment.id;
+                    }
+                  }}
+                  placeholder={assignmentsLoading ? 'Loading...' : 'Choose assignment'}
+                  disabled={assignmentsLoading}
+                  options={allAssignments.map((assignOption) => ({
+                    value: assignOption.id,
+                    label: assignOption.title,
+                  }))}
+                  className="w-full"
+                  triggerClassName="!h-8 text-xs"
+                />
+              )}
+            />
           </div>
         </CardContent>
       </Card>
@@ -759,14 +759,14 @@ export default function AssignmentDashboardPage({
           className="bg-card border-border h-12 w-full rounded-md border p-1 shadow-sm"
         >
           <TabsTrigger
-            className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white flex-1"
+            className="data-[state=active]:bg-secondary w-50 flex-1 data-[state=active]:text-white"
             value="problems"
           >
             <FileText className="h-4 w-4" />
             Problems
           </TabsTrigger>
           <TabsTrigger
-            className="data-[state=active]:bg-secondary w-50 data-[state=active]:text-white flex-1"
+            className="data-[state=active]:bg-secondary w-50 flex-1 data-[state=active]:text-white"
             value="submissions"
           >
             <Package className="h-4 w-4" />

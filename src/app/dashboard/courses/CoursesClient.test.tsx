@@ -14,7 +14,8 @@ const renderWithClient = (ui: React.ReactElement) => {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 };
 
-// Captures the (onCourseUpdated, onCourseDeleted, timezone) args the client passes.
+// Captures the (onCourseUpdated, onCourseDeleted, onCourseDuplicated, timezone) args
+// the client passes.
 const columnsMock = vi.hoisted(() => vi.fn(() => []));
 
 vi.mock('./course-columns', () => ({ columns: columnsMock }));
@@ -62,7 +63,7 @@ describe('CoursesClient', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('refreshes the list from /api/courses/list on demand', async () => {
+  it('refreshes the list from /api/me/courses on demand', async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => [course('c1', 'Refreshed'), course('c2', 'Second')],
@@ -73,7 +74,7 @@ describe('CoursesClient', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Trigger Refresh' }));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/courses/list', { cache: 'no-store' });
+      expect(global.fetch).toHaveBeenCalledWith('/api/me/courses', { cache: 'no-store' });
       expect(screen.getByText('Refreshed')).toBeInTheDocument();
       expect(screen.getByText('Second')).toBeInTheDocument();
     });

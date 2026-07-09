@@ -9,6 +9,7 @@ import { CategoryBadge } from '@/components/ui/category-badge';
 import { Clock, Info } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { formatDateTimeInTimeZone } from '@/lib/date';
+import { apiPaths } from '@/lib/api-paths';
 
 export interface ActivityUser {
   id: string;
@@ -251,7 +252,7 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
       return (
         <Avatar className="h-10 w-10">
           <AvatarImage
-            src={activity.user?.avatar ? `/api/uploads/pfps/${activity.user.avatar}` : undefined}
+            src={activity.user?.avatar ? apiPaths.files.pfp(activity.user.avatar) : undefined}
             alt={`${activity.user?.firstName} ${activity.user?.lastName}`}
           />
           <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">

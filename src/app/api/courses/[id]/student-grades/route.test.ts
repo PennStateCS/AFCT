@@ -15,8 +15,7 @@ vi.mock('@/lib/auth', () => ({ auth: authMock }));
 
 import { GET } from './route';
 
-const makeRequest = () =>
-  new Request('http://localhost/api/courses/c1/student-grades');
+const makeRequest = () => new Request('http://localhost/api/courses/c1/student-grades');
 const params = (id = 'c1') => ({ params: Promise.resolve({ id }) });
 
 const seedGradeData = () => {
@@ -81,7 +80,7 @@ describe('GET /api/courses/[id]/student-grades', () => {
   it('applies default values when a problem has no submissions or grades', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
     prismaMock.roster.findUnique.mockResolvedValue({ id: 'r1' });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
     prismaMock.assignment.findMany.mockResolvedValue([
       { id: 'a1', title: 'Assignment 1', description: null, dueDate: null },
     ]);
@@ -112,7 +111,7 @@ describe('GET /api/courses/[id]/student-grades', () => {
   it('returns assignment grade payload for an enrolled student', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
     prismaMock.roster.findUnique.mockResolvedValue({ id: 'r1' });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
     seedGradeData();
 
     const res = await GET(makeRequest(), params());
@@ -147,6 +146,56 @@ describe('GET /api/courses/[id]/student-grades', () => {
     expect(res.status).toBe(200);
   });
 
+  it('handles null grades, null problem points, extra problems, and problem-less assignments', async () => {
+    // Branch 100: `grade.grade ?? null` for a null grade row.
+    // Branch 125: second problem in the same assignment (acc[assignmentId] exists).
+    // Branches 130-131: `Number(maxPoints ?? 0)` / `Number(maxSubmissions ?? 0)` for nulls.
+    // Branch 137: `groupedProblems[assignment.id] ?? []` for an assignment with no problems.
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.roster.findUnique.mockResolvedValue({ id: 'r1' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
+    prismaMock.assignment.findMany.mockResolvedValue([
+      { id: 'a1', title: 'A1', description: null, dueDate: new Date('2025-01-01T00:00:00.000Z') },
+      { id: 'a2', title: 'A2 (no problems)', description: null, dueDate: null },
+    ]);
+    prismaMock.assignmentProblem.findMany.mockResolvedValue([
+      {
+        assignmentId: 'a1',
+        maxPoints: null,
+        maxSubmissions: null,
+        problem: { id: 'p1', title: 'P1', autograderEnabled: false },
+      },
+      {
+        assignmentId: 'a1',
+        maxPoints: 4,
+        maxSubmissions: 2,
+        problem: { id: 'p2', title: 'P2', autograderEnabled: true },
+      },
+    ]);
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([
+      { assignmentId: 'a1', problemId: 'p1', grade: null },
+    ]);
+    prismaMock.submission.groupBy.mockResolvedValue([]);
+    prismaMock.submission.findMany.mockResolvedValue([]);
+
+    const res = await GET(makeRequest(), params());
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // a1 has two problems; null maxPoints/maxSubmissions coerced to 0.
+    expect(body.assignments[0].problems).toHaveLength(2);
+    expect(body.assignments[0].problems[0]).toMatchObject({
+      id: 'p1',
+      maxPoints: 0,
+      maxSubmissions: 0,
+      grade: null,
+    });
+    expect(body.assignments[0].maxPoints).toBe(4);
+    // a2 has no problems.
+    expect(body.assignments[1].problems).toEqual([]);
+    expect(body.assignments[1].grade).toBeNull();
+  });
+
   it('returns 500 when the query fails', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.roster.findUnique.mockResolvedValue({ id: 'r1' });
@@ -155,5 +204,25 @@ describe('GET /api/courses/[id]/student-grades', () => {
     const res = await GET(makeRequest(), params());
 
     expect(res.status).toBe(500);
+  });
+
+  it('returns 500 with dev detail from a non-Error thrown value', async () => {
+    // Branch 169: `error instanceof Error ? error.message : String(error)`.
+    // Branch 173: NODE_ENV === 'development' includes the detail.
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const prevEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'development';
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.roster.findUnique.mockResolvedValue({ id: 'r1' });
+    prismaMock.assignment.findMany.mockRejectedValue('kaboom');
+
+    const res = await GET(makeRequest(), params());
+
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.detail).toBe('kaboom');
+
+    process.env.NODE_ENV = prevEnv;
+    consoleSpy.mockRestore();
   });
 });

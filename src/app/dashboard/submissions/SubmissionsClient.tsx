@@ -30,11 +30,9 @@ import {
   SubmissionStatusFilter,
 } from '@/lib/submission-status-filter';
 import type { ProblemSubmission } from '@/lib/problem-submission';
-import {
-  statusToneClass,
-  getTimingStatusChip,
-  getReviewStatusChip,
-} from '@/lib/submission-status';
+import { statusToneClass, getTimingStatusChip, getReviewStatusChip } from '@/lib/submission-status';
+import { apiPaths } from '@/lib/api-paths';
+import { queryKeys } from '@/lib/query-keys';
 
 type CourseItem = Pick<Course, 'id' | 'name' | 'code'>;
 
@@ -82,9 +80,8 @@ type ProblemItem = {
   grade: number | null;
 };
 
-
 const fetchCourseList = async (): Promise<CourseItem[]> => {
-  const response = await fetch('/api/courses/list');
+  const response = await fetch(apiPaths.myCourses());
   if (!response.ok) {
     throw new Error('Failed to load courses');
   }
@@ -92,7 +89,7 @@ const fetchCourseList = async (): Promise<CourseItem[]> => {
 };
 
 const fetchAssignmentsForCourse = async (course: CourseItem): Promise<AssignmentItem[]> => {
-  const response = await fetch(`/api/courses/${course.id}/assignments`);
+  const response = await fetch(apiPaths.courseAssignments(course.id));
   if (!response.ok) return [];
 
   const assignments = (await response.json()) as Array<{
@@ -119,7 +116,7 @@ const fetchAssignmentsForCourse = async (course: CourseItem): Promise<Assignment
 };
 
 const fetchProblemsForAssignment = async (assignmentId: string): Promise<ProblemItem[]> => {
-  const response = await fetch(`/api/assignments/${assignmentId}/problems`);
+  const response = await fetch(apiPaths.assignmentByIdProblems(assignmentId));
 
   if (!response.ok) {
     return [];
@@ -153,7 +150,7 @@ const fetchProblemsForAssignment = async (assignmentId: string): Promise<Problem
 const fetchSubmissions = async (problemIds: string[]): Promise<SubmissionItem[]> => {
   if (problemIds.length === 0) return [];
 
-  const response = await fetch('/api/admin/submissions', {
+  const response = await fetch(apiPaths.admin.submissions(), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -187,10 +184,7 @@ export default function SubmissionsClient() {
   const [jffViewerTitle, setJffViewerTitle] = useState<string | null>(null);
   const [jffViewerCourseId, setJffViewerCourseId] = useState<string | null>(null);
   const jffEpsSymbol = useEmptyStringSymbol(jffViewerCourseId);
-  const isRerunning = useMemo(
-    () => Object.values(rerunning).some(Boolean),
-    [rerunning],
-  );
+  const isRerunning = useMemo(() => Object.values(rerunning).some(Boolean), [rerunning]);
 
   // Cached submissions list keyed by the selected problem set. The query varies
   // with `selectedProblems`, so changing any course/assignment/problem filter
@@ -202,7 +196,7 @@ export default function SubmissionsClient() {
     isError: submissionsError,
     refetch: refetchSubmissions,
   } = useQuery({
-    queryKey: ['admin', 'submissions', selectedProblems],
+    queryKey: queryKeys.admin.submissions(selectedProblems),
     queryFn: () => fetchSubmissions(selectedProblems),
   });
 
@@ -224,7 +218,7 @@ export default function SubmissionsClient() {
   const handleViewSubmission = (submission: SubmissionItem) => {
     if (!submission.fileName) return;
 
-    setJffViewerSrc(`/api/uploads/submissions/${encodeURIComponent(submission.fileName)}`);
+    setJffViewerSrc(apiPaths.files.submission(encodeURIComponent(submission.fileName)));
     setJffViewerTitle(submission.originalFileName || submission.fileName);
     setJffViewerCourseId(submission.courseId ?? null);
     setJffViewerOpen(true);
@@ -233,7 +227,7 @@ export default function SubmissionsClient() {
   const handleDownloadSubmission = (submission: SubmissionItem) => {
     if (!submission.fileName) return;
 
-    const url = `/api/uploads/submissions/${encodeURIComponent(submission.fileName)}`;
+    const url = apiPaths.files.submission(encodeURIComponent(submission.fileName));
     const link = document.createElement('a');
     link.href = url;
     link.download = submission.originalFileName || 'Download';
@@ -326,7 +320,8 @@ export default function SubmissionsClient() {
   }, [selectedAssignments]);
 
   const courseOptions = useMemo(
-    () => courses.map((course) => ({ id: course.id, label: course.name ?? course.code ?? course.id })),
+    () =>
+      courses.map((course) => ({ id: course.id, label: course.name ?? course.code ?? course.id })),
     [courses],
   );
 
@@ -349,9 +344,12 @@ export default function SubmissionsClient() {
   const visibleSubmissions = useMemo(
     () =>
       submissions.filter((submission) => {
-        const matchesCourse = selectedCourses.length === 0 || selectedCourses.includes(submission.courseId);
-        const matchesAssignment = selectedAssignments.length === 0 || selectedAssignments.includes(submission.assignmentId);
-        const matchesProblem = selectedProblems.length === 0 || selectedProblems.includes(submission.problemId);
+        const matchesCourse =
+          selectedCourses.length === 0 || selectedCourses.includes(submission.courseId);
+        const matchesAssignment =
+          selectedAssignments.length === 0 || selectedAssignments.includes(submission.assignmentId);
+        const matchesProblem =
+          selectedProblems.length === 0 || selectedProblems.includes(submission.problemId);
 
         const assignment = assignments.find((item) => item.id === submission.assignmentId);
         const dueDate = assignment?.dueDate ? new Date(assignment.dueDate) : null;
@@ -362,7 +360,14 @@ export default function SubmissionsClient() {
 
         return matchesCourse && matchesAssignment && matchesProblem && matchesFilter;
       }),
-    [activeFilters, assignments, selectedAssignments, selectedCourses, selectedProblems, submissions],
+    [
+      activeFilters,
+      assignments,
+      selectedAssignments,
+      selectedCourses,
+      selectedProblems,
+      submissions,
+    ],
   );
 
   const toggleFilter = (filter: SubmissionStatusFilter) => {
@@ -440,7 +445,11 @@ export default function SubmissionsClient() {
             size="sm"
             variant="secondary"
             onClick={handleClearFilters}
-            disabled={selectedCourses.length === 0 && selectedAssignments.length === 0 && selectedProblems.length === 0}
+            disabled={
+              selectedCourses.length === 0 &&
+              selectedAssignments.length === 0 &&
+              selectedProblems.length === 0
+            }
           >
             Clear Filters
           </Button>
@@ -507,7 +516,10 @@ export default function SubmissionsClient() {
                       : 'border-border text-muted-foreground hover:border-foreground/50 hover:text-foreground'
                   }`}
                 >
-                  <span className={`inline-flex h-2.5 w-2.5 rounded-full ${dot}`} aria-hidden="true" />
+                  <span
+                    className={`inline-flex h-2.5 w-2.5 rounded-full ${dot}`}
+                    aria-hidden="true"
+                  />
                   {label}
                 </button>
               );
@@ -540,14 +552,17 @@ export default function SubmissionsClient() {
                 </TableRow>
               ) : (
                 visibleSubmissions.map((submission) => {
-                  const assignment = assignments.find((assignment) => assignment.id === submission.assignmentId);
+                  const assignment = assignments.find(
+                    (assignment) => assignment.id === submission.assignmentId,
+                  );
                   const dueDate = assignment?.dueDate ? new Date(assignment.dueDate) : null;
-                  const hasValidDueDate = dueDate instanceof Date && !Number.isNaN(dueDate.getTime());
+                  const hasValidDueDate =
+                    dueDate instanceof Date && !Number.isNaN(dueDate.getTime());
 
                   const renderStatusCell = (submission: ProblemSubmission) => {
                     const timingStatus = getTimingStatusChip(submission, hasValidDueDate, dueDate);
                     const reviewStatus = getReviewStatusChip(submission);
-                
+
                     return (
                       <div className="flex flex-col gap-1">
                         {[timingStatus, reviewStatus].map((chip) => (
@@ -570,15 +585,23 @@ export default function SubmissionsClient() {
                   return (
                     <TableRow key={submission.id} className="hover:bg-[var(--table-highlight)]">
                       <TableCell className="p-1 align-top">
-                        <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex min-w-0 items-center gap-3">
                           <div className="relative h-11 w-11 shrink-0">
                             <Avatar className="h-11 w-11">
                               <AvatarImage
-                                src={submission.avatar ? `/api/uploads/pfps/${submission.avatar}` : undefined}
+                                src={
+                                  submission.avatar
+                                    ? apiPaths.files.pfp(submission.avatar)
+                                    : undefined
+                                }
                                 alt={submission.studentEmail || submission.studentId || 'User'}
                               />
                               <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
-                                {getInitials(submission.studentFirstName, submission.studentLastName, submission.studentEmail)}
+                                {getInitials(
+                                  submission.studentFirstName,
+                                  submission.studentLastName,
+                                  submission.studentEmail,
+                                )}
                               </AvatarFallback>
                             </Avatar>
                           </div>
@@ -587,9 +610,7 @@ export default function SubmissionsClient() {
                             <p className="text-foreground text-sm">
                               {submission.studentEmail ?? submission.studentId ?? 'Unknown'}
                             </p>
-                            <p className="text-muted-foreground text-xs">
-                              {submission.studentId}
-                            </p>
+                            <p className="text-muted-foreground text-xs">{submission.studentId}</p>
                           </div>
                         </div>
                       </TableCell>
@@ -620,7 +641,7 @@ export default function SubmissionsClient() {
                           <Link
                             href={`/dashboard/courses/${submission.courseId}/${submission.assignmentId}?tab=submissions&studentId=${encodeURIComponent(
                               submission.studentId,
-                              )}${submission.problemId ? `&problemId=${encodeURIComponent(submission.problemId)}` : ''}`}
+                            )}${submission.problemId ? `&problemId=${encodeURIComponent(submission.problemId)}` : ''}`}
                             className="text-foreground text-sm hover:underline"
                           >
                             {submission.problemTitle ?? submission.problemId}
@@ -631,7 +652,9 @@ export default function SubmissionsClient() {
                       <TableCell className="p-1 align-top">
                         <div className="min-w-0">
                           <p className="text-foreground text-sm">
-                            {submission.submittedAt ? new Date(submission.submittedAt).toLocaleDateString() : 'Unknown'}
+                            {submission.submittedAt
+                              ? new Date(submission.submittedAt).toLocaleDateString()
+                              : 'Unknown'}
                           </p>
                         </div>
                       </TableCell>
@@ -639,16 +662,18 @@ export default function SubmissionsClient() {
                         <div className="min-w-0">
                           <p className="text-foreground text-sm">
                             {submission.maxPoints != null
-                            ? submission.grade != null
-                              ? `${submission.grade} / ${submission.maxPoints}`
-                              : `- / ${submission.maxPoints}`
-                            : submission.grade != null
-                            ? String(submission.grade)
-                            : '-'}
+                              ? submission.grade != null
+                                ? `${submission.grade} / ${submission.maxPoints}`
+                                : `- / ${submission.maxPoints}`
+                              : submission.grade != null
+                                ? String(submission.grade)
+                                : '-'}
                           </p>
                         </div>
                       </TableCell>
-                      <TableCell className="p-1 align-top">{renderStatusCell(submission)}</TableCell>
+                      <TableCell className="p-1 align-top">
+                        {renderStatusCell(submission)}
+                      </TableCell>
                       <TableCell className="p-1 align-top">
                         <div className="flex items-center gap-2 whitespace-nowrap">
                           <Button
@@ -658,8 +683,12 @@ export default function SubmissionsClient() {
                             title="View feedback"
                             aria-label="View submission feedback"
                             className="h-8 w-8 p-0"
-                            disabled={!submission.feedback || submission.status?.toLowerCase() === "pending" || submission.status?.toLowerCase() === "processing"}
-                        >
+                            disabled={
+                              !submission.feedback ||
+                              submission.status?.toLowerCase() === 'pending' ||
+                              submission.status?.toLowerCase() === 'processing'
+                            }
+                          >
                             <File className="h-4 w-4" />
                           </Button>
 
@@ -689,7 +718,10 @@ export default function SubmissionsClient() {
                           <Button
                             variant="secondary"
                             size="sm"
-                            disabled={submission.status?.toLowerCase() === "pending" || submission.status?.toLowerCase() === "processing"}
+                            disabled={
+                              submission.status?.toLowerCase() === 'pending' ||
+                              submission.status?.toLowerCase() === 'processing'
+                            }
                             title="Rerun submission"
                             aria-label="Rerun submission"
                             className="h-8 w-8 p-0"

@@ -13,10 +13,11 @@ import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { Button } from '@/components/ui/button';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { CalendarAssignment, getDateKeyInTimeZone, getMonthRangeIso } from '@/lib/calendar-shared';
+import { apiPaths } from '@/lib/api-paths';
 
 // Fetch assignments for courses the current user is enrolled in between given ISO start/end
 async function fetchAssignmentsInRange(startIso: string, endIso: string, signal?: AbortSignal) {
-  const res = await fetch('/api/assignments/range', {
+  const res = await fetch(apiPaths.myAssignments(), {
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
@@ -309,7 +310,7 @@ export default function CalendarClient({
                             isToday
                               ? 'bg-sky-100 ring-2 ring-sky-500 ring-inset dark:bg-sky-950/60 dark:ring-sky-400'
                               : 'bg-white dark:bg-neutral-900',
-                            !isToday && isWeekend && 'dark:bg-neutral-800 bg-slate-50',
+                            !isToday && isWeekend && 'bg-slate-50 dark:bg-neutral-800',
                           )}
                           style={{ aspectRatio: '1 / 1' }}
                         >

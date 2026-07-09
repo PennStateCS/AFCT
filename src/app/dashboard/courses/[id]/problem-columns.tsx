@@ -12,6 +12,7 @@ import { useEmptyStringSymbol } from '@/lib/useEmptyStringSymbol';
 import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
 import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
 import { formatDateInTimeZone } from '@/lib/date';
+import { apiPaths } from '@/lib/api-paths';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -77,7 +78,7 @@ export const useProblemColumns = ({
         if (!file || !fileName) return '—';
         return (
           <a
-            href={`/api/solutions/${fileName}?download=1`}
+            href={apiPaths.files.solution(fileName, { download: true })}
             download={file}
             className="text-sm break-all text-blue-600 hover:underline"
           >
@@ -181,7 +182,7 @@ export const useProblemColumns = ({
             onOpenChange={(open) =>
               setOpenDialog({ open, problem: open ? openDialog.problem : null })
             }
-            src={`/api/solutions/${encodeURIComponent(openDialog.problem.fileName ?? '')}`}
+            src={apiPaths.files.solution(encodeURIComponent(openDialog.problem.fileName ?? ''))}
             title={`${openDialog.problem.originalFileName || openDialog.problem.fileName} - Problem`}
             width="70vw"
             height="70vh"
@@ -195,7 +196,7 @@ export const useProblemColumns = ({
             onOpenChange={(open) =>
               setOpenDialog({ open, problem: open ? openDialog.problem : null })
             }
-            src={`/api/solutions/${encodeURIComponent(openDialog.problem.fileName ?? '')}`}
+            src={apiPaths.files.solution(encodeURIComponent(openDialog.problem.fileName ?? ''))}
             title={`${openDialog.problem.originalFileName || openDialog.problem.fileName} - Problem`}
           />
         );
@@ -206,7 +207,7 @@ export const useProblemColumns = ({
             onOpenChange={(open) =>
               setOpenDialog({ open, problem: open ? openDialog.problem : null })
             }
-            src={`/api/solutions/${encodeURIComponent(openDialog.problem.fileName ?? '')}`}
+            src={apiPaths.files.solution(encodeURIComponent(openDialog.problem.fileName ?? ''))}
             title={`${openDialog.problem.originalFileName || openDialog.problem.fileName} - Problem`}
           />
         );

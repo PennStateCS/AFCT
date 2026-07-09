@@ -7,6 +7,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { showToast } from '@/lib/toast';
 import { FullCourse, DeleteTarget, EnrollableUser, TabType } from '@/types/course';
 import { getEnrolledIds, type EnrolledUser } from '@/lib/course-utils';
+import { apiPaths } from '@/lib/api-paths';
+import { fetchJson } from '@/lib/query-fetch';
 import { Assignment, Problem, User } from '@prisma/client';
 
 type CourseSectionView = 'summary' | 'full' | 'assignments' | 'problems' | 'roster';
@@ -65,11 +67,7 @@ export function useCourseData(
       if (!courseId) return null;
       return queryClient.fetchQuery({
         queryKey: courseQueryKey(courseId, view),
-        queryFn: async () => {
-          const res = await fetch(`/api/courses/${courseId}?view=${view}`);
-          if (!res.ok) throw new Error('Failed to fetch course');
-          return (await res.json()) as FullCourse;
-        },
+        queryFn: () => fetchJson<FullCourse>(apiPaths.course(courseId, { view })),
       });
     },
     [courseId, queryClient],
@@ -101,8 +99,7 @@ export function useCourseData(
       // cached, switching to the tab renders instantly (fetchQuery returns the
       // cached data within staleTime with no refetch) — so flipping the loading
       // flag would just flash a needless spinner on every tab switch.
-      const hasCached =
-        queryClient.getQueryData(courseQueryKey(courseId, section)) !== undefined;
+      const hasCached = queryClient.getQueryData(courseQueryKey(courseId, section)) !== undefined;
       try {
         if (!hasCached) setLoadingSections((prev) => ({ ...prev, [section]: true }));
         // Served from the query cache when fresh; refetched when stale/invalidated.
@@ -271,7 +268,7 @@ export function useEnrollment(course: FullCourse | null) {
       const users = await queryClient.fetchQuery({
         queryKey: ['admin', 'users', 'all'],
         queryFn: async () => {
-          const res = await fetch('/api/admin/users');
+          const res = await fetch(apiPaths.admin.users());
           if (!res.ok) throw new Error('Failed to fetch users');
           return (await res.json()) as User[];
         },
@@ -296,7 +293,7 @@ export function useEnrollment(course: FullCourse | null) {
   const handleEnrollUser = useCallback(
     async (user: EnrollableUser, courseId: string, refetchCourse: () => void) => {
       try {
-        const res = await fetch(`/api/courses/${courseId}/enroll`, {
+        const res = await fetch(apiPaths.courseRoster(courseId), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: user.id }),

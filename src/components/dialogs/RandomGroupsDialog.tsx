@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useMemo, useState, useEffect } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { fetchJson } from '@/lib/query-fetch';
 import { Plus, Minus } from 'lucide-react';
 import {
   Dialog,
@@ -16,17 +18,32 @@ import InputGroup from '@/components/ui/InputGroup';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { showToast } from '@/lib/toast';
+import { apiPaths } from '@/lib/api-paths';
 
-type Enrollable = { id: string; firstName?: string | null; lastName?: string | null; email?: string | null };
+type Enrollable = {
+  id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+};
 
-export default function RandomGroupsDialog({ open, setOpen, courseId, students, onCreated }: { open: boolean; setOpen: (v: boolean) => void; courseId: string; students: Enrollable[]; onCreated?: () => void; }) {
+export default function RandomGroupsDialog({
+  open,
+  setOpen,
+  courseId,
+  students,
+  onCreated,
+}: {
+  open: boolean;
+  setOpen: (v: boolean) => void;
+  courseId: string;
+  students: Enrollable[];
+  onCreated?: () => void;
+}) {
   const [numGroups, setNumGroups] = useState<number>(2);
   const [prefix, setPrefix] = useState<string>('Group');
-  const [loading, setLoading] = useState(false);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<string>('');
-
-
 
   useEffect(() => {
     // Ensure numGroups doesn't exceed available students (students minus excluded)
@@ -38,9 +55,9 @@ export default function RandomGroupsDialog({ open, setOpen, courseId, students, 
     setNumGroups((prev) => (prev > available ? available : prev));
   }, [students.length, excluded.size]);
 
-
   const available = Math.max(0, students.length - excluded.size);
-  const validNum = available > 0 && numGroups >= 1 && Number.isInteger(numGroups) && numGroups <= available;
+  const validNum =
+    available > 0 && numGroups >= 1 && Number.isInteger(numGroups) && numGroups <= available;
 
   const sizes = useMemo(() => {
     const n = Math.max(0, students.length - excluded.size);
@@ -71,117 +88,156 @@ export default function RandomGroupsDialog({ open, setOpen, courseId, students, 
     return a;
   }
 
-  async function handleCreate() {
-    if (!validNum) return showToast.error('Enter a valid number of groups (1 - number of students).');
-    if (!courseId) return showToast.error('Missing course id');
-    if (available === 0) return showToast.error('No students available to assign.');
-
-    setLoading(true);
-    try {
+  // Create the groups and randomly assign the available students, sequentially so
+  // a mid-run failure surfaces the exact server error. A single failed request
+  // fails the whole run.
+  const { mutate: generateGroups, isPending: loading } = useMutation({
+    mutationFn: async () => {
       const availableStudents = students.filter((s) => !excluded.has(s.id));
       if (availableStudents.length === 0) throw new Error('No students available to assign.');
       const shuffled = shuffle(availableStudents.map((s) => s.id));
       let idx = 0;
-      const createdGroups: unknown[] = [];
+      let createdCount = 0;
 
       for (let g = 0; g < sizes.length; g++) {
-        const groupName = `${prefix} ${g + 1}`;
-        // create group
-        const createRes = await fetch(`/api/courses/${courseId}/groups`, {
+        const created = await fetchJson<{ id: string }>(apiPaths.courseGroups(courseId), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: groupName }),
+          body: JSON.stringify({ name: `${prefix} ${g + 1}` }),
         });
+        createdCount += 1;
 
-        if (!createRes.ok) {
-          const body = await createRes.json().catch(() => ({}));
-          throw new Error(body.error || 'Failed to create group');
-        }
-        const created = await createRes.json();
-        createdGroups.push(created);
-
-        // add members
         const count = sizes[g] ?? 0;
         for (let m = 0; m < count; m++) {
           const uid = shuffled[idx++];
-          // user may be undefined if there are fewer students than expected
-          if (!uid) continue;
-          const addRes = await fetch(`/api/courses/${courseId}/groups/${created.id}/members`, {
+          if (!uid) continue; // fewer students than expected
+          await fetchJson(apiPaths.courseGroupMembers(courseId, created.id), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userId: uid }),
           });
-          if (!addRes.ok) {
-            const body = await addRes.json().catch(() => ({}));
-            throw new Error(body.error || 'Failed to add member to group');
-          }
         }
       }
-
-      showToast.success(`${createdGroups.length} groups created`);
+      return createdCount;
+    },
+    onSuccess: (createdCount) => {
+      showToast.success(`${createdCount} groups created`);
       onCreated?.();
       setOpen(false);
-    } catch (err) {
+    },
+    onError: (err) => {
       console.error('Random group creation error:', err);
       showToast.error(err instanceof Error ? err.message : 'Failed to create random groups');
-    } finally {
-      setLoading(false);
-    }
+    },
+  });
+
+  function handleCreate() {
+    if (!validNum)
+      return showToast.error('Enter a valid number of groups (1 - number of students).');
+    if (!courseId) return showToast.error('Missing course id');
+    if (available === 0) return showToast.error('No students available to assign.');
+    generateGroups();
   }
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setNumGroups(2); setPrefix('Group'); } }}>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        setOpen(v);
+        if (!v) {
+          setNumGroups(2);
+          setPrefix('Group');
+        }
+      }}
+    >
       <DialogContent className="bg-card max-w-lg">
         <DialogHeader>
           <DialogTitle>Create Random Groups</DialogTitle>
-          <DialogDescription>Divide {Math.max(0, students.length - excluded.size)} of {students.length} students into random groups ({excluded.size} excluded).</DialogDescription>
+          <DialogDescription>
+            Divide {Math.max(0, students.length - excluded.size)} of {students.length} students into
+            random groups ({excluded.size} excluded).
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div>
-            <InputGroup label="Group Name Prefix" name="rg-prefix" value={prefix} setValue={setPrefix} />
+            <InputGroup
+              label="Group Name Prefix"
+              name="rg-prefix"
+              value={prefix}
+              setValue={setPrefix}
+            />
           </div>
 
           <div>
-            <InputGroup label="Exclude Students" name="exclude-search" placeholder="Search to exclude" value={filter} setValue={setFilter} />
-            <div className="h-44 overflow-auto rounded-md border mt-2">
+            <InputGroup
+              label="Exclude Students"
+              name="exclude-search"
+              placeholder="Search to exclude"
+              value={filter}
+              setValue={setFilter}
+            />
+            <div className="mt-2 h-44 overflow-auto rounded-md border">
               {students.length === 0 ? (
                 <div className="text-muted-foreground p-3 text-center text-sm">No students.</div>
               ) : (
                 <ul>
-                  {students.filter((s) => ((s.firstName || '') + ' ' + (s.lastName || '') + ' ' + (s.email || '')).toLowerCase().includes(filter.trim().toLowerCase())).slice(0, 500).map((s) => (
-                    <li key={s.id} className="px-3 py-2">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <Checkbox checked={excluded.has(s.id)} onCheckedChange={() => {
-                          setExcluded((prev) => {
-                            const copy = new Set(prev);
-                            if (copy.has(s.id)) copy.delete(s.id); else copy.add(s.id);
-                            return copy;
-                          });
-                        }} />
-                        <div className="flex-1 text-sm">
-                          <div>{s.firstName} {s.lastName}</div>
-                          <div className="text-xs text-muted-foreground">{s.email}</div>
-                        </div>
-                        <div className="text-xs text-muted-foreground">{excluded.has(s.id) ? 'Excluded' : ''}</div>
-                      </label>
-                    </li>
-                  ))}
+                  {students
+                    .filter((s) =>
+                      ((s.firstName || '') + ' ' + (s.lastName || '') + ' ' + (s.email || ''))
+                        .toLowerCase()
+                        .includes(filter.trim().toLowerCase()),
+                    )
+                    .slice(0, 500)
+                    .map((s) => (
+                      <li key={s.id} className="px-3 py-2">
+                        <label className="flex cursor-pointer items-center gap-2">
+                          <Checkbox
+                            checked={excluded.has(s.id)}
+                            onCheckedChange={() => {
+                              setExcluded((prev) => {
+                                const copy = new Set(prev);
+                                if (copy.has(s.id)) copy.delete(s.id);
+                                else copy.add(s.id);
+                                return copy;
+                              });
+                            }}
+                          />
+                          <div className="flex-1 text-sm">
+                            <div>
+                              {s.firstName} {s.lastName}
+                            </div>
+                            <div className="text-muted-foreground text-xs">{s.email}</div>
+                          </div>
+                          <div className="text-muted-foreground text-xs">
+                            {excluded.has(s.id) ? 'Excluded' : ''}
+                          </div>
+                        </label>
+                      </li>
+                    ))}
                 </ul>
               )}
             </div>
             <div className="mt-2 flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setExcluded(new Set(students.map((s) => s.id)))}>Exclude All</Button>
-              <Button variant="outline" size="sm" onClick={() => setExcluded(new Set())}>Clear Exclusions</Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setExcluded(new Set(students.map((s) => s.id)))}
+              >
+                Exclude All
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setExcluded(new Set())}>
+                Clear Exclusions
+              </Button>
             </div>
-          </div> 
+          </div>
 
           <div>
             <Label htmlFor="rg-count">Number of Groups</Label>
             <div className="mt-2 flex items-center gap-3">
               <Button
                 variant="outline"
-                className="h-9 w-9 p-0 rounded-full"
+                className="h-9 w-9 rounded-full p-0"
                 onClick={() => setNumGroups((n) => Math.max(1, Math.floor(n) - 1))}
                 disabled={numGroups <= 1 || students.length === 0}
                 aria-label="Decrease groups"
@@ -192,8 +248,8 @@ export default function RandomGroupsDialog({ open, setOpen, courseId, students, 
 
               <div className="flex-1">
                 <div className="flex items-baseline justify-between">
-                  <div className="text-2xl font-semibold text-center min-w-[56px]">{numGroups}</div>
-                  <div className="text-sm text-muted-foreground">of {available} students</div>
+                  <div className="min-w-[56px] text-center text-2xl font-semibold">{numGroups}</div>
+                  <div className="text-muted-foreground text-sm">of {available} students</div>
                 </div>
 
                 <input
@@ -203,15 +259,16 @@ export default function RandomGroupsDialog({ open, setOpen, courseId, students, 
                   max={Math.max(1, available)}
                   value={numGroups}
                   onChange={(e) => setNumGroups(Number(e.target.value))}
-                  className="w-full mt-3"
+                  className="mt-3 w-full"
                 />
-
               </div>
 
               <Button
                 variant="outline"
-                className="h-9 w-9 p-0 rounded-full"
-                onClick={() => setNumGroups((n) => Math.min(Math.max(1, students.length), Math.floor(n) + 1))}
+                className="h-9 w-9 rounded-full p-0"
+                onClick={() =>
+                  setNumGroups((n) => Math.min(Math.max(1, students.length), Math.floor(n) + 1))
+                }
                 disabled={numGroups >= Math.max(1, students.length) || students.length === 0}
                 aria-label="Increase groups"
                 title="Increase groups"
@@ -220,7 +277,7 @@ export default function RandomGroupsDialog({ open, setOpen, courseId, students, 
               </Button>
             </div>
 
-            <div className="text-xs text-muted-foreground mt-2">Distribution summary:</div>
+            <div className="text-muted-foreground mt-2 text-xs">Distribution summary:</div>
           </div>
 
           <div className="rounded-md border p-2 text-sm">
@@ -230,7 +287,10 @@ export default function RandomGroupsDialog({ open, setOpen, courseId, students, 
             ) : (
               <ul className="list-inside list-disc">
                 {distribution.map(([size, count]) => (
-                  <li key={size}>{count} {count === 1 ? 'group' : 'groups'} will have {size} {size === 1 ? 'student' : 'students'}</li>
+                  <li key={size}>
+                    {count} {count === 1 ? 'group' : 'groups'} will have {size}{' '}
+                    {size === 1 ? 'student' : 'students'}
+                  </li>
                 ))}
               </ul>
             )}
@@ -239,9 +299,17 @@ export default function RandomGroupsDialog({ open, setOpen, courseId, students, 
 
         <DialogFooter>
           <DialogClose asChild>
-            <Button variant="secondary" type="button" disabled={loading}>Cancel</Button>
+            <Button variant="secondary" type="button" disabled={loading}>
+              Cancel
+            </Button>
           </DialogClose>
-          <Button type="button" onClick={handleCreate} disabled={loading || !validNum || students.length === 0}>{loading ? 'Creating…' : 'Create Random Groups'}</Button>
+          <Button
+            type="button"
+            onClick={handleCreate}
+            disabled={loading || !validNum || students.length === 0}
+          >
+            {loading ? 'Creating…' : 'Create Random Groups'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

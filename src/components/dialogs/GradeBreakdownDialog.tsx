@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { fetchJson } from '@/lib/query-fetch';
+import { queryKeys } from '@/lib/query-keys';
 import { DataTable } from '@/components/ui/data-table';
 import { ColumnDef } from '@tanstack/react-table';
 import {
@@ -16,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { showToast } from '@/lib/toast';
 import { Loader2 } from 'lucide-react';
+import { apiPaths } from '@/lib/api-paths';
 
 type Row = {
   // the DataTable needs a stable `id` field (or `_id`) for its row
@@ -51,30 +54,24 @@ export function GradeBreakdownDialog({
   const queryClient = useQueryClient();
   const [rows, setRows] = useState<Row[]>([]);
   const [originalRows, setOriginalRows] = useState<Row[]>([]);
-  const [saving, setSaving] = useState(false);
 
   // Assignment problem links (with maxPoints) and the student's current per-problem
   // grades — both cached and fetched only while the dialog is open, so reopening the
   // same breakdown is served warm instead of refetching every time.
   const assignmentQuery = useQuery({
-    queryKey: ['course', courseId, 'assignment', assignmentId],
-    queryFn: async () => {
-      const res = await fetch(`/api/courses/${courseId}/${assignmentId}`);
-      if (!res.ok) throw new Error('Failed to fetch assignment');
-      return (await res.json()) as {
+    queryKey: queryKeys.assignment.gradeBreakdown(courseId, assignmentId),
+    queryFn: () =>
+      fetchJson<{
         problems?: Array<{ problem: { id: string; title?: string | null }; maxPoints: number }>;
-      };
-    },
+      }>(apiPaths.assignment(courseId, assignmentId)),
     enabled: open,
     staleTime: 30_000,
   });
 
   const gradesQuery = useQuery({
-    queryKey: ['course', courseId, 'assignment', assignmentId, 'problem-grades', studentId],
+    queryKey: queryKeys.assignment.problemGrades(courseId, assignmentId, studentId),
     queryFn: async () => {
-      const res = await fetch(
-        `/api/courses/${courseId}/${assignmentId}/problem-grades/${studentId}`,
-      );
+      const res = await fetch(apiPaths.assignmentProblemGrades(courseId, assignmentId, studentId));
       // 204 means nothing graded yet — treat as an empty map.
       if (res.status === 204) return {} as Record<string, { grade: number | null }>;
       if (!res.ok) throw new Error('Failed to fetch problem grades');
@@ -113,15 +110,10 @@ export function GradeBreakdownDialog({
     setOriginalRows(newRows);
   }, [open, assignmentQuery.data, gradesQuery.data]);
 
-  const handleGradeChange = useCallback(
-    (problemId: string, value: string) => {
-      const num = value === '' ? null : parseFloat(value);
-      setRows((prev) =>
-        prev.map((r) => (r.problemId === problemId ? { ...r, grade: num } : r)),
-      );
-    },
-    [],
-  );
+  const handleGradeChange = useCallback((problemId: string, value: string) => {
+    const num = value === '' ? null : parseFloat(value);
+    setRows((prev) => prev.map((r) => (r.problemId === problemId ? { ...r, grade: num } : r)));
+  }, []);
 
   const totals = useMemo(() => {
     const earned = rows.reduce((sum, r) => sum + (r.grade ?? 0), 0);
@@ -138,39 +130,38 @@ export function GradeBreakdownDialog({
     return false;
   }, [rows, originalRows]);
 
-  const handleSave = useCallback(async () => {
-    setSaving(true);
-    try {
-      // One request for the whole breakdown; the server diffs and writes only what
-      // changed (replaces the old one-POST-per-problem fan-out).
-      const gradesPayload = rows.reduce<Record<string, number | null>>((acc, r) => {
-        acc[r.problemId] = r.grade;
-        return acc;
-      }, {});
-      const res = await fetch(
-        `/api/courses/${courseId}/${assignmentId}/problem-grades/${studentId}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ grades: gradesPayload }),
-        },
-      );
-      if (!res.ok) throw new Error('save');
+  // One request for the whole breakdown; the server diffs and writes only what
+  // changed. Non-optimistic: the save is confirmed before we invalidate/close.
+  const { mutate: saveGrades, isPending: saving } = useMutation({
+    mutationFn: (gradesPayload: Record<string, number | null>) =>
+      fetchJson(apiPaths.assignmentProblemGrades(courseId, assignmentId, studentId), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ grades: gradesPayload }),
+      }),
+    onSuccess: async () => {
       // Refresh this student's cached grades so reopening reflects the save; the
       // parent (grades matrix) refreshes via onSaved.
       await queryClient.invalidateQueries({
-        queryKey: ['course', courseId, 'assignment', assignmentId, 'problem-grades', studentId],
+        queryKey: queryKeys.assignment.problemGrades(courseId, assignmentId, studentId),
       });
       showToast.success('Grades saved');
       onSaved?.();
       setOpen(false);
-    } catch (err) {
+    },
+    onError: (err) => {
       console.error('save error', err);
       showToast.error('Failed to save grades');
-    } finally {
-      setSaving(false);
-    }
-  }, [rows, courseId, assignmentId, studentId, onSaved, setOpen, queryClient]);
+    },
+  });
+
+  const handleSave = useCallback(() => {
+    const gradesPayload = rows.reduce<Record<string, number | null>>((acc, r) => {
+      acc[r.problemId] = r.grade;
+      return acc;
+    }, {});
+    saveGrades(gradesPayload);
+  }, [rows, saveGrades]);
 
   const columns = useMemo<ColumnDef<Row, unknown>[]>(
     () => [
@@ -212,16 +203,14 @@ export function GradeBreakdownDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       {/* widen the content for better data table fit */}
       {/* expanded max width to accommodate more content without wrapping */}
-      <DialogContent className="sm:max-w-3xl lg:max-w-4xl bg-card">
+      <DialogContent className="bg-card sm:max-w-3xl lg:max-w-4xl">
         <DialogHeader>
           <DialogTitle>
             {studentName} &ndash; {assignmentTitle}
           </DialogTitle>
-          <DialogDescription>
-            Edit individual problem scores for this assignment.
-          </DialogDescription>
+          <DialogDescription>Edit individual problem scores for this assignment.</DialogDescription>
           {/* current score summary */}
-          <div className="mt-1 text-sm font-medium text-right">
+          <div className="mt-1 text-right text-sm font-medium">
             Score:{' '}
             {totals.hasAny ? `${totals.earned} / ${totals.possible}` : `- / ${totals.possible}`}
           </div>

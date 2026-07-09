@@ -41,9 +41,11 @@ describe('course-utils', () => {
       } as Response);
 
       const target: DeleteTarget = { type: 'assignment', id: 'assignment-1' };
-      await deleteItem(target);
+      await deleteItem(target, 'course-1');
 
-      expect(mockFetch).toHaveBeenCalledWith('/api/assignments/assignment-1', { method: 'DELETE' });
+      expect(mockFetch).toHaveBeenCalledWith('/api/courses/course-1/assignments/assignment-1', {
+        method: 'DELETE',
+      });
     });
 
     it('should delete a problem successfully', async () => {
@@ -53,9 +55,11 @@ describe('course-utils', () => {
       } as Response);
 
       const target: DeleteTarget = { type: 'problem', id: 'problem-1' };
-      await deleteItem(target);
+      await deleteItem(target, 'course-1');
 
-      expect(mockFetch).toHaveBeenCalledWith('/api/problems/problem-1', { method: 'DELETE' });
+      expect(mockFetch).toHaveBeenCalledWith('/api/courses/course-1/problems/problem-1', {
+        method: 'DELETE',
+      });
     });
 
     it('should throw error when assignment deletion fails with JSON error', async () => {
@@ -66,7 +70,7 @@ describe('course-utils', () => {
       } as Response);
 
       const target: DeleteTarget = { type: 'assignment', id: 'assignment-1' };
-      await expect(deleteItem(target)).rejects.toThrow('Assignment not found');
+      await expect(deleteItem(target, 'course-1')).rejects.toThrow('Assignment not found');
     });
 
     it('should throw error when problem deletion fails with message', async () => {
@@ -77,7 +81,7 @@ describe('course-utils', () => {
       } as Response);
 
       const target: DeleteTarget = { type: 'problem', id: 'problem-1' };
-      await expect(deleteItem(target)).rejects.toThrow('Problem has submissions');
+      await expect(deleteItem(target, 'course-1')).rejects.toThrow('Problem has submissions');
     });
 
     it('should throw default error when deletion fails without JSON body', async () => {
@@ -90,7 +94,7 @@ describe('course-utils', () => {
       } as Response);
 
       const target: DeleteTarget = { type: 'assignment', id: 'assignment-1' };
-      await expect(deleteItem(target)).rejects.toThrow('Failed to delete assignment');
+      await expect(deleteItem(target, 'course-1')).rejects.toThrow('Failed to delete assignment');
     });
   });
 
@@ -250,9 +254,9 @@ describe('course-utils', () => {
         json: async () => ({ success: true }),
       } as Response);
 
-      await updateAssignmentPublishStatus('assignment-1', true);
+      await updateAssignmentPublishStatus('course-1', 'assignment-1', true);
 
-      expect(mockFetch).toHaveBeenCalledWith('/api/assignments/assignment-1', {
+      expect(mockFetch).toHaveBeenCalledWith('/api/courses/course-1/assignments/assignment-1', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isPublished: true }),
@@ -266,7 +270,7 @@ describe('course-utils', () => {
         json: async () => ({ error: 'Permission denied' }),
       } as Response);
 
-      await expect(updateAssignmentPublishStatus('assignment-1', true)).rejects.toThrow(
+      await expect(updateAssignmentPublishStatus('course-1', 'assignment-1', true)).rejects.toThrow(
         'Permission denied',
       );
     });

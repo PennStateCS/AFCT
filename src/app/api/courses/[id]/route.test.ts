@@ -61,6 +61,10 @@ beforeEach(() => {
 
 describe('GET /api/courses/[id]', () => {
   it('returns 400 when id is missing', async () => {
+    // Authenticated so the wrapper reaches its missing-course-id check (auth is
+    // verified before the id is resolved).
+    authMock.mockResolvedValue({ user: { id: 'admin-1', isAdmin: true } });
+
     const res = await GET(new Request('http://localhost/api/courses/'), {
       params: Promise.resolve({ id: '' }),
     });
@@ -107,7 +111,7 @@ describe('GET /api/courses/[id]', () => {
       createdAt: new Date('2026-01-01T00:00:00.000Z'),
       updatedAt: new Date('2026-01-02T00:00:00.000Z'),
     });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
 
     const res = await GET(new Request('http://localhost/api/courses/1'), {
       params: Promise.resolve({ id: 'course-1' }),
@@ -116,6 +120,111 @@ describe('GET /api/courses/[id]', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.viewerRole).toBe('STUDENT');
+  });
+
+  it('restricts a student view to published assignments and omits the problem bank', async () => {
+    authMock.mockResolvedValue({ user: { id: 'stu-1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
+    prismaMock.course.findUnique.mockResolvedValue({
+      id: 'course-1',
+      name: 'C1',
+      code: 'CS1',
+      isPublished: true,
+      isArchived: false,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+      _count: { assignments: 5, problems: 9, roster: 3 },
+      assignments: [],
+      roster: [],
+    });
+
+    await GET(new Request('http://localhost/api/courses/1'), {
+      params: Promise.resolve({ id: 'course-1' }),
+    });
+
+    const include = prismaMock.course.findUnique.mock.calls[0][0].include;
+    // Students only get published assignments, and never the problem bank.
+    expect(include.assignments.where).toEqual({ isPublished: true });
+    expect(include.problems).toBeUndefined();
+
+    // The response totals must not leak counts of hidden data.
+    const body = await (
+      await GET(new Request('http://localhost/api/courses/1'), {
+        params: Promise.resolve({ id: 'course-1' }),
+      })
+    ).json();
+    expect(body.problems).toEqual([]);
+    expect(body.problemTotal).toBe(0);
+    expect(body.assignmentTotal).toBe(0); // no published assignments in this mock
+  });
+
+  it('gives staff all assignments and the problem bank', async () => {
+    authMock.mockResolvedValue({ user: { id: 'fac-1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.course.findUnique.mockResolvedValue({
+      id: 'course-1',
+      name: 'C1',
+      code: 'CS1',
+      isPublished: true,
+      isArchived: false,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+      _count: { assignments: 5, problems: 9, roster: 3 },
+      assignments: [],
+      problems: [],
+      roster: [],
+    });
+
+    await GET(new Request('http://localhost/api/courses/1'), {
+      params: Promise.resolve({ id: 'course-1' }),
+    });
+
+    const include = prismaMock.course.findUnique.mock.calls[0][0].include;
+    expect(include.assignments.where).toEqual({});
+    expect(include.problems).toBe(true);
+  });
+
+  it('gives a student a privacy-safe roster (staff names only, no classmate email)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'stu-1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
+    prismaMock.course.findUnique.mockResolvedValue({
+      id: 'course-1',
+      name: 'C1',
+      code: 'CS1',
+      regCode: 'SECRET',
+      isPublished: true,
+      isArchived: false,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+      _count: { assignments: 0, problems: 0, roster: 2 },
+      assignments: [],
+      roster: [
+        {
+          role: 'FACULTY',
+          user: { id: 'u1', firstName: 'Ada', lastName: 'Lovelace', email: 'ada@x.edu' },
+        },
+        {
+          role: 'STUDENT',
+          user: { id: 'u2', firstName: 'Alan', lastName: 'Turing', email: 'alan@x.edu' },
+        },
+      ],
+    });
+
+    const body = await (
+      await GET(new Request('http://localhost/api/courses/1'), {
+        params: Promise.resolve({ id: 'course-1' }),
+      })
+    ).json();
+
+    expect(body.regCode).toBeNull(); // reg code is staff-only
+    const serialized = JSON.stringify(body.enrolled);
+    expect(serialized).not.toContain('@x.edu'); // no emails
+    expect(serialized).not.toContain('Alan'); // no classmate (student) name
+    expect(serialized).not.toContain('u2'); // no classmate id
+    expect(body.enrolled).toContainEqual(
+      expect.objectContaining({ firstName: 'Ada', courseRole: 'FACULTY' }),
+    );
+    expect(body.enrolled).toContainEqual({ id: '', courseRole: 'STUDENT' });
   });
 
   it('returns 404 when course is not found', async () => {
@@ -230,7 +339,7 @@ describe('PUT /api/courses/[id]', () => {
     expect(res.status).toBe(400);
   });
 
-  it('returns 403 when unauthenticated', async () => {
+  it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
     const req = new Request('http://localhost/api/courses/1', {
@@ -240,7 +349,7 @@ describe('PUT /api/courses/[id]', () => {
     });
 
     const res = await PUT(req, { params: Promise.resolve({ id: 'course-1' }) });
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('returns 400 when isArchived is not a boolean', async () => {
@@ -458,9 +567,15 @@ describe('PUT /api/courses/[id]', () => {
           problems: [],
           assignments: [],
           roster: [
-            { role: 'FACULTY', user: { id: 'u1', firstName: 'Ada', lastName: 'L', role: 'FACULTY' } },
+            {
+              role: 'FACULTY',
+              user: { id: 'u1', firstName: 'Ada', lastName: 'L', role: 'FACULTY' },
+            },
             { role: 'TA', user: { id: 'u2', firstName: 'Tim', lastName: 'A', role: 'TA' } },
-            { role: 'STUDENT', user: { id: 'u3', firstName: 'Sam', lastName: 'S', role: 'STUDENT' } },
+            {
+              role: 'STUDENT',
+              user: { id: 'u3', firstName: 'Sam', lastName: 'S', role: 'STUDENT' },
+            },
           ],
         }),
       },
@@ -587,6 +702,101 @@ describe('PUT /api/courses/[id]', () => {
     );
   });
 
+  it('records changed fields in the audit log when values differ', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
+    prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
+
+    const refreshed = {
+      id: 'course-1',
+      name: 'Renamed Course',
+      code: 'CS102',
+      regCode: 'ABC123',
+      semester: 'Fall 2026',
+      credits: 4,
+      startDate: new Date('2026-08-25T13:00:00.000Z'),
+      endDate: new Date('2026-12-15T22:00:00.000Z'),
+      registrationOpenAt: null,
+      registrationCloseAt: null,
+      isPublished: true,
+      isArchived: false,
+      emptyStringNotation: null,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+      problems: [],
+      assignments: [],
+      roster: [
+        {
+          role: 'FACULTY',
+          user: { id: 'u1', firstName: 'Ada', lastName: 'L', role: 'FACULTY' },
+        },
+      ],
+    };
+
+    const txMock = {
+      course: {
+        update: vi.fn().mockResolvedValue({ id: 'course-1' }),
+        // First findUnique = `before` snapshot (old values); second = refreshed course.
+        findUnique: vi
+          .fn()
+          .mockResolvedValueOnce({
+            name: 'Old Course',
+            code: 'CS101',
+            semester: 'Fall 2026',
+            credits: 3,
+            isPublished: false,
+            isArchived: false,
+            emptyStringNotation: null,
+            startDate: new Date('2026-08-25T13:00:00.000Z'),
+            endDate: new Date('2026-12-15T22:00:00.000Z'),
+            registrationOpenAt: null,
+            registrationCloseAt: null,
+          })
+          .mockResolvedValueOnce(refreshed),
+      },
+      roster: {
+        findMany: vi.fn().mockResolvedValue([{ userId: 'u1', role: 'FACULTY' }]),
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+        createMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+    };
+
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(txMock));
+    prismaMock.submission.count.mockResolvedValue(0);
+    prismaMock.comment.count.mockResolvedValue(0);
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+
+    const req = new Request('http://localhost/api/courses/1', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Renamed Course',
+        code: 'CS102',
+        semester: 'Fall 2026',
+        credits: 4,
+        startDate: '2026-08-25T09:00',
+        endDate: '2026-12-15T17:00',
+        registrationOpenAt: '2026-07-01T09:00',
+        registrationCloseAt: '2026-09-01T09:00',
+        isPublished: true,
+        isArchived: false,
+        instructorIds: ['u1'],
+      }),
+    });
+
+    const res = await PUT(req, { params: Promise.resolve({ id: 'course-1' }) });
+    expect(res.status).toBe(200);
+
+    // The audit log must capture the fields that actually changed.
+    const logCall = activityLogMock.mock.calls.find((c) => c[2]?.action === 'UPDATE_COURSE');
+    expect(logCall).toBeTruthy();
+    expect(logCall[2].metadata.changedFields).toEqual(
+      expect.arrayContaining(['name', 'code', 'credits', 'isPublished']),
+    );
+    expect(logCall[2].metadata.changes.name).toEqual({ from: 'Old Course', to: 'Renamed Course' });
+  });
+
   it('returns 500 when transaction throws', async () => {
     authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
@@ -669,7 +879,7 @@ describe('DELETE /api/courses/[id]', () => {
     expect(res.status).toBe(400);
   });
 
-  it('returns 403 when unauthenticated', async () => {
+  it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
     const req = new Request('http://localhost/api/courses/1', {
@@ -678,7 +888,7 @@ describe('DELETE /api/courses/[id]', () => {
     });
     const res = await DELETE(req, { params: Promise.resolve({ id: 'course-1' }) });
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('returns 403 when course is not archived', async () => {

@@ -30,9 +30,11 @@ const prismaMock = vi.hoisted(() => ({
 const execSyncMock = vi.hoisted(() => vi.fn());
 const tlsConnectMock = vi.hoisted(() => vi.fn());
 const authMock = vi.hoisted(() => vi.fn());
+const activityLogMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
+vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 vi.mock('dns', () => ({ promises: { lookup: vi.fn().mockResolvedValue([]) } }));
 vi.mock('child_process', () => ({ execSync: execSyncMock }));
 vi.mock('tls', () => ({ connect: tlsConnectMock }));
@@ -129,20 +131,25 @@ afterEach(() => {
 });
 
 describe('GET /api/status', () => {
-  it('returns 403 for an unauthenticated request', async () => {
+  it('returns 401 for an unauthenticated request', async () => {
     authMock.mockResolvedValue(null);
 
     const res = await GET(new Request('http://localhost/api/status'));
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
-  it('returns 403 for a non-staff (student) user', async () => {
+  it('returns 403 and logs a denial for a non-staff (student) user', async () => {
     authMock.mockResolvedValue({ user: { id: 's1', role: 'STUDENT' } });
 
     const res = await GET(new Request('http://localhost/api/status'));
 
     expect(res.status).toBe(403);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ action: 'ADMIN_STATUS_ACCESS_DENIED', severity: 'SECURITY' }),
+    );
   });
 
   it('denies a faculty user (no admin flag) with 403', async () => {
@@ -599,7 +606,10 @@ describe('GET /api/status', () => {
       { fileName: 'prob1.jff' },
       { fileName: null },
     ]);
-    prismaMock.submission.findMany.mockResolvedValue([{ fileName: 'sub1.txt' }, { fileName: null }]);
+    prismaMock.submission.findMany.mockResolvedValue([
+      { fileName: 'sub1.txt' },
+      { fileName: null },
+    ]);
     prismaMock.user.findMany.mockResolvedValue([{ avatar: 'avatar1.png' }, { avatar: null }]);
 
     const req = new Request('http://localhost/api/status');

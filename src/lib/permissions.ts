@@ -37,13 +37,25 @@ export async function getCourseRole(
 }
 
 /**
- * May the caller see this course at all? Admins always; otherwise they must be
- * enrolled in it (in any role). Use for course-scoped reads students may access.
+ * May the caller see this course at all? A system admin always may. Otherwise they
+ * must be on the roster, AND — for a student — the course must be published; course
+ * staff (FACULTY/TA) may access their course even while it is unpublished. This is
+ * the single gate for course-scoped reads, so the "students only see published
+ * courses" rule lives here rather than being re-checked in every route.
+ *
+ * One query (role + the course's published flag); admins short-circuit before it.
  */
 export async function canAccessCourse(user: PermissionUser, courseId: string): Promise<boolean> {
   if (isAdmin(user)) return true;
   if (!user?.id) return false;
-  return (await getCourseRole(user.id, courseId)) !== null;
+  const entry = await prisma.roster.findFirst({
+    where: { courseId, userId: user.id },
+    select: { role: true, course: { select: { isPublished: true } } },
+  });
+  if (!entry) return false;
+  if (entry.role === 'FACULTY' || entry.role === 'TA') return true;
+  // Students (and any non-staff role) only once the course is published.
+  return entry.course.isPublished;
 }
 
 /**

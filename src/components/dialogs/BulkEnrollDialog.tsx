@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useState, useEffect, useRef } from 'react';
 import { EnrollableUser } from '@/types/course';
+import { apiPaths } from '@/lib/api-paths';
 
 type Props = {
   open: boolean;
@@ -65,7 +66,7 @@ export default function BulkEnrollDialog({
     const parsed = parseEmails(rawText);
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/courses/${courseId}/lookup-users`, {
+      const res = await fetch(apiPaths.courseLookupUsers(courseId), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ emails: parsed }),
@@ -87,7 +88,7 @@ export default function BulkEnrollDialog({
     if (found.length === 0) return;
     setIsEnrolling(true);
     try {
-      const res = await fetch(`/api/courses/${courseId}/bulk-enroll`, {
+      const res = await fetch(apiPaths.courseRosterBulk(courseId), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userIds: found.map((u) => u.id) }),

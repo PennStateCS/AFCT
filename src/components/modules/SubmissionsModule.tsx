@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { useState } from 'react';
+import { apiPaths } from '@/lib/api-paths';
 
 type PendingAssignment = {
   assignmentId: string;
@@ -23,7 +24,7 @@ type SubmissionsModuleProps = {
 export function SubmissionsModule({ assignments }: SubmissionsModuleProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Function to handle a rerun 
+  // Function to handle a rerun
   async function handleRerun(assignments: PendingAssignment[]) {
     setIsSubmitting(true);
     const processedCourses = new Set<string>();
@@ -32,15 +33,15 @@ export function SubmissionsModule({ assignments }: SubmissionsModuleProps) {
       for (const item of assignments) {
         if (!processedCourses.has(item.courseId)) {
           processedCourses.add(item.courseId);
-          
+
           // Trigger the API request for the course
-          await fetch(`/api/course_submissions/${item.courseId}`, {
+          await fetch(apiPaths.courseSubmissionsRerun(item.courseId), {
             method: 'POST',
           });
         }
       }
     } catch (error) {
-      console.error("Failed to rerun submissions:", error);
+      console.error('Failed to rerun submissions:', error);
     } finally {
       setIsSubmitting(false);
     }
@@ -68,7 +69,8 @@ export function SubmissionsModule({ assignments }: SubmissionsModuleProps) {
                     {item.assignmentTitle}
                   </Link>
                   <span className="text-muted-foreground text-sm">
-                    {item.pendingCount} PENDING • {item.processingCount} PROCESSING • {item.gradedCount} GRADED • {item.failedCount} FAILED
+                    {item.pendingCount} PENDING • {item.processingCount} PROCESSING •{' '}
+                    {item.gradedCount} GRADED • {item.failedCount} FAILED
                   </span>
                 </li>
               ))}

@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react';
 import type { Submission } from '@prisma/client';
 import { showToast } from '@/lib/toast';
+import { apiPaths } from '@/lib/api-paths';
 
 export type RerunSubmissionOptions = {
   submission: Submission;
@@ -17,7 +18,7 @@ export async function rerunSubmission({
 
   setRerunning((prev) => ({ ...prev, [submission.id]: true }));
   try {
-    const res = await fetch(`/api/submissions/${submission.id}/rerun`, {
+    const res = await fetch(apiPaths.submissionRerun(submission.id), {
       method: 'POST',
     });
 
