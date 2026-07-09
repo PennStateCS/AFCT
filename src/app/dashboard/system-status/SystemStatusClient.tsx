@@ -206,7 +206,7 @@ export default function SystemStatusClient() {
             ))}
           </TabsList>
 
-          <div className="border-t pt-4">
+          <div className="pt-2">
             <TabsContent value="server">
               <ServerTab
                 active={tab === 'server'}
