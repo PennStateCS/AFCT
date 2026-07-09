@@ -53,6 +53,7 @@ import { useEmptyStringSymbol } from '@/lib/useEmptyStringSymbol';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { AssignmentWithDetails } from '@/lib/assignment-details';
 import { apiPaths } from '@/lib/api-paths';
+import { queryKeys } from '@/lib/query-keys';
 
 const problemTypeLabels: Record<string, string> = {
   FA: 'Finite Automaton',
@@ -108,13 +109,17 @@ export default function AssignmentDashboardPage({
   const [problemToEdit, setProblemToEdit] = useState<Problem | null>(null);
   const [tab, setTab] = useState(searchParams.get('tab') || 'problems');
 
-  // Assignment shell — cached and keyed to this course/assignment. Seeded from the
-  // SSR-provided initialAssignment (view=problems shape) so there's no refetch on
-  // mount when the server already sent it, and back-navigation is warm. Mutations
-  // invalidate this key, triggering a background refetch that does NOT blank the
-  // page — the previous data stays visible until the new payload arrives.
+  // Assignment shell — cached and keyed to this course/assignment via the shared
+  // queryKeys.assignment.shell key, so this privileged view and the embedded
+  // StudentNavigator (plus StudentAssignmentView / the max-points cell) dedupe onto
+  // one read of the same ?view=problems payload instead of fetching it twice.
+  // Seeded from the SSR-provided initialAssignment (view=problems shape) so there's
+  // no refetch on mount when the server already sent it, and back-navigation is
+  // warm. Mutations invalidate this key, triggering a background refetch that does
+  // NOT blank the page — the previous data stays visible until the new payload
+  // arrives.
   const assignmentQuery = useQuery({
-    queryKey: ['course', id, 'assignment', aid, 'detail'],
+    queryKey: queryKeys.assignment.shell(id, aid),
     queryFn: async () => {
       const res = await fetch(apiPaths.assignment(id, aid, { view: 'problems' }));
       if (!res.ok) throw new Error('Failed to fetch assignment');
@@ -128,7 +133,7 @@ export default function AssignmentDashboardPage({
   const loading = assignmentQuery.isPending;
 
   const invalidateAssignment = useCallback(
-    () => queryClient.invalidateQueries({ queryKey: ['course', id, 'assignment', aid, 'detail'] }),
+    () => queryClient.invalidateQueries({ queryKey: queryKeys.assignment.shell(id, aid) }),
     [queryClient, id, aid],
   );
 
