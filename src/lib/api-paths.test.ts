@@ -66,7 +66,6 @@ describe('apiPaths', () => {
     expect(apiPaths.admin.statusSummary()).toBe('/api/admin/status/summary');
     expect(apiPaths.admin.statusServer()).toBe('/api/admin/status/server');
     expect(apiPaths.admin.statusDatabase()).toBe('/api/admin/status/database');
-    expect(apiPaths.admin.statusDatabase({ deep: true })).toBe('/api/admin/status/database?deep=1');
     expect(apiPaths.admin.statusFiles()).toBe('/api/admin/status/files');
     expect(apiPaths.admin.logsExportFields()).toBe('/api/admin/logs/export/fields');
   });

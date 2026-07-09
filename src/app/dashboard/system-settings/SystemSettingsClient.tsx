@@ -779,7 +779,7 @@ export default function SystemSettingsClient() {
           <Tabs value={tab} onValueChange={handleTabChange} className="w-full gap-6">
             <TabsList
               aria-label="System settings sections"
-              className="bg-card border-border h-12 w-full justify-start overflow-x-auto rounded-md border p-1 shadow-sm"
+              className="bg-card border-border h-12 w-full justify-start gap-1 overflow-x-auto rounded-md border p-1 shadow-sm"
             >
               <TabsTrigger
                 value="general"

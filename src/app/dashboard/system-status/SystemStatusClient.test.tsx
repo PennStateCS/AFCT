@@ -112,13 +112,10 @@ describe('SystemStatusClient', () => {
     ).toBe(false);
   });
 
-  it('shows the Deep toggle on the Database tab', async () => {
+  it('fetches the database endpoint when the Database tab is open', async () => {
     localStorage.setItem('afct.systemStatusTab', 'database');
     renderWithClient(<SystemStatusClient />);
 
-    expect(
-      await screen.findByRole('switch', { name: 'Enable deep database probes' }),
-    ).toBeInTheDocument();
     await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/admin/status/database'));
   });
 });

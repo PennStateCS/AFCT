@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/query-fetch';
 import { Badge } from '@/components/ui/badge';
@@ -85,6 +85,10 @@ export const Skel = ({ w = 'w-24' }: { w?: string }) => (
   <div className={`h-4 ${w} bg-muted animate-pulse rounded`} />
 );
 
+export const Loading = ({ label = 'Loading…' }: { label?: string }) => (
+  <div className="text-muted-foreground py-8 text-center text-sm">{label}</div>
+);
+
 export const Meter = ({ pct, label }: { pct?: number; label: string }) => {
   const v = Math.max(0, Math.min(100, Math.round(pct ?? 0)));
   return (
@@ -137,13 +141,13 @@ export const Section = ({
   action,
   children,
 }: {
-  title: string;
+  title: React.ReactNode;
   action?: React.ReactNode;
   children: React.ReactNode;
 }) => (
   <section className="space-y-3">
     <div className="flex items-center justify-between gap-3">
-      <h3 className="text-base font-semibold">{title}</h3>
+      <h3 className="flex items-center gap-2 text-base font-semibold">{title}</h3>
       {action}
     </div>
     {children}
@@ -250,16 +254,25 @@ export function useTrends(sample: HistoryPoint | null, keepHours = 24) {
   const [windowHours, setWindowHours] = useState(1);
   const setHours = useCallback((h: number) => setWindowHours(h), []);
 
-  const trends = useMemo(() => {
-    const hist = readHistory();
-    const now = Date.now();
-
-    let source = hist;
-    if (sample) {
-      const withNew = [...hist.filter((p) => now - p.ts <= keepHours * 3600_000), sample];
-      writeHistory(withNew);
-      source = withNew;
+  // Persist each new sample to history as a side effect — never during render.
+  // Dedupe by timestamp so a repeated effect run (e.g. StrictMode's double
+  // invoke) can't append the same point twice, and any legacy dupes collapse.
+  useEffect(() => {
+    if (!sample) return;
+    const cutoff = sample.ts - keepHours * 3600_000;
+    const byTs = new Map<number, HistoryPoint>();
+    for (const p of readHistory()) {
+      if (p.ts >= cutoff) byTs.set(p.ts, p);
     }
+    byTs.set(sample.ts, sample);
+    writeHistory([...byTs.values()]);
+  }, [sample, keepHours]);
+
+  const trends = useMemo(() => {
+    const now = Date.now();
+    const hist = readHistory();
+    // Fold in the current sample so the trend reflects it before the effect commits.
+    const source = sample ? [...hist.filter((p) => p.ts !== sample.ts), sample] : hist;
 
     const windowHist = source.filter((p) => now - p.ts <= windowHours * 3600_000);
     const delta = (a?: number | null, b?: number | null) =>
@@ -277,7 +290,7 @@ export function useTrends(sample: HistoryPoint | null, keepHours = 24) {
       sessions: delta(first.sessions24h, last.sessions24h),
       latency: delta(first.latencyMs, last.latencyMs),
     };
-  }, [sample, windowHours, keepHours]);
+  }, [sample, windowHours]);
 
   return { windowHours, setHours, trends };
 }

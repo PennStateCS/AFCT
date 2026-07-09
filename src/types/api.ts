@@ -2402,10 +2402,7 @@ export interface operations {
     };
     getAdminStatus: {
         parameters: {
-            query?: {
-                /** @description Set to "1" to include the most expensive probes (e.g. Postgres top-queries). */
-                deep?: "1";
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;

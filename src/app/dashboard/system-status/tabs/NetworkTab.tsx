@@ -3,10 +3,8 @@
 import React from 'react';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
-import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { formatDateTimeInTimeZone } from '@/lib/date';
 import type { NetworkStatusResponse } from '@/lib/status/types';
-import { Skel, Stat, Section, useStatusQuery, formatMs, formatRate } from '../status-ui';
+import { Loading, Stat, Section, useStatusQuery, formatMs, formatRate } from '../status-ui';
 
 export default function NetworkTab({
   active,
@@ -15,7 +13,6 @@ export default function NetworkTab({
   active: boolean;
   autoRefresh: boolean;
 }) {
-  const { timezone } = useEffectiveTimezone();
   const { data: net, isLoading } = useStatusQuery<NetworkStatusResponse>({
     queryKey: queryKeys.admin.statusNetwork(),
     path: apiPaths.admin.statusNetwork(),
@@ -24,12 +21,7 @@ export default function NetworkTab({
   });
 
   if (isLoading || !net) {
-    return (
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Skel w="w-40" />
-        <Skel w="w-32" />
-      </div>
-    );
+    return <Loading />;
   }
 
   const errRate = (e?: { errors?: number; total?: number; ratePct?: number }) =>
@@ -37,16 +29,12 @@ export default function NetworkTab({
 
   return (
     <Section title="Network">
-      <div className="space-y-3">
+      <div className="max-w-xl space-y-3">
         <Stat label="DB Latency" value={formatMs(net.db?.latencyMs)} />
         <Stat label="Auth Latency" value={formatMs(net.auth?.latencyMs)} />
         <Stat
           label="DB Connections"
           value={typeof net.db?.connections === 'number' ? String(net.db.connections) : '—'}
-        />
-        <Stat
-          label="SSL cert expiry"
-          value={net.auth?.sslExpiry ? formatDateTimeInTimeZone(net.auth.sslExpiry, timezone) : '—'}
         />
         <Stat label="Error rate (5m)" value={errRate(net.errors?.last5m)} />
         <Stat label="Error rate (15m)" value={errRate(net.errors?.last15m)} />

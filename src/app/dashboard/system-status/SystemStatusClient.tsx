@@ -41,7 +41,6 @@ export default function SystemStatusClient() {
   const { timezone } = useEffectiveTimezone();
   const queryClient = useQueryClient();
   const [autoRefresh, setAutoRefresh] = useState(false);
-  const [deep, setDeep] = useState(false);
   // Persist the open tab so a refresh keeps you where you were (SSR-safe init).
   const [tab, setTabState] = useState<string>(() => {
     if (typeof window === 'undefined') return 'server';
@@ -60,7 +59,6 @@ export default function SystemStatusClient() {
   // Fast top-card summary — always loaded; the per-tab detail is fetched lazily.
   const {
     data: summary,
-    isLoading,
     isFetching,
     dataUpdatedAt,
   } = useQuery({
@@ -166,34 +164,27 @@ export default function SystemStatusClient() {
         </CardHeader>
 
         <CardContent className="space-y-4 pb-6">
-          {isLoading ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="rounded border p-3">
-                  <Skel w="w-16" />
-                  <div className="mt-2">
-                    <Skel w="w-20" />
-                  </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
+            {tiles.map((t) => (
+              <div key={t.label} className="rounded border p-3">
+                <div className="text-muted-foreground text-xs">{t.label}</div>
+                <div className="mt-1 flex h-7 items-center text-lg font-semibold">
+                  {!summary ? (
+                    <Skel w="w-16" />
+                  ) : (
+                    <>
+                      {t.value}
+                      <TrendBadge delta={t.delta} />
+                    </>
+                  )}
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
-              {tiles.map((t) => (
-                <div key={t.label} className="rounded border p-3">
-                  <div className="text-muted-foreground text-xs">{t.label}</div>
-                  <div className="mt-1 text-lg font-semibold">
-                    {t.value}
-                    <TrendBadge delta={t.delta} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+              </div>
+            ))}
+          </div>
 
           <TabsList
             aria-label="System status sections"
-            className="bg-card border-border h-12 w-full justify-start overflow-x-auto rounded-md border p-1 shadow-sm"
+            className="bg-card border-border h-12 w-full justify-start gap-1 overflow-x-auto rounded-md border p-1 shadow-sm"
           >
             {TABS.map((t) => (
               <TabsTrigger
@@ -215,12 +206,7 @@ export default function SystemStatusClient() {
               />
             </TabsContent>
             <TabsContent value="database">
-              <DatabaseTab
-                active={tab === 'database'}
-                autoRefresh={autoRefresh}
-                deep={deep}
-                setDeep={setDeep}
-              />
+              <DatabaseTab active={tab === 'database'} autoRefresh={autoRefresh} />
             </TabsContent>
             <TabsContent value="docker">
               <DockerTab active={tab === 'docker'} autoRefresh={autoRefresh} />
