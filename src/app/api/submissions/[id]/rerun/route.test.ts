@@ -128,6 +128,27 @@ describe('POST /api/submissions/[id]/rerun', () => {
     expect(rerunLog?.[2]?.metadata?.status).toBe('PENDING');
   });
 
+  // Branch 116: the assignment lookup returns null while the problem link still
+  // exists, so the rerun proceeds and the log records a null courseId via
+  // `assignment?.courseId ?? null`.
+  it('queues the submission with a null courseId when the assignment is missing', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.submission.findUnique.mockResolvedValue(submissionRecord);
+    prismaMock.assignment.findUnique.mockResolvedValue(null);
+    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
+      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
+    });
+    prismaMock.submission.update.mockResolvedValue({ ...submissionRecord, status: 'PENDING' });
+
+    const res = await POST(makeRequest(), { params: Promise.resolve({ id: 's1' }) });
+
+    expect(res.status).toBe(202);
+    const rerunLog = activityLogMock.mock.calls.find(
+      (call) => call[2]?.action === 'SUBMISSION_RERUN',
+    );
+    expect(rerunLog?.[2]?.courseId).toBeNull();
+  });
+
   it('returns 500 when resetting the submission fails', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.submission.findUnique.mockResolvedValue(submissionRecord);
@@ -140,5 +161,25 @@ describe('POST /api/submissions/[id]/rerun', () => {
     const res = await POST(makeRequest(), { params: Promise.resolve({ id: 's1' }) });
 
     expect(res.status).toBe(500);
+  });
+
+  // Branch 136 false side: a thrown non-Error is logged as the 'unknown error'
+  // message in the catch block.
+  it('returns 500 and logs unknown error when a non-Error is thrown', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.submission.findUnique.mockResolvedValue(submissionRecord);
+    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
+    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
+      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
+    });
+    prismaMock.submission.update.mockRejectedValueOnce('boom');
+
+    const res = await POST(makeRequest(), { params: Promise.resolve({ id: 's1' }) });
+
+    expect(res.status).toBe(500);
+    const errorLog = activityLogMock.mock.calls.find(
+      (call) => call[2]?.action === 'SUBMISSION_RERUN_ERROR',
+    );
+    expect(errorLog?.[2]?.metadata?.error).toBe('unknown error');
   });
 });

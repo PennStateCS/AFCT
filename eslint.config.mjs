@@ -2,6 +2,7 @@ import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { FlatCompat } from '@eslint/eslintrc';
 import eslintConfigPrettier from 'eslint-config-prettier';
+import pluginQuery from '@tanstack/eslint-plugin-query';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -25,6 +26,9 @@ const eslintConfig = [
     ],
   },
   ...compat.extends('next/core-web-vitals', 'next/typescript'),
+  // TanStack Query correctness rules: stable QueryClient, exhaustive query-key
+  // deps, no void queryFn, correct infinite-query/mutation property order, etc.
+  ...pluginQuery.configs['flat/recommended'],
   {
     // require() is idiomatic (and hoisting-safe) inside vitest `vi.mock` factories,
     // which are hoisted above the file's imports. Enforce ESM imports only in

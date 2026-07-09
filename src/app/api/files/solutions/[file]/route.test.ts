@@ -217,6 +217,31 @@ describe('GET /api/files/solutions/[file]', () => {
     );
   });
 
+  it('returns 500 and logs when reading the file throws', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: true } });
+    prismaMock.problem.findFirst.mockResolvedValue({
+      id: 'problem-1',
+      courseId: 'course-1',
+      fileName: 'file.txt',
+      originalFileName: 'solution.txt',
+    });
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.promises.readFile).mockRejectedValueOnce(new Error('disk failure'));
+
+    const res = await GET(new NextRequest('http://localhost/api/files/solutions/file.txt'), {
+      params: Promise.resolve({ file: 'file.txt' }),
+    });
+
+    expect(res.status).toBe(500);
+    const json = await res.json();
+    expect(json.error).toBe('Internal server error');
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({ action: 'SOLUTION_DOWNLOAD_ERROR', severity: 'ERROR' }),
+    );
+  });
+
   it('uses fileName when originalFileName is null', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: true } });
     prismaMock.problem.findFirst.mockResolvedValue({

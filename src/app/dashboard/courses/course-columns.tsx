@@ -12,11 +12,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { showToast } from '@/lib/toast';
 import { ColumnDef } from '@tanstack/react-table';
-import { Pencil, Trash2, BookOpen, ChevronDown } from 'lucide-react';
+import { Pencil, Trash2, BookOpen, ChevronDown, Copy } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { Course } from '@prisma/client';
 import { EditCourseDialog } from '@/components/dialogs/EditCourseDialog';
+import DuplicateCourseDialog from '@/components/dialogs/DuplicateCourseDialog';
 import { getInstructors, type EnrolledUser } from '@/lib/course-utils';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { formatDateTimeInTimeZone } from '@/lib/date';
@@ -40,6 +42,7 @@ type CourseActionsCellProps = {
   course: CourseWithFaculty;
   onCourseUpdated: (updated: CourseWithFaculty) => void; // Called when a course is updated (edit/save)
   onCourseDeleted: () => void; // Called after a course is deleted (triggers parent reload)
+  onCourseDuplicated: () => void; // Called after a course is duplicated (triggers parent reload)
   timeZone: string;
 };
 
@@ -93,6 +96,7 @@ const getRegistrationStatus = (
 export const columns = (
   onCourseUpdated: (updated: CourseWithFaculty) => void,
   onCourseDeleted: () => void,
+  onCourseDuplicated: () => void,
   timeZone: string,
 ): ColumnDef<CourseWithFaculty>[] => [
   {
@@ -197,6 +201,7 @@ export const columns = (
           course={course}
           onCourseUpdated={onCourseUpdated}
           onCourseDeleted={onCourseDeleted}
+          onCourseDuplicated={onCourseDuplicated}
           timeZone={timeZone}
         />
       );
@@ -208,10 +213,15 @@ function CourseActionsCell({
   course,
   onCourseUpdated,
   onCourseDeleted,
+  onCourseDuplicated,
   timeZone,
 }: CourseActionsCellProps) {
+  const { data: session } = useSession();
+  // Duplicating a course is a system-admin-only action; the route enforces this too.
+  const isAdmin = session?.user?.isAdmin === true;
   const [editOpen, setEditOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [duplicateOpen, setDuplicateOpen] = useState(false);
 
   const handleDelete = async () => {
     try {
@@ -274,6 +284,19 @@ function CourseActionsCell({
         confirmText="Delete"
       />
 
+      {isAdmin && (
+        <DuplicateCourseDialog
+          open={duplicateOpen}
+          setOpen={setDuplicateOpen}
+          course={course}
+          timeZone={timeZone}
+          onSuccess={() => {
+            setDuplicateOpen(false);
+            onCourseDuplicated();
+          }}
+        />
+      )}
+
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="secondary" aria-label={`Manage course ${course.name}`}>
@@ -300,6 +323,15 @@ function CourseActionsCell({
             <Pencil className="mr-2 h-4 w-4" />
             Edit Course
           </DropdownMenuItem>
+          {isAdmin && (
+            <DropdownMenuItem
+              onClick={() => setDuplicateOpen(true)}
+              className="hover:bg-secondary flex items-center gap-2"
+            >
+              <Copy className="mr-2 h-4 w-4" />
+              Duplicate Course
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onClick={() => setConfirmOpen(true)}

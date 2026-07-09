@@ -100,4 +100,23 @@ describe('POST /api/courses/[id]/submissions/rerun', () => {
 
     expect(res.status).toBe(500);
   });
+
+  // Covers the false side of `error instanceof Error` in the catch log (branch 89):
+  // a thrown non-Error is recorded as the 'unknown error' message.
+  it('returns 500 and logs unknown error when a non-Error is thrown', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'TA' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'TA' });
+    prismaMock.submission.findMany.mockResolvedValue([
+      { id: 's1', courseId: 'c1', assignmentId: 'a1', problemId: 'p1' },
+    ]);
+    prismaMock.submission.update.mockRejectedValueOnce('boom');
+
+    const res = await POST(makeRequest(), params());
+
+    expect(res.status).toBe(500);
+    const errorLog = activityLogMock.mock.calls.find(
+      (call) => call[2]?.action === 'COURSE_SUBMISSIONS_RERUN_ERROR',
+    );
+    expect(errorLog?.[2]?.metadata?.error).toBe('unknown error');
+  });
 });

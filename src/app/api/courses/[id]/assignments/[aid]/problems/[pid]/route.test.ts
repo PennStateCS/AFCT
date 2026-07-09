@@ -162,4 +162,25 @@ describe('PUT /api/courses/[id]/[aid]/problems/[pid]', () => {
     const res = await PUT(req, { params: Promise.resolve({ id: 'c1', aid: 'a1', pid: 'p1' }) });
     expect(res.status).toBe(500);
   });
+
+  it('returns 500 and logs when a non-Error is thrown', async () => {
+    prismaMock.assignmentProblem.update.mockRejectedValue('boom');
+
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems/p1', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ maxPoints: 10, maxSubmissions: 2, autograderEnabled: true }),
+    });
+
+    const res = await PUT(req, { params: Promise.resolve({ id: 'c1', aid: 'a1', pid: 'p1' }) });
+    expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        action: 'ASSIGNMENT_PROBLEM_SETTINGS_UPDATE_ERROR',
+        metadata: { error: 'unknown error' },
+      }),
+    );
+  });
 });

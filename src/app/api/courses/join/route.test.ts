@@ -11,9 +11,11 @@ const prismaMock = vi.hoisted(() => ({
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
+const activityLogMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
+vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 
 import { POST } from './route';
 
@@ -172,6 +174,72 @@ describe('POST /api/courses/join', () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toBe('Registration is not open yet for this course.');
+  });
+
+  it('returns 400 when the registration window is not configured', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: false } });
+    prismaMock.course.findUnique.mockResolvedValue(
+      buildCourse({ registrationOpenAt: null, registrationCloseAt: null }),
+    );
+    prismaMock.roster.findUnique.mockResolvedValue(null);
+
+    const req = new Request('http://localhost/api/courses/join', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: 'ABC123' }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('Registration is currently closed for this course.');
+  });
+
+  it('returns 500 and logs when creating the roster entry throws', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: false } });
+    prismaMock.course.findUnique.mockResolvedValue(buildCourse());
+    prismaMock.roster.findUnique.mockResolvedValue(null);
+    prismaMock.roster.create.mockRejectedValueOnce(new Error('db down'));
+
+    const req = new Request('http://localhost/api/courses/join', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: 'ABC123' }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).toBe('Failed to join the course.');
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      req,
+      expect.objectContaining({ action: 'COURSE_JOIN_ERROR', severity: 'ERROR' }),
+    );
+  });
+
+  it('returns 500 with a generic message when a non-Error is thrown', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: false } });
+    prismaMock.course.findUnique.mockResolvedValue(buildCourse());
+    prismaMock.roster.findUnique.mockResolvedValue(null);
+    prismaMock.roster.create.mockRejectedValueOnce('boom');
+
+    const req = new Request('http://localhost/api/courses/join', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: 'ABC123' }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      req,
+      expect.objectContaining({
+        action: 'COURSE_JOIN_ERROR',
+        metadata: expect.objectContaining({ error: 'unknown error' }),
+      }),
+    );
   });
 
   it('returns 400 when registration window has closed', async () => {
