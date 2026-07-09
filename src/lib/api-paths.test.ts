@@ -45,7 +45,7 @@ describe('apiPaths', () => {
 
   it('builds problem, submission, and account paths', () => {
     expect(apiPaths.courseProblem('c1', 'p1')).toBe('/api/courses/c1/problems/p1');
-    expect(apiPaths.problemComments('p1')).toBe('/api/problems/p1/comments');
+    expect(apiPaths.comments({ commentId: 'cm1' })).toBe('/api/comments?commentId=cm1');
     expect(apiPaths.submissionRerun('s1')).toBe('/api/submissions/s1/rerun');
     expect(apiPaths.systemSettingsPublic()).toBe('/api/system-settings/public');
   });

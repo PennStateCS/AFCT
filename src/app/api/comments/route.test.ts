@@ -28,7 +28,7 @@ vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 
-import { POST, GET, DELETE } from './route';
+import { POST, DELETE } from './route';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -203,108 +203,6 @@ describe('POST /api/comments', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           aboutStudentId: 's1',
-        }),
-      }),
-    );
-  });
-});
-
-describe('GET /api/comments', () => {
-  it('returns 401 when not authenticated', async () => {
-    authMock.mockResolvedValue(null);
-
-    const req = new NextRequest('http://localhost/api/comments?assignmentId=a1&problemId=p1');
-    const res = await GET(req);
-    expect(res.status).toBe(401);
-  });
-
-  it('returns 400 when params missing', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-
-    const req = new NextRequest('http://localhost/api/comments?assignmentId=a1');
-    const res = await GET(req);
-    expect(res.status).toBe(400);
-  });
-
-  it('returns 404 when assignment not found', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    prismaMock.assignment.findUnique.mockResolvedValue(null);
-
-    const req = new NextRequest('http://localhost/api/comments?assignmentId=a1&problemId=p1');
-    const res = await GET(req);
-    expect(res.status).toBe(404);
-  });
-
-  it('returns 403 when user not enrolled', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
-    prismaMock.roster.findFirst.mockResolvedValue(null);
-
-    const req = new NextRequest('http://localhost/api/comments?assignmentId=a1&problemId=p1');
-    const res = await GET(req);
-    expect(res.status).toBe(403);
-  });
-
-  it('fetches all comments for assignment/problem', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
-    prismaMock.comment.findMany.mockResolvedValue([
-      {
-        id: 'cm1',
-        content: 'Comment 1',
-        createdAt: new Date(),
-        roster: {
-          role: 'STUDENT',
-          user: { id: 'u1', firstName: 'A', lastName: 'B', avatar: null, role: 'STUDENT' },
-        },
-      },
-    ]);
-
-    const req = new NextRequest('http://localhost/api/comments?assignmentId=a1&problemId=p1');
-    const res = await GET(req);
-    expect(res.status).toBe(200);
-    const json = await res.json();
-    expect(json).toHaveLength(1);
-  });
-
-  it('filters comments by studentId', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
-    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
-    prismaMock.comment.findMany.mockResolvedValue([]);
-
-    const req = new NextRequest(
-      'http://localhost/api/comments?assignmentId=a1&problemId=p1&studentId=s1',
-    );
-    const res = await GET(req);
-    expect(res.status).toBe(200);
-    expect(prismaMock.comment.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          OR: expect.any(Array),
-        }),
-      }),
-    );
-  });
-
-  it('supports assignment-scope fetch for student without problemId', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
-    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
-    prismaMock.comment.findMany.mockResolvedValue([]);
-
-    const req = new NextRequest(
-      'http://localhost/api/comments?assignmentId=a1&studentId=s1&scope=assignment',
-    );
-    const res = await GET(req);
-
-    expect(res.status).toBe(200);
-    expect(prismaMock.comment.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          assignmentId: 'a1',
-          OR: expect.any(Array),
         }),
       }),
     );

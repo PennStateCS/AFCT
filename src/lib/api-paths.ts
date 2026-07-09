@@ -82,9 +82,6 @@ export const apiPaths = {
   // --- Global assignment routes -------------------------------------------
   assignmentByIdProblems: (id: string) => `/api/assignments/${id}/problems`,
 
-  // --- Problems (course-nested; see courseProblems/courseProblem above) -----
-  problemComments: (id: string) => `/api/problems/${id}/comments`,
-
   // --- Comments / submissions ---------------------------------------------
   comments: (opts?: { commentId?: string }) => `/api/comments${qs({ commentId: opts?.commentId })}`,
   submissions: () => '/api/submissions',
