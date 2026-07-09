@@ -14,7 +14,8 @@ const renderWithClient = (ui: React.ReactElement) => {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 };
 
-// Captures the (onCourseUpdated, onCourseDeleted, timezone) args the client passes.
+// Captures the (onCourseUpdated, onCourseDeleted, onCourseDuplicated, timezone) args
+// the client passes.
 const columnsMock = vi.hoisted(() => vi.fn(() => []));
 
 vi.mock('./course-columns', () => ({ columns: columnsMock }));
