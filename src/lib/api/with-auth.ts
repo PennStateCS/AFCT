@@ -36,7 +36,10 @@ export function withAdminAuth<Ctx = unknown, R extends Response = Response>(
 ): (req: Request, ctx: Ctx) => Promise<R | NextResponse> {
   return async (req: Request, ctx: Ctx) => {
     const session = await auth();
-    if (!session?.user) {
+    // Reject a missing session or a disabled/deleted account (the session callback
+    // marks the user inactive when the DB row is gone or disabled) before any
+    // privilege check — a stale JWT must not keep granting admin access.
+    if (!session?.user || session.user.inactive) {
       return apiError(401, 'Unauthorized');
     }
     if (!isAdmin(session.user)) {
@@ -85,7 +88,9 @@ export function withCourseAuth<Ctx extends CourseParams, R extends Response = Re
 ): (req: Request, ctx: Ctx) => Promise<R | NextResponse> {
   return async (req: Request, ctx: Ctx) => {
     const session = await auth();
-    if (!session?.user) {
+    // Reject a missing session or a disabled/deleted account before any course
+    // check (see withAdminAuth) — a stale JWT must not keep granting access.
+    if (!session?.user || session.user.inactive) {
       return apiError(401, 'Unauthorized');
     }
 

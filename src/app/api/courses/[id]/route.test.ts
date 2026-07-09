@@ -122,6 +122,109 @@ describe('GET /api/courses/[id]', () => {
     expect(body.viewerRole).toBe('STUDENT');
   });
 
+  it('restricts a student view to published assignments and omits the problem bank', async () => {
+    authMock.mockResolvedValue({ user: { id: 'stu-1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+    prismaMock.course.findUnique.mockResolvedValue({
+      id: 'course-1',
+      name: 'C1',
+      code: 'CS1',
+      isPublished: true,
+      isArchived: false,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+      _count: { assignments: 5, problems: 9, roster: 3 },
+      assignments: [],
+      roster: [],
+    });
+
+    await GET(new Request('http://localhost/api/courses/1'), {
+      params: Promise.resolve({ id: 'course-1' }),
+    });
+
+    const include = prismaMock.course.findUnique.mock.calls[0][0].include;
+    // Students only get published assignments, and never the problem bank.
+    expect(include.assignments.where).toEqual({ isPublished: true });
+    expect(include.problems).toBeUndefined();
+
+    // The response totals must not leak counts of hidden data.
+    const body = await (
+      await GET(new Request('http://localhost/api/courses/1'), {
+        params: Promise.resolve({ id: 'course-1' }),
+      })
+    ).json();
+    expect(body.problems).toEqual([]);
+    expect(body.problemTotal).toBe(0);
+    expect(body.assignmentTotal).toBe(0); // no published assignments in this mock
+  });
+
+  it('gives staff all assignments and the problem bank', async () => {
+    authMock.mockResolvedValue({ user: { id: 'fac-1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.course.findUnique.mockResolvedValue({
+      id: 'course-1',
+      name: 'C1',
+      code: 'CS1',
+      isPublished: true,
+      isArchived: false,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+      _count: { assignments: 5, problems: 9, roster: 3 },
+      assignments: [],
+      problems: [],
+      roster: [],
+    });
+
+    await GET(new Request('http://localhost/api/courses/1'), {
+      params: Promise.resolve({ id: 'course-1' }),
+    });
+
+    const include = prismaMock.course.findUnique.mock.calls[0][0].include;
+    expect(include.assignments.where).toEqual({});
+    expect(include.problems).toBe(true);
+  });
+
+  it('gives a student a privacy-safe roster (staff names only, no classmate email)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'stu-1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+    prismaMock.course.findUnique.mockResolvedValue({
+      id: 'course-1',
+      name: 'C1',
+      code: 'CS1',
+      isPublished: true,
+      isArchived: false,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+      _count: { assignments: 0, problems: 0, roster: 2 },
+      assignments: [],
+      roster: [
+        {
+          role: 'FACULTY',
+          user: { id: 'u1', firstName: 'Ada', lastName: 'Lovelace', email: 'ada@x.edu' },
+        },
+        {
+          role: 'STUDENT',
+          user: { id: 'u2', firstName: 'Alan', lastName: 'Turing', email: 'alan@x.edu' },
+        },
+      ],
+    });
+
+    const body = await (
+      await GET(new Request('http://localhost/api/courses/1'), {
+        params: Promise.resolve({ id: 'course-1' }),
+      })
+    ).json();
+
+    const serialized = JSON.stringify(body.enrolled);
+    expect(serialized).not.toContain('@x.edu'); // no emails
+    expect(serialized).not.toContain('Alan'); // no classmate (student) name
+    expect(serialized).not.toContain('u2'); // no classmate id
+    expect(body.enrolled).toContainEqual(
+      expect.objectContaining({ firstName: 'Ada', courseRole: 'FACULTY' }),
+    );
+    expect(body.enrolled).toContainEqual({ id: '', courseRole: 'STUDENT' });
+  });
+
   it('returns 404 when course is not found', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.course.findUnique.mockResolvedValue(null);

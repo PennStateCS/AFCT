@@ -146,7 +146,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.isAdmin = Boolean(token.isAdmin);
         session.user.avatar = (token.avatar as string | null) || undefined;
 
-        // Always fetch fresh user data to ensure profile updates are reflected
+        // Always fetch fresh user data to ensure profile updates are reflected —
+        // and, critically, to catch an account that has since been deleted or
+        // disabled so a stale JWT can't keep granting access (especially admin).
         try {
           const freshUser = await prisma.user.findUnique({
             where: { id: token.id as string },
@@ -156,27 +158,35 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               isAdmin: true,
               avatar: true,
               temporaryPassword: true,
+              inactive: true,
             },
           });
 
-          if (freshUser) {
+          if (freshUser && !freshUser.inactive) {
             session.user.firstName = freshUser.firstName || undefined;
             session.user.lastName = freshUser.lastName || undefined;
             session.user.isAdmin = freshUser.isAdmin;
             session.user.avatar = freshUser.avatar || undefined;
             session.user.mustChangePassword = freshUser.temporaryPassword;
+            session.user.inactive = false;
             // Update the combined name as well
             session.user.name =
               `${freshUser.firstName || ''} ${freshUser.lastName || ''}`.trim() || undefined;
           } else {
-            // Fallback to token data if user not found
+            // The account is gone or disabled: revoke access. Strip privileges and
+            // mark the session inactive so the auth wrappers (and any consumer that
+            // checks it) reject it, rather than trusting the stale token.
+            session.user.isAdmin = false;
+            session.user.inactive = true;
             session.user.firstName = token.firstName as string | undefined;
             session.user.lastName = token.lastName as string | undefined;
             session.user.mustChangePassword = Boolean(token.mustChangePassword);
           }
         } catch (error) {
           console.error('Error fetching fresh user data:', error);
-          // Fallback to token data on error
+          // Fall back to token data on a transient DB error (fail-open on
+          // availability grounds — failing closed would sign everyone out during a
+          // blip). isAdmin remains as set from the token above.
           session.user.firstName = token.firstName as string | undefined;
           session.user.lastName = token.lastName as string | undefined;
           session.user.mustChangePassword = Boolean(token.mustChangePassword);

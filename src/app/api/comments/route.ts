@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
     // Verify assignment & course
     const assignment = await prisma.assignment.findUnique({
       where: { id: assignmentId },
-      select: { courseId: true },
+      select: { courseId: true, isPublished: true },
     });
     if (!assignment) {
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
@@ -94,6 +94,18 @@ export async function POST(request: NextRequest) {
         metadata: {},
       });
       return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
+    }
+
+    // A student must not comment on an unpublished assignment (they can't see it);
+    // only course staff may. Mask it as 404 so the assignment stays invisible.
+    if (!assignment.isPublished && !(await canManageCourse(user, assignment.courseId))) {
+      await createEnhancedActivityLog(prisma, request, {
+        userId: session?.user?.id ?? null,
+        action: 'COMMENT_CREATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { reason: 'unpublished assignment' },
+      });
+      return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 
     // Obtain the author's roster row for the comment FK. Admins who aren't on the
@@ -117,6 +129,20 @@ export async function POST(request: NextRequest) {
     });
     if (!problem) {
       return NextResponse.json({ error: 'Problem not found in this course' }, { status: 404 });
+    }
+
+    // Verify the problem is actually linked to THIS assignment (not merely present
+    // in the course) — otherwise a comment could be created against an
+    // assignment/problem pair that doesn't exist.
+    const link = await prisma.assignmentProblem.findUnique({
+      where: { assignmentId_problemId: { assignmentId, problemId } },
+      select: { assignmentId: true },
+    });
+    if (!link) {
+      return NextResponse.json(
+        { error: 'Problem is not part of this assignment' },
+        { status: 400 },
+      );
     }
 
     // If filtering by a specific student, verify they’re enrolled
