@@ -54,23 +54,16 @@ const API_DESCRIPTION = [
 const TAG_DESCRIPTIONS = {
   auth: 'Sign-up and credential/email checks.',
   courses: 'Courses, rosters, enrollment, groups, grades, and their assignments and problems.',
-  comments: 'Per-problem discussion comments.',
-  assignments: 'Assignment CRUD and per-assignment problem and grade views.',
-  problems: 'Problem bank CRUD, submissions, and comments.',
+  comments: "An assignment problem's discussion comments.",
+  assignments: "An assignment's problem list (global lookup by assignment id).",
   submissions: 'Student submissions and re-evaluation.',
   users: 'User accounts and administration.',
   me: "The signed-in user's own profile, password, courses, enrollments, and assignments.",
   files: 'Served avatars, uploaded files, and solution files.',
-  groups: 'Course groups addressed by group id.',
-  logging: 'Activity/audit log browsing.',
-  logs: 'Activity-log export.',
-  admin: 'Admin-only user and submission tools.',
+  admin: 'Admin-only user, submission, log, and system tools.',
   'system-settings': 'System configuration, TLS certificates, and backups.',
   session: 'Session keep-alive.',
-  status: 'Operational status and diagnostics.',
   health: 'Liveness probe for the container healthcheck.',
-  uploads: 'Serving uploaded files (avatars, problem files, submissions).',
-  solutions: 'Serving problem solution files (staff only).',
   public: 'Public credential verification.',
 };
 
@@ -187,7 +180,9 @@ function parseRoute(file) {
       [...src.matchAll(/'(ADMIN|FACULTY|TA|STUDENT)'/g)]
         .map((x) => x[1])
         // only treat as required roles if they appear in an includes()/role check
-        .filter(() => /\.includes\(\s*role|role\s*(?:===|!==)|requireRole|\[['"](?:ADMIN|FACULTY)/.test(src)),
+        .filter(() =>
+          /\.includes\(\s*role|role\s*(?:===|!==)|requireRole|\[['"](?:ADMIN|FACULTY)/.test(src),
+        ),
     ),
   ];
   return { ops, authed, roles };
@@ -292,9 +287,11 @@ function buildSpec(routes) {
       description: API_DESCRIPTION,
     },
     servers: [{ url: '/', description: 'Same-origin (relative to the deployed app)' }],
-    tags: [...tags].sort().map((name) =>
-      TAG_DESCRIPTIONS[name] ? { name, description: TAG_DESCRIPTIONS[name] } : { name },
-    ),
+    tags: [...tags]
+      .sort()
+      .map((name) =>
+        TAG_DESCRIPTIONS[name] ? { name, description: TAG_DESCRIPTIONS[name] } : { name },
+      ),
     paths,
     components: {
       securitySchemes: {
@@ -314,7 +311,8 @@ function buildSpec(routes) {
         // responses (4xx/5xx) reference this schema.
         Error: {
           type: 'object',
-          description: 'Error response. Handlers return `error` or `message` with a human-readable reason.',
+          description:
+            'Error response. Handlers return `error` or `message` with a human-readable reason.',
           properties: {
             error: { type: 'string' },
             message: { type: 'string' },
@@ -414,6 +412,8 @@ console.log('[docs] spec validates against the OpenAPI schema');
 // Opt-in gate (DOCS_STRICT=1): also fail when any operation is still skeleton-only,
 // so a team can enforce full enrichment once they've reached it.
 if (process.env.DOCS_STRICT === '1' && skeletonCount) {
-  console.error(`\n[docs] ERROR: DOCS_STRICT set and ${skeletonCount} operation(s) lack an @openapi block.`);
+  console.error(
+    `\n[docs] ERROR: DOCS_STRICT set and ${skeletonCount} operation(s) lack an @openapi block.`,
+  );
   process.exit(1);
 }

@@ -2,12 +2,8 @@
  * Central builders for API endpoint paths.
  *
  * All client-side `fetch()` calls should build their URL through `apiPaths` rather than
- * hardcoding a string. That way, when a route is renamed or moved during the API
- * reorganization, the change is a single edit here and every caller follows — instead of
- * a sweep across dozens of files.
- *
- * These currently return the EXISTING paths (the reorg has not moved anything yet); later
- * stages rewrite the bodies in place.
+ * hardcoding a string. That way, when a route is renamed or moved, the change is a single
+ * edit here and every caller follows — instead of a sweep across dozens of files.
  */
 
 type QueryValue = string | number | boolean | null | undefined;
@@ -109,7 +105,6 @@ export const apiPaths = {
   // --- Admin ---------------------------------------------------------------
   admin: {
     users: (opts?: { role?: string }) => `/api/admin/users${qs({ role: opts?.role })}`,
-    user: (id: string) => `/api/admin/users/${id}`,
     usersBulk: () => '/api/admin/users/bulk',
     usersList: () => '/api/admin/users/list',
     resetPassword: () => '/api/admin/reset-password',
