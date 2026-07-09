@@ -103,6 +103,26 @@ describe('SessionWatcher', () => {
     expect(safeSignOutMock).toHaveBeenCalledTimes(1);
   });
 
+  it('heartbeats the server (update) on activity, throttled to the interval', () => {
+    // 5-min window → heartbeat interval is 75s.
+    render(<SessionWatcher />);
+    updateMock.mockClear();
+
+    // Activity before the interval elapses does not heartbeat.
+    act(() => {
+      vi.advanceTimersByTime(30_000);
+      window.dispatchEvent(new MouseEvent('mousemove'));
+    });
+    expect(updateMock).not.toHaveBeenCalled();
+
+    // Once past the interval, the next activity refreshes the server clock.
+    act(() => {
+      vi.advanceTimersByTime(50_000); // 80s total > 75s
+      window.dispatchEvent(new MouseEvent('mousemove'));
+    });
+    expect(updateMock).toHaveBeenCalled();
+  });
+
   it('signs out when the server marks the session inactive', () => {
     useSessionMock.mockReturnValue({
       status: 'authenticated',
