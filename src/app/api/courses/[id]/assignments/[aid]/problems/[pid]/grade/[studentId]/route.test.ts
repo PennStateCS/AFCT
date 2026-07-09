@@ -31,7 +31,7 @@ describe('/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]', () => {
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     authMock.mockResolvedValue({ user: { id: 'staff-1', role: 'FACULTY' } });
     prismaMock.assignmentProblem.findUnique.mockResolvedValue({
-      assignment: { courseId: defaultParams.id },
+      assignment: { courseId: defaultParams.id, isPublished: true },
       maxPoints: 100,
     });
     prismaMock.assignmentProblemGrade.findUnique.mockResolvedValue({
@@ -116,6 +116,22 @@ describe('/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]', () => {
 
       expect(res.status).toBe(200);
       expect(prismaMock.assignmentProblem.findUnique).toHaveBeenCalled();
+    });
+
+    it('404-masks an unpublished assignment for the owning student', async () => {
+      // Even reading their OWN grade, a student can't touch an unpublished assignment.
+      authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
+      prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+      prismaMock.assignmentProblem.findUnique.mockResolvedValue({
+        assignment: { courseId: defaultParams.id, isPublished: false },
+        maxPoints: 100,
+      });
+
+      const res = await GET(new Request('http://localhost'), {
+        params: Promise.resolve(defaultParams),
+      });
+
+      expect(res.status).toBe(404);
     });
 
     it('returns 403 when an enrolled student reads someone else grade', async () => {
