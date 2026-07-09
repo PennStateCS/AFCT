@@ -368,54 +368,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/assignments/{id}/student-context": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get my context for an assignment
-         * @description Everything the caller needs to see their own work on an assignment, grouped by  problem: their submissions, the comments addressed to them, and their per-problem  and overall grades. Requires enrollment in the course; students can't see it  until the assignment is published. Scoped entirely to the caller's own data.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/assignments/[id]/student-context/route.ts)
-         */
-        get: operations["getAssignmentsByIdStudentContext"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/assignments": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Create an assignment
-         * @description Creates an assignment in a course. Course staff (faculty or TAs) or a system  admin, checked against the body's courseId. The due date is  interpreted as end-of-day in the actor's timezone. Late submissions and their  cutoff must agree — a cutoff is required when late is on, forbidden when off, and  must fall on or after the due date.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/assignments/route.ts)
-         */
-        post: operations["postAssignments"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/auth/check-email": {
         parameters: {
             query?: never;
@@ -762,6 +714,28 @@ export interface paths {
         patch: operations["patchCoursesByIdAssignmentsByAid"];
         trace?: never;
     };
+    "/api/courses/{id}/assignments/{aid}/student-context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get my context for an assignment
+         * @description Everything the caller needs to see their own work on an assignment, grouped by  problem: their submissions, the comments addressed to them, and their per-problem  and overall grades. Requires enrollment in the course; students can't see it  until the assignment is published. Scoped entirely to the caller's own data.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/student-context/route.ts)
+         */
+        get: operations["getCoursesByIdAssignmentsByAidStudentContext"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/{id}/assignments/{aid}/submissions/{sid}": {
         parameters: {
             query?: never;
@@ -799,7 +773,13 @@ export interface paths {
          */
         get: operations["getCoursesByIdAssignments"];
         put?: never;
-        post?: never;
+        /**
+         * Create a course assignment
+         * @description Creates an assignment in the course. Course staff (faculty or TAs) or a system  admin. The due date is interpreted as end-of-day in the actor's timezone. Late  submissions and their cutoff must agree — a cutoff is required when late is on,  forbidden when off, and must fall on or after the due date.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/route.ts)
+         */
+        post: operations["postCoursesByIdAssignments"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2903,131 +2883,6 @@ export interface operations {
             };
         };
     };
-    getAssignmentsByIdStudentContext: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Assignment id */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The caller's submissions, comments, and grades for the assignment. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        assignmentGrade?: number | null;
-                        problemGrades?: Record<string, never>;
-                        submissionCount?: number;
-                        submissionsByProblem?: Record<string, never>;
-                        commentsByProblem?: Record<string, never>;
-                    };
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Assignment not found, unpublished (for students), or caller not enrolled. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    postAssignments: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    title: string;
-                    description?: string;
-                    courseId: string;
-                    /** @description Interpreted as end-of-day in the actor's timezone */
-                    dueDate?: string;
-                    allowLateSubmissions?: boolean;
-                    /** @description Required when allowLateSubmissions is true */
-                    lateCutoff?: string;
-                    isPublished?: boolean;
-                    isGroup?: boolean;
-                };
-            };
-        };
-        responses: {
-            /** @description The created assignment. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Missing fields, or an inconsistent late-submission window. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not course staff or a system admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     getAuthCheckEmail: {
         parameters: {
             query: {
@@ -4522,6 +4377,73 @@ export interface operations {
             };
         };
     };
+    getCoursesByIdAssignmentsByAidStudentContext: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Course id */
+                id: string;
+                /** @description Assignment id */
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's submissions, comments, and grades for the assignment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        assignmentGrade?: number | null;
+                        problemGrades?: Record<string, never>;
+                        submissionCount?: number;
+                        submissionsByProblem?: Record<string, never>;
+                        commentsByProblem?: Record<string, never>;
+                    };
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not enrolled in the course. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Assignment not found in this course, or unpublished (for students). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     getCoursesByIdAssignmentsByAidSubmissionsBySid: {
         parameters: {
             query?: never;
@@ -4623,6 +4545,76 @@ export interface operations {
             };
             /** @description Course not found. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postCoursesByIdAssignments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    title: string;
+                    description?: string;
+                    /** @description Interpreted as end-of-day in the actor's timezone */
+                    dueDate?: string;
+                    allowLateSubmissions?: boolean;
+                    /** @description Required when allowLateSubmissions is true */
+                    lateCutoff?: string;
+                    isPublished?: boolean;
+                    isGroup?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The created assignment. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing fields, or an inconsistent late-submission window. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff or a system admin. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

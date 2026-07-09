@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const authMock = vi.hoisted(() => vi.fn());
 const prismaMock = vi.hoisted(() => ({
-  assignment: { findUnique: vi.fn() },
+  assignment: { findFirst: vi.fn() },
   roster: { findFirst: vi.fn() },
   submission: { findMany: vi.fn() },
   comment: { findMany: vi.fn() },
@@ -14,42 +14,52 @@ vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
 import { GET } from './route';
 
+const url = 'http://localhost/api/courses/c1/assignments/a1/student-context';
+
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
 });
 
-describe('GET /api/assignments/[id]/student-context', () => {
+describe('GET /api/courses/[id]/assignments/[aid]/student-context', () => {
   it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
-    const res = await GET(new Request('http://localhost/api/assignments/a1/student-context'), {
-      params: Promise.resolve({ id: 'a1' }),
-    });
+    const res = await GET(new Request(url), { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
 
     expect(res.status).toBe(401);
   });
 
-  it('returns 404 when assignment does not exist', async () => {
+  it('returns 403 when the user is not on the course roster', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    prismaMock.assignment.findUnique.mockResolvedValue(null);
+    prismaMock.roster.findFirst.mockResolvedValue(null);
 
-    const res = await GET(new Request('http://localhost/api/assignments/a1/student-context'), {
-      params: Promise.resolve({ id: 'a1' }),
-    });
+    const res = await GET(new Request(url), { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 404 when assignment does not exist in the course', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
+    prismaMock.assignment.findFirst.mockResolvedValue(null);
+
+    const res = await GET(new Request(url), { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
 
     expect(res.status).toBe(404);
+    expect(prismaMock.assignment.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'a1', courseId: 'c1' } }),
+    );
   });
 
   it('returns grouped student context', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    prismaMock.assignment.findUnique.mockResolvedValue({
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
+    prismaMock.assignment.findFirst.mockResolvedValue({
       id: 'a1',
-      courseId: 'c1',
       isPublished: true,
       problems: [{ problemId: 'p1' }, { problemId: 'p2' }],
     });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
     prismaMock.submission.findMany.mockResolvedValue([
       {
         id: 's1',
@@ -76,9 +86,7 @@ describe('GET /api/assignments/[id]/student-context', () => {
     ]);
     prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([{ problemId: 'p1', grade: 95 }]);
 
-    const res = await GET(new Request('http://localhost/api/assignments/a1/student-context'), {
-      params: Promise.resolve({ id: 'a1' }),
-    });
+    const res = await GET(new Request(url), { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
 
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -92,46 +100,26 @@ describe('GET /api/assignments/[id]/student-context', () => {
 
   it('returns 404 when an unpublished assignment is requested by a student', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    prismaMock.assignment.findUnique.mockResolvedValue({
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
+    prismaMock.assignment.findFirst.mockResolvedValue({
       id: 'a1',
-      courseId: 'c1',
       isPublished: false,
       problems: [],
     });
 
-    const res = await GET(new Request('http://localhost/api/assignments/a1/student-context'), {
-      params: Promise.resolve({ id: 'a1' }),
-    });
-
-    expect(res.status).toBe(404);
-  });
-
-  it('returns 404 when the user is not on the course roster', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    prismaMock.assignment.findUnique.mockResolvedValue({
-      id: 'a1',
-      courseId: 'c1',
-      isPublished: true,
-      problems: [{ problemId: 'p1' }],
-    });
-    prismaMock.roster.findFirst.mockResolvedValue(null);
-
-    const res = await GET(new Request('http://localhost/api/assignments/a1/student-context'), {
-      params: Promise.resolve({ id: 'a1' }),
-    });
+    const res = await GET(new Request(url), { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
 
     expect(res.status).toBe(404);
   });
 
   it('buckets submissions and comments for problems not in the assignment list', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    prismaMock.assignment.findUnique.mockResolvedValue({
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
+    prismaMock.assignment.findFirst.mockResolvedValue({
       id: 'a1',
-      courseId: 'c1',
       isPublished: true,
       problems: [{ problemId: 'p1' }],
     });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
     // Submission/comment reference 'p2', which was not pre-seeded from the problem list.
     prismaMock.submission.findMany.mockResolvedValue([
       {
@@ -156,9 +144,7 @@ describe('GET /api/assignments/[id]/student-context', () => {
     ]);
     prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
 
-    const res = await GET(new Request('http://localhost/api/assignments/a1/student-context'), {
-      params: Promise.resolve({ id: 'a1' }),
-    });
+    const res = await GET(new Request(url), { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
 
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -170,18 +156,15 @@ describe('GET /api/assignments/[id]/student-context', () => {
 
   it('returns 500 when a data fetch fails', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    prismaMock.assignment.findUnique.mockResolvedValue({
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
+    prismaMock.assignment.findFirst.mockResolvedValue({
       id: 'a1',
-      courseId: 'c1',
       isPublished: true,
       problems: [{ problemId: 'p1' }],
     });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
     prismaMock.submission.findMany.mockRejectedValue(new Error('db down'));
 
-    const res = await GET(new Request('http://localhost/api/assignments/a1/student-context'), {
-      params: Promise.resolve({ id: 'a1' }),
-    });
+    const res = await GET(new Request(url), { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
 
     expect(res.status).toBe(500);
   });
