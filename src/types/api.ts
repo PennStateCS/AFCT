@@ -218,8 +218,6 @@ export interface paths {
          * Delete an orphaned upload
          * @description Deletes a single orphaned upload — a file on disk that no DB row references  (see the abandoned-file report on the status dashboard). System administrators  only. Guards on every axis: the category must be known, the name  must be separator-free, the file must still be unreferenced, and the resolved  path must stay inside its category folder.
          *
-         *     **Auth:** required
-         *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/abandoned-files/route.ts)
          */
         delete: operations["deleteAdminStatusAbandonedFiles"];
@@ -2355,8 +2353,17 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not signed in, or not a system administrator. */
+            /** @description Not signed in. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not a system administrator. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2423,6 +2430,15 @@ export interface operations {
                         /** @description Detected DB provider and request latency */
                         metrics?: Record<string, never>;
                     };
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Caller is not a system administrator. */
