@@ -115,7 +115,7 @@ export default function SystemStatusClient() {
   const refreshAll = () => queryClient.invalidateQueries({ queryKey: ['admin', 'status'] });
 
   return (
-    <div className="space-y-4 pb-8">
+    <Tabs value={tab} onValueChange={setTab} className="space-y-4 pb-8">
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
@@ -165,7 +165,7 @@ export default function SystemStatusClient() {
           </div>
         </CardHeader>
 
-        <CardContent className="pb-6">
+        <CardContent className="space-y-4 pb-6">
           {isLoading ? (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
               {Array.from({ length: 8 }).map((_, i) => (
@@ -190,22 +190,22 @@ export default function SystemStatusClient() {
               ))}
             </div>
           )}
+
+          <TabsList className="border-border h-12 w-full justify-start overflow-x-auto rounded-md border p-1">
+            {TABS.map((t) => (
+              <TabsTrigger
+                key={t.value}
+                value={t.value}
+                className="data-[state=active]:bg-secondary px-4 whitespace-nowrap data-[state=active]:text-white"
+              >
+                {t.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
         </CardContent>
       </Card>
 
-      <Tabs value={tab} onValueChange={setTab} className="w-full gap-4">
-        <TabsList className="bg-card border-border h-12 w-full justify-start overflow-x-auto rounded-md border p-1 shadow-sm">
-          {TABS.map((t) => (
-            <TabsTrigger
-              key={t.value}
-              value={t.value}
-              className="data-[state=active]:bg-secondary px-4 whitespace-nowrap data-[state=active]:text-white"
-            >
-              {t.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-
+      <div>
         <TabsContent value="server">
           <ServerTab
             active={tab === 'server'}
@@ -233,7 +233,7 @@ export default function SystemStatusClient() {
         <TabsContent value="files">
           <FilesTab active={tab === 'files'} autoRefresh={autoRefresh} />
         </TabsContent>
-      </Tabs>
-    </div>
+      </div>
+    </Tabs>
   );
 }
