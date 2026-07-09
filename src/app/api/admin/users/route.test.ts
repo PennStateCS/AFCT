@@ -45,7 +45,7 @@ describe('GET /api/users', () => {
 
     const res = await GET(new Request('http://localhost/api/users'));
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('returns users and logs activity', async () => {
@@ -89,7 +89,7 @@ describe('POST /api/users', () => {
 
     const res = await POST(req);
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('returns 400 when required fields missing', async () => {

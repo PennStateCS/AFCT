@@ -16,6 +16,7 @@ import { EditGroupDialog } from '@/components/dialogs/EditGroupsDialog';
 import ManageGroupMembersDialog from '@/components/dialogs/ManageGroupDialog';
 import RandomGroupsDialog from '@/components/dialogs/RandomGroupsDialog';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import { apiPaths } from '@/lib/api-paths';
 
 type CourseStudent = {
   id: string;
@@ -53,7 +54,7 @@ export function GroupsCard({
   const groupsQuery = useQuery({
     queryKey: ['course', courseId, 'groups'],
     queryFn: async () => {
-      const res = await fetch(`/api/courses/${courseId}/groups`);
+      const res = await fetch(apiPaths.courseGroups(courseId));
       if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load groups');
       const data = await res.json();
       return (Array.isArray(data) ? data : (data?.groups ?? [])) as Group[];
@@ -98,7 +99,7 @@ export function GroupsCard({
   const studentsQuery = useQuery({
     queryKey: ['course', courseId, 'students'],
     queryFn: async () => {
-      const res = await fetch(`/api/courses/${courseId}/students`);
+      const res = await fetch(apiPaths.courseStudents(courseId));
       if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load students');
       return (await res.json()) as CourseStudent[];
     },
@@ -117,7 +118,7 @@ export function GroupsCard({
   const handleDelete = async () => {
     if (!deletingGroup) return;
     try {
-      const res = await fetch(`/api/courses/${courseId}/groups/${deletingGroup.id}`, {
+      const res = await fetch(apiPaths.courseGroup(courseId, deletingGroup.id), {
         method: 'DELETE',
       });
       if (!res.ok) {

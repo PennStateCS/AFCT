@@ -56,7 +56,7 @@ describe('CalendarClient', () => {
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledTimes(1);
-      expect(global.fetch).toHaveBeenCalledWith('/api/assignments/range', expect.any(Object));
+      expect(global.fetch).toHaveBeenCalledWith('/api/me/assignments', expect.any(Object));
     });
   });
 

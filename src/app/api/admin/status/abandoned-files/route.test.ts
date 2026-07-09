@@ -7,11 +7,13 @@ const prismaMock = vi.hoisted(() => ({
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
+const activityLogMock = vi.hoisted(() => vi.fn());
 const fsExistsSyncMock = vi.hoisted(() => vi.fn());
 const fsUnlinkMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
+vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 vi.mock('fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('fs')>();
   return {
@@ -50,6 +52,24 @@ describe('DELETE /api/status/abandoned-files', () => {
     const res = await DELETE(req);
 
     expect(res.status).toBe(401);
+  });
+
+  it('returns 403 and logs a denial for a signed-in non-admin', async () => {
+    authMock.mockResolvedValue({ user: { id: 'f1', role: 'FACULTY' } });
+
+    const req = new Request('http://localhost/api/status/abandoned-files', {
+      method: 'DELETE',
+      body: JSON.stringify({ category: 'solutions', fileName: 'file.txt' }),
+    });
+
+    const res = await DELETE(req);
+
+    expect(res.status).toBe(403);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ action: 'ABANDONED_FILES_DELETE_DENIED', severity: 'SECURITY' }),
+    );
   });
 
   it('returns 400 for invalid request', async () => {

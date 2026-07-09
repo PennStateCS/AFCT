@@ -19,9 +19,9 @@ beforeEach(() => {
 });
 
 describe('GET /api/logging', () => {
-  it('returns 403 when unauthenticated', async () => {
+  it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
-    expect((await GET(request())).status).toBe(403);
+    expect((await GET(request())).status).toBe(401);
   });
 
   it('returns 403 when the user is not an admin', async () => {

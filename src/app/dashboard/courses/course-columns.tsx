@@ -20,6 +20,7 @@ import { EditCourseDialog } from '@/components/dialogs/EditCourseDialog';
 import { getInstructors, type EnrolledUser } from '@/lib/course-utils';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { formatDateTimeInTimeZone } from '@/lib/date';
+import { apiPaths } from '@/lib/api-paths';
 
 type CourseWithFaculty = Course & {
   // Enrolled list (user objects with courseRole and flags)
@@ -144,11 +145,7 @@ export const columns = (
         row.original.registrationOpenAt,
         row.original.registrationCloseAt,
       );
-      return (
-        <Badge variant={registrationStatus.theme.variant}>
-          {registrationStatus.label}
-        </Badge>
-      );
+      return <Badge variant={registrationStatus.theme.variant}>{registrationStatus.label}</Badge>;
     },
   },
   {
@@ -218,7 +215,7 @@ function CourseActionsCell({
 
   const handleDelete = async () => {
     try {
-      const res = await fetch(`/api/courses/${course.id}`, {
+      const res = await fetch(apiPaths.course(course.id), {
         method: 'DELETE',
         body: JSON.stringify(course),
       });
@@ -247,14 +244,16 @@ function CourseActionsCell({
         timeZone={timeZone}
         onSave={async (updatedCourse) => {
           try {
-            const res = await fetch(`/api/courses/${updatedCourse.id}`, {
+            const res = await fetch(apiPaths.course(String(updatedCourse.id)), {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(updatedCourse),
             });
             if (!res.ok) throw new Error('Failed to save course');
 
-            const refreshed = await fetch(`/api/courses/${updatedCourse.id}`).then((r) => r.json());
+            const refreshed = await fetch(apiPaths.course(String(updatedCourse.id))).then((r) =>
+              r.json(),
+            );
 
             onCourseUpdated(refreshed);
             showToast.success('Course updated!');

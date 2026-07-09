@@ -31,6 +31,7 @@ beforeEach(() => {
 
 describe('GET /api/courses/[id]/groups/[groupId]/members', () => {
   it('returns 400 when params are missing', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     const res = await GET(new NextRequest('http://localhost/api/courses/c1/groups/g1/members'), {
       params: Promise.resolve({ id: '', groupId: 'g1' }),
     } as any);
@@ -111,6 +112,7 @@ describe('GET /api/courses/[id]/groups/[groupId]/members', () => {
 
 describe('POST /api/courses/[id]/groups/[groupId]/members', () => {
   it('returns 400 when params are missing', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     const req = new NextRequest('http://localhost/api/courses/c1/groups/g1/members', {
       method: 'POST',
       body: JSON.stringify({ userId: 'u2' }),
@@ -226,7 +228,7 @@ describe('PATCH /api/courses/[id]/groups/[groupId]/members (bulk)', () => {
   });
 
   it('validates members array', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
 
     const req = new NextRequest('http://localhost/api/courses/c1/groups/g1/members', {
       method: 'PATCH',

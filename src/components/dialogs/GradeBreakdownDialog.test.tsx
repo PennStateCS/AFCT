@@ -98,10 +98,10 @@ describe('GradeBreakdownDialog', () => {
 
   it('fetches both reads and renders a row per problem with seeded grades', async () => {
     const fetchMock = vi.fn((url: string): Promise<FetchResult> => {
-      if (url === '/api/courses/c1/a1') {
+      if (url === '/api/courses/c1/assignments/a1') {
         return Promise.resolve({ ok: true, json: async () => assignmentPayload });
       }
-      if (url === '/api/courses/c1/a1/problem-grades/s1') {
+      if (url === '/api/courses/c1/assignments/a1/problem-grades/s1') {
         return Promise.resolve({
           ok: true,
           json: async () => ({ p1: { grade: 7 }, p2: { grade: null } }),
@@ -119,8 +119,8 @@ describe('GradeBreakdownDialog', () => {
 
     // Both reads fired.
     const urls = fetchMock.mock.calls.map((c) => c[0] as string);
-    expect(urls).toContain('/api/courses/c1/a1');
-    expect(urls).toContain('/api/courses/c1/a1/problem-grades/s1');
+    expect(urls).toContain('/api/courses/c1/assignments/a1');
+    expect(urls).toContain('/api/courses/c1/assignments/a1/problem-grades/s1');
 
     // Rows rendered with seeded grades.
     expect(screen.getByTestId('title-p1').textContent).toBe('Problem One');
@@ -131,10 +131,10 @@ describe('GradeBreakdownDialog', () => {
 
   it('handles a 204 on problem-grades (rows with null grades, no crash)', async () => {
     const fetchMock = vi.fn((url: string): Promise<FetchResult> => {
-      if (url === '/api/courses/c1/a1') {
+      if (url === '/api/courses/c1/assignments/a1') {
         return Promise.resolve({ ok: true, json: async () => assignmentPayload });
       }
-      if (url === '/api/courses/c1/a1/problem-grades/s1') {
+      if (url === '/api/courses/c1/assignments/a1/problem-grades/s1') {
         return Promise.resolve({
           ok: true,
           status: 204,
@@ -162,13 +162,13 @@ describe('GradeBreakdownDialog', () => {
     const onSaved = vi.fn();
     const setOpen = vi.fn();
     const fetchMock = vi.fn((url: string, init?: RequestInit): Promise<FetchResult> => {
-      if (url === '/api/courses/c1/a1') {
+      if (url === '/api/courses/c1/assignments/a1') {
         return Promise.resolve({ ok: true, json: async () => assignmentPayload });
       }
-      if (url === '/api/courses/c1/a1/problem-grades/s1' && init?.method === 'POST') {
+      if (url === '/api/courses/c1/assignments/a1/problem-grades/s1' && init?.method === 'POST') {
         return Promise.resolve({ ok: true, json: async () => ({ ok: true, changed: 1 }) });
       }
-      if (url === '/api/courses/c1/a1/problem-grades/s1') {
+      if (url === '/api/courses/c1/assignments/a1/problem-grades/s1') {
         return Promise.resolve({
           ok: true,
           json: async () => ({ p1: { grade: 7 }, p2: { grade: null } }),
@@ -178,18 +178,14 @@ describe('GradeBreakdownDialog', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    renderWithClient(
-      <GradeBreakdownDialog {...baseProps} setOpen={setOpen} onSaved={onSaved} />,
-    );
+    renderWithClient(<GradeBreakdownDialog {...baseProps} setOpen={setOpen} onSaved={onSaved} />);
 
     await waitFor(() => {
       expect(screen.getByTestId('table-rows').textContent).toBe('2');
     });
 
     // Drive the real Grade input for p1 to make the form dirty.
-    const p1Input = screen
-      .getByTestId('gradecell-p1')
-      .querySelector('input') as HTMLInputElement;
+    const p1Input = screen.getByTestId('gradecell-p1').querySelector('input') as HTMLInputElement;
     fireEvent.change(p1Input, { target: { value: '9' } });
 
     const saveButton = screen.getByRole('button', { name: 'Save' });
@@ -201,7 +197,7 @@ describe('GradeBreakdownDialog', () => {
     // Exactly one POST to the bulk problem-grades endpoint (studentId in the URL).
     const postCalls = fetchMock.mock.calls.filter(
       (c) =>
-        c[0] === '/api/courses/c1/a1/problem-grades/s1' &&
+        c[0] === '/api/courses/c1/assignments/a1/problem-grades/s1' &&
         (c[1] as RequestInit)?.method === 'POST',
     );
     expect(postCalls).toHaveLength(1);
@@ -222,10 +218,10 @@ describe('GradeBreakdownDialog', () => {
 
   it('shows a toast when the assignment read fails', async () => {
     const fetchMock = vi.fn((url: string): Promise<FetchResult> => {
-      if (url === '/api/courses/c1/a1') {
+      if (url === '/api/courses/c1/assignments/a1') {
         return Promise.resolve({ ok: false, json: async () => ({}) });
       }
-      if (url === '/api/courses/c1/a1/problem-grades/s1') {
+      if (url === '/api/courses/c1/assignments/a1/problem-grades/s1') {
         return Promise.resolve({ ok: true, json: async () => ({}) });
       }
       throw new Error(`Unexpected fetch: ${url}`);

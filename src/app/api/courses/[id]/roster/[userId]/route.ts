@@ -1,15 +1,17 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { auth } from '@/lib/auth';
-import { isAdmin } from '@/lib/permissions';
+import { canManageCourse, isAdmin } from '@/lib/permissions';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { withCourseAuth } from '@/lib/api/with-auth';
+import { logDenial } from '@/lib/api/activity';
 
 /**
- * Removes a user from a course roster. Permission is tiered: global admins and
- * course faculty may remove people, but TAs and students may not, and a faculty
- * member may not remove another faculty member. Two safety rules block the removal
- * outright — the user must have no submissions in the course, and a course can't
- * lose its last faculty member.
+ * Removes a user from a course roster. Permission is tiered: the shared wrapper
+ * admits global admins and course faculty only (TAs and students are rejected up
+ * front); the remaining rule — a faculty member may not remove another faculty
+ * member — is enforced here (a global admin may). Two safety rules block the removal
+ * outright: the user must have no submissions in the course, and a course can't lose
+ * its last faculty member.
  * @openapi
  * summary: Remove a user from a course
  * parameters:
@@ -26,148 +28,98 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
  *   403: { description: Caller's role may not remove this user. }
  *   500: { description: Server error. }
  */
-export async function DELETE(
-  req: NextRequest,
-  context: { params: Promise<{ id: string; userId: string }> },
-) {
-  const { id: courseId, userId } = await context.params;
-  let actorId: string | null = null;
+export const DELETE = withCourseAuth(
+  async (req, ctx, { user, courseId }) => {
+    const { userId } = await ctx.params;
 
-  try {
-    const session = await auth();
-    const currentUser = session?.user;
-
-    if (!currentUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    actorId = currentUser.id;
-
-    // Determine the current user's course role (if any)
-    const currentRoster = await prisma.roster.findFirst({
-      where: { courseId, userId: currentUser.id },
-      select: { role: true },
-    });
-    const currentCourseRole = currentRoster?.role ?? null;
-    const currentCourseRoleValue = String(currentCourseRole ?? '');
-
-    // Only global admins or course-level FACULTY/TA may attempt removal
-    if (!isAdmin(currentUser) && !['FACULTY', 'TA'].includes(currentCourseRoleValue)) {
-      await createEnhancedActivityLog(prisma, req as unknown as Request, {
-        userId: session?.user?.id ?? null,
-        action: 'ROSTER_REMOVE_DENIED',
-        severity: 'SECURITY',
-        metadata: {},
+    try {
+      // The wrapper admitted only global admins and course FACULTY. The one remaining
+      // rule: a (non-admin) faculty member may not remove another faculty member.
+      const targetRoster = await prisma.roster.findFirst({
+        where: { courseId, userId },
+        select: { role: true },
       });
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
 
-    // TAs and STUDENTs may not remove users
-    if (currentCourseRoleValue === 'TA' || currentCourseRoleValue === 'STUDENT') {
-      await createEnhancedActivityLog(prisma, req as unknown as Request, {
-        userId: session?.user?.id ?? null,
-        action: 'ROSTER_REMOVE_DENIED',
-        severity: 'SECURITY',
-        metadata: {},
+      if (!isAdmin(user) && targetRoster?.role === 'FACULTY') {
+        return logDenial(req, { userId: user.id, action: 'ROSTER_REMOVE_DENIED', courseId });
+      }
+
+      // Prevent removal if the user has any submissions in this course
+      const assignmentIds = await prisma.assignment.findMany({
+        where: { courseId },
+        select: { id: true },
       });
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+      const assignmentIdList = Array.isArray(assignmentIds)
+        ? assignmentIds.map((a: (typeof assignmentIds)[number]) => a.id)
+        : [];
 
-    // Get the target's roster entry to check role constraints
-    const targetRoster = await prisma.roster.findFirst({
-      where: { courseId, userId },
-      select: { role: true },
-    });
-    const targetCourseRoleValue = String(targetRoster?.role ?? '');
+      if (assignmentIdList.length > 0) {
+        const existingSubmission = await prisma.submission.findFirst({
+          where: {
+            studentId: userId,
+            assignmentId: { in: assignmentIdList },
+          },
+        });
 
-    // A faculty member may not remove another faculty member (a global admin may).
-    if (
-      currentCourseRoleValue === 'FACULTY' &&
-      targetRoster &&
-      targetCourseRoleValue === 'FACULTY'
-    ) {
-      await createEnhancedActivityLog(prisma, req as unknown as Request, {
-        userId: session?.user?.id ?? null,
-        action: 'ROSTER_REMOVE_DENIED',
-        severity: 'SECURITY',
-        metadata: {},
-      });
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+        if (existingSubmission) {
+          return NextResponse.json(
+            { error: 'User has submissions for this course and cannot be removed' },
+            { status: 400 },
+          );
+        }
+      }
 
-    // Prevent removal if the user has any submissions in this course
-    const assignmentIds = await prisma.assignment.findMany({
-      where: { courseId },
-      select: { id: true },
-    });
-    const assignmentIdList = Array.isArray(assignmentIds)
-      ? assignmentIds.map((a: (typeof assignmentIds)[number]) => a.id)
-      : [];
+      // Prevent removing the only faculty member from a course.
+      if (targetRoster?.role === 'FACULTY') {
+        const facultyCount = await prisma.roster.count({ where: { courseId, role: 'FACULTY' } });
+        if (facultyCount <= 1) {
+          return NextResponse.json(
+            { error: 'Cannot remove the only faculty member from the course' },
+            { status: 400 },
+          );
+        }
+      }
 
-    if (assignmentIdList.length > 0) {
-      const existingSubmission = await prisma.submission.findFirst({
-        where: {
-          studentId: userId,
-          assignmentId: { in: assignmentIdList },
+      // Delete any roster entries for this user in the course
+      const deleted = await prisma.roster.deleteMany({ where: { courseId, userId } });
+
+      // Log activity
+      await createEnhancedActivityLog(prisma, req, {
+        userId: user.id,
+        action: 'REMOVE_FROM_COURSE',
+        severity: 'INFO',
+        category: 'COURSE',
+        courseId,
+        metadata: {
+          userId: user.id,
+          courseId,
+          removedUserId: userId,
+          count: deleted.count,
         },
       });
 
-      if (existingSubmission) {
-        return NextResponse.json(
-          { error: 'User has submissions for this course and cannot be removed' },
-          { status: 400 },
-        );
-      }
+      return NextResponse.json({ success: true, removed: deleted.count });
+    } catch (err) {
+      console.error('DELETE /api/courses/[id]/roster/[userId] error:', err);
+      await createEnhancedActivityLog(prisma, req, {
+        userId: user.id,
+        action: 'ROSTER_REMOVE_ERROR',
+        severity: 'ERROR',
+        metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+      });
+      return NextResponse.json({ error: 'Server error' }, { status: 500 });
     }
-
-    // Prevent removing the only faculty member from a course
-    // Check whether the user to remove is a faculty member on the roster
-    const rosterEntry = await prisma.roster.findFirst({
-      where: { courseId, userId },
-      select: { role: true },
-    });
-    if (rosterEntry && rosterEntry.role === 'FACULTY') {
-      const facultyCount = await prisma.roster.count({ where: { courseId, role: 'FACULTY' } });
-      if (facultyCount <= 1) {
-        return NextResponse.json(
-          { error: 'Cannot remove the only faculty member from the course' },
-          { status: 400 },
-        );
-      }
-    }
-    // Delete any roster entries for this user in the course
-    const deleted = await prisma.roster.deleteMany({ where: { courseId, userId } });
-
-    // Log activity
-    await createEnhancedActivityLog(prisma, req as unknown as Request, {
-      userId: currentUser.id,
-      action: 'REMOVE_FROM_COURSE',
-      severity: 'INFO',
-      category: 'COURSE',
-      courseId,
-      metadata: {
-        userId: currentUser.id,
-        courseId: courseId,
-        removedUserId: userId,
-        count: deleted.count,
-      },
-    });
-
-    return NextResponse.json({ success: true, removed: deleted.count });
-  } catch (err) {
-    console.error('DELETE /api/courses/[id]/roster/[userId] error:', err);
-    await createEnhancedActivityLog(prisma, req as unknown as Request, {
-      userId: actorId,
-      action: 'ROSTER_REMOVE_ERROR',
-      severity: 'ERROR',
-      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
-    });
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
-  }
-}
+  },
+  { access: 'manage', roles: ['FACULTY'], deniedAction: 'ROSTER_REMOVE_DENIED' },
+);
 
 /**
  * Returns one roster entry (with the user's profile) plus the viewer's own course
  * role and an `viewerIsAdmin` flag, so the UI can decide which actions to offer.
- * Any signed-in user may call it; `userId` may be the literal "me" to target the
- * caller.
+ * Access is tiered: the caller must be a member of the course (the wrapper enforces
+ * this), and a non-staff member may only read their OWN entry — course staff
+ * (faculty/TA) and admins may read anyone's. `userId` may be the literal "me" to
+ * target the caller.
  * @openapi
  * summary: Get a roster entry
  * parameters:
@@ -177,58 +129,61 @@ export async function DELETE(
  *   200:
  *     description: The roster entry, the viewer's course role, and viewerIsAdmin.
  *   401: { description: Not signed in. }
+ *   403: { description: "Not a course member, or a non-staff member reading someone else's entry." }
  *   404: { description: No roster entry for that user in this course. }
  *   500: { description: Server error. }
  */
-export async function GET(
-  req: NextRequest,
-  context: { params: Promise<{ id: string; userId: string }> },
-) {
-  const { id: courseId, userId } = await context.params;
+export const GET = withCourseAuth(
+  async (req, ctx, { user, courseId }) => {
+    const { userId } = await ctx.params;
 
-  try {
-    const session = await auth();
-    const currentUser = session?.user;
-    if (!currentUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    try {
+      const targetUserId = userId === 'me' ? user.id : userId;
 
-    const targetUserId = userId === 'me' ? currentUser.id : userId;
+      // Course membership was enforced by the wrapper. A non-staff member may only
+      // read their own entry; staff (faculty/TA) and admins may read anyone's.
+      if (targetUserId !== user.id && !(await canManageCourse(user, courseId))) {
+        return logDenial(req, { userId: user.id, action: 'ROSTER_VIEW_DENIED', courseId });
+      }
 
-    // Fetch roster entry and include the user profile info for display in the dialog
-    const rosterEntry = await prisma.roster.findFirst({
-      where: { courseId, userId: targetUserId },
-      include: {
-        user: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            avatar: true,
+      // Fetch roster entry and include the user profile info for display in the dialog
+      const rosterEntry = await prisma.roster.findFirst({
+        where: { courseId, userId: targetUserId },
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              avatar: true,
+            },
           },
         },
-      },
-    });
-    if (!rosterEntry) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      });
+      if (!rosterEntry) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    // Also return the viewer's admin flag and course role so the UI can decide which actions to show
-    const viewerRoster = await prisma.roster.findFirst({
-      where: { courseId, userId: currentUser.id },
-      select: { role: true },
-    });
-    const viewerCourseRole = viewerRoster?.role ?? null;
-    const viewerIsAdmin = isAdmin(currentUser);
+      // Also return the viewer's admin flag and course role so the UI can decide which actions to show
+      const viewerRoster = await prisma.roster.findFirst({
+        where: { courseId, userId: user.id },
+        select: { role: true },
+      });
+      const viewerCourseRole = viewerRoster?.role ?? null;
+      const viewerIsAdmin = isAdmin(user);
 
-    return NextResponse.json({
-      success: true,
-      roster: rosterEntry,
-      viewerCourseRole,
-      viewerIsAdmin,
-    });
-  } catch (err) {
-    console.error('GET /api/courses/[id]/roster/[userId] error:', err);
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
-  }
-}
+      return NextResponse.json({
+        success: true,
+        roster: rosterEntry,
+        viewerCourseRole,
+        viewerIsAdmin,
+      });
+    } catch (err) {
+      console.error('GET /api/courses/[id]/roster/[userId] error:', err);
+      return NextResponse.json({ error: 'Server error' }, { status: 500 });
+    }
+  },
+  { access: 'read', deniedAction: 'ROSTER_VIEW_DENIED' },
+);
 
 /**
  * Changes a user's course role. Only a global admin or a course faculty member may
@@ -257,89 +212,68 @@ export async function GET(
  *   404: { description: Roster entry not found. }
  *   500: { description: Server error. }
  */
-export async function PATCH(
-  req: NextRequest,
-  context: { params: Promise<{ id: string; userId: string }> },
-) {
-  const { id: courseId, userId } = await context.params;
-  let actorId: string | null = null;
+export const PATCH = withCourseAuth(
+  async (req, ctx, { user, courseId }) => {
+    const { userId } = await ctx.params;
 
-  try {
-    const session = await auth();
-    const currentUser = session?.user;
-    if (!currentUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    actorId = currentUser.id;
+    try {
+      const body = await req.json();
+      const newRole = body?.role;
+      const allowedRoles = ['FACULTY', 'TA', 'STUDENT'];
+      if (!allowedRoles.includes(newRole))
+        return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
 
-    const body = await req.json();
-    const newRole = body?.role;
-    const allowedRoles = ['FACULTY', 'TA', 'STUDENT'];
-    if (!allowedRoles.includes(newRole))
-      return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
-
-    // Check permissions: global admin or a course faculty member
-    const currentRoster = await prisma.roster.findFirst({
-      where: { courseId, userId: currentUser.id },
-    });
-    const isAllowed = isAdmin(currentUser) || currentRoster?.role === 'FACULTY';
-    if (!isAllowed) {
-      await createEnhancedActivityLog(prisma, req as unknown as Request, {
-        userId: session?.user?.id ?? null,
-        action: 'ROSTER_UPDATE_DENIED',
-        severity: 'SECURITY',
-        metadata: {},
+      // Ensure roster entry exists
+      const target = await prisma.roster.findFirst({
+        where: { courseId, userId },
+        select: { id: true, role: true },
       });
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+      if (!target) return NextResponse.json({ error: 'Roster entry not found' }, { status: 404 });
 
-    // Ensure roster entry exists
-    const target = await prisma.roster.findFirst({
-      where: { courseId, userId },
-      select: { id: true, role: true },
-    });
-    if (!target) return NextResponse.json({ error: 'Roster entry not found' }, { status: 404 });
-
-    // Prevent demoting the only faculty member
-    if (target.role === 'FACULTY' && newRole !== 'FACULTY') {
-      const facultyCount = await prisma.roster.count({
-        where: { courseId, role: 'FACULTY' },
-      });
-      if (facultyCount <= 1) {
-        return NextResponse.json(
-          { error: 'Cannot demote the only course faculty member' },
-          { status: 400 },
-        );
+      // Prevent demoting the only faculty member
+      if (target.role === 'FACULTY' && newRole !== 'FACULTY') {
+        const facultyCount = await prisma.roster.count({
+          where: { courseId, role: 'FACULTY' },
+        });
+        if (facultyCount <= 1) {
+          return NextResponse.json(
+            { error: 'Cannot demote the only course faculty member' },
+            { status: 400 },
+          );
+        }
       }
-    }
 
-    const updated = await prisma.roster.update({
-      where: { id: target.id },
-      data: { role: newRole },
-    });
+      const updated = await prisma.roster.update({
+        where: { id: target.id },
+        data: { role: newRole },
+      });
 
-    await createEnhancedActivityLog(prisma, req as unknown as Request, {
-      userId: currentUser.id,
-      action: 'CHANGE_COURSE_ROLE',
-      severity: 'INFO',
-      category: 'COURSE',
-      courseId,
-      metadata: {
-        userId: currentUser.id,
+      await createEnhancedActivityLog(prisma, req, {
+        userId: user.id,
+        action: 'CHANGE_COURSE_ROLE',
+        severity: 'INFO',
+        category: 'COURSE',
         courseId,
-        targetUserId: userId,
-        previousRole: target.role,
-        newRole,
-      },
-    });
+        metadata: {
+          userId: user.id,
+          courseId,
+          targetUserId: userId,
+          previousRole: target.role,
+          newRole,
+        },
+      });
 
-    return NextResponse.json({ success: true, roster: updated });
-  } catch (err) {
-    console.error('PATCH /api/courses/[id]/roster/[userId] error:', err);
-    await createEnhancedActivityLog(prisma, req as unknown as Request, {
-      userId: actorId,
-      action: 'ROSTER_UPDATE_ERROR',
-      severity: 'ERROR',
-      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
-    });
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
-  }
-}
+      return NextResponse.json({ success: true, roster: updated });
+    } catch (err) {
+      console.error('PATCH /api/courses/[id]/roster/[userId] error:', err);
+      await createEnhancedActivityLog(prisma, req, {
+        userId: user.id,
+        action: 'ROSTER_UPDATE_ERROR',
+        severity: 'ERROR',
+        metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+      });
+      return NextResponse.json({ error: 'Server error' }, { status: 500 });
+    }
+  },
+  { access: 'manage', roles: ['FACULTY'], deniedAction: 'ROSTER_UPDATE_DENIED' },
+);

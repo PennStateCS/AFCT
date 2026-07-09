@@ -58,7 +58,7 @@ describe('DownloadLogsDialog', () => {
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
-        '/api/admin/logs/fields',
+        '/api/admin/logs/export/fields',
         expect.objectContaining({ method: 'GET' }),
       );
     });

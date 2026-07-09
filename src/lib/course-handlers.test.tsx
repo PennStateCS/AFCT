@@ -39,7 +39,7 @@ describe('useCourseHandlers — assignment publish toggle', () => {
     await act(async () => {
       await result.current.handleAssignmentPublishToggle('a1', true);
     });
-    expect(utils.updateAssignmentPublishStatus).toHaveBeenCalledWith('a1', true);
+    expect(utils.updateAssignmentPublishStatus).toHaveBeenCalledWith('c1', 'a1', true);
     expect(setCourse).toHaveBeenCalled();
     expect(toastMock.success).toHaveBeenCalled();
   });

@@ -23,11 +23,8 @@ import type { StudentProblemComment } from '@/lib/assignment-details';
 import type { ProblemSubmission } from '@/lib/problem-submission';
 import type { SubmissionStatusFilter } from '@/lib/submission-status-filter';
 import { STATUS_FILTER_OPTIONS, filterSubmissions } from '@/lib/submission-status-filter';
-import {
-  statusToneClass,
-  getTimingStatusChip,
-  getReviewStatusChip,
-} from '@/lib/submission-status';
+import { apiPaths } from '@/lib/api-paths';
+import { statusToneClass, getTimingStatusChip, getReviewStatusChip } from '@/lib/submission-status';
 
 type Problem = {
   id: string;
@@ -154,12 +151,17 @@ export default function ProblemWorkspace({
     (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
   );
 
-  const visibleSubmissions = filterSubmissions(sortedSubmissions, activeFilters, dueDate, hasValidDueDate);
+  const visibleSubmissions = filterSubmissions(
+    sortedSubmissions,
+    activeFilters,
+    dueDate,
+    hasValidDueDate,
+  );
 
   const handleDownload = (submission: ProblemSubmission) => {
     if (!submission.fileName) return;
 
-    const url = `/api/uploads/submissions/${encodeURIComponent(submission.fileName)}`;
+    const url = apiPaths.files.submission(encodeURIComponent(submission.fileName));
     const link = document.createElement('a');
     link.href = url;
     link.download = submission.originalFileName || 'Download';
@@ -217,16 +219,23 @@ export default function ProblemWorkspace({
               onRerun={onRerunSubmission ? () => onRerunSubmission(submissions[0]) : undefined}
             />
           ) : !isPrivledgedUser ? (
-            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-transparent px-3 py-2 text-[0.70rem] text-slate-700 dark:border-slate-200 dark:text-slate-200 whitespace-nowrap">
-              <span className="font-semibold uppercase tracking-[0.16em]">Grade</span>
-              <span>{currentGrade !== null ? currentGrade : '-'} / {problem.maxPoints}</span>
+            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-transparent px-3 py-2 text-[0.70rem] whitespace-nowrap text-slate-700 dark:border-slate-200 dark:text-slate-200">
+              <span className="font-semibold tracking-[0.16em] uppercase">Grade</span>
+              <span>
+                {currentGrade !== null ? currentGrade : '-'} / {problem.maxPoints}
+              </span>
             </div>
           ) : null}
         </div>
       </CardHeader>
       <CardContent>
         <div className="grid items-stretch gap-4 lg:grid-cols-[60%_40%]">
-          <WorkspacePanel title="Submissions" icon={<FileText className="h-4 w-4" />} className="h-full" contentClassName="p-2">
+          <WorkspacePanel
+            title="Submissions"
+            icon={<FileText className="h-4 w-4" />}
+            className="h-full"
+            contentClassName="p-2"
+          >
             {submissionsLoading ? (
               <div className="flex min-h-[320px] flex-col items-center justify-center gap-3">
                 <div className="border-muted-foreground/30 border-t-primary h-8 w-8 animate-spin rounded-full border-4" />
@@ -258,7 +267,10 @@ export default function ProblemWorkspace({
                               : 'border-border text-muted-foreground hover:border-foreground/50 hover:text-foreground'
                           }`}
                         >
-                          <span className={`inline-flex h-2 w-2 rounded-full ${dot}`} aria-hidden="true" />
+                          <span
+                            className={`inline-flex h-2 w-2 rounded-full ${dot}`}
+                            aria-hidden="true"
+                          />
                           {label}
                         </button>
                       );
@@ -281,104 +293,118 @@ export default function ProblemWorkspace({
                 </div>
 
                 <div className="overflow-x-auto rounded-md border">
-                <Table className="text-sm">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="px-2 py-1">Submitted</TableHead>
-                      <TableHead className="px-2 py-1">Status</TableHead>
-                      <TableHead className="px-2 py-1">Manage</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {visibleSubmissions.length === 0 ? (
+                  <Table className="text-sm">
+                    <TableHeader>
                       <TableRow>
-                        <TableCell colSpan={5} className="text-muted-foreground py-6 text-center text-sm">
-                          No submissions match the selected filter.
-                        </TableCell>
+                        <TableHead className="px-2 py-1">Submitted</TableHead>
+                        <TableHead className="px-2 py-1">Status</TableHead>
+                        <TableHead className="px-2 py-1">Manage</TableHead>
                       </TableRow>
-                    ) : visibleSubmissions.map((submission) => {
-                      const submittedAt = new Date(submission.submittedAt);
-                      const isLate =
-                        submission.status?.toLowerCase() === 'late' ||
-                        (hasValidDueDate && submittedAt.getTime() > dueDate!.getTime());
-                      return (
-                        <TableRow key={submission.id} className="hover:bg-transparent">
-                          <TableCell className="p-1 align-top">
-                            <div className="flex flex-col gap-1">
-                              <span>{submittedAt.toLocaleDateString()}</span>
-                              <span className="text-muted-foreground text-[11px]">
-                                {submittedAt.toLocaleTimeString()}
-                              </span>
-                              {isLate ? (
-                                <Badge
-                                  variant="secondary"
-                                  className="mt-1 inline-flex items-center rounded-full bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-900 shadow-sm"
-                                >
-                                  Late
-                                </Badge>
-                              ) : null}
-                            </div>
-                          </TableCell>
-                          <TableCell className="p-1 align-top">{renderStatusCell(submission)}</TableCell>
-                          <TableCell className="p-1 align-top">
-                              <div className="flex items-center gap-2 whitespace-nowrap">
-                                <Button
-                                  variant="secondary"
-                                  size="sm"
-                                  onClick={() => {
-                                    setActiveFeedback(String(submission.feedback));
-                                    setFeedbackDialogOpen(true);
-                                  }}
-                                  title="View feedback"
-                                  aria-label="View submission feedback"
-                                  className="h-8 w-8 p-0"
-                                  disabled={!submission.feedback || submission.status?.toLowerCase() === "pending" || submission.status?.toLowerCase() === "processing"}
-                                >
-                                  <File className="h-4 w-4" />
-                                </Button>
-
-                                <Button
-                                  variant="secondary"
-                                  size="sm"
-                                  onClick={() => onViewSubmission(submission)}
-                                  title="View submission"
-                                  aria-label="View submission"
-                                  className="h-8 w-8 p-0"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-
-                                <Button
-                                  variant="secondary"
-                                  size="sm"
-                                  disabled={!submission.fileName}
-                                  onClick={() => handleDownload(submission)}
-                                  title="Download submission"
-                                  aria-label="Download submission"
-                                  className="h-8 w-8 p-0"
-                                >
-                                  <Download className="h-4 w-4" />
-                                </Button>
-
-                                <Button
-                                  variant="secondary"
-                                  size="sm"
-                                  disabled={submission.status?.toLowerCase() === "pending" || submission.status?.toLowerCase() === "processing"}
-                                  onClick={() => onRerunSubmission?.(submission)}
-                                  title="Rerun submission"
-                                  aria-label="Rerun submission"
-                                  className="h-8 w-8 p-0"
-                                  hidden={!isPrivledgedUser}
-                                >
-                                  <RotateCcw className="h-4 w-4" />
-                                </Button>
-                            </div>
+                    </TableHeader>
+                    <TableBody>
+                      {visibleSubmissions.length === 0 ? (
+                        <TableRow>
+                          <TableCell
+                            colSpan={5}
+                            className="text-muted-foreground py-6 text-center text-sm"
+                          >
+                            No submissions match the selected filter.
                           </TableCell>
                         </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+                      ) : (
+                        visibleSubmissions.map((submission) => {
+                          const submittedAt = new Date(submission.submittedAt);
+                          const isLate =
+                            submission.status?.toLowerCase() === 'late' ||
+                            (hasValidDueDate && submittedAt.getTime() > dueDate!.getTime());
+                          return (
+                            <TableRow key={submission.id} className="hover:bg-transparent">
+                              <TableCell className="p-1 align-top">
+                                <div className="flex flex-col gap-1">
+                                  <span>{submittedAt.toLocaleDateString()}</span>
+                                  <span className="text-muted-foreground text-[11px]">
+                                    {submittedAt.toLocaleTimeString()}
+                                  </span>
+                                  {isLate ? (
+                                    <Badge
+                                      variant="secondary"
+                                      className="mt-1 inline-flex items-center rounded-full bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-900 shadow-sm"
+                                    >
+                                      Late
+                                    </Badge>
+                                  ) : null}
+                                </div>
+                              </TableCell>
+                              <TableCell className="p-1 align-top">
+                                {renderStatusCell(submission)}
+                              </TableCell>
+                              <TableCell className="p-1 align-top">
+                                <div className="flex items-center gap-2 whitespace-nowrap">
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => {
+                                      setActiveFeedback(String(submission.feedback));
+                                      setFeedbackDialogOpen(true);
+                                    }}
+                                    title="View feedback"
+                                    aria-label="View submission feedback"
+                                    className="h-8 w-8 p-0"
+                                    disabled={
+                                      !submission.feedback ||
+                                      submission.status?.toLowerCase() === 'pending' ||
+                                      submission.status?.toLowerCase() === 'processing'
+                                    }
+                                  >
+                                    <File className="h-4 w-4" />
+                                  </Button>
+
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => onViewSubmission(submission)}
+                                    title="View submission"
+                                    aria-label="View submission"
+                                    className="h-8 w-8 p-0"
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    disabled={!submission.fileName}
+                                    onClick={() => handleDownload(submission)}
+                                    title="Download submission"
+                                    aria-label="Download submission"
+                                    className="h-8 w-8 p-0"
+                                  >
+                                    <Download className="h-4 w-4" />
+                                  </Button>
+
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    disabled={
+                                      submission.status?.toLowerCase() === 'pending' ||
+                                      submission.status?.toLowerCase() === 'processing'
+                                    }
+                                    onClick={() => onRerunSubmission?.(submission)}
+                                    title="Rerun submission"
+                                    aria-label="Rerun submission"
+                                    className="h-8 w-8 p-0"
+                                    hidden={!isPrivledgedUser}
+                                  >
+                                    <RotateCcw className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
                 </div>
               </div>
             ) : (
