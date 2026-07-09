@@ -29,9 +29,11 @@ export const GET = withCourseAuth(
     const { aid: assignmentId, pid: problemId, studentId } = await ctx.params;
 
     try {
+      const isStaff = await canManageCourse(user, courseId);
+
       // A student may read their own grade; staff may read anyone's. (The wrapper
       // already enforced course membership via canAccessCourse.)
-      if (!(await canManageCourse(user, courseId)) && user.id !== studentId) {
+      if (!isStaff && user.id !== studentId) {
         return logDenial(req, {
           userId: user.id,
           action: 'PROBLEM_GRADE_ACCESS_DENIED',
@@ -47,11 +49,16 @@ export const GET = withCourseAuth(
           },
         },
         select: {
-          assignment: { select: { courseId: true } },
+          assignment: { select: { courseId: true, isPublished: true } },
         },
       });
 
       if (!assignmentProblem || assignmentProblem.assignment.courseId !== courseId) {
+        return NextResponse.json({ error: 'Problem not found' }, { status: 404 });
+      }
+
+      // Students can't read a grade for an unpublished assignment (mask as 404).
+      if (!assignmentProblem.assignment.isPublished && !isStaff) {
         return NextResponse.json({ error: 'Problem not found' }, { status: 404 });
       }
 

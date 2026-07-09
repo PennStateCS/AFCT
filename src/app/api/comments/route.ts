@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
     // Verify assignment & course
     const assignment = await prisma.assignment.findUnique({
       where: { id: assignmentId },
-      select: { courseId: true },
+      select: { courseId: true, isPublished: true },
     });
     if (!assignment) {
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
@@ -94,6 +94,18 @@ export async function POST(request: NextRequest) {
         metadata: {},
       });
       return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
+    }
+
+    // A student must not comment on an unpublished assignment (they can't see it);
+    // only course staff may. Mask it as 404 so the assignment stays invisible.
+    if (!assignment.isPublished && !(await canManageCourse(user, assignment.courseId))) {
+      await createEnhancedActivityLog(prisma, request, {
+        userId: session?.user?.id ?? null,
+        action: 'COMMENT_CREATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { reason: 'unpublished assignment' },
+      });
+      return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 
     // Obtain the author's roster row for the comment FK. Admins who aren't on the

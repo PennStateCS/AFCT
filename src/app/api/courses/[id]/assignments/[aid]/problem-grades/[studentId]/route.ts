@@ -32,9 +32,11 @@ export const GET = withCourseAuth(
     const { aid: assignmentId, studentId } = await ctx.params;
 
     try {
+      const isStaff = await canManageCourse(user, courseId);
+
       // A student may read their own grades; staff may read anyone's. (The wrapper
       // already enforced course membership via canAccessCourse.)
-      if (!(await canManageCourse(user, courseId)) && user.id !== studentId) {
+      if (!isStaff && user.id !== studentId) {
         return logDenial(req, {
           userId: user.id,
           action: 'PROBLEM_GRADES_ACCESS_DENIED',
@@ -44,10 +46,15 @@ export const GET = withCourseAuth(
 
       const assignment = await prisma.assignment.findFirst({
         where: { id: assignmentId, courseId },
-        select: { id: true },
+        select: { id: true, isPublished: true },
       });
 
       if (!assignment) {
+        return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+      }
+
+      // Students can't read grades for an unpublished assignment (mask as 404).
+      if (!assignment.isPublished && !isStaff) {
         return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
       }
 
