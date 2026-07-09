@@ -6,7 +6,7 @@ import { isAdmin } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
 import { resolveUserTimezone } from '@/lib/user-timezone';
-import { sumProblemPoints, toEnrolled } from '@/lib/course-format';
+import { sumProblemPoints, toEnrolled, toStudentSafeEnrolled } from '@/lib/course-format';
 import { toEmptyStringNotation } from '@/lib/empty-string-notation';
 
 // A prisma delegate whose aggregate methods are treated as optional, so the code
@@ -149,7 +149,7 @@ export const GET = withCourseAuth(
       const assignmentIds = includeAssignments ? assignmentRows.map((a) => String(a.id)) : [];
 
       let enrolled: Array<Record<string, unknown>> = [];
-      if (includeRoster) {
+      if (includeRoster && isStaff) {
         const studentIds = rosterRows
           .filter((r) => r.role === 'STUDENT')
           .map((r) => String(r.user.id));
@@ -195,6 +195,14 @@ export const GET = withCourseAuth(
           hasSubmissions:
             r.role === 'STUDENT' ? studentsWithSubmissions.has(String(r.user.id)) : false,
         }));
+      } else if (includeRoster) {
+        // Non-staff (students) get a privacy-safe roster: course staff keep their
+        // names (the UI labels the course with them) but not their email, and
+        // every classmate collapses to a count-only placeholder — no peer id,
+        // name, or email is ever sent to a student.
+        enrolled = toStudentSafeEnrolled(
+          rosterRows.map((r) => ({ ...r.user, courseRole: r.role })),
+        );
       }
 
       let assignmentsWithProblemCount: Array<Record<string, unknown>> = [];
