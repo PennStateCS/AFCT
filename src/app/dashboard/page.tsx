@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import DashboardClient from './DashboardClient';
 import { DueDateModule } from '@/components/modules/DueDateModule';
 import { JoinCourseModule } from '@/components/modules/JoinCourseModule';
+import { toStudentSafeEnrolled } from '@/lib/course-format';
 
 export const metadata: Metadata = {
   title: 'AFCT Dashboard',
@@ -65,14 +66,20 @@ export default async function DashboardPage() {
   });
 
   // Map courses and attach the user's role in each
+  const viewerIsAdmin = Boolean(session.user.isAdmin);
   const courses = rosterEntries.map((entry) => {
     const { course } = entry;
+    // The viewer's role in THIS course decides roster visibility: staff see the
+    // members; a student must not receive classmate names, so their roster is
+    // reduced to staff names + count-only placeholders (the cards only show
+    // instructor/TA names and a staff-gated student count).
+    const isStaffHere = viewerIsAdmin || entry.role === 'FACULTY' || entry.role === 'TA';
+    const enrolledMembers = course.roster.map((r) => ({ ...r.user, courseRole: r.role }));
 
     return {
       ...course,
       userRole: entry.role,
-      // Only include enrolled list (user objects with courseRole) — do not construct role-specific arrays
-      enrolled: course.roster.map((r) => ({ ...r.user, courseRole: r.role })),
+      enrolled: isStaffHere ? enrolledMembers : toStudentSafeEnrolled(enrolledMembers),
     };
   });
 
