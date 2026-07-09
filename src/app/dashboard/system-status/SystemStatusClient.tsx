@@ -191,12 +191,15 @@ export default function SystemStatusClient() {
             </div>
           )}
 
-          <TabsList className="border-border h-12 w-full justify-start overflow-x-auto rounded-md border p-1">
+          <TabsList
+            aria-label="System status sections"
+            className="bg-card border-border h-12 w-full justify-start overflow-x-auto rounded-md border p-1 shadow-sm"
+          >
             {TABS.map((t) => (
               <TabsTrigger
                 key={t.value}
                 value={t.value}
-                className="data-[state=active]:bg-secondary px-4 whitespace-nowrap data-[state=active]:text-white"
+                className="hover:bg-accent data-[state=active]:bg-secondary px-4 whitespace-nowrap data-[state=active]:text-white"
               >
                 {t.label}
               </TabsTrigger>
