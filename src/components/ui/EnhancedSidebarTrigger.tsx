@@ -10,7 +10,7 @@ export function EnhancedSidebarTrigger() {
   const Icon = isCollapsed ? PanelRightIcon : PanelLeftIcon;
 
   return (
-    <SidebarTrigger aria-label="Toggle Sidebar">
+    <SidebarTrigger aria-label="Toggle Sidebar" className="cursor-pointer">
       <Icon className="h-12 w-12" />
     </SidebarTrigger>
   );
