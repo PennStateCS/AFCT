@@ -368,62 +368,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/assignments/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get an assignment
-         * @description Fetches one assignment with its course and problems, plus a derived `maxPoints`  total. Visibility is role-aware: students only see published assignments in  courses they're enrolled in, faculty/TA need access to the course, and admins see  anything. Anything the caller may not see is masked as a 404.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/assignments/[id]/route.ts)
-         */
-        get: operations["getAssignmentsById"];
-        /**
-         * Update an assignment (full)
-         * @description Full update of an assignment. Course staff (faculty or TAs) or a system admin.  Guards protect data  integrity: an assignment can't be unpublished once it has submissions or grades,  and its group mode can't change after any submission exists. Late-submission  rules are validated the same way as on create.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/assignments/[id]/route.ts)
-         */
-        put: operations["putAssignmentsById"];
-        /**
-         * Create an assignment (alias)
-         * @description Creates an assignment. Course staff (faculty or TAs) or a system admin, checked  against the body's courseId. Note: this handler ignores  the `[id]` path segment and takes the course from the body — it mirrors  POST /api/assignments and exists for clients that post to this path. (One  difference: late submissions default to on here.)
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/assignments/[id]/route.ts)
-         */
-        post: operations["postAssignmentsById"];
-        /**
-         * Delete an assignment
-         * @description Deletes an assignment, but only when it's safe: no submissions and no comments.  Its problem links are cleared first, then the assignment is removed. Course staff  (faculty or TAs) or a system admin.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/assignments/[id]/route.ts)
-         */
-        delete: operations["deleteAssignmentsById"];
-        options?: never;
-        head?: never;
-        /**
-         * Update an assignment (partial)
-         * @description Partial update of an assignment — only the fields present in the body are  changed. Course staff (faculty or TAs) or a system admin, with the same  unpublish/group-mode guards and late-window validation as the full update.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/assignments/[id]/route.ts)
-         */
-        patch: operations["patchAssignmentsById"];
-        trace?: never;
-    };
     "/api/assignments/{id}/student-context": {
         parameters: {
             query?: never;
@@ -792,12 +736,30 @@ export interface paths {
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/route.ts)
          */
         get: operations["getCoursesByIdAssignmentsByAid"];
-        put?: never;
+        /**
+         * Update a course assignment (full)
+         * @description Full update of an assignment. Course staff (faculty or TAs) or a system admin.  Guards protect data integrity: an assignment can't be unpublished once it has  submissions or grades, and its group mode can't change after any submission exists.  Late-submission rules are validated the same way as on create.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/route.ts)
+         */
+        put: operations["putCoursesByIdAssignmentsByAid"];
         post?: never;
-        delete?: never;
+        /**
+         * Delete a course assignment
+         * @description Deletes an assignment, but only when it's safe: no submissions and no comments. Its  problem links are cleared first, then the assignment is removed. Course staff  (faculty or TAs) or a system admin.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/route.ts)
+         */
+        delete: operations["deleteCoursesByIdAssignmentsByAid"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update a course assignment (partial)
+         * @description Partial update of an assignment — only the fields present in the body are changed.  Course staff (faculty or TAs) or a system admin, with the same unpublish/group-mode  guards and late-window validation as the full update.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/[aid]/route.ts)
+         */
+        patch: operations["patchCoursesByIdAssignmentsByAid"];
         trace?: never;
     };
     "/api/courses/{id}/assignments/{aid}/submissions/{sid}": {
@@ -2941,342 +2903,6 @@ export interface operations {
             };
         };
     };
-    getAssignmentsById: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The assignment with its problems and maxPoints. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not found, or not visible to the caller. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    putAssignmentsById: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    title?: string;
-                    description?: string;
-                    dueDate?: string;
-                    allowLateSubmissions?: boolean;
-                    lateCutoff?: string | null;
-                    isPublished?: boolean;
-                    isGroup?: boolean;
-                };
-            };
-        };
-        responses: {
-            /** @description The updated assignment. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Inconsistent late-submission window. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not course staff or a system admin, or a state guard blocked the change. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Assignment not found. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    postAssignmentsById: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Ignored by this handler */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    title: string;
-                    description?: string;
-                    courseId: string;
-                    dueDate?: string;
-                    allowLateSubmissions?: boolean;
-                    lateCutoff?: string;
-                    isPublished?: boolean;
-                    isGroup?: boolean;
-                };
-            };
-        };
-        responses: {
-            /** @description The created assignment. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Missing fields, or an inconsistent late-submission window. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not course staff or a system admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    deleteAssignmentsById: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Assignment deleted. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Submissions or comments exist. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not course staff or a system admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Assignment not found. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    patchAssignmentsById: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    title?: string;
-                    description?: string;
-                    dueDate?: string;
-                    allowLateSubmissions?: boolean;
-                    lateCutoff?: string | null;
-                    isPublished?: boolean;
-                    isGroup?: boolean;
-                };
-            };
-        };
-        responses: {
-            /** @description The updated assignment. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Inconsistent late-submission window. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not course staff or a system admin, or a state guard blocked the change. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Assignment not found. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     getAssignmentsByIdStudentContext: {
         parameters: {
             query?: never;
@@ -4655,6 +4281,228 @@ export interface operations {
                 };
             };
             /** @description Assignment not found in this course, or not visible to the caller. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    putCoursesByIdAssignmentsByAid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    title?: string;
+                    description?: string;
+                    dueDate?: string;
+                    allowLateSubmissions?: boolean;
+                    lateCutoff?: string | null;
+                    isPublished?: boolean;
+                    isGroup?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The updated assignment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Inconsistent late-submission window. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff or a system admin, or a state guard blocked the change. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Assignment not found in this course. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteCoursesByIdAssignmentsByAid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Assignment deleted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Submissions or comments exist. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Assignment not found in this course. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    patchCoursesByIdAssignmentsByAid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    title?: string;
+                    description?: string;
+                    dueDate?: string;
+                    allowLateSubmissions?: boolean;
+                    lateCutoff?: string | null;
+                    isPublished?: boolean;
+                    isGroup?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The updated assignment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Inconsistent late-submission window. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff or a system admin, or a state guard blocked the change. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Assignment not found in this course. */
             404: {
                 headers: {
                     [name: string]: unknown;

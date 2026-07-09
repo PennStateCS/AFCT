@@ -204,7 +204,7 @@ export function EditAssignmentDialog({
     };
 
     try {
-      const res = await fetch(apiPaths.assignmentById(assignment.id), {
+      const res = await fetch(apiPaths.assignment(assignment.courseId, assignment.id), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
