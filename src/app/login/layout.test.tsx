@@ -44,4 +44,15 @@ describe('LoginLayout', () => {
     expect(redirectMock).not.toHaveBeenCalled();
     expect(element.props.children.props.children.props['data-testid']).toBe('child');
   });
+
+  it('renders the login form for an inactive (idle-expired/disabled) session instead of looping', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', inactive: true } });
+    redirectMock.mockReset();
+
+    const result = await LoginLayout({ children: <div data-testid="child">Child</div> });
+    const element = result as React.ReactElement;
+
+    expect(redirectMock).not.toHaveBeenCalled();
+    expect(element.props.children.props.children.props['data-testid']).toBe('child');
+  });
 });

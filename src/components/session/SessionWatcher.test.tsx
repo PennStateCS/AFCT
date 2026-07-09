@@ -103,6 +103,16 @@ describe('SessionWatcher', () => {
     expect(safeSignOutMock).toHaveBeenCalledTimes(1);
   });
 
+  it('signs out when the server marks the session inactive', () => {
+    useSessionMock.mockReturnValue({
+      status: 'authenticated',
+      update: updateMock,
+      data: { user: { inactive: true } },
+    });
+    render(<SessionWatcher />);
+    expect(safeSignOutMock).toHaveBeenCalledTimes(1);
+  });
+
   it('logs out immediately from the "Logout Now" button', () => {
     render(<SessionWatcher />);
     act(() => {
