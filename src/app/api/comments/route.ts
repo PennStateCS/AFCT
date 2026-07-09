@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
     const session = await auth();
     const user = session?.user;
     actorId = user?.id ?? null;
-    if (!user) {
+    if (!user || user.inactive) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -270,7 +270,7 @@ export async function DELETE(request: NextRequest) {
     const session = await auth();
     const user = session?.user;
     actorId = user?.id ?? null;
-    if (!user) {
+    if (!user || user.inactive) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

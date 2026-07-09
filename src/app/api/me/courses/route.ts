@@ -32,8 +32,8 @@ export async function GET(req: Request) {
   const session = await auth();
   const userId = session?.user?.id;
 
-  if (!userId) {
-    return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+  if (!userId || session.user.inactive) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const view = new URL(req.url).searchParams.get('view');

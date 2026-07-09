@@ -38,7 +38,7 @@ export async function GET(req: Request, context: { params: Promise<{ email: stri
   }
 
   const session = await auth();
-  if (!session) {
+  if (!session?.user || session.user.inactive) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

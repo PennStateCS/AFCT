@@ -58,7 +58,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
   }
 
   const session = await auth();
-  if (!session?.user) {
+  if (!session?.user || session.user.inactive) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -73,9 +73,17 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 
-    // Faculty-tier staff only (FACULTY, TAs excluded) or admin.
+    // Faculty-tier staff only (FACULTY, TAs excluded) or admin. Authenticated but
+    // under-privileged → 403 + a SECURITY denial log, matching the auth wrappers.
     if (!(await canManageCourse(session.user, assignment.courseId, COURSE_FACULTY_ROLES))) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session.user.id,
+        action: 'ASSIGNMENT_PROBLEMS_LIST_DENIED',
+        severity: 'SECURITY',
+        courseId: assignment.courseId,
+        metadata: {},
+      });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // ---- User and Course Id ----

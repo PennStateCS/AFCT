@@ -45,7 +45,7 @@ import { canAccessCourse, canManageCourse } from '@/lib/permissions';
  */
 export async function POST(req: NextRequest) {
   const session = await auth();
-  if (!session) {
+  if (!session?.user || session.user.inactive) {
     console.warn('Unauthorized submission attempt');
     await createEnhancedActivityLog(prisma, req, {
       userId: undefined,

@@ -63,7 +63,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     const session = await auth();
     const currentUser = session?.user;
 
-    if (!currentUser || !currentUser.id) {
+    if (!currentUser || !currentUser.id || currentUser.inactive) {
       console.warn('[PATCH] Unauthorized request');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

@@ -38,7 +38,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
 
     const session = await auth();
     actorId = session?.user?.id ?? null;
-    if (!session?.user?.id) {
+    if (!session?.user?.id || session.user.inactive) {
       return apiError(401, 'Unauthorized');
     }
 
