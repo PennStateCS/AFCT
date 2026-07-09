@@ -4,7 +4,6 @@ import { prisma } from '@/lib/prisma';
 import DashboardClient from './DashboardClient';
 import { DueDateModule } from '@/components/modules/DueDateModule';
 import { JoinCourseModule } from '@/components/modules/JoinCourseModule';
-import { SubmissionsModule } from '@/components/modules/SubmissionsModule';
 
 export const metadata: Metadata = {
   title: 'AFCT Dashboard',
@@ -79,111 +78,10 @@ export default async function DashboardPage() {
 
   const courseIds = courses.map((c) => c.id);
 
-  const gradingRoleEntries = rosterEntries.filter(
-    (entry) => entry.role === 'TA' || entry.role === 'FACULTY',
-  );
-  const gradingCourseIds = gradingRoleEntries.map((entry) => entry.courseId);
-  const showSubmissions = gradingCourseIds.length > 0;
-
-  const pendingByAssignment = new Map<
-    string,
-    {
-      assignmentId: string;
-      assignmentTitle: string;
-      courseId: string;
-      dueDate: Date;
-      pendingCount: number;
-      processingCount: number;
-      gradedCount: number;
-      failedCount: number;
-    }
-  >();
-
-  if (showSubmissions) {
-    const manualSubmissions = await prisma.submission.findMany({
-      where: {
-        assignmentProblem: {
-          assignment: {
-            courseId: { in: gradingCourseIds },
-            course: { isArchived: false },
-          },
-          autograderEnabled: false,
-        },
-      },
-      select: {
-        assignmentId: true,
-        problemId: true,
-        studentId: true,
-        status: true,
-        assignmentProblem: {
-          select: {
-            assignment: {
-              select: {
-                id: true,
-                title: true,
-                courseId: true,
-                dueDate: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    const manualGrades = await prisma.assignmentProblemGrade.findMany({
-      where: {
-        assignmentProblem: {
-          assignment: {
-            courseId: { in: gradingCourseIds },
-            course: { isArchived: false },
-          },
-          autograderEnabled: false,
-        },
-      },
-      select: {
-        assignmentId: true,
-        problemId: true,
-        studentId: true,
-      },
-    });
-
-    const gradedSubmissionKeys = new Set(
-      manualGrades.map((grade) => `${grade.assignmentId}:${grade.problemId}:${grade.studentId}`),
-    );
-
-    for (const submission of manualSubmissions) {
-      const isGraded = gradedSubmissionKeys.has(
-        `${submission.assignmentId}:${submission.problemId}:${submission.studentId}`,
-      );
-
-      const assignment = submission.assignmentProblem.assignment;
-      const key = assignment.id;
-      const existing = pendingByAssignment.get(key);
-
-      if (existing) {
-        if (isGraded) {
-          existing.gradedCount += 1;
-          continue;
-        }
-
-        if (submission.status == 'FAILED') {
-          existing.failedCount += 1;
-          continue;
-        }
-
-        if (submission.status == 'PROCESSING') {
-          existing.processingCount += 1;
-          continue;
-        }
-
-        existing.pendingCount += 1;
-      }
-    }
-  }
-
-  const pendingAssignments = Array.from(pendingByAssignment.values()).sort(
-    (a, b) => a.dueDate.getTime() - b.dueDate.getTime(),
-  );
+  // NOTE: the "pending grading" module was removed. Its map was never populated
+  // (nothing ever inserted a first entry), so it always rendered empty while still
+  // running two unbounded submission/grade queries on this — the most-visited —
+  // page. The feature can be rebuilt properly later; until then it does no work.
 
   // Get upcoming assignments for all user's courses
   const assignments =
@@ -221,11 +119,6 @@ export default async function DashboardPage() {
         <div className="pb-4">
           <JoinCourseModule />
         </div>
-        {showSubmissions && (
-          <div className="pb-4">
-            <SubmissionsModule assignments={pendingAssignments} />
-          </div>
-        )}
         <div>
           <DueDateModule assignments={assignments} />
         </div>
