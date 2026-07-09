@@ -1,7 +1,37 @@
 import { describe, it, expect } from 'vitest';
-import { getCourseStatusTag } from './course-status';
+import { getCourseStatusTag, getCourseDateBucket } from './course-status';
 
 describe('course-status', () => {
+  describe('getCourseDateBucket', () => {
+    const now = new Date('2026-06-15T12:00:00Z');
+
+    it('is upcoming when the start is in the future', () => {
+      expect(getCourseDateBucket({ startDate: '2026-07-01', endDate: '2026-12-01' }, now)).toBe(
+        'upcoming',
+      );
+    });
+
+    it('is current when now is within the range', () => {
+      expect(getCourseDateBucket({ startDate: '2026-01-01', endDate: '2026-12-01' }, now)).toBe(
+        'current',
+      );
+    });
+
+    it('is past once the end has passed', () => {
+      expect(getCourseDateBucket({ startDate: '2025-01-01', endDate: '2026-01-01' }, now)).toBe(
+        'past',
+      );
+    });
+
+    it('treats end == now as past (matches getCourseStatusTag)', () => {
+      expect(getCourseDateBucket({ startDate: '2026-01-01', endDate: now }, now)).toBe('past');
+    });
+
+    it('treats start == now as current', () => {
+      expect(getCourseDateBucket({ startDate: now, endDate: '2026-12-01' }, now)).toBe('current');
+    });
+  });
+
   describe('getCourseStatusTag', () => {
     it('should return Archived status when course is archived', () => {
       const result = getCourseStatusTag({

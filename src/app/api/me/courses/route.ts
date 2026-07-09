@@ -60,6 +60,8 @@ export async function GET(req: Request) {
           code: true,
           isPublished: true,
           isArchived: true,
+          startDate: true,
+          endDate: true,
         },
         orderBy: { createdAt: 'desc' },
       });
