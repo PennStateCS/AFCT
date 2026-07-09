@@ -10,6 +10,8 @@
  * Adopt incrementally: existing hand-written `fetch` query functions keep working.
  */
 
+import { QUERY_DEBUG, noteClientFetch, logClientTiming } from '@/lib/perf-debug';
+
 export class HttpError extends Error {
   readonly status: number;
   readonly body: unknown;
@@ -22,23 +24,34 @@ export class HttpError extends Error {
 }
 
 export async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  // Only pass `init` when present so the call reads as `fetch(url)` (no trailing
-  // undefined) — matches callers that pass no options.
-  const res = await (init ? fetch(url, init) : fetch(url));
-  if (!res.ok) {
-    let body: unknown = null;
-    let message = `Request failed (${res.status})`;
-    try {
-      body = await res.json();
-      const parsed = (body as { error?: string; message?: string } | null) ?? null;
-      const detail = parsed?.error ?? parsed?.message;
-      if (detail) message = detail;
-    } catch {
-      // Non-JSON error body — keep the status-based message.
+  // Dev-only instrumentation (off unless NEXT_PUBLIC_QUERY_DEBUG=1); a no-op in
+  // tests and production, so the fetch call shape below is unchanged.
+  const method = init?.method ?? 'GET';
+  const start = QUERY_DEBUG ? performance.now() : 0;
+  if (QUERY_DEBUG) noteClientFetch(method, url);
+  let statusForLog = 0;
+  try {
+    // Only pass `init` when present so the call reads as `fetch(url)` (no trailing
+    // undefined) — matches callers that pass no options.
+    const res = await (init ? fetch(url, init) : fetch(url));
+    statusForLog = res.status;
+    if (!res.ok) {
+      let body: unknown = null;
+      let message = `Request failed (${res.status})`;
+      try {
+        body = await res.json();
+        const parsed = (body as { error?: string; message?: string } | null) ?? null;
+        const detail = parsed?.error ?? parsed?.message;
+        if (detail) message = detail;
+      } catch {
+        // Non-JSON error body — keep the status-based message.
+      }
+      throw new HttpError(res.status, message, body);
     }
-    throw new HttpError(res.status, message, body);
+    return (await res.json()) as T;
+  } finally {
+    if (QUERY_DEBUG) logClientTiming(method, url, statusForLog, performance.now() - start);
   }
-  return (await res.json()) as T;
 }
 
 /**
