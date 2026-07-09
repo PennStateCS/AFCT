@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { canAccessCourse } from '@/lib/permissions';
+import { canAccessCourse, canManageCourse } from '@/lib/permissions';
 import { apiError } from '@/lib/api/http';
 import { logDenial, logError } from '@/lib/api/activity';
 import { isSafeUploadName, serveUploadedFile } from '@/lib/api/serve-file';
@@ -54,6 +54,20 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
         userId: session.user.id,
         action: 'PROBLEM_FILE_DOWNLOAD_DENIED',
       });
+    }
+
+    // A student may only fetch a problem file once the problem is part of a
+    // PUBLISHED assignment; staff/admin may fetch any. This keeps unreleased
+    // problem content hidden even from an enrolled member who guesses the
+    // filename. 404-mask it so the file's existence stays hidden.
+    if (!(await canManageCourse(session.user, problem.courseId))) {
+      const publishedLink = await prisma.assignmentProblem.findFirst({
+        where: { problemId: problem.id, assignment: { isPublished: true } },
+        select: { assignmentId: true },
+      });
+      if (!publishedLink) {
+        return apiError(404, 'File not found');
+      }
     }
 
     return await serveUploadedFile(file, 'problems', {

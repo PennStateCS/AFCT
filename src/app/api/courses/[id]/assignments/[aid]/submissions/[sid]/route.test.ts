@@ -171,7 +171,7 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
     // different student and not a manager -> hits the in-handler denial.
     authMock.mockResolvedValue({ user: { id: 'student-a', role: 'STUDENT' } });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', isPublished: true });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT', course: { isPublished: true } });
 
     const res = await GET(
       new Request('http://localhost/api/courses/c1/assignments/a1/submissions/student-b'),
@@ -190,7 +190,7 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
   it('allows a student to view their own submissions', async () => {
     authMock.mockResolvedValue({ user: { id: 'student-a', role: 'STUDENT' } });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', isPublished: true });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT', course: { isPublished: true } });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
       {
         problem: {
@@ -219,7 +219,7 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
   it('404-masks an unpublished assignment for the owning student', async () => {
     authMock.mockResolvedValue({ user: { id: 'student-a', role: 'STUDENT' } });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', isPublished: false });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT', course: { isPublished: true } });
 
     const res = await GET(
       new Request('http://localhost/api/courses/c1/assignments/a1/submissions/student-a'),

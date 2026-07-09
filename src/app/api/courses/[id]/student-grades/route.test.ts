@@ -80,7 +80,7 @@ describe('GET /api/courses/[id]/student-grades', () => {
   it('applies default values when a problem has no submissions or grades', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
     prismaMock.roster.findUnique.mockResolvedValue({ id: 'r1' });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
     prismaMock.assignment.findMany.mockResolvedValue([
       { id: 'a1', title: 'Assignment 1', description: null, dueDate: null },
     ]);
@@ -111,7 +111,7 @@ describe('GET /api/courses/[id]/student-grades', () => {
   it('returns assignment grade payload for an enrolled student', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
     prismaMock.roster.findUnique.mockResolvedValue({ id: 'r1' });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
     seedGradeData();
 
     const res = await GET(makeRequest(), params());
@@ -153,7 +153,7 @@ describe('GET /api/courses/[id]/student-grades', () => {
     // Branch 137: `groupedProblems[assignment.id] ?? []` for an assignment with no problems.
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
     prismaMock.roster.findUnique.mockResolvedValue({ id: 'r1' });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
     prismaMock.assignment.findMany.mockResolvedValue([
       { id: 'a1', title: 'A1', description: null, dueDate: new Date('2025-01-01T00:00:00.000Z') },
       { id: 'a2', title: 'A2 (no problems)', description: null, dueDate: null },
