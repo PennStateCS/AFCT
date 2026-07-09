@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeEmail } from './email';
+import { normalizeEmail, isValidEmail } from './email';
 
 describe('normalizeEmail', () => {
   it('trims and lowercases', () => {
@@ -12,5 +12,16 @@ describe('normalizeEmail', () => {
   });
   it('supports the "|| null" idiom for absent values', () => {
     expect(normalizeEmail(null) || null).toBeNull();
+  });
+});
+
+describe('isValidEmail', () => {
+  it('accepts a well-formed address', () => {
+    expect(isValidEmail('foo@example.com')).toBe(true);
+  });
+  it('rejects obvious junk', () => {
+    for (const bad of ['', 'foo', 'foo@', '@bar.com', 'foo@bar', 'a b@c.com']) {
+      expect(isValidEmail(bad)).toBe(false);
+    }
   });
 });

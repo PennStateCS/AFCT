@@ -4,9 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy';
 import { withAdminAuth } from '@/lib/api/with-auth';
-import { normalizeEmail } from '@/lib/email';
-
-const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+import { normalizeEmail, isValidEmail } from '@/lib/email';
 
 type BulkUserRow = {
   rowNumber?: number;
