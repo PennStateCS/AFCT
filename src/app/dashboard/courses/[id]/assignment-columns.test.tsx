@@ -20,19 +20,19 @@ describe('MaxPointsCell', () => {
   });
 
   it('renders the row value without fetching when maxPoints is known', () => {
-    renderWithClient(<MaxPointsCell assignmentId="a1" maxPoints={42} />);
+    renderWithClient(<MaxPointsCell courseId="c1" assignmentId="a1" maxPoints={42} />);
 
     expect(screen.getByText('42')).toBeInTheDocument();
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('fetches /api/assignments/{id} and renders the fetched value when maxPoints is null', async () => {
+  it('fetches the course assignment and renders the fetched value when maxPoints is null', async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => ({ maxPoints: 17 }),
     });
 
-    renderWithClient(<MaxPointsCell assignmentId="a1" maxPoints={null} />);
+    renderWithClient(<MaxPointsCell courseId="c1" assignmentId="a1" maxPoints={null} />);
 
     // Loading placeholder before the query resolves.
     expect(screen.getByText('...')).toBeInTheDocument();
@@ -40,6 +40,6 @@ describe('MaxPointsCell', () => {
     await waitFor(() => {
       expect(screen.getByText('17')).toBeInTheDocument();
     });
-    expect(global.fetch).toHaveBeenCalledWith('/api/assignments/a1');
+    expect(global.fetch).toHaveBeenCalledWith('/api/courses/c1/assignments/a1?view=problems');
   });
 });

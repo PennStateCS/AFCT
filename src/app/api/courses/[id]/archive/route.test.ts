@@ -24,6 +24,7 @@ beforeEach(() => {
 
 describe('PATCH /api/courses/[id]/archive', () => {
   it('returns 400 when isArchived invalid', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     const req = new Request('http://localhost/api/courses/c1/archive', {
       method: 'PATCH',
       body: JSON.stringify({ isArchived: 'yes' }),
@@ -34,7 +35,7 @@ describe('PATCH /api/courses/[id]/archive', () => {
     expect(res.status).toBe(400);
   });
 
-  it('returns 403 when unauthorized', async () => {
+  it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
     const req = new Request('http://localhost/api/courses/c1/archive', {
@@ -44,7 +45,7 @@ describe('PATCH /api/courses/[id]/archive', () => {
 
     const res = await PATCH(req, { params: Promise.resolve({ id: 'c1' }) });
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('returns 404 when course not found on archive', async () => {
@@ -100,5 +101,28 @@ describe('PATCH /api/courses/[id]/archive', () => {
     expect(res.status).toBe(200);
     expect(prismaMock.course.update).toHaveBeenCalled();
     expect(activityLogMock).toHaveBeenCalled();
+  });
+
+  it('returns 500 and logs when the update throws', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.course.findUnique.mockResolvedValue({ startDate: new Date(), endDate: new Date() });
+    canArchiveMock.mockResolvedValue({ canArchive: true });
+    prismaMock.course.update.mockRejectedValue(new Error('db down'));
+
+    const req = new Request('http://localhost/api/courses/c1/archive', {
+      method: 'PATCH',
+      body: JSON.stringify({ isArchived: true }),
+    });
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({ action: 'COURSE_ARCHIVE_ERROR' }),
+    );
+    consoleSpy.mockRestore();
   });
 });

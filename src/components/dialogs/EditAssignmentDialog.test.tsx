@@ -168,7 +168,7 @@ describe('EditAssignmentDialog', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
     const [requestUrl, requestInit] = fetchMock.mock.calls[0];
-    expect(requestUrl).toBe('/api/assignments/assignment-1');
+    expect(requestUrl).toBe('/api/courses/course-123/assignments/assignment-1');
 
     const payload = JSON.parse((requestInit as RequestInit).body as string);
     expect(payload).toMatchObject({

@@ -13,6 +13,7 @@ import { CreateUserDialog } from '@/components/dialogs/CreateUserDialog';
 import { ImportUsersDialog } from '@/components/dialogs/ImportUsersDialog';
 import { UserRoundPlus, Users } from 'lucide-react';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import { apiPaths } from '@/lib/api-paths';
 import type { UserListItem } from '@/lib/users-list';
 
 export default function UsersClient({ initialUsers }: { initialUsers?: UserListItem[] }) {
@@ -35,7 +36,7 @@ export default function UsersClient({ initialUsers }: { initialUsers?: UserListI
   } = useQuery({
     queryKey: ['admin', 'users'],
     queryFn: async () => {
-      const res = await fetch('/api/admin/users/list', { cache: 'no-store' });
+      const res = await fetch(apiPaths.admin.usersList(), { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed to fetch users');
       return (await res.json()) as UserListItem[];
     },
@@ -68,14 +69,11 @@ export default function UsersClient({ initialUsers }: { initialUsers?: UserListI
           User Accounts
         </CardTitle>
         <div className="flex items-center gap-2">
-		  <label className="flex items-center gap-2 cursor-pointer">
-            <Checkbox
-              checked={onlyActive}
-		      onCheckedChange={(value) => setOnlyActive(!!value)}
-		    />
-            <span className='text-sm font-medium'>Show only active users</span>
-		  </label>
-		  <Button variant="outline" onClick={() => setImportOpen(true)}>
+          <label className="flex cursor-pointer items-center gap-2">
+            <Checkbox checked={onlyActive} onCheckedChange={(value) => setOnlyActive(!!value)} />
+            <span className="text-sm font-medium">Show only active users</span>
+          </label>
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
             <Users />
             Import Users
           </Button>

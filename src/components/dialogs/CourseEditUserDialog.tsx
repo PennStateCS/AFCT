@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useState, useRef, useMemo } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { fetchJson } from '@/lib/query-fetch';
+import { queryKeys } from '@/lib/query-keys';
 import { getInitials } from '@/app/utils/initials';
 import {
   Dialog,
@@ -19,6 +21,7 @@ import { Trash2, Delete } from 'lucide-react';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { courseRoleOptions, formatCourseRole } from '@/lib/roles';
 import SelectField from '@/components/ui/SelectField';
+import { apiPaths } from '@/lib/api-paths';
 
 type CourseRosterEntry = {
   role?: string | null;
@@ -62,7 +65,6 @@ export default function CourseEditUserDialog({
   initialViewerDefaultRole = null,
 }: Props) {
   const queryClient = useQueryClient();
-  const [saving, setSaving] = useState(false);
   const [roster, setRoster] = useState<CourseRosterEntry | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [viewerCourseRole, setViewerCourseRole] = useState<string | null>(null);
@@ -87,15 +89,18 @@ export default function CourseEditUserDialog({
   // caller didn't hand us the entry via initialRoster (the fast-path prop).
   // Reopening the same user is served warm from the cache within staleTime.
   const rosterQuery = useQuery<RosterReadResponse>({
-    queryKey: ['course', courseId, 'roster', userId],
-    queryFn: async () => {
-      const res = await fetch(`/api/courses/${courseId}/roster/${userId}`);
-      if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load roster entry');
-      return (await res.json()) as RosterReadResponse;
-    },
+    queryKey: queryKeys.course.rosterEntry(courseId, userId),
+    queryFn: () => fetchJson<RosterReadResponse>(apiPaths.courseRosterEntry(courseId, userId)),
     enabled: open && !initialRoster,
     staleTime: 30_000,
   });
+
+  // Re-pull the edited roster entry and the course roster list (a role change or
+  // removal is reflected there too).
+  const invalidateRoster = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.course.rosterEntry(courseId, userId) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.course.roster(courseId) });
+  };
 
   // Blocking spinner: only while we're actually waiting on the network for a
   // dialog with no fast-path data (mirrors the old `loading` flag).
@@ -112,7 +117,7 @@ export default function CourseEditUserDialog({
       setViewerCourseRole(initialViewerCourseRole ?? null);
       setViewerDefaultRole(initialViewerDefaultRole ?? null);
       setAvatarPreview(
-        initialRoster.user.avatar ? `/api/uploads/pfps/${initialRoster.user.avatar}` : '',
+        initialRoster.user.avatar ? apiPaths.files.pfp(initialRoster.user.avatar) : '',
       );
       originalRosterRef.current = JSON.parse(JSON.stringify(initialRoster));
       return;
@@ -123,17 +128,9 @@ export default function CourseEditUserDialog({
     setRoster(body.roster ?? null);
     setViewerCourseRole(body.viewerCourseRole ?? null);
     setViewerDefaultRole(body.viewerDefaultRole ?? null);
-    setAvatarPreview(
-      body.roster?.user.avatar ? `/api/uploads/pfps/${body.roster.user.avatar}` : '',
-    );
+    setAvatarPreview(body.roster?.user.avatar ? apiPaths.files.pfp(body.roster.user.avatar) : '');
     originalRosterRef.current = JSON.parse(JSON.stringify(body.roster ?? null));
-  }, [
-    open,
-    initialRoster,
-    initialViewerCourseRole,
-    initialViewerDefaultRole,
-    rosterQuery.data,
-  ]);
+  }, [open, initialRoster, initialViewerCourseRole, initialViewerDefaultRole, rosterQuery.data]);
 
   // On a failed roster read, surface the error and close (old fetch behavior).
   useEffect(() => {
@@ -144,60 +141,68 @@ export default function CourseEditUserDialog({
     }
   }, [open, initialRoster, rosterQuery.isError, rosterQuery.error, setOpen]);
 
-  const handleSave = async () => {
-    if (!roster) return;
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/courses/${courseId}/roster/${userId}`, {
+  const { mutate: saveRoster, isPending: isSaving } = useMutation({
+    mutationFn: (role: string | null | undefined) =>
+      fetchJson(apiPaths.courseRosterEntry(courseId, userId), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: roster.role }),
-      });
-      const body = await res.json();
-      if (!res.ok) {
-        showToast.error(body?.error || 'Failed to save roster entry');
-        return;
-      }
-      // Update original copy so the dialog reflects the saved state
-      originalRosterRef.current = JSON.parse(JSON.stringify(roster));
-      // Invalidate the cached read so a reopen reflects the change; the role
-      // edit also changes the course roster list view.
-      queryClient.invalidateQueries({ queryKey: ['course', courseId, 'roster', userId] });
-      queryClient.invalidateQueries({ queryKey: ['course', courseId, 'roster'] });
+        body: JSON.stringify({ role }),
+      }),
+    onSuccess: () => {
+      // Reflect the saved state so isDirty resets to false.
+      originalRosterRef.current = roster ? JSON.parse(JSON.stringify(roster)) : null;
+      invalidateRoster();
       showToast.success('Roster updated');
       onSaved?.();
       setOpen(false);
-    } catch (err) {
+    },
+    onError: (err) => {
       console.error('Error saving roster entry', err);
-      showToast.error('Failed to save roster entry');
-    } finally {
-      setSaving(false);
-    }
+      showToast.error(err instanceof Error ? err.message : 'Failed to save roster entry');
+    },
+  });
+
+  const handleSave = () => {
+    if (!roster) return;
+    saveRoster(roster.role);
   };
 
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   // Execute removal (called from ConfirmDialog onConfirm)
-  const handleRemove = async () => {
-    try {
-      const res = await fetch(`/api/courses/${courseId}/roster/${userId}`, { method: 'DELETE' });
-      const body = await res.json();
-      if (!res.ok) {
-        showToast.error(body?.error || 'Failed to remove user');
-        return;
-      }
-      queryClient.invalidateQueries({ queryKey: ['course', courseId, 'roster', userId] });
-      queryClient.invalidateQueries({ queryKey: ['course', courseId, 'roster'] });
+  const { mutate: removeUser } = useMutation({
+    mutationFn: () => fetchJson(apiPaths.courseRosterEntry(courseId, userId), { method: 'DELETE' }),
+    onSuccess: () => {
+      invalidateRoster();
       showToast.success('User removed from course');
       onSaved?.();
       setOpen(false);
-    } catch (err) {
+    },
+    onError: (err) => {
       console.error('Error removing user', err);
-      showToast.error('Failed to remove user');
-    } finally {
-      setConfirmOpen(false);
-    }
-  };
+      showToast.error(err instanceof Error ? err.message : 'Failed to remove user');
+    },
+    onSettled: () => setConfirmOpen(false),
+  });
+  const handleRemove = () => removeUser();
+
+  const { mutate: deleteAvatar } = useMutation({
+    mutationFn: (targetUserId: string) => {
+      const form = new FormData();
+      form.append('deleteAvatar', 'true');
+      return fetchJson(apiPaths.user(targetUserId), { method: 'PATCH', body: form });
+    },
+    onSuccess: () => {
+      setRoster((r) => (r ? { ...r, user: { ...r.user, avatar: null } } : r));
+      queryClient.invalidateQueries({ queryKey: queryKeys.course.rosterEntry(courseId, userId) });
+      showToast.success('Profile photo removed');
+      onSaved?.();
+    },
+    onError: (err) => {
+      console.error('Failed to delete avatar', err);
+      showToast.error(err instanceof Error ? err.message : 'Failed to delete avatar');
+    },
+  });
 
   return (
     <Dialog
@@ -208,7 +213,7 @@ export default function CourseEditUserDialog({
         if (!v && originalRosterRef.current) {
           const orig = JSON.parse(JSON.stringify(originalRosterRef.current));
           setRoster(orig);
-          setAvatarPreview(orig.user.avatar ? `/api/uploads/pfps/${orig.user.avatar}` : '');
+          setAvatarPreview(orig.user.avatar ? apiPaths.files.pfp(orig.user.avatar) : '');
           setConfirmOpen(false);
         }
       }}
@@ -230,10 +235,7 @@ export default function CourseEditUserDialog({
             <div className="space-y-4">
               <div className="flex items-center gap-4">
                 <Avatar className="h-20 w-20">
-                  <AvatarImage
-                    src={avatarPreview || undefined}
-                    alt="User Avatar"
-                  />
+                  <AvatarImage src={avatarPreview || undefined} alt="User Avatar" />
                   <AvatarFallback className="bg-secondary text-secondary-foreground">
                     {getInitials(
                       roster.user.firstName,
@@ -259,30 +261,9 @@ export default function CourseEditUserDialog({
                     <Button
                       variant="outline"
                       className="flex items-center gap-2 border-red-600 text-red-600 hover:bg-red-50"
-                      onClick={async () => {
+                      onClick={() => {
                         if (!confirm("Delete this user's profile photo?")) return;
-                        try {
-                          const form = new FormData();
-                          form.append('deleteAvatar', 'true');
-                          const res = await fetch(`/api/users/${roster.user.id}`, {
-                            method: 'PATCH',
-                            body: form,
-                          });
-                          const body = await res.json();
-                          if (!res.ok) {
-                            showToast.error(body?.error || 'Failed to delete avatar');
-                            return;
-                          }
-                          setRoster({ ...roster, user: { ...roster.user, avatar: null } });
-                          queryClient.invalidateQueries({
-                            queryKey: ['course', courseId, 'roster', userId],
-                          });
-                          showToast.success('Profile photo removed');
-                          onSaved?.();
-                        } catch (err) {
-                          console.error('Failed to delete avatar', err);
-                          showToast.error('Failed to delete avatar');
-                        }
+                        deleteAvatar(roster.user.id);
                       }}
                       disabled={!roster.user?.avatar}
                       title={!roster.user?.avatar ? 'No profile photo to delete' : undefined}
@@ -364,10 +345,10 @@ export default function CourseEditUserDialog({
           </DialogClose>
           <Button
             onClick={handleSave}
-            disabled={!isDirty || saving || loading}
+            disabled={!isDirty || isSaving || loading}
             title={!isDirty ? 'No changes to save' : undefined}
           >
-            {saving ? 'Saving…' : 'Save'}
+            {isSaving ? 'Saving…' : 'Save'}
           </Button>
         </DialogFooter>
       </DialogContent>

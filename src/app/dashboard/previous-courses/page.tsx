@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import DashboardClient from '../DashboardClient';
+import { toStudentSafeEnrolled } from '@/lib/course-format';
 
 export const metadata: Metadata = {
   title: 'Previous Courses',
@@ -62,17 +63,30 @@ export default async function AllCoursesPage() {
     },
   });
 
-  // Map courses and attach the user's role in each
-  const courses = rosterEntries.map((entry) => {
-    const { course } = entry;
+  // Map courses and attach the user's role in each. Students never see an
+  // unpublished course they're enrolled in; staff/admin see theirs regardless.
+  const viewerIsAdmin = Boolean(session.user.isAdmin);
+  const courses = rosterEntries
+    .filter(
+      (entry) =>
+        viewerIsAdmin ||
+        entry.role === 'FACULTY' ||
+        entry.role === 'TA' ||
+        entry.course.isPublished,
+    )
+    .map((entry) => {
+      const { course } = entry;
+      // A student must not receive classmate names/emails for a past course either;
+      // staff keep the full roster, students get staff names + count-only entries.
+      const isStaffHere = viewerIsAdmin || entry.role === 'FACULTY' || entry.role === 'TA';
+      const enrolledMembers = course.roster.map((r) => ({ ...r.user, courseRole: r.role }));
 
-    return {
-      ...course,
-      userRole: entry.role,
-      // Only include enrolled list (user objects with courseRole) — do not construct role-specific arrays
-      enrolled: course.roster.map((r) => ({ ...r.user, courseRole: r.role })),
-    };
-  });
+      return {
+        ...course,
+        userRole: entry.role,
+        enrolled: isStaffHere ? enrolledMembers : toStudentSafeEnrolled(enrolledMembers),
+      };
+    });
 
   return (
     <div className="h-full w-full flex-col lg:flex-row">

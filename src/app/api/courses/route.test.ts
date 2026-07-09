@@ -31,9 +31,25 @@ import { GET, POST } from './route';
 beforeEach(() => {
   vi.clearAllMocks();
   validationResponseMock.mockReturnValue({ status: 500 });
+  // GET + POST are admin-only; default to an admin session (denial tests override).
+  authMock.mockResolvedValue({ user: { id: 'admin', isAdmin: true } });
 });
 
 describe('GET /api/courses', () => {
+  it('returns 401 when not signed in', async () => {
+    authMock.mockResolvedValue(null);
+    const res = await GET();
+    expect(res.status).toBe(401);
+    expect(prismaMock.course.findMany).not.toHaveBeenCalled();
+  });
+
+  it('returns 403 for a non-admin', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
+    const res = await GET();
+    expect(res.status).toBe(403);
+    expect(prismaMock.course.findMany).not.toHaveBeenCalled();
+  });
+
   it('returns courses with enrolled roster', async () => {
     prismaMock.course.findMany.mockResolvedValue([
       {
@@ -57,6 +73,33 @@ describe('GET /api/courses', () => {
     expect(body[0].enrolled).toEqual([
       { id: 'u1', firstName: 'Ada', lastName: 'Lovelace', role: 'FACULTY', courseRole: 'FACULTY' },
     ]);
+  });
+
+  it('derives maxPoints and problemCount for assignments', async () => {
+    prismaMock.course.findMany.mockResolvedValue([
+      {
+        id: 'course-1',
+        name: 'Course 1',
+        roster: [],
+        assignments: [
+          {
+            id: 'a1',
+            title: 'A1',
+            problems: [{ maxPoints: 60 }, { maxPoints: 40 }],
+          },
+        ],
+      },
+    ]);
+
+    const res = await GET();
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    expect(body[0].assignments[0]).toEqual(
+      expect.objectContaining({ id: 'a1', title: 'A1', maxPoints: 100, problemCount: 2 }),
+    );
+    // The `problems` array must be stripped from the response assignment.
+    expect(body[0].assignments[0].problems).toBeUndefined();
   });
 
   it('returns 500 on unexpected error', async () => {

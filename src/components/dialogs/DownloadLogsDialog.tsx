@@ -23,273 +23,264 @@ import { z } from 'zod';
 
 import { json2csv } from 'json-2-csv';
 import { showToast } from '@/lib/toast';
-
+import { apiPaths } from '@/lib/api-paths';
 
 // RHF form state = Zod INPUT (strings for datetime-local)
 type FormValues = z.infer<typeof DownloadLogsSchema>;
 
 type DownloadLogsDialogProps = {
-    open: boolean;
-    onOpenChange: (o: boolean) => void;
-}
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+};
 
-export function DownloadLogsDialog({
-    open,
-    onOpenChange,
-}: DownloadLogsDialogProps) {
-    const defaults: FormValues = useMemo(
-        () => ({
-            cols: [],
-            begTime: "",
-            endTime: "",
-        }), [],        
-    );
+export function DownloadLogsDialog({ open, onOpenChange }: DownloadLogsDialogProps) {
+  const defaults: FormValues = useMemo(
+    () => ({
+      cols: [],
+      begTime: '',
+      endTime: '',
+    }),
+    [],
+  );
 
-    const {
-        control,
-        setValue,
-        handleSubmit,
-        reset,
-        watch,
-        formState: { errors, isSubmitting, isValid },
-    } = useForm<FormValues>({
-        resolver: zodResolver(DownloadLogsSchema),
-        defaultValues: defaults,
-        mode: 'onChange',
-        reValidateMode: 'onChange',
+  const {
+    control,
+    setValue,
+    handleSubmit,
+    reset,
+    watch,
+    formState: { errors, isSubmitting, isValid },
+  } = useForm<FormValues>({
+    resolver: zodResolver(DownloadLogsSchema),
+    defaultValues: defaults,
+    mode: 'onChange',
+    reValidateMode: 'onChange',
+  });
+
+  const watchedBegTime = watch('begTime');
+
+  // Available log column names. Fetched lazily via TanStack Query — only when the
+  // dialog is open (enabled: open preserves the original lazy-on-open behavior).
+  // Field lists rarely change, so a 5-minute staleTime avoids refetching each open.
+  const { data: fields, isError: fieldsError } = useQuery({
+    queryKey: ['admin', 'logs', 'fields'],
+    queryFn: async (): Promise<string[]> => {
+      const res = await fetch(apiPaths.admin.logsExportFields(), {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.message || res.statusText || 'Failed to duplicate');
+      }
+      return res.json();
+    },
+    enabled: open,
+    staleTime: 5 * 60_000,
+  });
+
+  const colList = useMemo(() => fields ?? [], [fields]);
+
+  // Select All: Set the form value to contain every ID from colList
+  const handleSelectAll = () => {
+    setValue('cols', colList, { shouldValidate: true, shouldDirty: true });
+  };
+
+  // Unselect All: Set the form value to an empty array
+  const handleUnselectAll = () => {
+    setValue('cols', [], { shouldValidate: true, shouldDirty: true });
+  };
+
+  // Reset the form to defaults whenever the dialog opens.
+  useEffect(() => {
+    if (!open) return;
+
+    reset(defaults, {
+      keepDirty: false,
+      keepTouched: false,
+      keepErrors: false,
+      keepValues: false,
     });
+  }, [open, defaults, reset]);
 
-    const watchedBegTime = watch('begTime');
-
-    // Available log column names. Fetched lazily via TanStack Query — only when the
-    // dialog is open (enabled: open preserves the original lazy-on-open behavior).
-    // Field lists rarely change, so a 5-minute staleTime avoids refetching each open.
-    const {
-        data: fields,
-        isError: fieldsError,
-    } = useQuery({
-        queryKey: ['admin', 'logs', 'fields'],
-        queryFn: async (): Promise<string[]> => {
-            const res = await fetch(`/api/admin/logs/fields`, {
-                method: 'GET',
-                headers: { 'Content-Type': 'application/json' },
-            });
-            if (!res.ok) {
-                const data = await res.json().catch(() => ({}));
-                throw new Error(data?.message || res.statusText || 'Failed to duplicate');
-            }
-            return res.json();
-        },
-        enabled: open,
-        staleTime: 5 * 60_000,
-    });
-
-    const colList = useMemo(() => fields ?? [], [fields]);
-
-    // Select All: Set the form value to contain every ID from colList
-    const handleSelectAll = () => {
-        setValue("cols", colList, { shouldValidate: true, shouldDirty: true });
-    };
-
-    // Unselect All: Set the form value to an empty array
-    const handleUnselectAll = () => {
-        setValue("cols", [], { shouldValidate: true, shouldDirty: true });
-    };
-
-    // Reset the form to defaults whenever the dialog opens.
-    useEffect(() => {
-        if (!open) return;
-
-        reset(defaults, {
-            keepDirty: false,
-            keepTouched: false,
-            keepErrors: false,
-            keepValues: false,
-        });
-    }, [open, defaults, reset]);
-
-    // Surface a fetch failure the same way the original init() did.
-    useEffect(() => {
-        if (fieldsError) {
-            showToast.error('Failed to get log fields');
-        }
-    }, [fieldsError]);
-
-    // Run after colList is available
-    useEffect(() => {
-        // Get values
-        if (colList && colList.length > 0) {
-            setValue("cols", colList, { shouldValidate: true, shouldDirty: true });
-        }
-    }, [colList, setValue])
-
-    // Reset form
-    const resetForm = () => {
-        reset(defaults, {
-            keepDirty: false,
-            keepTouched: false,
-            keepErrors: false,
-            keepValues: false,
-        });
+  // Surface a fetch failure the same way the original init() did.
+  useEffect(() => {
+    if (fieldsError) {
+      showToast.error('Failed to get log fields');
     }
+  }, [fieldsError]);
 
-    // Submit
-    const onSubmit = async (raw: FormValues) => {
-        // Convert form values to the format expected by the API schema
-        const payload = {
-            ...raw,
-            cols: raw.cols,
-            begTime: raw.begTime === "" ? "1000-01-01T12:00" : raw.begTime,
-            endTime: raw.endTime === "" ? "3000-01-01T12:00" : raw.endTime,
-        };
+  // Run after colList is available
+  useEffect(() => {
+    // Get values
+    if (colList && colList.length > 0) {
+      setValue('cols', colList, { shouldValidate: true, shouldDirty: true });
+    }
+  }, [colList, setValue]);
 
-        const res = await fetch('/api/admin/logs/export', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
+  // Reset form
+  const resetForm = () => {
+    reset(defaults, {
+      keepDirty: false,
+      keepTouched: false,
+      keepErrors: false,
+      keepValues: false,
+    });
+  };
 
-        if (res.ok) {
-            // Convert to CSV format
-            const data = await res.json();
-            const csvString = json2csv(data, { expandNestedObjects: true });
-
-            // Prevent character corruption in Excel with BOM (\uFEFF)
-            const blob = new Blob(['\uFEFF' + csvString], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-
-            // Instantly trigger download without appending to the DOM
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = 'export_data.csv';
-            link.click();
-
-            // Clean up memory immediately to prevent leaks
-            URL.revokeObjectURL(url);
-
-            // Reset form and close dialog
-            resetForm();
-            onOpenChange(false);
-            showToast.success("Downloaded log file");
-        } else {
-            showToast.error("Failed to download logs");
-            console.error("Failed to download logs");
-        }
+  // Submit
+  const onSubmit = async (raw: FormValues) => {
+    // Convert form values to the format expected by the API schema
+    const payload = {
+      ...raw,
+      cols: raw.cols,
+      begTime: raw.begTime === '' ? '1000-01-01T12:00' : raw.begTime,
+      endTime: raw.endTime === '' ? '3000-01-01T12:00' : raw.endTime,
     };
 
-    const onSubmitWrapper = (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        handleSubmit((data) => onSubmit(data as unknown as FormValues))(e);
-    };
+    const res = await fetch(apiPaths.admin.logsExport(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
 
-    return (
-        <Dialog
-            open={open}
-            onOpenChange={onOpenChange}
-        >
-            <DialogContent className="bg-card sm:max-w-xl">
-                <DialogHeader>
-                    {/* Title */}
-                    <DialogTitle>Download Logs</DialogTitle>
-                </DialogHeader>
+    if (res.ok) {
+      // Convert to CSV format
+      const data = await res.json();
+      const csvString = json2csv(data, { expandNestedObjects: true });
 
-                {/* Form */}
-                <form onSubmit={onSubmitWrapper} className="min-w-0 space-y-4">
-                    {/* Fields */}
-                    <Controller
-                        control={control}
-                        name="cols"
-                        render={({ field }) => (
-                                <SearchableMultiSelect
-                                    label="Fields"
-                                    items={colList.map((col: string) => ({
-                                        id: col,
-                                        label: col,
-                                    }))}
-                                    value={field.value ?? []}
-                                    onChange={(value) => field.onChange(value)}
-                                    placeholder="Select fields"
-                                    searchPlaceholder="Search fields..."
-                                    emptyStateText="No field found."
-                                    error={errors.cols?.message}
-                                    isValid={(field.value?.length ?? 0) > 0 && !errors.cols}
-                                />
-                        )}
-                    />
+      // Prevent character corruption in Excel with BOM (\uFEFF)
+      const blob = new Blob(['\uFEFF' + csvString], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
 
-                    {/* Select and remove all */}
-                    <div className="grid gap-4 md:grid-cols-2">
-                        <Button type="button" onClick={handleSelectAll}>
-                            Select All
-                        </Button>
+      // Instantly trigger download without appending to the DOM
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'export_data.csv';
+      link.click();
 
-                        <Button type="button" onClick={handleUnselectAll}>
-                            Clear All
-                        </Button>
-                    </div>
+      // Clean up memory immediately to prevent leaks
+      URL.revokeObjectURL(url);
 
+      // Reset form and close dialog
+      resetForm();
+      onOpenChange(false);
+      showToast.success('Downloaded log file');
+    } else {
+      showToast.error('Failed to download logs');
+      console.error('Failed to download logs');
+    }
+  };
 
-                    {/* Time range */}
-                    <div className="grid gap-4 md:grid-cols-2">
-                        {/* START datetime-local */}
-                        <Controller
-                        control={control}
-                        name="begTime"
-                        render={({ field }) => (
-                            <InputGroup
-                                label="Start Date & Time"
-                                name="begTime"
-                                type="datetime-local"
-                                className="min-w-0"
-                                fieldProps={{
-                                ...field,
-                                value: field.value ?? '',
-                                }}
-                            />
-                        )}
-                        />
+  const onSubmitWrapper = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    handleSubmit((data) => onSubmit(data as unknown as FormValues))(e);
+  };
 
-                        {/* END datetime-local */}
-                        <Controller
-                        control={control}
-                        name="endTime"
-                        render={({ field }) => (
-                            <InputGroup
-                                label="End Date & Time"
-                                name="endTime"
-                                type="datetime-local"
-                                className="min-w-0"
-                                fieldProps={{
-                                    ...field,
-                                    value: field.value,
-                                }}
-                                min={watchedBegTime || ""} // prevent picking an end earlier than start
-                            />
-                        )}
-                        />
-                    </div>
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="bg-card sm:max-w-xl">
+        <DialogHeader>
+          {/* Title */}
+          <DialogTitle>Download Logs</DialogTitle>
+        </DialogHeader>
 
-                    {/* Form footer */}
-                    <DialogFooter>
-                        {/* Close button */}
-                        <DialogClose asChild>
-                            <Button
-                                type="button"
-                                variant="secondary"
-                                onClick={resetForm} // clear touched/dirty/errors before closing
-                                disabled={isSubmitting}
-                            >
-                                Cancel
-                            </Button>
-                        </DialogClose>
+        {/* Form */}
+        <form onSubmit={onSubmitWrapper} className="min-w-0 space-y-4">
+          {/* Fields */}
+          <Controller
+            control={control}
+            name="cols"
+            render={({ field }) => (
+              <SearchableMultiSelect
+                label="Fields"
+                items={colList.map((col: string) => ({
+                  id: col,
+                  label: col,
+                }))}
+                value={field.value ?? []}
+                onChange={(value) => field.onChange(value)}
+                placeholder="Select fields"
+                searchPlaceholder="Search fields..."
+                emptyStateText="No field found."
+                error={errors.cols?.message}
+                isValid={(field.value?.length ?? 0) > 0 && !errors.cols}
+              />
+            )}
+          />
 
-                        {/* Submit button */}
-                        <Button type="submit" disabled={isSubmitting || !isValid}>
-                        {isSubmitting ? 'Downloading…' : 'Download Logs'}
-                        </Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
-    )
+          {/* Select and remove all */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <Button type="button" onClick={handleSelectAll}>
+              Select All
+            </Button>
+
+            <Button type="button" onClick={handleUnselectAll}>
+              Clear All
+            </Button>
+          </div>
+
+          {/* Time range */}
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* START datetime-local */}
+            <Controller
+              control={control}
+              name="begTime"
+              render={({ field }) => (
+                <InputGroup
+                  label="Start Date & Time"
+                  name="begTime"
+                  type="datetime-local"
+                  className="min-w-0"
+                  fieldProps={{
+                    ...field,
+                    value: field.value ?? '',
+                  }}
+                />
+              )}
+            />
+
+            {/* END datetime-local */}
+            <Controller
+              control={control}
+              name="endTime"
+              render={({ field }) => (
+                <InputGroup
+                  label="End Date & Time"
+                  name="endTime"
+                  type="datetime-local"
+                  className="min-w-0"
+                  fieldProps={{
+                    ...field,
+                    value: field.value,
+                  }}
+                  min={watchedBegTime || ''} // prevent picking an end earlier than start
+                />
+              )}
+            />
+          </div>
+
+          {/* Form footer */}
+          <DialogFooter>
+            {/* Close button */}
+            <DialogClose asChild>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={resetForm} // clear touched/dirty/errors before closing
+                disabled={isSubmitting}
+              >
+                Cancel
+              </Button>
+            </DialogClose>
+
+            {/* Submit button */}
+            <Button type="submit" disabled={isSubmitting || !isValid}>
+              {isSubmitting ? 'Downloading…' : 'Download Logs'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
 }

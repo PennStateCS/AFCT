@@ -17,6 +17,9 @@ import { validationResponse } from '@/lib/zod-error';
 import { auth } from '@/lib/auth';
 import { isAdmin } from '@/lib/permissions';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
+import { resolveUserTimezone } from '@/lib/user-timezone';
+import { generateUniqueCourseCode } from '@/lib/course-code';
+import { sumProblemPoints, toEnrolled } from '@/lib/course-format';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { toEmptyStringNotation } from '@/lib/empty-string-notation';
 import type { Prisma } from '@prisma/client';
@@ -32,41 +35,6 @@ type RosterItem = Prisma.RosterGetPayload<{
 }>;
 
 // ----------------------------------------
-// Utilities
-// ----------------------------------------
-/**
- * Generate a unique course registration code in the format `ABC123`.
- * Retries until no collision exists in the database.
- */
-async function generateUniqueCourseCode() {
-  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  const numbers = '0123456789';
-
-  function randomCode() {
-    const part1 = Array.from(
-      { length: 3 },
-      () => letters[Math.floor(Math.random() * letters.length)],
-    ).join('');
-    const part2 = Array.from(
-      { length: 3 },
-      () => numbers[Math.floor(Math.random() * numbers.length)],
-    ).join('');
-    return `${part1}${part2}`.toUpperCase();
-  }
-
-  let code: string;
-  let exists = true;
-
-  do {
-    code = randomCode();
-    const existing = await prisma.course.findUnique({ where: { regCode: code } });
-    exists = !!existing;
-  } while (exists);
-
-  return code;
-}
-
-// ----------------------------------------
 // GET /api/courses
 // ----------------------------------------
 /**
@@ -75,19 +43,31 @@ async function generateUniqueCourseCode() {
  * @openapi
  * summary: List all courses
  * description: >-
- *   Returns every course with its roster and assignment metadata for the
- *   dashboard. This endpoint performs no authentication or authorization — any
- *   caller receives the full course list and roster names.
+ *   Returns every course with its roster and assignment metadata. System
+ *   administrators only — the payload spans all courses and includes every
+ *   member's identity and each course's registration code.
  * responses:
  *   200:
  *     description: Array of courses, each with an `enrolled` roster and assignments.
  *     content:
  *       application/json:
  *         schema: { type: array, items: { type: object } }
+ *   401: { description: Not signed in. }
+ *   403: { description: System administrators only. }
  *   500: { description: Server error. }
  */
 export async function GET() {
   try {
+    // Admin-only: this returns every course's roster identities and registration
+    // codes, so it must not be reachable by non-admins (or anonymously).
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!isAdmin(session.user)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const courses = await prisma.course.findMany({
       include: {
         roster: {
@@ -109,21 +89,13 @@ export async function GET() {
     // Group roster by role (treat course admins like faculty for display and permissions)
     const formatted = courses.map((c: (typeof courses)[number]) => {
       // Build single `enrolled` list (user objects with courseRole). Do not construct role-specific arrays here.
-      const enrolled = c.roster.map((r: (typeof c.roster)[number]) => ({
-        ...r.user,
-        courseRole: r.role,
-      }));
+      const enrolled = toEnrolled(c.roster);
 
       const assignmentsWithDerivedPoints = c.assignments.map((assignment) => {
-        const totalProblemPoints = (assignment.problems ?? []).reduce((sum, ap) => {
-          const value = typeof ap.maxPoints === 'number' ? ap.maxPoints : 0;
-          return sum + (Number.isFinite(value) ? value : 0);
-        }, 0);
-
         const { problems, ...restAssignment } = assignment;
         return {
           ...restAssignment,
-          maxPoints: totalProblemPoints,
+          maxPoints: sumProblemPoints(problems),
           problemCount: problems?.length ?? 0,
         };
       });
@@ -198,19 +170,7 @@ export async function POST(req: Request) {
     }
 
     // 3) Get user's timezone (DB user > system settings > default)
-    let userTimezone = 'America/New_York';
-    if (session?.user?.id) {
-      const userRecord = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { timezone: true },
-      });
-      if (userRecord?.timezone) {
-        userTimezone = userRecord.timezone;
-      } else {
-        const system = await prisma.systemSettings.findUnique({ where: { id: 1 } });
-        userTimezone = system?.timezone || userTimezone;
-      }
-    }
+    const userTimezone = await resolveUserTimezone(session?.user?.id);
 
     if (!json.registrationOpenAt || !json.registrationCloseAt) {
       return NextResponse.json({ message: 'Registration window is required.' }, { status: 400 });

@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import SwitchField from '@/components/ui/SwitchField';
 import FileUploadInput from '@/components/FileUploadInput';
 import { useMaxUploadSize } from '@/hooks/useMaxUploadSize';
+import { apiPaths } from '@/lib/api-paths';
 
 type ImportUsersDialogProps = {
   open: boolean;
@@ -188,7 +189,7 @@ export function ImportUsersDialog({ open, setOpen, onSuccess }: ImportUsersDialo
     setParseError(null);
 
     try {
-      const res = await fetch('/api/admin/users/bulk', {
+      const res = await fetch(apiPaths.admin.usersBulk(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rows, temporaryPasswords }),

@@ -18,8 +18,9 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { DuplicateFormSchema } from '@/schemas/course';
-import { FullCourse } from '@/types/course';
+import type { Course } from '@prisma/client';
 import { toast } from 'sonner';
+import { apiPaths } from '@/lib/api-paths';
 
 function toDateTimeLocalInTimeZone(date: Date | string, timeZone: string): string {
   const d = new Date(date);
@@ -47,7 +48,8 @@ type FormValues = z.infer<typeof DuplicateFormSchema>;
 interface Props {
   open: boolean;
   setOpen: (v: boolean) => void;
-  course: FullCourse | null;
+  // Only base course fields are read (name, code, dates, etc.), so any Course row works.
+  course: Course | null;
   timeZone: string;
   onSuccess?: (newId: string) => void;
 }
@@ -152,7 +154,7 @@ export default function DuplicateCourseDialog({
     };
 
     try {
-      const res = await fetch(`/api/courses/${courseId}/duplicate`, {
+      const res = await fetch(apiPaths.courseDuplicate(courseId), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

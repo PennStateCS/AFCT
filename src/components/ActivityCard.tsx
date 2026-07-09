@@ -13,6 +13,7 @@ import {
 import { Loader2, RefreshCw, Activity } from 'lucide-react';
 import { toast } from 'sonner';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import { apiPaths } from '@/lib/api-paths';
 
 const PAGE_SIZE = 50;
 
@@ -50,7 +51,7 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
     queryKey: ['course', courseId, 'activity', { limit: PAGE_SIZE }],
     queryFn: async ({ pageParam }) => {
       const offset = pageParam as number;
-      const url = `/api/courses/${courseId}/activity?limit=${PAGE_SIZE}&offset=${offset}`;
+      const url = apiPaths.courseActivity(courseId, { limit: PAGE_SIZE, offset });
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`Failed to fetch activities: ${response.status} ${response.statusText}`);
@@ -139,11 +140,7 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
           </div>
         ) : (
           <>
-            <DataTable
-              columns={columns}
-              data={activities}
-              tableLabel="Activity log table"
-            />
+            <DataTable columns={columns} data={activities} tableLabel="Activity log table" />
 
             {hasMore && (
               <div className="flex justify-center pt-4">

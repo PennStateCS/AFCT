@@ -1,12 +1,13 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { apiPaths } from '@/lib/api-paths';
 
 /**
  * Resolves the timezone to display dates in: the user's own profile timezone,
  * else the system default, else the browser's. Both reads go through the query
  * cache (shared keys), so the many components that call this hook on a page load
- * dedupe onto a single `/api/profile` + `/api/system-settings/public` fetch instead
+ * dedupe onto a single `/api/me` + `/api/system-settings/public` fetch instead
  * of each firing their own (previously a 5+ request stampede per page).
  */
 export function useEffectiveTimezone() {
@@ -15,7 +16,7 @@ export function useEffectiveTimezone() {
   const profileQuery = useQuery({
     queryKey: ['profile'],
     queryFn: async () => {
-      const res = await fetch('/api/profile', { cache: 'no-store' });
+      const res = await fetch(apiPaths.me(), { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed to load profile');
       return (await res.json()) as { timezone?: string | null };
     },
@@ -25,7 +26,7 @@ export function useEffectiveTimezone() {
   const publicSettingsQuery = useQuery({
     queryKey: ['system-settings', 'public'],
     queryFn: async () => {
-      const res = await fetch('/api/system-settings/public', { cache: 'no-store' });
+      const res = await fetch(apiPaths.systemSettingsPublic(), { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed to load public settings');
       return (await res.json()) as { timezone?: string | null };
     },

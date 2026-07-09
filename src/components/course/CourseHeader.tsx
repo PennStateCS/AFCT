@@ -6,16 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import {
-  Pencil,
-  Copy,
-  CopyCheck,
-  Layers as DuplicateIcon,
-  Users,
-  ClipboardList,
-  BookOpen,
-  Inbox,
-} from 'lucide-react';
+import { Pencil, Copy, CopyCheck, Users, ClipboardList, BookOpen, Inbox } from 'lucide-react';
 import type { FullCourse } from '@/types/course';
 import { getInstructors, getStudentCount, type EnrolledUser } from '@/lib/course-utils';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
@@ -25,7 +16,6 @@ interface CourseHeaderProps {
   course: FullCourse;
   isStudent: boolean;
   onEditClick: () => void;
-  onDuplicate?: () => void;
   onPublishToggle: (checked: boolean) => void;
   onArchiveToggle: (checked: boolean) => void;
 }
@@ -34,7 +24,6 @@ export function CourseHeader({
   course,
   isStudent,
   onEditClick,
-  onDuplicate,
   onPublishToggle,
   onArchiveToggle,
 }: CourseHeaderProps) {
@@ -246,30 +235,6 @@ export function CourseHeader({
               <Pencil className="mr-2 h-4 w-4" />
               Edit Course
             </Button>
-
-            {onDuplicate && (
-              <>
-                <TooltipProvider delayDuration={200}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className="sm:hidden"
-                        onClick={onDuplicate}
-                        aria-label="Duplicate course"
-                      >
-                        <DuplicateIcon className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Duplicate course</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-                <Button variant="outline" className="hidden sm:inline-flex" onClick={onDuplicate}>
-                  <DuplicateIcon className="mr-2 h-4 w-4" />
-                  Duplicate Course
-                </Button>
-              </>
-            )}
           </div>
         )}
       </CardHeader>
@@ -287,9 +252,7 @@ export function CourseHeader({
                 <div className="grid grid-cols-1 gap-y-2 text-sm">
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground text-xs">Status</span>
-                    <Badge variant={courseStatus.theme.variant}>
-                      {courseStatus.label}
-                    </Badge>
+                    <Badge variant={courseStatus.theme.variant}>{courseStatus.label}</Badge>
                   </div>
                   {/* Published */}
                   <div className="flex items-center justify-between">

@@ -16,6 +16,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CreateGroupSchema, type CreateGroupRaw } from '@/schemas/group';
 import { toast } from 'sonner';
+import { apiPaths } from '@/lib/api-paths';
 
 type CreateGroupDialogProps = {
   open: boolean;
@@ -30,7 +31,13 @@ export function CreateGroupDialog({ open, setOpen, courseId, onSuccess }: Create
     [courseId],
   );
 
-  const { control, handleSubmit, reset, setError, formState: { errors, isSubmitting, isValid } } = useForm<CreateGroupRaw>({
+  const {
+    control,
+    handleSubmit,
+    reset,
+    setError,
+    formState: { errors, isSubmitting, isValid },
+  } = useForm<CreateGroupRaw>({
     resolver: zodResolver(CreateGroupSchema),
     defaultValues: defaults,
   });
@@ -42,7 +49,7 @@ export function CreateGroupDialog({ open, setOpen, courseId, onSuccess }: Create
   const onSubmit = async (raw: CreateGroupRaw) => {
     try {
       const payload = { ...raw, courseId: courseId ?? raw.courseId };
-      const res = await fetch(`/api/courses/${payload.courseId}/groups`, {
+      const res = await fetch(apiPaths.courseGroups(payload.courseId), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: payload.name }),
@@ -74,7 +81,13 @@ export function CreateGroupDialog({ open, setOpen, courseId, onSuccess }: Create
   };
 
   return (
-    <Dialog open={open} onOpenChange={(val) => { setOpen(val); if (!val) reset(defaults); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(val) => {
+        setOpen(val);
+        if (!val) reset(defaults);
+      }}
+    >
       <DialogContent className="bg-card max-w-lg">
         <DialogHeader>
           <DialogTitle>Create Group</DialogTitle>
@@ -82,22 +95,44 @@ export function CreateGroupDialog({ open, setOpen, courseId, onSuccess }: Create
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <Controller control={control} name="name" render={({ field }) => (
-            <InputGroup label="Group Name" name="name" fieldProps={field} error={errors.name?.message} />
-          )} />
+          <Controller
+            control={control}
+            name="name"
+            render={({ field }) => (
+              <InputGroup
+                label="Group Name"
+                name="name"
+                fieldProps={field}
+                error={errors.name?.message}
+              />
+            )}
+          />
 
           {/* If no courseId preset, show a course select (rare for this flow) */}
           {!courseId && (
-            <Controller control={control} name="courseId" render={({ field }) => (
-              <InputGroup label="Course ID" name="courseId" fieldProps={field} error={errors.courseId?.message} />
-            )} />
+            <Controller
+              control={control}
+              name="courseId"
+              render={({ field }) => (
+                <InputGroup
+                  label="Course ID"
+                  name="courseId"
+                  fieldProps={field}
+                  error={errors.courseId?.message}
+                />
+              )}
+            />
           )}
 
           <DialogFooter className="bg-card mt-4">
             <DialogClose asChild>
-              <Button variant="secondary" type="button" disabled={isSubmitting}>Cancel</Button>
+              <Button variant="secondary" type="button" disabled={isSubmitting}>
+                Cancel
+              </Button>
             </DialogClose>
-            <Button type="submit" disabled={!isValid || isSubmitting}>{isSubmitting ? 'Creating...' : 'Create Group'}</Button>
+            <Button type="submit" disabled={!isValid || isSubmitting}>
+              {isSubmitting ? 'Creating...' : 'Create Group'}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
