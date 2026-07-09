@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
+import { isSessionIdleExpired } from '@/lib/session-timeout';
 
 /**
  * Coarse, edge-level authentication net.
@@ -50,6 +51,21 @@ export async function middleware(req: NextRequest) {
     secret: process.env.NEXTAUTH_SECRET,
     secureCookie: process.env.NODE_ENV === 'production',
   });
+
+  // Idle-timeout backstop: reject a signed-in token whose activity window has
+  // lapsed, from the token alone (no DB — this runs on the edge). The client
+  // watcher normally signs the user out gracefully first; this catches clients
+  // that aren't running (locked, suspended, JS disabled, tampered). Sign-out and
+  // the activity heartbeat go through `/api/auth/*`, which is allowlisted above,
+  // so an expired session can still end itself.
+  if (token && isSessionIdleExpired(token.lastActivity, token.idleTimeoutMs, Date.now())) {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const loginUrl = new URL('/login', req.url);
+    loginUrl.searchParams.set('callbackUrl', pathname);
+    return NextResponse.redirect(loginUrl);
+  }
 
   // Admin namespace: only short-circuit when we can POSITIVELY confirm a non-admin.
   if (pathname.startsWith('/api/admin')) {

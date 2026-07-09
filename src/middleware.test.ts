@@ -106,4 +106,39 @@ describe('middleware', () => {
       expect(res.status).toBe(200);
     });
   });
+
+  describe('idle-timeout enforcement', () => {
+    const IDLE = 20 * 60_000;
+    const expired = { id: 'u1', lastActivity: Date.now() - IDLE - 5_000, idleTimeoutMs: IDLE };
+    const fresh = { id: 'u1', lastActivity: Date.now() - 1_000, idleTimeoutMs: IDLE };
+
+    it('401s an idle-expired token on an API route', async () => {
+      getTokenMock.mockResolvedValue(expired);
+      const res = await middleware(req('/api/courses/c1'));
+      expect(res.status).toBe(401);
+    });
+
+    it('redirects an idle-expired token on a page route', async () => {
+      getTokenMock.mockResolvedValue(expired);
+      const res = await middleware(req('/dashboard/courses/c1'));
+      expect(res.status).toBe(307);
+      expect(res.headers.get('location') ?? '').toContain('/login');
+    });
+
+    it('401s an idle-expired admin on an admin route (idle beats the admin check)', async () => {
+      getTokenMock.mockResolvedValue({ ...expired, isAdmin: true });
+      const res = await middleware(req('/api/admin/users'));
+      expect(res.status).toBe(401);
+    });
+
+    it('passes a fresh (recently-active) token through', async () => {
+      getTokenMock.mockResolvedValue(fresh);
+      expect((await middleware(req('/api/courses/c1'))).status).toBe(200);
+    });
+
+    it('does not idle-check a legacy token without activity fields', async () => {
+      getTokenMock.mockResolvedValue({ id: 'u1' });
+      expect((await middleware(req('/api/courses/c1'))).status).toBe(200);
+    });
+  });
 });
