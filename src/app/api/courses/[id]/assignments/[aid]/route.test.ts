@@ -296,6 +296,41 @@ describe('PUT /api/courses/[id]/assignments/[aid]', () => {
     const body = await res.json();
     expect(body.error).toContain('submissions');
   });
+
+  it('blocks unpublishing when grades exist (no submissions)', async () => {
+    prismaMock.assignment.findFirst.mockResolvedValue({ ...existingAssignment });
+    prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
+    prismaMock.assignmentProblemGrade.findFirst.mockResolvedValue({ assignmentId: 'a1' });
+    const res = await PUT(putReq({ isPublished: false }), mutationParams);
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toContain('grades');
+  });
+
+  it('blocks changing group mode once submissions exist', async () => {
+    prismaMock.assignment.findFirst.mockResolvedValue({ ...existingAssignment, isGroup: false });
+    prismaMock.submission.count.mockResolvedValue(1);
+    const res = await PUT(putReq({ isGroup: true }), mutationParams);
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toContain('group mode');
+  });
+
+  it('returns 400 for an inconsistent late-submission window', async () => {
+    // allowLate enabled with no cutoff (existing has none) -> computeLateSubmissionState fails.
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      ...existingAssignment,
+      allowLateSubmissions: false,
+      lateCutoff: null,
+    });
+    const res = await PUT(putReq({ allowLateSubmissions: true }), mutationParams);
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 500 when the update throws', async () => {
+    prismaMock.assignment.findFirst.mockResolvedValue({ ...existingAssignment });
+    prismaMock.assignment.update.mockRejectedValue(new Error('db down'));
+    const res = await PUT(putReq({ title: 'New', dueDate: '2026-01-01' }), mutationParams);
+    expect(res.status).toBe(500);
+  });
 });
 
 describe('PATCH /api/courses/[id]/assignments/[aid]', () => {
@@ -329,6 +364,54 @@ describe('PATCH /api/courses/[id]/assignments/[aid]', () => {
       }),
     );
   });
+
+  const patchReq = (body: unknown) =>
+    new Request('http://localhost/api/courses/c1/assignments/a1', {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+
+  it('blocks unpublishing when submissions exist', async () => {
+    prismaMock.assignment.findFirst.mockResolvedValue({ ...existingAssignment });
+    prismaMock.assignmentProblem.findFirst.mockResolvedValue({ assignmentId: 'a1' });
+    const res = await PATCH(patchReq({ isPublished: false }), mutationParams);
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toContain('submissions');
+  });
+
+  it('blocks unpublishing when grades exist (no submissions)', async () => {
+    prismaMock.assignment.findFirst.mockResolvedValue({ ...existingAssignment });
+    prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
+    prismaMock.assignmentProblemGrade.findFirst.mockResolvedValue({ assignmentId: 'a1' });
+    const res = await PATCH(patchReq({ isPublished: false }), mutationParams);
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toContain('grades');
+  });
+
+  it('blocks changing group mode once submissions exist', async () => {
+    prismaMock.assignment.findFirst.mockResolvedValue({ ...existingAssignment });
+    prismaMock.submission.count.mockResolvedValue(2);
+    const res = await PATCH(patchReq({ isGroup: true }), mutationParams);
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toContain('group mode');
+  });
+
+  it('returns 400 for an inconsistent late-submission window', async () => {
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      ...existingAssignment,
+      allowLateSubmissions: false,
+      lateCutoff: null,
+    });
+    const res = await PATCH(patchReq({ allowLateSubmissions: true }), mutationParams);
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 500 when the update throws', async () => {
+    prismaMock.assignment.findFirst.mockResolvedValue({ ...existingAssignment });
+    prismaMock.assignment.update.mockRejectedValue(new Error('db down'));
+    const res = await PATCH(patchReq({ title: 'New' }), mutationParams);
+    expect(res.status).toBe(500);
+  });
 });
 
 describe('DELETE /api/courses/[id]/assignments/[aid]', () => {
@@ -361,5 +444,34 @@ describe('DELETE /api/courses/[id]/assignments/[aid]', () => {
       where: { assignmentId: 'a1' },
     });
     expect(prismaMock.assignment.delete).toHaveBeenCalledWith({ where: { id: 'a1' } });
+  });
+
+  it('400s when comments exist', async () => {
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
+    prismaMock.submission.count.mockResolvedValue(0);
+    prismaMock.comment.count.mockResolvedValue(4);
+    const res = await DELETE(delReq(), mutationParams);
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain('comments');
+  });
+
+  it('still succeeds when the activity-log write fails', async () => {
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
+    prismaMock.submission.count.mockResolvedValue(0);
+    prismaMock.comment.count.mockResolvedValue(0);
+    prismaMock.assignment.delete.mockResolvedValue({ id: 'a1', title: 'Old' });
+    activityLogMock.mockRejectedValueOnce(new Error('log down'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const res = await DELETE(delReq(), mutationParams);
+    expect(res.status).toBe(200);
+  });
+
+  it('returns 500 when the delete throws', async () => {
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
+    prismaMock.submission.count.mockResolvedValue(0);
+    prismaMock.comment.count.mockResolvedValue(0);
+    prismaMock.assignment.delete.mockRejectedValue(new Error('db down'));
+    const res = await DELETE(delReq(), mutationParams);
+    expect(res.status).toBe(500);
   });
 });
