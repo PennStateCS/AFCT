@@ -1,13 +1,12 @@
 'use client';
 
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatDateTimeInTimeZone } from '@/lib/date';
 import type { NetworkStatusResponse } from '@/lib/status/types';
-import { Skel, Stat, useStatusQuery, formatMs, formatRate } from '../status-ui';
+import { Skel, Stat, Section, useStatusQuery, formatMs, formatRate } from '../status-ui';
 
 export default function NetworkTab({
   active,
@@ -26,12 +25,10 @@ export default function NetworkTab({
 
   if (isLoading || !net) {
     return (
-      <Card>
-        <CardContent className="grid gap-4 p-6 sm:grid-cols-2">
-          <Skel w="w-40" />
-          <Skel w="w-32" />
-        </CardContent>
-      </Card>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Skel w="w-40" />
+        <Skel w="w-32" />
+      </div>
     );
   }
 
@@ -39,13 +36,8 @@ export default function NetworkTab({
     e ? `${e.errors ?? 0}/${e.total ?? 0} (${formatRate(e.ratePct ?? 0)})` : '—';
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle role="heading" aria-level={2} className="text-lg">
-          Network
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-3 sm:grid-cols-2">
+    <Section title="Network">
+      <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
         <Stat label="DB Latency" value={formatMs(net.db?.latencyMs)} />
         <Stat label="Auth Latency" value={formatMs(net.auth?.latencyMs)} />
         <Stat
@@ -68,7 +60,7 @@ export default function NetworkTab({
           label="Auth Host"
           value={net.auth?.host ? `${net.auth.host}:${net.auth.port ?? ''}` : '—'}
         />
-      </CardContent>
-    </Card>
+      </div>
+    </Section>
   );
 }
