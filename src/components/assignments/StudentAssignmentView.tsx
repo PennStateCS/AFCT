@@ -79,7 +79,7 @@ export default function StudentAssignmentPage({
   const contextQuery = useQuery({
     queryKey: ['assignment', assignmentId, 'student-context'],
     queryFn: async () => {
-      const res = await fetch(apiPaths.assignmentStudentContext(assignmentId));
+      const res = await fetch(apiPaths.assignmentStudentContext(params.id, assignmentId));
       if (!res.ok) throw new Error('Failed to fetch assignment context');
       return (await res.json()) as StudentAssignmentContext;
     },
