@@ -8,6 +8,7 @@ import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
+import { formBool } from '@/lib/api/request';
 
 // Solution files live here; the URL to serve them is /api/files/solutions/[file].
 const uploadsDir = path.join('/private', 'uploads', 'solutions');
@@ -68,8 +69,8 @@ export const PUT = withCourseAuth(
       const maxPoints = formData.get('maxPoints') as string | null;
       const assignmentId = formData.get('assignmentId') as string;
       const maxStates = formData.get('maxStates') as string | null;
-      const isDeterministic = formData.get('isDeterministic') === 'true';
-      const autograderEnabled = formData.get('autograderEnabled') === 'true';
+      const isDeterministic = formBool(formData, 'isDeterministic');
+      const autograderEnabled = formBool(formData, 'autograderEnabled');
       const file = formData.get('file') as File | null;
 
       if (!title || !type) {

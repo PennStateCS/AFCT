@@ -22,6 +22,17 @@ type DateInput = Date | string | number;
 
 const toDate = (value: DateInput): Date => (value instanceof Date ? value : new Date(value));
 
+/**
+ * Parse a date-ish input, returning `null` when it's missing or doesn't resolve
+ * to a real date (i.e. `getTime()` is NaN). Replaces the repeated
+ * `new Date(x)` + `Number.isNaN(d.getTime())` guard scattered across routes.
+ */
+export function parseValidDate(value: DateInput | null | undefined): Date | null {
+  if (value == null || value === '') return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 export function formatDateTimeInTimeZone(value: DateInput, timeZone = 'UTC') {
   const date = toDate(value);
   if (!Number.isFinite(date.getTime())) return 'Invalid date';

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcrypt';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { normalizeEmail } from '@/lib/email';
 
 /**
  * Verifies email/password credentials and returns the matching user's public
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
     }
 
-    const normalizedEmail = String(email).trim().toLowerCase();
+    const normalizedEmail = normalizeEmail(email);
     const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
 
     if (!user) {

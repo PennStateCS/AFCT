@@ -1,3 +1,5 @@
+import { clampInt } from '@/lib/api/request';
+
 export const DEFAULT_SYSTEM_TIMEZONE = 'UTC';
 export const DEFAULT_MAX_UPLOAD_SIZE_MB = 25;
 export const MIN_UPLOAD_SIZE_MB = 1;
@@ -79,11 +81,6 @@ export const MAX_SUBMISSION_MAX_ATTEMPTS = 10;
 export const DEFAULT_SUBMISSION_ANALYZER_LIMIT = 15;
 export const MIN_SUBMISSION_ANALYZER_LIMIT = 1;
 export const MAX_SUBMISSION_ANALYZER_LIMIT = 100;
-
-function clampInt(value: number, min: number, max: number, fallback: number): number {
-  if (!Number.isFinite(value)) return fallback;
-  return Math.max(min, Math.min(max, Math.trunc(value)));
-}
 
 export const clampSubmissionEvalTimeoutMs = (v: number) =>
   clampInt(v, MIN_SUBMISSION_EVAL_TIMEOUT_MS, MAX_SUBMISSION_EVAL_TIMEOUT_MS, DEFAULT_SUBMISSION_EVAL_TIMEOUT_MS);

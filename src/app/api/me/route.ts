@@ -10,6 +10,7 @@ import { randomUUID } from 'crypto';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
+import { formBool } from '@/lib/api/request';
 
 const uploadDir = path.join('/private', 'uploads', 'pfps');
 
@@ -75,7 +76,7 @@ export async function POST(req: Request) {
     const firstName = (formData.get('firstName') as string)?.trim();
     const lastName = (formData.get('lastName') as string)?.trim();
     const avatar = formData.get('avatar') as File | null;
-    const deleteAvatar = formData.get('deleteAvatar') === 'true';
+    const deleteAvatar = formBool(formData, 'deleteAvatar');
     const timezoneRaw = (formData.get('timezone') as string | null)?.trim() || '';
     const { maxBytes, maxMb } = await getSystemUploadLimit();
 

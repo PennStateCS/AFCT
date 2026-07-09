@@ -4,6 +4,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withAdminAuth } from '@/lib/api/with-auth';
 import { generateUniqueCourseCode } from '@/lib/course-code';
 import { resolveUserTimezone } from '@/lib/user-timezone';
+import { parseValidDate } from '@/lib/date';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
 import { toEmptyStringNotation } from '@/lib/empty-string-notation';
 import type { Prisma } from '@prisma/client';
@@ -121,15 +122,16 @@ export const POST = withAdminAuth(
         );
       }
 
-      const parsedStartDate = new Date(startDate);
-      const parsedEndDate = new Date(endDate);
-      const parsedRegistrationOpenAt = new Date(registrationOpenAt);
-      const parsedRegistrationCloseAt = new Date(registrationCloseAt);
+      const parsedStartDate = parseValidDate(startDate);
+      const parsedEndDate = parseValidDate(endDate);
+      const parsedRegistrationOpenAt = parseValidDate(registrationOpenAt);
+      const parsedRegistrationCloseAt = parseValidDate(registrationCloseAt);
 
       if (
-        [parsedStartDate, parsedEndDate, parsedRegistrationOpenAt, parsedRegistrationCloseAt].some(
-          (d) => Number.isNaN(d.getTime()),
-        )
+        !parsedStartDate ||
+        !parsedEndDate ||
+        !parsedRegistrationOpenAt ||
+        !parsedRegistrationCloseAt
       ) {
         return NextResponse.json({ error: 'Invalid date/time value.' }, { status: 400 });
       }
