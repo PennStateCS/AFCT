@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useMemo, useState, useEffect } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { fetchJson } from '@/lib/query-fetch';
 import { Plus, Minus } from 'lucide-react';
 import {
   Dialog,
@@ -40,7 +42,6 @@ export default function RandomGroupsDialog({
 }) {
   const [numGroups, setNumGroups] = useState<number>(2);
   const [prefix, setPrefix] = useState<string>('Group');
-  const [loading, setLoading] = useState(false);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<string>('');
 
@@ -87,63 +88,55 @@ export default function RandomGroupsDialog({
     return a;
   }
 
-  async function handleCreate() {
-    if (!validNum)
-      return showToast.error('Enter a valid number of groups (1 - number of students).');
-    if (!courseId) return showToast.error('Missing course id');
-    if (available === 0) return showToast.error('No students available to assign.');
-
-    setLoading(true);
-    try {
+  // Create the groups and randomly assign the available students, sequentially so
+  // a mid-run failure surfaces the exact server error. A single failed request
+  // fails the whole run.
+  const { mutate: generateGroups, isPending: loading } = useMutation({
+    mutationFn: async () => {
       const availableStudents = students.filter((s) => !excluded.has(s.id));
       if (availableStudents.length === 0) throw new Error('No students available to assign.');
       const shuffled = shuffle(availableStudents.map((s) => s.id));
       let idx = 0;
-      const createdGroups: unknown[] = [];
+      let createdCount = 0;
 
       for (let g = 0; g < sizes.length; g++) {
-        const groupName = `${prefix} ${g + 1}`;
-        // create group
-        const createRes = await fetch(apiPaths.courseGroups(courseId), {
+        const created = await fetchJson<{ id: string }>(apiPaths.courseGroups(courseId), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: groupName }),
+          body: JSON.stringify({ name: `${prefix} ${g + 1}` }),
         });
+        createdCount += 1;
 
-        if (!createRes.ok) {
-          const body = await createRes.json().catch(() => ({}));
-          throw new Error(body.error || 'Failed to create group');
-        }
-        const created = await createRes.json();
-        createdGroups.push(created);
-
-        // add members
         const count = sizes[g] ?? 0;
         for (let m = 0; m < count; m++) {
           const uid = shuffled[idx++];
-          // user may be undefined if there are fewer students than expected
-          if (!uid) continue;
-          const addRes = await fetch(apiPaths.courseGroupMembers(courseId, created.id), {
+          if (!uid) continue; // fewer students than expected
+          await fetchJson(apiPaths.courseGroupMembers(courseId, created.id), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userId: uid }),
           });
-          if (!addRes.ok) {
-            const body = await addRes.json().catch(() => ({}));
-            throw new Error(body.error || 'Failed to add member to group');
-          }
         }
       }
-
-      showToast.success(`${createdGroups.length} groups created`);
+      return createdCount;
+    },
+    onSuccess: (createdCount) => {
+      showToast.success(`${createdCount} groups created`);
       onCreated?.();
       setOpen(false);
-    } catch (err) {
+    },
+    onError: (err) => {
       console.error('Random group creation error:', err);
       showToast.error(err instanceof Error ? err.message : 'Failed to create random groups');
-    } finally {
-      setLoading(false);
-    }
+    },
+  });
+
+  function handleCreate() {
+    if (!validNum)
+      return showToast.error('Enter a valid number of groups (1 - number of students).');
+    if (!courseId) return showToast.error('Missing course id');
+    if (available === 0) return showToast.error('No students available to assign.');
+    generateGroups();
   }
 
   return (

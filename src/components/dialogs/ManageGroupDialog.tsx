@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { fetchJson } from '@/lib/query-fetch';
+import { queryKeys } from '@/lib/query-keys';
 import {
   Dialog,
   DialogContent,
@@ -54,30 +56,24 @@ export default function ManageGroupMembersDialog({
   const [initialSelected, setInitialSelected] = useState<Record<string, boolean>>({});
   const [filter, setFilter] = useState('');
   const [selectedIdx, setSelectedIdx] = useState<number>(-1);
-  const [busy, setBusy] = useState(false);
   const itemRefs = React.useRef<(HTMLLIElement | null)[]>([]);
 
   // Course students. Shared key with GroupsCard/AssignmentSubmissions so the
   // read dedupes / serves warm across those consumers.
   const studentsQuery = useQuery<RawStudent[]>({
-    queryKey: ['course', courseId, 'students'],
-    queryFn: async () => {
-      const res = await fetch(apiPaths.courseStudents(courseId));
-      if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load students');
-      return (await res.json()) as RawStudent[];
-    },
+    queryKey: queryKeys.course.students(courseId),
+    queryFn: () => fetchJson<RawStudent[]>(apiPaths.courseStudents(courseId)),
     enabled: open && !!group,
     staleTime: 30_000,
   });
 
   // Group members. Keyed per group so reopening the same group is served warm.
   const membersQuery = useQuery<{ members: { userId: string }[] }>({
-    queryKey: ['course', courseId, 'group', groupId, 'members'],
-    queryFn: async () => {
-      const res = await fetch(apiPaths.courseGroupMembers(courseId, String(groupId)));
-      if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load members');
-      return (await res.json()) as { members: { userId: string }[] };
-    },
+    queryKey: queryKeys.course.groupMembers(courseId, String(groupId)),
+    queryFn: () =>
+      fetchJson<{ members: { userId: string }[] }>(
+        apiPaths.courseGroupMembers(courseId, String(groupId)),
+      ),
     enabled: open && !!group,
     staleTime: 30_000,
   });
@@ -107,7 +103,6 @@ export default function ManageGroupMembersDialog({
   // students, only the members read gates the spinner.
   const studentsLoading =
     initialStudents && initialStudents.length > 0 ? false : studentsQuery.isLoading;
-  const loading = busy || (!!group && open && (studentsLoading || membersQuery.isLoading));
 
   // Cache the reads, seed the local editable selection. Rebuilds the checkbox
   // state whenever the roster or the member set changes.
@@ -202,11 +197,10 @@ export default function ManageGroupMembersDialog({
     return false;
   }
 
-  async function handleSave() {
-    if (!group) return;
-    if (!isDirty(selected, initialSelected)) return setOpen(false);
-    setBusy(true);
-    try {
+  // Diff the checkbox selection against the loaded members and apply the adds and
+  // removes in parallel. A single failed op fails the whole save.
+  const { mutate: saveMembers, isPending: isSaving } = useMutation({
+    mutationFn: async (target: { id: string }) => {
       const toAdd: string[] = [];
       const toRemove: string[] = [];
       for (const s of students) {
@@ -215,47 +209,44 @@ export default function ManageGroupMembersDialog({
         if (!was && now) toAdd.push(s.userId);
         if (was && !now) toRemove.push(s.userId);
       }
-
-      // Run adds and removes in parallel
-      const ops: Promise<Response>[] = [];
-      for (const uid of toAdd) {
-        ops.push(
-          fetch(apiPaths.courseGroupMembers(courseId, group.id), {
+      const ops: Promise<unknown>[] = [
+        ...toAdd.map((uid) =>
+          fetchJson(apiPaths.courseGroupMembers(courseId, target.id), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userId: uid }),
           }),
-        );
-      }
-      for (const uid of toRemove) {
-        ops.push(fetch(apiPaths.courseGroupMember(courseId, group.id, uid), { method: 'DELETE' }));
-      }
-
-      const results = await Promise.all(ops);
-      // Check for any non-ok
-      for (const r of results) {
-        if (!r.ok) {
-          const body = await r.json().catch(() => ({}));
-          throw new Error(body.error || 'Failed to update members');
-        }
-      }
-
+        ),
+        ...toRemove.map((uid) =>
+          fetchJson(apiPaths.courseGroupMember(courseId, target.id, uid), { method: 'DELETE' }),
+        ),
+      ];
+      await Promise.all(ops);
+    },
+    onSuccess: (_data, target) => {
       showToast.success('Members updated');
       setInitialSelected({ ...selected });
-      // Invalidate the members read so a reopen reflects the change, and the
-      // groups list (membership counts may render there).
+      // Re-pull the members read (reopen reflects the change) and the groups list
+      // (membership counts may render there).
       queryClient.invalidateQueries({
-        queryKey: ['course', courseId, 'group', group.id, 'members'],
+        queryKey: queryKeys.course.groupMembers(courseId, target.id),
       });
-      queryClient.invalidateQueries({ queryKey: ['course', courseId, 'groups'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.course.groups(courseId) });
       onChanged?.();
       setOpen(false);
-    } catch (err) {
+    },
+    onError: (err) => {
       console.error('Save members error:', err);
       showToast.error('Failed to save members');
-    } finally {
-      setBusy(false);
-    }
+    },
+  });
+
+  const loading = isSaving || (!!group && open && (studentsLoading || membersQuery.isLoading));
+
+  function handleSave() {
+    if (!group) return;
+    if (!isDirty(selected, initialSelected)) return setOpen(false);
+    saveMembers({ id: group.id });
   }
 
   function handleCancel() {
