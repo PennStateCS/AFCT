@@ -131,6 +131,34 @@ describe('POST /api/courses/[id]/roster/bulk', () => {
     );
   });
 
+  it('returns 400 when userIds is missing entirely (defaults to [])', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+
+    // Body has no userIds → `(body?.userIds ?? [])` falls back to [] (branch at line 40).
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/bulk', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+    expect(res.status).toBe(400);
+  });
+
+  it('filters out falsy user ids and returns 400 when none remain', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+
+    // Empty strings survive String() but are dropped by filter(Boolean) → empty list (line 40).
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ userIds: ['', ''] }),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+    expect(res.status).toBe(400);
+  });
+
   it('returns 500 when enrollment transaction fails', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
@@ -143,5 +171,28 @@ describe('POST /api/courses/[id]/roster/bulk', () => {
 
     const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
     expect(res.status).toBe(500);
+  });
+
+  it('returns 500 and logs "unknown error" when a non-Error is thrown', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    // Throw a non-Error to exercise the `: 'unknown error'` branch (line 78).
+    prismaMock.$transaction.mockRejectedValueOnce('boom');
+
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ userIds: ['u1'] }),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+    expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        action: 'COURSE_BULK_ENROLL_ERROR',
+        metadata: expect.objectContaining({ error: 'unknown error' }),
+      }),
+    );
   });
 });

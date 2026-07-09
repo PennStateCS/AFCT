@@ -102,4 +102,27 @@ describe('PATCH /api/courses/[id]/archive', () => {
     expect(prismaMock.course.update).toHaveBeenCalled();
     expect(activityLogMock).toHaveBeenCalled();
   });
+
+  it('returns 500 and logs when the update throws', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.course.findUnique.mockResolvedValue({ startDate: new Date(), endDate: new Date() });
+    canArchiveMock.mockResolvedValue({ canArchive: true });
+    prismaMock.course.update.mockRejectedValue(new Error('db down'));
+
+    const req = new Request('http://localhost/api/courses/c1/archive', {
+      method: 'PATCH',
+      body: JSON.stringify({ isArchived: true }),
+    });
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({ action: 'COURSE_ARCHIVE_ERROR' }),
+    );
+    consoleSpy.mockRestore();
+  });
 });

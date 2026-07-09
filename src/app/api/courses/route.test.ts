@@ -59,6 +59,33 @@ describe('GET /api/courses', () => {
     ]);
   });
 
+  it('derives maxPoints and problemCount for assignments', async () => {
+    prismaMock.course.findMany.mockResolvedValue([
+      {
+        id: 'course-1',
+        name: 'Course 1',
+        roster: [],
+        assignments: [
+          {
+            id: 'a1',
+            title: 'A1',
+            problems: [{ maxPoints: 60 }, { maxPoints: 40 }],
+          },
+        ],
+      },
+    ]);
+
+    const res = await GET();
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    expect(body[0].assignments[0]).toEqual(
+      expect.objectContaining({ id: 'a1', title: 'A1', maxPoints: 100, problemCount: 2 }),
+    );
+    // The `problems` array must be stripped from the response assignment.
+    expect(body[0].assignments[0].problems).toBeUndefined();
+  });
+
   it('returns 500 on unexpected error', async () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     prismaMock.course.findMany.mockRejectedValue(new Error('boom'));
