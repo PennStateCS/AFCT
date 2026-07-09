@@ -49,6 +49,18 @@ describe('withAdminAuth', () => {
     expect(createLogMock).not.toHaveBeenCalled();
   });
 
+  it('returns 401 for a disabled/deleted account even if the token says admin', async () => {
+    // The session callback marks a gone/disabled user inactive; the wrapper must
+    // reject before the admin check so a stale JWT can't keep admin access.
+    authMock.mockResolvedValue({ user: { id: 'a1', isAdmin: true, inactive: true } });
+    const handler = vi.fn();
+
+    const res = await withAdminAuth(handler, DENIED)(new Request('http://localhost/x'), {});
+
+    expect(res.status).toBe(401);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
   it('returns 403 Forbidden + logs a SECURITY denial for a signed-in non-admin', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
     const req = new Request('http://localhost/x');
@@ -71,6 +83,13 @@ describe('withCourseAuth', () => {
 
   it('returns 401 when there is no session', async () => {
     authMock.mockResolvedValue(null);
+    const res = await withCourseAuth(vi.fn(), manage)(new Request('http://localhost/x'), ctx());
+    expect(res.status).toBe(401);
+    expect(canManageMock).not.toHaveBeenCalled();
+  });
+
+  it('returns 401 for a disabled/deleted account before any course check', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', inactive: true } });
     const res = await withCourseAuth(vi.fn(), manage)(new Request('http://localhost/x'), ctx());
     expect(res.status).toBe(401);
     expect(canManageMock).not.toHaveBeenCalled();
