@@ -124,10 +124,10 @@ export default function StudentAssignmentPage({
       setSubmittingComment((prev) => ({ ...prev, [problemId]: true }));
 
       try {
-        const response = await fetch(apiPaths.problemComments(problemId), {
+        const response = await fetch(apiPaths.comments(), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: text }),
+          body: JSON.stringify({ content: text, assignmentId, problemId }),
         });
 
         if (!response.ok) {
@@ -144,7 +144,7 @@ export default function StudentAssignmentPage({
         setSubmittingComment((prev) => ({ ...prev, [problemId]: false }));
       }
     },
-    [refreshContext, newComment],
+    [refreshContext, newComment, assignmentId],
   );
 
   const handleDeleteComment = useCallback(
