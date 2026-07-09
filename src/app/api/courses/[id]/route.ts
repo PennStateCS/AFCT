@@ -313,7 +313,8 @@ export const GET = withCourseAuth(
         id: course.id,
         name: course.name,
         code: course.code,
-        regCode: course.regCode,
+        // The registration/join code is staff-only; a student must not receive it.
+        regCode: isStaff ? course.regCode : null,
         semester: course.semester,
         credits: course.credits,
         startDate: course.startDate,
