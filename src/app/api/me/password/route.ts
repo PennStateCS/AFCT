@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
   try {
     const session = await auth();
 
-    if (!session?.user?.id) {
+    if (!session?.user?.id || session.user.inactive) {
       console.warn('[CHANGE_PASSWORD] Unauthorized access attempt');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

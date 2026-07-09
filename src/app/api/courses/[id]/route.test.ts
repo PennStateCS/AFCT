@@ -928,7 +928,7 @@ describe('DELETE /api/courses/[id]', () => {
     });
     const res = await DELETE(req, { params: Promise.resolve({ id: 'course-1' }) });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(204);
     expect(activityLogMock).toHaveBeenCalled();
   });
 

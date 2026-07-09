@@ -4,6 +4,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canArchiveCourse, canUnpublishCourse } from '@/lib/course-status-checks';
 import { isAdmin } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { apiError } from '@/lib/api/http';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
 import { resolveUserTimezone } from '@/lib/user-timezone';
 import { sumProblemPoints, toEnrolled, toStudentSafeEnrolled } from '@/lib/course-format';
@@ -765,7 +766,7 @@ export const DELETE = withCourseAuth(
           semester: deletedCourse.semester,
         },
       });
-      return NextResponse.json({ status: 204 });
+      return new NextResponse(null, { status: 204 });
     } catch (error) {
       console.error('DELETE /api/courses/[id] error:', error);
       await createEnhancedActivityLog(prisma, req, {
@@ -774,7 +775,7 @@ export const DELETE = withCourseAuth(
         severity: 'ERROR',
         metadata: { error: error instanceof Error ? error.message : 'unknown error' },
       });
-      return NextResponse.json({ error: error }, { status: 500 });
+      return apiError(500, 'Internal Server Error');
     }
   },
   { access: 'manage', deniedAction: 'COURSE_DELETE_DENIED' },

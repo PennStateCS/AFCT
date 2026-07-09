@@ -35,7 +35,8 @@ import { prisma } from '@/lib/prisma';
 export async function POST(req: NextRequest) {
   try {
     const session = await auth();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session?.user || session.user.inactive)
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = (await req.json()) as { start: string; end: string };
     const { start, end } = body;

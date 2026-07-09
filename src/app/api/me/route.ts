@@ -67,7 +67,7 @@ async function deleteFileIfExists(filename: string) {
  */
 export async function POST(req: Request) {
   const session = await auth();
-  if (!session?.user?.id) {
+  if (!session?.user?.id || session.user.inactive) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -202,7 +202,7 @@ export async function POST(req: Request) {
  */
 export async function GET() {
   const session = await auth();
-  if (!session?.user?.id) {
+  if (!session?.user?.id || session.user.inactive) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
