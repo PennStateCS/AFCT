@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 import CourseClient from './CourseClient';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { canAccessCourse } from '@/lib/permissions';
 
 export const metadata: Metadata = {
   title: 'Course',
@@ -16,6 +18,17 @@ export default async function AdminCoursePage({ params }: Props) {
   const session = await auth();
   const viewerId = session?.user?.id;
   const viewerIsAdmin = Boolean(session?.user?.isAdmin);
+
+  // Gate the server-side course load behind the same rule the API routes use
+  // (canAccessCourse: a system admin, or any enrolled member). Without this, a
+  // signed-in non-member who visits /dashboard/courses/<id> would receive the
+  // course's roster (names, emails, avatars), registration code, and counts in
+  // the SSR payload before any API-route check ran. Checking first also means we
+  // never load other users' data for a non-member, and a 404 avoids revealing
+  // whether the course exists.
+  if (!(await canAccessCourse(session?.user, id))) {
+    notFound();
+  }
 
   const course = await prisma.course.findUnique({
     where: { id },
@@ -45,7 +58,7 @@ export default async function AdminCoursePage({ params }: Props) {
   });
 
   if (!course) {
-    return <CourseClient initialCourse={null} />;
+    notFound();
   }
 
   const viewerRoster = viewerId
