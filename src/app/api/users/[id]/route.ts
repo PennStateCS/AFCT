@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
-import { writeFile, unlink } from 'fs/promises';
+import { writeFile } from 'fs/promises';
 import path from 'path';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { isAdmin } from '@/lib/permissions';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
+import { safeStoredFilename, resolveInsideDir, safeUnlinkInDir } from '@/lib/safe-upload';
+
+// Avatars are stored here; the client-supplied name is never used to build a path.
+const pfpsDir = path.join('/private', 'uploads', 'pfps');
 
 /**
  * Updates a user: names, admin flag, active status, timezone, and avatar. Accepts
@@ -134,21 +138,21 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     let avatarFilename: string | null | undefined;
 
     // Write the new avatar, then remove the previous file so uploads don't pile up.
+    // Stored under a random UUID + sanitized extension (userId prefix for
+    // readability), never a path derived from the client-supplied avatar.name, and
+    // written non-executable.
     if (avatarFile && avatarFile.size > 0) {
       const bytes = Buffer.from(await avatarFile.arrayBuffer());
-      avatarFilename = `${userId}-${Date.now()}-${avatarFile.name}`;
-      const uploadPath = path.join('/private', 'uploads', 'pfps', avatarFilename);
-      await writeFile(uploadPath, bytes);
+      avatarFilename = safeStoredFilename(avatarFile.name, `${userId}-`);
+      await writeFile(resolveInsideDir(pfpsDir, avatarFilename), bytes, { mode: 0o644 });
 
       if (userRecord?.avatar) {
-        const oldPath = path.join('/private', 'uploads', 'pfps', userRecord.avatar);
-        await unlink(oldPath).catch(() => {});
+        await safeUnlinkInDir(pfpsDir, userRecord.avatar);
       }
     }
 
     if (deleteAvatar && userRecord?.avatar) {
-      const oldPath = path.join('/private', 'uploads', 'pfps', userRecord.avatar);
-      await unlink(oldPath).catch(() => {});
+      await safeUnlinkInDir(pfpsDir, userRecord.avatar);
       avatarFilename = null;
     }
 
@@ -315,8 +319,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     });
 
     if (user?.avatar) {
-      const avatarPath = path.join('/private', 'uploads', 'pfps', user.avatar);
-      await unlink(avatarPath).catch(() => {});
+      await safeUnlinkInDir(pfpsDir, user.avatar);
     }
 
     // Delete user from database. The user's activity logs are intentionally
