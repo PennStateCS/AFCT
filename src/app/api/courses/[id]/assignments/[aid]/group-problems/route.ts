@@ -71,7 +71,10 @@ export const GET = withCourseAuth(
       return NextResponse.json({ error: 'Failed to fetch group problems' }, { status: 500 });
     }
   },
-  { access: 'read', deniedAction: 'GROUP_PROBLEMS_ACCESS_DENIED' },
+  // Staff-only: this returns the whole course's group→problem matrix (an
+  // instructor tool consumed by the privileged assignment/grading views), which a
+  // student has no need for.
+  { access: 'manage', deniedAction: 'GROUP_PROBLEMS_ACCESS_DENIED' },
 );
 
 /**

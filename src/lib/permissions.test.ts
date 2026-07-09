@@ -45,9 +45,31 @@ describe('canAccessCourse', () => {
     expect(prismaMock.roster.findFirst).not.toHaveBeenCalled();
   });
 
-  it('enrolled non-admins may access it', async () => {
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+  it('a student may access an enrolled PUBLISHED course', async () => {
+    prismaMock.roster.findFirst.mockResolvedValue({
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
     await expect(canAccessCourse({ id: 'u', isAdmin: false }, 'c')).resolves.toBe(true);
+  });
+
+  it('a student may NOT access an enrolled UNPUBLISHED course', async () => {
+    prismaMock.roster.findFirst.mockResolvedValue({
+      role: 'STUDENT',
+      course: { isPublished: false },
+    });
+    await expect(canAccessCourse({ id: 'u', isAdmin: false }, 'c')).resolves.toBe(false);
+  });
+
+  it('staff (FACULTY/TA) may access their course even while unpublished', async () => {
+    prismaMock.roster.findFirst.mockResolvedValue({
+      role: 'FACULTY',
+      course: { isPublished: false },
+    });
+    await expect(canAccessCourse({ id: 'u' }, 'c')).resolves.toBe(true);
+
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'TA', course: { isPublished: false } });
+    await expect(canAccessCourse({ id: 'u' }, 'c')).resolves.toBe(true);
   });
 
   it('non-enrolled non-admins may not', async () => {

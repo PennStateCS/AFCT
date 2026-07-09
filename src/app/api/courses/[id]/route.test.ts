@@ -111,7 +111,7 @@ describe('GET /api/courses/[id]', () => {
       createdAt: new Date('2026-01-01T00:00:00.000Z'),
       updatedAt: new Date('2026-01-02T00:00:00.000Z'),
     });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
 
     const res = await GET(new Request('http://localhost/api/courses/1'), {
       params: Promise.resolve({ id: 'course-1' }),
@@ -124,7 +124,7 @@ describe('GET /api/courses/[id]', () => {
 
   it('restricts a student view to published assignments and omits the problem bank', async () => {
     authMock.mockResolvedValue({ user: { id: 'stu-1', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
     prismaMock.course.findUnique.mockResolvedValue({
       id: 'course-1',
       name: 'C1',
@@ -186,11 +186,12 @@ describe('GET /api/courses/[id]', () => {
 
   it('gives a student a privacy-safe roster (staff names only, no classmate email)', async () => {
     authMock.mockResolvedValue({ user: { id: 'stu-1', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
     prismaMock.course.findUnique.mockResolvedValue({
       id: 'course-1',
       name: 'C1',
       code: 'CS1',
+      regCode: 'SECRET',
       isPublished: true,
       isArchived: false,
       createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -215,6 +216,7 @@ describe('GET /api/courses/[id]', () => {
       })
     ).json();
 
+    expect(body.regCode).toBeNull(); // reg code is staff-only
     const serialized = JSON.stringify(body.enrolled);
     expect(serialized).not.toContain('@x.edu'); // no emails
     expect(serialized).not.toContain('Alan'); // no classmate (student) name

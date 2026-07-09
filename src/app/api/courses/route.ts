@@ -43,19 +43,31 @@ type RosterItem = Prisma.RosterGetPayload<{
  * @openapi
  * summary: List all courses
  * description: >-
- *   Returns every course with its roster and assignment metadata for the
- *   dashboard. This endpoint performs no authentication or authorization — any
- *   caller receives the full course list and roster names.
+ *   Returns every course with its roster and assignment metadata. System
+ *   administrators only — the payload spans all courses and includes every
+ *   member's identity and each course's registration code.
  * responses:
  *   200:
  *     description: Array of courses, each with an `enrolled` roster and assignments.
  *     content:
  *       application/json:
  *         schema: { type: array, items: { type: object } }
+ *   401: { description: Not signed in. }
+ *   403: { description: System administrators only. }
  *   500: { description: Server error. }
  */
 export async function GET() {
   try {
+    // Admin-only: this returns every course's roster identities and registration
+    // codes, so it must not be reachable by non-admins (or anonymously).
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!isAdmin(session.user)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const courses = await prisma.course.findMany({
       include: {
         roster: {

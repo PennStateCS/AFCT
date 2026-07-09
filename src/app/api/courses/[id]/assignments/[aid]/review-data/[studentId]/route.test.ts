@@ -74,7 +74,7 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
 
   it('allows a student to view their own review data', async () => {
     authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1', role: 'STUDENT' });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1', role: 'STUDENT', course: { isPublished: true } });
 
     const res = await GET(new Request('http://localhost'), { params: Promise.resolve(params) });
 
@@ -85,7 +85,7 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
     // Even their OWN data: a student can't read review data (problem content) for
     // an unpublished assignment.
     authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1', role: 'STUDENT' });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1', role: 'STUDENT', course: { isPublished: true } });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: params.aid, isPublished: false });
 
     const res = await GET(new Request('http://localhost'), { params: Promise.resolve(params) });
@@ -206,7 +206,7 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
     // Enrolled as a plain student (read access granted by the wrapper) but neither
     // the owner nor a manager -> hits the in-handler denial after the 404 check.
     authMock.mockResolvedValue({ user: { id: 'student-2', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-2', role: 'STUDENT' });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-2', role: 'STUDENT', course: { isPublished: true } });
 
     const res = await GET(new Request('http://localhost'), { params: Promise.resolve(params) });
 
