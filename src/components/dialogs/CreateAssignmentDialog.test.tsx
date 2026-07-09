@@ -138,7 +138,7 @@ describe('CreateAssignmentDialog', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
     const [requestUrl, requestInit] = fetchMock.mock.calls[0];
-    expect(requestUrl).toBe('/api/assignments');
+    expect(requestUrl).toBe('/api/courses/course-123/assignments');
 
     const payload = JSON.parse((requestInit as RequestInit).body as string);
     expect(payload).toMatchObject({

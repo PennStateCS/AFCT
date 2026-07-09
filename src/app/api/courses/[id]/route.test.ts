@@ -61,6 +61,10 @@ beforeEach(() => {
 
 describe('GET /api/courses/[id]', () => {
   it('returns 400 when id is missing', async () => {
+    // Authenticated so the wrapper reaches its missing-course-id check (auth is
+    // verified before the id is resolved).
+    authMock.mockResolvedValue({ user: { id: 'admin-1', isAdmin: true } });
+
     const res = await GET(new Request('http://localhost/api/courses/'), {
       params: Promise.resolve({ id: '' }),
     });
@@ -230,7 +234,7 @@ describe('PUT /api/courses/[id]', () => {
     expect(res.status).toBe(400);
   });
 
-  it('returns 403 when unauthenticated', async () => {
+  it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
     const req = new Request('http://localhost/api/courses/1', {
@@ -240,7 +244,7 @@ describe('PUT /api/courses/[id]', () => {
     });
 
     const res = await PUT(req, { params: Promise.resolve({ id: 'course-1' }) });
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('returns 400 when isArchived is not a boolean', async () => {
@@ -458,9 +462,15 @@ describe('PUT /api/courses/[id]', () => {
           problems: [],
           assignments: [],
           roster: [
-            { role: 'FACULTY', user: { id: 'u1', firstName: 'Ada', lastName: 'L', role: 'FACULTY' } },
+            {
+              role: 'FACULTY',
+              user: { id: 'u1', firstName: 'Ada', lastName: 'L', role: 'FACULTY' },
+            },
             { role: 'TA', user: { id: 'u2', firstName: 'Tim', lastName: 'A', role: 'TA' } },
-            { role: 'STUDENT', user: { id: 'u3', firstName: 'Sam', lastName: 'S', role: 'STUDENT' } },
+            {
+              role: 'STUDENT',
+              user: { id: 'u3', firstName: 'Sam', lastName: 'S', role: 'STUDENT' },
+            },
           ],
         }),
       },
@@ -669,7 +679,7 @@ describe('DELETE /api/courses/[id]', () => {
     expect(res.status).toBe(400);
   });
 
-  it('returns 403 when unauthenticated', async () => {
+  it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
     const req = new Request('http://localhost/api/courses/1', {
@@ -678,7 +688,7 @@ describe('DELETE /api/courses/[id]', () => {
     });
     const res = await DELETE(req, { params: Promise.resolve({ id: 'course-1' }) });
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('returns 403 when course is not archived', async () => {

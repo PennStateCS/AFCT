@@ -1,8 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { canManageCourse } from '@/lib/permissions';
+import { withCourseAuth } from '@/lib/api/with-auth';
 
 /**
  * CORS preflight handler.
@@ -37,69 +36,56 @@ export async function OPTIONS() {
  *   422: { description: Missing name. }
  *   500: { description: Server error. }
  */
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string; groupId: string }> },
-) {
-  const { id, groupId } = await params;
+export const PATCH = withCourseAuth(
+  async (req, ctx, { user, courseId }) => {
+    const { groupId } = await ctx.params;
 
-  if (!id || !groupId) return NextResponse.json({ error: 'Missing params' }, { status: 400 });
+    if (!groupId) return NextResponse.json({ error: 'Missing params' }, { status: 400 });
 
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    try {
+      const body = await req.json();
+      const name = (body.name ?? '').trim();
+      if (!name) return NextResponse.json({ error: 'Name is required' }, { status: 422 });
 
-  if (!(await canManageCourse(session.user, id))) {
-    await createEnhancedActivityLog(prisma, req, {
-      userId: session?.user?.id ?? null,
-      action: 'GROUP_UPDATE_DENIED',
-      severity: 'SECURITY',
-      metadata: {},
-    });
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+      // Ensure group exists and belongs to course
+      const group = await prisma.group.findUnique({ where: { id: groupId } });
+      if (!group || group.courseId !== courseId)
+        return NextResponse.json({ error: 'Group not found for course' }, { status: 404 });
 
-  try {
-    const body = await req.json();
-    const name = (body.name ?? '').trim();
-    if (!name) return NextResponse.json({ error: 'Name is required' }, { status: 422 });
+      // Prevent duplicate names for the same course
+      const exists = await prisma.group.findUnique({
+        where: { courseId_name: { courseId, name } },
+      });
+      if (exists && exists.id !== groupId)
+        return NextResponse.json(
+          { error: 'Group name already exists for this course' },
+          { status: 409 },
+        );
 
-    // Ensure group exists and belongs to course
-    const group = await prisma.group.findUnique({ where: { id: groupId } });
-    if (!group || group.courseId !== id)
-      return NextResponse.json({ error: 'Group not found for course' }, { status: 404 });
+      const updated = await prisma.group.update({ where: { id: groupId }, data: { name } });
 
-    // Prevent duplicate names for the same course
-    const exists = await prisma.group.findUnique({
-      where: { courseId_name: { courseId: id, name } },
-    });
-    if (exists && exists.id !== groupId)
-      return NextResponse.json(
-        { error: 'Group name already exists for this course' },
-        { status: 409 },
-      );
+      await createEnhancedActivityLog(prisma, req, {
+        userId: user.id,
+        action: 'UPDATE_GROUP',
+        severity: 'INFO',
+        category: 'COURSE',
+        metadata: { courseId, groupId, name },
+      });
 
-    const updated = await prisma.group.update({ where: { id: groupId }, data: { name } });
-
-    await createEnhancedActivityLog(prisma, req, {
-      userId: session.user.id,
-      action: 'UPDATE_GROUP',
-      severity: 'INFO',
-      category: 'COURSE',
-      metadata: { courseId: id, groupId, name },
-    });
-
-    return NextResponse.json(updated);
-  } catch (err) {
-    console.error('[GROUP_UPDATE_ERROR]', err);
-    await createEnhancedActivityLog(prisma, req, {
-      userId: session?.user?.id ?? null,
-      action: 'GROUP_UPDATE_ERROR',
-      severity: 'ERROR',
-      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
-    });
-    return NextResponse.json({ error: 'Failed to update group' }, { status: 500 });
-  }
-}
+      return NextResponse.json(updated);
+    } catch (err) {
+      console.error('[GROUP_UPDATE_ERROR]', err);
+      await createEnhancedActivityLog(prisma, req, {
+        userId: user.id,
+        action: 'GROUP_UPDATE_ERROR',
+        severity: 'ERROR',
+        metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+      });
+      return NextResponse.json({ error: 'Failed to update group' }, { status: 500 });
+    }
+  },
+  { access: 'manage', deniedAction: 'GROUP_UPDATE_DENIED' },
+);
 
 /**
  * Deletes a group; its membership rows cascade away with it. Course staff (faculty
@@ -116,52 +102,39 @@ export async function PATCH(
  *   404: { description: Group not found in this course. }
  *   500: { description: Server error. }
  */
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string; groupId: string }> },
-) {
-  const { id, groupId } = await params;
+export const DELETE = withCourseAuth(
+  async (req, ctx, { user, courseId }) => {
+    const { groupId } = await ctx.params;
 
-  if (!id || !groupId) return NextResponse.json({ error: 'Missing params' }, { status: 400 });
+    if (!groupId) return NextResponse.json({ error: 'Missing params' }, { status: 400 });
 
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    try {
+      // Ensure group exists and belongs to course
+      const group = await prisma.group.findUnique({ where: { id: groupId } });
+      if (!group || group.courseId !== courseId)
+        return NextResponse.json({ error: 'Group not found for course' }, { status: 404 });
 
-  if (!(await canManageCourse(session.user, id))) {
-    await createEnhancedActivityLog(prisma, req, {
-      userId: session?.user?.id ?? null,
-      action: 'GROUP_DELETE_DENIED',
-      severity: 'SECURITY',
-      metadata: {},
-    });
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+      await prisma.group.delete({ where: { id: groupId } });
 
-  try {
-    // Ensure group exists and belongs to course
-    const group = await prisma.group.findUnique({ where: { id: groupId } });
-    if (!group || group.courseId !== id)
-      return NextResponse.json({ error: 'Group not found for course' }, { status: 404 });
+      await createEnhancedActivityLog(prisma, req, {
+        userId: user.id,
+        action: 'DELETE_GROUP',
+        severity: 'INFO',
+        category: 'COURSE',
+        metadata: { courseId, groupId, deletedGroupName: group.name },
+      });
 
-    await prisma.group.delete({ where: { id: groupId } });
-
-    await createEnhancedActivityLog(prisma, req, {
-      userId: session.user.id,
-      action: 'DELETE_GROUP',
-      severity: 'INFO',
-      category: 'COURSE',
-      metadata: { courseId: id, groupId, deletedGroupName: group.name },
-    });
-
-    return NextResponse.json({ success: true });
-  } catch (err) {
-    console.error('[GROUP_DELETE_ERROR]', err);
-    await createEnhancedActivityLog(prisma, req, {
-      userId: session?.user?.id ?? null,
-      action: 'GROUP_DELETE_ERROR',
-      severity: 'ERROR',
-      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
-    });
-    return NextResponse.json({ error: 'Failed to delete group' }, { status: 500 });
-  }
-}
+      return NextResponse.json({ success: true });
+    } catch (err) {
+      console.error('[GROUP_DELETE_ERROR]', err);
+      await createEnhancedActivityLog(prisma, req, {
+        userId: user.id,
+        action: 'GROUP_DELETE_ERROR',
+        severity: 'ERROR',
+        metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+      });
+      return NextResponse.json({ error: 'Failed to delete group' }, { status: 500 });
+    }
+  },
+  { access: 'manage', deniedAction: 'GROUP_DELETE_DENIED' },
+);

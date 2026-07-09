@@ -21,6 +21,7 @@ import {
   DropdownMenuContent,
 } from '@/components/ui/dropdown-menu';
 import { ChevronDown, Search as SearchIcon, Check } from 'lucide-react';
+import { apiPaths } from '@/lib/api-paths';
 
 type Problem = {
   id: string;
@@ -152,7 +153,7 @@ export function AssociateProblemsDialog({
         // Determine assignment group support
         let isGroup = false;
         if (assignmentId) {
-          const aRes = await fetch(`/api/courses/${courseId}/${assignmentId}`, {
+          const aRes = await fetch(apiPaths.assignment(courseId, assignmentId), {
             signal: ac.signal,
           });
           if (aRes.ok) {
@@ -166,8 +167,8 @@ export function AssociateProblemsDialog({
         if (isGroup) {
           setGroupsLoading(true);
           const [grRes, gpRes] = await Promise.all([
-            fetch(`/api/courses/${courseId}/groups`),
-            fetch(`/api/courses/${courseId}/${assignmentId}/group-problems`),
+            fetch(apiPaths.courseGroups(courseId)),
+            fetch(apiPaths.assignmentGroupProblems(courseId, String(assignmentId))),
           ]);
 
           if (grRes.ok) {
@@ -191,7 +192,9 @@ export function AssociateProblemsDialog({
         // Refresh the authoritative problem list for this course when the dialog
         // opens so deleted problems don't remain selectable in the UI.
         try {
-          const pRes = await fetch(`/api/courses/${courseId}?view=problems`, { signal: ac.signal });
+          const pRes = await fetch(apiPaths.course(courseId, { view: 'problems' }), {
+            signal: ac.signal,
+          });
           if (pRes.ok) {
             const pData = await pRes.json();
             const list = Array.isArray(pData?.problems) ? pData.problems : [];
@@ -296,7 +299,7 @@ export function AssociateProblemsDialog({
 
   // Keep the dialog in sync with external changes while it's open.
   // This covers cases where problems/group mappings are modified elsewhere
-  // (remove-problem, delete problem, admin actions) so the UI won't show
+  // (removing a problem, deleting a problem, admin actions) so the UI won't show
   // stale mappings or deleted problems while user has the dialog open.
   React.useEffect(() => {
     if (!internalOpen) return;
@@ -306,10 +309,14 @@ export function AssociateProblemsDialog({
     async function syncExternal() {
       try {
         // Fetch latest course problems
-        const pReq = fetch(`/api/courses/${courseId}?view=problems`, { signal: ac.signal });
+        const pReq = fetch(apiPaths.course(String(courseId), { view: 'problems' }), {
+          signal: ac.signal,
+        });
         // Fetch group->problem mappings only for assignments that support groups.
         const gpReq = assignmentId
-          ? fetch(`/api/courses/${courseId}/${assignmentId}/group-problems`, { signal: ac.signal })
+          ? fetch(apiPaths.assignmentGroupProblems(String(courseId), assignmentId), {
+              signal: ac.signal,
+            })
           : Promise.resolve(null);
 
         const [pRes, gpRes] = await Promise.all([pReq, gpReq]);

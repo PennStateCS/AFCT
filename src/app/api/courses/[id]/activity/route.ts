@@ -1,9 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { auth } from '@/lib/auth';
-import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { canAccessCourse } from '@/lib/permissions';
+import { withCourseAuth } from '@/lib/api/with-auth';
 
 /**
  * Returns a paginated activity feed for one course — logs tied directly to the
@@ -31,100 +29,86 @@ import { canAccessCourse } from '@/lib/permissions';
  *   404: { description: Course not found. }
  *   500: { description: Server error. }
  */
-export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { id: courseId } = await context.params;
-
-    const course = await prisma.course.findFirst({
-      where: { id: courseId },
-      select: { id: true },
-    });
-
-    if (!course) {
-      return NextResponse.json({ error: 'Course not found' }, { status: 404 });
-    }
-
-    if (!(await canAccessCourse(session.user, courseId))) {
-      await createEnhancedActivityLog(prisma, request, {
-        userId: session?.user?.id ?? null,
-        action: 'COURSE_ACTIVITY_ACCESS_DENIED',
-        severity: 'SECURITY',
-        metadata: {},
+export const GET = withCourseAuth(
+  async (request, _ctx, { courseId }) => {
+    try {
+      const course = await prisma.course.findFirst({
+        where: { id: courseId },
+        select: { id: true },
       });
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
 
-    // Get URL search params for pagination
-    const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get('limit') || '50');
-    const offset = parseInt(searchParams.get('offset') || '0');
+      if (!course) {
+        return NextResponse.json({ error: 'Course not found' }, { status: 404 });
+      }
 
-    // Precompute the 24h login window and the course's roster user ids once, then
-    // reuse a single WHERE for both the page query and the count. Previously the
-    // clause was duplicated verbatim and used a correlated per-row rosterEntries
-    // subquery to find member logins; an `userId IN (...)` on the precomputed set
-    // is a plain indexed lookup instead.
-    const loginSince = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const rosterUserIds = (
-      await prisma.roster.findMany({ where: { courseId }, select: { userId: true } })
-    ).map((r) => r.userId);
+      // Get URL search params for pagination
+      const { searchParams } = new URL(request.url);
+      const limit = parseInt(searchParams.get('limit') || '50');
+      const offset = parseInt(searchParams.get('offset') || '0');
 
-    const where: Prisma.ActivityLogWhereInput = {
-      OR: [
-        // Direct course activities (indexed foreign key).
-        { courseId },
-        // Assignment / problem / submission activities within this course.
-        { assignment: { courseId } },
-        { problem: { courseId } },
-        { submission: { assignmentProblem: { assignment: { courseId } } } },
-        // Recent logins by course members (last 24h).
-        {
-          AND: [
-            { action: { contains: 'LOGIN' } },
-            { timestamp: { gte: loginSince } },
-            { userId: { in: rosterUserIds } },
-          ],
-        },
-      ],
-    };
+      // Precompute the 24h login window and the course's roster user ids once, then
+      // reuse a single WHERE for both the page query and the count. Previously the
+      // clause was duplicated verbatim and used a correlated per-row rosterEntries
+      // subquery to find member logins; an `userId IN (...)` on the precomputed set
+      // is a plain indexed lookup instead.
+      const loginSince = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const rosterUserIds = (
+        await prisma.roster.findMany({ where: { courseId }, select: { userId: true } })
+      ).map((r) => r.userId);
 
-    // Page query + count run in parallel (they were sequential awaits).
-    const [activityLogs, totalCount] = await Promise.all([
-      prisma.activityLog.findMany({
-        where,
-        include: {
-          user: {
-            select: { id: true, email: true, firstName: true, lastName: true, avatar: true },
+      const where: Prisma.ActivityLogWhereInput = {
+        OR: [
+          // Direct course activities (indexed foreign key).
+          { courseId },
+          // Assignment / problem / submission activities within this course.
+          { assignment: { courseId } },
+          { problem: { courseId } },
+          { submission: { assignmentProblem: { assignment: { courseId } } } },
+          // Recent logins by course members (last 24h).
+          {
+            AND: [
+              { action: { contains: 'LOGIN' } },
+              { timestamp: { gte: loginSince } },
+              { userId: { in: rosterUserIds } },
+            ],
           },
-          course: { select: { id: true, name: true, code: true } },
-          assignment: { select: { id: true, title: true } },
-          problem: { select: { id: true, title: true } },
-          submission: {
-            select: {
-              id: true,
-              assignmentProblem: { select: { assignment: { select: { title: true } } } },
+        ],
+      };
+
+      // Page query + count run in parallel (they were sequential awaits).
+      const [activityLogs, totalCount] = await Promise.all([
+        prisma.activityLog.findMany({
+          where,
+          include: {
+            user: {
+              select: { id: true, email: true, firstName: true, lastName: true, avatar: true },
+            },
+            course: { select: { id: true, name: true, code: true } },
+            assignment: { select: { id: true, title: true } },
+            problem: { select: { id: true, title: true } },
+            submission: {
+              select: {
+                id: true,
+                assignmentProblem: { select: { assignment: { select: { title: true } } } },
+              },
             },
           },
-        },
-        orderBy: { timestamp: 'desc' },
-        take: limit,
-        skip: offset,
-      }),
-      prisma.activityLog.count({ where }),
-    ]);
+          orderBy: { timestamp: 'desc' },
+          take: limit,
+          skip: offset,
+        }),
+        prisma.activityLog.count({ where }),
+      ]);
 
-    return NextResponse.json({
-      activities: activityLogs,
-      totalCount,
-      hasMore: offset + limit < totalCount,
-    });
-  } catch (error) {
-    console.error('Error fetching activity logs:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-  }
-}
+      return NextResponse.json({
+        activities: activityLogs,
+        totalCount,
+        hasMore: offset + limit < totalCount,
+      });
+    } catch (error) {
+      console.error('Error fetching activity logs:', error);
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    }
+  },
+  { access: 'read', deniedAction: 'COURSE_ACTIVITY_ACCESS_DENIED' },
+);

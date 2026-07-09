@@ -50,7 +50,7 @@ describe('POST /api/users/bulk', () => {
 
     const res = await POST(req);
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('returns 403 for disallowed roles', async () => {

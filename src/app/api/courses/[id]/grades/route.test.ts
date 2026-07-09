@@ -25,6 +25,8 @@ beforeEach(() => {
 
 describe('GET /api/courses/[id]/grades', () => {
   it('returns 400 when course ID missing', async () => {
+    // Admin passes the auth gate; the wrapper then rejects the empty course id.
+    authMock.mockResolvedValue({ user: { id: 'a1', isAdmin: true } });
     const req = new NextRequest('http://localhost/api/courses//grades');
     const res = await GET(req, { params: Promise.resolve({ id: '' }) });
 
@@ -192,6 +194,7 @@ const postReq = (body?: unknown) =>
 
 describe('POST /api/courses/[id]/grades (export log)', () => {
   it('returns 400 when course ID missing', async () => {
+    authMock.mockResolvedValue({ user: { id: 'a1', isAdmin: true } });
     const res = await POST(postReq({}), { params: Promise.resolve({ id: '' }) });
     expect(res.status).toBe(400);
   });

@@ -21,14 +21,14 @@ beforeEach(() => {
 });
 
 describe('GET /api/courses/[id]/students', () => {
-  it('returns 403 when unauthorized', async () => {
+  it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
     const res = await GET(new Request('http://localhost/api/courses/c1/students'), {
       params: Promise.resolve({ id: 'c1' }),
     });
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('returns only students (STUDENT filtered in the query)', async () => {

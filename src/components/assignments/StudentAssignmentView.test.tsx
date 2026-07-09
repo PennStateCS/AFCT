@@ -146,12 +146,12 @@ describe('StudentAssignmentPage', () => {
     expect(screen.getAllByText('Regex Basics').length).toBeGreaterThan(0);
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith('/api/assignments/a1/student-context');
+      expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/assignments/a1/student-context');
     });
 
-    // The assignment shell was seeded, so no GET /api/assignments/a1.
+    // The assignment shell was seeded, so no GET for the assignment itself.
     const calledUrls = fetchMock.mock.calls.map((c) => c[0] as string);
-    expect(calledUrls.some((u) => u === '/api/assignments/a1')).toBe(false);
+    expect(calledUrls.some((u) => u.startsWith('/api/courses/c1/assignments/a1?'))).toBe(false);
   });
 
   it('renders the problem from initialAssignment while student-context is empty', async () => {
@@ -189,11 +189,14 @@ describe('StudentAssignmentPage', () => {
     fireEvent.change(screen.getByTestId('comment-input'), { target: { value: 'Nice problem' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save Comment' }));
 
-    // POST fires against the selected problem's comments endpoint.
+    // POST fires against the canonical comments endpoint with the problem in the body.
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        '/api/problems/p1/comments',
-        expect.objectContaining({ method: 'POST' }),
+        '/api/comments',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ content: 'Nice problem', assignmentId: 'a1', problemId: 'p1' }),
+        }),
       );
     });
 
