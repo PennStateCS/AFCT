@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { isAdmin, canManageCourse, canAccessCourse } from '@/lib/permissions';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { withServerTiming } from '@/lib/perf-debug';
 import { apiError } from './http';
 
 /** The session user shape handlers receive once auth has passed. */
@@ -47,7 +48,7 @@ export function withAdminAuth<Ctx = unknown, R extends Response = Response>(
       });
       return apiError(403, 'Forbidden');
     }
-    return handler(req, ctx, { session, user: session.user });
+    return withServerTiming(req, () => handler(req, ctx, { session, user: session.user }));
   };
 }
 
@@ -110,6 +111,8 @@ export function withCourseAuth<Ctx extends CourseParams, R extends Response = Re
       return apiError(403, 'Forbidden');
     }
 
-    return handler(req, ctx, { session, user: session.user, courseId });
+    return withServerTiming(req, () =>
+      handler(req, ctx, { session, user: session.user, courseId }),
+    );
   };
 }
