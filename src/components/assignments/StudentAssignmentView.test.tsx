@@ -189,11 +189,14 @@ describe('StudentAssignmentPage', () => {
     fireEvent.change(screen.getByTestId('comment-input'), { target: { value: 'Nice problem' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save Comment' }));
 
-    // POST fires against the selected problem's comments endpoint.
+    // POST fires against the canonical comments endpoint with the problem in the body.
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        '/api/problems/p1/comments',
-        expect.objectContaining({ method: 'POST' }),
+        '/api/comments',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ content: 'Nice problem', assignmentId: 'a1', problemId: 'p1' }),
+        }),
       );
     });
 
