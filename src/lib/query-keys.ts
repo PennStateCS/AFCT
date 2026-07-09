@@ -63,8 +63,6 @@ export const queryKeys = {
      */
     studentContext: (courseId: string, assignmentId: string) =>
       ['assignment', courseId, assignmentId, 'student-context'] as const,
-    detail: (courseId: string, assignmentId: string) =>
-      ['course', courseId, 'assignment', assignmentId, 'detail'] as const,
     groupsAndMappings: (courseId: string, assignmentId: string) =>
       ['course', courseId, 'assignment', assignmentId, 'groups-and-mappings'] as const,
     gradeBreakdown: (courseId: string, assignmentId: string) =>
