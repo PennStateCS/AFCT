@@ -88,7 +88,7 @@ describe('GET /api/assignments/[id]/problems', () => {
     expect(body[0]).toMatchObject({ id: 'p1', solved: true, grade: 85 });
   });
 
-  it('group assignment returns only problems for user\'s group + unassigned problems', async () => {
+  it("group assignment returns only problems for user's group + unassigned problems", async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1', isGroup: true });
@@ -150,6 +150,49 @@ describe('GET /api/assignments/[id]/problems', () => {
 
     const solved = body.find((b: any) => b.id === 'p-g1');
     expect(solved.solved).toBe(true);
+  });
+
+  it('still returns problems when activity logging fails', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1', isGroup: false });
+    prismaMock.assignmentProblem.findMany.mockResolvedValue([
+      {
+        problem: {
+          id: 'p1',
+          title: 'P',
+          description: null,
+          type: 'FA',
+          maxStates: null,
+          isDeterministic: null,
+        },
+        submissions: [],
+      },
+    ]);
+    activityLogMock.mockRejectedValueOnce(new Error('log down'));
+
+    const req = new NextRequest('http://localhost/api/assignments/a1/problems');
+    const res = await GET(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body[0].id).toBe('p1');
+    consoleSpy.mockRestore();
+  });
+
+  it('returns 500 when fetching problems throws', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1', isGroup: false });
+    prismaMock.assignmentProblem.findMany.mockRejectedValueOnce(new Error('db down'));
+
+    const req = new NextRequest('http://localhost/api/assignments/a1/problems');
+    const res = await GET(req, { params: Promise.resolve({ id: 'a1' }) });
+
+    expect(res.status).toBe(500);
+    consoleSpy.mockRestore();
   });
 
   it('group assignment: user not in a group sees only unassigned problems', async () => {

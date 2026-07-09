@@ -166,6 +166,27 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
     expect(res.status).toBe(403);
   });
 
+  it('returns 403 when an enrolled student requests another student’s submissions', async () => {
+    // Enrolled as a student (read access granted by the wrapper) but requesting a
+    // different student and not a manager -> hits the in-handler denial.
+    authMock.mockResolvedValue({ user: { id: 'student-a', role: 'STUDENT' } });
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
+
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/assignments/a1/submissions/student-b'),
+      {
+        params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 'student-b' }),
+      },
+    );
+
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toBe('Forbidden');
+    // Reached the handler (assignment lookup) before denying.
+    expect(prismaMock.assignment.findFirst).toHaveBeenCalled();
+  });
+
   it('allows a student to view their own submissions', async () => {
     authMock.mockResolvedValue({ user: { id: 'student-a', role: 'STUDENT' } });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
@@ -280,6 +301,46 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
     const body = await res.json();
     expect(body.error).toBe('Failed to fetch submissions');
 
+    consoleSpy.mockRestore();
+  });
+
+  it('rethrows a P2022 error with no column metadata', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
+    prismaMock.assignmentProblem.findMany.mockResolvedValue([
+      {
+        problem: {
+          id: 'p1',
+          title: 'P1',
+          description: null,
+          type: null,
+          maxStates: null,
+          isDeterministic: null,
+          originalFileName: null,
+        },
+      },
+    ]);
+
+    const { Prisma } = await import('@prisma/client');
+    // P2022 but with no `meta.column` -> `?? ''` fallback, does not include
+    // 'evaluationRaw', so the error is rethrown rather than retried.
+    const error = new Prisma.PrismaClientKnownRequestError('Column error', {
+      code: 'P2022',
+      clientVersion: '5.0.0',
+    });
+    prismaMock.submission.findMany.mockRejectedValue(error);
+
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/assignments/a1/submissions/s1'),
+      {
+        params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 's1' }),
+      },
+    );
+
+    expect(res.status).toBe(500);
+    expect(prismaMock.submission.findMany).toHaveBeenCalledTimes(1);
     consoleSpy.mockRestore();
   });
 

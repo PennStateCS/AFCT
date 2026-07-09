@@ -170,6 +170,83 @@ describe('POST /api/comments', () => {
     expect(res.status).toBe(404);
   });
 
+  it('maps null author fields to null in the response', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
+    prismaMock.problem.findFirst.mockResolvedValue({ id: 'p1', courseId: 'c1' });
+    prismaMock.comment.create.mockResolvedValue({
+      id: 'cm1',
+      content: 'Hello',
+      createdAt: new Date('2025-01-01T00:00:00.000Z'),
+      roster: {
+        role: null,
+        user: { id: 'u1', firstName: null, lastName: null, avatar: null },
+      },
+    });
+
+    const req = new NextRequest('http://localhost/api/comments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: 'Hello', assignmentId: 'a1', problemId: 'p1' }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.author).toEqual({
+      id: 'u1',
+      firstName: null,
+      lastName: null,
+      avatar: null,
+      role: null,
+    });
+  });
+
+  it('returns 400 with validation details on invalid input', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+
+    const req = new NextRequest('http://localhost/api/comments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      // content is required and non-empty; empty string fails the schema.
+      body: JSON.stringify({ content: '', assignmentId: 'a1', problemId: 'p1' }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('Invalid request data');
+    expect(Array.isArray(body.details)).toBe(true);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      req,
+      expect.objectContaining({ action: 'COMMENT_CREATE_ERROR', severity: 'ERROR' }),
+    );
+  });
+
+  it('returns 500 when comment creation throws a non-Zod error', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
+    prismaMock.problem.findFirst.mockResolvedValue({ id: 'p1', courseId: 'c1' });
+    prismaMock.comment.create.mockRejectedValueOnce(new Error('db down'));
+
+    const req = new NextRequest('http://localhost/api/comments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: 'Hello', assignmentId: 'a1', problemId: 'p1' }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      req,
+      expect.objectContaining({ action: 'COMMENT_CREATE_ERROR', severity: 'ERROR' }),
+    );
+  });
+
   it('creates comment about specific student', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1' });
@@ -295,6 +372,31 @@ describe('DELETE /api/comments', () => {
     });
     const res = await DELETE(req);
     expect(res.status).toBe(200);
+  });
+
+  it('returns 500 and logs when deletion throws', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.comment.findUnique.mockResolvedValue({
+      id: 'cm1',
+      assignmentId: 'a1',
+      problemId: 'p1',
+      aboutStudentId: null,
+      roster: { user: { id: 'u1' } },
+      assignment: { courseId: 'c1' },
+    });
+    prismaMock.comment.delete.mockRejectedValueOnce(new Error('db down'));
+
+    const req = new NextRequest('http://localhost/api/comments?commentId=cm1', {
+      method: 'DELETE',
+    });
+    const res = await DELETE(req);
+
+    expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      req,
+      expect.objectContaining({ action: 'COMMENT_DELETE_ERROR', severity: 'ERROR' }),
+    );
   });
 
   it('returns 403 when student tries to delete others comment', async () => {

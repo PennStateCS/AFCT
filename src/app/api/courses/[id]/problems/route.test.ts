@@ -131,4 +131,52 @@ describe('POST /api/courses/[id]/problems', () => {
     expect(res.status).toBe(400);
     expect(prismaMock.problem.create).not.toHaveBeenCalled();
   });
+
+  it('returns 413 when the file exceeds the upload limit', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    uploadLimitMock.mockResolvedValue({ maxBytes: 0, maxMb: 0 });
+
+    const formData = new FormData();
+    formData.set('title', 'Problem');
+    formData.set('type', 'FA');
+    formData.set('file', new File([new Uint8Array([1, 2, 3])], 'file.jff'));
+
+    const req = new NextRequest('http://localhost/api/courses/c1/problems', {
+      method: 'POST',
+      body: formData,
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(413);
+    expect(prismaMock.problem.create).not.toHaveBeenCalled();
+  });
+
+  it('returns 500 and logs when problem creation throws', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.course.findUnique.mockResolvedValue({ id: 'c1' });
+    prismaMock.problem.create.mockRejectedValue(new Error('db down'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const formData = new FormData();
+    formData.set('title', 'Problem');
+    formData.set('type', 'FA');
+    formData.set('file', new File([new Uint8Array([1])], 'file.jff'));
+
+    const req = new NextRequest('http://localhost/api/courses/c1/problems', {
+      method: 'POST',
+      body: formData,
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ action: 'PROBLEM_CREATE_ERROR', severity: 'ERROR' }),
+    );
+  });
 });

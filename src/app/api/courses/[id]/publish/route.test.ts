@@ -88,4 +88,25 @@ describe('PATCH /api/courses/[id]/publish', () => {
     expect(prismaMock.course.update).toHaveBeenCalled();
     expect(activityLogMock).toHaveBeenCalled();
   });
+
+  it('returns 500 and logs when the update throws', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
+    prismaMock.course.update.mockRejectedValue(new Error('db down'));
+
+    const req = new Request('http://localhost/api/courses/c1/publish', {
+      method: 'PATCH',
+      body: JSON.stringify({ isPublished: true }),
+    });
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({ action: 'COURSE_PUBLISH_ERROR' }),
+    );
+    consoleSpy.mockRestore();
+  });
 });

@@ -64,6 +64,41 @@ describe('GET /api/courses/[id]/assignments', () => {
     expect(res.status).toBe(404);
   });
 
+  it('defaults totalGrade to 0 when a problem has no grades', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.course.findUnique.mockResolvedValue({ id: 'c1' });
+    prismaMock.assignment.findMany.mockResolvedValue([
+      {
+        id: 'a1',
+        title: 'A',
+        dueDate: new Date('2025-01-01T00:00:00Z'),
+        description: null,
+        problems: [{ maxPoints: 10, grades: [] }],
+      },
+    ]);
+
+    const req = new NextRequest('http://localhost/api/courses/c1/assignments');
+    const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body[0].totalGrade).toBe(0);
+    expect(body[0].maxGrade).toBe(10);
+  });
+
+  it('returns 500 when fetching assignments throws', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.course.findUnique.mockResolvedValue({ id: 'c1' });
+    prismaMock.assignment.findMany.mockRejectedValueOnce(new Error('db down'));
+
+    const req = new NextRequest('http://localhost/api/courses/c1/assignments');
+    const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(500);
+  });
+
   it('returns assignments with grade totals', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
@@ -219,5 +254,23 @@ describe('POST /api/courses/[id]/assignments', () => {
     const res = await post({ title: 'New', dueDate: '2026-01-10' });
 
     expect(res.status).toBe(500);
+  });
+
+  it('returns 500 when creation throws a non-Error value', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.assignment.create.mockRejectedValueOnce('boom');
+
+    const res = await post({ title: 'New', dueDate: '2026-01-10' });
+
+    expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        action: 'ASSIGNMENT_CREATE_ERROR',
+        metadata: { error: 'unknown error' },
+      }),
+    );
   });
 });
