@@ -17,6 +17,7 @@ import { prisma } from '@/lib/prisma';
 import { NextResponse } from 'next/server';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { isAdmin } from '@/lib/permissions';
+import { parseValidDate } from '@/lib/date';
 
 /**
  * Enrolls the signed-in user in a course via its 6-character registration code,
@@ -88,10 +89,8 @@ export async function POST(req: Request) {
     );
   }
 
-  const registrationOpenAt = course.registrationOpenAt ? new Date(course.registrationOpenAt) : null;
-  const registrationCloseAt = course.registrationCloseAt
-    ? new Date(course.registrationCloseAt)
-    : null;
+  const registrationOpenAt = parseValidDate(course.registrationOpenAt);
+  const registrationCloseAt = parseValidDate(course.registrationCloseAt);
 
   if (!registrationOpenAt || !registrationCloseAt) {
     return NextResponse.json(

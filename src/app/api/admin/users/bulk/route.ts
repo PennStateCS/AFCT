@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy';
 import { withAdminAuth } from '@/lib/api/with-auth';
+import { normalizeEmail } from '@/lib/email';
 
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
@@ -98,7 +99,7 @@ export const POST = withAdminAuth(
       // Pre-fetch which of the submitted emails already exist in ONE query, instead
       // of a findUnique per row (an N+1 that scaled with the CSV size).
       const candidateEmails = Array.from(
-        new Set(rows.map((r) => (r?.email ?? '').trim().toLowerCase()).filter((e) => e.length > 0)),
+        new Set(rows.map((r) => normalizeEmail(r?.email)).filter((e) => e.length > 0)),
       );
       const existingEmails = new Set(
         candidateEmails.length > 0
@@ -117,7 +118,7 @@ export const POST = withAdminAuth(
 
         const firstName = (row.firstName ?? '').trim();
         const lastName = (row.lastName ?? '').trim();
-        const email = (row.email ?? '').trim().toLowerCase();
+        const email = normalizeEmail(row.email);
         const password = String(row.password ?? '').trim();
 
         if (!firstName || !lastName || !email || !password) {

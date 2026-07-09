@@ -11,6 +11,7 @@ import {
 } from '@/lib/security/rate-limiter';
 import { verifyCaptchaToken } from '@/lib/security/captcha';
 import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy';
+import { normalizeEmail } from '@/lib/email';
 
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
@@ -56,15 +57,8 @@ const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const {
-      firstName,
-      lastName,
-      email,
-      password,
-      interactionMs,
-      captchaToken,
-    } = body;
-    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : email;
+    const { firstName, lastName, email, password, interactionMs, captchaToken } = body;
+    const normalizedEmail = normalizeEmail(email);
     const ipAddress = getClientIp(req);
 
     const settings = await prisma.systemSettings.findUnique({
