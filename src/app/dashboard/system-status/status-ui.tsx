@@ -131,6 +131,25 @@ export const Stat = ({
   </div>
 );
 
+/** A titled section for the in-card tab content (replaces per-panel Cards). */
+export const Section = ({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) => (
+  <section className="space-y-3">
+    <div className="flex items-center justify-between gap-3">
+      <h3 className="text-base font-semibold">{title}</h3>
+      {action}
+    </div>
+    {children}
+  </section>
+);
+
 export const TrendBadge = ({ delta }: { delta: number }) => {
   const up = delta > 0;
   const flat = Math.abs(delta) < 0.1;

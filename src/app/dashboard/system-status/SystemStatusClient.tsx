@@ -205,38 +205,38 @@ export default function SystemStatusClient() {
               </TabsTrigger>
             ))}
           </TabsList>
+
+          <div className="border-t pt-4">
+            <TabsContent value="server">
+              <ServerTab
+                active={tab === 'server'}
+                autoRefresh={autoRefresh}
+                windowHours={windowHours}
+              />
+            </TabsContent>
+            <TabsContent value="database">
+              <DatabaseTab
+                active={tab === 'database'}
+                autoRefresh={autoRefresh}
+                deep={deep}
+                setDeep={setDeep}
+              />
+            </TabsContent>
+            <TabsContent value="docker">
+              <DockerTab active={tab === 'docker'} autoRefresh={autoRefresh} />
+            </TabsContent>
+            <TabsContent value="network">
+              <NetworkTab active={tab === 'network'} autoRefresh={autoRefresh} />
+            </TabsContent>
+            <TabsContent value="sessions">
+              <SessionsTab active={tab === 'sessions'} autoRefresh={autoRefresh} />
+            </TabsContent>
+            <TabsContent value="files">
+              <FilesTab active={tab === 'files'} autoRefresh={autoRefresh} />
+            </TabsContent>
+          </div>
         </CardContent>
       </Card>
-
-      <div>
-        <TabsContent value="server">
-          <ServerTab
-            active={tab === 'server'}
-            autoRefresh={autoRefresh}
-            windowHours={windowHours}
-          />
-        </TabsContent>
-        <TabsContent value="database">
-          <DatabaseTab
-            active={tab === 'database'}
-            autoRefresh={autoRefresh}
-            deep={deep}
-            setDeep={setDeep}
-          />
-        </TabsContent>
-        <TabsContent value="docker">
-          <DockerTab active={tab === 'docker'} autoRefresh={autoRefresh} />
-        </TabsContent>
-        <TabsContent value="network">
-          <NetworkTab active={tab === 'network'} autoRefresh={autoRefresh} />
-        </TabsContent>
-        <TabsContent value="sessions">
-          <SessionsTab active={tab === 'sessions'} autoRefresh={autoRefresh} />
-        </TabsContent>
-        <TabsContent value="files">
-          <FilesTab active={tab === 'files'} autoRefresh={autoRefresh} />
-        </TabsContent>
-      </div>
     </Tabs>
   );
 }
