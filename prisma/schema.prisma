@@ -405,7 +405,7 @@ model SystemSettings {
   timezone        String @default("UTC")
   maxUploadSizeMb Int    @default(25)
   allowSignup     Boolean @default(true)
-  sessionTimeoutMinutes Int @default(20)
+  sessionTimeoutMinutes Int @default(60)
 
   // Login lockout policy (per-account): how many failed attempts before the
   // account is temporarily locked, and for how long.
