@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { parseLimitOffset } from '@/lib/api/request';
 
 /**
  * Returns a paginated activity feed for one course — logs tied directly to the
@@ -43,8 +44,7 @@ export const GET = withCourseAuth(
 
       // Get URL search params for pagination
       const { searchParams } = new URL(request.url);
-      const limit = parseInt(searchParams.get('limit') || '50');
-      const offset = parseInt(searchParams.get('offset') || '0');
+      const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 50, maxLimit: 200 });
 
       // Precompute the 24h login window and the course's roster user ids once, then
       // reuse a single WHERE for both the page query and the count. Previously the

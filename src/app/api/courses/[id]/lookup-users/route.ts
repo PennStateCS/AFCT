@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { normalizeEmail } from '@/lib/email';
 
 /**
  * Resolves a list of emails to user records, splitting them into `found` and
@@ -41,7 +42,7 @@ export const POST = withCourseAuth(
     try {
       const body = await req.json();
       const emails: string[] = (body?.emails ?? [])
-        .map((e: string) => String(e).trim().toLowerCase())
+        .map((e: unknown) => normalizeEmail(e))
         .filter(Boolean);
       if (!emails.length) return NextResponse.json({ found: [], notFound: [] });
 

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { normalizeEmail } from '@/lib/email';
 
 /**
  * Reports whether an email is already registered, so the signup form can warn
@@ -22,7 +23,7 @@ import { prisma } from '@/lib/prisma';
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const email = searchParams.get('email')?.trim().toLowerCase() || null;
+  const email = normalizeEmail(searchParams.get('email')) || null;
 
   if (!email) {
     return NextResponse.json({ error: 'Email is required.' }, { status: 400 });
