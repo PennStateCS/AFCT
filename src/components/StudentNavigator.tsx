@@ -15,6 +15,7 @@ import {
 import { formatDateTimeInTimeZone } from '@/lib/date';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { apiPaths } from '@/lib/api-paths';
+import { queryKeys } from '@/lib/query-keys';
 
 export type StudentNavigatorStudent = {
   id: string;
@@ -51,13 +52,13 @@ export default function StudentNavigator({
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   // Assignment shell — cached and shared with StudentAssignmentView via the same
-  // ['assignment', assignmentId] key, so the two dedupe/share this read.
+  // key (queryKeys.assignment.shell), so the two dedupe/share this read.
   const assignmentQuery = useQuery<{
     dueDate?: string | Date;
     allowLateSubmissions?: boolean;
     lateCutoff?: string | Date | null;
   }>({
-    queryKey: ['assignment', assignmentId],
+    queryKey: queryKeys.assignment.shell(courseId, assignmentId),
     queryFn: async () => {
       const res = await fetch(apiPaths.assignment(courseId, assignmentId, { view: 'problems' }));
       if (!res.ok) throw new Error('Failed to fetch assignment');
