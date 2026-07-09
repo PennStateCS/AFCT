@@ -13,6 +13,7 @@ import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { formatDateTimeInTimeZone } from '@/lib/date';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
+import { fetchJson } from '@/lib/query-fetch';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -38,11 +39,10 @@ export function MaxPointsCell({
 
   const { data } = useQuery({
     queryKey: queryKeys.assignment.shell(courseId, assignmentId),
-    queryFn: async () => {
-      const res = await fetch(apiPaths.assignment(courseId, assignmentId, { view: 'problems' }));
-      if (!res.ok) throw new Error('Failed to fetch assignment');
-      return (await res.json()) as { maxPoints: number | null };
-    },
+    queryFn: () =>
+      fetchJson<{ maxPoints: number | null }>(
+        apiPaths.assignment(courseId, assignmentId, { view: 'problems' }),
+      ),
     enabled: needsFetch,
     staleTime: 30_000,
   });
