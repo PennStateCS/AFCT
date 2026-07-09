@@ -13,17 +13,7 @@ Built with:
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue?logo=typescript)
 [![Publish Docker image to GHCR](https://github.com/PennStateWilkes-Barre/AFCT-Dashboard/actions/workflows/publish-ghcr.yml/badge.svg?branch=main)](https://github.com/PennStateWilkes-Barre/AFCT-Dashboard/actions/workflows/publish-ghcr.yml)
 
-## Table of Contents
-
-- [Tech Stack](#tech-stack)
-- [Funding Acknowledgement](#funding-acknowledgement)
-- [Production Deployment](#production-deployment)
-- [Development Setup](#development-setup)
-- [Testing](#testing)
-- [API Documentation](#api-documentation)
-- [Contributors](#contributors)
-
-## 📚 Tech Stack
+## Tech Stack
 
 - Node.js 20+
 - Next.js 15
@@ -34,51 +24,38 @@ Built with:
 
 ## Funding Acknowledgement
 
-This project was supported by grant funding.
+This project is supported in part by the National Science Foundation under Grant No. 2439326. Any opinions, findings, conclusions, or recommendations expressed are those of the authors and do not necessarily reflect the views of the NSF.
 
-[Add more here ]
+## Participating Institutions
 
-## 🏭 Production Deployment
+AFCT is part of a multi-institutional collaboration involving:
 
-Production deployments pull the GHCR image and run via Docker Compose with Nginx reverse proxy.
+- College of the Holy Cross
+- Rochester Institute of Technology
+- The Pennsylvania State University
+- The University of New Mexico
+- University of Rochester
 
-See the full guide in: [docs/production_setup.md](docs/production_setup.md).
+This collaboration supports the continued development, deployment, and study of AFCT across undergraduate computing theory courses.
 
-## 🧰 Development Setup
+## Documentation
 
-A full set of development instructions can be found in the development setup guide: [docs/development_setup.md](docs/development_setup.md).
+The AFCT Dashboard includes automatically generated documentation for the HTTP API. The API reference is rebuilt from the route handlers and published whenever changes are pushed to `main`.
 
-## ✅ Testing
+- **[API Reference](https://pennstatewilkes-barre.github.io/AFCT-Dashboard/)** — browsable documentation for each endpoint, including authentication requirements, parameters, and request/response formats.
+- **[OpenAPI Specification](https://pennstatewilkes-barre.github.io/AFCT-Dashboard/openapi.json)** — the raw `openapi.json` file, which can be imported into tools such as Postman, Insomnia, or client-generation workflows.
 
-Run all tests:
+Additional setup and deployment guides are available in the repository:
 
-```bash
-npm test
-```
+- **[Development Setup](docs/development_setup.md)** — instructions for configuring a local development environment.
+- **[Production Setup](docs/production_setup.md)** — instructions for deploying the GHCR image with Docker Compose and an Nginx reverse proxy.
 
-Watch mode:
-
-```bash
-npm run test:watch
-```
-
-## 📖 API Documentation
-
-An interactive reference for the HTTP API, auto-generated from the route handlers and published on each push to `main`:
-
-- **[API reference](https://pennstatewilkes-barre.github.io/AFCT-Dashboard/)** — browsable docs for every endpoint (auth, parameters, request/response shapes).
-- **[OpenAPI spec](https://pennstatewilkes-barre.github.io/AFCT-Dashboard/openapi.json)** — the raw `openapi.json`, for importing into Postman/Insomnia or generating clients.
-
-Regenerate locally with `npm run docs`.
-
----
-
-## 👥 Contributors
+## Contributors
 
 | Name                | Affiliation | Email            | GitHub                                        |
 | ------------------- | ----------- | ---------------- | --------------------------------------------- |
 | Jesse Burdick-Pless | RIT         | -                | [jb4411](https://github.com/jb4411)           |
 | Jeffrey Chiampi     | PSU         | jdc308@psu.edu   | [jdc308](https://github.com/jdc308)           |
 | Edwin Kismal        | PSU         | etk5176@psu.edu  | [EdwinKimsal](https://github.com/EdwinKimsal) |
-| Adam Manowski       | PSU         | ajm9738@psu.edu  | [astermaxed](https://github.com/astermaxed)     |
+| Adam Manowski       | PSU         | ajm9738@psu.edu  | [astermaxed](https://github.com/astermaxed)   |
 | Andrew Sutton       | PSU         | ams12165@psu.edu | [asutton24](https://github.com/asutton24)     |

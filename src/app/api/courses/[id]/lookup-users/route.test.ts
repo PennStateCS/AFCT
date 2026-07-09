@@ -67,4 +67,34 @@ describe('POST /api/courses/[id]/lookup-users', () => {
     ]);
     expect(body.notFound).toEqual(['b@example.com']);
   });
+
+  it('returns empty arrays when the body omits emails entirely', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
+
+    const noEmailsReq = new NextRequest('http://localhost/api/courses/c1/lookup-users', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+
+    const res = await POST(noEmailsReq, ctx());
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ found: [], notFound: [] });
+  });
+
+  it('returns 500 and logs when the lookup throws', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
+    prismaMock.user.findMany.mockRejectedValue(new Error('db down'));
+
+    const res = await POST(req(['a@example.com']), ctx());
+
+    expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({ action: 'COURSE_LOOKUP_USERS_ERROR' }),
+    );
+    consoleSpy.mockRestore();
+  });
 });

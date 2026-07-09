@@ -18,6 +18,8 @@ import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatDateTimeInTimeZone } from '@/lib/date';
 import { apiPaths } from '@/lib/api-paths';
+import { queryKeys } from '@/lib/query-keys';
+import { fetchJson } from '@/lib/query-fetch';
 import {
   AssignmentWithDetails,
   StudentAssignmentContext,
@@ -55,7 +57,7 @@ export default function StudentAssignmentPage({
   // Assignment shell — cached; the SSR-provided assignment seeds it so there's no
   // refetch on mount when the server already sent it, and back-navigation is warm.
   const assignmentQuery = useQuery({
-    queryKey: ['assignment', assignmentId],
+    queryKey: queryKeys.assignment.shell(params.id, assignmentId),
     queryFn: async () => {
       const res = await fetch(apiPaths.assignment(params.id, assignmentId, { view: 'problems' }));
       if (!res.ok) {
@@ -77,12 +79,11 @@ export default function StudentAssignmentPage({
   // Per-student submissions, comments, and grades — cached, and re-pulled (via
   // invalidation) after the student adds or deletes a comment.
   const contextQuery = useQuery({
-    queryKey: ['assignment', assignmentId, 'student-context'],
-    queryFn: async () => {
-      const res = await fetch(apiPaths.assignmentStudentContext(params.id, assignmentId));
-      if (!res.ok) throw new Error('Failed to fetch assignment context');
-      return (await res.json()) as StudentAssignmentContext;
-    },
+    queryKey: queryKeys.assignment.studentContext(params.id, assignmentId),
+    queryFn: () =>
+      fetchJson<StudentAssignmentContext>(
+        apiPaths.assignmentStudentContext(params.id, assignmentId),
+      ),
     enabled: !!assignmentId && !!userId,
     staleTime: 30_000,
   });
@@ -111,9 +112,9 @@ export default function StudentAssignmentPage({
   const refreshContext = useCallback(
     () =>
       queryClient.invalidateQueries({
-        queryKey: ['assignment', assignmentId, 'student-context'],
+        queryKey: queryKeys.assignment.studentContext(params.id, assignmentId),
       }),
-    [queryClient, assignmentId],
+    [queryClient, params.id, assignmentId],
   );
 
   const handleSubmitComment = useCallback(

@@ -62,7 +62,7 @@ export default function CoursesClient({ initialCourses }: { initialCourses: Cour
   );
 
   const columnsMemo = useMemo(
-    () => columns(patchCourse, refresh, timezone),
+    () => columns(patchCourse, refresh, refresh, timezone),
     [patchCourse, refresh, timezone],
   );
 

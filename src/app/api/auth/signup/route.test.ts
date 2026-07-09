@@ -227,6 +227,80 @@ describe('POST /api/auth/signup', () => {
     expect(captchaMock.verifyCaptchaToken).toHaveBeenCalledWith('captcha-abc', '127.0.0.1');
   });
 
+  it('returns 500 and logs when user creation throws', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(null);
+    prismaMock.user.create.mockRejectedValueOnce(new Error('db down'));
+
+    const req = new Request('http://localhost/api/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({
+        firstName: 'A',
+        lastName: 'B',
+        email: 'a@example.com',
+        password: 'Strong1!a',
+      }),
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      req,
+      expect.objectContaining({ action: 'SIGNUP_ERROR', severity: 'ERROR' }),
+    );
+  });
+
+  it('returns 500 with a generic message when a non-Error is thrown', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(null);
+    prismaMock.user.create.mockRejectedValueOnce('boom');
+
+    const req = new Request('http://localhost/api/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({
+        firstName: 'A',
+        lastName: 'B',
+        email: 'a@example.com',
+        password: 'Strong1!a',
+      }),
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      req,
+      expect.objectContaining({
+        action: 'SIGNUP_ERROR',
+        metadata: expect.objectContaining({ error: 'unknown error' }),
+      }),
+    );
+  });
+
+  it('passes a finite interactionMs through to the rate limiter', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(null);
+    prismaMock.user.create.mockResolvedValue({ id: 'u1' });
+
+    const req = new Request('http://localhost/api/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({
+        firstName: 'A',
+        lastName: 'B',
+        email: 'a@example.com',
+        password: 'Strong1!a',
+        interactionMs: 1234,
+      }),
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(201);
+    expect(rateLimiterMock.evaluateSignupRateLimit).toHaveBeenCalledWith(
+      expect.objectContaining({ interactionMs: 1234 }),
+    );
+  });
+
   it('applies friction when requested', async () => {
     rateLimiterMock.evaluateSignupRateLimit.mockReturnValue({
       status: 'ok',

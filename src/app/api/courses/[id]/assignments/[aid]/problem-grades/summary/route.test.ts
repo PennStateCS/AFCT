@@ -87,4 +87,16 @@ describe('GET /api/courses/[id]/[aid]/problem-grades/summary', () => {
       s2: false,
     });
   });
+
+  it('returns 500 when the summary query throws', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    prismaMock.assignmentProblemGrade.groupBy.mockRejectedValueOnce(new Error('db down'));
+
+    const res = await GET(new Request('http://localhost'), {
+      params: Promise.resolve(defaultParams),
+    });
+
+    expect(res.status).toBe(500);
+    consoleSpy.mockRestore();
+  });
 });

@@ -59,13 +59,11 @@ const mockCourse: FullCourse = {
 };
 
 const onEditClick = vi.fn();
-const onDuplicate = vi.fn();
 const onPublishToggle = vi.fn();
 const onArchiveToggle = vi.fn();
 
 beforeEach(() => {
   onEditClick.mockReset();
-  onDuplicate.mockReset();
   onPublishToggle.mockReset();
   onArchiveToggle.mockReset();
 });
@@ -77,7 +75,6 @@ describe('CourseHeader', () => {
         course={mockCourse}
         isStudent={false}
         onEditClick={onEditClick}
-        onDuplicate={onDuplicate}
         onPublishToggle={onPublishToggle}
         onArchiveToggle={onArchiveToggle}
       />,
@@ -89,7 +86,6 @@ describe('CourseHeader', () => {
     expect(screen.getByText('3 credits')).toBeInTheDocument();
     expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Edit Course' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Duplicate Course' })).toBeInTheDocument();
   });
 
   it('hides instructor actions for students', () => {
@@ -98,14 +94,12 @@ describe('CourseHeader', () => {
         course={mockCourse}
         isStudent
         onEditClick={onEditClick}
-        onDuplicate={onDuplicate}
         onPublishToggle={onPublishToggle}
         onArchiveToggle={onArchiveToggle}
       />,
     );
 
     expect(screen.queryByRole('button', { name: 'Edit Course' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Duplicate Course' })).toBeNull();
   });
 
   it('calls the appropriate callbacks when toggles and actions are used', async () => {
@@ -116,7 +110,6 @@ describe('CourseHeader', () => {
         course={mockCourse}
         isStudent={false}
         onEditClick={onEditClick}
-        onDuplicate={onDuplicate}
         onPublishToggle={onPublishToggle}
         onArchiveToggle={onArchiveToggle}
       />,
@@ -124,9 +117,6 @@ describe('CourseHeader', () => {
 
     await user.click(screen.getByRole('button', { name: 'Edit Course' }));
     expect(onEditClick).toHaveBeenCalledTimes(1);
-
-    await user.click(screen.getByRole('button', { name: 'Duplicate Course' }));
-    expect(onDuplicate).toHaveBeenCalledTimes(1);
 
     const switches = screen.getAllByRole('switch');
     await user.click(switches[0]);

@@ -597,6 +597,101 @@ describe('PUT /api/courses/[id]', () => {
     );
   });
 
+  it('records changed fields in the audit log when values differ', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
+    prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
+
+    const refreshed = {
+      id: 'course-1',
+      name: 'Renamed Course',
+      code: 'CS102',
+      regCode: 'ABC123',
+      semester: 'Fall 2026',
+      credits: 4,
+      startDate: new Date('2026-08-25T13:00:00.000Z'),
+      endDate: new Date('2026-12-15T22:00:00.000Z'),
+      registrationOpenAt: null,
+      registrationCloseAt: null,
+      isPublished: true,
+      isArchived: false,
+      emptyStringNotation: null,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+      problems: [],
+      assignments: [],
+      roster: [
+        {
+          role: 'FACULTY',
+          user: { id: 'u1', firstName: 'Ada', lastName: 'L', role: 'FACULTY' },
+        },
+      ],
+    };
+
+    const txMock = {
+      course: {
+        update: vi.fn().mockResolvedValue({ id: 'course-1' }),
+        // First findUnique = `before` snapshot (old values); second = refreshed course.
+        findUnique: vi
+          .fn()
+          .mockResolvedValueOnce({
+            name: 'Old Course',
+            code: 'CS101',
+            semester: 'Fall 2026',
+            credits: 3,
+            isPublished: false,
+            isArchived: false,
+            emptyStringNotation: null,
+            startDate: new Date('2026-08-25T13:00:00.000Z'),
+            endDate: new Date('2026-12-15T22:00:00.000Z'),
+            registrationOpenAt: null,
+            registrationCloseAt: null,
+          })
+          .mockResolvedValueOnce(refreshed),
+      },
+      roster: {
+        findMany: vi.fn().mockResolvedValue([{ userId: 'u1', role: 'FACULTY' }]),
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+        createMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+    };
+
+    prismaMock.$transaction.mockImplementation(async (cb: any) => cb(txMock));
+    prismaMock.submission.count.mockResolvedValue(0);
+    prismaMock.comment.count.mockResolvedValue(0);
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+
+    const req = new Request('http://localhost/api/courses/1', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Renamed Course',
+        code: 'CS102',
+        semester: 'Fall 2026',
+        credits: 4,
+        startDate: '2026-08-25T09:00',
+        endDate: '2026-12-15T17:00',
+        registrationOpenAt: '2026-07-01T09:00',
+        registrationCloseAt: '2026-09-01T09:00',
+        isPublished: true,
+        isArchived: false,
+        instructorIds: ['u1'],
+      }),
+    });
+
+    const res = await PUT(req, { params: Promise.resolve({ id: 'course-1' }) });
+    expect(res.status).toBe(200);
+
+    // The audit log must capture the fields that actually changed.
+    const logCall = activityLogMock.mock.calls.find((c) => c[2]?.action === 'UPDATE_COURSE');
+    expect(logCall).toBeTruthy();
+    expect(logCall[2].metadata.changedFields).toEqual(
+      expect.arrayContaining(['name', 'code', 'credits', 'isPublished']),
+    );
+    expect(logCall[2].metadata.changes.name).toEqual({ from: 'Old Course', to: 'Renamed Course' });
+  });
+
   it('returns 500 when transaction throws', async () => {
     authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });

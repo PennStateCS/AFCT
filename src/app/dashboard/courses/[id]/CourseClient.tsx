@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { useParams } from 'next/navigation';
 import type { Assignment, Problem } from '@prisma/client';
 
 import type { EnrollableUser } from '@/types/course';
@@ -19,16 +18,12 @@ import { StudentCourseView } from '@/components/course/StudentCourseView';
 import { AdminCourseView } from '@/components/course/AdminCourseView';
 import LoadingSpinner from '@/components/ui/loading-spinner';
 import { CourseDialogs } from '@/components/course/CourseDialogs';
-import DuplicateCourseDialog from '@/components/dialogs/DuplicateCourseDialog';
 import { FullCourse } from '@/types/course';
 import { TabType } from '@/types/course';
 
 export default function CourseClient({ initialCourse }: { initialCourse?: FullCourse | null }) {
   const { id } = useParams();
-  const router = useRouter();
-  const { data: session } = useSession();
   const courseId = Array.isArray(id) ? id[0] : id;
-  const isAdmin = session?.user?.isAdmin === true;
   // A viewer is a (non-privileged) student when they are NOT a global admin AND
   // their per-course role is not staff (FACULTY/TA). Derive from the initial
   // course payload so the data hook can request the correct view up front.
@@ -49,11 +44,8 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
   const dialogStates = useDialogStates();
   const { allUsers, fetchAvailableUsers, handleEnrollUser } = useEnrollment(course);
   const handlers = useCourseHandlers(course, setCourse);
-  const [duplicateOpen, setDuplicateOpen] = useState(false);
   const [bulkEnrollOpen, setBulkEnrollOpen] = useState(false);
   const { timezone } = useEffectiveTimezone();
-
-  const openDuplicate = () => setDuplicateOpen(true);
 
   const openEnrollDialog = useCallback(async () => {
     const users = await fetchAvailableUsers();
@@ -187,7 +179,6 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
         course={course}
         isStudent={isStudent}
         onEditClick={() => dialogStates.setEditOpen(true)}
-        onDuplicate={isAdmin ? openDuplicate : undefined}
         onPublishToggle={handlePublishToggle}
         onArchiveToggle={handleArchiveToggle}
       />
@@ -257,18 +248,6 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
           onEnrollUser={handleEnrollUserWrapper}
           bulkEnrollOpen={bulkEnrollOpen}
           setBulkEnrollOpen={setBulkEnrollOpen}
-        />
-      )}
-
-      {isAdmin && (
-        <DuplicateCourseDialog
-          open={duplicateOpen}
-          setOpen={setDuplicateOpen}
-          course={course}
-          timeZone={timezone}
-          onSuccess={(newId) => {
-            router.push(`/dashboard/courses/${newId}`);
-          }}
         />
       )}
     </div>

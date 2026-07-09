@@ -119,6 +119,27 @@ describe('GET /api/courses/[id]/roster/[userId]', () => {
     expect(prismaMock.roster.findFirst).not.toHaveBeenCalled();
   });
 
+  it('returns null viewerCourseRole when the viewer has no roster entry', async () => {
+    // Branch 171: `viewerRoster?.role ?? null` — admin viewer not on the roster.
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
+    isAdminMock.mockReturnValue(true);
+    prismaMock.roster.findFirst
+      .mockResolvedValueOnce({
+        id: 'r1',
+        role: 'STUDENT',
+        user: { id: 'u2', firstName: 'A', lastName: 'B', email: 'u2@example.com', role: 'STUDENT' },
+      })
+      .mockResolvedValueOnce(null); // viewer has no roster entry
+
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/u2');
+    const res = await GET(req, { params: Promise.resolve({ id: 'c1', userId: 'u2' }) });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.viewerCourseRole).toBeNull();
+    expect(body.viewerIsAdmin).toBe(true);
+  });
+
   it('handles server errors gracefully', async () => {
     // Authorized, but the roster lookup throws — the handler's catch returns 500.
     authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
@@ -233,6 +254,22 @@ describe('DELETE /api/courses/[id]/roster/[userId]', () => {
     expect(activityLogMock).toHaveBeenCalled();
   });
 
+  it('removes a student who has assignments but no submissions', async () => {
+    // Exercises branch 64: assignments exist but existingSubmission is null → proceeds.
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
+    isAdminMock.mockReturnValue(true);
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' }); // target
+    prismaMock.assignment.findMany.mockResolvedValue([{ id: 'a1' }]);
+    prismaMock.submission.findFirst.mockResolvedValue(null);
+    prismaMock.roster.deleteMany.mockResolvedValue({ count: 1 });
+
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/u2', { method: 'DELETE' });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'c1', userId: 'u2' }) });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.roster.deleteMany).toHaveBeenCalled();
+  });
+
   it('handles server errors gracefully', async () => {
     // Authorized, but the target lookup throws — the handler's catch returns 500.
     authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
@@ -243,6 +280,26 @@ describe('DELETE /api/courses/[id]/roster/[userId]', () => {
     const res = await DELETE(req, { params: Promise.resolve({ id: 'c1', userId: 'u2' }) });
 
     expect(res.status).toBe(500);
+  });
+
+  it('returns 500 and logs "unknown error" when a non-Error is thrown', async () => {
+    // Branch 108: `err instanceof Error ? err.message : 'unknown error'`.
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
+    isAdminMock.mockReturnValue(true);
+    prismaMock.roster.findFirst.mockRejectedValue('boom');
+
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/u2', { method: 'DELETE' });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'c1', userId: 'u2' }) });
+
+    expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        action: 'ROSTER_REMOVE_ERROR',
+        metadata: expect.objectContaining({ error: 'unknown error' }),
+      }),
+    );
   });
 });
 
@@ -285,6 +342,59 @@ describe('PATCH /api/courses/[id]/roster/[userId]', () => {
     expect(res.status).toBe(403);
   });
 
+  it('returns 404 when the roster entry does not exist', async () => {
+    // Branch 231: `!target` → 404.
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
+    canManageCourseMock.mockResolvedValue(true);
+    prismaMock.roster.findFirst.mockResolvedValue(null); // target missing
+
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/u2', {
+      method: 'PATCH',
+      body: JSON.stringify({ role: 'TA' }),
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'c1', userId: 'u2' }) });
+
+    expect(res.status).toBe(404);
+    expect(prismaMock.roster.update).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when demoting the only faculty member', async () => {
+    // Branches 234 + 238: target is FACULTY, demoted to non-FACULTY, only one faculty.
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
+    canManageCourseMock.mockResolvedValue(true);
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'FACULTY' }); // target
+    prismaMock.roster.count.mockResolvedValue(1); // only faculty
+
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/u2', {
+      method: 'PATCH',
+      body: JSON.stringify({ role: 'STUDENT' }),
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'c1', userId: 'u2' }) });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain('only course faculty member');
+    expect(prismaMock.roster.update).not.toHaveBeenCalled();
+  });
+
+  it('demotes a faculty member when another faculty remains', async () => {
+    // Branch 238 false: facultyCount > 1 → proceeds with the update.
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
+    canManageCourseMock.mockResolvedValue(true);
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'FACULTY' }); // target
+    prismaMock.roster.count.mockResolvedValue(2); // another faculty remains
+    prismaMock.roster.update.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
+
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/u2', {
+      method: 'PATCH',
+      body: JSON.stringify({ role: 'STUDENT' }),
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'c1', userId: 'u2' }) });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.roster.update).toHaveBeenCalled();
+  });
+
   it('updates role when allowed', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     canManageCourseMock.mockResolvedValue(true);
@@ -302,5 +412,50 @@ describe('PATCH /api/courses/[id]/roster/[userId]', () => {
     const body = await res.json();
     expect(body.success).toBe(true);
     expect(activityLogMock).toHaveBeenCalled();
+  });
+
+  it('returns 500 when the update fails', async () => {
+    // Lines 268-275: PATCH catch block.
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
+    canManageCourseMock.mockResolvedValue(true);
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' }); // target
+    prismaMock.roster.update.mockRejectedValue(new Error('db down'));
+
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/u2', {
+      method: 'PATCH',
+      body: JSON.stringify({ role: 'TA' }),
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'c1', userId: 'u2' }) });
+
+    expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ action: 'ROSTER_UPDATE_ERROR' }),
+    );
+  });
+
+  it('returns 500 and logs "unknown error" when a non-Error is thrown', async () => {
+    // Branch 273: `err instanceof Error ? err.message : 'unknown error'`.
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
+    canManageCourseMock.mockResolvedValue(true);
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' }); // target
+    prismaMock.roster.update.mockRejectedValue('boom');
+
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/u2', {
+      method: 'PATCH',
+      body: JSON.stringify({ role: 'TA' }),
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'c1', userId: 'u2' }) });
+
+    expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        action: 'ROSTER_UPDATE_ERROR',
+        metadata: expect.objectContaining({ error: 'unknown error' }),
+      }),
+    );
   });
 });
