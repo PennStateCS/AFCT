@@ -109,4 +109,61 @@ describe('SystemStatusClient', () => {
       expect(global.fetch).toHaveBeenCalledWith('/api/admin/status?deep=1', { cache: 'no-store' });
     });
   });
+
+  it('deletes an abandoned file (confirmed) and re-pulls the status snapshot', async () => {
+    const statusWithFiles = makeStatus({
+      abandonedFiles: {
+        total: 1,
+        byCategory: { solutions: 1 },
+        samples: [{ category: 'solutions', fileName: 'orphan.jff', path: '/uploads/orphan.jff' }],
+      },
+    });
+    const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (String(url).includes('abandoned-files') && init?.method === 'DELETE') {
+        return Promise.resolve({ ok: true, json: async () => ({ ok: true }) } as Response);
+      }
+      return Promise.resolve({ ok: true, json: async () => statusWithFiles } as Response);
+    });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    renderWithClient(<SystemStatusClient />);
+
+    const deleteBtn = await screen.findByRole('button', {
+      name: 'Delete abandoned file orphan.jff',
+    });
+    fireEvent.click(deleteBtn);
+
+    await waitFor(() => {
+      const deleted = fetchMock.mock.calls.some(
+        ([u, init]) =>
+          String(u).includes('abandoned-files') &&
+          (init as RequestInit | undefined)?.method === 'DELETE',
+      );
+      expect(deleted).toBe(true);
+    });
+  });
+
+  it('does not delete when the confirm dialog is dismissed', async () => {
+    const statusWithFiles = makeStatus({
+      abandonedFiles: {
+        total: 1,
+        byCategory: { solutions: 1 },
+        samples: [{ category: 'solutions', fileName: 'orphan.jff', path: '/uploads/orphan.jff' }],
+      },
+    });
+    const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
+    fetchMock.mockResolvedValue({ ok: true, json: async () => statusWithFiles } as Response);
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+    renderWithClient(<SystemStatusClient />);
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Delete abandoned file orphan.jff' }),
+    );
+
+    const deleteCalled = fetchMock.mock.calls.some(
+      ([, init]) => (init as RequestInit | undefined)?.method === 'DELETE',
+    );
+    expect(deleteCalled).toBe(false);
+  });
 });
