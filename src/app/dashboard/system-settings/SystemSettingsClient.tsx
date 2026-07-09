@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { fetchJson } from '@/lib/query-fetch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
@@ -287,7 +288,6 @@ export default function SystemSettingsClient() {
     },
     staleTime: 30_000,
   });
-  const [backupNowBusy, setBackupNowBusy] = useState(false);
   // Force-refresh helper used after "Back up now"; returns the new count so the
   // caller can poll until the freshly-requested backup appears.
   const reloadBackups = useCallback(async (): Promise<number> => {
@@ -370,15 +370,9 @@ export default function SystemSettingsClient() {
     if (settingsError) showToast.error('Failed to load system settings.');
   }, [settingsError]);
 
-  const handleBackupNow = async () => {
-    setBackupNowBusy(true);
-    try {
-      const before = await reloadBackups();
-      const res = await fetch(apiPaths.admin.backups(), { method: 'POST' });
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.error || 'Failed to start backup');
-      }
+  const { mutate: triggerBackup, isPending: backupNowBusy } = useMutation({
+    mutationFn: (_beforeCount: number) => fetchJson(apiPaths.admin.backups(), { method: 'POST' }),
+    onSuccess: (_data, beforeCount) => {
       showToast.success('Backup requested — it should appear within a minute.');
       // The backup container runs the request on its next tick; poll until the
       // new backup shows up (or we give up after ~1 minute).
@@ -386,14 +380,20 @@ export default function SystemSettingsClient() {
       const poll = async () => {
         tries += 1;
         const count = await reloadBackups();
-        if (count <= before && tries < 10) setTimeout(poll, 6000);
+        if (count <= beforeCount && tries < 10) setTimeout(poll, 6000);
       };
       setTimeout(poll, 6000);
-    } catch (err) {
+    },
+    onError: (err) => {
       showToast.error(err instanceof Error ? err.message : 'Failed to start backup');
-    } finally {
-      setBackupNowBusy(false);
-    }
+    },
+  });
+
+  const handleBackupNow = async () => {
+    // Capture the current backup count before triggering so the poll can detect
+    // the new backup appearing.
+    const before = await reloadBackups();
+    triggerBackup(before);
   };
 
   // Restore the last-viewed tab on load, and remember it on change.
