@@ -57,6 +57,14 @@ declare module 'next-auth/jwt' {
     ipAddress?: string;
     userAgent?: string;
     exp?: number;
+    /**
+     * Server-clock timestamp (ms) of the last activity heartbeat. Refreshed only
+     * by an explicit client `update()` ping, never by passive session reads, so
+     * background polling doesn't keep an idle session alive.
+     */
+    lastActivity?: number;
+    /** The idle limit (ms) the server enforces against {@link lastActivity}. */
+    idleTimeoutMs?: number;
   }
 }
 
