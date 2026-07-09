@@ -41,7 +41,7 @@ describe('GET /api/courses/[id]/assignments/[aid]/student-context', () => {
 
   it('returns 404 when assignment does not exist in the course', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT', course: { isPublished: true } });
     prismaMock.assignment.findFirst.mockResolvedValue(null);
 
     const res = await GET(new Request(url), { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
@@ -54,7 +54,7 @@ describe('GET /api/courses/[id]/assignments/[aid]/student-context', () => {
 
   it('returns grouped student context', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT', course: { isPublished: true } });
     prismaMock.assignment.findFirst.mockResolvedValue({
       id: 'a1',
       isPublished: true,
@@ -100,7 +100,7 @@ describe('GET /api/courses/[id]/assignments/[aid]/student-context', () => {
 
   it('returns 404 when an unpublished assignment is requested by a student', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT', course: { isPublished: true } });
     prismaMock.assignment.findFirst.mockResolvedValue({
       id: 'a1',
       isPublished: false,
@@ -114,7 +114,7 @@ describe('GET /api/courses/[id]/assignments/[aid]/student-context', () => {
 
   it('buckets submissions and comments for problems not in the assignment list', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT', course: { isPublished: true } });
     prismaMock.assignment.findFirst.mockResolvedValue({
       id: 'a1',
       isPublished: true,
@@ -156,7 +156,7 @@ describe('GET /api/courses/[id]/assignments/[aid]/student-context', () => {
 
   it('returns 500 when a data fetch fails', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT', course: { isPublished: true } });
     prismaMock.assignment.findFirst.mockResolvedValue({
       id: 'a1',
       isPublished: true,

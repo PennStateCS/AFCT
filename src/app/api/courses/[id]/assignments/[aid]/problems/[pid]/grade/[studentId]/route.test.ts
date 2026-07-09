@@ -108,7 +108,7 @@ describe('/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]', () => {
       // Student is enrolled (passes read access) and is the owner of the grade,
       // so canManageCourse is false but user.id === studentId keeps them allowed.
       authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
-      prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+      prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
 
       const res = await GET(new Request('http://localhost'), {
         params: Promise.resolve(defaultParams),
@@ -121,7 +121,7 @@ describe('/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]', () => {
     it('404-masks an unpublished assignment for the owning student', async () => {
       // Even reading their OWN grade, a student can't touch an unpublished assignment.
       authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
-      prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+      prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
       prismaMock.assignmentProblem.findUnique.mockResolvedValue({
         assignment: { courseId: defaultParams.id, isPublished: false },
         maxPoints: 100,
@@ -138,7 +138,7 @@ describe('/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]', () => {
       // Enrolled as a plain student (read access granted) but not the owner and
       // not a manager -> hits the in-handler denial.
       authMock.mockResolvedValue({ user: { id: 'other-student', role: 'STUDENT' } });
-      prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+      prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
 
       const res = await GET(new Request('http://localhost'), {
         params: Promise.resolve(defaultParams),

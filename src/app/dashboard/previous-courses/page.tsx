@@ -63,21 +63,30 @@ export default async function AllCoursesPage() {
     },
   });
 
-  // Map courses and attach the user's role in each
+  // Map courses and attach the user's role in each. Students never see an
+  // unpublished course they're enrolled in; staff/admin see theirs regardless.
   const viewerIsAdmin = Boolean(session.user.isAdmin);
-  const courses = rosterEntries.map((entry) => {
-    const { course } = entry;
-    // A student must not receive classmate names/emails for a past course either;
-    // staff keep the full roster, students get staff names + count-only entries.
-    const isStaffHere = viewerIsAdmin || entry.role === 'FACULTY' || entry.role === 'TA';
-    const enrolledMembers = course.roster.map((r) => ({ ...r.user, courseRole: r.role }));
+  const courses = rosterEntries
+    .filter(
+      (entry) =>
+        viewerIsAdmin ||
+        entry.role === 'FACULTY' ||
+        entry.role === 'TA' ||
+        entry.course.isPublished,
+    )
+    .map((entry) => {
+      const { course } = entry;
+      // A student must not receive classmate names/emails for a past course either;
+      // staff keep the full roster, students get staff names + count-only entries.
+      const isStaffHere = viewerIsAdmin || entry.role === 'FACULTY' || entry.role === 'TA';
+      const enrolledMembers = course.roster.map((r) => ({ ...r.user, courseRole: r.role }));
 
-    return {
-      ...course,
-      userRole: entry.role,
-      enrolled: isStaffHere ? enrolledMembers : toStudentSafeEnrolled(enrolledMembers),
-    };
-  });
+      return {
+        ...course,
+        userRole: entry.role,
+        enrolled: isStaffHere ? enrolledMembers : toStudentSafeEnrolled(enrolledMembers),
+      };
+    });
 
   return (
     <div className="h-full w-full flex-col lg:flex-row">

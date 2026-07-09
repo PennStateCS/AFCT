@@ -96,9 +96,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
     }
 
+    const isStaff = await canManageCourse(user, assignment.courseId);
+
     // A student must not comment on an unpublished assignment (they can't see it);
     // only course staff may. Mask it as 404 so the assignment stays invisible.
-    if (!assignment.isPublished && !(await canManageCourse(user, assignment.courseId))) {
+    if (!assignment.isPublished && !isStaff) {
       await createEnhancedActivityLog(prisma, request, {
         userId: session?.user?.id ?? null,
         action: 'COMMENT_CREATE_DENIED',
@@ -106,6 +108,19 @@ export async function POST(request: NextRequest) {
         metadata: { reason: 'unpublished assignment' },
       });
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+    }
+
+    // Students may only comment on their own thread. `studentId` (aboutStudentId)
+    // names whose feedback thread the comment belongs to; a non-staff author may
+    // only target themselves. Staff/admin may file into any student's thread.
+    if (studentId && studentId !== user.id && !isStaff) {
+      await createEnhancedActivityLog(prisma, request, {
+        userId: session?.user?.id ?? null,
+        action: 'COMMENT_CREATE_DENIED',
+        severity: 'SECURITY',
+        metadata: { reason: "another student's thread" },
+      });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // Obtain the author's roster row for the comment FK. Admins who aren't on the
