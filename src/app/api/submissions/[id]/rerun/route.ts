@@ -31,7 +31,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
     const user = session?.user;
     actorId = user?.id ?? null;
 
-    if (!user?.id) {
+    if (!user?.id || user.inactive) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -100,7 +100,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
     const updated = await prisma.submission.update({
       where: { id },
       data: {
-        status: "PENDING",
+        status: 'PENDING',
         feedback: null,
         correct: null,
         evaluationRaw: Prisma.DbNull,
@@ -122,7 +122,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
         assignmentId: submission.assignmentId,
         problemId: submission.problemId,
         submissionId: submission.id,
-        status: 'PENDING'
+        status: 'PENDING',
       },
     });
 

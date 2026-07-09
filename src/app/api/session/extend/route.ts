@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   try {
     const session = await auth();
 
-    if (!session || !session.user) {
+    if (!session?.user || session.user.inactive) {
       await createEnhancedActivityLog(prisma, req, {
         action: 'SESSION_EXTENSION_FAILED',
         severity: 'WARNING',

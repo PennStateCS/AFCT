@@ -56,15 +56,21 @@ type RosterItem = Prisma.RosterGetPayload<{
  *   403: { description: System administrators only. }
  *   500: { description: Server error. }
  */
-export async function GET() {
+export async function GET(req: Request) {
   try {
     // Admin-only: this returns every course's roster identities and registration
     // codes, so it must not be reachable by non-admins (or anonymously).
     const session = await auth();
-    if (!session?.user) {
+    if (!session?.user || session.user.inactive) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     if (!isAdmin(session.user)) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session.user.id,
+        action: 'COURSES_LIST_DENIED',
+        severity: 'SECURITY',
+        metadata: {},
+      });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
