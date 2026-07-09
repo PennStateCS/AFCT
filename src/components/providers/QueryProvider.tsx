@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { useSession } from 'next-auth/react';
+import { retryUnlessClientError } from '@/lib/query-fetch';
 
 /**
  * Clears the entire query cache whenever the signed-in identity changes — a
@@ -61,7 +62,10 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
             // Keep unused cache entries for 5 minutes so back-navigation is instant.
             gcTime: 5 * 60_000,
             refetchOnWindowFocus: false,
-            retry: 1,
+            // Retry transient failures once, but never a 4xx (auth/permission/
+            // not-found won't succeed on retry). Applies to queries whose queryFn
+            // throws HttpError (via fetchJson); others keep the single retry.
+            retry: retryUnlessClientError,
           },
         },
       }),

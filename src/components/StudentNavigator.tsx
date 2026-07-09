@@ -16,6 +16,7 @@ import { formatDateTimeInTimeZone } from '@/lib/date';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
+import { fetchJson } from '@/lib/query-fetch';
 
 export type StudentNavigatorStudent = {
   id: string;
@@ -59,11 +60,12 @@ export default function StudentNavigator({
     lateCutoff?: string | Date | null;
   }>({
     queryKey: queryKeys.assignment.shell(courseId, assignmentId),
-    queryFn: async () => {
-      const res = await fetch(apiPaths.assignment(courseId, assignmentId, { view: 'problems' }));
-      if (!res.ok) throw new Error('Failed to fetch assignment');
-      return res.json();
-    },
+    queryFn: () =>
+      fetchJson<{
+        dueDate?: string | Date;
+        allowLateSubmissions?: boolean;
+        lateCutoff?: string | Date | null;
+      }>(apiPaths.assignment(courseId, assignmentId, { view: 'problems' })),
     enabled: !!assignmentId,
     staleTime: 30_000,
   });
