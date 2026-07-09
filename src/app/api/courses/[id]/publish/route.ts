@@ -87,7 +87,7 @@ export const PATCH = withCourseAuth(
         severity: 'ERROR',
         metadata: { error: error instanceof Error ? error.message : 'unknown error' },
       });
-      return new NextResponse('Failed to update publish status', { status: 500 });
+      return NextResponse.json({ error: 'Failed to update publish status' }, { status: 500 });
     }
   },
   { access: 'manage', roles: COURSE_FACULTY_ROLES, deniedAction: 'COURSE_PUBLISH_DENIED' },

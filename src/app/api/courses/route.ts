@@ -114,7 +114,7 @@ export async function GET(req: Request) {
     return NextResponse.json(formatted, { status: 200 });
   } catch (error) {
     console.error('Failed to fetch courses:', error);
-    return NextResponse.json({ message: 'Server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }
 
@@ -172,14 +172,14 @@ export async function POST(req: Request) {
         severity: 'SECURITY',
         metadata: {},
       });
-      return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // 3) Get user's timezone (DB user > system settings > default)
     const userTimezone = await resolveUserTimezone(session?.user?.id);
 
     if (!json.registrationOpenAt || !json.registrationCloseAt) {
-      return NextResponse.json({ message: 'Registration window is required.' }, { status: 400 });
+      return NextResponse.json({ error: 'Registration window is required.' }, { status: 400 });
     }
 
     // 4) Optional uniqueness check (code + semester)
@@ -189,7 +189,7 @@ export async function POST(req: Request) {
     });
     if (exists) {
       return NextResponse.json(
-        { message: 'A course with that code and semester already exists.' },
+        { error: 'A course with that code and semester already exists.' },
         { status: 409 },
       );
     }
@@ -318,6 +318,6 @@ export async function POST(req: Request) {
       severity: 'ERROR',
       metadata: { error: err instanceof Error ? err.message : 'unknown error' },
     });
-    return NextResponse.json({ message: 'Server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }

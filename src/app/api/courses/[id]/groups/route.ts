@@ -66,7 +66,7 @@ export const GET = withCourseAuth(
  *   403: { description: Not course staff or a system admin. }
  *   404: { description: Course not found. }
  *   409: { description: A group with that name already exists in the course. }
- *   422: { description: Missing group name. }
+ *   400: { description: Missing group name. }
  *   500: { description: Server error. }
  */
 export const POST = withCourseAuth(
@@ -76,7 +76,7 @@ export const POST = withCourseAuth(
 
       const name = (data.name ?? '').trim();
 
-      if (!name) return NextResponse.json({ error: 'Name not found' }, { status: 422 });
+      if (!name) return NextResponse.json({ error: 'Name is required' }, { status: 400 });
 
       // Ensure course exists
       const course = await prisma.course.findUnique({ where: { id: courseId } });

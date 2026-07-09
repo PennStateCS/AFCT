@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { canManageCourse, COURSE_FACULTY_ROLES } from '@/lib/permissions';
+import { canManageCourse } from '@/lib/permissions';
 import { ProblemTypeEnum } from '@/schemas/problem';
 import { z } from 'zod';
 
@@ -73,9 +73,9 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 
-    // Faculty-tier staff only (FACULTY, TAs excluded) or admin. Authenticated but
-    // under-privileged → 403 + a SECURITY denial log, matching the auth wrappers.
-    if (!(await canManageCourse(session.user, assignment.courseId, COURSE_FACULTY_ROLES))) {
+    // Course staff (FACULTY + TA) or admin — matching the other assignment routes.
+    // Authenticated but under-privileged → 403 + a SECURITY denial log.
+    if (!(await canManageCourse(session.user, assignment.courseId))) {
       await createEnhancedActivityLog(prisma, req, {
         userId: session.user.id,
         action: 'ASSIGNMENT_PROBLEMS_LIST_DENIED',

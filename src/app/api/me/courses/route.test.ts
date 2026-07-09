@@ -71,7 +71,7 @@ describe('GET /api/me/courses', () => {
     const res = await GET(req());
 
     expect(res.status).toBe(500);
-    expect(await res.json()).toEqual({ message: 'Server error' });
+    expect(await res.json()).toEqual({ error: 'Server error' });
     consoleSpy.mockRestore();
   });
 });
@@ -167,7 +167,7 @@ describe('GET /api/me/courses?view=nav', () => {
 
     expect(res.status).toBe(500);
     const body = await res.json();
-    expect(body).toEqual({ message: 'Server error' });
+    expect(body).toEqual({ error: 'Server error' });
     consoleSpy.mockRestore();
   });
 });
