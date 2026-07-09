@@ -5,8 +5,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { getUsersList } from '@/lib/users-list';
 import { withAdminAuth } from '@/lib/api/with-auth';
-
-const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+import { isValidEmail } from '@/lib/email';
 
 // Local password check for admin-created accounts: 8+ chars with mixed case, a
 // digit, and a symbol.
