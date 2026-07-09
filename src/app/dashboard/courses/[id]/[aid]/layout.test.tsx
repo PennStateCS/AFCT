@@ -6,8 +6,12 @@ const prismaMock = vi.hoisted(() => ({
     findFirst: vi.fn(),
   },
 }));
+const authMock = vi.hoisted(() => vi.fn());
+const getCourseRoleMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
+vi.mock('@/lib/auth', () => ({ auth: authMock }));
+vi.mock('@/lib/permissions', () => ({ getCourseRole: getCourseRoleMock }));
 vi.mock('@/components/navbar/AssignmentBreadcrumbSource', () => ({
   __esModule: true,
   default: ({
@@ -29,11 +33,17 @@ import AssignmentLayout from './layout';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
+  getCourseRoleMock.mockResolvedValue('STUDENT');
 });
 
 describe('AssignmentLayout', () => {
-  it('renders breadcrumb source when assignment exists', async () => {
-    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', title: 'Assignment One' });
+  it('renders breadcrumb source when a member views a published assignment', async () => {
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      title: 'Assignment One',
+      isPublished: true,
+    });
 
     const result = await AssignmentLayout({
       params: Promise.resolve({ id: 'c1', aid: 'a1' }),
@@ -42,7 +52,7 @@ describe('AssignmentLayout', () => {
 
     expect(prismaMock.assignment.findFirst).toHaveBeenCalledWith({
       where: { id: 'a1', courseId: 'c1' },
-      select: { id: true, title: true },
+      select: { id: true, title: true, isPublished: true },
     });
 
     const element = result as React.ReactElement;
@@ -67,5 +77,53 @@ describe('AssignmentLayout', () => {
     const element = result as React.ReactElement;
     expect(element.props.children[0]).toBeNull();
     expect(element.props.children[1].props['data-testid']).toBe('children');
+  });
+
+  it('does not query or expose the assignment for a non-member', async () => {
+    getCourseRoleMock.mockResolvedValue(null); // not enrolled, not admin
+
+    const result = await AssignmentLayout({
+      params: Promise.resolve({ id: 'c1', aid: 'a1' }),
+      children: <div data-testid="children">Child</div>,
+    });
+
+    expect(getCourseRoleMock).toHaveBeenCalledWith('u1', 'c1');
+    expect(prismaMock.assignment.findFirst).not.toHaveBeenCalled();
+    const element = result as React.ReactElement;
+    expect(element.props.children[0]).toBeNull();
+  });
+
+  it('hides an unpublished assignment title from a student', async () => {
+    getCourseRoleMock.mockResolvedValue('STUDENT');
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      title: 'Secret Draft',
+      isPublished: false,
+    });
+
+    const result = await AssignmentLayout({
+      params: Promise.resolve({ id: 'c1', aid: 'a1' }),
+      children: <div data-testid="children">Child</div>,
+    });
+
+    const element = result as React.ReactElement;
+    expect(element.props.children[0]).toBeNull();
+  });
+
+  it('shows an unpublished assignment title to staff', async () => {
+    getCourseRoleMock.mockResolvedValue('FACULTY');
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      title: 'Draft',
+      isPublished: false,
+    });
+
+    const result = await AssignmentLayout({
+      params: Promise.resolve({ id: 'c1', aid: 'a1' }),
+      children: <div data-testid="children">Child</div>,
+    });
+
+    const element = result as React.ReactElement;
+    expect(element.props.children[0].props.assignmentTitle).toBe('Draft');
   });
 });

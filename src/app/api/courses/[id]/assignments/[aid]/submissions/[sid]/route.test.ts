@@ -52,7 +52,7 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
 
   it('returns 404 when no problems', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
-    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', isPublished: true });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([]);
 
     const res = await GET(
@@ -67,7 +67,7 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
 
   it('returns grouped submissions', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
-    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', isPublished: true });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
       {
         problem: {
@@ -108,7 +108,7 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
 
   it('returns 403 for staff not on the course roster', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
-    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', isPublished: true });
     prismaMock.roster.findFirst.mockResolvedValue(null);
 
     const res = await GET(
@@ -125,7 +125,7 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
 
   it('allows staff on the roster to view any student submissions', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
-    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', isPublished: true });
     prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'FACULTY' });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
       {
@@ -154,7 +154,7 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
 
   it('returns 403 when a student requests another student’s submissions', async () => {
     authMock.mockResolvedValue({ user: { id: 'student-a', role: 'STUDENT' } });
-    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', isPublished: true });
 
     const res = await GET(
       new Request('http://localhost/api/courses/c1/assignments/a1/submissions/student-b'),
@@ -170,7 +170,7 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
     // Enrolled as a student (read access granted by the wrapper) but requesting a
     // different student and not a manager -> hits the in-handler denial.
     authMock.mockResolvedValue({ user: { id: 'student-a', role: 'STUDENT' } });
-    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', isPublished: true });
     prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
 
     const res = await GET(
@@ -189,7 +189,7 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
 
   it('allows a student to view their own submissions', async () => {
     authMock.mockResolvedValue({ user: { id: 'student-a', role: 'STUDENT' } });
-    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', isPublished: true });
     prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
       {
@@ -216,9 +216,26 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
     expect(res.status).toBe(200);
   });
 
+  it('404-masks an unpublished assignment for the owning student', async () => {
+    authMock.mockResolvedValue({ user: { id: 'student-a', role: 'STUDENT' } });
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', isPublished: false });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
+
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/assignments/a1/submissions/student-a'),
+      {
+        params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 'student-a' }),
+      },
+    );
+
+    expect(res.status).toBe(404);
+    // Never reaches the problem/submission queries.
+    expect(prismaMock.assignmentProblem.findMany).not.toHaveBeenCalled();
+  });
+
   it('handles P2022 Prisma error for evaluationRaw and retries', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
-    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', isPublished: true });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
       {
         problem: {
@@ -265,7 +282,7 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
 
   it('rethrows non-P2022 Prisma errors', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
-    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', isPublished: true });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
       {
         problem: {
@@ -306,7 +323,7 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
 
   it('rethrows a P2022 error with no column metadata', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
-    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', isPublished: true });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
       {
         problem: {
@@ -346,7 +363,7 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
 
   it('does not fail request when activity logging fails', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
-    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', isPublished: true });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
       {
         problem: {

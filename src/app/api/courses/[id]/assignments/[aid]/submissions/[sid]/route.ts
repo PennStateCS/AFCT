@@ -72,7 +72,7 @@ export const GET = withCourseAuth(
       // Verify that the assignment belongs to the given course
       const assignment = await prisma.assignment.findFirst({
         where: { id: assignmentId, courseId },
-        select: { id: true },
+        select: { id: true, isPublished: true },
       });
 
       if (!assignment) {
@@ -82,9 +82,20 @@ export const GET = withCourseAuth(
         );
       }
 
+      const isStaff = await canManageCourse(user, courseId);
+
+      // A student must not read submissions (which include problem content) for an
+      // unpublished assignment, even their own — mask it as 404, like the reads.
+      if (!assignment.isPublished && !isStaff) {
+        return NextResponse.json(
+          { error: 'Assignment not found for this course' },
+          { status: 404 },
+        );
+      }
+
       // Students may only read their own submissions; staff may read anyone's. (The
       // wrapper already enforced course membership via canAccessCourse.)
-      if (!(await canManageCourse(user, courseId)) && user.id !== studentId) {
+      if (!isStaff && user.id !== studentId) {
         return logDenial(req, {
           userId: user.id,
           action: 'SUBMISSIONS_ACCESS_DENIED',

@@ -35,7 +35,7 @@ describe('GET /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
     canManageCourseMock.mockResolvedValue(true);
     canAccessCourseMock.mockResolvedValue(true);
     authMock.mockResolvedValue({ user: { id: 'staff-1', role: 'FACULTY' } });
-    prismaMock.assignment.findFirst.mockResolvedValue({ id: defaultParams.aid });
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: defaultParams.aid, isPublished: true });
     prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
   });
 
@@ -69,6 +69,22 @@ describe('GET /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
     });
 
     expect(res.status).toBe(404);
+  });
+
+  it('404-masks an unpublished assignment for the owning student', async () => {
+    authMock.mockResolvedValue({ user: { id: defaultParams.studentId, role: 'STUDENT' } });
+    canManageCourseMock.mockResolvedValue(false);
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: defaultParams.aid,
+      isPublished: false,
+    });
+
+    const res = await GET(new Request('http://localhost'), {
+      params: Promise.resolve(defaultParams),
+    });
+
+    expect(res.status).toBe(404);
+    expect(prismaMock.assignmentProblemGrade.findMany).not.toHaveBeenCalled();
   });
 
   it('returns 204 when no grades are present', async () => {
@@ -125,7 +141,7 @@ describe('POST /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
     canManageCourseMock.mockResolvedValue(true);
     canAccessCourseMock.mockResolvedValue(true);
     authMock.mockResolvedValue({ user: { id: 'staff-1', role: 'FACULTY' } });
-    prismaMock.assignment.findFirst.mockResolvedValue({ id: defaultParams.aid });
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: defaultParams.aid, isPublished: true });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
       { problemId: 'prob-1', maxPoints: 10 },
       { problemId: 'prob-2', maxPoints: 20 },

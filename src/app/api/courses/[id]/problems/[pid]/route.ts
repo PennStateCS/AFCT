@@ -7,6 +7,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
 
 // Solution files live here; the URL to serve them is /api/files/solutions/[file].
 const uploadsDir = path.join('/private', 'uploads', 'solutions');
@@ -112,20 +113,22 @@ export const PUT = withCourseAuth(
 
         fs.mkdirSync(uploadsDir, { recursive: true });
 
-        // Delete old file if it exists
+        // Delete old file if it exists (resolve it inside the uploads dir so a
+        // legacy/unsafe stored name can't be used to unlink outside it).
         if (existingProblem.fileName) {
-          const oldFilePath = path.join(uploadsDir, existingProblem.fileName);
           try {
-            fs.unlinkSync(oldFilePath);
+            fs.unlinkSync(resolveInsideDir(uploadsDir, existingProblem.fileName));
           } catch (err) {
             console.warn('Could not delete old file:', err);
           }
         }
 
+        // Store under a random UUID + sanitized extension, never a path derived
+        // from client input; keep the original name only as display metadata.
         const buffer = Buffer.from(await file.arrayBuffer());
-        fileName = `${Date.now()}-${file.name}`;
+        fileName = safeStoredFilename(file.name);
         originalFileName = file.name;
-        fs.writeFileSync(path.join(uploadsDir, fileName), buffer);
+        fs.writeFileSync(resolveInsideDir(uploadsDir, fileName), buffer, { mode: 0o644 });
       }
 
       const updatedProblem = await prisma.problem.update({
@@ -224,9 +227,8 @@ export const DELETE = withCourseAuth(
       await prisma.submission.deleteMany({ where: { problemId } });
 
       if (existingProblem.fileName) {
-        const filePath = path.join(uploadsDir, existingProblem.fileName);
         try {
-          fs.unlinkSync(filePath);
+          fs.unlinkSync(resolveInsideDir(uploadsDir, existingProblem.fileName));
         } catch (err) {
           console.warn('Could not delete problem file:', err);
         }

@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import type { EmptyStringNotation } from '@prisma/client';
+import { toStudentSafeEnrolled } from '@/lib/course-format';
 
 export type CourseListItem = {
   id: string;
@@ -77,25 +78,38 @@ export async function getCoursesListForUser(
     orderBy: { createdAt: 'desc' },
   });
 
-  return courses.map((course) => ({
-    id: course.id,
-    name: course.name,
-    code: course.code,
-    regCode: course.regCode,
-    semester: course.semester,
-    credits: course.credits,
-    startDate: course.startDate,
-    endDate: course.endDate,
-    registrationOpenAt: course.registrationOpenAt,
-    registrationCloseAt: course.registrationCloseAt,
-    isPublished: course.isPublished,
-    isArchived: course.isArchived,
-    emptyStringNotation: course.emptyStringNotation,
-    createdAt: course.createdAt,
-    updatedAt: course.updatedAt,
-    enrolled: course.roster.map((r) => ({
-      ...r.user,
-      courseRole: r.role,
-    })),
-  }));
+  const viewerIsAdmin = role === 'ADMIN';
+
+  return courses.map((course) => {
+    // Decide roster visibility from the viewer's role IN THIS course (they may be
+    // faculty in one and a student in another), not the coarse global `role`.
+    const viewerEntry = course.roster.find((r) => r.user.id === userId);
+    const isStaffHere =
+      viewerIsAdmin || viewerEntry?.role === 'FACULTY' || viewerEntry?.role === 'TA';
+
+    const enrolledMembers = course.roster.map((r) => ({ ...r.user, courseRole: r.role }));
+
+    return {
+      id: course.id,
+      name: course.name,
+      code: course.code,
+      // The registration code lets someone enroll; only staff/admin need it in a
+      // course list. Students (in that course) don't — hide it.
+      regCode: isStaffHere ? course.regCode : null,
+      semester: course.semester,
+      credits: course.credits,
+      startDate: course.startDate,
+      endDate: course.endDate,
+      registrationOpenAt: course.registrationOpenAt,
+      registrationCloseAt: course.registrationCloseAt,
+      isPublished: course.isPublished,
+      isArchived: course.isArchived,
+      emptyStringNotation: course.emptyStringNotation,
+      createdAt: course.createdAt,
+      updatedAt: course.updatedAt,
+      // Staff see the full roster (names + emails); a student gets staff names only,
+      // with classmates collapsed to count-only placeholders and no emails.
+      enrolled: isStaffHere ? enrolledMembers : toStudentSafeEnrolled(enrolledMembers),
+    };
+  });
 }

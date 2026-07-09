@@ -96,6 +96,7 @@ beforeEach(() => {
     dueDate: FUTURE,
     allowLateSubmissions: false,
     lateCutoff: null,
+    isPublished: true,
   });
   prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
   prismaMock.submission.findFirst.mockResolvedValue(null);
@@ -152,6 +153,7 @@ describe('POST /api/submissions', () => {
       dueDate: PAST,
       allowLateSubmissions: false,
       lateCutoff: null,
+      isPublished: true,
     });
 
     const res = await POST(makeRequest(makeFormData()));
@@ -168,6 +170,7 @@ describe('POST /api/submissions', () => {
       dueDate: PAST,
       allowLateSubmissions: true,
       lateCutoff: PAST,
+      isPublished: true,
     });
 
     const res = await POST(makeRequest(makeFormData()));
@@ -185,6 +188,44 @@ describe('POST /api/submissions', () => {
     expect(res.status).toBe(403);
     expect(logActions()).toContain('SUBMISSION_FORBIDDEN');
     expect(prismaMock.submission.create).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 (and does not store) when a student submits to an unpublished assignment', async () => {
+    prismaMock.assignment.findUnique.mockResolvedValue({
+      id: 'assignment-1',
+      courseId: 'course-1',
+      dueDate: FUTURE,
+      allowLateSubmissions: false,
+      lateCutoff: null,
+      isPublished: false,
+    });
+    // Enrolled student (roster role STUDENT): access passes, manage does not.
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+
+    const res = await POST(makeRequest(makeFormData()));
+
+    expect(res.status).toBe(404);
+    expect(logActions()).toContain('SUBMISSION_UNPUBLISHED_ASSIGNMENT');
+    expect(prismaMock.submission.create).not.toHaveBeenCalled();
+  });
+
+  it('allows staff to submit to an unpublished assignment', async () => {
+    prismaMock.assignment.findUnique.mockResolvedValue({
+      id: 'assignment-1',
+      courseId: 'course-1',
+      dueDate: FUTURE,
+      allowLateSubmissions: false,
+      lateCutoff: null,
+      isPublished: false,
+    });
+    // Course staff (FACULTY) may submit to an unpublished assignment.
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+
+    const res = await POST(makeRequest(makeFormData()));
+
+    expect(res.status).toBe(202);
+    expect(logActions()).not.toContain('SUBMISSION_UNPUBLISHED_ASSIGNMENT');
+    expect(prismaMock.submission.create).toHaveBeenCalled();
   });
 
   it('allows an admin to submit without a roster entry', async () => {
@@ -245,6 +286,7 @@ describe('POST /api/submissions', () => {
       dueDate: PAST,
       allowLateSubmissions: false,
       lateCutoff: PAST,
+      isPublished: true,
     });
 
     const res = await POST(makeRequest(makeFormData()));
@@ -266,6 +308,7 @@ describe('POST /api/submissions', () => {
       dueDate: PAST,
       allowLateSubmissions: true,
       lateCutoff: null,
+      isPublished: true,
     });
 
     const res = await POST(makeRequest(makeFormData()));

@@ -26,7 +26,7 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
     vi.clearAllMocks();
 
     authMock.mockResolvedValue({ user: { id: 'faculty-1', role: 'FACULTY' } });
-    prismaMock.assignment.findFirst.mockResolvedValue({ id: params.aid });
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: params.aid, isPublished: true });
     prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1', role: 'FACULTY' });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
       {
@@ -79,6 +79,19 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
     const res = await GET(new Request('http://localhost'), { params: Promise.resolve(params) });
 
     expect(res.status).toBe(200);
+  });
+
+  it('404-masks an unpublished assignment for the owning student', async () => {
+    // Even their OWN data: a student can't read review data (problem content) for
+    // an unpublished assignment.
+    authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1', role: 'STUDENT' });
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: params.aid, isPublished: false });
+
+    const res = await GET(new Request('http://localhost'), { params: Promise.resolve(params) });
+
+    expect(res.status).toBe(404);
+    expect(prismaMock.submission.findMany).not.toHaveBeenCalled();
   });
 
   it('returns 404 when assignment is not found in the course', async () => {
