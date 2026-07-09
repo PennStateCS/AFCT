@@ -11,6 +11,7 @@ import InputGroup from '@/components/ui/InputGroup';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 import { PasswordRulesHelper } from '@/components/auth/PasswordRulesHelper';
 import { isStrongPassword, passwordRules } from '@/lib/password-policy';
+import { apiPaths } from '@/lib/api-paths';
 
 /* ---------------- Validators ---------------- */
 
@@ -68,7 +69,7 @@ export default function LoginPage() {
     let active = true;
     (async () => {
       try {
-        const res = await fetch('/api/system-settings/public', { cache: 'no-store' });
+        const res = await fetch(apiPaths.systemSettingsPublic(), { cache: 'no-store' });
         if (!res.ok) return;
         const data = (await res.json()) as { hcaptchaSiteKey?: string | null };
         if (active && typeof data.hcaptchaSiteKey === 'string' && data.hcaptchaSiteKey) {
@@ -113,7 +114,7 @@ export default function LoginPage() {
 
     const loadPublicSettings = async () => {
       try {
-        const res = await fetch('/api/system-settings/public', { cache: 'no-store' });
+        const res = await fetch(apiPaths.systemSettingsPublic(), { cache: 'no-store' });
         if (!res.ok) return;
         const data = (await res.json()) as { allowSignup?: boolean };
         if (!active) return;
@@ -371,7 +372,7 @@ export default function LoginPage() {
                 <InputGroup
                   id="login-email"
                   label="Email"
-				  labelClassName="text-gray-800"
+                  labelClassName="text-gray-800"
                   name="login-email"
                   required
                   requiredMark
@@ -384,7 +385,7 @@ export default function LoginPage() {
 
                 <InputGroup
                   label="Password"
-				  labelClassName="text-gray-800"
+                  labelClassName="text-gray-800"
                   name="login-password"
                   required
                   requiredMark

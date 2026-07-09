@@ -21,12 +21,12 @@ beforeEach(() => {
 });
 
 describe('GET /api/system-settings', () => {
-  it('returns 403 when not authorized', async () => {
+  it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
     const res = await GET();
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('returns 403 for a non-privileged role', async () => {
@@ -112,7 +112,7 @@ describe('GET /api/system-settings', () => {
 });
 
 describe('PUT /api/system-settings', () => {
-  it('returns 403 when not authorized', async () => {
+  it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
     const req = new Request('http://localhost/api/system-settings', {
@@ -122,7 +122,7 @@ describe('PUT /api/system-settings', () => {
 
     const res = await PUT(req);
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('returns 400 for invalid JSON body', async () => {
@@ -304,7 +304,9 @@ describe('PUT /api/system-settings', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     okUpsert();
 
-    const res = await PUT(putBody({ hcaptchaSiteKey: ' site-1 ', hcaptchaSecretKey: ' secret-1 ' }));
+    const res = await PUT(
+      putBody({ hcaptchaSiteKey: ' site-1 ', hcaptchaSecretKey: ' secret-1 ' }),
+    );
 
     expect(res.status).toBe(200);
     const call = prismaMock.systemSettings.upsert.mock.calls[0][0];
@@ -471,7 +473,11 @@ describe('PUT /api/system-settings', () => {
 
   it('never logs the hCaptcha secret value, only that it changed', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
-    prismaMock.systemSettings.findUnique.mockResolvedValue({ id: 1, timezone: 'UTC', maxUploadSizeMb: 25 });
+    prismaMock.systemSettings.findUnique.mockResolvedValue({
+      id: 1,
+      timezone: 'UTC',
+      maxUploadSizeMb: 25,
+    });
     okUpsert();
 
     const res = await PUT(putBody({ hcaptchaSecretKey: 'super-secret-value' }));
@@ -511,5 +517,131 @@ describe('PUT /api/system-settings', () => {
     const data = auditMock.mock.calls[0][2] as { userId: string; action: string };
     expect(data.userId).toBe('u9');
     expect(data.action).toBe('SYSTEM_SETTINGS_UPDATE_DENIED');
+  });
+
+  it('clamps and persists login lockout policy fields when provided', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    okUpsert();
+
+    const res = await PUT(putBody({ loginMaxAttempts: 99_999, loginLockoutMinutes: 0 }));
+
+    expect(res.status).toBe(200);
+    const call = prismaMock.systemSettings.upsert.mock.calls[0][0];
+    expect(call.update.loginMaxAttempts).toBeDefined();
+    expect(call.update.loginLockoutMinutes).toBeDefined();
+    expect(call.create.loginMaxAttempts).toBeDefined();
+  });
+
+  it('persists backup schedule fields when provided', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    okUpsert();
+
+    const res = await PUT(
+      putBody({
+        backupEnabled: false,
+        backupHour: 99,
+        backupRetentionDays: 0,
+        activityLogRetentionDays: 999_999,
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const call = prismaMock.systemSettings.upsert.mock.calls[0][0];
+    expect(call.update.backupEnabled).toBe(false);
+    expect(call.update.backupHour).toBeDefined();
+    expect(call.update.backupRetentionDays).toBeDefined();
+    expect(call.update.activityLogRetentionDays).toBeDefined();
+  });
+
+  it('returns 500 and logs an error when the upsert fails', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.systemSettings.findUnique.mockResolvedValue(null);
+    prismaMock.systemSettings.upsert.mockRejectedValueOnce(new Error('write failed'));
+
+    const res = await PUT(putBody({}));
+
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).toBe('Failed to update settings');
+    expect(auditMock).toHaveBeenCalledTimes(1);
+    const data = auditMock.mock.calls[0][2] as { action: string; severity: string };
+    expect(data.action).toBe('SYSTEM_SETTINGS_UPDATE_ERROR');
+    expect(data.severity).toBe('ERROR');
+  });
+
+  it('treats a missing timezone as invalid (empty-string fallback)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+
+    const req = new Request('http://localhost/api/system-settings', {
+      method: 'PUT',
+      body: JSON.stringify({ maxUploadSizeMb: 10 }),
+    });
+
+    const res = await PUT(req);
+
+    // No timezone -> String(undefined ?? '') === '' -> not a COMMON_TIMEZONE -> 400.
+    expect(res.status).toBe(400);
+  });
+
+  it('coerces a non-numeric maxUploadSizeMb to the clamped minimum', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    okUpsert();
+
+    const req = new Request('http://localhost/api/system-settings', {
+      method: 'PUT',
+      body: JSON.stringify({ timezone: 'UTC', maxUploadSizeMb: 'not-a-number' }),
+    });
+
+    const res = await PUT(req);
+
+    expect(res.status).toBe(200);
+    const call = prismaMock.systemSettings.upsert.mock.calls[0][0];
+    // Non-finite -> 0 -> clamped up to the minimum of 1.
+    expect(call.update.maxUploadSizeMb).toBe(1);
+  });
+
+  it('persists the remaining submission queue fields when provided', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    okUpsert();
+
+    const res = await PUT(
+      putBody({ submissionResubmitCooldownMs: 1234, submissionMaxAttempts: 7 }),
+    );
+
+    expect(res.status).toBe(200);
+    const call = prismaMock.systemSettings.upsert.mock.calls[0][0];
+    expect(call.update.submissionResubmitCooldownMs).toBeDefined();
+    expect(call.update.submissionMaxAttempts).toBeDefined();
+  });
+
+  it('returns 500 with "unknown error" when a non-Error value is thrown by upsert', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.systemSettings.findUnique.mockResolvedValue(null);
+    prismaMock.systemSettings.upsert.mockRejectedValueOnce('a plain string');
+
+    const res = await PUT(putBody({}));
+
+    expect(res.status).toBe(500);
+    const data = auditMock.mock.calls[0][2] as { metadata: { error: string } };
+    expect(data.metadata.error).toBe('unknown error');
+  });
+
+  it('still returns 200 when the audit log itself throws (error swallowed)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.systemSettings.findUnique.mockResolvedValue({
+      id: 1,
+      timezone: 'UTC',
+      maxUploadSizeMb: 25,
+    });
+    prismaMock.systemSettings.upsert.mockResolvedValue({
+      id: 1,
+      timezone: 'America/New_York',
+      maxUploadSizeMb: 25,
+    });
+    auditMock.mockRejectedValueOnce(new Error('log sink down'));
+
+    const res = await PUT(putBody({ timezone: 'America/New_York' }));
+
+    expect(res.status).toBe(200);
   });
 });

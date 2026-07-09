@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useCallback, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { fetchJson } from '@/lib/query-fetch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import pkg from '../../../../package.json';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatDateTimeInTimeZone, formatTimeInTimeZone } from '@/lib/date';
+import { apiPaths } from '@/lib/api-paths';
 
 type IpAddr = { iface?: string; address?: string; family?: string };
 type CpuInfo = { model?: string; speed?: number };
@@ -410,7 +412,6 @@ export default function SystemStatusClient() {
   const { timezone } = useEffectiveTimezone();
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [deep, setDeep] = useState(false);
-  const [deletingFiles, setDeletingFiles] = useState<Record<string, boolean>>({});
 
   // Live system status, cached per `deep` toggle. Auto-refresh drives the query's
   // own polling interval, replacing the old manual setInterval loop.
@@ -423,7 +424,7 @@ export default function SystemStatusClient() {
   } = useQuery({
     queryKey: ['admin', 'status', deep],
     queryFn: async () => {
-      const r = await fetch(`/api/admin/status${deep ? '?deep=1' : ''}`, { cache: 'no-store' });
+      const r = await fetch(apiPaths.admin.status({ deep }), { cache: 'no-store' });
       if (!r.ok) throw new Error('Failed to fetch status');
       return (await r.json()) as StatusResponse;
     },
@@ -438,33 +439,36 @@ export default function SystemStatusClient() {
   const refreshing = isFetching;
   const lastUpdated = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
 
-  const handleDeleteAbandonedFile = useCallback(
-    async (category: string, fileName: string) => {
-      const key = `${category}/${fileName}`;
-      if (deletingFiles[key]) return;
-      const ok = window.confirm(`Delete abandoned file "${fileName}"?`);
-      if (!ok) return;
-
-      setDeletingFiles((prev) => ({ ...prev, [key]: true }));
-      try {
-        const res = await fetch('/api/admin/status/abandoned-files', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ category, fileName }),
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => null);
-          throw new Error(err?.error || 'Failed to delete file');
-        }
-        await refetch();
-      } catch (err) {
-        console.error('Delete abandoned file error:', err);
-        window.alert(err instanceof Error ? err.message : 'Failed to delete file');
-      } finally {
-        setDeletingFiles((prev) => ({ ...prev, [key]: false }));
-      }
+  const {
+    mutate: mutateDeleteFile,
+    isPending: isDeletingFile,
+    variables: deletingFileVars,
+  } = useMutation({
+    mutationFn: (vars: { category: string; fileName: string }) =>
+      fetchJson(apiPaths.admin.abandonedFiles(), {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(vars),
+      }),
+    onSuccess: () => {
+      // A file was removed — re-pull the status snapshot (which recomputes the
+      // abandoned-file report).
+      void refetch();
     },
-    [deletingFiles, refetch],
+    onError: (err) => {
+      console.error('Delete abandoned file error:', err);
+      window.alert(err instanceof Error ? err.message : 'Failed to delete file');
+    },
+  });
+
+  const handleDeleteAbandonedFile = useCallback(
+    (category: string, fileName: string) => {
+      // One destructive delete at a time (the button also disables while pending).
+      if (isDeletingFile) return;
+      if (!window.confirm(`Delete abandoned file "${fileName}"?`)) return;
+      mutateDeleteFile({ category, fileName });
+    },
+    [isDeletingFile, mutateDeleteFile],
   );
 
   const dbOk = status?.database?.ok ?? false;
@@ -1061,8 +1065,10 @@ export default function SystemStatusClient() {
                   </div>
                   <ul className="max-h-56 overflow-auto px-3 py-2 text-xs">
                     {status.abandonedFiles.samples.map((f, i) => {
-                      const key = `${f.category}/${f.fileName}`;
-                      const isDeleting = deletingFiles[key];
+                      const isDeleting =
+                        isDeletingFile &&
+                        deletingFileVars?.category === f.category &&
+                        deletingFileVars?.fileName === f.fileName;
                       return (
                         <li
                           key={`${f.category}-${f.fileName}-${i}`}

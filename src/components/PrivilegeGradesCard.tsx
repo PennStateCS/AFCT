@@ -16,12 +16,13 @@ import { formatTimeInTimeZone } from '@/lib/date';
 import { GradesLmsExportDialog } from '@/components/dialogs/GradesLmsExportDialog';
 import { buildLmsGradesCsv, type LmsPlatform } from '@/lib/lms-grade-export';
 import { useSession } from 'next-auth/react';
+import { apiPaths } from '@/lib/api-paths';
 
 type StudentRow = {
   id: string;
   email: string;
-  firstName?: string,
-  lastName?: string,
+  firstName?: string;
+  lastName?: string;
   [key: string]: unknown;
 };
 
@@ -69,7 +70,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
   const gradesQuery = useQuery<GradesData>({
     queryKey: ['course', courseId, 'grades'],
     queryFn: async () => {
-      const res = await fetch(`/api/courses/${courseId}/grades`);
+      const res = await fetch(apiPaths.courseGrades(courseId));
       if (!res.ok) throw new Error((await res.json())?.error || 'Failed to load grades');
       const body = (await res.json()) as GradesResponse;
 
@@ -151,14 +152,19 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
 
   const exportGrades = useCallback(
     (platform: LmsPlatform, assignmentIds: string[]) => {
-      const selectedForExport = assignments.filter((assignment) => assignmentIds.includes(assignment.id));
+      const selectedForExport = assignments.filter((assignment) =>
+        assignmentIds.includes(assignment.id),
+      );
       if (!selectedForExport) {
         showToast.error('Please select an assignment to export.');
         return;
       }
 
-     //const exportAssignments = [{ id: selectedForExport.id, title: selectedForExport.title }];
-	  const exportAssignments = selectedForExport.map((assignment) => ({ id: assignment.id, title: assignment.title}));
+      //const exportAssignments = [{ id: selectedForExport.id, title: selectedForExport.title }];
+      const exportAssignments = selectedForExport.map((assignment) => ({
+        id: assignment.id,
+        title: assignment.title,
+      }));
       const { csvContent, filenamePrefix } = buildLmsGradesCsv(
         platform,
         students,
@@ -184,7 +190,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
       showToast.success(`Grades exported for ${platform}`);
 
       // Record the export in the audit log (best-effort; never block the download).
-      void fetch(`/api/courses/${courseId}/grades`, {
+      void fetch(apiPaths.courseGrades(courseId), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -213,7 +219,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
           return (
             <Avatar className="h-10 w-10">
               <AvatarImage
-                src={user.avatar ? `/api/uploads/pfps/${user.avatar}` : undefined}
+                src={user.avatar ? apiPaths.files.pfp(String(user.avatar)) : undefined}
                 alt={`${user.firstName} ${user.lastName}`}
               />
               <AvatarFallback className="bg-secondary text-secondary-foreground">
@@ -265,7 +271,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
               <span className="text-sm">
                 {val === null || val === undefined ? '-' : String(val)}
               </span>
-              <span className="text-sm text-muted-foreground">
+              <span className="text-muted-foreground text-sm">
                 {max === null || max === undefined ? '/-' : `/${String(max)}`}
               </span>
             </button>

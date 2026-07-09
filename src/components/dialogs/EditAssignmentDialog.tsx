@@ -20,6 +20,7 @@ import { useEffect, useMemo } from 'react';
 
 import { useForm, Controller } from 'react-hook-form';
 import { showToast } from '@/lib/toast';
+import { apiPaths } from '@/lib/api-paths';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 
@@ -203,7 +204,7 @@ export function EditAssignmentDialog({
     };
 
     try {
-      const res = await fetch(`/api/assignments/${assignment.id}`, {
+      const res = await fetch(apiPaths.assignment(assignment.courseId, assignment.id), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -399,11 +400,11 @@ export function EditAssignmentDialog({
               title={
                 !isValid
                   ? 'Fix validation errors to save'
-                    : isSubmitting
-                      ? 'Already submitting'
-                      : courseIsArchived
-                        ? 'Course is archived'
-                        : undefined
+                  : isSubmitting
+                    ? 'Already submitting'
+                    : courseIsArchived
+                      ? 'Course is archived'
+                      : undefined
               }
             >
               {isSubmitting ? 'Saving…' : 'Save Changes'}
@@ -414,4 +415,3 @@ export function EditAssignmentDialog({
     </Dialog>
   );
 }
-

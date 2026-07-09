@@ -9,7 +9,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { getQueueSettings } from '@/lib/eval-config';
 import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
-import { canAccessCourse } from '@/lib/permissions';
+import { canAccessCourse, canManageCourse } from '@/lib/permissions';
 
 /**
  * Submits a student's solution file for one assignment problem (multipart/form-data)
@@ -139,6 +139,7 @@ export async function POST(req: NextRequest) {
       dueDate: true,
       allowLateSubmissions: true,
       lateCutoff: true,
+      isPublished: true,
     },
   });
 
@@ -186,6 +187,30 @@ export async function POST(req: NextRequest) {
       },
     });
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  // Students may only submit to a published assignment. Staff (course FACULTY/TA
+  // or a system admin) may submit to an unpublished one (e.g. to test it). We
+  // return 404 rather than 403 so an unpublished assignment stays invisible to a
+  // student — the same treatment the read paths give it.
+  if (!assignment.isPublished && !(await canManageCourse(session.user, courseId))) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session.user.id,
+      action: 'SUBMISSION_UNPUBLISHED_ASSIGNMENT',
+      severity: 'SECURITY',
+      category: 'SUBMISSION',
+      courseId,
+      assignmentId,
+      problemId,
+      metadata: {
+        userId: session.user.id,
+        courseId,
+        assignmentId,
+        problemId,
+        error: 'Submission to an unpublished assignment by a non-staff user.',
+      },
+    });
+    return NextResponse.json({ error: 'Assignment not found.' }, { status: 404 });
   }
 
   // Rate limit: enforce a short cooldown between submissions to the same problem
@@ -435,7 +460,7 @@ export async function POST(req: NextRequest) {
         problemId: problemId,
         submissionId: submission.id,
         fileName: fileName,
-        status: "PENDING",
+        status: 'PENDING',
       },
     });
 
@@ -464,7 +489,7 @@ export async function POST(req: NextRequest) {
         assignmentId: assignmentId,
         problemId: problemId,
         error: error instanceof Error ? error.message : String(error),
-        status: "FAILED",
+        status: 'FAILED',
       },
     });
 

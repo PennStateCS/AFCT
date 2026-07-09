@@ -21,14 +21,14 @@ beforeEach(() => {
 });
 
 describe('GET /api/courses/[id]/students', () => {
-  it('returns 403 when unauthorized', async () => {
+  it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
     const res = await GET(new Request('http://localhost/api/courses/c1/students'), {
       params: Promise.resolve({ id: 'c1' }),
     });
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('returns only students (STUDENT filtered in the query)', async () => {
@@ -53,5 +53,18 @@ describe('GET /api/courses/[id]/students', () => {
     expect(prismaMock.roster.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { courseId: 'c1', role: 'STUDENT' } }),
     );
+  });
+
+  it('returns 500 when the query throws', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.roster.findMany.mockRejectedValue(new Error('db down'));
+
+    const res = await GET(new Request('http://localhost/api/courses/c1/students'), {
+      params: Promise.resolve({ id: 'c1' }),
+    });
+
+    expect(res.status).toBe(500);
+    consoleSpy.mockRestore();
   });
 });

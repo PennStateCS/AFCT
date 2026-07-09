@@ -15,6 +15,13 @@ declare module 'next-auth' {
       image?: string;
       ipAddress?: string;
       userAgent?: string;
+      /**
+       * True when the account is disabled or no longer exists. The session
+       * callback sets this from the DB on every request; the auth wrappers reject
+       * a session whose user is inactive, so a disabled/deleted user loses access
+       * without waiting for the JWT to expire.
+       */
+      inactive?: boolean;
     } & DefaultSession['user'];
 
     ipAddress?: string;

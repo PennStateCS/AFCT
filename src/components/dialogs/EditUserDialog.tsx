@@ -25,6 +25,7 @@ import type { User } from '@prisma/client';
 import { UpdateUserSchema, type UpdateUserRaw, type UpdateUserInput } from '@/schemas/user';
 import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import { apiPaths } from '@/lib/api-paths';
 
 type EditUserDialogProps = {
   user: User;
@@ -40,7 +41,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
   const viewerIsAdmin = Boolean(session?.user?.isAdmin);
   // Local preview state (keep separate from RHF file)
   const [avatarPreview, setAvatarPreview] = useState<string>(
-    user.avatar ? `/api/uploads/pfps/${user.avatar}` : '',
+    user.avatar ? apiPaths.files.pfp(user.avatar) : '',
   );
   const [serverTimezone, setServerTimezone] = useState('UTC');
 
@@ -83,7 +84,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
         keepValues: true,
       });
       // Reset preview from current user
-      setAvatarPreview(user.avatar ? `/api/uploads/pfps/${user.avatar}` : '');
+      setAvatarPreview(user.avatar ? apiPaths.files.pfp(user.avatar) : '');
     } else {
       reset(defaults, {
         keepDirty: false,
@@ -157,7 +158,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
     // Only admins can set this; the backend ignores it from non-admins regardless.
     if (viewerIsAdmin) formData.append('isAdmin', parsed.isAdmin ? 'true' : 'false');
 
-    const res = await fetch(`/api/users/${user.id}`, {
+    const res = await fetch(apiPaths.user(user.id), {
       method: 'PATCH',
       body: formData,
     });
@@ -369,11 +370,7 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
             <Button
               type="submit"
               disabled={!isValid || isSubmitting}
-              title={
-                !isValid
-                  ? 'Fix validation errors to save'
-                    : undefined
-              }
+              title={!isValid ? 'Fix validation errors to save' : undefined}
             >
               {isSubmitting ? 'Saving…' : 'Save Changes'}
             </Button>

@@ -22,6 +22,7 @@ import { z } from 'zod';
 
 // ✅ Import assignment schemas directly to avoid barrel/cycle issues
 import { CreateAssignmentFormSchema } from '@/schemas/assignment';
+import { apiPaths } from '@/lib/api-paths';
 
 type FormValues = z.infer<typeof CreateAssignmentFormSchema>; // strings for datetime-local
 
@@ -173,7 +174,7 @@ export function CreateAssignmentDialog({
       ...formData,
     };
 
-    const res = await fetch('/api/assignments', {
+    const res = await fetch(apiPaths.courseAssignments(courseId), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),

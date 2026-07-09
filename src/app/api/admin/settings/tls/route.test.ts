@@ -118,4 +118,155 @@ describe('TLS route actions', () => {
     expect(res.status).toBe(500);
     expect(lastAudit().action).toBe('TLS_CERT_ERROR');
   });
+
+  it('GET returns the current cert info plus the pending-CSR flag for an admin', async () => {
+    authMock.mockResolvedValue(admin);
+    tls.readCertInfo.mockReturnValueOnce({ installed: true, subject: 'CN=current' });
+    tls.hasPendingCsr.mockReturnValueOnce(true);
+
+    const res = await GET();
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual({ installed: true, subject: 'CN=current', pendingCsr: true });
+  });
+
+  it('returns 400 for an invalid JSON body', async () => {
+    authMock.mockResolvedValue(admin);
+
+    const req = new Request('http://localhost/api/system-settings/tls', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: 'not-json',
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('Invalid JSON body');
+  });
+
+  it('installs a signed certificate and logs TLS_CERT_INSTALLED (csr-signed)', async () => {
+    authMock.mockResolvedValue(admin);
+
+    const res = await POST(post({ action: 'install-signed', cert: 'SIGNED-CERT', chain: 'CHAIN' }));
+
+    expect(res.status).toBe(200);
+    expect(tls.installSignedCert).toHaveBeenCalledWith('SIGNED-CERT', 'CHAIN');
+    const audit = lastAudit();
+    expect(audit.action).toBe('TLS_CERT_INSTALLED');
+    expect(audit.metadata.method).toBe('csr-signed');
+  });
+
+  it('installs an uploaded cert+key via the default install action', async () => {
+    authMock.mockResolvedValue(admin);
+
+    const res = await POST(post({ cert: 'CERT', key: 'KEY' }));
+
+    expect(res.status).toBe(200);
+    expect(tls.installCert).toHaveBeenCalledWith('CERT', 'KEY', undefined);
+    const audit = lastAudit();
+    expect(audit.action).toBe('TLS_CERT_INSTALLED');
+    expect(audit.metadata.method).toBe('upload');
+  });
+
+  it('still succeeds when the audit log itself throws (error swallowed)', async () => {
+    authMock.mockResolvedValue(admin);
+    auditMock.mockRejectedValueOnce(new Error('log sink down'));
+
+    const res = await POST(post({ action: 'self-signed', commonName: 'afct.local' }));
+
+    expect(res.status).toBe(200);
+  });
+
+  it('passes altNames through to CSR generation when provided as an array', async () => {
+    authMock.mockResolvedValue(admin);
+
+    const res = await POST(
+      post({ action: 'generate-csr', commonName: 'afct.local', altNames: ['a.local', 'b.local'] }),
+    );
+
+    expect(res.status).toBe(200);
+    const audit = lastAudit();
+    expect(audit.metadata.altNames).toEqual(['a.local', 'b.local']);
+  });
+
+  it('defaults cert/key to empty strings when omitted on the install actions', async () => {
+    authMock.mockResolvedValue(admin);
+    // Full CertInfo so certMeta records every field (exercises the non-null sides).
+    tls.installCert.mockReturnValueOnce({
+      installed: true,
+      subject: 'CN=x',
+      issuer: 'CN=ca',
+      validTo: '2030-01-01',
+      selfSigned: false,
+    });
+
+    // No cert/key in the body -> installCert('', '', undefined).
+    const installRes = await POST(post({ action: 'install' }));
+    expect(installRes.status).toBe(200);
+    expect(tls.installCert).toHaveBeenCalledWith('', '', undefined);
+
+    // No cert in the body -> installSignedCert('', undefined).
+    const signedRes = await POST(post({ action: 'install-signed' }));
+    expect(signedRes.status).toBe(200);
+    expect(tls.installSignedCert).toHaveBeenCalledWith('', undefined);
+  });
+
+  it('records null cert metadata when the CertInfo omits every detail field', async () => {
+    authMock.mockResolvedValue(admin);
+    // A bare CertInfo -> certMeta coalesces each missing field to null.
+    tls.installCert.mockReturnValueOnce({ installed: true });
+
+    const res = await POST(post({ action: 'install', cert: 'C', key: 'K' }));
+
+    expect(res.status).toBe(200);
+    const audit = lastAudit();
+    expect(audit.metadata).toMatchObject({
+      subject: null,
+      issuer: null,
+      validTo: null,
+      selfSigned: null,
+    });
+  });
+
+  it('records "install" as the attempted action when none is supplied (rejected cert)', async () => {
+    authMock.mockResolvedValue(admin);
+    tls.installCert.mockImplementationOnce(() => {
+      throw new CertValidationError('bad cert');
+    });
+
+    // No action field -> falls through to the default install path.
+    const res = await POST(post({ cert: 'CERT', key: 'KEY' }));
+
+    expect(res.status).toBe(400);
+    expect(lastAudit().metadata.attempted).toBe('install');
+  });
+
+  it('records "install" as the attempted action when none is supplied (unexpected error)', async () => {
+    authMock.mockResolvedValue(admin);
+    tls.installCert.mockImplementationOnce(() => {
+      throw new Error('boom');
+    });
+
+    const res = await POST(post({ cert: 'CERT', key: 'KEY' }));
+
+    expect(res.status).toBe(500);
+    const audit = lastAudit();
+    expect(audit.action).toBe('TLS_CERT_ERROR');
+    expect(audit.metadata.attempted).toBe('install');
+  });
+
+  it('logs "unknown error" when a non-Error value is thrown', async () => {
+    authMock.mockResolvedValue(admin);
+    tls.generateSelfSigned.mockImplementationOnce(() => {
+      throw 'a plain string';
+    });
+
+    const res = await POST(post({ action: 'self-signed', commonName: 'x' }));
+
+    expect(res.status).toBe(500);
+    expect(lastAudit().metadata.error).toBe('unknown error');
+  });
 });

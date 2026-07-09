@@ -14,13 +14,15 @@ import {
 
 import { formatDateTimeInTimeZone } from '@/lib/date';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import { apiPaths } from '@/lib/api-paths';
+import { queryKeys } from '@/lib/query-keys';
+import { fetchJson } from '@/lib/query-fetch';
 
 export type StudentNavigatorStudent = {
   id: string;
   firstName?: string | null;
   lastName?: string | null;
 };
-
 
 export type StudentNavigatorProps = {
   students: StudentNavigatorStudent[];
@@ -30,6 +32,7 @@ export type StudentNavigatorProps = {
   onNext: () => void;
   gradeStatuses?: Record<string, boolean | undefined>;
   assignmentTotals?: { earned: number; available: number };
+  courseId: string;
   assignmentId: string;
 };
 
@@ -41,6 +44,7 @@ export default function StudentNavigator({
   onNext,
   gradeStatuses,
   assignmentTotals,
+  courseId,
   assignmentId,
 }: StudentNavigatorProps) {
   const { timezone } = useEffectiveTimezone();
@@ -49,23 +53,24 @@ export default function StudentNavigator({
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   // Assignment shell — cached and shared with StudentAssignmentView via the same
-  // ['assignment', assignmentId] key, so the two dedupe/share this read.
+  // key (queryKeys.assignment.shell), so the two dedupe/share this read.
   const assignmentQuery = useQuery<{
     dueDate?: string | Date;
     allowLateSubmissions?: boolean;
     lateCutoff?: string | Date | null;
   }>({
-    queryKey: ['assignment', assignmentId],
-    queryFn: async () => {
-      const res = await fetch(`/api/assignments/${assignmentId}`);
-      if (!res.ok) throw new Error('Failed to fetch assignment');
-      return res.json();
-    },
+    queryKey: queryKeys.assignment.shell(courseId, assignmentId),
+    queryFn: () =>
+      fetchJson<{
+        dueDate?: string | Date;
+        allowLateSubmissions?: boolean;
+        lateCutoff?: string | Date | null;
+      }>(apiPaths.assignment(courseId, assignmentId, { view: 'problems' })),
     enabled: !!assignmentId,
     staleTime: 30_000,
   });
 
-  const assignment = assignmentQuery.isError ? null : assignmentQuery.data ?? null;
+  const assignment = assignmentQuery.isError ? null : (assignmentQuery.data ?? null);
   // Only surface the loading label when a fetch is actually in flight; a disabled
   // query (no assignmentId) reports isPending but should render nothing here.
   const loadingAssignment = !!assignmentId && assignmentQuery.isPending;
@@ -137,7 +142,8 @@ export default function StudentNavigator({
           {assignmentTotals ? (
             <span>
               <span className="text-muted-foreground mx-2">•</span>
-              {formatPoints(assignmentTotals.earned)} / {formatPoints(assignmentTotals.available)} pts
+              {formatPoints(assignmentTotals.earned)} / {formatPoints(assignmentTotals.available)}{' '}
+              pts
             </span>
           ) : null}
         </span>
