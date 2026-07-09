@@ -256,7 +256,10 @@ export function CreateProblemDialog({
       }
 
       formData.append('file', values.file);
-      const res = await fetch(apiPaths.problems(), { method: 'POST', body: formData });
+      const res = await fetch(apiPaths.courseProblems(values.courseId), {
+        method: 'POST',
+        body: formData,
+      });
 
       if (res.ok) {
         const created = await res.json().catch(() => null);

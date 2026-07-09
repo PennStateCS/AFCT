@@ -1006,11 +1006,17 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put?: never;
+        /**
+         * Update a course problem
+         * @description Updates a problem within a course (multipart/form-data). Course staff (faculty or  TAs) or a system admin. The problem must belong to the course in the path. Sending a  new file replaces the stored solution — it's structure-validated and size-checked  first, and the previous file is removed. Omitting the file keeps the current one.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/problems/[pid]/route.ts)
+         */
+        put: operations["putCoursesByIdProblemsByPid"];
         post?: never;
         /**
          * Delete a course problem
-         * @description Deletes a problem within a course, unconditionally cascading its submissions and  assignment links first, then removing the solution file. Course staff (faculty or  TAs) or a system admin. The problem must belong to the course in the path. Unlike  DELETE /api/problems/[id], this does not refuse when the problem is used by an  assignment — it removes those links.
+         * @description Deletes a problem within a course and its solution file. Course staff (faculty or  TAs) or a system admin. The problem must belong to the course in the path. Refused  while the problem is still attached to any assignment (problems are shared across  assignments many-to-many); otherwise its submissions are removed first, then the  record and file.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/problems/[pid]/route.ts)
          */
@@ -1031,7 +1037,7 @@ export interface paths {
         put?: never;
         /**
          * Create a problem in a course
-         * @description Creates a problem in a course from an uploaded solution file. Course staff  (faculty or TAs) or a system admin. The file is size-checked and stored under a generated name;  `maxStates` applies to FA/PDA and `isDeterministic` to FA. (Sibling of  POST /api/problems, scoped to the course in the path.)
+         * @description Creates a problem in a course from an uploaded solution file (multipart/form-data).  Course staff (faculty or TAs) or a system admin. The file's XML structure is  validated against the problem type before it's written to disk, and it's  size-checked against the system upload limit. `maxStates` applies to FA/PDA and  `isDeterministic` to FA. The course comes from the path.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/problems/route.ts)
          */
@@ -1604,38 +1610,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/problems/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Update a problem
-         * @description Updates a problem (multipart/form-data). Course staff (faculty or TAs) or a system  admin. Sending a new file replaces the stored solution — it's structure-validated  and size-checked first, and the previous file is removed. Omitting the file keeps  the current one.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/problems/[id]/route.ts)
-         */
-        put: operations["putProblemsById"];
-        post?: never;
-        /**
-         * Delete a problem
-         * @description Deletes a problem and its solution file. Course staff (faculty or TAs) or a system  admin. Refused while the problem is still attached to any assignment; otherwise its  submissions are removed first, then the record and file.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/problems/[id]/route.ts)
-         */
-        delete: operations["deleteProblemsById"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/problems/{id}/submissions": {
         parameters: {
             query?: never;
@@ -1654,30 +1628,6 @@ export interface paths {
         get: operations["getProblemsByIdSubmissions"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/problems": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Create a problem
-         * @description Creates a problem from an uploaded solution file (multipart/form-data). Course  staff (faculty or TAs) or a system admin. The file's XML structure is validated  against the problem type before it's written to disk, and it's size-checked against  the system upload limit. `maxStates` applies to FA/PDA and `isDeterministic` to FA.
-         *
-         *     **Auth:** required
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/problems/route.ts)
-         */
-        post: operations["postProblems"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5499,6 +5449,101 @@ export interface operations {
             };
         };
     };
+    putCoursesByIdProblemsByPid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                pid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    title: string;
+                    description?: string;
+                    type: string;
+                    maxPoints?: string;
+                    maxSubmissions?: string;
+                    maxStates?: string;
+                    /** @enum {string} */
+                    isDeterministic?: "true" | "false";
+                    /** @enum {string} */
+                    autograderEnabled?: "true" | "false";
+                    /**
+                     * Format: binary
+                     * @description Optional new solution file
+                     */
+                    file?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The updated problem. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing fields or the new file failed structure validation. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not course staff (faculty or TA) or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Problem not found in this course. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description File exceeds the system upload limit. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     deleteCoursesByIdProblemsByPid: {
         parameters: {
             query?: never;
@@ -5517,6 +5562,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Problem is still linked to an assignment. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
             };
             /** @description Not signed in. */
             401: {
@@ -5570,8 +5624,11 @@ export interface operations {
                 "multipart/form-data": {
                     title: string;
                     description?: string;
-                    /** @enum {string} */
-                    type: "PDA" | "RE" | "CFG" | "FA";
+                    /** @description Problem type (e.g. FA, PDA, RE, CFG) */
+                    type: string;
+                    assignmentId?: string;
+                    maxPoints?: string;
+                    maxSubmissions?: string;
                     /** @description FA/PDA only */
                     maxStates?: string;
                     /**
@@ -5579,7 +5636,12 @@ export interface operations {
                      * @enum {string}
                      */
                     isDeterministic?: "true" | "false";
-                    /** Format: binary */
+                    /** @enum {string} */
+                    autograderEnabled?: "true" | "false";
+                    /**
+                     * Format: binary
+                     * @description Solution definition (XML)
+                     */
                     file: string;
                 };
             };
@@ -5592,7 +5654,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Missing fields or file. */
+            /** @description Missing fields or the solution file failed structure validation. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -7370,148 +7432,6 @@ export interface operations {
             };
         };
     };
-    putProblemsById: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": {
-                    title: string;
-                    description?: string;
-                    type: string;
-                    courseId: string;
-                    maxPoints?: string;
-                    maxSubmissions?: string;
-                    maxStates?: string;
-                    /** @enum {string} */
-                    isDeterministic?: "true" | "false";
-                    /** @enum {string} */
-                    autograderEnabled?: "true" | "false";
-                    /**
-                     * Format: binary
-                     * @description Optional new solution file
-                     */
-                    file?: string;
-                };
-            };
-        };
-        responses: {
-            /** @description The updated problem. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Missing fields or the new file failed structure validation. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Caller is not course staff or a system admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Problem not found. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description File exceeds the system upload limit. */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    deleteProblemsById: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Problem deleted. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Problem is still linked to an assignment. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Caller is not course staff or a system admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Problem not found. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     getProblemsByIdSubmissions: {
         parameters: {
             query?: {
@@ -7556,87 +7476,6 @@ export interface operations {
             };
             /** @description Problem not found. */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    postProblems: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": {
-                    title: string;
-                    description?: string;
-                    /** @description Problem type (e.g. FA, PDA, RE, CFG) */
-                    type: string;
-                    courseId: string;
-                    assignmentId?: string;
-                    maxPoints?: string;
-                    maxSubmissions?: string;
-                    /** @description FA/PDA only */
-                    maxStates?: string;
-                    /**
-                     * @description FA only
-                     * @enum {string}
-                     */
-                    isDeterministic?: "true" | "false";
-                    /** @enum {string} */
-                    autograderEnabled?: "true" | "false";
-                    /**
-                     * Format: binary
-                     * @description Solution definition (XML)
-                     */
-                    file: string;
-                };
-            };
-        };
-        responses: {
-            /** @description The created problem. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Missing fields or the solution file failed structure validation. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Caller is not course staff or a system admin. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description File exceeds the system upload limit. */
-            413: {
                 headers: {
                     [name: string]: unknown;
                 };

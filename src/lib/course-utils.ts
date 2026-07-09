@@ -16,7 +16,7 @@ export async function deleteItem(target: DeleteTarget, courseId: string): Promis
       throw new Error(msg);
     }
   } else if (target.type === 'problem') {
-    const res = await fetch(apiPaths.problem(target.id), { method: 'DELETE' });
+    const res = await fetch(apiPaths.courseProblem(courseId, target.id), { method: 'DELETE' });
     if (!res.ok) {
       let msg = 'Failed to delete problem';
       try {

@@ -10,13 +10,18 @@ const prismaMock = vi.hoisted(() => ({
 const authMock = vi.hoisted(() => vi.fn());
 const activityLogMock = vi.hoisted(() => vi.fn());
 const uploadLimitMock = vi.hoisted(() => vi.fn());
+const validateMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 vi.mock('@/lib/upload-limits', () => ({ getSystemUploadLimit: uploadLimitMock }));
-vi.mock('fs/promises', () => ({ writeFile: vi.fn(), mkdir: vi.fn() }));
-vi.mock('uuid', () => ({ v4: vi.fn().mockReturnValue('uuid') }));
+vi.mock('@/app/utils/xmlStructureValidate', () => ({ validateStructureXML: validateMock }));
+vi.mock('fs', () => ({
+  default: { mkdirSync: vi.fn(), writeFileSync: vi.fn() },
+  mkdirSync: vi.fn(),
+  writeFileSync: vi.fn(),
+}));
 
 import { POST } from './route';
 
@@ -24,6 +29,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
   uploadLimitMock.mockResolvedValue({ maxBytes: 5 * 1024 * 1024, maxMb: 5 });
+  validateMock.mockReturnValue({ isValid: true });
 });
 
 describe('POST /api/courses/[id]/problems', () => {
@@ -103,5 +109,26 @@ describe('POST /api/courses/[id]/problems', () => {
     expect(res.status).toBe(201);
     expect(prismaMock.problem.create).toHaveBeenCalled();
     expect(activityLogMock).toHaveBeenCalled();
+  });
+
+  it('returns 400 when the solution file fails structure validation', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    validateMock.mockReturnValue({ isValid: false, error: 'bad structure' });
+
+    const formData = new FormData();
+    formData.set('title', 'Problem');
+    formData.set('type', 'FA');
+    formData.set('file', new File([new Uint8Array([1])], 'file.jff'));
+
+    const req = new NextRequest('http://localhost/api/courses/c1/problems', {
+      method: 'POST',
+      body: formData,
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(400);
+    expect(prismaMock.problem.create).not.toHaveBeenCalled();
   });
 });
