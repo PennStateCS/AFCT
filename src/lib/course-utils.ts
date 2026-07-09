@@ -2,9 +2,9 @@ import { FullCourse, DeleteTarget } from '@/types/course';
 import { Assignment, Problem, Course } from '@prisma/client';
 import { apiPaths } from '@/lib/api-paths';
 
-export async function deleteItem(target: DeleteTarget): Promise<void> {
+export async function deleteItem(target: DeleteTarget, courseId: string): Promise<void> {
   if (target.type === 'assignment') {
-    const res = await fetch(apiPaths.assignmentById(target.id), { method: 'DELETE' });
+    const res = await fetch(apiPaths.assignment(courseId, target.id), { method: 'DELETE' });
     if (!res.ok) {
       let msg = 'Failed to delete assignment';
       try {
@@ -109,10 +109,11 @@ export function updateCourseAfterProblemCreate(
 }
 
 export async function updateAssignmentPublishStatus(
+  courseId: string,
   assignmentId: string,
   isPublished: boolean,
 ): Promise<void> {
-  const res = await fetch(apiPaths.assignmentById(assignmentId), {
+  const res = await fetch(apiPaths.assignment(courseId, assignmentId), {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ isPublished }),
