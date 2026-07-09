@@ -3,7 +3,8 @@ import { notFound } from 'next/navigation';
 import CourseClient from './CourseClient';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { canAccessCourse } from '@/lib/permissions';
+import { getCourseRole } from '@/lib/permissions';
+import { toStudentSafeEnrolled } from '@/lib/course-format';
 
 export const metadata: Metadata = {
   title: 'Course',
@@ -16,19 +17,21 @@ type Props = {
 export default async function AdminCoursePage({ params }: Props) {
   const { id } = await params;
   const session = await auth();
-  const viewerId = session?.user?.id;
   const viewerIsAdmin = Boolean(session?.user?.isAdmin);
 
-  // Gate the server-side course load behind the same rule the API routes use
-  // (canAccessCourse: a system admin, or any enrolled member). Without this, a
-  // signed-in non-member who visits /dashboard/courses/<id> would receive the
-  // course's roster (names, emails, avatars), registration code, and counts in
-  // the SSR payload before any API-route check ran. Checking first also means we
-  // never load other users' data for a non-member, and a 404 avoids revealing
-  // whether the course exists.
-  if (!(await canAccessCourse(session?.user, id))) {
+  // Resolve the viewer's role first, then gate the load on it (a system admin or
+  // any enrolled member). Without this a signed-in non-member who visits
+  // /dashboard/courses/<id> would receive the course's roster (names, emails,
+  // avatars), registration code, and counts in the SSR payload before any
+  // API-route check ran; a 404 also avoids revealing whether the course exists.
+  const viewerRole = await getCourseRole(session?.user?.id, id);
+  if (!viewerIsAdmin && viewerRole === null) {
     notFound();
   }
+  // Only course staff (FACULTY/TA or admin) may see the full roster, including
+  // classmate emails. For a student, we don't even query peers' emails, and the
+  // roster is reduced to staff names + count-only placeholders below.
+  const isStaff = viewerIsAdmin || viewerRole === 'FACULTY' || viewerRole === 'TA';
 
   const course = await prisma.course.findUnique({
     where: { id },
@@ -48,8 +51,9 @@ export default async function AdminCoursePage({ params }: Props) {
               id: true,
               firstName: true,
               lastName: true,
-              email: true,
               avatar: true,
+              // Emails are only for staff; never queried for a student viewer.
+              email: isStaff,
             },
           },
         },
@@ -61,9 +65,10 @@ export default async function AdminCoursePage({ params }: Props) {
     notFound();
   }
 
-  const viewerRoster = viewerId
-    ? (course.roster.find((rosterEntry) => rosterEntry.user.id === viewerId) ?? null)
-    : null;
+  const enrolledMembers = course.roster.map((r) => ({ ...r.user, courseRole: r.role }));
+  const enrolled = isStaff
+    ? enrolledMembers.map((member) => ({ ...member, hasSubmissions: false }))
+    : toStudentSafeEnrolled(enrolledMembers);
 
   const initialCourse = {
     id: course.id,
@@ -81,13 +86,13 @@ export default async function AdminCoursePage({ params }: Props) {
     emptyStringNotation: course.emptyStringNotation,
     createdAt: course.createdAt,
     updatedAt: course.updatedAt,
-    enrolled: course.roster.map((r) => ({ ...r.user, courseRole: r.role, hasSubmissions: false })),
+    enrolled,
     assignments: [],
     problems: [],
     assignmentTotal: course._count.assignments,
     problemTotal: course._count.problems,
     rosterTotal: course._count.roster,
-    viewerRole: viewerRoster?.role ?? null,
+    viewerRole,
     viewerIsAdmin,
   };
 

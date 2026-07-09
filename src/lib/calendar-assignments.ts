@@ -24,14 +24,22 @@ export async function getAssignmentsForUserRange(params: {
   const staffCourseIds = new Set(
     rosterEntries.filter((r) => r.role === 'FACULTY' || r.role === 'TA').map((r) => r.courseId),
   );
+  const staffCourseIdsArr = courseIds.filter((id) => staffCourseIds.has(id));
+  const studentCourseIdsArr = courseIds.filter((id) => !staffCourseIds.has(id));
 
   const assignments = await prisma.assignment.findMany({
     where: {
-      courseId: { in: courseIds },
       dueDate: {
         gte: startDate,
         lte: endDate,
       },
+      // In courses where the viewer is staff, show every assignment; where they
+      // are a student, show only published ones — an unpublished assignment must
+      // not surface on the calendar (title/due date) before it's released.
+      OR: [
+        { courseId: { in: staffCourseIdsArr } },
+        { courseId: { in: studentCourseIdsArr }, isPublished: true },
+      ],
     },
     select: {
       id: true,
