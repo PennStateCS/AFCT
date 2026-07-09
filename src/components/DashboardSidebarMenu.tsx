@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { apiPaths } from '@/lib/api-paths';
 import { safeSignOut } from '@/lib/safe-signout';
+import { getCourseDateBucket } from '@/lib/course-status';
 
 import { ChangePasswordDialog } from './dialogs/ChangePasswordDialog';
 import { EditProfileDialog } from './dialogs/EditProfileDialog';
@@ -66,7 +67,18 @@ type Course = {
   code: string;
   isPublished: boolean;
   isArchived: boolean;
+  startDate: string;
+  endDate: string;
 };
+
+// The dated sidebar course sections, in display order. Archived courses are
+// excluded (they live on the Archived Courses page); each section is hidden when
+// it has no courses, and courses within a section are alphabetized by code.
+const COURSE_SECTIONS = [
+  { bucket: 'upcoming', label: 'Upcoming Courses' },
+  { bucket: 'current', label: 'Current Courses' },
+  { bucket: 'past', label: 'Past Courses' },
+] as const;
 
 // Static admin menu items (kept alphabetical by title)
 const adminMenu = [
@@ -137,8 +149,15 @@ export default function DashboardSidebarMenu() {
   };
 
   // The server (nav API) already scopes which courses are returned per the
-  // viewer's per-course role; here we only drop archived ones.
+  // viewer's per-course role; here we only drop archived ones (they live on the
+  // Archived Courses page), then bucket by date into the sidebar sections.
   const visibleCourses = courses.filter((c) => !c.isArchived);
+  const courseSections = COURSE_SECTIONS.map((section) => ({
+    ...section,
+    courses: visibleCourses
+      .filter((c) => getCourseDateBucket(c) === section.bucket)
+      .sort((a, b) => a.code.localeCompare(b.code)),
+  })).filter((section) => section.courses.length > 0);
   const isDev = process.env.NODE_ENV !== 'production';
   const resolvedAdminMenu = (
     isDev
@@ -216,88 +235,89 @@ export default function DashboardSidebarMenu() {
           </SidebarGroup>
         )}
 
-        {/* Courses menu */}
-        {!(collapsed && visibleCourses.length === 0) && (
-          <SidebarGroup>
-            <SidebarGroupLabel
-              aria-hidden={collapsed}
-              className={
-                collapsed
-                  ? 'hidden'
-                  : 'text-sidebar-foreground overflow-hidden text-sm whitespace-nowrap'
-              }
-            >
-              Current Courses
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {visibleCourses.length === 0 ? (
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      asChild
-                      aria-disabled={true}
-                      className={cn('text-sidebar-foreground/60 cursor-default')}
-                    >
-                      <div className={cn('flex w-full items-center gap-2')}>
-                        <Book className="h-4 w-4 shrink-0" />
-                        <span
-                          aria-hidden={collapsed}
-                          className={
-                            collapsed ? 'hidden' : 'overflow-hidden text-ellipsis whitespace-nowrap'
-                          }
-                        >
-                          No courses
-                        </span>
-                      </div>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ) : (
-                  visibleCourses.map((course) => (
-                    <SidebarMenuItem key={course.id}>
-                      <TooltipProvider delayDuration={100}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <SidebarMenuButton
-                              asChild
-                              isActive={pathname.startsWith(`/dashboard/courses/${course.id}`)}
-                              className={cn(menuButtonStyles)}
-                            >
-                              <Link
-                                href={`/dashboard/courses/${course.id}`}
-                                aria-label={`${course.code}: ${course.name}`}
-                                className="flex min-w-0 items-center gap-2"
-                              >
-                                <Book className="h-4 w-4 shrink-0" />
-                                <span
-                                  aria-hidden={collapsed}
-                                  className={
-                                    collapsed
-                                      ? 'hidden'
-                                      : 'overflow-hidden text-ellipsis whitespace-nowrap'
-                                  }
-                                >
-                                  {course.code}
-                                </span>
-                              </Link>
-                            </SidebarMenuButton>
-                          </TooltipTrigger>
-                          <TooltipContent
-                            side="right"
-                            hidden={!collapsed}
-                            className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
-                            sideOffset={10}
-                          >
-                            {course.code}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
+        {/* Course sections — bucketed by date; an empty section is omitted. */}
+        {courseSections.length === 0
+          ? !collapsed && (
+              <SidebarGroup>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        asChild
+                        aria-disabled={true}
+                        className={cn('text-sidebar-foreground/60 cursor-default')}
+                      >
+                        <div className={cn('flex w-full items-center gap-2')}>
+                          <Book className="h-4 w-4 shrink-0" />
+                          <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+                            No courses
+                          </span>
+                        </div>
+                      </SidebarMenuButton>
                     </SidebarMenuItem>
-                  ))
-                )}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )
+          : courseSections.map((section) => (
+              <SidebarGroup key={section.bucket}>
+                <SidebarGroupLabel
+                  aria-hidden={collapsed}
+                  className={
+                    collapsed
+                      ? 'hidden'
+                      : 'text-sidebar-foreground overflow-hidden text-sm whitespace-nowrap'
+                  }
+                >
+                  {section.label}
+                </SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {section.courses.map((course) => (
+                      <SidebarMenuItem key={course.id}>
+                        <TooltipProvider delayDuration={100}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <SidebarMenuButton
+                                asChild
+                                isActive={pathname.startsWith(`/dashboard/courses/${course.id}`)}
+                                className={cn(menuButtonStyles)}
+                              >
+                                <Link
+                                  href={`/dashboard/courses/${course.id}`}
+                                  aria-label={`${course.code}: ${course.name}`}
+                                  className="flex min-w-0 items-center gap-2"
+                                >
+                                  <Book className="h-4 w-4 shrink-0" />
+                                  <span
+                                    aria-hidden={collapsed}
+                                    className={
+                                      collapsed
+                                        ? 'hidden'
+                                        : 'overflow-hidden text-ellipsis whitespace-nowrap'
+                                    }
+                                  >
+                                    {course.code}
+                                  </span>
+                                </Link>
+                              </SidebarMenuButton>
+                            </TooltipTrigger>
+                            <TooltipContent
+                              side="right"
+                              hidden={!collapsed}
+                              className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
+                              sideOffset={10}
+                            >
+                              {course.code}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            ))}
 
         {/* Features */}
         <SidebarGroup>
@@ -353,19 +373,19 @@ export default function DashboardSidebarMenu() {
                 </TooltipProvider>
               </SidebarMenuItem>
 
-              {/* Previous Courses */}
-              <SidebarMenuItem key="features-previous-courses">
+              {/* Archived Courses */}
+              <SidebarMenuItem key="features-archived-courses">
                 <TooltipProvider delayDuration={100}>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <SidebarMenuButton
                         asChild
-                        isActive={pathname === '/dashboard/previous-courses'}
+                        isActive={pathname === '/dashboard/archived-courses'}
                         className={cn(menuButtonStyles)}
                       >
                         <Link
-                          href="/dashboard/previous-courses"
-                          aria-label="Previous Courses"
+                          href="/dashboard/archived-courses"
+                          aria-label="Archived Courses"
                           className="flex min-w-0 items-center gap-2"
                         >
                           <Library className="h-4 w-4 shrink-0" />
@@ -377,7 +397,7 @@ export default function DashboardSidebarMenu() {
                                 : 'overflow-hidden text-ellipsis whitespace-nowrap'
                             }
                           >
-                            Previous Courses
+                            Archived Courses
                           </span>
                         </Link>
                       </SidebarMenuButton>
@@ -388,7 +408,7 @@ export default function DashboardSidebarMenu() {
                       className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
                       sideOffset={10}
                     >
-                      Previous Courses
+                      Archived Courses
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>

@@ -5,10 +5,10 @@ import DashboardClient from '../DashboardClient';
 import { toStudentSafeEnrolled } from '@/lib/course-format';
 
 export const metadata: Metadata = {
-  title: 'Previous Courses',
+  title: 'Archived Courses',
 };
 
-export default async function AllCoursesPage() {
+export default async function ArchivedCoursesPage() {
   const session = await auth();
 
   if (!session?.user) {
@@ -21,14 +21,12 @@ export default async function AllCoursesPage() {
 
   const { id } = session.user;
 
-  // Get all courses for the user via roster entries
+  // The caller's archived courses (kept out of the dated sidebar sections).
   const rosterEntries = await prisma.roster.findMany({
     where: {
       userId: id,
       course: {
-        endDate: {
-          lt: new Date(),
-        },
+        isArchived: true,
       },
     },
     select: {
@@ -76,8 +74,8 @@ export default async function AllCoursesPage() {
     )
     .map((entry) => {
       const { course } = entry;
-      // A student must not receive classmate names/emails for a past course either;
-      // staff keep the full roster, students get staff names + count-only entries.
+      // A student must not receive classmate names/emails for an archived course
+      // either; staff keep the full roster, students get staff names + count-only.
       const isStaffHere = viewerIsAdmin || entry.role === 'FACULTY' || entry.role === 'TA';
       const enrolledMembers = course.roster.map((r) => ({ ...r.user, courseRole: r.role }));
 
@@ -93,7 +91,7 @@ export default async function AllCoursesPage() {
       <DashboardClient
         sessionUser={{ id, isAdmin: session.user.isAdmin ?? false }}
         courses={courses}
-        title={'Previous Courses'}
+        title={'Archived Courses'}
       />
     </div>
   );
