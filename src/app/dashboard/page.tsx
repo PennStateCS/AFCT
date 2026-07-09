@@ -65,23 +65,33 @@ export default async function DashboardPage() {
     },
   });
 
-  // Map courses and attach the user's role in each
+  // Map courses and attach the user's role in each. A student must not even see an
+  // unpublished course they're enrolled in (e.g. a faculty pre-enroll before
+  // release); staff/admin see theirs regardless of publish state.
   const viewerIsAdmin = Boolean(session.user.isAdmin);
-  const courses = rosterEntries.map((entry) => {
-    const { course } = entry;
-    // The viewer's role in THIS course decides roster visibility: staff see the
-    // members; a student must not receive classmate names, so their roster is
-    // reduced to staff names + count-only placeholders (the cards only show
-    // instructor/TA names and a staff-gated student count).
-    const isStaffHere = viewerIsAdmin || entry.role === 'FACULTY' || entry.role === 'TA';
-    const enrolledMembers = course.roster.map((r) => ({ ...r.user, courseRole: r.role }));
+  const courses = rosterEntries
+    .filter(
+      (entry) =>
+        viewerIsAdmin ||
+        entry.role === 'FACULTY' ||
+        entry.role === 'TA' ||
+        entry.course.isPublished,
+    )
+    .map((entry) => {
+      const { course } = entry;
+      // The viewer's role in THIS course decides roster visibility: staff see the
+      // members; a student must not receive classmate names, so their roster is
+      // reduced to staff names + count-only placeholders (the cards only show
+      // instructor/TA names and a staff-gated student count).
+      const isStaffHere = viewerIsAdmin || entry.role === 'FACULTY' || entry.role === 'TA';
+      const enrolledMembers = course.roster.map((r) => ({ ...r.user, courseRole: r.role }));
 
-    return {
-      ...course,
-      userRole: entry.role,
-      enrolled: isStaffHere ? enrolledMembers : toStudentSafeEnrolled(enrolledMembers),
-    };
-  });
+      return {
+        ...course,
+        userRole: entry.role,
+        enrolled: isStaffHere ? enrolledMembers : toStudentSafeEnrolled(enrolledMembers),
+      };
+    });
 
   const courseIds = courses.map((c) => c.id);
 

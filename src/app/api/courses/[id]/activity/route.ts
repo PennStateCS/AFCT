@@ -110,5 +110,7 @@ export const GET = withCourseAuth(
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
   },
-  { access: 'read', deniedAction: 'COURSE_ACTIVITY_ACCESS_DENIED' },
+  // Staff-only: the course activity feed exposes every member's events plus their
+  // names/emails, so students (who may only see their own data) must not read it.
+  { access: 'manage', deniedAction: 'COURSE_ACTIVITY_ACCESS_DENIED' },
 );

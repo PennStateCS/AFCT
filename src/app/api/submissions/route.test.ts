@@ -98,7 +98,7 @@ beforeEach(() => {
     lateCutoff: null,
     isPublished: true,
   });
-  prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+  prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
   prismaMock.submission.findFirst.mockResolvedValue(null);
   prismaMock.submission.create.mockResolvedValue({
     id: 'submission-1',
@@ -200,7 +200,7 @@ describe('POST /api/submissions', () => {
       isPublished: false,
     });
     // Enrolled student (roster role STUDENT): access passes, manage does not.
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
 
     const res = await POST(makeRequest(makeFormData()));
 

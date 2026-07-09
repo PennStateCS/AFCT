@@ -35,9 +35,20 @@ describe('GET /api/courses/[id]/[aid]/group-problems', () => {
     expect(res.status).toBe(401);
   });
 
-  it('returns groups + mappings and logs the view', async () => {
+  it('denies an enrolled STUDENT (staff-only)', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+
+    const res = await GET(
+      new NextRequest('http://localhost/api/courses/c1/assignments/a1/group-problems'),
+      { params: Promise.resolve({ id: 'c1', aid: 'a1' }) } as any,
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it('returns groups + mappings and logs the view', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.group.findMany.mockResolvedValue([{ id: 'g1', name: 'G1' }]);
     prismaMock.groupAssignmentProblem.findMany.mockResolvedValue([
       { assignmentId: 'a1', problemId: 'p1', groupId: 'g1' },
@@ -61,7 +72,7 @@ describe('GET /api/courses/[id]/[aid]/group-problems', () => {
 
   it('groups multiple problems mapped to the same group', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.group.findMany.mockResolvedValue([{ id: 'g1', name: 'G1' }]);
     // Two mappings for the same group exercises the "already-seen group" branch.
     prismaMock.groupAssignmentProblem.findMany.mockResolvedValue([
@@ -82,7 +93,7 @@ describe('GET /api/courses/[id]/[aid]/group-problems', () => {
   it('returns 500 when fetching group problems throws', async () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.group.findMany.mockRejectedValueOnce(new Error('db down'));
 
     const res = await GET(
@@ -96,7 +107,7 @@ describe('GET /api/courses/[id]/[aid]/group-problems', () => {
 
   it('still returns 200 when activity logging fails in GET', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.group.findMany.mockResolvedValue([{ id: 'g1', name: 'G1' }]);
     prismaMock.groupAssignmentProblem.findMany.mockResolvedValue([]);
     activityLogMock.mockRejectedValue(new Error('log failed'));

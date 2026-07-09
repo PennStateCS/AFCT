@@ -31,9 +31,25 @@ import { GET, POST } from './route';
 beforeEach(() => {
   vi.clearAllMocks();
   validationResponseMock.mockReturnValue({ status: 500 });
+  // GET + POST are admin-only; default to an admin session (denial tests override).
+  authMock.mockResolvedValue({ user: { id: 'admin', isAdmin: true } });
 });
 
 describe('GET /api/courses', () => {
+  it('returns 401 when not signed in', async () => {
+    authMock.mockResolvedValue(null);
+    const res = await GET();
+    expect(res.status).toBe(401);
+    expect(prismaMock.course.findMany).not.toHaveBeenCalled();
+  });
+
+  it('returns 403 for a non-admin', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
+    const res = await GET();
+    expect(res.status).toBe(403);
+    expect(prismaMock.course.findMany).not.toHaveBeenCalled();
+  });
+
   it('returns courses with enrolled roster', async () => {
     prismaMock.course.findMany.mockResolvedValue([
       {
