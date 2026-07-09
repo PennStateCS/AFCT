@@ -13,7 +13,7 @@ Built with:
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue?logo=typescript)
 [![Publish Docker image to GHCR](https://github.com/PennStateWilkes-Barre/AFCT-Dashboard/actions/workflows/publish-ghcr.yml/badge.svg?branch=main)](https://github.com/PennStateWilkes-Barre/AFCT-Dashboard/actions/workflows/publish-ghcr.yml)
 
-## 📚 Tech Stack
+## Tech Stack
 
 - Node.js 20+
 - Next.js 15
@@ -26,19 +26,19 @@ Built with:
 
 This project is supported in part by the National Science Foundation under Grant No. 2439326. Any opinions, findings, conclusions, or recommendations expressed are those of the authors and do not necessarily reflect the views of the NSF.
 
-## 🤝 Participating Institutions
+## Participating Institutions
 
 AFCT is part of a multi-institutional collaboration involving:
 
-- The College of the Holy Cross
-- The Pennsylvania State Univeristy
-- The Rochester Institute of Technology
+- College of the Holy Cross
+- Rochester Institute of Technology
+- The Pennsylvania State University
 - The University of New Mexico
-- The University of Rochester
+- University of Rochester
 
 This collaboration supports the continued development, deployment, and study of AFCT across undergraduate computing theory courses.
 
-## 📖 Documentation
+## Documentation
 
 The AFCT Dashboard includes automatically generated documentation for the HTTP API. The API reference is rebuilt from the route handlers and published whenever changes are pushed to `main`.
 
@@ -50,7 +50,7 @@ Additional setup and deployment guides are available in the repository:
 - **[Development Setup](docs/development_setup.md)** — instructions for configuring a local development environment.
 - **[Production Setup](docs/production_setup.md)** — instructions for deploying the GHCR image with Docker Compose and an Nginx reverse proxy.
 
-## 👥 Contributors
+## Contributors
 
 | Name                | Affiliation | Email            | GitHub                                        |
 | ------------------- | ----------- | ---------------- | --------------------------------------------- |

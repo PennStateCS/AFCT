@@ -19,6 +19,7 @@ import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatDateTimeInTimeZone } from '@/lib/date';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
+import { fetchJson } from '@/lib/query-fetch';
 import {
   AssignmentWithDetails,
   StudentAssignmentContext,
@@ -79,11 +80,10 @@ export default function StudentAssignmentPage({
   // invalidation) after the student adds or deletes a comment.
   const contextQuery = useQuery({
     queryKey: queryKeys.assignment.studentContext(params.id, assignmentId),
-    queryFn: async () => {
-      const res = await fetch(apiPaths.assignmentStudentContext(params.id, assignmentId));
-      if (!res.ok) throw new Error('Failed to fetch assignment context');
-      return (await res.json()) as StudentAssignmentContext;
-    },
+    queryFn: () =>
+      fetchJson<StudentAssignmentContext>(
+        apiPaths.assignmentStudentContext(params.id, assignmentId),
+      ),
     enabled: !!assignmentId && !!userId,
     staleTime: 30_000,
   });
