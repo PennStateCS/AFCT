@@ -39,7 +39,7 @@ export const POST = withCourseAuth(
       const body = await req.json();
       const userIds: string[] = (body?.userIds ?? []).map((s: string) => String(s)).filter(Boolean);
       if (!userIds.length)
-        return NextResponse.json({ message: 'No users provided' }, { status: 400 });
+        return NextResponse.json({ error: 'No users provided' }, { status: 400 });
 
       // Enroll all users in a transaction as STUDENT course role.
       await prisma.$transaction(async (tx: Prisma.TransactionClient) => {

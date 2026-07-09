@@ -105,10 +105,7 @@ export const POST = withCourseAuth(
       const parsedSettings = z.array(ProblemSettingsSchema).safeParse(body.problemSettings ?? []);
       if (!parsedSettings.success) {
         return NextResponse.json(
-          {
-            error: 'Invalid problemSettings in request body',
-            details: parsedSettings.error.issues,
-          },
+          { error: 'Invalid problemSettings in request body' },
           { status: 400 },
         );
       }

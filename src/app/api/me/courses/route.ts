@@ -78,6 +78,6 @@ export async function GET(req: Request) {
     return NextResponse.json(courses, { status: 200 });
   } catch (error) {
     console.error('Failed to fetch courses list:', error);
-    return NextResponse.json({ message: 'Server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }

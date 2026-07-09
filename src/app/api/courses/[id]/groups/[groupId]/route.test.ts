@@ -76,7 +76,7 @@ describe('PATCH /api/courses/[id]/groups/[groupId]', () => {
     expect(res.status).toBe(400);
   });
 
-  it('returns 422 when name missing', async () => {
+  it('returns 400 when name missing', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
 
@@ -87,7 +87,7 @@ describe('PATCH /api/courses/[id]/groups/[groupId]', () => {
       }),
       { params: { id: 'c1', groupId: 'g1' } } as any,
     );
-    expect(res.status).toBe(422);
+    expect(res.status).toBe(400);
   });
 
   it('updates group and logs', async () => {

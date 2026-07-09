@@ -77,7 +77,7 @@ export const GET = withCourseAuth(
  *   401: { description: Not signed in. }
  *   403: { description: Not course staff or a system admin. }
  *   404: { description: Group not found in this course. }
- *   422: { description: "Missing userId, or the user isn't enrolled in the course." }
+ *   400: { description: "Missing userId, or the user isn't enrolled in the course." }
  *   500: { description: Server error. }
  */
 export const POST = withCourseAuth(
@@ -89,7 +89,7 @@ export const POST = withCourseAuth(
     try {
       const body = await req.json();
       const userId = (body.userId ?? '').trim();
-      if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 422 });
+      if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
 
       // Ensure group + course consistency
       const group = await prisma.group.findUnique({ where: { id: groupId } });
@@ -101,7 +101,7 @@ export const POST = withCourseAuth(
         where: { courseId_userId: { courseId, userId } },
       });
       if (!rosterEntry)
-        return NextResponse.json({ error: 'User is not enrolled in course' }, { status: 422 });
+        return NextResponse.json({ error: 'User is not enrolled in course' }, { status: 400 });
 
       // Create or update group roster entry (skip duplicates)
       await prisma.groupRoster.upsert({
@@ -165,7 +165,7 @@ export const POST = withCourseAuth(
  *   401: { description: Not signed in. }
  *   403: { description: Not course staff or a system admin. }
  *   404: { description: Group not found in this course. }
- *   422: { description: "Missing members array, or some users aren't enrolled." }
+ *   400: { description: "Missing members array, or some users aren't enrolled." }
  *   500: { description: Server error. }
  */
 export const PATCH = withCourseAuth(
@@ -175,7 +175,7 @@ export const PATCH = withCourseAuth(
     try {
       const body = (await req.json()) as { members?: unknown };
       const members = Array.isArray(body?.members) ? (body.members as unknown[]).map(String) : null;
-      if (!members) return NextResponse.json({ error: 'Missing members array' }, { status: 422 });
+      if (!members) return NextResponse.json({ error: 'Missing members array' }, { status: 400 });
 
       // Ensure group exists and belongs to course
       const group = await prisma.group.findUnique({ where: { id: groupId } });
@@ -193,7 +193,7 @@ export const PATCH = withCourseAuth(
         if (invalid.length > 0)
           return NextResponse.json(
             { error: 'Some users are not enrolled in course', invalid },
-            { status: 422 },
+            { status: 400 },
           );
       }
 

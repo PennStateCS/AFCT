@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { COURSE_FACULTY_ROLES } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { resolveUserTimezone } from '@/lib/user-timezone';
@@ -75,11 +74,8 @@ export const GET = withCourseAuth(
       return NextResponse.json({ error: 'Failed to fetch assignments.' }, { status: 500 });
     }
   },
-  {
-    access: 'manage',
-    roles: COURSE_FACULTY_ROLES,
-    deniedAction: 'COURSE_ASSIGNMENTS_ACCESS_DENIED',
-  },
+  // Course staff (FACULTY + TA), matching who can create/edit assignments below.
+  { access: 'manage', deniedAction: 'COURSE_ASSIGNMENTS_ACCESS_DENIED' },
 );
 
 /**

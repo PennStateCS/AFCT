@@ -292,7 +292,7 @@ describe('POST /api/comments', () => {
     });
   });
 
-  it('returns 400 with validation details on invalid input', async () => {
+  it('returns 400 on invalid input', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
 
     const req = new NextRequest('http://localhost/api/comments', {
@@ -306,7 +306,6 @@ describe('POST /api/comments', () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toBe('Invalid request data');
-    expect(Array.isArray(body.details)).toBe(true);
     expect(activityLogMock).toHaveBeenCalledWith(
       prismaMock,
       req,

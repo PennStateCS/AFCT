@@ -117,7 +117,7 @@ describe('POST /api/courses/[id]/groups', () => {
     expect(res.status).toBe(403);
   });
 
-  it('returns 422 when name missing', async () => {
+  it('returns 400 when name missing', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
 
@@ -128,7 +128,7 @@ describe('POST /api/courses/[id]/groups', () => {
       }),
       { params: { id: 'c1' } } as any,
     );
-    expect(res.status).toBe(422);
+    expect(res.status).toBe(400);
   });
 
   it('returns 404 when course does not exist', async () => {

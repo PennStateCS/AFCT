@@ -102,7 +102,7 @@ export const PATCH = withCourseAuth(
         severity: 'ERROR',
         metadata: { error: error instanceof Error ? error.message : 'unknown error' },
       });
-      return NextResponse.json('Failed to update archive status', { status: 500 });
+      return NextResponse.json({ error: 'Failed to update archive status' }, { status: 500 });
     }
   },
   { access: 'manage', roles: COURSE_FACULTY_ROLES, deniedAction: 'COURSE_ARCHIVE_DENIED' },
