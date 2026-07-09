@@ -54,6 +54,18 @@ export const GET = withCourseAuth(
       const includeAssignments = view === 'full' || view === 'summary' || view === 'assignments';
       const includeProblems = view === 'full' || view === 'problems';
 
+      // Only course staff (FACULTY/TA) or a system admin may see unpublished
+      // assignments and the course-wide problem bank; a student must see neither.
+      // Resolve the viewer's role BEFORE the course query so it gates the query
+      // itself (rather than returning the data and filtering after the fact).
+      const viewerRoster = await prisma.roster.findFirst({
+        where: { courseId: id, userId: user.id },
+        select: { role: true },
+      });
+      const viewerIsAdmin = isAdmin(user);
+      const isStaff =
+        viewerIsAdmin || viewerRoster?.role === 'FACULTY' || viewerRoster?.role === 'TA';
+
       const course = await prisma.course.findUnique({
         where: { id },
         include: {
@@ -82,10 +94,12 @@ export const GET = withCourseAuth(
                 },
               }
             : {}),
-          ...(includeProblems ? { problems: true } : {}),
+          ...(includeProblems && isStaff ? { problems: true } : {}),
           ...(includeAssignments
             ? {
                 assignments: {
+                  // Students only ever see published assignments here.
+                  where: isStaff ? {} : { isPublished: true },
                   include: {
                     problems: {
                       select: {
@@ -106,12 +120,8 @@ export const GET = withCourseAuth(
         return NextResponse.json({ error: 'Course not found' }, { status: 404 });
       }
 
-      // Course membership was enforced by the wrapper (access: 'read'). This roster
-      // lookup only reports the viewer's course role in the response.
-      const viewerRoster = await prisma.roster.findFirst({
-        where: { courseId: course.id, userId: user.id },
-        select: { role: true },
-      });
+      // Course membership was enforced by the wrapper (access: 'read'); the
+      // viewer's role (viewerRoster/isStaff) was resolved above the query.
 
       // The findUnique uses conditional includes, so widen to the relations and
       // _count that may be present for the requested view.
@@ -288,9 +298,8 @@ export const GET = withCourseAuth(
         }));
       }
 
-      // Viewer's roles, from the roster lookup above.
+      // Viewer's role, from the roster lookup above (viewerIsAdmin/isStaff too).
       const viewerRole: string | null = viewerRoster?.role ?? null;
-      const viewerIsAdmin = isAdmin(user);
 
       const response = {
         id: course.id,
@@ -312,8 +321,12 @@ export const GET = withCourseAuth(
         enrolled: includeRoster ? enrolled : [],
         problems: includeProblems ? problemsWithLink : [],
         assignments: includeAssignments ? assignmentsWithProblemCount : [],
-        assignmentTotal: courseData._count?.assignments ?? assignmentRows.length,
-        problemTotal: courseData._count?.problems ?? problemRows.length,
+        // For non-staff the counts must reflect only what they can see (published
+        // assignments; no problem bank), not the course-wide totals.
+        assignmentTotal: isStaff
+          ? (courseData._count?.assignments ?? assignmentRows.length)
+          : assignmentRows.length,
+        problemTotal: isStaff ? (courseData._count?.problems ?? problemRows.length) : 0,
         rosterTotal: courseData._count?.roster ?? rosterRows.length,
         viewerRole,
         viewerIsAdmin,
