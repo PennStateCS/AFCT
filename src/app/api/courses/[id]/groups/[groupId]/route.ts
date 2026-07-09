@@ -33,7 +33,7 @@ export async function OPTIONS() {
  *   403: { description: Not course staff or a system admin. }
  *   404: { description: Group not found in this course. }
  *   409: { description: Name already used by another group in the course. }
- *   422: { description: Missing name. }
+ *   400: { description: Missing name. }
  *   500: { description: Server error. }
  */
 export const PATCH = withCourseAuth(
@@ -45,7 +45,7 @@ export const PATCH = withCourseAuth(
     try {
       const body = await req.json();
       const name = (body.name ?? '').trim();
-      if (!name) return NextResponse.json({ error: 'Name is required' }, { status: 422 });
+      if (!name) return NextResponse.json({ error: 'Name is required' }, { status: 400 });
 
       // Ensure group exists and belongs to course
       const group = await prisma.group.findUnique({ where: { id: groupId } });

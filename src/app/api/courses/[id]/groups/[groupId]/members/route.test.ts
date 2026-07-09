@@ -153,7 +153,7 @@ describe('POST /api/courses/[id]/groups/[groupId]/members', () => {
     expect(res.status).toBe(403);
   });
 
-  it('returns 422 when userId is blank', async () => {
+  it('returns 400 when userId is blank', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     const req = new NextRequest('http://localhost/api/courses/c1/groups/g1/members', {
@@ -161,12 +161,12 @@ describe('POST /api/courses/[id]/groups/[groupId]/members', () => {
       body: JSON.stringify({ userId: '   ' }),
     });
     const res = await POST(req, { params: Promise.resolve({ id: 'c1', groupId: 'g1' }) } as any);
-    expect(res.status).toBe(422);
+    expect(res.status).toBe(400);
   });
 
   // Covers the nullish-coalescing false branch (branch 88): userId absent entirely
-  // (not just whitespace) still yields the missing-userId 422.
-  it('returns 422 when userId is absent from the body', async () => {
+  // (not just whitespace) still yields the missing-userId 400.
+  it('returns 400 when userId is absent from the body', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     const req = new NextRequest('http://localhost/api/courses/c1/groups/g1/members', {
@@ -174,7 +174,7 @@ describe('POST /api/courses/[id]/groups/[groupId]/members', () => {
       body: JSON.stringify({}),
     });
     const res = await POST(req, { params: Promise.resolve({ id: 'c1', groupId: 'g1' }) } as any);
-    expect(res.status).toBe(422);
+    expect(res.status).toBe(400);
   });
 
   it('returns 404 when group belongs to another course', async () => {
@@ -202,7 +202,7 @@ describe('POST /api/courses/[id]/groups/[groupId]/members', () => {
       body: JSON.stringify({ userId: 'u2' }),
     });
     const res = await POST(req, { params: Promise.resolve({ id: 'c1', groupId: 'g1' }) } as any);
-    expect(res.status).toBe(422);
+    expect(res.status).toBe(400);
   });
 
   it('adds member and logs', async () => {
@@ -281,7 +281,7 @@ describe('PATCH /api/courses/[id]/groups/[groupId]/members (bulk)', () => {
       body: JSON.stringify({}),
     });
     const res = await PATCH(req, { params: Promise.resolve({ id: 'c1', groupId: 'g1' }) } as any);
-    expect(res.status).toBe(422);
+    expect(res.status).toBe(400);
   });
 
   it('returns 403 for non-admin user without course staff role', async () => {
@@ -309,7 +309,7 @@ describe('PATCH /api/courses/[id]/groups/[groupId]/members (bulk)', () => {
     expect(res.status).toBe(404);
   });
 
-  it('returns 422 when some members are not enrolled', async () => {
+  it('returns 400 when some members are not enrolled', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.group.findUnique.mockResolvedValue({ id: 'g1', courseId: 'c1' });
@@ -320,7 +320,7 @@ describe('PATCH /api/courses/[id]/groups/[groupId]/members (bulk)', () => {
       body: JSON.stringify({ members: ['u2', 'u9'] }),
     });
     const res = await PATCH(req, { params: Promise.resolve({ id: 'c1', groupId: 'g1' }) } as any);
-    expect(res.status).toBe(422);
+    expect(res.status).toBe(400);
   });
 
   it('adds/removes members and logs', async () => {

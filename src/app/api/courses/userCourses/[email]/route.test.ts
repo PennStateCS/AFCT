@@ -34,7 +34,7 @@ describe('GET /api/courses/userCourses/[email]', () => {
     expect(res.status).toBe(401);
   });
 
-  it('returns courses for user', async () => {
+  it('returns courses for a non-admin, hiding unpublished courses from students', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1' } });
     prismaMock.course.findMany.mockResolvedValue([{ id: 'c1', name: 'Course' }]);
 
@@ -46,17 +46,34 @@ describe('GET /api/courses/userCourses/[email]', () => {
     const body = await res.json();
     expect(body).toEqual([{ id: 'c1', name: 'Course' }]);
 
-    // Ensure we filter out courses that haven't started yet by querying startDate <= now
+    // Visibility mirrors canAccessCourse: published-and-enrolled OR staff-on-course.
+    // Also excludes not-yet-started and archived courses.
     expect(prismaMock.course.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          roster: { some: { userId: 'u1' } },
+          OR: [
+            { isPublished: true, roster: { some: { userId: 'u1' } } },
+            { roster: { some: { userId: 'u1', role: { in: ['FACULTY', 'TA'] } } } },
+          ],
           isArchived: false,
           startDate: expect.objectContaining({ lte: expect.any(Date) }),
         }),
         select: { id: true, name: true },
       }),
     );
+  });
+
+  it('an admin sees any course they are rostered on (no published restriction)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin1', isAdmin: true } });
+    prismaMock.course.findMany.mockResolvedValue([]);
+
+    await GET(new Request('http://localhost/api/courses/userCourses/a@example.com'), {
+      params: Promise.resolve({ email: 'a@example.com' }),
+    });
+
+    const where = prismaMock.course.findMany.mock.calls[0][0].where;
+    expect(where).toMatchObject({ roster: { some: { userId: 'admin1' } } });
+    expect(where.OR).toBeUndefined();
   });
 
   it('returns 500 when the course query fails', async () => {
@@ -69,6 +86,6 @@ describe('GET /api/courses/userCourses/[email]', () => {
 
     expect(res.status).toBe(500);
     const body = await res.json();
-    expect(body).toEqual({ message: 'Server error' });
+    expect(body).toEqual({ error: 'Server error' });
   });
 });
