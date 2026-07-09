@@ -87,6 +87,25 @@ describe('GET /api/courses/[id]/activity', () => {
     expect(body.totalCount).toBe(1);
   });
 
+  it('maps roster member ids into the login-activity filter', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1' } });
+    prismaMock.course.findFirst.mockResolvedValue({ id: 'c1' });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    // Non-empty roster so the `(r) => r.userId` mapper actually runs.
+    prismaMock.roster.findMany.mockResolvedValue([{ userId: 'm1' }, { userId: 'm2' }]);
+    prismaMock.activityLog.findMany.mockResolvedValue([{ id: 'log1' }]);
+    prismaMock.activityLog.count.mockResolvedValue(1);
+
+    const req = new NextRequest('http://localhost/api/courses/c1/activity?limit=10&offset=0');
+    const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(200);
+    // Verify the precomputed roster ids reached the WHERE clause.
+    const whereArg = prismaMock.activityLog.findMany.mock.calls[0][0].where;
+    const loginClause = whereArg.OR.find((c: { AND?: unknown[] }) => Array.isArray(c.AND));
+    expect(loginClause.AND).toContainEqual({ userId: { in: ['m1', 'm2'] } });
+  });
+
   it('returns 500 when activity query fails', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.course.findFirst.mockResolvedValue({ id: 'c1' });

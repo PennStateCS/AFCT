@@ -344,4 +344,176 @@ describe('POST /api/courses/[id]/duplicate', () => {
 
     expect(res.status).toBe(201);
   });
+
+  it('returns 400 for missing required fields even with valid credits and code', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+
+    // Valid credits + code pass their guards, but `title` (and others) are missing,
+    // so the required-fields check at the next branch returns 400.
+    const req = new NextRequest('http://localhost/api/courses/c1/duplicate', {
+      method: 'POST',
+      body: JSON.stringify({ credits: 3, code: 'CS 101' }),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({ error: 'Missing required fields' });
+  });
+
+  it('returns 400 for an invalid date/time value', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+
+    const req = new NextRequest('http://localhost/api/courses/c1/duplicate', {
+      method: 'POST',
+      body: JSON.stringify(makePayload({ startDate: 'not-a-date' })),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({ error: 'Invalid date/time value.' });
+  });
+
+  it('uses legacy copyAssignments-only flag (assignments mode)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
+    prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
+    prismaMock.course.findUnique.mockResolvedValue(null);
+
+    const tx = {
+      course: { create: vi.fn().mockResolvedValue({ id: 'new-course' }) },
+      roster: { create: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
+      assignment: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ id: 'a1', title: 'A1', dueDate: new Date(), problems: [] }]),
+        create: vi.fn().mockResolvedValue({ id: 'new-a1' }),
+      },
+      assignmentProblem: { create: vi.fn() },
+      problem: { findMany: vi.fn().mockResolvedValue([]), create: vi.fn() },
+    };
+    prismaMock.$transaction.mockImplementation(async (cb: (client: typeof tx) => unknown) =>
+      cb(tx),
+    );
+
+    const req = new NextRequest('http://localhost/api/courses/c1/duplicate', {
+      method: 'POST',
+      body: JSON.stringify(makePayload({ copyAssignments: true })),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(201);
+    // assignments mode: assignment copied, no problem copies, no link rows.
+    expect(tx.assignment.create).toHaveBeenCalled();
+    expect(tx.problem.create).not.toHaveBeenCalled();
+    expect(tx.assignmentProblem.create).not.toHaveBeenCalled();
+  });
+
+  it('uses legacy copyProblems-only flag (problems mode)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
+    prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
+    prismaMock.course.findUnique.mockResolvedValue(null);
+
+    const tx = {
+      course: { create: vi.fn().mockResolvedValue({ id: 'new-course' }) },
+      roster: { create: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
+      assignment: { findMany: vi.fn().mockResolvedValue([]), create: vi.fn() },
+      problem: {
+        findMany: vi.fn().mockResolvedValue([{ id: 'p1', title: 'Problem 1' }]),
+        create: vi.fn().mockResolvedValue({ id: 'new-p1' }),
+      },
+    };
+    prismaMock.$transaction.mockImplementation(async (cb: (client: typeof tx) => unknown) =>
+      cb(tx),
+    );
+
+    const req = new NextRequest('http://localhost/api/courses/c1/duplicate', {
+      method: 'POST',
+      body: JSON.stringify(makePayload({ copyProblems: true })),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(201);
+    expect(tx.problem.create).toHaveBeenCalled();
+    expect(tx.assignment.create).not.toHaveBeenCalled();
+  });
+
+  it('skips the actor when copying faculty and skips unmapped problem links', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
+    prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
+    prismaMock.course.findUnique.mockResolvedValue(null);
+
+    const tx = {
+      course: { create: vi.fn().mockResolvedValue({ id: 'new-course' }) },
+      roster: {
+        create: vi.fn(),
+        // Includes the actor (u1) which must be skipped (already added as faculty).
+        findMany: vi.fn().mockResolvedValue([
+          { userId: 'u1', role: 'FACULTY' },
+          { userId: 'u2', role: 'FACULTY' },
+        ]),
+      },
+      assignment: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: 'a1',
+            title: 'A1',
+            dueDate: new Date(),
+            // p-missing was never copied (not in problemIdMap) -> link is skipped.
+            problems: [{ problemId: 'p-missing' }],
+          },
+        ]),
+        create: vi.fn().mockResolvedValue({ id: 'new-a1' }),
+      },
+      assignmentProblem: { create: vi.fn() },
+      problem: {
+        // No problems attached to needed set are found, so problemIdMap stays empty.
+        findMany: vi.fn().mockResolvedValue([]),
+        create: vi.fn(),
+      },
+    };
+    prismaMock.$transaction.mockImplementation(async (cb: (client: typeof tx) => unknown) =>
+      cb(tx),
+    );
+
+    const req = new NextRequest('http://localhost/api/courses/c1/duplicate', {
+      method: 'POST',
+      body: JSON.stringify(
+        makePayload({ copyMode: 'assignments_with_problems', copyFaculty: true }),
+      ),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(201);
+    // Actor + one other faculty (u1 skipped as self) => 2 roster.create calls.
+    expect(tx.roster.create).toHaveBeenCalledTimes(2);
+    // The unmapped problem link must be skipped.
+    expect(tx.assignmentProblem.create).not.toHaveBeenCalled();
+  });
+
+  it('returns 500 when the transaction throws', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
+    prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
+    prismaMock.course.findUnique.mockResolvedValue(null);
+    prismaMock.$transaction.mockRejectedValue(new Error('tx failed'));
+
+    const req = new NextRequest('http://localhost/api/courses/c1/duplicate', {
+      method: 'POST',
+      body: JSON.stringify(makePayload()),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(500);
+    await expect(res.json()).resolves.toMatchObject({ error: 'Internal server error' });
+    consoleSpy.mockRestore();
+  });
 });

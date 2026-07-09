@@ -169,6 +169,32 @@ describe('GET /api/courses/[id]/grades', () => {
     expect(body.grades).toEqual({ s1: { a1: 0 } });
   });
 
+  it('treats null problem maxPoints as 0 when summing assignment points', async () => {
+    // Branch 157: `Number(p.maxPoints ?? 0)` — a problem with null maxPoints.
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.roster.findMany.mockResolvedValue([{ userId: 's1', role: 'STUDENT' }]);
+    prismaMock.user.findMany.mockResolvedValue([
+      { id: 's1', firstName: 'A', lastName: 'B', email: 's1@example.com', avatar: null },
+    ]);
+    prismaMock.assignment.findMany.mockResolvedValue([
+      {
+        id: 'a1',
+        title: 'A1',
+        dueDate: '2025-01-01',
+        problems: [{ maxPoints: null }, { maxPoints: 5 }],
+      },
+    ]);
+    prismaMock.assignmentProblemGrade.groupBy.mockResolvedValue([]);
+
+    const req = new NextRequest('http://localhost/api/courses/c1/grades');
+    const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.assignments[0].maxPoints).toBe(5);
+  });
+
   it('returns 500 when a query fails', async () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
@@ -179,6 +205,27 @@ describe('GET /api/courses/[id]/grades', () => {
     const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
 
     expect(res.status).toBe(500);
+    consoleSpy.mockRestore();
+  });
+
+  it('returns 500 with dev detail from a non-Error thrown value', async () => {
+    // Branch 197: `error instanceof Error ? error.message : String(error)`.
+    // Branch 201: NODE_ENV === 'development' includes the detail.
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const prevEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'development';
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.roster.findMany.mockRejectedValue('kaboom');
+
+    const req = new NextRequest('http://localhost/api/courses/c1/grades');
+    const res = await GET(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.detail).toBe('kaboom');
+
+    process.env.NODE_ENV = prevEnv;
     consoleSpy.mockRestore();
   });
 });
@@ -284,6 +331,27 @@ describe('POST /api/courses/[id]/grades (export log)', () => {
       prismaMock,
       expect.anything(),
       expect.objectContaining({ action: 'GRADES_EXPORT_ERROR', severity: 'ERROR' }),
+    );
+    consoleSpy.mockRestore();
+  });
+
+  it('returns 500 and logs "unknown error" when a non-Error is thrown', async () => {
+    // Branch 68: `error instanceof Error ? error.message : 'unknown error'`.
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    activityLogMock.mockRejectedValueOnce('boom');
+
+    const res = await POST(postReq({}), { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        action: 'GRADES_EXPORT_ERROR',
+        metadata: expect.objectContaining({ error: 'unknown error' }),
+      }),
     );
     consoleSpy.mockRestore();
   });

@@ -213,4 +213,28 @@ describe('POST /api/courses/[id]/groups', () => {
     );
     expect(res.status).toBe(500);
   });
+
+  // Covers the false side of the `err instanceof Error` ternary in the catch-block
+  // error log (branch 112): a thrown non-Error yields the 'unknown error' message.
+  it('returns 500 and logs unknown error when create throws a non-Error', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.course.findUnique.mockResolvedValue({ id: 'c1' });
+    prismaMock.group.findUnique.mockResolvedValue(null);
+    prismaMock.group.create.mockRejectedValueOnce('boom');
+
+    const res = await POST(
+      new NextRequest('http://localhost/api/courses/c1/groups', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'New' }),
+      }),
+      { params: { id: 'c1' } } as any,
+    );
+    expect(res.status).toBe(500);
+
+    const errorLog = activityLogMock.mock.calls.find(
+      (call) => call[2]?.action === 'GROUP_CREATE_ERROR',
+    );
+    expect(errorLog?.[2]?.metadata?.error).toBe('unknown error');
+  });
 });

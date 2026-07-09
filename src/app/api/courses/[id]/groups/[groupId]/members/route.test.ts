@@ -49,6 +49,18 @@ describe('GET /api/courses/[id]/groups/[groupId]/members', () => {
     expect(res.status).toBe(401);
   });
 
+  // Valid courseId passes the wrapper guard, exercising the handler's own
+  // `!groupId` guard (line 29 / branch 29) when only groupId is empty.
+  it('returns 400 from the handler when only groupId is missing', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+
+    const res = await GET(new NextRequest('http://localhost/api/courses/c1/groups//members'), {
+      params: Promise.resolve({ id: 'c1', groupId: '' }),
+    } as any);
+    expect(res.status).toBe(400);
+  });
+
   it('returns 403 for non-staff users', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
 
@@ -152,6 +164,19 @@ describe('POST /api/courses/[id]/groups/[groupId]/members', () => {
     expect(res.status).toBe(422);
   });
 
+  // Covers the nullish-coalescing false branch (branch 88): userId absent entirely
+  // (not just whitespace) still yields the missing-userId 422.
+  it('returns 422 when userId is absent from the body', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    const req = new NextRequest('http://localhost/api/courses/c1/groups/g1/members', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1', groupId: 'g1' }) } as any);
+    expect(res.status).toBe(422);
+  });
+
   it('returns 404 when group belongs to another course', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
@@ -212,6 +237,27 @@ describe('POST /api/courses/[id]/groups/[groupId]/members', () => {
     });
     const res = await POST(req, { params: Promise.resolve({ id: 'c1', groupId: 'g1' }) } as any);
     expect(res.status).toBe(500);
+  });
+
+  // Covers the false side of `err instanceof Error` in the POST catch log (branch 125).
+  it('returns 500 and logs unknown error when upsert throws a non-Error', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.group.findUnique.mockResolvedValue({ id: 'g1', courseId: 'c1' });
+    prismaMock.roster.findUnique.mockResolvedValue({ userId: 'u2' });
+    prismaMock.groupRoster.upsert.mockRejectedValueOnce('boom');
+
+    const req = new NextRequest('http://localhost/api/courses/c1/groups/g1/members', {
+      method: 'POST',
+      body: JSON.stringify({ userId: 'u2' }),
+    });
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1', groupId: 'g1' }) } as any);
+    expect(res.status).toBe(500);
+
+    const errorLog = activityLogMock.mock.calls.find(
+      (call) => call[2]?.action === 'GROUP_MEMBER_ADD_ERROR',
+    );
+    expect(errorLog?.[2]?.metadata?.error).toBe('unknown error');
   });
 });
 
@@ -313,6 +359,28 @@ describe('PATCH /api/courses/[id]/groups/[groupId]/members (bulk)', () => {
     expect(prismaMock.groupRoster.deleteMany).not.toHaveBeenCalled();
   });
 
+  // Covers the `members.length > 0` false branch (branch 183): an empty desired set
+  // skips enrollment validation and removes all existing members.
+  it('clears all members when given an empty members array', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.group.findUnique.mockResolvedValue({ id: 'g1', courseId: 'c1' });
+    prismaMock.groupRoster.findMany.mockResolvedValue([{ userId: 'u3' }]);
+    prismaMock.groupRoster.deleteMany.mockResolvedValue({} as any);
+
+    const req = new NextRequest('http://localhost/api/courses/c1/groups/g1/members', {
+      method: 'PATCH',
+      body: JSON.stringify({ members: [] }),
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'c1', groupId: 'g1' }) } as any);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.removed).toEqual(['u3']);
+    expect(body.added).toEqual([]);
+    // Enrollment validation is skipped entirely for an empty desired set.
+    expect(prismaMock.roster.findMany).not.toHaveBeenCalled();
+  });
+
   it('returns 500 on unexpected patch errors', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
@@ -324,5 +392,24 @@ describe('PATCH /api/courses/[id]/groups/[groupId]/members (bulk)', () => {
     });
     const res = await PATCH(req, { params: Promise.resolve({ id: 'c1', groupId: 'g1' }) } as any);
     expect(res.status).toBe(500);
+  });
+
+  // Covers the false side of `err instanceof Error` in the PATCH catch log (branch 233).
+  it('returns 500 and logs unknown error when patch throws a non-Error', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.group.findUnique.mockRejectedValueOnce('boom');
+
+    const req = new NextRequest('http://localhost/api/courses/c1/groups/g1/members', {
+      method: 'PATCH',
+      body: JSON.stringify({ members: [] }),
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'c1', groupId: 'g1' }) } as any);
+    expect(res.status).toBe(500);
+
+    const errorLog = activityLogMock.mock.calls.find(
+      (call) => call[2]?.action === 'GROUP_MEMBERS_UPDATE_ERROR',
+    );
+    expect(errorLog?.[2]?.metadata?.error).toBe('unknown error');
   });
 });

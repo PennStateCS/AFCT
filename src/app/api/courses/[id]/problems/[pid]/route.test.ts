@@ -261,4 +261,36 @@ describe('PUT /api/courses/[id]/problems/[pid]', () => {
     expect(res.status).toBe(400);
     expect(prismaMock.problem.update).not.toHaveBeenCalled();
   });
+
+  it('returns 413 when the replacement file exceeds the upload limit', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.problem.findFirst.mockResolvedValue({ id: 'p1', fileName: 'old.jff' });
+    uploadLimitMock.mockResolvedValue({ maxBytes: 0, maxMb: 0 });
+
+    const file = new File([new Uint8Array([1, 2, 3])], 'new.jff');
+    const res = await PUT(putReq({ title: 'Updated', type: 'FA' }, file), params());
+
+    expect(res.status).toBe(413);
+    expect(prismaMock.problem.update).not.toHaveBeenCalled();
+  });
+
+  it('returns 500 and logs when the update throws (non-FA type, no maxPoints)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.problem.findFirst.mockResolvedValue({ id: 'p1', fileName: null });
+    prismaMock.problem.update.mockRejectedValue(new Error('db down'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    // type 'RE' (not FA/PDA) exercises the maxStates/isDeterministic null branches;
+    // omitting maxPoints exercises its `undefined` side before the update rejects.
+    const res = await PUT(putReq({ title: 'Updated', type: 'RE' }), params());
+
+    expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ action: 'PROBLEM_UPDATE_ERROR', severity: 'ERROR' }),
+    );
+  });
 });

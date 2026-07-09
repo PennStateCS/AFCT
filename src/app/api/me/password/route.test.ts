@@ -122,6 +122,72 @@ describe('POST /api/me/password', () => {
     expect(res.status).toBe(400);
   });
 
+  it('returns 400 when a strong new password matches the current one', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.user.findUnique.mockResolvedValue({ password: 'hash' });
+    // First compare: old password correct. Second compare: new === old.
+    bcryptMock.compare.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
+
+    const req = new NextRequest('http://localhost/api/me/password', {
+      method: 'POST',
+      body: JSON.stringify({ oldPassword: 'Newpassword1!', newPassword: 'Newpassword1!' }),
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('New password cannot be the same as the old password');
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
+  it('returns 500 and logs when the update throws', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.user.findUnique.mockResolvedValue({ password: 'hash', temporaryPassword: false });
+    bcryptMock.compare.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    bcryptMock.hash.mockResolvedValue('newhash');
+    prismaMock.user.update.mockRejectedValueOnce(new Error('db down'));
+
+    const req = new NextRequest('http://localhost/api/me/password', {
+      method: 'POST',
+      body: JSON.stringify({ oldPassword: 'oldpass', newPassword: 'Newpassword1!' }),
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      req,
+      expect.objectContaining({ action: 'CHANGE_PASSWORD_ERROR', severity: 'ERROR' }),
+    );
+  });
+
+  it('returns 500 with a generic error message when a non-Error is thrown', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.user.findUnique.mockResolvedValue({ password: 'hash', temporaryPassword: false });
+    bcryptMock.compare.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    bcryptMock.hash.mockResolvedValue('newhash');
+    prismaMock.user.update.mockRejectedValueOnce('boom');
+
+    const req = new NextRequest('http://localhost/api/me/password', {
+      method: 'POST',
+      body: JSON.stringify({ oldPassword: 'oldpass', newPassword: 'Newpassword1!' }),
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      req,
+      expect.objectContaining({
+        action: 'CHANGE_PASSWORD_ERROR',
+        metadata: expect.objectContaining({ error: 'unknown error' }),
+      }),
+    );
+  });
+
   it('updates password and logs activity', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
     prismaMock.user.findUnique.mockResolvedValue({ password: 'hash', temporaryPassword: true });

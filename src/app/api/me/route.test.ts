@@ -229,6 +229,36 @@ describe('POST /api/me', () => {
     expect(unlinkMock).toHaveBeenCalledWith(expect.stringContaining('old.png'));
   });
 
+  it('falls back to a .png extension for an extensionless avatar filename', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1' } });
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'user-1', avatar: null });
+    prismaMock.user.update.mockResolvedValue({
+      id: 'user-1',
+      email: 'user@example.com',
+      firstName: 'A',
+      lastName: 'B',
+      avatar: 'new',
+      timezone: null,
+    });
+    existsSyncMock.mockReturnValue(true);
+
+    const file = makeFile(1024, 'avatar-no-ext');
+    const formData = new FormData();
+    formData.set('firstName', 'A');
+    formData.set('lastName', 'B');
+    formData.set('avatar', file);
+
+    const req = new Request('http://localhost/api/me', {
+      method: 'POST',
+      body: formData,
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(200);
+    expect(writeFileMock).toHaveBeenCalledWith(expect.stringMatching(/\.png$/), expect.anything());
+  });
+
   it('deletes the current avatar when deleteAvatar is true', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1' } });
     prismaMock.user.findUnique.mockResolvedValue({ id: 'user-1', avatar: 'old.png' });
@@ -261,6 +291,88 @@ describe('POST /api/me', () => {
         data: expect.objectContaining({ avatar: null }),
       }),
     );
+  });
+
+  it('returns 500 and logs when the update throws', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1' } });
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'user-1', avatar: null });
+    prismaMock.user.update.mockRejectedValueOnce(new Error('db down'));
+
+    const formData = new FormData();
+    formData.set('firstName', 'A');
+    formData.set('lastName', 'B');
+
+    const req = new Request('http://localhost/api/me', {
+      method: 'POST',
+      body: formData,
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      req,
+      expect.objectContaining({ action: 'PROFILE_UPDATE_ERROR', severity: 'ERROR' }),
+    );
+  });
+
+  it('returns 500 with a generic message when the thrown value is not an Error', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1' } });
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'user-1', avatar: null });
+    prismaMock.user.update.mockRejectedValueOnce('boom');
+
+    const formData = new FormData();
+    formData.set('firstName', 'A');
+    formData.set('lastName', 'B');
+
+    const req = new Request('http://localhost/api/me', {
+      method: 'POST',
+      body: formData,
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(500);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      req,
+      expect.objectContaining({
+        action: 'PROFILE_UPDATE_ERROR',
+        metadata: expect.objectContaining({ error: 'unknown error' }),
+      }),
+    );
+  });
+
+  it('swallows unlink errors when deleting a previous avatar', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1' } });
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'user-1', avatar: 'old.png' });
+    prismaMock.user.update.mockResolvedValue({
+      id: 'user-1',
+      email: 'user@example.com',
+      firstName: 'A',
+      lastName: 'B',
+      avatar: null,
+      timezone: null,
+    });
+    existsSyncMock.mockReturnValue(true);
+    unlinkMock.mockRejectedValueOnce(new Error('permission denied'));
+
+    const formData = new FormData();
+    formData.set('firstName', 'A');
+    formData.set('lastName', 'B');
+    formData.set('deleteAvatar', 'true');
+
+    const req = new Request('http://localhost/api/me', {
+      method: 'POST',
+      body: formData,
+    });
+
+    const res = await POST(req);
+
+    // The unlink failure is caught inside deleteFileIfExists; the update still succeeds.
+    expect(res.status).toBe(200);
+    expect(unlinkMock).toHaveBeenCalled();
   });
 
   it('creates the upload directory when missing', async () => {
