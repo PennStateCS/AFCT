@@ -37,7 +37,7 @@ export default function NetworkTab({
 
   return (
     <Section title="Network">
-      <div className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
+      <div className="space-y-3">
         <Stat label="DB Latency" value={formatMs(net.db?.latencyMs)} />
         <Stat label="Auth Latency" value={formatMs(net.auth?.latencyMs)} />
         <Stat
