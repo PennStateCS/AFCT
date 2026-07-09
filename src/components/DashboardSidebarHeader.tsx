@@ -11,7 +11,6 @@ import {
 import { usePathname } from 'next/navigation';
 
 import Link from 'next/link';
-import { cn } from '@/lib/utils';
 import { LayoutDashboard } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -30,10 +29,9 @@ export default function DashboardSidebarHeader() {
                 <SidebarMenuButton
                   asChild
                   isActive={pathname == '/dashboard'}
-                  className={cn(
-                    'hover:bg-secondary focus:bg-secondary text-sidebar-foreground',
-                    'data-[active=true]:bg-secondary',
-                  )}
+                  className={
+                    'text-sidebar-foreground hover:bg-secondary focus-visible:bg-secondary active:bg-secondary data-[active=true]:bg-secondary data-[active=true]:text-secondary-foreground'
+                  }
                 >
                   <Link href="/dashboard" className="flex min-w-0 items-center gap-2">
                     <LayoutDashboard className="h-4 w-4 shrink-0" />

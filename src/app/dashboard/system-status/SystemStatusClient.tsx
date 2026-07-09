@@ -11,6 +11,7 @@ import pkg from '../../../../package.json';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatDateTimeInTimeZone, formatTimeInTimeZone } from '@/lib/date';
 import { apiPaths } from '@/lib/api-paths';
+import { Copy } from 'lucide-react';
 
 type IpAddr = { iface?: string; address?: string; family?: string };
 type CpuInfo = { model?: string; speed?: number };
@@ -334,11 +335,11 @@ const Stat = ({
       {onCopy ? (
         <button
           type="button"
-          className="text-muted-foreground ml-2 text-xs underline hover:opacity-80"
+          className="text-muted-foreground ml-2 text-xs underline hover:cursor-pointer"
           onClick={onCopy}
           aria-label={copyAriaLabel ?? `Copy ${label}`}
         >
-          Copy
+          <Copy className="h-3 w-3" />
         </button>
       ) : null}
     </div>
@@ -1024,10 +1025,11 @@ export default function SystemStatusClient() {
                         <Button
                           variant="secondary"
                           size="sm"
+                          className="hover:cursor-pointer"
                           onClick={() => copy(ip.address)}
                           aria-label={`Copy IP address ${ip.address ?? ''}`}
                         >
-                          Copy
+                          <Copy className="h-3 w-3" />
                         </Button>
                       </li>
                     ))}
@@ -1213,11 +1215,11 @@ export default function SystemStatusClient() {
                               {s.ipAddress ? (
                                 <button
                                   type="button"
-                                  className="text-muted-foreground text-xs underline hover:opacity-80"
+                                  className="text-muted-foreground text-xs hover:cursor-pointer"
                                   onClick={() => copy(s.ipAddress)}
                                   aria-label={`Copy IP address ${s.ipAddress}`}
                                 >
-                                  Copy
+                                  <Copy className="h-3 w-3" />
                                 </button>
                               ) : null}
                             </div>
