@@ -146,12 +146,12 @@ describe('StudentAssignmentPage', () => {
     expect(screen.getAllByText('Regex Basics').length).toBeGreaterThan(0);
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith('/api/assignments/a1/student-context');
+      expect(fetchMock).toHaveBeenCalledWith('/api/courses/c1/assignments/a1/student-context');
     });
 
-    // The assignment shell was seeded, so no GET /api/assignments/a1.
+    // The assignment shell was seeded, so no GET for the assignment itself.
     const calledUrls = fetchMock.mock.calls.map((c) => c[0] as string);
-    expect(calledUrls.some((u) => u === '/api/assignments/a1')).toBe(false);
+    expect(calledUrls.some((u) => u.startsWith('/api/courses/c1/assignments/a1?'))).toBe(false);
   });
 
   it('renders the problem from initialAssignment while student-context is empty', async () => {
