@@ -37,7 +37,7 @@ import {
  * the app query cache; it renders nothing until the user is authenticated.
  */
 export default function SessionWatcher() {
-  const { status, update } = useSession();
+  const { data: session, status, update } = useSession();
   const timeoutMinutes = useSessionTimeoutMinutes();
 
   const timeoutMs = sessionTimeoutMs(timeoutMinutes);
@@ -64,6 +64,17 @@ export default function SessionWatcher() {
     signingOutRef.current = true;
     void safeSignOut({ callbackUrl: '/login' });
   }, []);
+
+  // The server revokes a session by marking it inactive (idle-timeout lapsed, or
+  // the account was disabled/deleted). `useSession` still reports "authenticated"
+  // in that case, so without this the user is left on a half-broken page — cleared
+  // query cache, hidden admin menu, background 401s — instead of being redirected.
+  // Sign out the moment a session comes back inactive.
+  useEffect(() => {
+    if (status === 'authenticated' && session?.user?.inactive) {
+      performSignOut();
+    }
+  }, [status, session, performSignOut]);
 
   const extendSession = useCallback(async () => {
     if (signingOutRef.current) return;
