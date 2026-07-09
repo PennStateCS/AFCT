@@ -5,7 +5,6 @@ import { geistSans, geistMono } from '@/app/fonts';
 import { Toaster } from 'sonner';
 import { SessionProvider } from 'next-auth/react';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
-import SessionWatcher from '@/components/SessionWatcher';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -18,7 +17,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           disableTransitionOnChange
         >
           <SessionProvider>
-            <SessionWatcher />
             <Toaster
               position="top-center"
               theme="light"
