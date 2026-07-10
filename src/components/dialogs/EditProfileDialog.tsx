@@ -28,7 +28,6 @@ import {
   type UpdateProfileInput,
 } from '@/schemas/profile';
 import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
-import { useMaxUploadSize } from '@/hooks/useMaxUploadSize';
 import { apiPaths } from '@/lib/api-paths';
 import { AvatarCrop } from '../AvatarCrop';
 
@@ -47,7 +46,6 @@ type EditProfileDialog = {
 export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDialog) {
   // Local preview state (keep separate from RHF file)
   const queryClient = useQueryClient();
-  const { maxMb, loading: loadingMaxSize } = useMaxUploadSize();
   const [avatarPreview, setAvatarPreview] = useState<string>(
     user.avatar ? apiPaths.files.pfp(user.avatar) : '',
   );

@@ -11,7 +11,7 @@ export function AvatarCrop({ avatarPreview }: { avatarPreview: string }) {
     <div className="space-y-4">
       <div className="mx-auto grid h-[260px] w-[260px] place-items-center rounded-2xl overflow-hidden">
         <AvatarEditor
-          image={avatarPreview as any}
+          image={avatarPreview}
           width={230}
           height={230}
           border={15}
