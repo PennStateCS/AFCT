@@ -1,11 +1,12 @@
 // /src/app/api/assignments/[id]/problems/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canManageCourse } from '@/lib/permissions';
-import { ProblemTypeEnum } from '@/schemas/problem';
-import { z } from 'zod';
+import type { ProblemTypeEnum } from '@/schemas/problem';
+import type { z } from 'zod';
 
 // Types
 interface Problem {

@@ -2,8 +2,8 @@
 
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ColumnDef } from '@tanstack/react-table';
-import { Assignment } from '@prisma/client';
+import type { ColumnDef } from '@tanstack/react-table';
+import type { Assignment } from '@prisma/client';
 import type { AssignmentWithProblemCount } from '@/types/course';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';

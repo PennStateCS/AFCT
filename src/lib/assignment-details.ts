@@ -1,4 +1,4 @@
-import { Problem, CourseRole } from '@prisma/client';
+import type { Problem, CourseRole } from '@prisma/client';
 
 export type AssignmentProblemLink = {
   problem: Problem;

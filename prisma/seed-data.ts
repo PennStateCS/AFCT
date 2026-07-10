@@ -1,4 +1,4 @@
-import { ProblemType } from '@prisma/client';
+import type { ProblemType } from '@prisma/client';
 
 type PersonSeed = {
   id?: string;
@@ -254,7 +254,8 @@ export const problemData = [
   },
   {
     title: 'Infinite Loop TM',
-    description: 'Create the Turing machine shown in the provided JFLAP file that loops on its working alphabet.',
+    description:
+      'Create the Turing machine shown in the provided JFLAP file that loops on its working alphabet.',
     fileName: 'InfiniteLoopTM.jff',
     originalFileName: 'InfiniteLoopTM.jff',
     type: 'TM' as ProblemType,
@@ -270,7 +271,8 @@ export const problemData = [
   },
   {
     title: 'To Lowercase TM',
-    description: 'Create the Turing machine shown in the provided JFLAP file that converts input to lowercase.',
+    description:
+      'Create the Turing machine shown in the provided JFLAP file that converts input to lowercase.',
     fileName: 'toLowercaseTM.jff',
     originalFileName: 'toLowercaseTM.jff',
     type: 'TM' as ProblemType,

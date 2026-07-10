@@ -24,11 +24,8 @@ import {
 import { rerunSubmission } from '@/app/utils/rerunSubmission';
 import { rerunVisibleSubmissions } from '@/app/utils/rerunVisibleSubmissions';
 import { showToast } from '@/lib/toast';
-import {
-  filterSubmissions,
-  STATUS_FILTER_OPTIONS,
-  SubmissionStatusFilter,
-} from '@/lib/submission-status-filter';
+import type { SubmissionStatusFilter } from '@/lib/submission-status-filter';
+import { filterSubmissions, STATUS_FILTER_OPTIONS } from '@/lib/submission-status-filter';
 import type { ProblemSubmission } from '@/lib/problem-submission';
 import { statusToneClass, getTimingStatusChip, getReviewStatusChip } from '@/lib/submission-status';
 import { apiPaths } from '@/lib/api-paths';

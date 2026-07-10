@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { toEndOfDayInTimezone } from '@/lib/date-utils';
 import { getAssignmentsForUserRange, resolveUserTimezone } from '@/lib/calendar-assignments';

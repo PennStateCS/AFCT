@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
-import { ProblemTypeEnum } from '@/schemas/problem';
+import type { ProblemTypeEnum } from '@/schemas/problem';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { z } from 'zod';
 

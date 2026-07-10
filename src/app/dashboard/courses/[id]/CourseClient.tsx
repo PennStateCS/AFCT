@@ -18,8 +18,8 @@ import { StudentCourseView } from '@/components/course/StudentCourseView';
 import { AdminCourseView } from '@/components/course/AdminCourseView';
 import LoadingSpinner from '@/components/ui/loading-spinner';
 import { CourseDialogs } from '@/components/course/CourseDialogs';
-import { FullCourse } from '@/types/course';
-import { TabType } from '@/types/course';
+import type { FullCourse } from '@/types/course';
+import type { TabType } from '@/types/course';
 
 export default function CourseClient({ initialCourse }: { initialCourse?: FullCourse | null }) {
   const { id } = useParams();

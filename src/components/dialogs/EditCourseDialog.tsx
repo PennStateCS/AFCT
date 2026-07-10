@@ -12,7 +12,7 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Course, User } from '@prisma/client';
+import type { Course, User } from '@prisma/client';
 import { useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import InputGroup from '@/components/ui/InputGroup';
@@ -24,11 +24,12 @@ import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
 
 import { useForm, Controller } from 'react-hook-form';
 import { showToast } from '@/lib/toast';
-import { z } from 'zod';
+import type { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CourseFormSchema } from '@/schemas/course';
 import { toast } from 'sonner';
-import { getInstructors, EnrolledUser } from '@/lib/course-utils';
+import type { EnrolledUser } from '@/lib/course-utils';
+import { getInstructors } from '@/lib/course-utils';
 import { apiPaths } from '@/lib/api-paths';
 
 type EditCourseDialogProps = {

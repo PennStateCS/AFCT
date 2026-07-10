@@ -20,7 +20,7 @@ import { formatDeadlineDual } from '@/lib/date';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { fetchJson } from '@/lib/query-fetch';
-import {
+import type {
   AssignmentWithDetails,
   StudentAssignmentContext,
   StudentProblemComment,

@@ -5,11 +5,11 @@ import type { Dispatch, SetStateAction } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { showToast } from '@/lib/toast';
-import { FullCourse, DeleteTarget, EnrollableUser, TabType } from '@/types/course';
+import type { FullCourse, DeleteTarget, EnrollableUser, TabType } from '@/types/course';
 import { getEnrolledIds, type EnrolledUser } from '@/lib/course-utils';
 import { apiPaths } from '@/lib/api-paths';
 import { fetchJson } from '@/lib/query-fetch';
-import { Assignment, Problem, User } from '@prisma/client';
+import type { Assignment, Problem, User } from '@prisma/client';
 
 type CourseSectionView = 'summary' | 'full' | 'assignments' | 'problems' | 'roster';
 type SectionKey = 'assignments' | 'problems' | 'roster';
