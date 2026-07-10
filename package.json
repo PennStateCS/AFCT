@@ -39,6 +39,7 @@
     "docker:dev:resetdb": "docker compose -f docker-compose.dev.yml down -v",
     "docker:dev:emptydb": "docker exec -it afct-dev-postgres psql -U afct_user -d afct -c \"DROP SCHEMA public CASCADE; CREATE SCHEMA public;\" && docker exec -it afct-dev npx prisma migrate deploy",
     "docker:dev:migrate": "docker exec -it afct-dev npx prisma migrate dev",
+    "docker:dev:migrate:deploy": "docker exec afct-dev npx prisma migrate deploy",
     "docker:dev:generate": "docker exec -it afct-dev npx prisma generate",
     "docker:dev:studio": "docker exec -it afct-dev npx prisma studio",
     "docker:dev:seed": "docker exec -it afct-dev npx prisma db seed",
