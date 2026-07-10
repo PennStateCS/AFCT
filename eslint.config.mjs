@@ -1,15 +1,13 @@
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { FlatCompat } from '@eslint/eslintrc';
 import eslintConfigPrettier from 'eslint-config-prettier';
 import pluginQuery from '@tanstack/eslint-plugin-query';
+// eslint-config-next 16 ships native flat configs (no more FlatCompat).
+import nextCoreWebVitals from 'eslint-config-next/core-web-vitals';
+import nextTypescript from 'eslint-config-next/typescript';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-});
 
 const eslintConfig = [
   // Global ignores (previously handled implicitly by `next lint`): build output,
@@ -26,10 +24,24 @@ const eslintConfig = [
       'src/types/api.ts', // generated from the OpenAPI spec by `npm run docs:types`
     ],
   },
-  ...compat.extends('next/core-web-vitals', 'next/typescript'),
+  ...nextCoreWebVitals,
+  ...nextTypescript,
   // TanStack Query correctness rules: stable QueryClient, exhaustive query-key
   // deps, no void queryFn, correct infinite-query/mutation property order, etc.
   ...pluginQuery.configs['flat/recommended'],
+  {
+    // eslint-config-next 16 pulls in eslint-plugin-react-hooks 7, whose
+    // "recommended" set newly enables the React-Compiler readiness rules. Adopting
+    // those is a separate effort (they flag long-standing, working patterns), so
+    // keep them off to preserve this project's existing lint baseline for now.
+    rules: {
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/incompatible-library': 'off',
+      'react-hooks/purity': 'off',
+      'react-hooks/refs': 'off',
+      'react-hooks/static-components': 'off',
+    },
+  },
   {
     // require() is idiomatic (and hoisting-safe) inside vitest `vi.mock` factories,
     // which are hoisted above the file's imports. Enforce ESM imports only in

@@ -1,10 +1,8 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  // Don’t fail production builds on ESLint issues; enforce via CI instead
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  // Next 16 no longer runs ESLint during `next build` (lint is enforced via the
+  // `lint` script / CI), so the old `eslint.ignoreDuringBuilds` key is gone.
   turbopack: {
     root: __dirname,
   },
