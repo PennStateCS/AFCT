@@ -13,7 +13,12 @@ interface CourseHeaderProps {
   isStudent: boolean;
 }
 
-export function CourseHeader({ course, isStudent }: CourseHeaderProps) {
+/**
+ * The inner header content — title, badges, course status, and (for staff) the
+ * faculty/TA line and course dates. Extracted so it can sit either in its own
+ * card (student view) or above the tab bar in the admin card.
+ */
+export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
   const { timezone } = useEffectiveTimezone();
 
   const normalizeDate = (value?: string | Date | null) => {
@@ -59,51 +64,60 @@ export function CourseHeader({ course, isStudent }: CourseHeaderProps) {
 
   // -- render ---------------------------------------------------------------
   return (
-    <Card>
-      <CardHeader className="flex flex-col gap-3">
-        {/* Title with the badges (and course status) pulled to its right */}
-        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-          <CardTitle
-            id="course-page-title"
-            role="heading"
-            aria-level={1}
-            className="text-2xl leading-tight font-semibold tracking-tight"
-          >
-            <span className="text-muted-foreground">{course.code}</span>
-            <span className="text-muted-foreground">: </span>
-            {course.name}
-          </CardTitle>
+    <>
+      {/* Title with the badges (and course status) pulled to its right */}
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+        <CardTitle
+          id="course-page-title"
+          role="heading"
+          aria-level={1}
+          className="text-2xl leading-tight font-semibold tracking-tight"
+        >
+          <span className="text-muted-foreground">{course.code}</span>
+          <span className="text-muted-foreground">: </span>
+          {course.name}
+        </CardTitle>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary">{course.semester}</Badge>
-            <Badge variant="outline">
-              {course.credits} credit{course.credits === 1 ? '' : 's'}
-            </Badge>
-            <Badge variant={courseStatus.theme.variant}>{courseStatus.label}</Badge>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="secondary">{course.semester}</Badge>
+          <Badge variant="outline">
+            {course.credits} credit{course.credits === 1 ? '' : 's'}
+          </Badge>
+          <Badge variant={courseStatus.theme.variant}>{courseStatus.label}</Badge>
+        </div>
+      </div>
+
+      {!isStudent && (
+        <div className="space-y-1">
+          {/* Instructors and TAs, side by side */}
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
+            <span>
+              <span className="text-muted-foreground">Faculty: </span>
+              {facultyNames}
+            </span>
+            <span>
+              <span className="text-muted-foreground">TAs: </span>
+              {taNames}
+            </span>
+          </div>
+
+          {/* Course start and end dates */}
+          <div className="text-muted-foreground flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
+            <span>Start: {formatCourseDate(startDate)}</span>
+            <span>End: {formatCourseDate(endDate)}</span>
           </div>
         </div>
+      )}
+    </>
+  );
+}
 
-        {!isStudent && (
-          <div className="space-y-1">
-            {/* Instructors and TAs, side by side */}
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
-              <span>
-                <span className="text-muted-foreground">Faculty: </span>
-                {facultyNames}
-              </span>
-              <span>
-                <span className="text-muted-foreground">TAs: </span>
-                {taNames}
-              </span>
-            </div>
-
-            {/* Course start and end dates */}
-            <div className="text-muted-foreground flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
-              <span>Start: {formatCourseDate(startDate)}</span>
-              <span>End: {formatCourseDate(endDate)}</span>
-            </div>
-          </div>
-        )}
+/** Standalone header card (student view; the admin view embeds the tab bar). */
+export function CourseHeader({ course, isStudent }: CourseHeaderProps) {
+  return (
+    <Card>
+      <CardHeader className="flex flex-col gap-3">
+        <CourseHeaderContent course={course} isStudent={isStudent} />
       </CardHeader>
     </Card>
   );
