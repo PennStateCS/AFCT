@@ -1,4 +1,4 @@
-import { CourseRole } from '@prisma/client';
+import type { CourseRole } from '@prisma/client';
 import { CourseRoleEnum } from '@/schemas/user';
 import type { Row } from '@tanstack/react-table';
 

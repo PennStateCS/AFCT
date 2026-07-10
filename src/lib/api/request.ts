@@ -5,7 +5,7 @@
  * re-implemented (and occasionally mis-implemented) across route handlers.
  */
 
-import { NextResponse } from 'next/server';
+import type { NextResponse } from 'next/server';
 import type { ZodType } from 'zod';
 import { apiError } from './http';
 
@@ -28,7 +28,9 @@ export async function readJson<T>(
   const result = schema.safeParse(raw);
   if (!result.success) {
     const first = result.error.issues[0];
-    const detail = first ? `${first.path.join('.') || 'body'}: ${first.message}` : 'Validation failed';
+    const detail = first
+      ? `${first.path.join('.') || 'body'}: ${first.message}`
+      : 'Validation failed';
     return { ok: false, response: apiError(400, detail) };
   }
   return { ok: true, data: result.data };

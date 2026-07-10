@@ -6,7 +6,8 @@ import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { getCourseStatusTag } from '@/lib/course-status';
-import { EnrolledUser, formatInstructorNames, getStudentCount, getTAs } from '@/lib/course-utils';
+import type { EnrolledUser } from '@/lib/course-utils';
+import { formatInstructorNames, getStudentCount, getTAs } from '@/lib/course-utils';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatDateTimeInTimeZone } from '@/lib/date';
 
@@ -46,9 +47,7 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
   const canManageCourse = (course: DashboardCourse) =>
     isAdmin || course.userRole === 'FACULTY' || course.userRole === 'TA';
 
-  const visibleCourses = courses.filter(
-    (course) => course.isPublished || canManageCourse(course),
-  );
+  const visibleCourses = courses.filter((course) => course.isPublished || canManageCourse(course));
 
   return (
     <Card className="flex h-full" aria-labelledby="current-courses-title">

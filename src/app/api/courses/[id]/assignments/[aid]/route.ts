@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { ProblemTypeEnum } from '@/schemas/problem';
-import { RoleEnum } from '@/schemas/user';
+import type { ProblemTypeEnum } from '@/schemas/problem';
+import type { RoleEnum } from '@/schemas/user';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { canManageCourse } from '@/lib/permissions';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
@@ -10,7 +10,7 @@ import { sumProblemPoints } from '@/lib/course-format';
 import { resolveCourseTimezone } from '@/lib/course-timezone';
 import { toEndOfDayInTimezone } from '@/lib/date-utils';
 import { computeLateSubmissionState } from '@/lib/assignment-late-window';
-import { z } from 'zod';
+import type { z } from 'zod';
 
 // Types
 interface AssignmentWithProblemsAndCourse {

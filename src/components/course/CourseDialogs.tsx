@@ -6,8 +6,8 @@ import { CreateAssignmentDialog } from '@/components/dialogs/CreateAssignmentDia
 import { EnrollUserDialog } from '@/components/dialogs/EnrollUsersDialog';
 import BulkEnrollDialog from '@/components/dialogs/BulkEnrollDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
-import { FullCourse, DeleteTarget, EnrollableUser } from '@/types/course';
-import { Assignment, Problem, Course } from '@prisma/client';
+import type { FullCourse, DeleteTarget, EnrollableUser } from '@/types/course';
+import type { Assignment, Problem, Course } from '@prisma/client';
 
 interface CourseDialogsProps {
   course: FullCourse;

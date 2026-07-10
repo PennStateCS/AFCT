@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import SwitchField from '@/components/ui/SwitchField';
 import { Button } from '@/components/ui/button';
-import { User } from '@prisma/client';
+import type { User } from '@prisma/client';
 import { toast } from 'sonner';
 import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
@@ -25,7 +25,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   CreateCourseFormSchema, // Form schema (no transformations)
 } from '@/schemas/course';
-import { z } from 'zod';
+import type { z } from 'zod';
 import { apiPaths } from '@/lib/api-paths';
 
 // RHF form state = Zod INPUT (strings for datetime-local)
@@ -40,10 +40,7 @@ interface CreateCourseDialogProps {
 export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDialogProps) {
   // Default the course timezone to the creator's browser zone — a sensible starting
   // point they can change. (The server falls back to the system zone if omitted.)
-  const browserTz = useMemo(
-    () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-    [],
-  );
+  const browserTz = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC', []);
 
   // Default form values (strings for datetime-local)
   const defaults: FormValues = useMemo(

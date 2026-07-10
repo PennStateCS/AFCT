@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import AssignmentClient from './AssignmentClient';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { AssignmentWithDetails } from '@/lib/assignment-details';
+import type { AssignmentWithDetails } from '@/lib/assignment-details';
 
 export const metadata: Metadata = {
   title: 'Assignment',
@@ -70,8 +70,7 @@ export default async function AssignmentPage({ params }: PageProps) {
     if (assignment) {
       // Staff (admin or course FACULTY/TA) see any assignment; an enrolled student
       // sees it only once published.
-      const hasStudentAccess =
-        enrollment?.role === 'STUDENT' && assignment.isPublished;
+      const hasStudentAccess = enrollment?.role === 'STUDENT' && assignment.isPublished;
 
       if (isStaff || hasStudentAccess) {
         const totalProblemPoints = assignment.problems.reduce((sum, ap) => {

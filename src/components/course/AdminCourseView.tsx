@@ -8,10 +8,10 @@ import GroupsCard from '@/components/GroupsCard';
 import { userColumns } from '@/app/dashboard/courses/[id]/user-columns';
 import { useAssignmentColumns } from '@/app/dashboard/courses/[id]/assignment-columns';
 import { useProblemColumns } from '@/app/dashboard/courses/[id]/problem-columns';
-import { FullCourse, TabType } from '@/types/course';
+import type { FullCourse, TabType } from '@/types/course';
 import { getInstructors } from '@/lib/course-utils';
 import { NotebookText, FileText, GraduationCap, Table, Users, Activity } from 'lucide-react';
-import { Assignment, Problem } from '@prisma/client';
+import type { Assignment, Problem } from '@prisma/client';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { useMemo } from 'react';
 
@@ -107,7 +107,7 @@ export function AdminCourseView({
           id="tab-assignments"
           aria-controls="panel-assignments"
           aria-label={`Assignments (${assignmentCount})`}
-          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-accent data-[state=active]:text-white"
+          className="data-[state=active]:bg-secondary hover:bg-accent px-4 whitespace-nowrap data-[state=active]:text-white"
           value="assignments"
         >
           <div className="flex items-center gap-2">
@@ -120,7 +120,7 @@ export function AdminCourseView({
           id="tab-problems"
           aria-controls="panel-problems"
           aria-label={`Problems (${problemCount})`}
-          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-accent data-[state=active]:text-white"
+          className="data-[state=active]:bg-secondary hover:bg-accent px-4 whitespace-nowrap data-[state=active]:text-white"
           value="problems"
         >
           <div className="flex items-center gap-2">
@@ -133,7 +133,7 @@ export function AdminCourseView({
           id="tab-roster"
           aria-controls="panel-roster"
           aria-label={`Roster (${rosterCount})`}
-          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-accent data-[state=active]:text-white"
+          className="data-[state=active]:bg-secondary hover:bg-accent px-4 whitespace-nowrap data-[state=active]:text-white"
           value="roster"
         >
           <div className="flex items-center gap-2">
@@ -145,7 +145,7 @@ export function AdminCourseView({
         <TabsTrigger
           id="tab-grades"
           aria-controls="panel-grades"
-          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-accent data-[state=active]:text-white"
+          className="data-[state=active]:bg-secondary hover:bg-accent px-4 whitespace-nowrap data-[state=active]:text-white"
           value="grades"
         >
           <div className="flex items-center gap-2">
@@ -157,7 +157,7 @@ export function AdminCourseView({
         <TabsTrigger
           id="tab-groups"
           aria-controls="panel-groups"
-          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-accent data-[state=active]:text-white"
+          className="data-[state=active]:bg-secondary hover:bg-accent px-4 whitespace-nowrap data-[state=active]:text-white"
           value="groups"
         >
           <div className="flex items-center gap-2">
@@ -169,7 +169,7 @@ export function AdminCourseView({
         <TabsTrigger
           id="tab-activity"
           aria-controls="panel-activity"
-          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-accent data-[state=active]:text-white"
+          className="data-[state=active]:bg-secondary hover:bg-accent px-4 whitespace-nowrap data-[state=active]:text-white"
           value="activity"
         >
           <div className="flex items-center gap-2">
