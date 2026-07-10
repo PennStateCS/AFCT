@@ -932,7 +932,9 @@ export default function AssignmentDashboardPage({
           courseIsArchived={courseIsArchived}
           open={editAssignmentOpen}
           setOpen={setEditAssignmentOpen}
-          timeZone={timezone}
+          // Edit the due date in the COURSE's zone (what the server stores it in), not
+          // the viewer's — otherwise saving would shift the deadline.
+          timeZone={assignment.course?.timezone ?? timezone}
           assignment={{
             ...assignment,
             description: assignment.description ?? null,

@@ -131,7 +131,9 @@ export function CourseDialogs({
         <EditAssignmentDialog
           courseIsArchived={course.isArchived}
           assignment={selectedAssignment}
-          timeZone={timeZone}
+          // Edit due dates in the COURSE's zone (where the server stores them), not the
+          // viewer's — otherwise saving would shift the deadline.
+          timeZone={course.timezone ?? timeZone}
           open={editAssignmentOpen}
           setOpen={setEditAssignmentOpen}
           onSave={onAssignmentSave}
@@ -156,7 +158,8 @@ export function CourseDialogs({
         setOpen={setCreateAssignmentOpen}
         courseId={course.id}
         courseIsArchived={course.isArchived}
-        timeZone={timeZone}
+        // New due dates are interpreted in the COURSE's zone, not the viewer's.
+        timeZone={course.timezone ?? timeZone}
         onCreate={onAssignmentCreate}
       />
 
