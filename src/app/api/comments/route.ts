@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canAccessCourse, canManageCourse } from '@/lib/permissions';
+import { apiError } from '@/lib/api/http';
+import { logDenial, logError } from '@/lib/api/activity';
 
 const createCommentSchema = z.object({
   content: z.string().min(1, 'Comment content is required').max(5000, 'Comment too long'),
@@ -46,7 +48,7 @@ export async function POST(request: NextRequest) {
     const user = session?.user;
     actorId = user?.id ?? null;
     if (!user || user.inactive) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return apiError(401, 'Unauthorized');
     }
 
     const body = await request.json();
@@ -58,18 +60,16 @@ export async function POST(request: NextRequest) {
       select: { courseId: true, isPublished: true },
     });
     if (!assignment) {
-      return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+      return apiError(404, 'Assignment not found');
     }
 
     // Authorize: any enrolled user (or admin) may comment.
     if (!(await canAccessCourse(user, assignment.courseId))) {
-      await createEnhancedActivityLog(prisma, request, {
-        userId: session?.user?.id ?? null,
+      return logDenial(request, {
+        userId: user.id,
         action: 'COMMENT_CREATE_DENIED',
-        severity: 'SECURITY',
-        metadata: {},
+        courseId: assignment.courseId,
       });
-      return NextResponse.json({ error: 'User not enrolled in this course' }, { status: 403 });
     }
 
     const isStaff = await canManageCourse(user, assignment.courseId);
@@ -77,26 +77,28 @@ export async function POST(request: NextRequest) {
     // A student must not comment on an unpublished assignment (they can't see it);
     // only course staff may. Mask it as 404 so the assignment stays invisible.
     if (!assignment.isPublished && !isStaff) {
+      // Existence-mask (404, not 403), so we log the denial directly rather than via
+      // logDenial (which returns 403 Forbidden).
       await createEnhancedActivityLog(prisma, request, {
-        userId: session?.user?.id ?? null,
+        userId: user.id,
         action: 'COMMENT_CREATE_DENIED',
         severity: 'SECURITY',
+        courseId: assignment.courseId,
         metadata: { reason: 'unpublished assignment' },
       });
-      return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+      return apiError(404, 'Assignment not found');
     }
 
     // Students may only comment on their own thread. `studentId` (aboutStudentId)
     // names whose feedback thread the comment belongs to; a non-staff author may
     // only target themselves. Staff/admin may file into any student's thread.
     if (studentId && studentId !== user.id && !isStaff) {
-      await createEnhancedActivityLog(prisma, request, {
-        userId: session?.user?.id ?? null,
+      return logDenial(request, {
+        userId: user.id,
         action: 'COMMENT_CREATE_DENIED',
-        severity: 'SECURITY',
+        courseId: assignment.courseId,
         metadata: { reason: "another student's thread" },
       });
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // The author's roster row supplies only their course-role badge and may be absent
@@ -112,7 +114,7 @@ export async function POST(request: NextRequest) {
       where: { id: problemId, courseId: assignment.courseId },
     });
     if (!problem) {
-      return NextResponse.json({ error: 'Problem not found in this course' }, { status: 404 });
+      return apiError(404, 'Problem not found in this course');
     }
 
     // Verify the problem is actually linked to THIS assignment (not merely present
@@ -123,10 +125,7 @@ export async function POST(request: NextRequest) {
       select: { assignmentId: true },
     });
     if (!link) {
-      return NextResponse.json(
-        { error: 'Problem is not part of this assignment' },
-        { status: 400 },
-      );
+      return apiError(400, 'Problem is not part of this assignment');
     }
 
     // If filtering by a specific student, verify they’re enrolled
@@ -135,7 +134,7 @@ export async function POST(request: NextRequest) {
         where: { courseId_userId: { courseId: assignment.courseId, userId: studentId } },
       });
       if (!studentRosterEntry) {
-        return NextResponse.json({ error: 'Student not enrolled in this course' }, { status: 404 });
+        return apiError(404, 'Student not enrolled in this course');
       }
     }
 
@@ -192,16 +191,11 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     console.error('Error creating comment:', error);
-    await createEnhancedActivityLog(prisma, request, {
-      userId: actorId,
-      action: 'COMMENT_CREATE_ERROR',
-      severity: 'ERROR',
-      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
-    });
+    await logError(request, { userId: actorId, action: 'COMMENT_CREATE_ERROR', error });
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Invalid request data' }, { status: 400 });
+      return apiError(400, 'Invalid request data');
     }
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return apiError(500, 'Internal server error');
   }
 }
 
@@ -228,13 +222,13 @@ export async function DELETE(request: NextRequest) {
     const user = session?.user;
     actorId = user?.id ?? null;
     if (!user || user.inactive) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return apiError(401, 'Unauthorized');
     }
 
     const { searchParams } = new URL(request.url);
     const commentId = searchParams.get('commentId');
     if (!commentId) {
-      return NextResponse.json({ error: 'commentId is required' }, { status: 400 });
+      return apiError(400, 'commentId is required');
     }
 
     const comment = await prisma.comment.findUnique({
@@ -244,19 +238,17 @@ export async function DELETE(request: NextRequest) {
       },
     });
     if (!comment) {
-      return NextResponse.json({ error: 'Comment not found' }, { status: 404 });
+      return apiError(404, 'Comment not found');
     }
 
     // Comments are immutable to students: only course staff (faculty/TA) or a system
     // admin may delete — including their own. A student cannot delete their comment.
     if (!(await canManageCourse(user, comment.assignment.courseId))) {
-      await createEnhancedActivityLog(prisma, request, {
-        userId: session?.user?.id ?? null,
+      return logDenial(request, {
+        userId: user.id,
         action: 'COMMENT_DELETE_DENIED',
-        severity: 'SECURITY',
-        metadata: {},
+        courseId: comment.assignment.courseId,
       });
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     await prisma.comment.delete({ where: { id: commentId } });
@@ -285,12 +277,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting comment:', error);
-    await createEnhancedActivityLog(prisma, request, {
-      userId: actorId,
-      action: 'COMMENT_DELETE_ERROR',
-      severity: 'ERROR',
-      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
-    });
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    await logError(request, { userId: actorId, action: 'COMMENT_DELETE_ERROR', error });
+    return apiError(500, 'Internal server error');
   }
 }
