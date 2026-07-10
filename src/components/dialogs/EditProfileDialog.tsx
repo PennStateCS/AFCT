@@ -11,12 +11,12 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Trash2 } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
 import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
-import FileUploadInput from '@/components/FileUploadInput';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
@@ -30,6 +30,7 @@ import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { useMaxUploadSize } from '@/hooks/useMaxUploadSize';
 import { apiPaths } from '@/lib/api-paths';
+import { AvatarCrop } from '../AvatarCrop';
 
 type EditProfileDialog = {
   user: SessionUser;
@@ -174,13 +175,14 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
       <DialogContent className="bg-card max-w-lg">
         <DialogHeader>
           <DialogTitle>Edit Profile</DialogTitle>
-          <DialogDescription>Update your personal information and avatar.</DialogDescription>
+          <DialogDescription>Update your personal information.</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {/* Avatar */}
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-4">
+          <div className="flex flex-col items-center gap-3">
+            <Label className="text-center w-full">Avatar Image</Label>
+            <div className="flex items-center justify-center gap-4 w-full">
               <Avatar className="h-20 w-20">
                 <AvatarImage src={avatarPreview || undefined} alt="User Avatar" />
                 <AvatarFallback className="bg-secondary text-secondary-foreground">
@@ -188,48 +190,49 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
                 </AvatarFallback>
               </Avatar>
 
-              <div className="flex flex-col gap-2">
-                {
+              <div className="flex w-full max-w-xs flex-col gap-3">
+                <input
+                  id="avatar-upload"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => handleAvatarUpload(e.target.files?.[0])}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => document.getElementById('avatar-upload')?.click()}
+                  className="flex items-center gap-2"
+                >
+                  <Upload className="h-4 w-4" />
+                  Upload Avatar
+                </Button>
+                {errors.avatarFile?.message && (
+                  <p className="mt-1 text-xs text-red-600">
+                    {typeof errors.avatarFile?.message === 'string'
+                      ? errors.avatarFile.message
+                      : String(errors.avatarFile?.message)}
+                  </p>
+                )}
+
+                {avatarPreview && (
                   <Button
                     type="button"
                     variant="outline"
                     className="flex items-center gap-2 border-red-600 text-red-600 hover:bg-red-50"
                     onClick={handleDeleteAvatar}
-                    size="sm"
                   >
                     <Trash2 className="h-4 w-4" />
                     Delete Avatar
                   </Button>
-                }
+                )}
               </div>
             </div>
-
-            <Controller
-              control={control}
-              name="avatarFile"
-              render={({ field: { onChange, value } }) => (
-                <FileUploadInput
-                  id="avatar-file"
-                  name="avatarFile"
-                  label="Avatar Image"
-                  accept="image/*"
-                  maxSizeMb={maxMb}
-                  value={value}
-                  onChange={(file) => {
-                    handleAvatarUpload(file);
-                    onChange(file);
-                  }}
-                  error={
-                    typeof errors.avatarFile?.message === 'string'
-                      ? errors.avatarFile.message
-                      : undefined
-                  }
-                  disabled={loadingMaxSize}
-                  description="Recommended: square image, at least 256x256px"
-                />
-              )}
-            />
           </div>
+
+          {avatarPreview ? (
+            <AvatarCrop avatarPreview={avatarPreview} />
+          ) : null}
 
           {/* First Name */}
           <Controller
