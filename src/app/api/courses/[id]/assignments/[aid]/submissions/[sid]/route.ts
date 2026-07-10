@@ -188,7 +188,9 @@ export const GET = withCourseAuth(
           (s: (typeof submissions)[number]) => s.problemId === problem.id,
         );
         result[problem.id] = {
-          problem,
+          // The problem's solution filename is instructor-only; hide it from students
+          // (their own submission filenames below are theirs to see).
+          problem: { ...problem, originalFileName: isStaff ? problem.originalFileName : null },
           submissions: subsForProblem.map((s: (typeof subsForProblem)[number]) => ({
             id: s.id,
             submittedAt: s.submittedAt,
