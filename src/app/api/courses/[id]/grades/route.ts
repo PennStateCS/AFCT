@@ -70,7 +70,7 @@ export const POST = withCourseAuth(
       return NextResponse.json({ error: 'Failed to record export' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'GRADES_EXPORT_DENIED' },
+  { access: 'manage', deniedAction: 'GRADES_EXPORT_DENIED', blockWhenArchived: true },
 );
 
 /**

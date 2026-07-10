@@ -28,6 +28,7 @@ import { POST } from './route';
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
+  prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
   uploadLimitMock.mockResolvedValue({ maxBytes: 5 * 1024 * 1024, maxMb: 5 });
   validateMock.mockReturnValue({ isValid: true });
 });
@@ -109,6 +110,27 @@ describe('POST /api/courses/[id]/problems', () => {
     expect(res.status).toBe(201);
     expect(prismaMock.problem.create).toHaveBeenCalled();
     expect(activityLogMock).toHaveBeenCalled();
+  });
+
+  it('returns 409 when the course is archived', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+
+    const formData = new FormData();
+    formData.set('title', 'Problem');
+    formData.set('type', 'FA');
+    formData.set('file', new File([new Uint8Array([1])], 'file.jff'));
+
+    const req = new NextRequest('http://localhost/api/courses/c1/problems', {
+      method: 'POST',
+      body: formData,
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(409);
+    expect(prismaMock.problem.create).not.toHaveBeenCalled();
   });
 
   it('returns 400 when the solution file fails structure validation', async () => {

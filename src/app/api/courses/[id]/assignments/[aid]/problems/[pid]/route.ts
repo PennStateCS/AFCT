@@ -150,5 +150,5 @@ export const PUT = withCourseAuth(
       );
     }
   },
-  { access: 'manage', deniedAction: 'ASSIGNMENT_PROBLEM_SETTINGS_UPDATE_DENIED' },
+  { access: 'manage', deniedAction: 'ASSIGNMENT_PROBLEM_SETTINGS_UPDATE_DENIED', blockWhenArchived: true },
 );

@@ -110,7 +110,7 @@ export const DELETE = withCourseAuth(
       return NextResponse.json({ error: 'Server error' }, { status: 500 });
     }
   },
-  { access: 'manage', roles: ['FACULTY'], deniedAction: 'ROSTER_REMOVE_DENIED' },
+  { access: 'manage', roles: ['FACULTY'], blockWhenArchived: true, deniedAction: 'ROSTER_REMOVE_DENIED' },
 );
 
 /**
@@ -275,5 +275,5 @@ export const PATCH = withCourseAuth(
       return NextResponse.json({ error: 'Server error' }, { status: 500 });
     }
   },
-  { access: 'manage', roles: ['FACULTY'], deniedAction: 'ROSTER_UPDATE_DENIED' },
+  { access: 'manage', roles: ['FACULTY'], blockWhenArchived: true, deniedAction: 'ROSTER_UPDATE_DENIED' },
 );

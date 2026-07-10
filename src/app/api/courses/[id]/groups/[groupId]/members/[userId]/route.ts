@@ -65,5 +65,5 @@ export const DELETE = withCourseAuth(
       return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'GROUP_MEMBER_REMOVE_DENIED' },
+  { access: 'manage', deniedAction: 'GROUP_MEMBER_REMOVE_DENIED', blockWhenArchived: true },
 );

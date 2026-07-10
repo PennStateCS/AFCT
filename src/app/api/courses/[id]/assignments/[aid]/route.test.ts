@@ -8,6 +8,7 @@ const prismaMock = vi.hoisted(() => ({
   comment: { count: vi.fn() },
   user: { findUnique: vi.fn() },
   systemSettings: { findUnique: vi.fn() },
+  course: { findUnique: vi.fn() },
   roster: { findFirst: vi.fn() },
 }));
 
@@ -29,6 +30,7 @@ import { GET, PUT, PATCH, DELETE } from './route';
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
+  prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
   prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
   toEndOfDayMock.mockReturnValue(new Date('2026-01-01T00:00:00.000Z'));
   toDateTimeMock.mockReturnValue(new Date('2026-01-02T00:00:00.000Z'));
@@ -331,6 +333,13 @@ describe('PUT /api/courses/[id]/assignments/[aid]', () => {
     const res = await PUT(putReq({ title: 'New', dueDate: '2026-01-01' }), mutationParams);
     expect(res.status).toBe(500);
   });
+
+  it('returns 409 when the course is archived', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+    const res = await PUT(putReq({ title: 'New', dueDate: '2026-01-01' }), mutationParams);
+    expect(res.status).toBe(409);
+    expect(prismaMock.assignment.update).not.toHaveBeenCalled();
+  });
 });
 
 describe('PATCH /api/courses/[id]/assignments/[aid]', () => {
@@ -412,6 +421,13 @@ describe('PATCH /api/courses/[id]/assignments/[aid]', () => {
     const res = await PATCH(patchReq({ title: 'New' }), mutationParams);
     expect(res.status).toBe(500);
   });
+
+  it('returns 409 when the course is archived', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+    const res = await PATCH(patchReq({ title: 'New' }), mutationParams);
+    expect(res.status).toBe(409);
+    expect(prismaMock.assignment.update).not.toHaveBeenCalled();
+  });
 });
 
 describe('DELETE /api/courses/[id]/assignments/[aid]', () => {
@@ -473,5 +489,12 @@ describe('DELETE /api/courses/[id]/assignments/[aid]', () => {
     prismaMock.assignment.delete.mockRejectedValue(new Error('db down'));
     const res = await DELETE(delReq(), mutationParams);
     expect(res.status).toBe(500);
+  });
+
+  it('returns 409 when the course is archived', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+    const res = await DELETE(delReq(), mutationParams);
+    expect(res.status).toBe(409);
+    expect(prismaMock.assignment.delete).not.toHaveBeenCalled();
   });
 });

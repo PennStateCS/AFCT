@@ -114,5 +114,5 @@ export const POST = withCourseAuth(
       return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'GROUP_CREATE_DENIED' },
+  { access: 'manage', deniedAction: 'GROUP_CREATE_DENIED', blockWhenArchived: true },
 );

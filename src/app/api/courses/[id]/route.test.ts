@@ -54,6 +54,8 @@ import { GET, PUT, DELETE } from './route';
 beforeEach(() => {
   vi.clearAllMocks();
   authMock.mockResolvedValue(null);
+  // Default: the course is not archived, so the wrapper's archive freeze is a no-op.
+  prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
   canArchiveMock.mockResolvedValue({ canArchive: true, reason: '' });
   canUnpublishMock.mockResolvedValue({ canUnpublish: true, reason: '' });
   toDateTimeMock.mockImplementation((val: string) => new Date(val));
@@ -350,6 +352,33 @@ describe('PUT /api/courses/[id]', () => {
 
     const res = await PUT(req, { params: Promise.resolve({ id: 'course-1' }) });
     expect(res.status).toBe(401);
+  });
+
+  it('returns 409 and does not update when the course is archived', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+
+    const req = new Request('http://localhost/api/courses/1', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Course 1',
+        code: 'CS101',
+        semester: 'Fall 2026',
+        credits: 3,
+        startDate: '2026-08-25T09:00',
+        endDate: '2026-12-15T17:00',
+        registrationOpenAt: '2026-07-01T09:00',
+        registrationCloseAt: '2026-09-01T09:00',
+        isPublished: true,
+        isArchived: false,
+        instructorIds: ['u1'],
+      }),
+    });
+
+    const res = await PUT(req, { params: Promise.resolve({ id: 'course-1' }) });
+    expect(res.status).toBe(409);
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 
   it('returns 400 when isArchived is not a boolean', async () => {

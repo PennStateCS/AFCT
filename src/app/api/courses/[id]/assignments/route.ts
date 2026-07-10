@@ -193,5 +193,5 @@ export const POST = withCourseAuth(
       return NextResponse.json({ error: 'Failed to create assignment' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'ASSIGNMENT_CREATE_DENIED' },
+  { access: 'manage', deniedAction: 'ASSIGNMENT_CREATE_DENIED', blockWhenArchived: true },
 );

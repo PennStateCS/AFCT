@@ -19,6 +19,7 @@ import { GET, POST } from './route';
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
+  prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
 });
 
 describe('GET /api/courses/[id]/groups', () => {
@@ -160,6 +161,22 @@ describe('POST /api/courses/[id]/groups', () => {
       { params: { id: 'c1' } } as any,
     );
     expect(res.status).toBe(409);
+  });
+
+  it('returns 409 when the course is archived', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+
+    const res = await POST(
+      new NextRequest('http://localhost/api/courses/c1/groups', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'New' }),
+      }),
+      { params: { id: 'c1' } } as any,
+    );
+    expect(res.status).toBe(409);
+    expect(prismaMock.group.create).not.toHaveBeenCalled();
   });
 
   it('creates group', async () => {

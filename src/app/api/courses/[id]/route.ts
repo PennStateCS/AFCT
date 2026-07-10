@@ -704,7 +704,7 @@ export const PUT = withCourseAuth(
       return NextResponse.json({ error: 'Failed to update course' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'COURSE_UPDATE_DENIED' },
+  { access: 'manage', deniedAction: 'COURSE_UPDATE_DENIED', blockWhenArchived: true },
 );
 
 /**

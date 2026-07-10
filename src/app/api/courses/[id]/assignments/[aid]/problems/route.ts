@@ -286,7 +286,7 @@ export const POST = withCourseAuth(
       return NextResponse.json({ error: 'Failed to update assignment problems.' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'ASSIGNMENT_ADD_PROBLEMS_DENIED' },
+  { access: 'manage', deniedAction: 'ASSIGNMENT_ADD_PROBLEMS_DENIED', blockWhenArchived: true },
 );
 
 /**
@@ -410,5 +410,5 @@ export const DELETE = withCourseAuth(
       return NextResponse.json({ error: 'Failed to remove problem.' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'ASSIGNMENT_REMOVE_PROBLEM_DENIED' },
+  { access: 'manage', deniedAction: 'ASSIGNMENT_REMOVE_PROBLEM_DENIED', blockWhenArchived: true },
 );

@@ -84,7 +84,7 @@ export const PATCH = withCourseAuth(
       return NextResponse.json({ error: 'Failed to update group' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'GROUP_UPDATE_DENIED' },
+  { access: 'manage', deniedAction: 'GROUP_UPDATE_DENIED', blockWhenArchived: true },
 );
 
 /**
@@ -136,5 +136,5 @@ export const DELETE = withCourseAuth(
       return NextResponse.json({ error: 'Failed to delete group' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'GROUP_DELETE_DENIED' },
+  { access: 'manage', deniedAction: 'GROUP_DELETE_DENIED', blockWhenArchived: true },
 );
