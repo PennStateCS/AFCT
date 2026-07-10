@@ -3,31 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { CourseRoleEnum } from '@/schemas/user';
 import { canAccessCourse, canManageCourse } from '@/lib/permissions';
-
-// ---- Types ----
-interface CommentUser {
-  id: string;
-  firstName?: string | null;
-  lastName?: string | null;
-  avatar?: string | null;
-}
-
-interface CommentRoster {
-  role?: z.infer<typeof CourseRoleEnum> | null;
-  user: CommentUser;
-}
-
-interface CommentDB {
-  id: string;
-  content: string;
-  createdAt: string | Date;
-  roster: CommentRoster;
-  assignmentId?: string;
-  problemId?: string;
-  aboutStudentId?: string | null;
-}
 
 const createCommentSchema = z.object({
   content: z.string().min(1, 'Comment content is required').max(5000, 'Comment too long'),
@@ -123,20 +99,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Obtain the author's roster row for the comment FK. Admins who aren't on the
-    // roster are auto-added as faculty so they can comment.
-    let rosterEntry = await prisma.roster.findFirst({
+    // The author's roster row supplies only their course-role badge and may be absent
+    // (e.g. a system admin commenting on a course they aren't enrolled in). We do NOT
+    // fabricate a roster row — the comment is attributed to the author (User) directly.
+    const rosterEntry = await prisma.roster.findFirst({
       where: { courseId: assignment.courseId, userId: user.id },
+      select: { id: true },
     });
-    if (!rosterEntry) {
-      rosterEntry = await prisma.roster.create({
-        data: {
-          courseId: assignment.courseId,
-          userId: user.id,
-          role: 'FACULTY',
-        },
-      });
-    }
 
     // Verify problem belongs to course
     const problem = await prisma.problem.findFirst({
@@ -170,31 +139,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Create comment
-    const comment = (await prisma.comment.create({
+    // Create comment — attributed to the author (User); roster (role badge) optional.
+    const comment = await prisma.comment.create({
       data: {
         content,
         assignmentId,
         problemId,
-        rosterId: rosterEntry.id,
+        authorId: user.id,
+        rosterId: rosterEntry?.id ?? null,
         aboutStudentId: studentId || null,
       },
       include: {
-        roster: {
-          select: {
-            role: true, // course-specific role (e.g., FACULTY/TA/STUDENT)
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                avatar: true,
-              },
-            },
-          },
-        },
+        author: { select: { id: true, firstName: true, lastName: true, avatar: true } },
+        roster: { select: { role: true } }, // course role for the badge, may be null
       },
-    })) as CommentDB;
+    });
 
     await createEnhancedActivityLog(prisma, request, {
       userId: user.id,
@@ -222,11 +181,11 @@ export async function POST(request: NextRequest) {
         content: comment.content,
         createdAt: comment.createdAt,
         author: {
-          id: comment.roster.user.id,
-          firstName: comment.roster.user.firstName ?? null,
-          lastName: comment.roster.user.lastName ?? null,
-          avatar: comment.roster.user.avatar ?? null,
-          role: comment.roster.role ?? null,
+          id: comment.author.id,
+          firstName: comment.author.firstName ?? null,
+          lastName: comment.author.lastName ?? null,
+          avatar: comment.author.avatar ?? null,
+          role: comment.roster?.role ?? null,
         },
       },
       { status: 201 },
@@ -281,7 +240,6 @@ export async function DELETE(request: NextRequest) {
     const comment = await prisma.comment.findUnique({
       where: { id: commentId },
       include: {
-        roster: { include: { user: true } },
         assignment: { select: { courseId: true } },
       },
     });
@@ -320,7 +278,7 @@ export async function DELETE(request: NextRequest) {
         problemId: comment.problemId,
         commentId: comment.id,
         aboutStudentId: comment.aboutStudentId,
-        isOwnerDeleting: comment.roster.user.id === user.id,
+        isOwnerDeleting: comment.authorId === user.id,
       },
     });
 

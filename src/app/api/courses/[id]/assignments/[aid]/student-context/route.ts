@@ -83,19 +83,11 @@ export const GET = withCourseAuth(
           where: {
             assignmentId,
             problemId: { in: problemIds },
-            OR: [{ aboutStudentId: userId }, { roster: { userId } }],
+            OR: [{ aboutStudentId: userId }, { authorId: userId }],
           },
           include: {
-            roster: {
-              include: {
-                user: {
-                  select: {
-                    firstName: true,
-                    lastName: true,
-                  },
-                },
-              },
-            },
+            author: { select: { id: true, firstName: true, lastName: true } },
+            roster: { select: { role: true } }, // course role for the badge, may be null
           },
           orderBy: { createdAt: 'asc' },
         }),
@@ -173,12 +165,13 @@ export const GET = withCourseAuth(
               id: comment.id,
               content: comment.content,
               createdAt: comment.createdAt.toISOString(),
-              authorId: comment.roster?.userId ?? null,
+              authorId: comment.author.id,
               authorName:
-                [comment.roster?.user?.firstName, comment.roster?.user?.lastName]
-                  .filter(Boolean)
-                  .join(' ') || 'Unknown',
-              authorRole: comment.roster?.role ?? 'STUDENT',
+                [comment.author.firstName, comment.author.lastName].filter(Boolean).join(' ') ||
+                'Unknown',
+              // Role badge from the author's roster row; null when they aren't rostered
+              // (e.g. a system admin), rather than mislabeling them as a student.
+              authorRole: comment.roster?.role ?? null,
               problemId: comment.problemId,
             })),
           ]),
