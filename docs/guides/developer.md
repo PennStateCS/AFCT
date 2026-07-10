@@ -34,7 +34,15 @@ Both exclude archived and soft-deleted courses.
 | Faculty / TA | Their course | All course data | Course content, roster, grades, unless the course is archived |
 | Student | Their course, if published | Own data only | Own submissions, within the submission rules |
 
-The exhaustive matrix and its edge cases live in the internal design notes (`route-authorization.md` in `docs/`).
+Key rules by resource:
+
+- **Courses**: admins create, duplicate, soft-delete, and un-archive. Staff publish, archive, and edit their own course. A student sees a course only once it is published.
+- **Assignments and problems**: staff author and configure them, not while archived. A student sees an assignment only when both it and its course are published. Problem answer and solution files are never student accessible.
+- **Submissions**: a student may submit to a published assignment, in a published course they are enrolled in, within the assignment's date window, and only while under the problem's submission limit. Submissions are immutable. A group assignment has one shared submission per group.
+- **Grades**: staff and admins see all grades in a course; a student sees only their own. Manual overrides are staff or admin only and are always audit logged, including a self-override.
+- **Files**: a student may download only their own submission files (their group's on a group assignment). Problem and solution files are staff or admin only.
+- **Comments**: a student sees only their own thread plus staff replies and cannot delete. Staff and admins see and manage every thread.
+- **Archived courses** are read only for everyone, admins included. Only an admin can un-archive.
 
 ## API conventions
 
@@ -46,7 +54,7 @@ The exhaustive matrix and its edge cases live in the internal design notes (`rou
 
 ## Logging
 
-All audit writes go through `createEnhancedActivityLog`. Severity is `INFO`, `WARNING`, `ERROR`, or `SECURITY`, inferred from the action name suffix. Log every write and every privileged action taken on a student. Do not log a user reading their own routine data. The log is append only. The full policy is in `logging-policy.md` in `docs/`.
+All audit writes go through `createEnhancedActivityLog`. Severity is `INFO`, `WARNING`, `ERROR`, or `SECURITY`, inferred from the action name suffix: `_DENIED` or `_FORBIDDEN` map to `SECURITY`, `_ERROR` to `ERROR`, `_REJECTED` or `_INVALID` or `_RATE_LIMIT` to `WARNING`, and everything else to `INFO`. Log every write and every privileged action taken on a student. Do not log a user reading their own routine data. The log is append only: no route edits or deletes an entry, and retention pruning runs as a scheduled job.
 
 ## Time and deadlines
 
