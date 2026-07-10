@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { withAdminAuth } from '@/lib/api/with-auth';
 import { generateUniqueCourseCode } from '@/lib/course-code';
 import { resolveUserTimezone } from '@/lib/user-timezone';
@@ -311,11 +312,10 @@ export const POST = withAdminAuth(
       return NextResponse.json({ id: result.id, message: 'Course duplicated' }, { status: 201 });
     } catch (err) {
       console.error('Duplicate course error:', err);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: actorId,
         action: 'COURSE_DUPLICATE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+        error: err,
       });
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }

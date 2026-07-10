@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { logError } from '@/lib/api/activity';
 
 /**
  * Lists a group's members, oldest first. Course staff (faculty or TAs) or a system
@@ -121,11 +122,10 @@ export const POST = withCourseAuth(
       return NextResponse.json({ success: true }, { status: 201 });
     } catch (err) {
       console.error('[GROUP_MEMBERS_POST_ERROR]', err);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'GROUP_MEMBER_ADD_ERROR',
-        severity: 'ERROR',
-        metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+        error: err,
       });
       return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
@@ -229,11 +229,10 @@ export const PATCH = withCourseAuth(
       return NextResponse.json({ success: true, added: toAdd, removed: toRemove });
     } catch (err) {
       console.error('PATCH /api/courses/[id]/groups/[groupId]/members error:', err);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'GROUP_MEMBERS_UPDATE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+        error: err,
       });
       return NextResponse.json({ error: 'Server error' }, { status: 500 });
     }

@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { toEndOfDayInTimezone } from '@/lib/date-utils';
 import { getAssignmentsForUserRange, resolveUserTimezone } from '@/lib/calendar-assignments';
-import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { prisma } from '@/lib/prisma';
+import { logError } from '@/lib/api/activity';
 
 /**
  * Returns the assignments visible to the signed-in user whose due dates fall in a
@@ -59,11 +58,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(assignments, { status: 200 });
   } catch (error) {
     console.error('Error fetching assignment range:', error);
-    await createEnhancedActivityLog(prisma, req, {
+    await logError(req, {
       userId: null,
       action: 'ASSIGNMENT_RANGE_ERROR',
-      severity: 'ERROR',
-      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+      error,
     });
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }

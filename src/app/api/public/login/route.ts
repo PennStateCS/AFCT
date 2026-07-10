@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcrypt';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { normalizeEmail } from '@/lib/email';
 
 /**
@@ -123,13 +124,10 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error('Login error:', err);
 
-    await createEnhancedActivityLog(prisma, req, {
+    await logError(req, {
       action: 'LOGIN_ERROR',
-      severity: 'ERROR',
+      error: err,
       category: 'SYSTEM',
-      metadata: {
-        error: err instanceof Error ? err.message : 'Unknown error',
-      },
     });
 
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
