@@ -12,9 +12,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { Label } from '@/components/ui/label';
 import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
-import { UploadCloud, Trash2 } from 'lucide-react';
+import { Upload, Trash2 } from 'lucide-react';
 
 import { useEffect, useMemo, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
@@ -26,6 +27,7 @@ import { UpdateUserSchema, type UpdateUserRaw, type UpdateUserInput } from '@/sc
 import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { apiPaths } from '@/lib/api-paths';
+import { AvatarCrop } from '../AvatarCrop';
 
 type EditUserDialogProps = {
   user: User;
@@ -204,57 +206,64 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {/* Avatar block */}
-          <div className="flex items-center gap-4">
-            <Avatar className="h-20 w-20">
-              <AvatarImage src={avatarPreview || undefined} alt="User Avatar" />
-              <AvatarFallback className="bg-secondary text-secondary-foreground">
-                {(watch('firstName') || user.firstName || '?').charAt(0)}
-                {(watch('lastName') || user.lastName || '?').charAt(0)}
-              </AvatarFallback>
-            </Avatar>
+          <div className="flex flex-col items-center gap-3">
+            <Label className="text-center w-full">Avatar Image</Label>
+            <div className="flex items-center justify-center gap-4 w-full">
+              <Avatar className="h-20 w-20">
+                <AvatarImage src={avatarPreview || undefined} alt="User Avatar" />
+                <AvatarFallback className="bg-secondary text-secondary-foreground">
+                  {(watch('firstName') || user.firstName || '?').charAt(0)}
+                  {(watch('lastName') || user.lastName || '?').charAt(0)}
+                </AvatarFallback>
+              </Avatar>
 
-            <div className="flex flex-col gap-2">
-              <Controller
-                control={control}
-                name="avatarFile"
-                render={() => (
-                  <>
-                    <input
-                      id="avatar-upload"
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => onAvatarPicked(e.target.files?.[0])}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => document.getElementById('avatar-upload')?.click()}
-                      className="flex items-center gap-2"
-                    >
-                      <UploadCloud className="h-4 w-4" />
-                      Upload Avatar
-                    </Button>
-                    {avatarFileErrorMessage && (
-                      <p className="mt-1 text-xs text-red-600">{avatarFileErrorMessage}</p>
-                    )}
-                  </>
+              <div className="flex w-full max-w-xs flex-col gap-3">
+                <Controller
+                  control={control}
+                  name="avatarFile"
+                  render={() => (
+                    <>
+                      <input
+                        id="avatar-upload"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => onAvatarPicked(e.target.files?.[0])}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => document.getElementById('avatar-upload')?.click()}
+                        className="flex items-center gap-2"
+                      >
+                        <Upload className="h-4 w-4" />
+                        Upload Avatar
+                      </Button>
+                      {avatarFileErrorMessage && (
+                        <p className="mt-1 text-xs text-red-600">{avatarFileErrorMessage}</p>
+                      )}
+                    </>
+                  )}
+                />
+
+                {avatarPreview && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex items-center gap-2 border-red-600 text-red-600 hover:bg-red-50"
+                    onClick={onDeleteAvatar}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete Avatar
+                  </Button>
                 )}
-              />
-
-              {avatarPreview && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="flex items-center gap-2 border-red-600 text-red-600 hover:bg-red-50"
-                  onClick={onDeleteAvatar}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Delete Avatar
-                </Button>
-              )}
+              </div>
             </div>
           </div>
+
+          {avatarPreview ? (
+            <AvatarCrop avatarPreview={avatarPreview} />
+          ) : null}
 
           {/* First name */}
           <Controller
