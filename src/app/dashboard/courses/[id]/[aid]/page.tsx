@@ -61,6 +61,7 @@ export default async function AssignmentPage({ params }: PageProps) {
             name: true,
             code: true,
             isArchived: true,
+            timezone: true,
           },
         },
       },

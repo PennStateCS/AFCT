@@ -16,7 +16,7 @@ import ProblemWorkspace from '@/components/assignments/ProblemWorkspace';
 import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
 import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { formatDateTimeInTimeZone } from '@/lib/date';
+import { formatDateTimeInTimeZone, formatDeadlineDual } from '@/lib/date';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { fetchJson } from '@/lib/query-fetch';
@@ -256,10 +256,13 @@ export default function StudentAssignmentPage({
 
   const allowLateSubmissions = assignment.allowLateSubmissions ?? false;
   const lateCutoffDate = assignment.lateCutoff ? new Date(assignment.lateCutoff) : null;
-  const dueDisplay = formatDateTimeInTimeZone(assignment.dueDate, timezone);
+  // Show deadlines in the student's local zone AND the course zone (when they differ),
+  // so a student in a different timezone can't misread the cutoff.
+  const courseZone = assignment.course?.timezone ?? null;
+  const dueDisplay = formatDeadlineDual(assignment.dueDate, timezone, courseZone);
   const lateCutoffDisplay = allowLateSubmissions
     ? lateCutoffDate
-      ? formatDateTimeInTimeZone(lateCutoffDate, timezone)
+      ? formatDeadlineDual(lateCutoffDate, timezone, courseZone)
       : 'Never'
     : 'Not allowed';
   const latePolicyDisplay = !allowLateSubmissions
