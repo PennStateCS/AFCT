@@ -394,9 +394,9 @@ export default function SystemSettingsClient() {
       const poll = async () => {
         tries += 1;
         const count = await reloadBackups();
-        if (count <= beforeCount && tries < 10) setTimeout(poll, 6000);
+        if (count <= beforeCount && tries < 10) setTimeout(() => void poll(), 6000);
       };
-      setTimeout(poll, 6000);
+      setTimeout(() => void poll(), 6000);
     },
     onError: (err) => {
       showToast.error(err instanceof Error ? err.message : 'Failed to start backup');

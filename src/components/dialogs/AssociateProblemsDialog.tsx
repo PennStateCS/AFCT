@@ -224,7 +224,7 @@ export function AssociateProblemsDialog({
       }
     }
 
-    if (open) init();
+    if (open) void init();
 
     // If parent closed while we were initializing, close local dialog too
     if (!open) {
@@ -341,7 +341,7 @@ export function AssociateProblemsDialog({
       }
     }
 
-    syncExternal();
+    void syncExternal();
     return () => {
       aborted = true;
       ac.abort();

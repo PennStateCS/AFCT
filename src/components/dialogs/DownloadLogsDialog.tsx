@@ -174,7 +174,7 @@ export function DownloadLogsDialog({ open, onOpenChange }: DownloadLogsDialogPro
 
   const onSubmitWrapper = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    handleSubmit((data) => onSubmit(data as unknown as FormValues))(e);
+    void handleSubmit((data) => onSubmit(data as unknown as FormValues))(e);
   };
 
   return (

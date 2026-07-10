@@ -57,6 +57,30 @@ const eslintConfig = [
       ],
     },
   },
+  // Type-aware linting for source code (not tests). These rules need the TS
+  // program, so we turn on projectService here and scope it to src, away from the
+  // test files (already relaxed above and noisy for these checks). The headline
+  // rule is no-floating-promises, which flags unawaited promises.
+  {
+    files: ['src/**/*.ts', 'src/**/*.tsx'],
+    ignores: ['**/*.test.ts', '**/*.test.tsx'],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: __dirname,
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/await-thenable': 'error',
+      // Real misuse (e.g. an async fn in an `if`) is an error; the noisy JSX
+      // `onClick={async …}` void-return case is allowed via attributes:false.
+      '@typescript-eslint/no-misused-promises': [
+        'error',
+        { checksVoidReturn: { attributes: false } },
+      ],
+    },
+  },
   // Last: turn off any ESLint rules that would conflict with Prettier formatting.
   eslintConfigPrettier,
 ];
