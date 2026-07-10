@@ -49,5 +49,7 @@ describe('getAssignmentsForUserRange', () => {
     ]);
     // The old unscoped `courseId: { in: [...] }` filter is gone.
     expect(where.courseId).toBeUndefined();
+    // Archived and soft-deleted courses are excluded from the calendar for everyone.
+    expect(where.course).toEqual({ isArchived: false, deletedAt: null });
   });
 });
