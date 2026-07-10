@@ -48,4 +48,11 @@ export type EnrollableUser = {
   lastName: string | null;
 };
 
-export type TabType = 'assignments' | 'problems' | 'roster' | 'grades' | 'groups' | 'activity';
+export type TabType =
+  | 'assignments'
+  | 'problems'
+  | 'roster'
+  | 'grades'
+  | 'groups'
+  | 'activity'
+  | 'settings';

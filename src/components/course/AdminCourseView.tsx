@@ -1,4 +1,6 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { ActivityCard } from '@/components/ActivityCard';
 import { AssignmentsCard } from '@/components/AssignmentsCard';
 import { ProblemsCard } from '@/components/ProblemsCard';
@@ -10,7 +12,16 @@ import { useAssignmentColumns } from '@/app/dashboard/courses/[id]/assignment-co
 import { useProblemColumns } from '@/app/dashboard/courses/[id]/problem-columns';
 import type { FullCourse, TabType } from '@/types/course';
 import { getInstructors } from '@/lib/course-utils';
-import { NotebookText, FileText, GraduationCap, Table, Users, Activity } from 'lucide-react';
+import {
+  NotebookText,
+  FileText,
+  GraduationCap,
+  Table,
+  Users,
+  Activity,
+  Settings,
+  Pencil,
+} from 'lucide-react';
 import type { Assignment, Problem } from '@prisma/client';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { useMemo } from 'react';
@@ -32,6 +43,7 @@ interface AdminCourseViewProps {
   onProblemEdit: (problem: Problem) => void;
   onProblemDelete: (problemId: string) => void;
   onRefreshCourse: () => void;
+  onEditCourse: () => void;
 }
 
 export function AdminCourseView({
@@ -51,6 +63,7 @@ export function AdminCourseView({
   onProblemDelete,
   onRefreshCourse,
   onBulkEnroll,
+  onEditCourse,
 }: AdminCourseViewProps) {
   const { timezone } = useEffectiveTimezone();
   const enrolled = course.enrolled ?? [];
@@ -177,6 +190,18 @@ export function AdminCourseView({
             Activity
           </div>
         </TabsTrigger>
+
+        <TabsTrigger
+          id="tab-settings"
+          aria-controls="panel-settings"
+          className="data-[state=active]:bg-secondary hover:bg-accent px-4 whitespace-nowrap data-[state=active]:text-white"
+          value="settings"
+        >
+          <div className="flex items-center gap-2">
+            <Settings className="h-4 w-4" />
+            Settings
+          </div>
+        </TabsTrigger>
       </TabsList>
 
       <TabsContent
@@ -276,6 +301,39 @@ export function AdminCourseView({
         {tab === 'activity' ? (
           <div className="mb-8 space-y-6">
             <ActivityCard courseId={course.id} />
+          </div>
+        ) : null}
+      </TabsContent>
+
+      <TabsContent
+        id="panel-settings"
+        aria-labelledby="tab-settings"
+        value="settings"
+        className="animate-fade-in-up transition-opacity duration-300"
+      >
+        {tab === 'settings' ? (
+          <div className="mb-8 space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle role="heading" aria-level={2} className="text-xl">
+                  Course Settings
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-muted-foreground text-sm">
+                  Edit the course name, code, dates, timezone, and self-registration settings.
+                </p>
+                <Button onClick={onEditCourse} disabled={course.isArchived}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Edit course settings
+                </Button>
+                {course.isArchived ? (
+                  <p className="text-muted-foreground text-xs">
+                    This course is archived and read-only. Unarchive it to make changes.
+                  </p>
+                ) : null}
+              </CardContent>
+            </Card>
           </div>
         ) : null}
       </TabsContent>
