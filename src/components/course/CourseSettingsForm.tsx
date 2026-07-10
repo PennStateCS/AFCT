@@ -177,7 +177,7 @@ export function CourseSettingsForm({
     });
 
   return (
-    <form className={cn('space-y-4', className)} onSubmit={onSubmitWrapper}>
+    <form className={cn('max-w-xl space-y-4', className)} onSubmit={onSubmitWrapper}>
       {/* NAME */}
       <Controller
         name="name"
@@ -187,6 +187,7 @@ export function CourseSettingsForm({
             name="name"
             label="Course Name"
             fieldProps={field}
+            description="The full title students see for this course."
             error={errors.name?.message}
           />
         )}
@@ -202,6 +203,7 @@ export function CourseSettingsForm({
             label="Course Code"
             fieldProps={field}
             placeholder="e.g., CMPSC 221"
+            description="A short identifier for the course. It's normalized to uppercase when saved."
             error={errors.code?.message}
             showStatus
             isValid={!errors.code && !!field.value}
@@ -209,38 +211,38 @@ export function CourseSettingsForm({
         )}
       />
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Controller
-          name="semester"
-          control={control}
-          render={({ field }) => (
-            <InputGroup
-              name="semester"
-              label="Semester"
-              fieldProps={field}
-              placeholder="Fall 2025"
-              error={errors.semester?.message}
-            />
-          )}
-        />
+      <Controller
+        name="semester"
+        control={control}
+        render={({ field }) => (
+          <InputGroup
+            name="semester"
+            label="Semester"
+            fieldProps={field}
+            placeholder="Fall 2025"
+            description="The term this course runs in."
+            error={errors.semester?.message}
+          />
+        )}
+      />
 
-        <Controller
-          name="credits"
-          control={control}
-          render={({ field }) => (
-            <InputGroup
-              name="credits"
-              label="Credits"
-              type="number"
-              fieldProps={field}
-              min={1}
-              max={6}
-              step={1}
-              error={errors.credits?.message}
-            />
-          )}
-        />
-      </div>
+      <Controller
+        name="credits"
+        control={control}
+        render={({ field }) => (
+          <InputGroup
+            name="credits"
+            label="Credits"
+            type="number"
+            fieldProps={field}
+            min={1}
+            max={6}
+            step={1}
+            description="Number of credit hours (1–6)."
+            error={errors.credits?.message}
+          />
+        )}
+      />
 
       {/* COURSE TIMEZONE — anchors all the course's deadlines */}
       <Controller
@@ -263,113 +265,114 @@ export function CourseSettingsForm({
         )}
       />
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Controller
-          name="startDate"
-          control={control}
-          render={({ field }) => (
-            <InputGroup
-              name="startDate"
-              label="Start Date & Time"
-              type="datetime-local"
-              fieldProps={{
-                ...field,
-                value: field.value ?? '',
-                onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                  field.onChange(e.target.value),
-              }}
-              error={errors.startDate?.message}
-              requiredMark
-            />
-          )}
-        />
-
-        <Controller
-          name="endDate"
-          control={control}
-          render={({ field }) => (
-            <InputGroup
-              name="endDate"
-              label="End Date & Time"
-              type="datetime-local"
-              fieldProps={{
-                ...field,
-                value: field.value ?? '',
-                onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                  field.onChange(e.target.value),
-              }}
-              error={errors.endDate?.message}
-              min={startDateStr || undefined}
-              requiredMark
-            />
-          )}
-        />
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Controller
-          name="registrationOpenAt"
-          control={control}
-          render={({ field }) => (
-            <InputGroup
-              name="registrationOpenAt"
-              label="Self Registration Opens"
-              type="datetime-local"
-              fieldProps={{
-                ...field,
-                value: field.value ?? '',
-                onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                  field.onChange(e.target.value),
-              }}
-              error={errors.registrationOpenAt?.message}
-              requiredMark
-            />
-          )}
-        />
-
-        <Controller
-          name="registrationCloseAt"
-          control={control}
-          render={({ field }) => (
-            <InputGroup
-              name="registrationCloseAt"
-              label="Self Registration Closes"
-              type="datetime-local"
-              fieldProps={{
-                ...field,
-                value: field.value ?? '',
-                onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                  field.onChange(e.target.value),
-              }}
-              error={errors.registrationCloseAt?.message}
-              requiredMark
-            />
-          )}
-        />
-      </div>
-
       <Controller
+        name="startDate"
         control={control}
-        name="instructorIds"
         render={({ field }) => (
-          <SearchableMultiSelect
-            label="Assign Faculty"
-            items={facultyList.map((faculty) => ({
-              id: faculty.id,
-              label:
-                `${faculty.firstName ?? ''} ${faculty.lastName ?? ''}`.trim() ||
-                faculty.email ||
-                'Unknown user',
-            }))}
-            value={field.value ?? []}
-            onChange={(value) => field.onChange(value)}
-            placeholder="Select faculty"
-            searchPlaceholder="Search faculty..."
-            emptyStateText="No faculty found."
-            error={errors.instructorIds?.message}
+          <InputGroup
+            name="startDate"
+            label="Start Date & Time"
+            type="datetime-local"
+            fieldProps={{
+              ...field,
+              value: field.value ?? '',
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) => field.onChange(e.target.value),
+            }}
+            description="When the course begins, in the course timezone above."
+            error={errors.startDate?.message}
+            requiredMark
           />
         )}
       />
+
+      <Controller
+        name="endDate"
+        control={control}
+        render={({ field }) => (
+          <InputGroup
+            name="endDate"
+            label="End Date & Time"
+            type="datetime-local"
+            fieldProps={{
+              ...field,
+              value: field.value ?? '',
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) => field.onChange(e.target.value),
+            }}
+            description="When the course ends. Must be on or after the start date."
+            error={errors.endDate?.message}
+            min={startDateStr || undefined}
+            requiredMark
+          />
+        )}
+      />
+
+      <Controller
+        name="registrationOpenAt"
+        control={control}
+        render={({ field }) => (
+          <InputGroup
+            name="registrationOpenAt"
+            label="Self Registration Opens"
+            type="datetime-local"
+            fieldProps={{
+              ...field,
+              value: field.value ?? '',
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) => field.onChange(e.target.value),
+            }}
+            description="When students may start self-enrolling with the registration code."
+            error={errors.registrationOpenAt?.message}
+            requiredMark
+          />
+        )}
+      />
+
+      <Controller
+        name="registrationCloseAt"
+        control={control}
+        render={({ field }) => (
+          <InputGroup
+            name="registrationCloseAt"
+            label="Self Registration Closes"
+            type="datetime-local"
+            fieldProps={{
+              ...field,
+              value: field.value ?? '',
+              onChange: (e: React.ChangeEvent<HTMLInputElement>) => field.onChange(e.target.value),
+            }}
+            description="After this time, self-registration is closed."
+            error={errors.registrationCloseAt?.message}
+            requiredMark
+          />
+        )}
+      />
+
+      <div className="flex flex-col">
+        <Controller
+          control={control}
+          name="instructorIds"
+          render={({ field }) => (
+            <SearchableMultiSelect
+              label="Assign Faculty"
+              items={facultyList.map((faculty) => ({
+                id: faculty.id,
+                label:
+                  `${faculty.firstName ?? ''} ${faculty.lastName ?? ''}`.trim() ||
+                  faculty.email ||
+                  'Unknown user',
+              }))}
+              value={field.value ?? []}
+              onChange={(value) => field.onChange(value)}
+              placeholder="Select faculty"
+              searchPlaceholder="Search faculty..."
+              emptyStateText="No faculty found."
+              error={errors.instructorIds?.message}
+            />
+          )}
+        />
+        <p className="text-muted-foreground mt-1 text-xs">
+          Faculty assigned here can manage this course.
+        </p>
+      </div>
 
       {/* EMPTY STRING NOTATION */}
       <Controller
@@ -399,6 +402,7 @@ export function CourseSettingsForm({
             name="isPublished-switch"
             checked={!!field.value}
             onCheckedChange={(checked) => field.onChange(!!checked)}
+            description="When on, enrolled students can see the course."
           />
         )}
       />
@@ -413,6 +417,7 @@ export function CourseSettingsForm({
             name="isArchived-switch"
             checked={!!field.value}
             onCheckedChange={(checked) => field.onChange(!!checked)}
+            description="Archiving makes the course read-only for everyone."
           />
         )}
       />
