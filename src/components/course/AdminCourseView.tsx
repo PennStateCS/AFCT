@@ -1,5 +1,5 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { CourseHeaderContent } from '@/components/course/CourseHeader';
 import { CourseSettingsForm } from '@/components/course/CourseSettingsForm';
 import { ActivityCard } from '@/components/ActivityCard';
@@ -115,17 +115,12 @@ export function AdminCourseView({
   );
 
   return (
-    <Tabs
-      defaultValue="assignments"
-      value={tab}
-      onValueChange={onTabChange}
-      className="space-y-6"
-    >
+    <Tabs defaultValue="assignments" value={tab} onValueChange={onTabChange}>
       <Card>
         <CardHeader className="flex flex-col gap-3">
           <CourseHeaderContent course={course} isStudent={false} />
         </CardHeader>
-        <CardContent className="px-4 pt-0 pb-4">
+        <CardContent className="space-y-6 px-4 pt-0 pb-4">
           <TabsList
             aria-label="Course content sections"
             className="bg-card border-border h-12 w-full justify-start gap-1 overflow-x-auto rounded-md border p-1 shadow-sm"
@@ -217,8 +212,6 @@ export function AdminCourseView({
           </div>
         </TabsTrigger>
           </TabsList>
-        </CardContent>
-      </Card>
 
       <TabsContent
         id="panel-assignments"
@@ -328,33 +321,29 @@ export function AdminCourseView({
         className="animate-fade-in-up transition-opacity duration-300"
       >
         {tab === 'settings' ? (
-          <div className="mb-8 space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle role="heading" aria-level={2} className="text-xl">
-                  Course Settings
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-muted-foreground text-sm">
-                  Edit the course name, code, dates, timezone, and self-registration settings.
-                </p>
-                {course.isArchived ? (
-                  <p className="text-muted-foreground text-xs">
-                    This course is archived and read-only. Unarchive it to make changes.
-                  </p>
-                ) : null}
-                <CourseSettingsForm
-                  course={course}
-                  onSaved={onCourseSaved}
-                  onPublishToggle={onPublishToggle}
-                  onArchiveToggle={onArchiveToggle}
-                />
-              </CardContent>
-            </Card>
+          <div className="mb-8 space-y-4">
+            <h2 role="heading" aria-level={2} className="text-xl font-semibold">
+              Course Settings
+            </h2>
+            <p className="text-muted-foreground text-sm">
+              Edit the course name, code, dates, timezone, and self-registration settings.
+            </p>
+            {course.isArchived ? (
+              <p className="text-muted-foreground text-xs">
+                This course is archived and read-only. Unarchive it to make changes.
+              </p>
+            ) : null}
+            <CourseSettingsForm
+              course={course}
+              onSaved={onCourseSaved}
+              onPublishToggle={onPublishToggle}
+              onArchiveToggle={onArchiveToggle}
+            />
           </div>
         ) : null}
       </TabsContent>
+        </CardContent>
+      </Card>
     </Tabs>
   );
 }
