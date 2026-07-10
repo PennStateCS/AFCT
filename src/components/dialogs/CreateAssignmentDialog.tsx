@@ -24,7 +24,7 @@ import type { z } from 'zod';
 import { CreateAssignmentFormSchema } from '@/schemas/assignment';
 import { apiPaths } from '@/lib/api-paths';
 
-type FormValues = z.infer<typeof CreateAssignmentFormSchema>; // strings for datetime-local
+type FormValues = z.input<typeof CreateAssignmentFormSchema>; // strings for datetime-local
 
 import type { Assignment } from '@prisma/client';
 

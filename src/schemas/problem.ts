@@ -61,7 +61,11 @@ const BaseProblemObject = z.object({
  * Add custom validation to the base object
  */
 function addProblemValidation<T extends z.ZodRawShape>(schema: z.ZodObject<T>) {
-  return schema.superRefine((d, ctx) => {
+  return schema.superRefine((data, ctx) => {
+    // The helper is generic over the raw shape, which Zod 4 types as an opaque
+    // mapped type; every variant (base / +file / partial) shares these base
+    // fields, so narrow to the known shape for the conditional checks.
+    const d = data as Partial<z.infer<typeof BaseProblemObject>>;
     const isFAorPDA = d.type === 'FA' || d.type === 'PDA';
 
     if (isFAorPDA && !d.isUnlimitedStates) {
