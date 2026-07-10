@@ -65,18 +65,16 @@ function MetadataCell({ activity }: { activity: ActivityLog }) {
 
   // Close metadata when clicking outside
   useEffect(() => {
+    if (!expanded) return;
     const handleClickOutside = (event: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setExpanded(false);
       }
     };
-
-    if (expanded) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
-      };
-    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, [expanded]);
 
   const formatMetadataForDisplay = (

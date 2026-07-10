@@ -132,10 +132,18 @@ export default function RandomGroupsDialog({
   });
 
   function handleCreate() {
-    if (!validNum)
-      return showToast.error('Enter a valid number of groups (1 - number of students).');
-    if (!courseId) return showToast.error('Missing course id');
-    if (available === 0) return showToast.error('No students available to assign.');
+    if (!validNum) {
+      showToast.error('Enter a valid number of groups (1 - number of students).');
+      return;
+    }
+    if (!courseId) {
+      showToast.error('Missing course id');
+      return;
+    }
+    if (available === 0) {
+      showToast.error('No students available to assign.');
+      return;
+    }
     generateGroups();
   }
 
