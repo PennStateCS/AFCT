@@ -236,6 +236,7 @@ export const POST = withCourseAuth(
               assignmentId,
               problemId: change.problemId,
               metadata: {
+                targetUserId: studentId,
                 studentId,
                 graderId,
                 previousGrade: change.previousGrade,
