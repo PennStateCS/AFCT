@@ -37,34 +37,48 @@ export const COURSE_TABS: readonly CourseTabDef[] = [
   { value: 'settings', label: 'Settings', Icon: Settings },
 ] as const;
 
-const TRIGGER_CLASS =
-  'data-[state=active]:bg-secondary hover:bg-accent px-4 whitespace-nowrap data-[state=active]:text-white';
+// Underline navigation: a light bar on the card's own (white) background with a
+// subtle bottom border. Overrides the segmented/filled defaults from TabsList.
+const LIST_CLASS =
+  'h-auto w-full items-center justify-start gap-6 overflow-x-auto rounded-none border-b border-border bg-transparent p-0';
 
-/** Counts appended to a tab label, e.g. `Assignments (3)`. Absent → no count. */
+// Each trigger is a content-width item with a transparent bottom border that
+// turns teal (and its text teal + bolder) when active. `-mb-px` overlaps the
+// list's bottom border so the active underline replaces it cleanly.
+const TRIGGER_CLASS = [
+  'text-muted-foreground hover:text-foreground',
+  'data-[state=active]:text-teal-600 dark:data-[state=active]:text-teal-400 data-[state=active]:font-semibold',
+  '-mb-px inline-flex h-auto flex-none items-center gap-1.5 whitespace-nowrap',
+  'rounded-none border-0 border-b-2 border-transparent bg-transparent px-1 py-3 text-sm font-medium',
+  'transition-colors',
+  'data-[state=active]:border-teal-600 dark:data-[state=active]:border-teal-400',
+  'data-[state=active]:bg-transparent data-[state=active]:shadow-none',
+].join(' ');
+
+/** Counts rendered as a small subtle badge next to the label. Absent → none. */
 type TabCounts = Partial<Record<TabType, number>>;
 
 export function CourseTabBar({ counts }: { counts?: TabCounts }) {
   return (
-    <TabsList
-      aria-label="Course content sections"
-      className="bg-card border-border h-12 w-full justify-start gap-1 overflow-x-auto rounded-md border p-1 shadow-sm"
-    >
+    <TabsList aria-label="Course content sections" className={LIST_CLASS}>
       {COURSE_TABS.map(({ value, label, Icon }) => {
         const count = counts?.[value];
-        const text = count === undefined ? label : `${label} (${count})`;
         return (
           <TabsTrigger
             key={value}
             id={`tab-${value}`}
             aria-controls={`panel-${value}`}
-            aria-label={text}
+            aria-label={count === undefined ? label : `${label}, ${count}`}
             className={TRIGGER_CLASS}
             value={value}
           >
-            <div className="flex items-center gap-2">
-              <Icon className="h-4 w-4" />
-              {text}
-            </div>
+            <Icon className="size-3.5 opacity-70" />
+            {label}
+            {count !== undefined && (
+              <span className="bg-muted text-muted-foreground ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] leading-none font-medium">
+                {count}
+              </span>
+            )}
           </TabsTrigger>
         );
       })}
