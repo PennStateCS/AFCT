@@ -287,6 +287,19 @@ describe('POST /api/courses', () => {
     expect(res.status).toBe(403);
   });
 
+  it('returns 401 for a disabled/deleted admin even with a stale admin token', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: true, inactive: true } });
+
+    const req = new Request('http://localhost/api/courses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'X', code: 'C', semester: 'F', credits: 3 }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(401);
+  });
+
   it('returns validation response when validation fails', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN', isAdmin: true } });
     validationResponseMock.mockReturnValue({ status: 400 });
