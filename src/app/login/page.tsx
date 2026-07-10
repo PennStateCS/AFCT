@@ -19,10 +19,10 @@ const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 
 // Dev-only quick login shortcuts so QA can impersonate common roles fast.
 const testLoginButtons = [
-  { role: 'admin', label: 'Admin', classes: 'bg-[#2F4A8A] text-white hover:bg-[#253972]' },
-  { role: 'faculty', label: 'Faculty', classes: 'bg-[#486AAE] text-white hover:bg-[#3B5793]' },
-  { role: 'ta', label: 'TA', classes: 'bg-[#5F9EA0] text-white hover:bg-[#4E7E80]' },
-  { role: 'student', label: 'Student', classes: 'bg-[#8BD3CF] text-gray-900 hover:bg-[#78BBB7]' },
+  { role: 'admin', label: 'Admin', classes: 'bg-[#406669] text-white hover:bg-[#335556]' },
+  { role: 'faculty', label: 'Faculty', classes: 'bg-[#588a87] text-white hover:bg-[#47776f]' },
+  { role: 'ta', label: 'TA', classes: 'bg-[#375087] text-white hover:bg-[#2c3b73]' },
+  { role: 'student', label: 'Student', classes: 'bg-[#1b2a52] text-white hover:bg-[#162043]' },
 ];
 
 type LoginField = 'email' | 'password';
