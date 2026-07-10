@@ -146,9 +146,13 @@ export default function FileUploadInput({
           {value ? (
             <>
               <div className="flex items-center gap-2">
-                <Upload className="h-5 w-5 text-green-600" />
                 <div className="text-left">
-                  <p className="text-foreground truncate text-sm font-medium">{value.name}</p>
+                  <p className="text-foreground text-sm font-medium">
+                    <span className="inline-flex items-center gap-2">
+                      <Upload className="h-3 w-3 text-green-600" />
+                      <span className="truncate">{value.name}</span>
+                    </span>
+                  </p>
                   <p className="text-muted-foreground text-xs">{formattedSize}</p>
                 </div>
               </div>
@@ -163,11 +167,13 @@ export default function FileUploadInput({
             </>
           ) : (
             <>
-              <Upload
-                className={`h-6 w-6 ${isDragging ? 'text-primary' : 'text-muted-foreground'}`}
-              />
               <div>
-                <p className="text-sm font-medium">Drop file here or click to select</p>
+                <p className="text-sm font-medium">
+                  <span className="inline-flex items-center gap-2">
+                    <Upload className={`h-3 w-3 ${isDragging ? 'text-primary' : 'text-muted-foreground'}`} />
+                    <span>Drop file here or click to select</span>
+                  </span>
+                </p>
                 <p className="text-muted-foreground text-xs">{formattedSize}</p>
               </div>
             </>
