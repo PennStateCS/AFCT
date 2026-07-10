@@ -186,10 +186,12 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
       <h1 className="sr-only">
         {course.code}: {course.name}
       </h1>
-      <CourseHeader course={course} isStudent={isStudent} />
 
       {isStudent ? (
-        <StudentCourseView course={course} tab={tab as TabType} onTabChange={handleTabChange} />
+        <>
+          <CourseHeader course={course} isStudent={isStudent} />
+          <StudentCourseView course={course} tab={tab as TabType} onTabChange={handleTabChange} />
+        </>
       ) : (
         <AdminCourseView
           course={course}
