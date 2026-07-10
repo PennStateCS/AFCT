@@ -165,9 +165,14 @@ export async function POST(req: Request) {
     // 2) Ensure user is authorized to create courses
     const session = await auth();
     actorId = session?.user?.id ?? null;
-    if (!isAdmin(session?.user)) {
+    // Reject a missing session or a disabled/deleted account (inactive) before the
+    // admin check — a stale JWT that still says admin must not create courses.
+    if (!session?.user || session.user.inactive) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!isAdmin(session.user)) {
       await createEnhancedActivityLog(prisma, req, {
-        userId: session?.user?.id ?? null,
+        userId: session.user.id,
         action: 'COURSE_CREATE_DENIED',
         severity: 'SECURITY',
         metadata: {},
