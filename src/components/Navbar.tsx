@@ -174,7 +174,7 @@ const Navbar: React.FC = () => {
                   <AvatarImage 
                     src={`/api/uploads/pfps/${user.avatar}`}
                     alt={`${user.firstName} ${user.lastName}`} />
-                  <AvatarFallback>
+                  <AvatarFallback className="text-sm text-white">
                     {getInitials(user.firstName, user.lastName, user.email)}
                   </AvatarFallback>
                 </Avatar>
