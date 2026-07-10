@@ -315,6 +315,62 @@ describe('GET /api/courses/[id]', () => {
     expect(body.viewerRole).toBe('FACULTY');
   });
 
+  it('hides class-wide submission/comment counts from a student', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({
+      id: 'course-1',
+      name: 'Course 1',
+      code: 'CS101',
+      isPublished: true,
+      isArchived: false,
+      _count: { assignments: 1, problems: 0, roster: 2 },
+      roster: [
+        {
+          role: 'STUDENT',
+          user: { id: 'viewer-1', firstName: 'S', lastName: 'One', role: 'STUDENT' },
+        },
+      ],
+      problems: [],
+      assignments: [
+        {
+          id: 'a1',
+          title: 'A1',
+          description: null,
+          dueDate: new Date('2026-09-01T00:00:00.000Z'),
+          isPublished: true,
+          allowLateSubmissions: true,
+          lateCutoff: null,
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+          courseId: 'course-1',
+          problems: [{ maxPoints: 100 }],
+          _count: { problems: 1 },
+        },
+      ],
+    });
+    // Non-zero on purpose: the student path must NOT query these class-wide totals.
+    prismaMock.submission.count.mockResolvedValue(7);
+    prismaMock.comment.count.mockResolvedValue(3);
+    authMock.mockResolvedValue({ user: { id: 'viewer-1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
+
+    const res = await GET(new Request('http://localhost/api/courses/1'), {
+      params: Promise.resolve({ id: 'course-1' }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.assignments[0]).toEqual(
+      expect.objectContaining({
+        submissionCount: 0,
+        commentCount: 0,
+        hasSubmissionsOrComments: false,
+      }),
+    );
+    expect(prismaMock.submission.count).not.toHaveBeenCalled();
+    expect(prismaMock.comment.count).not.toHaveBeenCalled();
+    expect(body.viewerRole).toBe('STUDENT');
+  });
+
   it('returns 500 when get throws', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.course.findUnique.mockRejectedValue(new Error('db error'));
