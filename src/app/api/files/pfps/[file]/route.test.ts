@@ -15,6 +15,9 @@ vi.mock('path', () => ({
     join: vi.fn((...args) => args.join('/')),
   },
 }));
+vi.mock('@/lib/safe-upload', () => ({
+  resolveInsideDir: (dir: string, name: string) => `${dir}/${name}`,
+}));
 
 import { GET } from './route';
 
@@ -103,7 +106,9 @@ describe('GET /api/files/pfps/[file]', () => {
 
     expect(res.status).toBe(200);
     expect(res.headers.get('Content-Type')).toBe('application/octet-stream');
-    expect(res.headers.get('Content-Disposition')).toBe('inline; filename="avatar.png"');
+    expect(res.headers.get('Content-Disposition')).toBe(
+      "inline; filename=\"avatar.png\"; filename*=UTF-8''avatar.png",
+    );
     expect(fsMock.existsSync).toHaveBeenCalledWith('/private/uploads/pfps/avatar.png');
     expect(fsMock.promises.readFile).toHaveBeenCalledWith('/private/uploads/pfps/avatar.png');
   });
