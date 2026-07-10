@@ -405,6 +405,7 @@ export function CourseSettingsForm({
             checked={!!field.value}
             onCheckedChange={(checked) => field.onChange(!!checked)}
             description="When on, enrolled students can see the course."
+            boxClassName="border-black"
           />
         )}
       />
@@ -420,6 +421,7 @@ export function CourseSettingsForm({
             checked={!!field.value}
             onCheckedChange={(checked) => field.onChange(!!checked)}
             description="Archiving makes the course read-only for everyone."
+            boxClassName="border-black"
           />
         )}
       />
