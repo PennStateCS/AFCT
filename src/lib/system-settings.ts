@@ -5,6 +5,8 @@ export const DEFAULT_MAX_UPLOAD_SIZE_MB = 25;
 export const MIN_UPLOAD_SIZE_MB = 1;
 export const MAX_UPLOAD_SIZE_MB = 1024;
 export const DEFAULT_ALLOW_SIGNUP = true;
+/** App-wide clock: false = 12-hour (AM/PM), true = 24-hour. Display-only. */
+export const DEFAULT_CLOCK_24_HOUR = false;
 export const DEFAULT_SESSION_TIMEOUT_MINUTES = 60;
 export const MIN_SESSION_TIMEOUT_MINUTES = 5;
 export const MAX_SESSION_TIMEOUT_MINUTES = 1440;

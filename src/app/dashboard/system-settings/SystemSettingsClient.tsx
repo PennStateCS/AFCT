@@ -32,6 +32,7 @@ import {
   clampBackupRetentionDays,
   clampActivityLogRetentionDays,
   DEFAULT_ALLOW_SIGNUP,
+  DEFAULT_CLOCK_24_HOUR,
   DEFAULT_MAX_UPLOAD_SIZE_MB,
   DEFAULT_SESSION_TIMEOUT_MINUTES,
   DEFAULT_LOGIN_MAX_ATTEMPTS,
@@ -81,6 +82,7 @@ type SystemSettingsResponse = {
   timezone: string;
   maxUploadSizeMb: number;
   allowSignup: boolean;
+  clock24Hour: boolean;
   sessionTimeoutMinutes: number;
   submissionEvalTimeoutMs: number;
   submissionEvalMaxMemoryMb: number;
@@ -114,6 +116,7 @@ type FormSnapshot = {
   timezone: string;
   maxUploadSizeMb: number | '';
   allowSignup: boolean;
+  clock24Hour: boolean;
   sessionTimeoutMinutes: number | '';
   evalTimeoutSec: number | '';
   resubmitCooldownSec: number | '';
@@ -174,6 +177,7 @@ function buildSettingsSnapshot(data: SystemSettingsResponse): FormSnapshot {
     timezone: data.timezone || DEFAULT_SYSTEM_TIMEZONE,
     maxUploadSizeMb: Number(data.maxUploadSizeMb) || DEFAULT_MAX_UPLOAD_SIZE_MB,
     allowSignup: data.allowSignup ?? DEFAULT_ALLOW_SIGNUP,
+    clock24Hour: data.clock24Hour ?? DEFAULT_CLOCK_24_HOUR,
     sessionTimeoutMinutes: clampSessionTimeoutMinutes(
       Number(data.sessionTimeoutMinutes) || DEFAULT_SESSION_TIMEOUT_MINUTES,
     ),
@@ -237,6 +241,7 @@ export default function SystemSettingsClient() {
     initialSeed?.maxUploadSizeMb ?? '',
   );
   const [allowSignup, setAllowSignup] = useState(initialSeed?.allowSignup ?? true);
+  const [clock24Hour, setClock24Hour] = useState(initialSeed?.clock24Hour ?? false);
   const [sessionTimeoutMinutes, setSessionTimeoutMinutes] = useState<number | ''>(
     initialSeed?.sessionTimeoutMinutes ?? '',
   );
@@ -345,6 +350,7 @@ export default function SystemSettingsClient() {
     setTimezone(norm.timezone);
     setMaxUploadSizeMb(norm.maxUploadSizeMb);
     setAllowSignup(norm.allowSignup);
+    setClock24Hour(norm.clock24Hour);
     setSessionTimeoutMinutes(norm.sessionTimeoutMinutes);
     setEvalTimeoutSec(norm.evalTimeoutSec);
     setResubmitCooldownSec(norm.resubmitCooldownSec);
@@ -596,6 +602,7 @@ export default function SystemSettingsClient() {
           timezone,
           maxUploadSizeMb: clampedSize,
           allowSignup,
+          clock24Hour,
           sessionTimeoutMinutes: clampedTimeout,
           submissionEvalTimeoutMs: evalTimeoutMs,
           submissionResubmitCooldownMs: resubmitCooldownMs,
@@ -645,6 +652,7 @@ export default function SystemSettingsClient() {
         timezone,
         maxUploadSizeMb: clampedSize,
         allowSignup,
+        clock24Hour,
         sessionTimeoutMinutes: clampedTimeout,
         evalTimeoutSec: msToSec(evalTimeoutMs),
         resubmitCooldownSec: msToSec(resubmitCooldownMs),
@@ -669,6 +677,7 @@ export default function SystemSettingsClient() {
               timezone,
               maxUploadSizeMb: clampedSize,
               allowSignup,
+              clock24Hour,
               sessionTimeoutMinutes: clampedTimeout,
               submissionEvalTimeoutMs: evalTimeoutMs,
               submissionResubmitCooldownMs: resubmitCooldownMs,
@@ -704,6 +713,7 @@ export default function SystemSettingsClient() {
     setTimezone(baseline.timezone);
     setMaxUploadSizeMb(baseline.maxUploadSizeMb);
     setAllowSignup(baseline.allowSignup);
+    setClock24Hour(baseline.clock24Hour);
     setSessionTimeoutMinutes(baseline.sessionTimeoutMinutes);
     setEvalTimeoutSec(baseline.evalTimeoutSec);
     setResubmitCooldownSec(baseline.resubmitCooldownSec);
@@ -731,6 +741,7 @@ export default function SystemSettingsClient() {
     timezone,
     maxUploadSizeMb,
     allowSignup,
+    clock24Hour,
     sessionTimeoutMinutes,
     evalTimeoutSec,
     resubmitCooldownSec,
@@ -906,6 +917,17 @@ export default function SystemSettingsClient() {
                   disabled={disabled}
                   descriptionPlacement="inline"
                   description="When enabled, the Sign up option appears on the login page."
+                  boxClassName="border-black"
+                />
+                <SwitchField
+                  id="clock-24-hour"
+                  name="clock-24-hour"
+                  label="24-hour clock"
+                  checked={clock24Hour}
+                  onCheckedChange={setClock24Hour}
+                  disabled={disabled}
+                  descriptionPlacement="inline"
+                  description="Display times on a 24-hour clock (e.g. 23:59) instead of 12-hour AM/PM, app-wide."
                   boxClassName="border-black"
                 />
               </div>
