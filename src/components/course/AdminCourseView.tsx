@@ -1,5 +1,6 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { CourseHeaderContent } from '@/components/course/CourseHeader';
 import { CourseSettingsForm } from '@/components/course/CourseSettingsForm';
 import { ActivityCard } from '@/components/ActivityCard';
 import { AssignmentsCard } from '@/components/AssignmentsCard';
@@ -114,11 +115,21 @@ export function AdminCourseView({
   );
 
   return (
-    <Tabs defaultValue="assignments" value={tab} onValueChange={onTabChange}>
-      <TabsList
-        aria-label="Course content sections"
-        className="bg-card border-border h-12 w-full justify-start gap-1 overflow-x-auto rounded-md border p-1 shadow-sm"
-      >
+    <Tabs
+      defaultValue="assignments"
+      value={tab}
+      onValueChange={onTabChange}
+      className="space-y-6"
+    >
+      <Card>
+        <CardHeader className="flex flex-col gap-3">
+          <CourseHeaderContent course={course} isStudent={false} />
+        </CardHeader>
+        <CardContent className="px-4 pt-0 pb-4">
+          <TabsList
+            aria-label="Course content sections"
+            className="bg-card border-border h-12 w-full justify-start gap-1 overflow-x-auto rounded-md border p-1 shadow-sm"
+          >
         <TabsTrigger
           id="tab-assignments"
           aria-controls="panel-assignments"
@@ -205,7 +216,9 @@ export function AdminCourseView({
             Settings
           </div>
         </TabsTrigger>
-      </TabsList>
+          </TabsList>
+        </CardContent>
+      </Card>
 
       <TabsContent
         id="panel-assignments"
