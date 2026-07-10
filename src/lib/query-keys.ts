@@ -100,6 +100,14 @@ export const queryKeys = {
     /** Submissions for a set of problems — ids are sorted so key order is stable. */
     submissions: (problemIds: readonly string[]) =>
       ['admin', 'submissions', sortedIds(problemIds)] as const,
+    /** Cascading filter lists behind the submissions log (courses → assignments → problems). */
+    submissionFilters: {
+      courses: () => ['admin', 'submission-filters', 'courses'] as const,
+      assignments: (courseIds: readonly string[]) =>
+        ['admin', 'submission-filters', 'assignments', sortedIds(courseIds)] as const,
+      problems: (assignmentIds: readonly string[]) =>
+        ['admin', 'submission-filters', 'problems', sortedIds(assignmentIds)] as const,
+    },
   },
 
   // --- Public / self -------------------------------------------------------
