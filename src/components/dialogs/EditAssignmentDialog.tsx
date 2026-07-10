@@ -65,7 +65,7 @@ type EditAssignmentDialogProps = {
 };
 
 // RHF state BEFORE Zod transforms (string for datetime-local, etc.)
-type FormValues = z.infer<typeof AssignmentFormSchema>;
+type FormValues = z.input<typeof AssignmentFormSchema>;
 
 export function EditAssignmentDialog({
   courseIsArchived,

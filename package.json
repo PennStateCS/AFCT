@@ -121,10 +121,10 @@
     "tailwind-merge": "^3.6.0",
     "tippy.js": "^6.3.7",
     "tsx": "^4.23.0",
-    "zod": "^3.25.76"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@hookform/resolvers": "^3.10.0",
+    "@hookform/resolvers": "^5.4.0",
     "@seriousme/openapi-schema-validator": "^2.9.0",
     "@tailwindcss/postcss": "^4.3.2",
     "@tanstack/eslint-plugin-query": "^5.101.2",
