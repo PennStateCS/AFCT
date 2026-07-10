@@ -23,7 +23,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 
 import type { Problem } from '@prisma/client';
-import { ProblemFormSchema, UpdateProblemSchema, ProblemTypeEnum } from '@/schemas/problem';
+import type { ProblemTypeEnum } from '@/schemas/problem';
+import { ProblemFormSchema, UpdateProblemSchema } from '@/schemas/problem';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 

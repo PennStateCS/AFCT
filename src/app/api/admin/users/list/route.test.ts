@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { routeCtx, testRequest } from '@/test/route';
 
 const authMock = vi.hoisted(() => vi.fn());
 const getUsersListMock = vi.hoisted(() => vi.fn());
@@ -16,7 +17,7 @@ describe('GET /api/users/list', () => {
   it('returns 403 when unauthorized', async () => {
     authMock.mockResolvedValue(null);
 
-    const res = await GET();
+    const res = await GET(testRequest(), routeCtx());
 
     expect(res.status).toBe(401);
   });
@@ -25,7 +26,7 @@ describe('GET /api/users/list', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     getUsersListMock.mockResolvedValue([{ id: 'u2', email: 'u2@example.com' }]);
 
-    const res = await GET();
+    const res = await GET(testRequest(), routeCtx());
 
     expect(res.status).toBe(200);
     expect(getUsersListMock).toHaveBeenCalled();
@@ -36,7 +37,7 @@ describe('GET /api/users/list', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     getUsersListMock.mockRejectedValue(new Error('db error'));
 
-    const res = await GET();
+    const res = await GET(testRequest(), routeCtx());
 
     expect(res.status).toBe(500);
     await expect(res.json()).resolves.toEqual({ error: 'Failed to fetch users' });

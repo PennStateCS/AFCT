@@ -49,7 +49,7 @@ export function RegexViewerDialog({ src, open, onOpenChange, title }: { src: str
       }
 	};
 
-	load();
+	void load();
   }, [src, open]);
   if (!data) return null;
   const parsed = parseRegex(data);

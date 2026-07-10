@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { testRequest } from '@/test/route';
 
 const prismaMock = vi.hoisted(() => ({
   course: {
@@ -38,14 +39,14 @@ beforeEach(() => {
 describe('GET /api/courses', () => {
   it('returns 401 when not signed in', async () => {
     authMock.mockResolvedValue(null);
-    const res = await GET();
+    const res = await GET(testRequest());
     expect(res.status).toBe(401);
     expect(prismaMock.course.findMany).not.toHaveBeenCalled();
   });
 
   it('returns 403 for a non-admin', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
-    const res = await GET();
+    const res = await GET(testRequest());
     expect(res.status).toBe(403);
     expect(prismaMock.course.findMany).not.toHaveBeenCalled();
   });
@@ -65,7 +66,7 @@ describe('GET /api/courses', () => {
       },
     ]);
 
-    const res = await GET();
+    const res = await GET(testRequest());
     expect(res.status).toBe(200);
 
     const body = await res.json();
@@ -91,7 +92,7 @@ describe('GET /api/courses', () => {
       },
     ]);
 
-    const res = await GET();
+    const res = await GET(testRequest());
     expect(res.status).toBe(200);
 
     const body = await res.json();
@@ -106,7 +107,7 @@ describe('GET /api/courses', () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     prismaMock.course.findMany.mockRejectedValue(new Error('boom'));
 
-    const res = await GET();
+    const res = await GET(testRequest());
     expect(res.status).toBe(500);
     consoleSpy.mockRestore();
   });
@@ -262,7 +263,8 @@ describe('POST /api/courses', () => {
 
     const res = await POST(req);
     expect(res.status).toBe(201);
-    expect(prismaMock.user.findUnique).toHaveBeenCalled();
+    // No timezone supplied → the course zone falls back to the system setting (not the
+    // actor's), so we read SystemSettings, not the user's timezone.
     expect(prismaMock.systemSettings.findUnique).toHaveBeenCalled();
     expect(txMock.roster.createMany).not.toHaveBeenCalled();
   });
@@ -285,6 +287,19 @@ describe('POST /api/courses', () => {
 
     const res = await POST(req);
     expect(res.status).toBe(403);
+  });
+
+  it('returns 401 for a disabled/deleted admin even with a stale admin token', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: true, inactive: true } });
+
+    const req = new Request('http://localhost/api/courses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'X', code: 'C', semester: 'F', credits: 3 }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(401);
   });
 
   it('returns validation response when validation fails', async () => {

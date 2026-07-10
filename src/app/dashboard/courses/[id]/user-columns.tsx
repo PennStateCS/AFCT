@@ -1,8 +1,8 @@
 'use client';
 
-import { ColumnDef } from '@tanstack/react-table';
+import type { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Trash2 } from 'lucide-react';
-import { User } from '@prisma/client';
+import type { User } from '@prisma/client';
 import { getInitials } from '@/app/utils/initials';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import CourseEditUserDialog from '@/components/dialogs/CourseEditUserDialog';

@@ -5,8 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getInitials } from '@/app/utils/initials';
 import { DataTable } from '@/components/ui/data-table';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { ColumnDef } from '@tanstack/react-table';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import type { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
 import { Table, Download, RefreshCw } from 'lucide-react';
@@ -170,7 +169,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         students,
         exportAssignments,
       );
-      const assignmentSlug = selectedForExport[0].title
+      const assignmentSlug = (selectedForExport[0]?.title ?? '')
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/(^-|-$)/g, '');
@@ -308,14 +307,14 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
   }, [assignments]);
 
   return (
-    <Card>
-      <CardHeader>
+    <div className="space-y-6">
+      <div>
         <div className="flex flex-wrap items-center justify-between gap-y-1">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <CardTitle className="flex items-center gap-2 text-2xl">
+            <h2 className="flex items-center gap-2 text-2xl font-semibold">
               <Table className="h-5 w-5" />
               Grades
-            </CardTitle>
+            </h2>
             <div className="text-muted-foreground flex items-center gap-1 text-sm">
               <div className="h-2 w-2 rounded-full bg-blue-500"></div>
               Click a grade to view/edit details
@@ -327,8 +326,8 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
             </div>
           ) : null}
         </div>
-      </CardHeader>
-      <CardContent className="space-y-6">
+      </div>
+      <div className="space-y-6">
         <DataTable
           columns={columns}
           data={students}
@@ -360,7 +359,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
             </>
           }
         />
-      </CardContent>
+      </div>
 
       {/* breakdown dialog */}
       {selectedStudent && selectedAssignment && (
@@ -388,6 +387,6 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
           disabled={loading || students.length === 0}
         />
       ) : null}
-    </Card>
+    </div>
   );
 }

@@ -26,7 +26,7 @@ describe('fetchJson', () => {
 
   it('falls back to a status message when the error body is not JSON', async () => {
     mockFetch(() => new Response('nope', { status: 500 }));
-    const err = await fetchJson('/x').catch((e) => e);
+    const err = (await fetchJson('/x').catch((e) => e)) as HttpError;
     expect(err).toBeInstanceOf(HttpError);
     expect(err.status).toBe(500);
     expect(err.message).toContain('500');

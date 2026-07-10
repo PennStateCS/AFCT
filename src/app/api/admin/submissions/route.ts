@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { withAdminAuth } from '@/lib/api/with-auth';
 
 /**
@@ -134,11 +134,10 @@ export const POST = withAdminAuth(
       return NextResponse.json(formattedSubmissions);
     } catch (error) {
       console.error('Error fetching submissions:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: null,
         action: 'ADMIN_SUBMISSIONS_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
       });
       return NextResponse.json({ error: 'Failed to fetch submissions' }, { status: 500 });
     }

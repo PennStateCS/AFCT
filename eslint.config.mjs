@@ -17,6 +17,7 @@ const eslintConfig = [
   {
     ignores: [
       '.next/**',
+      '.claude/**', // scratch git worktrees and agent state, not project source
       'node_modules/**',
       'coverage/**',
       'next-env.d.ts',
@@ -54,6 +55,39 @@ const eslintConfig = [
           varsIgnorePattern: '^_',
           caughtErrorsIgnorePattern: '^_',
         },
+      ],
+      // Type-only imports must use `import type`, so the compiler and bundler can
+      // erase them cleanly (pairs with verbatimModuleSyntax in tsconfig). Inline
+      // `import()` type annotations are left alone: they already erase fine and a
+      // few test files rely on them.
+      '@typescript-eslint/consistent-type-imports': ['error', { disallowTypeAnnotations: false }],
+    },
+  },
+  // Type-aware linting for source code (not tests). These rules need the TS
+  // program, so we turn on projectService here and scope it to src, away from the
+  // test files (already relaxed above and noisy for these checks). The headline
+  // rule is no-floating-promises, which flags unawaited promises.
+  {
+    files: ['src/**/*.ts', 'src/**/*.tsx'],
+    ignores: ['**/*.test.ts', '**/*.test.tsx'],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: __dirname,
+      },
+    },
+    rules: {
+      // No `any` in source (tests keep it relaxed above). Source is already clean;
+      // the JFF/CFG viewers keep their own file-scoped disables where XML parsing
+      // genuinely needs it.
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/await-thenable': 'error',
+      // Real misuse (e.g. an async fn in an `if`) is an error; the noisy JSX
+      // `onClick={async …}` void-return case is allowed via attributes:false.
+      '@typescript-eslint/no-misused-promises': [
+        'error',
+        { checksVoidReturn: { attributes: false } },
       ],
     },
   },

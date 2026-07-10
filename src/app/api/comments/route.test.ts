@@ -67,10 +67,8 @@ describe('POST /api/comments', () => {
       id: 'cm1',
       content: 'Hello',
       createdAt: new Date('2025-01-01T00:00:00.000Z'),
-      roster: {
-        role: 'STUDENT',
-        user: { id: 'u1', firstName: 'A', lastName: 'B', avatar: null, role: 'STUDENT' },
-      },
+      author: { id: 'u1', firstName: 'A', lastName: 'B', avatar: null },
+      roster: { role: 'STUDENT' },
     });
 
     const req = new NextRequest('http://localhost/api/comments', {
@@ -107,20 +105,17 @@ describe('POST /api/comments', () => {
     expect(prismaMock.comment.create).not.toHaveBeenCalled();
   });
 
-  it('allows admin to add comment without roster entry', async () => {
+  it('lets an admin comment without being added to the roster', async () => {
     authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1', isPublished: true });
-    prismaMock.roster.findFirst.mockResolvedValue(null);
-    prismaMock.roster.create.mockResolvedValue({ id: 'r-admin', role: 'ADMIN' });
+    prismaMock.roster.findFirst.mockResolvedValue(null); // admin not on the roster
     prismaMock.problem.findFirst.mockResolvedValue({ id: 'p1', courseId: 'c1' });
     prismaMock.comment.create.mockResolvedValue({
       id: 'cm-admin',
       content: 'Admin note',
       createdAt: new Date('2025-01-01T00:00:00.000Z'),
-      roster: {
-        role: 'ADMIN',
-        user: { id: 'admin-1', firstName: 'Admin', lastName: 'User', avatar: null, role: 'ADMIN' },
-      },
+      author: { id: 'admin-1', firstName: 'Admin', lastName: 'User', avatar: null },
+      roster: null, // no course role — not rostered
     });
 
     const req = new NextRequest('http://localhost/api/comments', {
@@ -131,8 +126,13 @@ describe('POST /api/comments', () => {
 
     const res = await POST(req);
     expect(res.status).toBe(201);
-    expect(prismaMock.roster.create).toHaveBeenCalled();
-    expect(prismaMock.comment.create).toHaveBeenCalled();
+    // The admin is NOT auto-added to the roster; the comment is attributed via authorId.
+    expect(prismaMock.roster.create).not.toHaveBeenCalled();
+    expect(prismaMock.comment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ authorId: 'admin-1', rosterId: null }),
+      }),
+    );
   });
 
   it('returns 404 when assignment not found', async () => {
@@ -268,10 +268,8 @@ describe('POST /api/comments', () => {
       id: 'cm1',
       content: 'Hello',
       createdAt: new Date('2025-01-01T00:00:00.000Z'),
-      roster: {
-        role: null,
-        user: { id: 'u1', firstName: null, lastName: null, avatar: null },
-      },
+      author: { id: 'u1', firstName: null, lastName: null, avatar: null },
+      roster: { role: null },
     });
 
     const req = new NextRequest('http://localhost/api/comments', {
@@ -292,7 +290,7 @@ describe('POST /api/comments', () => {
     });
   });
 
-  it('returns 400 with validation details on invalid input', async () => {
+  it('returns 400 on invalid input', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
 
     const req = new NextRequest('http://localhost/api/comments', {
@@ -306,7 +304,6 @@ describe('POST /api/comments', () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toBe('Invalid request data');
-    expect(Array.isArray(body.details)).toBe(true);
     expect(activityLogMock).toHaveBeenCalledWith(
       prismaMock,
       req,
@@ -350,10 +347,8 @@ describe('POST /api/comments', () => {
       id: 'cm1',
       content: 'Note about student',
       createdAt: new Date(),
-      roster: {
-        role: 'FACULTY',
-        user: { id: 'u1', firstName: 'F', lastName: 'A', avatar: null, role: 'FACULTY' },
-      },
+      author: { id: 'u1', firstName: 'F', lastName: 'A', avatar: null },
+      roster: { role: 'FACULTY' },
     });
 
     const req = new NextRequest('http://localhost/api/comments', {
@@ -430,7 +425,7 @@ describe('DELETE /api/comments', () => {
     expect(res.status).toBe(404);
   });
 
-  it('allows owner to delete own comment', async () => {
+  it('denies a student deleting their own comment (comments are immutable)', async () => {
     authMock.mockResolvedValue({ user: { id: 'owner-id', role: 'STUDENT' } });
     prismaMock.comment.findUnique.mockResolvedValue({
       id: 'cm1',
@@ -440,12 +435,14 @@ describe('DELETE /api/comments', () => {
       roster: { user: { id: 'owner-id' } },
       assignment: { courseId: 'c1' },
     });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' }); // not staff
 
     const req = new NextRequest('http://localhost/api/comments?commentId=cm1', {
       method: 'DELETE',
     });
     const res = await DELETE(req);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(403);
+    expect(prismaMock.comment.delete).not.toHaveBeenCalled();
   });
 
   it('allows faculty to delete any comment', async () => {

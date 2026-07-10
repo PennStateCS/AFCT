@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { canManageCourse } from '@/lib/permissions';
 
 /**
@@ -31,7 +32,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
     const user = session?.user;
     actorId = user?.id ?? null;
 
-    if (!user?.id) {
+    if (!user?.id || user.inactive) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -100,7 +101,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
     const updated = await prisma.submission.update({
       where: { id },
       data: {
-        status: "PENDING",
+        status: 'PENDING',
         feedback: null,
         correct: null,
         evaluationRaw: Prisma.DbNull,
@@ -122,18 +123,17 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
         assignmentId: submission.assignmentId,
         problemId: submission.problemId,
         submissionId: submission.id,
-        status: 'PENDING'
+        status: 'PENDING',
       },
     });
 
     return NextResponse.json({ success: true, submission: updated }, { status: 202 });
   } catch (error) {
     console.error('POST /api/submissions/[id]/rerun error:', error);
-    await createEnhancedActivityLog(prisma, req, {
+    await logError(req, {
       userId: actorId,
       action: 'SUBMISSION_RERUN_ERROR',
-      severity: 'ERROR',
-      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+      error,
     });
     return NextResponse.json({ error: 'Failed to rerun submission' }, { status: 500 });
   }

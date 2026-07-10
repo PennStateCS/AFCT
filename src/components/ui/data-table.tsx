@@ -2,18 +2,20 @@
 
 import React from 'react';
 
-import {
+import type {
   ColumnDef,
+  VisibilityState,
+  SortingState,
+  PaginationState,
+  OnChangeFn,
+} from '@tanstack/react-table';
+import {
   flexRender,
   getCoreRowModel,
   getPaginationRowModel,
   getSortedRowModel,
   getFilteredRowModel,
   useReactTable,
-  VisibilityState,
-  SortingState,
-  PaginationState,
-  OnChangeFn,
 } from '@tanstack/react-table';
 import {
   Table,
@@ -386,11 +388,7 @@ export function DataTable<TData, TValue>({
                   const alignHeadClass =
                     align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : '';
                   const alignFlexClass =
-                    align === 'center'
-                      ? 'justify-center'
-                      : align === 'right'
-                        ? 'justify-end'
-                        : '';
+                    align === 'center' ? 'justify-center' : align === 'right' ? 'justify-end' : '';
 
                   return (
                     <TableHead
@@ -404,7 +402,7 @@ export function DataTable<TData, TValue>({
                               : 'none'
                           : undefined
                       }
-                      className={`${getResponsiveClass(priority)} whitespace-nowrap h-12 font-semibold ${alignHeadClass}`}
+                      className={`${getResponsiveClass(priority)} h-12 font-semibold whitespace-nowrap ${alignHeadClass}`}
                     >
                       {header.isPlaceholder ? null : canSort ? (
                         <button

@@ -1,4 +1,4 @@
-import { Course, Assignment, Problem } from '@prisma/client';
+import type { Course, Assignment, Problem } from '@prisma/client';
 
 // Assignment with problem count as returned by API. `maxPoints` is not stored on
 // the assignment record any more; consumers are expected to fetch it separately
@@ -48,4 +48,11 @@ export type EnrollableUser = {
   lastName: string | null;
 };
 
-export type TabType = 'assignments' | 'problems' | 'roster' | 'grades' | 'groups' | 'activity';
+export type TabType =
+  | 'assignments'
+  | 'problems'
+  | 'roster'
+  | 'grades'
+  | 'groups'
+  | 'activity'
+  | 'settings';

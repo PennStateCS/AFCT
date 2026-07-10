@@ -91,7 +91,7 @@ describe('course-utils', () => {
         json: async () => {
           throw new Error('Invalid JSON');
         },
-      } as Response);
+      } as unknown as Response);
 
       const target: DeleteTarget = { type: 'assignment', id: 'assignment-1' };
       await expect(deleteItem(target, 'course-1')).rejects.toThrow('Failed to delete assignment');
@@ -111,8 +111,8 @@ describe('course-utils', () => {
         { id: 'assignment-2', name: 'Assignment 2', problemCount: 2 } as any,
       ],
       problems: [
-        { id: 'problem-1', name: 'Problem 1' } as Problem,
-        { id: 'problem-2', name: 'Problem 2' } as Problem,
+        { id: 'problem-1', name: 'Problem 1' } as unknown as Problem,
+        { id: 'problem-2', name: 'Problem 2' } as unknown as Problem,
       ],
     } as FullCourse;
 
@@ -152,13 +152,13 @@ describe('course-utils', () => {
       const updatedAssignment: Assignment = {
         id: 'assignment-1',
         name: 'New Name',
-      } as Assignment;
+      } as unknown as Assignment;
 
       const result = updateCourseAfterAssignmentSave(mockCourse, updatedAssignment);
 
-      expect(result.assignments[0].name).toBe('New Name');
+      expect((result.assignments[0] as unknown as { name: string }).name).toBe('New Name');
       expect(result.assignments[0].problemCount).toBe(3); // preserved
-      expect(result.assignments[1].name).toBe('Assignment 2'); // unchanged
+      expect((result.assignments[1] as unknown as { name: string }).name).toBe('Assignment 2'); // unchanged
     });
   });
 
@@ -192,20 +192,20 @@ describe('course-utils', () => {
     it('should update an existing problem in the course', () => {
       const mockCourse: FullCourse = {
         problems: [
-          { id: 'problem-1', name: 'Old Problem' } as Problem,
-          { id: 'problem-2', name: 'Problem 2' } as Problem,
+          { id: 'problem-1', name: 'Old Problem' } as unknown as Problem,
+          { id: 'problem-2', name: 'Problem 2' } as unknown as Problem,
         ],
       } as FullCourse;
 
       const updatedProblem: Problem = {
         id: 'problem-1',
         name: 'Updated Problem',
-      } as Problem;
+      } as unknown as Problem;
 
       const result = updateCourseAfterProblemSave(mockCourse, updatedProblem);
 
-      expect(result.problems[0].name).toBe('Updated Problem');
-      expect(result.problems[1].name).toBe('Problem 2');
+      expect((result.problems[0] as unknown as { name: string }).name).toBe('Updated Problem');
+      expect((result.problems[1] as unknown as { name: string }).name).toBe('Problem 2');
     });
   });
 
@@ -218,7 +218,7 @@ describe('course-utils', () => {
       const newAssignment: Assignment = {
         id: 'assignment-2',
         name: 'New Assignment',
-      } as Assignment;
+      } as unknown as Assignment;
 
       const result = updateCourseAfterAssignmentCreate(mockCourse, newAssignment);
 
@@ -231,13 +231,13 @@ describe('course-utils', () => {
   describe('updateCourseAfterProblemCreate', () => {
     it('should add new problem to course', () => {
       const mockCourse: FullCourse = {
-        problems: [{ id: 'problem-1', name: 'Problem 1' } as Problem],
+        problems: [{ id: 'problem-1', name: 'Problem 1' } as unknown as Problem],
       } as FullCourse;
 
       const newProblem: Problem = {
         id: 'problem-2',
         name: 'New Problem',
-      } as Problem;
+      } as unknown as Problem;
 
       const result = updateCourseAfterProblemCreate(mockCourse, newProblem);
 

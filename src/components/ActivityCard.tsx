@@ -2,7 +2,6 @@
 
 import React, { useEffect, useMemo } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DataTable } from '@/components/ui/data-table';
@@ -93,27 +92,23 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
 
   if (isLoading) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-2xl">
-            <Activity className="h-5 w-5" />
-            Activity
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin" />
-            <span className="ml-2">Loading activity...</span>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="space-y-4">
+        <h2 className="flex items-center gap-2 text-2xl font-semibold">
+          <Activity className="h-5 w-5" />
+          Activity
+        </h2>
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span className="ml-2">Loading activity...</span>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-        <CardTitle className="flex items-center gap-2 text-2xl">
+    <div className="space-y-4">
+      <div className="flex flex-row items-center justify-between">
+        <h2 className="flex items-center gap-2 text-2xl font-semibold">
           <Activity className="h-5 w-5" />
           Activity
           {totalCount > 0 && (
@@ -121,7 +116,7 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
               {totalCount}
             </Badge>
           )}
-        </CardTitle>
+        </h2>
         <Button
           variant="ghost"
           size="sm"
@@ -131,8 +126,8 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
         >
           <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
         </Button>
-      </CardHeader>
-      <CardContent className="overflow-x-auto">
+      </div>
+      <div className="overflow-x-auto">
         {activities.length === 0 ? (
           <div className="text-muted-foreground py-8 text-center">
             <Activity className="mx-auto mb-4 h-12 w-12 opacity-50" />
@@ -163,7 +158,7 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
             )}
           </>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

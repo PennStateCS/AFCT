@@ -66,6 +66,7 @@ model User {
   activityLogs  ActivityLog[]
   groupRosters  GroupRoster[] // Group memberships across courses
   commentsAbout Comment[]         @relation("CommentsAboutStudent") // Comments about this student's work
+  commentsAuthored Comment[]      @relation("CommentAuthor") // Comments this user wrote
 
   @@index([isAdmin])
   @@index([inactive])
@@ -86,6 +87,17 @@ model Course {
   isPublished Boolean  @default(false)
   isArchived  Boolean  @default(false)
 
+  // Soft delete: when set, the course is retained for recovery but hidden from all
+  // non-admin views and inaccessible through the app. Deletion requires the course to
+  // already be archived, so a deleted course is always archived too.
+  deletedAt DateTime?
+
+  // The canonical IANA timezone that anchors this course's deadlines. Staff-entered
+  // wall-times (due dates, late cutoffs) are interpreted in this zone and stored as
+  // UTC, so a deadline means the same instant for every student. Defaults to the
+  // system timezone at creation.
+  timezone String @default("UTC")
+
   // How the empty string is displayed in automata/languages for this course.
   emptyStringNotation EmptyStringNotation @default(EPSILON)
 
@@ -104,6 +116,7 @@ model Course {
   @@index([createdAt])
   @@index([registrationOpenAt])
   @@index([registrationCloseAt])
+  @@index([deletedAt])
 }
 
 model Roster {
@@ -345,14 +358,22 @@ model Comment {
   problem   Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
   problemId String
 
-  roster   Roster @relation(fields: [rosterId], references: [id], onDelete: Cascade)
-  rosterId String
+  // The author is always a User. `roster` is only the author's role WITHIN this
+  // course (for the role badge) and is null when the author isn't rostered — e.g. a
+  // system admin commenting on a course they aren't enrolled in. We never fabricate a
+  // roster row just to attribute a comment.
+  author   User   @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  authorId String
+
+  roster   Roster? @relation(fields: [rosterId], references: [id], onDelete: SetNull)
+  rosterId String?
 
   aboutStudent   User?   @relation("CommentsAboutStudent", fields: [aboutStudentId], references: [id], onDelete: Cascade)
   aboutStudentId String?
 
   @@index([assignmentId])
   @@index([problemId])
+  @@index([authorId])
   @@index([rosterId])
   @@index([aboutStudentId])
   @@index([assignmentId, problemId])
@@ -405,7 +426,15 @@ model SystemSettings {
   timezone        String @default("UTC")
   maxUploadSizeMb Int    @default(25)
   allowSignup     Boolean @default(true)
-  sessionTimeoutMinutes Int @default(20)
+  // Canonical comma-separated allow-list of email domains permitted to self-register
+  // (e.g. "psu.edu,example.edu"). Blank = no restriction (any domain may sign up).
+  signupAllowedDomains String @default("")
+  sessionTimeoutMinutes Int @default(60)
+
+  // App-wide date/time display preference. When true, times render on a 24-hour clock
+  // (e.g. 23:59); otherwise 12-hour with AM/PM. Display-only — never affects stored
+  // UTC instants or deadline enforcement.
+  clock24Hour Boolean @default(false)
 
   // Login lockout policy (per-account): how many failed attempts before the
   // account is temporarily locked, and for how long.

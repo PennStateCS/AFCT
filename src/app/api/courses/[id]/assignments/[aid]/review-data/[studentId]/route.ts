@@ -133,22 +133,11 @@ export const GET = withCourseAuth(
         prisma.comment.findMany({
           where: {
             assignmentId,
-            OR: [{ aboutStudentId: studentId }, { roster: { userId: studentId } }],
+            OR: [{ aboutStudentId: studentId }, { authorId: studentId }],
           },
           include: {
-            roster: {
-              select: {
-                role: true,
-                user: {
-                  select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                    avatar: true,
-                  },
-                },
-              },
-            },
+            author: { select: { id: true, firstName: true, lastName: true, avatar: true } },
+            roster: { select: { role: true } }, // course role for the badge, may be null
           },
           orderBy: { createdAt: 'asc' },
         }),
@@ -229,11 +218,11 @@ export const GET = withCourseAuth(
         createdAt: comment.createdAt,
         problemId: comment.problemId,
         author: {
-          id: comment.roster.user.id,
-          firstName: comment.roster.user.firstName ?? null,
-          lastName: comment.roster.user.lastName ?? null,
-          avatar: comment.roster.user.avatar ?? null,
-          role: comment.roster.role ?? null,
+          id: comment.author.id,
+          firstName: comment.author.firstName ?? null,
+          lastName: comment.author.lastName ?? null,
+          avatar: comment.author.avatar ?? null,
+          role: comment.roster?.role ?? null,
         },
       }));
 

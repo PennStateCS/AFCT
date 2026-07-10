@@ -1,13 +1,16 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { writeFile } from 'fs/promises';
 import path from 'path';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { isAdmin } from '@/lib/permissions';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { safeStoredFilename, resolveInsideDir, safeUnlinkInDir } from '@/lib/safe-upload';
+import { formBool, formBoolOptional } from '@/lib/api/request';
 
 // Avatars are stored here; the client-supplied name is never used to build a path.
 const pfpsDir = path.join('/private', 'uploads', 'pfps');
@@ -62,7 +65,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     const session = await auth();
     const currentUser = session?.user;
 
-    if (!currentUser || !currentUser.id) {
+    if (!currentUser || !currentUser.id || currentUser.inactive) {
       console.warn('[PATCH] Unauthorized request');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -96,11 +99,11 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       const formData = await req.formData();
       firstName = formData.get('firstName') as string;
       lastName = formData.get('lastName') as string;
-      inactive = formData.get('inactive') === 'true';
+      inactive = formBool(formData, 'inactive');
       avatarFile = formData.get('avatar') as File;
-      deleteAvatar = formData.get('deleteAvatar') === 'true';
+      deleteAvatar = formBool(formData, 'deleteAvatar');
       timezoneRaw = (formData.get('timezone') as string) || undefined;
-      isAdminFlag = formData.has('isAdmin') ? formData.get('isAdmin') === 'true' : undefined;
+      isAdminFlag = formBoolOptional(formData, 'isAdmin');
     } else {
       const body = await req.json();
       ({ firstName, lastName, inactive } = body);
@@ -263,11 +266,10 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     return NextResponse.json(updatedUser);
   } catch (error) {
     console.error('[PATCH] Error updating user:', error);
-    await createEnhancedActivityLog(prisma, req, {
+    await logError(req, {
       userId: actorId,
       action: 'USER_UPDATE_ERROR',
-      severity: 'ERROR',
-      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+      error,
     });
     return NextResponse.json({ error: 'Failed to update user' }, { status: 500 });
   }
@@ -337,6 +339,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
       category: 'USER',
       metadata: {
         actorId,
+        targetUserId: userId,
         deletedUserId: userId,
         deletedUserEmail: user?.email ?? null,
         deletedUserName: [user?.firstName, user?.lastName].filter(Boolean).join(' ') || null,
@@ -346,11 +349,10 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
     return NextResponse.json({ success: true, message: 'User deleted' });
   } catch (error) {
     console.error('[DELETE] Error deleting user:', error);
-    await createEnhancedActivityLog(prisma, req, {
+    await logError(req, {
       userId: actorId,
       action: 'USER_DELETE_ERROR',
-      severity: 'ERROR',
-      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+      error,
     });
     return NextResponse.json({ error: 'Failed to delete user' }, { status: 500 });
   }

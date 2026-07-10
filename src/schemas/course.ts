@@ -83,6 +83,9 @@ const BaseCourseObject = z
     registrationCloseAt: DateTimeLocal,
     isPublished: z.boolean().default(false),
     emptyStringNotation: EmptyStringNotationSchema,
+    // Canonical IANA zone that anchors this course's deadlines. Optional here so
+    // forms that don't surface a picker still validate; the API defaults it.
+    timezone: z.string().min(1).optional(),
   })
   .strict();
 
@@ -100,6 +103,8 @@ const BaseCourseFormObject = z
     registrationOpenAt: DateTimeLocalForm,
     registrationCloseAt: DateTimeLocalForm,
     emptyStringNotation: EmptyStringNotationSchema,
+    // Canonical IANA zone that anchors this course's deadlines (see BaseCourseObject).
+    timezone: z.string().min(1).optional(),
   })
   .strict();
 
@@ -212,7 +217,6 @@ export const UpdateCourseSchema = BaseCourseObject.partial().extend({
 export const CourseFormSchema = BaseCourseFormObject.extend({
   isPublished: z.boolean().default(false),
   isArchived: z.boolean().default(false),
-  instructorIds: z.array(z.string()).default([]),
 })
   .refine((d) => d.startDate <= d.endDate, {
     path: ['startDate'],
@@ -236,14 +240,6 @@ export const CourseFormSchema = BaseCourseFormObject.extend({
         code: z.ZodIssueCode.custom,
         path: ['registrationCloseAt'],
         message: 'Self registration close must be on or after the open date.',
-      });
-    }
-
-    if (d.instructorIds.length === 0) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['instructorIds'],
-        message: 'Pick at least one faculty member.',
       });
     }
   });

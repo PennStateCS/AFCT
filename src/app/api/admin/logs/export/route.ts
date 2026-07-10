@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { DownloadLogsSchema } from '@/schemas/log';
 import { EXPORTABLE_LOG_FIELDS } from '@/lib/log-fields';
 import { withAdminAuth } from '@/lib/api/with-auth';
+import { parseValidDate } from '@/lib/date';
 import type { Prisma } from '@prisma/client';
 
 // Upper bound so a single export can't try to page the entire table into memory.
@@ -64,11 +65,11 @@ export const POST = withAdminAuth(
     const select = Object.fromEntries(validCols.map((c) => [c, true])) as Prisma.ActivityLogSelect;
 
     // begTime/endTime are datetime-local strings; ignore either if unparseable.
-    const beg = new Date(begTime);
-    const end = new Date(endTime);
+    const beg = parseValidDate(begTime);
+    const end = parseValidDate(endTime);
     const timestamp: Prisma.DateTimeFilter = {};
-    if (!Number.isNaN(beg.getTime())) timestamp.gte = beg;
-    if (!Number.isNaN(end.getTime())) timestamp.lte = end;
+    if (beg) timestamp.gte = beg;
+    if (end) timestamp.lte = end;
     const where: Prisma.ActivityLogWhereInput = timestamp.gte || timestamp.lte ? { timestamp } : {};
 
     try {

@@ -12,7 +12,8 @@ import { DueDateModule } from '@/components/modules/DueDateModule';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { Button } from '@/components/ui/button';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
-import { CalendarAssignment, getDateKeyInTimeZone, getMonthRangeIso } from '@/lib/calendar-shared';
+import type { CalendarAssignment } from '@/lib/calendar-shared';
+import { getDateKeyInTimeZone, getMonthRangeIso } from '@/lib/calendar-shared';
 import { apiPaths } from '@/lib/api-paths';
 
 // Fetch assignments for courses the current user is enrolled in between given ISO start/end
@@ -327,20 +328,28 @@ export default function CalendarClient({
                             onClick={() => openCurrentDay()}
                             className="grid min-h-0 w-full min-w-0 cursor-default content-start gap-1 overflow-hidden p-1"
                           >
-                            {dayAssignments.slice(0, visibleCount).map((a) => (
-                              <Link
-                                key={a.id}
-                                href={`/dashboard/courses/${a.courseId}/${a.id}`}
-                                className={cn(
-                                  'assignment-link box-border block min-h-[1rem] w-full min-w-0 cursor-pointer truncate overflow-hidden rounded bg-sky-700 py-0.5 pl-1 text-left text-xs leading-tight whitespace-nowrap text-white hover:bg-sky-800 dark:bg-sky-600 dark:hover:bg-sky-700',
-                                  a.crossedOut && 'line-through opacity-80',
-                                )}
-                                title={`${a.course.code} - ${a.title}`}
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                {`${a.course.code} - ${a.title}`}
-                              </Link>
-                            ))}
+                            {dayAssignments.slice(0, visibleCount).map((a) => {
+                              const isDraft = a.isPublished === false;
+                              return (
+                                <Link
+                                  key={a.id}
+                                  href={`/dashboard/courses/${a.courseId}/${a.id}`}
+                                  className={cn(
+                                    'assignment-link box-border block min-h-[1rem] w-full min-w-0 cursor-pointer truncate overflow-hidden rounded py-0.5 pl-1 text-left text-xs leading-tight whitespace-nowrap text-white',
+                                    isDraft
+                                      ? 'bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700'
+                                      : 'bg-sky-700 hover:bg-sky-800 dark:bg-sky-600 dark:hover:bg-sky-700',
+                                    a.crossedOut && 'line-through opacity-80',
+                                  )}
+                                  title={`${isDraft ? 'Draft — ' : ''}${a.course.code} - ${a.title}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {isDraft && <span aria-hidden="true">✎ </span>}
+                                  {`${a.course.code} - ${a.title}`}
+                                  {isDraft && <span className="sr-only"> (draft)</span>}
+                                </Link>
+                              );
+                            })}
                             {dayAssignments.length > visibleCount && (
                               <>
                                 <div

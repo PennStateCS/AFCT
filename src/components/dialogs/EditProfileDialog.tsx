@@ -19,6 +19,7 @@ import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQueryClient } from '@tanstack/react-query';
 
 import type { SessionUser } from '@/types/next-auth';
 import {
@@ -27,10 +28,15 @@ import {
   type UpdateProfileInput,
 } from '@/schemas/profile';
 import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
-import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { useMaxUploadSize } from '@/hooks/useMaxUploadSize';
 import { apiPaths } from '@/lib/api-paths';
 import { AvatarCrop } from '../AvatarCrop';
+
+// Sentinel for the "follow my device/system" choice. Radix Select forbids an
+// empty-string item value, so we use a token and translate it to '' on submit —
+// the server stores that as null, which makes the display-timezone resolver fall
+// through to the system default, then the browser.
+const AUTO_TIMEZONE = '__auto__';
 
 type EditProfileDialog = {
   user: SessionUser;
@@ -40,12 +46,13 @@ type EditProfileDialog = {
 };
 export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDialog) {
   // Local preview state (keep separate from RHF file)
-  const { timezone: effectiveTimezone } = useEffectiveTimezone();
+  const queryClient = useQueryClient();
   const { maxMb, loading: loadingMaxSize } = useMaxUploadSize();
   const [avatarPreview, setAvatarPreview] = useState<string>(
     user.avatar ? apiPaths.files.pfp(user.avatar) : '',
   );
-  const [serverTimezone, setServerTimezone] = useState('UTC');
+  // What "Automatic" would resolve to on this device — shown for reassurance.
+  const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
   // RHF defaults – email is read-only so it isn't in the schema
   const defaults: UpdateProfileRaw = useMemo(
@@ -65,7 +72,6 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
     handleSubmit,
     reset,
     setValue,
-    getValues,
     formState: { errors, isSubmitting, isValid },
   } = useForm<UpdateProfileRaw>({
     resolver: zodResolver(UpdateProfileSchema),
@@ -94,15 +100,6 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
       });
     }
   }, [open, defaults, reset, user.avatar]);
-
-  useEffect(() => {
-    if (!open) return;
-    const tz = user.timezone || effectiveTimezone || 'UTC';
-    setServerTimezone(effectiveTimezone || 'UTC');
-    if (!getValues('timezone')) {
-      setValue('timezone', tz, { shouldDirty: false });
-    }
-  }, [open, user.timezone, effectiveTimezone, getValues, setValue]);
 
   const handleAvatarUpload = (file?: File) => {
     // Update RHF state and local state
@@ -136,7 +133,9 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
     formData.append('lastName', parsed.lastName);
     if (parsed.avatarFile) formData.append('avatar', parsed.avatarFile);
     if (parsed.deleteAvatar) formData.append('deleteAvatar', 'true');
-    if (parsed.timezone) formData.append('timezone', parsed.timezone);
+    // Always send it: a blank value tells the server to clear the override
+    // (Automatic), so the display timezone follows the system/browser again.
+    formData.append('timezone', parsed.timezone ?? '');
 
     try {
       // Post new profile data to database
@@ -150,6 +149,10 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
         avatar: parsed.deleteAvatar ? null : user.avatar,
         timezone: parsed.timezone || undefined,
       });
+
+      // The display-timezone hook reads /api/me through this cached key; refetch
+      // it so a changed (or cleared) timezone takes effect without a reload.
+      await queryClient.invalidateQueries({ queryKey: ['profile'] });
 
       toast.success('Profile updated!');
       setOpen(false);
@@ -271,13 +274,19 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
                 label="Timezone"
                 name="timezone"
                 id="timezone"
-                value={field.value || serverTimezone}
-                onValueChange={(v) => field.onChange(v)}
+                // Empty override renders as "Automatic". Radix needs a non-empty
+                // item value, so map '' <-> AUTO_TIMEZONE across the boundary.
+                value={field.value ? field.value : AUTO_TIMEZONE}
+                onValueChange={(v) => field.onChange(v === AUTO_TIMEZONE ? '' : v)}
                 placeholder="Select timezone"
-                options={COMMON_TIMEZONES.map((tz) => ({
-                  value: tz,
-                  label: formatTimezoneLabel(tz),
-                }))}
+                description={`Automatic follows this device's timezone (currently ${browserTimezone}).`}
+                options={[
+                  { value: AUTO_TIMEZONE, label: 'Automatic (detect from browser)' },
+                  ...COMMON_TIMEZONES.map((tz) => ({
+                    value: tz,
+                    label: formatTimezoneLabel(tz),
+                  })),
+                ]}
               />
             )}
           />

@@ -1,11 +1,12 @@
 // /src/app/api/assignments/[id]/problems/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { canManageCourse, COURSE_FACULTY_ROLES } from '@/lib/permissions';
-import { ProblemTypeEnum } from '@/schemas/problem';
-import { z } from 'zod';
+import { canManageCourse } from '@/lib/permissions';
+import type { ProblemTypeEnum } from '@/schemas/problem';
+import type { z } from 'zod';
 
 // Types
 interface Problem {
@@ -58,7 +59,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
   }
 
   const session = await auth();
-  if (!session?.user) {
+  if (!session?.user || session.user.inactive) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -73,9 +74,17 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 
-    // Faculty-tier staff only (FACULTY, TAs excluded) or admin.
-    if (!(await canManageCourse(session.user, assignment.courseId, COURSE_FACULTY_ROLES))) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // Course staff (FACULTY + TA) or admin — matching the other assignment routes.
+    // Authenticated but under-privileged → 403 + a SECURITY denial log.
+    if (!(await canManageCourse(session.user, assignment.courseId))) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session.user.id,
+        action: 'ASSIGNMENT_PROBLEMS_LIST_DENIED',
+        severity: 'SECURITY',
+        courseId: assignment.courseId,
+        metadata: {},
+      });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // ---- User and Course Id ----

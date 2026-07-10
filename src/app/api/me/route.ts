@@ -8,8 +8,10 @@ import { writeFile, unlink, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import { randomUUID } from 'crypto';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
+import { formBool } from '@/lib/api/request';
 
 const uploadDir = path.join('/private', 'uploads', 'pfps');
 
@@ -66,7 +68,7 @@ async function deleteFileIfExists(filename: string) {
  */
 export async function POST(req: Request) {
   const session = await auth();
-  if (!session?.user?.id) {
+  if (!session?.user?.id || session.user.inactive) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -75,7 +77,7 @@ export async function POST(req: Request) {
     const firstName = (formData.get('firstName') as string)?.trim();
     const lastName = (formData.get('lastName') as string)?.trim();
     const avatar = formData.get('avatar') as File | null;
-    const deleteAvatar = formData.get('deleteAvatar') === 'true';
+    const deleteAvatar = formBool(formData, 'deleteAvatar');
     const timezoneRaw = (formData.get('timezone') as string | null)?.trim() || '';
     const { maxBytes, maxMb } = await getSystemUploadLimit();
 
@@ -168,12 +170,11 @@ export async function POST(req: Request) {
     return NextResponse.json(updatedUser, { status: 200 });
   } catch (error) {
     console.error('[PROFILE_UPDATE_ERROR]', error);
-    await createEnhancedActivityLog(prisma, req, {
+    await logError(req, {
       userId: session.user.id,
       action: 'PROFILE_UPDATE_ERROR',
-      severity: 'ERROR',
+      error,
       category: 'USER',
-      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
     });
     return NextResponse.json({ error: 'Failed to update profile.' }, { status: 500 });
   }
@@ -201,7 +202,7 @@ export async function POST(req: Request) {
  */
 export async function GET() {
   const session = await auth();
-  if (!session?.user?.id) {
+  if (!session?.user?.id || session.user.inactive) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

@@ -11,12 +11,12 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { showToast } from '@/lib/toast';
-import { ColumnDef } from '@tanstack/react-table';
+import type { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Trash2, BookOpen, ChevronDown, Copy } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { Course } from '@prisma/client';
+import type { Course } from '@prisma/client';
 import { EditCourseDialog } from '@/components/dialogs/EditCourseDialog';
 import DuplicateCourseDialog from '@/components/dialogs/DuplicateCourseDialog';
 import { getInstructors, type EnrolledUser } from '@/lib/course-utils';

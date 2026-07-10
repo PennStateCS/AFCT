@@ -16,7 +16,7 @@ import InputGroup from '@/components/ui/InputGroup';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import type { z } from 'zod';
 import { DuplicateFormSchema } from '@/schemas/course';
 import type { Course } from '@prisma/client';
 import { toast } from 'sonner';

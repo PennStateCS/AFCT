@@ -7,7 +7,7 @@
  * - Randomized rosters (instructors/TAs/students)
  * - Problems for each course
  */
-import { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 
 // Seed-only category used to group people and drive roster assignment. Users no
 // longer carry a global role; admins are flagged via `isAdmin`.
@@ -136,7 +136,8 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
 
   // Assign each course to current/next/after term, repeating for extra courses.
   const courseDates = courseData.map((_, index) => {
-    const term = termSequence[index % termSequence.length];
+    // Index is taken modulo the length of the self-built sequence, so it is always in range.
+    const term = termSequence[index % termSequence.length]!;
     const dates = getTermDates(term.term, term.year);
 
     // Set times to 11:59 PM EST/EDT (America/New_York)
@@ -154,25 +155,29 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
   });
 
   const courseSemesters = courseData.map((_, index) => {
-    const term = termSequence[index % termSequence.length];
+    // Index is taken modulo the length of the self-built sequence, so it is always in range.
+    const term = termSequence[index % termSequence.length]!;
     return `${term.term} ${term.year}`;
   });
 
   console.log(`[seed] development: upserting ${courseData.length} courses`);
   // Upsert courses and capture IDs back into seed data.
   const courses = await Promise.all(
-    courseData.map((courseSeed, index) =>
-      prisma.course.upsert({
+    courseData.map((courseSeed, index) => {
+      // courseDates/courseSemesters are built by mapping over courseData, so this index is in range.
+      const dates = courseDates[index]!;
+      const semester = courseSemesters[index]!;
+      return prisma.course.upsert({
         where: { regCode: courseSeed.regCode },
         update: {
           name: courseSeed.title,
           code: courseSeed.code,
-          semester: courseSemesters[index],
+          semester,
           credits: courseSeed.credits,
-          startDate: courseDates[index].startDate,
-          endDate: courseDates[index].endDate,
-          registrationOpenAt: courseDates[index].startDate,
-          registrationCloseAt: courseDates[index].endDate,
+          startDate: dates.startDate,
+          endDate: dates.endDate,
+          registrationOpenAt: dates.startDate,
+          registrationCloseAt: dates.endDate,
           isPublished: courseSeed.isPublished,
           isArchived: courseSeed.isArchived,
         },
@@ -180,21 +185,23 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
           name: courseSeed.title,
           code: courseSeed.code,
           regCode: courseSeed.regCode,
-          semester: courseSemesters[index],
+          semester,
           credits: courseSeed.credits,
-          startDate: courseDates[index].startDate,
-          endDate: courseDates[index].endDate,
-          registrationOpenAt: courseDates[index].startDate,
-          registrationCloseAt: courseDates[index].endDate,
+          startDate: dates.startDate,
+          endDate: dates.endDate,
+          registrationOpenAt: dates.startDate,
+          registrationCloseAt: dates.endDate,
           isPublished: courseSeed.isPublished,
           isArchived: courseSeed.isArchived,
         },
-      }),
-    ),
+      });
+    }),
   );
 
   courses.forEach((course, index) => {
-    courseData[index].id = course.id;
+    // courses was built by mapping over courseData, so this index is in range.
+    const seedCourse = courseData[index];
+    if (seedCourse) seedCourse.id = course.id;
   });
 
   console.log('[seed] development: preparing rosters');
@@ -224,7 +231,8 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
     prisma,
     courses.map((course, index) => ({
       id: course.id,
-      assignTa: courseData[index].assignTa,
+      // courses was built by mapping over courseData, so this index is in range.
+      assignTa: courseData[index]!.assignTa,
     })),
     facultyUsers,
     taUsers,
@@ -240,10 +248,7 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
     if (oliver?.id) {
       const targetCourses = courses.filter((course, index) => {
         const seedCourse = courseData[index];
-        return (
-          course.id === charlesCmpen271Course?.id ||
-          seedCourse?.code === 'CMPSC 131'
-        );
+        return course.id === charlesCmpen271Course?.id || seedCourse?.code === 'CMPSC 131';
       });
 
       for (const course of targetCourses) {
@@ -333,7 +338,9 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
 
   console.log('[seed] development: creating assignments for courses');
   // Create assignments for each course without duplicates.
-  const createdAssignments: { [courseId: string]: Array<{ courseId: string, id: string; title: string }> } = {};
+  const createdAssignments: {
+    [courseId: string]: Array<{ courseId: string; id: string; title: string }>;
+  } = {};
 
   try {
     // Prepare all assignment data for batch insertion
@@ -500,51 +507,55 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
       });
 
       const oneDayMs = 24 * 60 * 60 * 1000;
-      const submissionsToCreate = await Promise.all(flipFlopsProblems.flatMap(async (assignmentProblem, index) => {
-        const submittedBase = new Date(Date.now() - (flipFlopsProblems.length - index + 2) * oneDayMs);
-        const originalFileName = assignmentProblem.problem.originalFileName ?? 'submission.jff';
-        const extension = path.extname(originalFileName) || '.jff';
+      const submissionsToCreate = await Promise.all(
+        flipFlopsProblems.flatMap(async (assignmentProblem, index) => {
+          const submittedBase = new Date(
+            Date.now() - (flipFlopsProblems.length - index + 2) * oneDayMs,
+          );
+          const originalFileName = assignmentProblem.problem.originalFileName ?? 'submission.jff';
+          const extension = path.extname(originalFileName) || '.jff';
 
-        const createStoredSubmission = async () => {
-          const storedFileName = `${randomUUID()}${extension}`;
-          const sourcePath = path.join(submissionSourceDir, originalFileName);
-          const destinationPath = path.join(submissionDestinationDir, storedFileName);
+          const createStoredSubmission = async () => {
+            const storedFileName = `${randomUUID()}${extension}`;
+            const sourcePath = path.join(submissionSourceDir, originalFileName);
+            const destinationPath = path.join(submissionDestinationDir, storedFileName);
 
-          await fs.copyFile(sourcePath, destinationPath);
-          return {
-            fileName: storedFileName,
-            originalFileName,
+            await fs.copyFile(sourcePath, destinationPath);
+            return {
+              fileName: storedFileName,
+              originalFileName,
+            };
           };
-        };
 
-        const firstStoredSubmission = await createStoredSubmission();
-        const revisedStoredSubmission = await createStoredSubmission();
+          const firstStoredSubmission = await createStoredSubmission();
+          const revisedStoredSubmission = await createStoredSubmission();
 
-        return [
-          {
-            courseId: flipFlopsAssignment.courseId,
-            assignmentId: flipFlopsAssignment.id,
-            problemId: assignmentProblem.problemId,
-            studentId: oliverId,
-            submittedAt: submittedBase,
-            correct: false,
-            feedback: `Initial attempt for ${assignmentProblem.problem.title} needs another revision.`,
-            fileName: firstStoredSubmission.fileName,
-            originalFileName: firstStoredSubmission.originalFileName,
-          },
-          {
-            courseId: flipFlopsAssignment.courseId,
-            assignmentId: flipFlopsAssignment.id,
-            problemId: assignmentProblem.problemId,
-            studentId: oliverId,
-            submittedAt: new Date(submittedBase.getTime() + 6 * 60 * 60 * 1000),
-            correct: true,
-            feedback: `${assignmentProblem.problem.title} submission accepted after revision.`,
-            fileName: revisedStoredSubmission.fileName,
-            originalFileName: revisedStoredSubmission.originalFileName,
-          },
-        ];
-      })).then((submissionGroups) => submissionGroups.flat());
+          return [
+            {
+              courseId: flipFlopsAssignment.courseId,
+              assignmentId: flipFlopsAssignment.id,
+              problemId: assignmentProblem.problemId,
+              studentId: oliverId,
+              submittedAt: submittedBase,
+              correct: false,
+              feedback: `Initial attempt for ${assignmentProblem.problem.title} needs another revision.`,
+              fileName: firstStoredSubmission.fileName,
+              originalFileName: firstStoredSubmission.originalFileName,
+            },
+            {
+              courseId: flipFlopsAssignment.courseId,
+              assignmentId: flipFlopsAssignment.id,
+              problemId: assignmentProblem.problemId,
+              studentId: oliverId,
+              submittedAt: new Date(submittedBase.getTime() + 6 * 60 * 60 * 1000),
+              correct: true,
+              feedback: `${assignmentProblem.problem.title} submission accepted after revision.`,
+              fileName: revisedStoredSubmission.fileName,
+              originalFileName: revisedStoredSubmission.originalFileName,
+            },
+          ];
+        }),
+      ).then((submissionGroups) => submissionGroups.flat());
 
       const createdSubmissions = await prisma.submission.createMany({
         data: submissionsToCreate,
@@ -555,7 +566,10 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
       );
     }
   } catch (error) {
-    console.error('[seed] development: error creating Flip Flops submissions for Oliver Green', error);
+    console.error(
+      '[seed] development: error creating Flip Flops submissions for Oliver Green',
+      error,
+    );
     throw error;
   }
 

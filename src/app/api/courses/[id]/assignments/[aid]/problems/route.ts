@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { ProblemTypeEnum } from '@/schemas/problem';
+import { logError } from '@/lib/api/activity';
+import type { ProblemTypeEnum } from '@/schemas/problem';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { z } from 'zod';
 
@@ -30,6 +31,11 @@ interface AssignmentWithProblems {
     };
   }[];
 }
+
+// Concrete path params for this route. Next guarantees each dynamic segment is
+// present, so typing them keeps the destructured values `string` (rather than
+// `string | undefined`) under noUncheckedIndexedAccess.
+type RouteCtx = { params: Promise<{ id: string; aid: string }> };
 
 const ProblemSettingsSchema = z.object({
   problemId: z.string(),
@@ -84,7 +90,7 @@ type ProblemSettingsInput = z.infer<typeof ProblemSettingsSchema>;
  *   500: { description: Server error. }
  */
 export const POST = withCourseAuth(
-  async (req, ctx, { user, courseId }) => {
+  async (req, ctx: RouteCtx, { user, courseId }) => {
     const { aid: assignmentId } = await ctx.params;
 
     try {
@@ -105,10 +111,7 @@ export const POST = withCourseAuth(
       const parsedSettings = z.array(ProblemSettingsSchema).safeParse(body.problemSettings ?? []);
       if (!parsedSettings.success) {
         return NextResponse.json(
-          {
-            error: 'Invalid problemSettings in request body',
-            details: parsedSettings.error.issues,
-          },
+          { error: 'Invalid problemSettings in request body' },
           { status: 400 },
         );
       }
@@ -256,8 +259,8 @@ export const POST = withCourseAuth(
             linksWithSubmissions: linksWithSubmissions.length,
           },
         });
-      } catch (logError) {
-        console.warn('Failed to log activity:', logError);
+      } catch (logErr) {
+        console.warn('Failed to log activity:', logErr);
         // Don't fail the whole request if logging fails
       }
 
@@ -280,16 +283,15 @@ export const POST = withCourseAuth(
     } catch (err) {
       // Handle unexpected errors
       console.error('Failed to update assignment problems:', err);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: null,
         action: 'ASSIGNMENT_ADD_PROBLEMS_ERROR',
-        severity: 'ERROR',
-        metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+        error: err,
       });
       return NextResponse.json({ error: 'Failed to update assignment problems.' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'ASSIGNMENT_ADD_PROBLEMS_DENIED' },
+  { access: 'manage', deniedAction: 'ASSIGNMENT_ADD_PROBLEMS_DENIED', blockWhenArchived: true },
 );
 
 /**
@@ -316,7 +318,7 @@ export const POST = withCourseAuth(
  *   500: { description: Server error. }
  */
 export const DELETE = withCourseAuth(
-  async (req, ctx, { user, courseId }) => {
+  async (req, ctx: RouteCtx, { user, courseId }) => {
     const { aid: assignmentId } = await ctx.params;
 
     try {
@@ -404,14 +406,13 @@ export const DELETE = withCourseAuth(
       return NextResponse.json({ success: true, problems });
     } catch (error) {
       console.error('Error removing problem from assignment:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'ASSIGNMENT_REMOVE_PROBLEM_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
       });
       return NextResponse.json({ error: 'Failed to remove problem.' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'ASSIGNMENT_REMOVE_PROBLEM_DENIED' },
+  { access: 'manage', deniedAction: 'ASSIGNMENT_REMOVE_PROBLEM_DENIED', blockWhenArchived: true },
 );

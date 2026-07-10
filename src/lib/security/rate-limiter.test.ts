@@ -34,7 +34,7 @@ describe('evaluateLoginRateLimit — IP-only escalation', () => {
   it('applies friction once the IP crosses the friction threshold (8th attempt)', () => {
     // Attempts 1–7 stay clean, the 8th trips friction.
     for (let i = 1; i <= 7; i++) {
-      expect(call().applyFriction).toBe(false);
+      expect((call() as unknown as { applyFriction: boolean }).applyFriction).toBe(false);
     }
     const eighth = call();
     expect(eighth.status).toBe('ok');

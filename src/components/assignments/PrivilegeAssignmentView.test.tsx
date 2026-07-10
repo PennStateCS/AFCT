@@ -195,6 +195,12 @@ describe('AssignmentDashboardPage (PrivilegeAssignmentView)', () => {
     const groupProblemsCall = fetchMock.mock.calls.find(
       (c) => (c[0] as string) === '/api/courses/c1/assignments/a1/group-problems',
     );
-    expect((groupProblemsCall?.[1] as { method?: string } | undefined)?.method).toBeUndefined();
+    expect(
+      (
+        (groupProblemsCall as unknown as unknown[] | undefined)?.[1] as
+          | { method?: string }
+          | undefined
+      )?.method,
+    ).toBeUndefined();
   });
 });

@@ -29,7 +29,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ file: stri
     }
 
     const session = await auth();
-    if (!session?.user?.id) {
+    if (!session?.user?.id || session.user.inactive) {
       return apiError(401, 'Unauthorized');
     }
 

@@ -1,4 +1,4 @@
-import { Problem, CourseRole } from '@prisma/client';
+import type { Problem, CourseRole } from '@prisma/client';
 
 export type AssignmentProblemLink = {
   problem: Problem;
@@ -12,6 +12,8 @@ export type AssignmentCourseSummary = {
   name: string;
   code?: string;
   isArchived?: boolean;
+  /** The course's canonical timezone — anchors deadlines; used for dual-zone display. */
+  timezone?: string | null;
   roster?: Array<{
     role: CourseRole | null;
     user: {

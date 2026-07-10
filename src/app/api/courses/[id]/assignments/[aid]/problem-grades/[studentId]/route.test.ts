@@ -9,6 +9,7 @@ const prismaMock = vi.hoisted(() => ({
     deleteMany: vi.fn(),
     upsert: vi.fn(),
   },
+  course: { findUnique: vi.fn() },
   $transaction: vi.fn(),
 }));
 
@@ -22,6 +23,13 @@ vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/permissions', () => ({
   canManageCourse: canManageCourseMock,
   canAccessCourse: canAccessCourseMock,
+  isCourseArchived: async (courseId: string) => {
+    const course = await prismaMock.course.findUnique({
+      where: { id: courseId },
+      select: { isArchived: true },
+    });
+    return Boolean(course?.isArchived);
+  },
 }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 
@@ -141,6 +149,7 @@ describe('POST /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
     canManageCourseMock.mockResolvedValue(true);
     canAccessCourseMock.mockResolvedValue(true);
     authMock.mockResolvedValue({ user: { id: 'staff-1', role: 'FACULTY' } });
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: defaultParams.aid, isPublished: true });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
       { problemId: 'prob-1', maxPoints: 10 },
@@ -375,6 +384,19 @@ describe('POST /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
 
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({ ok: true, changed: 0 });
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(prismaMock.assignmentProblemGrade.upsert).not.toHaveBeenCalled();
+    expect(prismaMock.assignmentProblemGrade.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('returns 409 and writes nothing when the course is archived', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+
+    const res = await POST(buildRequest({ grades: { 'prob-1': 7 } }), {
+      params: Promise.resolve(defaultParams),
+    });
+
+    expect(res.status).toBe(409);
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
     expect(prismaMock.assignmentProblemGrade.upsert).not.toHaveBeenCalled();
     expect(prismaMock.assignmentProblemGrade.deleteMany).not.toHaveBeenCalled();

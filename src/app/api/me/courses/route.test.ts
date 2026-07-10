@@ -71,7 +71,7 @@ describe('GET /api/me/courses', () => {
     const res = await GET(req());
 
     expect(res.status).toBe(500);
-    expect(await res.json()).toEqual({ message: 'Server error' });
+    expect(await res.json()).toEqual({ error: 'Server error' });
     consoleSpy.mockRestore();
   });
 });
@@ -109,6 +109,7 @@ describe('GET /api/me/courses?view=nav', () => {
     expect(prismaMock.course.findMany).toHaveBeenCalledWith({
       where: {
         roster: { some: { userId: 'student-1' } },
+        deletedAt: null,
         OR: [
           { isPublished: true },
           { roster: { some: { userId: 'student-1', role: { in: ['FACULTY', 'TA'] } } } },
@@ -120,6 +121,8 @@ describe('GET /api/me/courses?view=nav', () => {
         code: true,
         isPublished: true,
         isArchived: true,
+        startDate: true,
+        endDate: true,
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -146,6 +149,7 @@ describe('GET /api/me/courses?view=nav', () => {
     expect(prismaMock.course.findMany).toHaveBeenCalledWith({
       where: {
         roster: { some: { userId: 'admin-1' } },
+        deletedAt: null,
       },
       select: {
         id: true,
@@ -153,6 +157,8 @@ describe('GET /api/me/courses?view=nav', () => {
         code: true,
         isPublished: true,
         isArchived: true,
+        startDate: true,
+        endDate: true,
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -167,7 +173,7 @@ describe('GET /api/me/courses?view=nav', () => {
 
     expect(res.status).toBe(500);
     const body = await res.json();
-    expect(body).toEqual({ message: 'Server error' });
+    expect(body).toEqual({ error: 'Server error' });
     consoleSpy.mockRestore();
   });
 });

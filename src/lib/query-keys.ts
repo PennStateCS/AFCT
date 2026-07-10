@@ -47,22 +47,24 @@ export const queryKeys = {
       ['course', courseId, 'activity', opts] as const,
   },
 
-  // --- Assignments (all scoped by courseId) --------------------------------
+  // --- Assignments (all nested under their course so course-level invalidation
+  //     cascades to them) ---------------------------------------------------
   assignment: {
     /**
      * The assignment "shell" (problems view). Shared by the max-points cell, the
      * student navigator, and the student assignment view so they dedupe onto one
-     * read. Scoped by courseId (the fetch is course-scoped).
+     * read. Nested under the course→assignment prefix (like every key below), so
+     * `invalidateQueries(['course', courseId])` reaches it.
      */
     shell: (courseId: string, assignmentId: string) =>
-      ['assignment', courseId, assignmentId] as const,
+      ['course', courseId, 'assignment', assignmentId, 'shell'] as const,
     /**
      * The caller's own submissions/comments/grades for an assignment — the
      * response is user-specific, so it must never be reused across a user switch
      * (the QueryClient is cleared on identity change; see QueryProvider).
      */
     studentContext: (courseId: string, assignmentId: string) =>
-      ['assignment', courseId, assignmentId, 'student-context'] as const,
+      ['course', courseId, 'assignment', assignmentId, 'student-context'] as const,
     groupsAndMappings: (courseId: string, assignmentId: string) =>
       ['course', courseId, 'assignment', assignmentId, 'groups-and-mappings'] as const,
     gradeBreakdown: (courseId: string, assignmentId: string) =>
@@ -84,7 +86,14 @@ export const queryKeys = {
     users: () => ['admin', 'users'] as const,
     usersAll: () => ['admin', 'users', 'all'] as const,
     usersFaculty: () => ['admin', 'users', 'faculty'] as const,
-    status: (deep: boolean) => ['admin', 'status', deep] as const,
+    /** Per-domain status endpoints for the tabbed status dashboard. */
+    statusSummary: () => ['admin', 'status', 'summary'] as const,
+    statusServer: () => ['admin', 'status', 'server'] as const,
+    statusDatabase: () => ['admin', 'status', 'database'] as const,
+    statusDocker: () => ['admin', 'status', 'docker'] as const,
+    statusNetwork: () => ['admin', 'status', 'network'] as const,
+    statusSessions: () => ['admin', 'status', 'sessions'] as const,
+    statusFiles: () => ['admin', 'status', 'files'] as const,
     settings: () => ['admin', 'settings'] as const,
     settingsBackups: () => ['admin', 'settings', 'backups'] as const,
     settingsTls: () => ['admin', 'settings', 'tls'] as const,
@@ -93,6 +102,14 @@ export const queryKeys = {
     /** Submissions for a set of problems — ids are sorted so key order is stable. */
     submissions: (problemIds: readonly string[]) =>
       ['admin', 'submissions', sortedIds(problemIds)] as const,
+    /** Cascading filter lists behind the submissions log (courses → assignments → problems). */
+    submissionFilters: {
+      courses: () => ['admin', 'submission-filters', 'courses'] as const,
+      assignments: (courseIds: readonly string[]) =>
+        ['admin', 'submission-filters', 'assignments', sortedIds(courseIds)] as const,
+      problems: (assignmentIds: readonly string[]) =>
+        ['admin', 'submission-filters', 'problems', sortedIds(assignmentIds)] as const,
+    },
   },
 
   // --- Public / self -------------------------------------------------------

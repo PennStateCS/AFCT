@@ -2,8 +2,7 @@
 
 import React from 'react';
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { CourseHeader } from './CourseHeader';
 import type { FullCourse } from '@/types/course';
@@ -36,8 +35,12 @@ const mockCourse: FullCourse = {
   registrationCloseAt: new Date('2025-08-15T13:00:00Z'),
   isPublished: true,
   isArchived: false,
+  deletedAt: null,
+  timezone: 'America/New_York',
   emptyStringNotation: 'EPSILON',
   regCode: 'abc123',
+  createdAt: new Date('2025-06-01T13:00:00Z'),
+  updatedAt: new Date('2025-06-01T13:00:00Z'),
   problems: [],
   assignments: [],
   enrolled: [
@@ -58,71 +61,25 @@ const mockCourse: FullCourse = {
   ],
 };
 
-const onEditClick = vi.fn();
-const onPublishToggle = vi.fn();
-const onArchiveToggle = vi.fn();
-
-beforeEach(() => {
-  onEditClick.mockReset();
-  onPublishToggle.mockReset();
-  onArchiveToggle.mockReset();
-});
-
 describe('CourseHeader', () => {
-  it('renders course metadata and staff info for instructors', () => {
-    render(
-      <CourseHeader
-        course={mockCourse}
-        isStudent={false}
-        onEditClick={onEditClick}
-        onPublishToggle={onPublishToggle}
-        onArchiveToggle={onArchiveToggle}
-      />,
-    );
+  it('renders course metadata, status, and staff info for instructors', () => {
+    render(<CourseHeader course={mockCourse} isStudent={false} />);
 
     expect(screen.getByText(/CMPSC 431/)).toBeInTheDocument();
     expect(screen.getByText('Software Engineering')).toBeInTheDocument();
     expect(screen.getByText('Fall 2025')).toBeInTheDocument();
     expect(screen.getByText('3 credits')).toBeInTheDocument();
+    // Course status badge lives next to the metadata badges.
+    expect(screen.getByText(/^(Open|Upcoming|Closed)$/)).toBeInTheDocument();
+    // Faculty/TA line is instructor-only.
     expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Edit Course' })).toBeInTheDocument();
   });
 
-  it('hides instructor actions for students', () => {
-    render(
-      <CourseHeader
-        course={mockCourse}
-        isStudent
-        onEditClick={onEditClick}
-        onPublishToggle={onPublishToggle}
-        onArchiveToggle={onArchiveToggle}
-      />,
-    );
+  it('hides the staff/date line for students', () => {
+    render(<CourseHeader course={mockCourse} isStudent />);
 
-    expect(screen.queryByRole('button', { name: 'Edit Course' })).toBeNull();
-  });
-
-  it('calls the appropriate callbacks when toggles and actions are used', async () => {
-    const user = userEvent.setup();
-
-    render(
-      <CourseHeader
-        course={mockCourse}
-        isStudent={false}
-        onEditClick={onEditClick}
-        onPublishToggle={onPublishToggle}
-        onArchiveToggle={onArchiveToggle}
-      />,
-    );
-
-    await user.click(screen.getByRole('button', { name: 'Edit Course' }));
-    expect(onEditClick).toHaveBeenCalledTimes(1);
-
-    const switches = screen.getAllByRole('switch');
-    await user.click(switches[0]);
-    await user.click(switches[1]);
-
-    expect(onPublishToggle).toHaveBeenCalled();
-    expect(onArchiveToggle).toHaveBeenCalled();
+    // Title and badges still render, but the faculty/TA line does not.
+    expect(screen.getByText('Software Engineering')).toBeInTheDocument();
+    expect(screen.queryByText('Ada Lovelace')).not.toBeInTheDocument();
   });
 });

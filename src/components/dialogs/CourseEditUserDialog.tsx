@@ -98,8 +98,8 @@ export default function CourseEditUserDialog({
   // Re-pull the edited roster entry and the course roster list (a role change or
   // removal is reflected there too).
   const invalidateRoster = () => {
-    queryClient.invalidateQueries({ queryKey: queryKeys.course.rosterEntry(courseId, userId) });
-    queryClient.invalidateQueries({ queryKey: queryKeys.course.roster(courseId) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.course.rosterEntry(courseId, userId) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.course.roster(courseId) });
   };
 
   // Blocking spinner: only while we're actually waiting on the network for a
@@ -194,7 +194,7 @@ export default function CourseEditUserDialog({
     },
     onSuccess: () => {
       setRoster((r) => (r ? { ...r, user: { ...r.user, avatar: null } } : r));
-      queryClient.invalidateQueries({ queryKey: queryKeys.course.rosterEntry(courseId, userId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.course.rosterEntry(courseId, userId) });
       showToast.success('Profile photo removed');
       onSaved?.();
     },

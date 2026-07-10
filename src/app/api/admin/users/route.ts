@@ -2,11 +2,11 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { getUsersList } from '@/lib/users-list';
 import { withAdminAuth } from '@/lib/api/with-auth';
-
-const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+import { isValidEmail } from '@/lib/email';
 
 // Local password check for admin-created accounts: 8+ chars with mixed case, a
 // digit, and a symbol.
@@ -157,11 +157,10 @@ export const POST = withAdminAuth(
       return NextResponse.json(newUser, { status: 201 });
     } catch (error) {
       console.error('[USERS_POST_ERROR]', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: null,
         action: 'USER_CREATE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
       });
       return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }

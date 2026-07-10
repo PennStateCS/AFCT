@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { logError } from '@/lib/api/activity';
 
 /**
  * Lists a course's groups, alphabetically. Course staff (faculty or TAs) or a
@@ -66,7 +67,7 @@ export const GET = withCourseAuth(
  *   403: { description: Not course staff or a system admin. }
  *   404: { description: Course not found. }
  *   409: { description: A group with that name already exists in the course. }
- *   422: { description: Missing group name. }
+ *   400: { description: Missing group name. }
  *   500: { description: Server error. }
  */
 export const POST = withCourseAuth(
@@ -76,7 +77,7 @@ export const POST = withCourseAuth(
 
       const name = (data.name ?? '').trim();
 
-      if (!name) return NextResponse.json({ error: 'Name not found' }, { status: 422 });
+      if (!name) return NextResponse.json({ error: 'Name is required' }, { status: 400 });
 
       // Ensure course exists
       const course = await prisma.course.findUnique({ where: { id: courseId } });
@@ -105,14 +106,13 @@ export const POST = withCourseAuth(
       return NextResponse.json(group, { status: 201 });
     } catch (err) {
       console.error('[COURSE_GROUPS_POST_ERROR]', err);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'GROUP_CREATE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+        error: err,
       });
       return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'GROUP_CREATE_DENIED' },
+  { access: 'manage', deniedAction: 'GROUP_CREATE_DENIED', blockWhenArchived: true },
 );

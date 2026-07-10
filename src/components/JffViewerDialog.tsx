@@ -182,7 +182,7 @@ function bundleEdges(
   return Array.from(map.entries()).map(([key, items]) => {
     // JFLAP shows later-entered transitions first
     items.sort((a, b) => b.idx - a.idx);
-    const [from, to] = key.split('→');
+    const [from = '', to = ''] = key.split('→');
     const lines = items.map((i) => i.text);
     const finalLines = wrap ? wrapLines(lines, maxLen) : lines;
     return { from, to, label: finalLines.join('\n') };
@@ -358,16 +358,17 @@ export function JffCytoscapeViewer({
 
         // Find the direction with the lowest score
         let bestIdx = 0;
-        let bestScore = scores[0];
+        let bestScore = scores[0] ?? Infinity;
         for (let i = 1; i < scores.length; ++i) {
-          if (scores[i] < bestScore) {
-            bestScore = scores[i];
+          const s = scores[i];
+          if (s !== undefined && s < bestScore) {
+            bestScore = s;
             bestIdx = i;
           }
         }
 
         // Apply best angle
-        const bestAngle = directions[bestIdx];
+        const bestAngle = directions[bestIdx] ?? 0;
         const pos = {
           x: nodePos.x + Math.cos(bestAngle) * radius,
           y: nodePos.y + Math.sin(bestAngle) * radius,
@@ -656,13 +657,13 @@ export function JffCytoscapeViewer({
         cy.userPanningEnabled(true);
 
         // Expose fitAndResize for Fit button and initial layout
-        onResizeRef.current = fitAndResize;
+        onResizeRef.current = () => void fitAndResize();
         setTimeout(() => {
           onResizeRef.current?.();
         }, 0);
 
         // keep size/zoom coherent if dialog resizes
-        const debouncedFitAndResize = debounce(fitAndResize, 160);
+        const debouncedFitAndResize = debounce(() => void fitAndResize(), 160);
         window.addEventListener('resize', debouncedFitAndResize, { passive: true });
         (cy as any).__onResize = debouncedFitAndResize;
 
@@ -738,14 +739,15 @@ export function JffCytoscapeViewer({
                   return score;
                 });
                 let bestIdx = 0;
-                let bestScore = scores[0];
+                let bestScore = scores[0] ?? Infinity;
                 for (let i = 1; i < scores.length; ++i) {
-                  if (scores[i] < bestScore) {
-                    bestScore = scores[i];
+                  const s = scores[i];
+                  if (s !== undefined && s < bestScore) {
+                    bestScore = s;
                     bestIdx = i;
                   }
                 }
-                const bestAngle = directions[bestIdx];
+                const bestAngle = directions[bestIdx] ?? 0;
                 const pos = {
                   x: nodePos.x + Math.cos(bestAngle) * radius,
                   y: nodePos.y + Math.sin(bestAngle) * radius,
@@ -767,7 +769,7 @@ export function JffCytoscapeViewer({
   );
 
   useEffect(() => {
-    if (typeof window !== 'undefined') load();
+    if (typeof window !== 'undefined') void load();
     return () => {
       const cy = cyRef.current;
       if (cy) {

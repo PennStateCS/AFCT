@@ -181,7 +181,10 @@ export default function ManageGroupMembersDialog({
       setSelectedIdx((prev) => (prev > 0 ? prev - 1 : filteredStudents.length - 1));
     } else if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      if (selectedIdx >= 0) toggle(filteredStudents[selectedIdx].userId);
+      if (selectedIdx >= 0) {
+        const target = filteredStudents[selectedIdx];
+        if (target) toggle(target.userId);
+      }
     }
   }
 
@@ -228,10 +231,10 @@ export default function ManageGroupMembersDialog({
       setInitialSelected({ ...selected });
       // Re-pull the members read (reopen reflects the change) and the groups list
       // (membership counts may render there).
-      queryClient.invalidateQueries({
+      void queryClient.invalidateQueries({
         queryKey: queryKeys.course.groupMembers(courseId, target.id),
       });
-      queryClient.invalidateQueries({ queryKey: queryKeys.course.groups(courseId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.course.groups(courseId) });
       onChanged?.();
       setOpen(false);
     },
