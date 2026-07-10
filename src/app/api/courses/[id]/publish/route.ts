@@ -2,12 +2,11 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canUnpublishCourse } from '@/lib/course-status-checks';
-import { COURSE_FACULTY_ROLES } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
 
 /**
- * Toggles a course's published state. Course faculty or a system admin (TAs
- * excluded). Unpublishing runs a
+ * Toggles a course's published state. Course staff (faculty or TA) or a system admin.
+ * Unpublishing runs a
  * safety check (canUnpublishCourse) that refuses if students would lose access to
  * work already in progress.
  * @openapi
@@ -28,7 +27,7 @@ import { withCourseAuth } from '@/lib/api/with-auth';
  *     description: The updated course (id, name, code, isPublished, updatedAt).
  *   400: { description: isPublished must be a boolean. }
  *   401: { description: Not signed in. }
- *   403: { description: "Not course faculty or a system admin (TAs excluded), or unpublishing is blocked by the safety check." }
+ *   403: { description: "Not course staff or a system admin, or unpublishing is blocked by the safety check." }
  *   500: { description: Server error. }
  */
 export const PATCH = withCourseAuth(
@@ -90,5 +89,6 @@ export const PATCH = withCourseAuth(
       return NextResponse.json({ error: 'Failed to update publish status' }, { status: 500 });
     }
   },
-  { access: 'manage', roles: COURSE_FACULTY_ROLES, deniedAction: 'COURSE_PUBLISH_DENIED' },
+  // Course staff (faculty or TA) or admin — the default role set. TA = faculty.
+  { access: 'manage', deniedAction: 'COURSE_PUBLISH_DENIED' },
 );
