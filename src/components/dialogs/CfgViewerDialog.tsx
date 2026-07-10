@@ -30,8 +30,8 @@ function parseCfg(xmlText: string){
   const right: string[] = [];
   productions.forEach(node => {
 	const [lNode, rNode] = node.children;
-	left.push(lNode.textContent ?? '');
-	right.push(rNode.textContent ?? '');
+	left.push(lNode?.textContent ?? '');
+	right.push(rNode?.textContent ?? '');
   });
 
   return { type: type, left: left, right: right };

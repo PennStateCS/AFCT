@@ -136,7 +136,8 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
 
   // Assign each course to current/next/after term, repeating for extra courses.
   const courseDates = courseData.map((_, index) => {
-    const term = termSequence[index % termSequence.length];
+    // Index is taken modulo the length of the self-built sequence, so it is always in range.
+    const term = termSequence[index % termSequence.length]!;
     const dates = getTermDates(term.term, term.year);
 
     // Set times to 11:59 PM EST/EDT (America/New_York)
@@ -154,25 +155,29 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
   });
 
   const courseSemesters = courseData.map((_, index) => {
-    const term = termSequence[index % termSequence.length];
+    // Index is taken modulo the length of the self-built sequence, so it is always in range.
+    const term = termSequence[index % termSequence.length]!;
     return `${term.term} ${term.year}`;
   });
 
   console.log(`[seed] development: upserting ${courseData.length} courses`);
   // Upsert courses and capture IDs back into seed data.
   const courses = await Promise.all(
-    courseData.map((courseSeed, index) =>
-      prisma.course.upsert({
+    courseData.map((courseSeed, index) => {
+      // courseDates/courseSemesters are built by mapping over courseData, so this index is in range.
+      const dates = courseDates[index]!;
+      const semester = courseSemesters[index]!;
+      return prisma.course.upsert({
         where: { regCode: courseSeed.regCode },
         update: {
           name: courseSeed.title,
           code: courseSeed.code,
-          semester: courseSemesters[index],
+          semester,
           credits: courseSeed.credits,
-          startDate: courseDates[index].startDate,
-          endDate: courseDates[index].endDate,
-          registrationOpenAt: courseDates[index].startDate,
-          registrationCloseAt: courseDates[index].endDate,
+          startDate: dates.startDate,
+          endDate: dates.endDate,
+          registrationOpenAt: dates.startDate,
+          registrationCloseAt: dates.endDate,
           isPublished: courseSeed.isPublished,
           isArchived: courseSeed.isArchived,
         },
@@ -180,21 +185,23 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
           name: courseSeed.title,
           code: courseSeed.code,
           regCode: courseSeed.regCode,
-          semester: courseSemesters[index],
+          semester,
           credits: courseSeed.credits,
-          startDate: courseDates[index].startDate,
-          endDate: courseDates[index].endDate,
-          registrationOpenAt: courseDates[index].startDate,
-          registrationCloseAt: courseDates[index].endDate,
+          startDate: dates.startDate,
+          endDate: dates.endDate,
+          registrationOpenAt: dates.startDate,
+          registrationCloseAt: dates.endDate,
           isPublished: courseSeed.isPublished,
           isArchived: courseSeed.isArchived,
         },
-      }),
-    ),
+      });
+    }),
   );
 
   courses.forEach((course, index) => {
-    courseData[index].id = course.id;
+    // courses was built by mapping over courseData, so this index is in range.
+    const seedCourse = courseData[index];
+    if (seedCourse) seedCourse.id = course.id;
   });
 
   console.log('[seed] development: preparing rosters');
@@ -224,7 +231,8 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
     prisma,
     courses.map((course, index) => ({
       id: course.id,
-      assignTa: courseData[index].assignTa,
+      // courses was built by mapping over courseData, so this index is in range.
+      assignTa: courseData[index]!.assignTa,
     })),
     facultyUsers,
     taUsers,

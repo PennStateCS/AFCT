@@ -6,6 +6,11 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { logError } from '@/lib/api/activity';
 
+// Concrete path params for this route. Next guarantees each dynamic segment is
+// present, so typing them keeps the destructured values `string` (rather than
+// `string | undefined`) under noUncheckedIndexedAccess.
+type RouteCtx = { params: Promise<{ id: string; aid: string; pid: string }> };
+
 const AssignmentProblemSettingsSchema = z.object({
   maxPoints: z.number().min(0),
   maxSubmissions: z
@@ -51,7 +56,7 @@ type AssignmentProblemSettingsInput = z.infer<typeof AssignmentProblemSettingsSc
  *   500: { description: Server error. }
  */
 export const PUT = withCourseAuth(
-  async (req, ctx, { user, courseId }) => {
+  async (req, ctx: RouteCtx, { user, courseId }) => {
     const { aid: assignmentId, pid: problemId } = await ctx.params;
 
     try {

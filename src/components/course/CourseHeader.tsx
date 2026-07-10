@@ -122,13 +122,13 @@ export function CourseHeader({
   const facultyNames = formatAllFacultyNames(getInstructors(enrolled));
 
   const taList = enrolled.filter((u) => u.courseRole === 'TA');
-  const taNames =
-    taList.length === 0
-      ? 'None assigned'
-      : taList.length === 1
-        ? `${taList[0].firstName ?? ''} ${taList[0].lastName ?? ''}`.trim()
-        : `${(taList[0].firstName ?? '') + (taList[0].lastName ? ' ' + taList[0].lastName : '')}`.trim() +
-          ', ...';
+  const firstTa = taList[0];
+  const taNames = !firstTa
+    ? 'None assigned'
+    : taList.length === 1
+      ? `${firstTa.firstName ?? ''} ${firstTa.lastName ?? ''}`.trim()
+      : `${(firstTa.firstName ?? '') + (firstTa.lastName ? ' ' + firstTa.lastName : '')}`.trim() +
+        ', ...';
 
   // derive metrics from the course object where possible
   type AssignmentCounts = {
