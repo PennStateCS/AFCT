@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Pencil, Copy, CopyCheck, Users, ClipboardList, BookOpen, Inbox } from 'lucide-react';
+import { Copy, CopyCheck, Users, ClipboardList, BookOpen, Inbox } from 'lucide-react';
 import type { FullCourse } from '@/types/course';
 import { getInstructors, getStudentCount, type EnrolledUser } from '@/lib/course-utils';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
@@ -15,7 +15,6 @@ import { formatDateTimeInTimeZone } from '@/lib/date';
 interface CourseHeaderProps {
   course: FullCourse;
   isStudent: boolean;
-  onEditClick: () => void;
   onPublishToggle: (checked: boolean) => void;
   onArchiveToggle: (checked: boolean) => void;
 }
@@ -23,7 +22,6 @@ interface CourseHeaderProps {
 export function CourseHeader({
   course,
   isStudent,
-  onEditClick,
   onPublishToggle,
   onArchiveToggle,
 }: CourseHeaderProps) {
@@ -209,34 +207,6 @@ export function CourseHeader({
           </div>
         </div>
 
-        {!isStudent && (
-          <div className="flex items-center gap-2">
-            <TooltipProvider delayDuration={200}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="secondary"
-                    className="sm:hidden"
-                    onClick={onEditClick}
-                    aria-label="Edit course"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Edit course</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <Button
-              variant="secondary"
-              className="hidden sm:inline-flex"
-              onClick={onEditClick}
-              hidden={course.isArchived}
-            >
-              <Pencil className="mr-2 h-4 w-4" />
-              Edit Course
-            </Button>
-          </div>
-        )}
       </CardHeader>
 
       {/* Three cards; spacing kept exactly as before (px-6 pt-1 pb-1 + gap-3) */}
