@@ -725,6 +725,19 @@ export const PUT = withCourseAuth(
  */
 export const DELETE = withCourseAuth(
   async (req, ctx, { session, user, courseId: id }) => {
+    // Deleting a course is admin-only. The wrapper admits course staff, so reject a
+    // non-admin (faculty/TA) here — staff may archive a course but never delete it.
+    if (!isAdmin(user)) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: user.id,
+        action: 'COURSE_DELETE_DENIED',
+        severity: 'SECURITY',
+        courseId: id,
+        metadata: { reason: 'course deletion is admin-only' },
+      });
+      return NextResponse.json({ error: 'Only an admin can delete a course' }, { status: 403 });
+    }
+
     // Make sure the course isArchived
     const courseIsArchived = await prisma.course.findFirst({
       where: { id },

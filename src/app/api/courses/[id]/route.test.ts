@@ -920,6 +920,21 @@ describe('DELETE /api/courses/[id]', () => {
     expect(res.status).toBe(401);
   });
 
+  it('forbids a non-admin staff member from deleting (admin-only)', async () => {
+    // Faculty passes the manage wrapper but must not delete a course.
+    authMock.mockResolvedValue({ user: { id: 'fac-1', isAdmin: false } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+
+    const req = new Request('http://localhost/api/courses/1', {
+      method: 'DELETE',
+      body: JSON.stringify({}),
+    });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'course-1' }) });
+
+    expect(res.status).toBe(403);
+    expect(prismaMock.course.delete).not.toHaveBeenCalled();
+  });
+
   it('returns 403 when course is not archived', async () => {
     authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.course.findFirst.mockResolvedValue({ isArchived: false });
