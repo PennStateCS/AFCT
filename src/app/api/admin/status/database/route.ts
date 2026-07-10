@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
  * @openapi
  * summary: Database status
  * responses:
- *   200: { description: DB health, details, and engine stats. }
+ *   200: { description: "DB health, details, and engine stats." }
  *   401: { description: Not signed in. }
  *   403: { description: Not a system administrator. }
  */
