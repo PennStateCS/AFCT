@@ -78,10 +78,8 @@ describe('GET /api/courses/[id]/assignments/[aid]/student-context', () => {
         content: 'LGTM',
         createdAt: new Date('2026-03-01T11:00:00.000Z'),
         problemId: 'p1',
-        roster: {
-          role: 'FACULTY',
-          user: { firstName: 'Ada', lastName: 'Lovelace' },
-        },
+        author: { id: 'faculty-1', firstName: 'Ada', lastName: 'Lovelace' },
+        roster: { role: 'FACULTY' },
       },
     ]);
     prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([{ problemId: 'p1', grade: 95 }]);
@@ -139,6 +137,7 @@ describe('GET /api/courses/[id]/assignments/[aid]/student-context', () => {
         content: 'note',
         createdAt: new Date('2026-03-01T11:00:00.000Z'),
         problemId: 'p2',
+        author: { id: 'admin-1', firstName: 'Al', lastName: 'Min' },
         roster: null,
       },
     ]);
