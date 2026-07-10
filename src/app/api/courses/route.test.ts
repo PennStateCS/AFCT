@@ -262,7 +262,8 @@ describe('POST /api/courses', () => {
 
     const res = await POST(req);
     expect(res.status).toBe(201);
-    expect(prismaMock.user.findUnique).toHaveBeenCalled();
+    // No timezone supplied → the course zone falls back to the system setting (not the
+    // actor's), so we read SystemSettings, not the user's timezone.
     expect(prismaMock.systemSettings.findUnique).toHaveBeenCalled();
     expect(txMock.roster.createMany).not.toHaveBeenCalled();
   });

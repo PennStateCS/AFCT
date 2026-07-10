@@ -16,6 +16,7 @@ export type CourseListItem = {
   isPublished: boolean;
   isArchived: boolean;
   deletedAt: Date | null;
+  timezone: string;
   emptyStringNotation: EmptyStringNotation;
   createdAt: Date;
   updatedAt: Date;
@@ -62,6 +63,7 @@ export async function getCoursesListForUser(
       isPublished: true,
       isArchived: true,
       deletedAt: true,
+      timezone: true,
       emptyStringNotation: true,
       createdAt: true,
       updatedAt: true,
@@ -110,6 +112,7 @@ export async function getCoursesListForUser(
       isPublished: course.isPublished,
       isArchived: course.isArchived,
       deletedAt: course.deletedAt,
+      timezone: course.timezone,
       emptyStringNotation: course.emptyStringNotation,
       createdAt: course.createdAt,
       updatedAt: course.updatedAt,

@@ -6,7 +6,8 @@ import { isAdmin } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { apiError } from '@/lib/api/http';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
-import { resolveUserTimezone } from '@/lib/user-timezone';
+import { resolveCourseTimezone } from '@/lib/course-timezone';
+import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { sumProblemPoints, toEnrolled, toStudentSafeEnrolled } from '@/lib/course-format';
 import { toEmptyStringNotation } from '@/lib/empty-string-notation';
 
@@ -393,8 +394,19 @@ export const PUT = withCourseAuth(
     // Parse request
     const body = await req.json();
 
-    // Get user's timezone (DB user > system settings > default)
-    const userTimezone = await resolveUserTimezone(user.id);
+    // The course's timezone anchors its dates/deadlines. Allow updating it (validated);
+    // otherwise keep the course's existing zone. Dates below are interpreted in it.
+    let courseTimezone: string;
+    if (!body.timezone) {
+      courseTimezone = await resolveCourseTimezone(id);
+    } else if (
+      typeof body.timezone === 'string' &&
+      COMMON_TIMEZONES.includes(body.timezone as (typeof COMMON_TIMEZONES)[number])
+    ) {
+      courseTimezone = body.timezone;
+    } else {
+      return NextResponse.json({ error: 'Invalid timezone.' }, { status: 400 });
+    }
 
     // Validate input
     if (typeof body.isArchived !== 'boolean') {
@@ -477,13 +489,14 @@ export const PUT = withCourseAuth(
             code: body.code,
             semester: body.semester,
             credits: Number(body.credits),
-            startDate: toDateTimeInTimezone(body.startDate, userTimezone),
-            endDate: toDateTimeInTimezone(body.endDate, userTimezone),
+            timezone: courseTimezone,
+            startDate: toDateTimeInTimezone(body.startDate, courseTimezone),
+            endDate: toDateTimeInTimezone(body.endDate, courseTimezone),
             registrationOpenAt: body.registrationOpenAt
-              ? toDateTimeInTimezone(body.registrationOpenAt, userTimezone)
+              ? toDateTimeInTimezone(body.registrationOpenAt, courseTimezone)
               : null,
             registrationCloseAt: body.registrationCloseAt
-              ? toDateTimeInTimezone(body.registrationCloseAt, userTimezone)
+              ? toDateTimeInTimezone(body.registrationCloseAt, courseTimezone)
               : null,
             isPublished: body.isPublished,
             isArchived: body.isArchived,
