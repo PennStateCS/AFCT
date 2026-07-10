@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import type { SetStateAction } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { showToast } from '@/lib/toast';
 import { FullCourse, DeleteTarget, EnrollableUser, TabType } from '@/types/course';
 import { getEnrolledIds, type EnrolledUser } from '@/lib/course-utils';
@@ -18,13 +18,24 @@ type SectionKey = 'assignments' | 'problems' | 'roster';
 export const courseQueryKey = (courseId: string, view: CourseSectionView) =>
   ['course', courseId, view] as const;
 
+/** Ensure the lazily-merged section arrays are always present on a course payload. */
+const normalizeCourse = (data: FullCourse): FullCourse => ({
+  ...data,
+  enrolled: data.enrolled || [],
+  assignments: data.assignments || [],
+  problems: data.problems || [],
+});
+
 /**
- * Course data hook backed by the TanStack Query cache. Every view fetch goes
- * through `queryClient.fetchQuery`, so the cache dedupes in-flight requests and
- * serves warm data instantly when the user navigates back to a course (no network
- * within the staleTime window). Local component state still drives rendering and
- * optimistic `setCourse` updates — those are mirrored into the base cache entry so
- * the cache stays consistent with what the user sees.
+ * Course data hook backed by the TanStack Query cache. The base view is a real
+ * `useQuery`, so mounting, deduping, warm back-navigation, error/loading state,
+ * and retries are all handled by Query — there is no mirrored `useState`. The
+ * base cache entry IS the rendered course: `setCourse` writes to it via
+ * `setQueryData`, so optimistic updates re-render through the query, and the
+ * lazily-loaded section tabs (assignments/problems/roster) merge into the same
+ * entry. Because that entry accumulates merged sections, its `staleTime` is
+ * `Infinity` — a background refetch would clobber the merge; the course is
+ * refreshed only explicitly via `refetchCourse` (or optimistic `setCourse`).
  */
 export function useCourseData(
   courseId: string,
@@ -34,29 +45,41 @@ export function useCourseData(
   const isStudent = !!options?.isStudent;
   const baseView: CourseSectionView = isStudent ? 'full' : 'summary';
 
-  // Seed from a warm cache entry (fast back-navigation) before the SSR prop.
-  const [course, setCourseState] = useState<FullCourse | null>(
-    () =>
-      (courseId
-        ? (queryClient.getQueryData(courseQueryKey(courseId, baseView)) as FullCourse | undefined)
-        : undefined) ??
-      options?.initialCourse ??
-      null,
-  );
+  const {
+    data: course = null,
+    isError,
+    refetch,
+  } = useQuery({
+    queryKey: courseQueryKey(courseId, baseView),
+    queryFn: () =>
+      fetchJson<FullCourse>(apiPaths.course(courseId, { view: baseView })).then(normalizeCourse),
+    enabled: !!courseId,
+    staleTime: Infinity,
+    initialData: options?.initialCourse ? normalizeCourse(options.initialCourse) : undefined,
+  });
+
   const [loadingSections, setLoadingSections] = useState<Record<SectionKey, boolean>>({
     assignments: false,
     problems: false,
     roster: false,
   });
 
-  // setCourse mirrors optimistic updates into the base cache entry so the cached
-  // course matches what's rendered (keeps back-navigation showing current data).
-  const setCourse = useCallback(
-    (updater: SetStateAction<FullCourse | null>) => {
-      setCourseState((prev) => {
-        const next = typeof updater === 'function' ? updater(prev) : updater;
-        if (courseId) queryClient.setQueryData(courseQueryKey(courseId, baseView), next);
-        return next;
+  // Surface the load failure once (Query owns the fetch; there is no onError in v5).
+  useEffect(() => {
+    if (isError) showToast.error('Failed to load course');
+  }, [isError]);
+
+  // Optimistic updates write straight to the base cache entry — `useQuery` then
+  // re-renders `course` from it. Same Dispatch signature as the old useState
+  // setter, so `course-handlers` and its `updateCourseAfter*` helpers are unchanged.
+  const setCourse = useCallback<Dispatch<SetStateAction<FullCourse | null>>>(
+    (updater) => {
+      if (!courseId) return;
+      queryClient.setQueryData<FullCourse | null>(courseQueryKey(courseId, baseView), (prev) => {
+        const current = (prev ?? null) as FullCourse | null;
+        return typeof updater === 'function'
+          ? (updater as (p: FullCourse | null) => FullCourse | null)(current)
+          : updater;
       });
     },
     [courseId, baseView, queryClient],
@@ -72,23 +95,6 @@ export function useCourseData(
     },
     [courseId, queryClient],
   );
-
-  const fetchCourse = useCallback(async () => {
-    try {
-      const data = await fetchCourseByView(baseView);
-      if (!data) return;
-      setCourse({
-        ...data,
-        // normalize to `enrolled` representation (user objects with courseRole)
-        enrolled: data.enrolled || [],
-        assignments: data.assignments || [],
-        problems: data.problems || [],
-      });
-    } catch (error) {
-      showToast.error('Failed to load course');
-      console.error('Error fetching course:', error);
-    }
-  }, [fetchCourseByView, baseView, setCourse]);
 
   const loadTabData = useCallback(
     async (tab: TabType) => {
@@ -134,33 +140,23 @@ export function useCourseData(
     [courseId, isStudent, fetchCourseByView, setCourse, queryClient],
   );
 
-  // Invalidate the whole course (all views) then re-pull the base view. Section
-  // tabs re-pull lazily on next visit because their cache entries are now stale.
+  // Invalidate the whole course (all views); the active base query refetches
+  // itself, and section tabs re-pull lazily on next visit (their entries are now
+  // stale). Awaiting settles once the base refetch completes.
   const refetchCourse = useCallback(async () => {
     if (courseId) await queryClient.invalidateQueries({ queryKey: ['course', courseId] });
-    await fetchCourse();
-  }, [courseId, queryClient, fetchCourse]);
+  }, [courseId, queryClient]);
 
-  // Warm the base cache entry from the SSR-provided course on first mount.
+  // A student whose SSR payload was summary-shaped (no assignments) needs the full
+  // view. staleTime:Infinity won't auto-refetch, so force it once — the ref stops
+  // a genuinely empty course from looping.
+  const forcedStudentFull = useRef(false);
   useEffect(() => {
-    if (!courseId || !options?.initialCourse) return;
-    if (queryClient.getQueryData(courseQueryKey(courseId, baseView)) === undefined) {
-      queryClient.setQueryData(courseQueryKey(courseId, baseView), options.initialCourse);
+    if (isStudent && course && course.assignments.length === 0 && !forcedStudentFull.current) {
+      forcedStudentFull.current = true;
+      void refetch();
     }
-    // Only on mount / course change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [courseId]);
-
-  useEffect(() => {
-    if (!course) {
-      fetchCourse();
-      return;
-    }
-    // Students need full assignment data for their default view.
-    if (isStudent && course.assignments.length === 0) {
-      fetchCourse();
-    }
-  }, [fetchCourse, course, isStudent]);
+  }, [isStudent, course, refetch]);
 
   return {
     course,
