@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
+import fs from 'fs';
+import path from 'path';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
 import { withAdminAuth } from '@/lib/api/with-auth';
+import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
 import { generateUniqueCourseCode } from '@/lib/course-code';
 import { resolveUserTimezone } from '@/lib/user-timezone';
 import { parseValidDate } from '@/lib/date';
@@ -153,8 +156,32 @@ export const POST = withAdminAuth(
 
       const userTimezone = await resolveUserTimezone(actorId);
 
+      // Solution files live here. Duplicated problems get their OWN physical copy so
+      // the two rows don't share one file (a later delete/replace of one problem would
+      // otherwise unlink the file the other still points at). Track the copies so a
+      // rolled-back transaction leaves no orphaned files behind.
+      const solutionsDir = path.join('/private', 'uploads', 'solutions');
+      const copiedSolutionFiles: string[] = [];
+      const copyProblemSolution = async (p: {
+        fileName: string | null;
+        originalFileName: string | null;
+      }): Promise<{ fileName?: string; originalFileName?: string }> => {
+        if (!p.fileName) return {};
+        const src = resolveInsideDir(solutionsDir, p.fileName);
+        // If the source is already missing, the original is broken too — the copy just
+        // has no solution file rather than a dangling pointer.
+        if (!fs.existsSync(src)) return {};
+        const newName = safeStoredFilename(p.originalFileName ?? p.fileName);
+        const dest = resolveInsideDir(solutionsDir, newName);
+        await fs.promises.copyFile(src, dest);
+        copiedSolutionFiles.push(dest);
+        return { fileName: newName, originalFileName: p.originalFileName ?? undefined };
+      };
+
       // Begin transaction
-      const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      let result;
+      try {
+        result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         // Create new course (default not published)
         const regCode = await generateUniqueCourseCode();
 
@@ -219,12 +246,12 @@ export const POST = withAdminAuth(
           // copy all problems
           const originalProblems = await tx.problem.findMany({ where: { courseId } });
           for (const p of originalProblems) {
+            const solution = await copyProblemSolution(p);
             const created = await tx.problem.create({
               data: {
                 title: p.title,
                 description: p.description ?? undefined,
-                fileName: p.fileName ?? undefined,
-                originalFileName: p.originalFileName ?? undefined,
+                ...solution,
                 type: p.type ?? undefined,
                 maxStates: p.maxStates ?? undefined,
                 isDeterministic: p.isDeterministic ?? undefined,
@@ -244,12 +271,12 @@ export const POST = withAdminAuth(
               where: { id: { in: Array.from(neededProblemIds) } },
             });
             for (const p of problemsToCopy) {
+              const solution = await copyProblemSolution(p);
               const created = await tx.problem.create({
                 data: {
                   title: p.title,
                   description: p.description ?? undefined,
-                  fileName: p.fileName ?? undefined,
-                  originalFileName: p.originalFileName ?? undefined,
+                  ...solution,
                   type: p.type ?? undefined,
                   maxStates: p.maxStates ?? undefined,
                   isDeterministic: p.isDeterministic ?? undefined,
@@ -288,8 +315,14 @@ export const POST = withAdminAuth(
           }
         }
 
-        return newCourse;
-      });
+          return newCourse;
+        });
+      } catch (txErr) {
+        // The duplication rolled back — remove any solution files we copied so they
+        // don't leak as orphans.
+        await Promise.all(copiedSolutionFiles.map((f) => fs.promises.unlink(f).catch(() => {})));
+        throw txErr;
+      }
 
       await createEnhancedActivityLog(prisma, req, {
         userId: actorId,
