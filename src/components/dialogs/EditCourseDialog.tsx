@@ -20,6 +20,7 @@ import SelectField from '@/components/ui/SelectField';
 import SwitchField from '@/components/ui/SwitchField';
 import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
 import { EMPTY_STRING_NOTATION_OPTIONS } from '@/lib/empty-string-notation';
+import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
 
 import { useForm, Controller } from 'react-hook-form';
 import { showToast } from '@/lib/toast';
@@ -62,33 +63,33 @@ function toDateTimeLocalInTimeZone(date: Date | string, timeZone: string): strin
 // RHF form state before transforms (strings for datetime-local)
 type FormValues = z.infer<typeof CourseFormSchema>;
 
-export function EditCourseDialog({
-  course,
-  open,
-  setOpen,
-  onSave,
-  timeZone,
-}: EditCourseDialogProps) {
+export function EditCourseDialog({ course, open, setOpen, onSave }: EditCourseDialogProps) {
+  // A course's dates/deadlines are anchored to the course's OWN timezone — display and
+  // interpret the datetime-local fields in it (not the viewer's), so what staff see is
+  // exactly what the server stores. (The `timeZone` prop is no longer used for this.)
+  const courseTz = course.timezone || 'UTC';
+
   const defaultValues: FormValues = useMemo(
     () => ({
       name: course.name ?? '',
       code: course.code ?? '',
       semester: course.semester ?? '',
       credits: String(course.credits ?? 3),
-      startDate: toDateTimeLocalInTimeZone(course.startDate, timeZone),
-      endDate: toDateTimeLocalInTimeZone(course.endDate, timeZone),
+      startDate: toDateTimeLocalInTimeZone(course.startDate, courseTz),
+      endDate: toDateTimeLocalInTimeZone(course.endDate, courseTz),
       registrationOpenAt: course.registrationOpenAt
-        ? toDateTimeLocalInTimeZone(course.registrationOpenAt, timeZone)
+        ? toDateTimeLocalInTimeZone(course.registrationOpenAt, courseTz)
         : '',
       registrationCloseAt: course.registrationCloseAt
-        ? toDateTimeLocalInTimeZone(course.registrationCloseAt, timeZone)
+        ? toDateTimeLocalInTimeZone(course.registrationCloseAt, courseTz)
         : '',
       isPublished: course.isPublished ?? false,
       isArchived: course.isArchived ?? false,
       instructorIds: getInstructors(course.enrolled).map((u) => u.id),
       emptyStringNotation: course.emptyStringNotation ?? 'EPSILON',
+      timezone: courseTz,
     }),
-    [course, timeZone],
+    [course, courseTz],
   );
 
   const {
@@ -261,6 +262,27 @@ export function EditCourseDialog({
               )}
             />
           </div>
+
+          {/* COURSE TIMEZONE — anchors all the course's deadlines */}
+          <Controller
+            name="timezone"
+            control={control}
+            render={({ field }) => (
+              <SelectField
+                label="Course timezone"
+                name="timezone"
+                id="timezone"
+                value={field.value ?? 'UTC'}
+                onValueChange={field.onChange}
+                options={COMMON_TIMEZONES.map((tz) => ({
+                  value: tz,
+                  label: formatTimezoneLabel(tz),
+                }))}
+                description="The dates below — and every assignment due date — are interpreted in this timezone for all students."
+                error={errors.timezone?.message}
+              />
+            )}
+          />
 
           <div className="grid gap-4 md:grid-cols-2">
             <Controller
