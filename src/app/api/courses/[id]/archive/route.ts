@@ -2,14 +2,15 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canArchiveCourse } from '@/lib/course-status-checks';
-import { COURSE_FACULTY_ROLES } from '@/lib/permissions';
+import { isAdmin } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
 
 /**
- * Toggles a course's archived state. Course faculty or a system admin (TAs
- * excluded). Archiving runs a safety
- * check (canArchiveCourse) using the course's stored dates rather than any client
- * value, to avoid timezone drift deciding whether a course has really ended.
+ * Toggles a course's archived state. **Archiving** is allowed for course staff
+ * (faculty or TA) or a system admin; **un-archiving is admin-only** — reopening a
+ * frozen course to edits is a privileged action. Archiving runs a safety check
+ * (canArchiveCourse) using the course's stored dates rather than any client value, to
+ * avoid timezone drift deciding whether a course has really ended.
  * @openapi
  * summary: Archive or unarchive a course
  * parameters:
@@ -28,7 +29,7 @@ import { withCourseAuth } from '@/lib/api/with-auth';
  *     description: The updated course (id, name, code, isArchived, updatedAt).
  *   400: { description: isArchived must be a boolean. }
  *   401: { description: Not signed in. }
- *   403: { description: "Not course faculty or a system admin (TAs excluded), or archiving is blocked by the safety check." }
+ *   403: { description: "Not permitted (staff may archive; only an admin may un-archive), or archiving is blocked by the safety check." }
  *   404: { description: Course not found. }
  *   500: { description: Server error. }
  */
@@ -38,6 +39,19 @@ export const PATCH = withCourseAuth(
       const { isArchived } = await req.json();
       if (typeof isArchived !== 'boolean') {
         return NextResponse.json({ error: 'isArchived must be a boolean' }, { status: 400 });
+      }
+
+      // Un-archiving reopens a frozen course to edits — admin-only. Staff may archive
+      // (the wrapper already confirmed staff/admin) but must not un-archive.
+      if (!isArchived && !isAdmin(user)) {
+        await createEnhancedActivityLog(prisma, req, {
+          userId: user.id,
+          action: 'COURSE_ARCHIVE_DENIED',
+          severity: 'SECURITY',
+          courseId,
+          metadata: { reason: 'un-archive is admin-only' },
+        });
+        return NextResponse.json({ error: 'Only an admin can un-archive a course' }, { status: 403 });
       }
 
       // Centralized check for archiving (use DB dates to avoid client timezone drift)
@@ -105,5 +119,7 @@ export const PATCH = withCourseAuth(
       return NextResponse.json({ error: 'Failed to update archive status' }, { status: 500 });
     }
   },
-  { access: 'manage', roles: COURSE_FACULTY_ROLES, deniedAction: 'COURSE_ARCHIVE_DENIED' },
+  // Staff (faculty or TA) or admin may reach the route; the handler further restricts
+  // un-archiving to admins. TA = faculty.
+  { access: 'manage', deniedAction: 'COURSE_ARCHIVE_DENIED' },
 );
