@@ -159,6 +159,9 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
 			'border-black',
             error && 'border-red-500',
             type === 'number' && 'appearance-auto',
+            // Push the native calendar/clock picker icon to the far right of the field.
+            ['datetime-local', 'date', 'time', 'month', 'week'].includes(type) &&
+              '[&::-webkit-calendar-picker-indicator]:ml-auto',
             inputPaddingRight,
 			labelClassName,
           )}
