@@ -1,6 +1,6 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { CourseSettingsForm } from '@/components/course/CourseSettingsForm';
 import { ActivityCard } from '@/components/ActivityCard';
 import { AssignmentsCard } from '@/components/AssignmentsCard';
 import { ProblemsCard } from '@/components/ProblemsCard';
@@ -20,9 +20,8 @@ import {
   Users,
   Activity,
   Settings,
-  Pencil,
 } from 'lucide-react';
-import type { Assignment, Problem } from '@prisma/client';
+import type { Assignment, Problem, Course } from '@prisma/client';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { useMemo } from 'react';
 
@@ -43,7 +42,7 @@ interface AdminCourseViewProps {
   onProblemEdit: (problem: Problem) => void;
   onProblemDelete: (problemId: string) => void;
   onRefreshCourse: () => void;
-  onEditCourse: () => void;
+  onCourseSaved: (updated: Partial<Course>) => void;
 }
 
 export function AdminCourseView({
@@ -63,7 +62,7 @@ export function AdminCourseView({
   onProblemDelete,
   onRefreshCourse,
   onBulkEnroll,
-  onEditCourse,
+  onCourseSaved,
 }: AdminCourseViewProps) {
   const { timezone } = useEffectiveTimezone();
   const enrolled = course.enrolled ?? [];
@@ -319,19 +318,16 @@ export function AdminCourseView({
                   Course Settings
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-4">
                 <p className="text-muted-foreground text-sm">
                   Edit the course name, code, dates, timezone, and self-registration settings.
                 </p>
-                <Button onClick={onEditCourse} disabled={course.isArchived}>
-                  <Pencil className="mr-2 h-4 w-4" />
-                  Edit course settings
-                </Button>
                 {course.isArchived ? (
                   <p className="text-muted-foreground text-xs">
                     This course is archived and read-only. Unarchive it to make changes.
                   </p>
                 ) : null}
+                <CourseSettingsForm course={course} onSaved={onCourseSaved} />
               </CardContent>
             </Card>
           </div>
