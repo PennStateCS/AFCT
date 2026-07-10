@@ -120,13 +120,7 @@ export function CourseHeader({
   const facultyNames = formatAllFacultyNames(getInstructors(enrolled));
 
   const taList = enrolled.filter((u) => u.courseRole === 'TA');
-  const firstTa = taList[0];
-  const taNames = !firstTa
-    ? 'None assigned'
-    : taList.length === 1
-      ? `${firstTa.firstName ?? ''} ${firstTa.lastName ?? ''}`.trim()
-      : `${(firstTa.firstName ?? '') + (firstTa.lastName ? ' ' + firstTa.lastName : '')}`.trim() +
-        ', ...';
+  const taNames = formatAllFacultyNames(taList);
 
   // derive metrics from the course object where possible
   type AssignmentCounts = {
@@ -183,23 +177,21 @@ export function CourseHeader({
   // -- render ---------------------------------------------------------------
   return (
     <Card>
-      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <CardTitle
-              id="course-page-title"
-              role="heading"
-              aria-level={1}
-              className="text-2xl leading-tight font-semibold tracking-tight"
-            >
-              <span className="text-muted-foreground">{course.code}</span>
-              <span className="text-muted-foreground">: </span>
-              {course.name}
-            </CardTitle>
-          </div>
+      <CardHeader className="flex flex-col gap-3">
+        {/* Title with the badges pulled to its right */}
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+          <CardTitle
+            id="course-page-title"
+            role="heading"
+            aria-level={1}
+            className="text-2xl leading-tight font-semibold tracking-tight"
+          >
+            <span className="text-muted-foreground">{course.code}</span>
+            <span className="text-muted-foreground">: </span>
+            {course.name}
+          </CardTitle>
 
-          {/* meta row */}
-          <div className="flex flex-wrap items-center gap-5 text-sm">
+          <div className="flex flex-wrap items-center gap-2">
             <Badge variant="secondary">{course.semester}</Badge>
             <Badge variant="outline">
               {course.credits} credit{course.credits === 1 ? '' : 's'}
@@ -207,10 +199,31 @@ export function CourseHeader({
           </div>
         </div>
 
+        {!isStudent && (
+          <div className="space-y-1">
+            {/* Instructors and TAs, side by side */}
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
+              <span>
+                <span className="text-muted-foreground">Faculty: </span>
+                {facultyNames}
+              </span>
+              <span>
+                <span className="text-muted-foreground">TAs: </span>
+                {taNames}
+              </span>
+            </div>
+
+            {/* Course start and end dates */}
+            <div className="text-muted-foreground flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
+              <span>Start: {formatCourseDate(startDate)}</span>
+              <span>End: {formatCourseDate(endDate)}</span>
+            </div>
+          </div>
+        )}
       </CardHeader>
 
       {/* Three cards; spacing kept exactly as before (px-6 pt-1 pb-1 + gap-3) */}
-      <CardContent className="grid gap-7 px-6 pt-1 pb-1 sm:grid-cols-2 lg:grid-cols-4">
+      <CardContent className="grid gap-7 px-6 pt-1 pb-1 sm:grid-cols-2 lg:grid-cols-3">
         {!isStudent && (
           <>
             {/* Course Access (flush colored header touching border) */}
@@ -243,18 +256,6 @@ export function CourseHeader({
                       onCheckedChange={onArchiveToggle}
                       aria-label="Toggle course archive"
                     />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground text-[11px]">Start Date</span>
-                    <span className="text-right text-xs leading-snug">
-                      {formatCourseDate(startDate)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground text-[11px]">End Date</span>
-                    <span className="text-right text-xs leading-snug">
-                      {formatCourseDate(endDate)}
-                    </span>
                   </div>
                 </div>
               </div>
@@ -314,25 +315,6 @@ export function CourseHeader({
                     </span>
                   </div>
                 </div>
-              </div>
-            </div>
-
-            {/* Course Staff (flush colored header touching border) */}
-            <div className="rounded-md border">
-              <div className="bg-sidebar/80 rounded-t-md border-b px-2.5 py-2 text-sm leading-none font-medium text-white">
-                Course Staff
-              </div>
-              <div className="px-2.5 pt-2 pb-2.5">
-                <dl className="mt-1 grid gap-1.5 text-sm">
-                  <div className="grid grid-cols-[90px_1fr] gap-1.5">
-                    <dt className="text-muted-foreground text-xs">Faculty</dt>
-                    <dd className="text-xs">{facultyNames}</dd>
-                  </div>
-                  <div className="grid grid-cols-[90px_1fr] gap-1.5">
-                    <dt className="text-muted-foreground text-xs">TAs</dt>
-                    <dd className="text-xs">{taNames}</dd>
-                  </div>
-                </dl>
               </div>
             </div>
 

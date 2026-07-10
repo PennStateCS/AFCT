@@ -161,8 +161,8 @@ export function CourseDialogs({
         title={pendingPublish ? 'Publish Course?' : 'Unpublish Course?'}
         description={
           pendingPublish
-            ? 'Are you sure you want to publish this course? It will be visible to students.'
-            : 'Are you sure you want to unpublish this course? Students will no longer see it.'
+            ? 'This takes effect immediately: the course becomes visible to enrolled students as soon as you confirm.'
+            : 'This takes effect immediately: students will no longer see the course as soon as you confirm.'
         }
         onConfirm={onPublishConfirm}
         onCancel={onPublishCancel}
@@ -174,8 +174,8 @@ export function CourseDialogs({
         title={pendingArchive ? 'Archive Course?' : 'Unarchive Course?'}
         description={
           pendingArchive
-            ? 'Are you sure you want to archive this course?'
-            : 'Are you sure you want to unarchive this course?'
+            ? 'This takes effect immediately: the course becomes read-only for everyone as soon as you confirm.'
+            : 'This takes effect immediately: the course becomes editable again as soon as you confirm.'
         }
         onConfirm={onArchiveConfirm}
         onCancel={onArchiveCancel}
