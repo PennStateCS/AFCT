@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import type { EmptyStringNotation } from '@prisma/client';
+import type { EmptyStringNotation, CourseRole } from '@prisma/client';
 import { toStudentSafeEnrolled } from '@/lib/course-format';
 
 export type CourseListItem = {
@@ -38,13 +38,21 @@ export async function getCoursesListForUser(
 ): Promise<CourseListItem[]> {
   // Soft-deleted courses never appear in any course list (they're retained only for
   // out-of-band recovery), so exclude them for every role.
+  // A non-admin only ever sees courses they're enrolled in. Within those, a course
+  // shows if it is published OR the viewer is staff (FACULTY/TA) in it — so staff see
+  // their own unpublished courses while students are limited to published ones. This
+  // is role-aware per roster entry, not a blanket global-admin-vs-not publish gate
+  // (the caller passes 'STUDENT' for every non-admin, which previously hid staff drafts).
   const where =
     role === 'ADMIN'
       ? { deletedAt: null }
       : {
           deletedAt: null,
           roster: { some: { userId } },
-          ...(role === 'STUDENT' ? { isPublished: true } : {}),
+          OR: [
+            { isPublished: true },
+            { roster: { some: { userId, role: { in: ['FACULTY', 'TA'] as CourseRole[] } } } },
+          ],
         };
 
   const courses = await prisma.course.findMany({

@@ -29,6 +29,11 @@ export default async function DashboardPage() {
     where: {
       userId: id,
       course: {
+        // Never surface archived or soft-deleted courses on the dashboard (archiving
+        // or deleting a course does not flip isPublished, so students could otherwise
+        // still see a published-then-archived course and its upcoming assignments).
+        isArchived: false,
+        deletedAt: null,
         endDate: {
           gte: new Date(),
         },

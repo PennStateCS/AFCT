@@ -770,8 +770,6 @@ export const DELETE = withCourseAuth(
       return NextResponse.json({ error: 'Course must be archived' }, { status: 403 });
     }
 
-    await req.json();
-
     try {
       // Soft delete: retain the row (and all its data) for recovery, but stamp
       // deletedAt so the access gates and list queries treat it as gone. The course

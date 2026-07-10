@@ -313,8 +313,8 @@ export function CreateProblemDialog({
         return;
       }
       if (error instanceof z.ZodError) {
-        // Handle Zod validation errors
-        const message = error.errors?.map((e) => e.message).join();
+        // Handle Zod validation errors (Zod 4 renamed `.errors` to `.issues`).
+        const message = error.issues?.map((e) => e.message).join();
         showToast.error(`Error: ${message}`);
       }
     }

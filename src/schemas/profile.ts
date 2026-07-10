@@ -34,4 +34,5 @@ export const UpdateProfileSchema = z.object({
   .strict();
 
 export type UpdateProfileInput = z.infer<typeof UpdateProfileSchema>;
-export type UpdateProfileRaw = z.infer<typeof UpdateProfileSchema>;
+// Form-side (pre-validation) shape: fields with `.default()` are optional here.
+export type UpdateProfileRaw = z.input<typeof UpdateProfileSchema>;

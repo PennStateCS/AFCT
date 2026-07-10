@@ -1,4 +1,5 @@
 import type { ProblemType } from '@prisma/client';
+import type { CourseLifecycle } from './seed-utils';
 
 type PersonSeed = {
   id?: string;
@@ -16,6 +17,11 @@ type CourseSeed = {
   isPublished: boolean;
   isArchived: boolean;
   assignTa: boolean;
+  // When set, the course's dates are pinned to this lifecycle state (relative to
+  // now) instead of the rolling academic term.
+  lifecycle?: CourseLifecycle;
+  // When set, this faculty member is always rostered on the course as FACULTY.
+  facultyEmail?: string;
 };
 
 export const facultyData: PersonSeed[] = [
@@ -109,6 +115,53 @@ export const courseData: CourseSeed[] = [
     isPublished: true,
     isArchived: false,
     assignTa: false,
+  },
+  // Charles Xavier's lifecycle set — one course in each state so the dev DB can
+  // always exercise past / current / future / archived. Dates are pinned relative
+  // to now (see getLifecycleDates), not the rolling term.
+  {
+    title: 'Digital Logic Design',
+    code: 'CMPEN 270',
+    regCode: 'PAST01',
+    credits: 3,
+    isPublished: true,
+    isArchived: false,
+    assignTa: true,
+    lifecycle: 'past',
+    facultyEmail: 'faculty@example.com',
+  },
+  {
+    title: 'Computer Organization and Design',
+    code: 'CMPEN 331',
+    regCode: 'CURR01',
+    credits: 3,
+    isPublished: true,
+    isArchived: false,
+    assignTa: true,
+    lifecycle: 'current',
+    facultyEmail: 'faculty@example.com',
+  },
+  {
+    title: 'Operating Systems Design',
+    code: 'CMPSC 473',
+    regCode: 'FUTR01',
+    credits: 3,
+    isPublished: true,
+    isArchived: false,
+    assignTa: false,
+    lifecycle: 'future',
+    facultyEmail: 'faculty@example.com',
+  },
+  {
+    title: 'Compiler Construction',
+    code: 'CMPSC 470',
+    regCode: 'ARCH01',
+    credits: 3,
+    isPublished: true,
+    isArchived: true,
+    assignTa: false,
+    lifecycle: 'archived',
+    facultyEmail: 'faculty@example.com',
   },
 ];
 
@@ -312,5 +365,41 @@ export const assignmentData = [
     dueFraction: 0.75,
     isPublished: true,
     courseIndex: 1,
+  },
+  // Lifecycle courses (indices 5–8): a little content so each state isn't empty.
+  {
+    title: 'Boolean Algebra Basics',
+    description: 'Simplify the given Boolean expressions and build their circuits.',
+    dueFraction: 0.4,
+    isPublished: true,
+    courseIndex: 5,
+  },
+  {
+    title: 'Pipelining Lab',
+    description: 'Analyze hazards in a 5-stage pipeline and propose forwarding fixes.',
+    dueFraction: 0.5,
+    isPublished: true,
+    courseIndex: 6,
+  },
+  {
+    title: 'Cache Simulation',
+    description: 'Implement and measure a set-associative cache simulator.',
+    dueFraction: 0.8,
+    isPublished: true,
+    courseIndex: 6,
+  },
+  {
+    title: 'Scheduling Project',
+    description: 'Compare CPU scheduling algorithms on a shared workload.',
+    dueFraction: 0.5,
+    isPublished: true,
+    courseIndex: 7,
+  },
+  {
+    title: 'Lexer Assignment',
+    description: 'Write a lexer for the course toy language.',
+    dueFraction: 0.6,
+    isPublished: true,
+    courseIndex: 8,
   },
 ];

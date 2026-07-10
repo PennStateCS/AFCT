@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const prismaMock = vi.hoisted(() => ({
+  assignment: { findFirst: vi.fn() },
   group: { findMany: vi.fn(), findUnique: vi.fn() },
   groupAssignmentProblem: { findMany: vi.fn(), deleteMany: vi.fn() },
   course: { findUnique: vi.fn() },
@@ -21,6 +22,13 @@ beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
   prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
+  // withAssignmentAuth resolves the assignment (and confirms it's in the course) here.
+  prismaMock.assignment.findFirst.mockResolvedValue({
+    id: 'a1',
+    courseId: 'c1',
+    isPublished: true,
+    isGroup: false,
+  });
   // clearAllMocks doesn't reset implementations, so drop any leaked mockRejectedValue.
   activityLogMock.mockReset();
 });
