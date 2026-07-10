@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canManageCourse } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
-import { logDenial } from '@/lib/api/activity';
+import { logDenial, logError } from '@/lib/api/activity';
 
 /**
  * Returns a student's per-problem grades and feedback for one assignment, keyed by
@@ -247,21 +247,20 @@ export const POST = withCourseAuth(
             }),
           ),
         );
-      } catch (logError) {
+      } catch (logErr) {
         console.error(
           'POST /api/courses/[id]/[aid]/problem-grades/[studentId] audit error:',
-          logError,
+          logErr,
         );
       }
 
       return NextResponse.json({ ok: true, changed: changes.length });
     } catch (error) {
       console.error('POST /api/courses/[id]/[aid]/problem-grades/[studentId] error:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: graderId,
         action: 'PROBLEM_GRADE_UPDATE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
       });
       return NextResponse.json({ error: 'Failed to save grades' }, { status: 500 });
     }

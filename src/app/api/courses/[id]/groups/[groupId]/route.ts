@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { logError } from '@/lib/api/activity';
 
 /**
  * CORS preflight handler.
@@ -75,11 +76,10 @@ export const PATCH = withCourseAuth(
       return NextResponse.json(updated);
     } catch (err) {
       console.error('[GROUP_UPDATE_ERROR]', err);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'GROUP_UPDATE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+        error: err,
       });
       return NextResponse.json({ error: 'Failed to update group' }, { status: 500 });
     }
@@ -127,11 +127,10 @@ export const DELETE = withCourseAuth(
       return NextResponse.json({ success: true });
     } catch (err) {
       console.error('[GROUP_DELETE_ERROR]', err);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'GROUP_DELETE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+        error: err,
       });
       return NextResponse.json({ error: 'Failed to delete group' }, { status: 500 });
     }

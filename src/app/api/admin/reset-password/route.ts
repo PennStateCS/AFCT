@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy';
 import { withAdminAuth } from '@/lib/api/with-auth';
 
@@ -68,11 +69,10 @@ export const POST = withAdminAuth(
       return NextResponse.json({ success: true });
     } catch (error) {
       console.error('Reset password error:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'ADMIN_RESET_PASSWORD_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
       });
       return NextResponse.json({ error: 'Failed to reset password' }, { status: 500 });
     }

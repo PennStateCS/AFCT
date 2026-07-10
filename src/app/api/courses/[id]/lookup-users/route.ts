@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { normalizeEmail } from '@/lib/email';
 
@@ -61,11 +61,10 @@ export const POST = withCourseAuth(
       return NextResponse.json({ found: users, notFound }, { status: 200 });
     } catch (err) {
       console.error('lookup-users error', err);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: null,
         action: 'COURSE_LOOKUP_USERS_ERROR',
-        severity: 'ERROR',
-        metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+        error: err,
       });
       return NextResponse.json({ error: 'Server error' }, { status: 500 });
     }

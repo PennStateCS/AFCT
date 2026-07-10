@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { ProblemType } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 import { withCourseAuth } from '@/lib/api/with-auth';
@@ -156,11 +157,10 @@ export const POST = withCourseAuth(
       return NextResponse.json(problem, { status: 201 });
     } catch (error) {
       console.error('Error creating problem:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'PROBLEM_CREATE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
       });
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }

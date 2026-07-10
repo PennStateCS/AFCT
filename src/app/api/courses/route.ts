@@ -22,6 +22,7 @@ import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { generateUniqueCourseCode } from '@/lib/course-code';
 import { sumProblemPoints, toEnrolled } from '@/lib/course-format';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { toEmptyStringNotation } from '@/lib/empty-string-notation';
 import type { Prisma } from '@prisma/client';
 
@@ -333,11 +334,10 @@ export async function POST(req: Request) {
     if (resp.status === 400) return resp;
 
     console.error('Failed to create course:', err);
-    await createEnhancedActivityLog(prisma, req, {
+    await logError(req, {
       userId: actorId,
       action: 'COURSE_CREATE_ERROR',
-      severity: 'ERROR',
-      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+      error: err,
     });
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }

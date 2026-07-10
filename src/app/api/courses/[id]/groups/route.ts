@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { logError } from '@/lib/api/activity';
 
 /**
  * Lists a course's groups, alphabetically. Course staff (faculty or TAs) or a
@@ -105,11 +106,10 @@ export const POST = withCourseAuth(
       return NextResponse.json(group, { status: 201 });
     } catch (err) {
       console.error('[COURSE_GROUPS_POST_ERROR]', err);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'GROUP_CREATE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+        error: err,
       });
       return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }

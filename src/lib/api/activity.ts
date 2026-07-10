@@ -43,6 +43,9 @@ export async function logError(
     userId?: string | null;
     action: string;
     error: unknown;
+    category?: EnhancedActivityLogData['category'];
+    courseId?: string | null;
+    assignmentId?: string | null;
     metadata?: Record<string, unknown>;
   },
 ): Promise<void> {
@@ -50,6 +53,9 @@ export async function logError(
     userId: data.userId ?? null,
     action: data.action,
     severity: 'ERROR',
+    ...(data.category ? { category: data.category } : {}),
+    ...(data.courseId ? { courseId: data.courseId } : {}),
+    ...(data.assignmentId ? { assignmentId: data.assignmentId } : {}),
     metadata: {
       ...(data.metadata ?? {}),
       error: data.error instanceof Error ? data.error.message : 'unknown error',
