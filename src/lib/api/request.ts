@@ -1,9 +1,38 @@
 /**
- * Small helpers for pulling typed values out of an incoming request — query-param
- * pagination and multipart-form flags — plus the bounded-integer coercion they
- * build on. Centralizes idioms that had been re-implemented (and occasionally
- * mis-implemented) across route handlers.
+ * Small helpers for pulling typed values out of an incoming request — a validated
+ * JSON body, query-param pagination, and multipart-form flags — plus the
+ * bounded-integer coercion they build on. Centralizes idioms that had been
+ * re-implemented (and occasionally mis-implemented) across route handlers.
  */
+
+import { NextResponse } from 'next/server';
+import type { ZodType } from 'zod';
+import { apiError } from './http';
+
+/**
+ * Parse and validate a JSON request body against a Zod schema. Returns a discriminated
+ * result: `{ ok: true, data }` with the typed, validated body, or `{ ok: false,
+ * response }` — a ready-to-return **400** for malformed JSON or a schema mismatch.
+ * Never throws, so a handler can `if (!parsed.ok) return parsed.response;` and move on.
+ */
+export async function readJson<T>(
+  req: Request,
+  schema: ZodType<T>,
+): Promise<{ ok: true; data: T } | { ok: false; response: NextResponse }> {
+  let raw: unknown;
+  try {
+    raw = await req.json();
+  } catch {
+    return { ok: false, response: apiError(400, 'Invalid JSON body') };
+  }
+  const result = schema.safeParse(raw);
+  if (!result.success) {
+    const first = result.error.issues[0];
+    const detail = first ? `${first.path.join('.') || 'body'}: ${first.message}` : 'Validation failed';
+    return { ok: false, response: apiError(400, detail) };
+  }
+  return { ok: true, data: result.data };
+}
 
 /** Coerce to an integer clamped to `[min, max]`; non-finite input yields `fallback`. */
 export function clampInt(value: number, min: number, max: number, fallback: number): number {

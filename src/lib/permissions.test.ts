@@ -2,10 +2,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const prismaMock = vi.hoisted(() => ({
   roster: { findFirst: vi.fn() },
+  course: { findUnique: vi.fn() },
+  groupRoster: { findFirst: vi.fn() },
 }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
-import { isAdmin, getCourseRole, canAccessCourse, canManageCourse } from './permissions';
+import {
+  isAdmin,
+  getCourseRole,
+  canAccessCourse,
+  canManageCourse,
+  isCourseArchived,
+  staffManagesStudent,
+  usersShareGroupInCourse,
+  canViewStudentData,
+} from './permissions';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -101,5 +112,90 @@ describe('canManageCourse', () => {
   it('respects a narrower role set (FACULTY only excludes TAs)', async () => {
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'TA' });
     await expect(canManageCourse({ id: 'u' }, 'c', ['FACULTY'])).resolves.toBe(false);
+  });
+});
+
+describe('isCourseArchived', () => {
+  it('is true when the course row is archived', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+    await expect(isCourseArchived('c')).resolves.toBe(true);
+  });
+
+  it('is false when not archived or the course is missing', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
+    await expect(isCourseArchived('c')).resolves.toBe(false);
+    prismaMock.course.findUnique.mockResolvedValue(null);
+    await expect(isCourseArchived('c')).resolves.toBe(false);
+  });
+});
+
+describe('staffManagesStudent', () => {
+  it('admins manage any account without a lookup', async () => {
+    await expect(staffManagesStudent({ id: 'a', isAdmin: true }, 't')).resolves.toBe(true);
+    expect(prismaMock.roster.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('is true when the target is a STUDENT in a course the caller staffs', async () => {
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1' });
+    await expect(staffManagesStudent({ id: 's' }, 't')).resolves.toBe(true);
+    // The query pins the target to a STUDENT roster whose course rosters the caller as staff.
+    expect(prismaMock.roster.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ userId: 't', role: 'STUDENT' }),
+      }),
+    );
+  });
+
+  it('is false when no such relationship exists', async () => {
+    prismaMock.roster.findFirst.mockResolvedValue(null);
+    await expect(staffManagesStudent({ id: 's' }, 't')).resolves.toBe(false);
+  });
+
+  it('anonymous callers manage no one', async () => {
+    await expect(staffManagesStudent(null, 't')).resolves.toBe(false);
+    expect(prismaMock.roster.findFirst).not.toHaveBeenCalled();
+  });
+});
+
+describe('usersShareGroupInCourse', () => {
+  it('short-circuits true when both ids are the same', async () => {
+    await expect(usersShareGroupInCourse('c', 'u', 'u')).resolves.toBe(true);
+    expect(prismaMock.groupRoster.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('is true when a shared group exists', async () => {
+    prismaMock.groupRoster.findFirst.mockResolvedValue({ id: 'gr1' });
+    await expect(usersShareGroupInCourse('c', 'a', 'b')).resolves.toBe(true);
+  });
+
+  it('is false when no shared group and when an id is missing', async () => {
+    prismaMock.groupRoster.findFirst.mockResolvedValue(null);
+    await expect(usersShareGroupInCourse('c', 'a', 'b')).resolves.toBe(false);
+    await expect(usersShareGroupInCourse('c', 'a', null)).resolves.toBe(false);
+  });
+});
+
+describe('canViewStudentData', () => {
+  it('admins and staff may view anyone', async () => {
+    await expect(canViewStudentData({ id: 'a', isAdmin: true }, 'c', 't')).resolves.toBe(true);
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' }); // canManageCourse → true
+    await expect(canViewStudentData({ id: 's' }, 'c', 't')).resolves.toBe(true);
+  });
+
+  it('a student may view their own data', async () => {
+    await expect(canViewStudentData({ id: 'u' }, 'c', 'u')).resolves.toBe(true);
+  });
+
+  it('a non-staff student may not view another student on an individual assignment', async () => {
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' }); // not staff
+    await expect(canViewStudentData({ id: 'u' }, 'c', 'other')).resolves.toBe(false);
+  });
+
+  it('a groupmate may view shared work on a group assignment', async () => {
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' }); // not staff
+    prismaMock.groupRoster.findFirst.mockResolvedValue({ id: 'gr1' }); // same group
+    await expect(
+      canViewStudentData({ id: 'u' }, 'c', 'mate', { groupAssignment: true }),
+    ).resolves.toBe(true);
   });
 });
