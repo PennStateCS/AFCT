@@ -235,9 +235,11 @@ export default function AssignmentSubmissions({
     if (visibleProblems.length === 0) return;
     const params = new URLSearchParams(searchParamsString);
     const paramProblemId = params.get('problemId');
+    const firstProblem = visibleProblems[0];
+    if (!firstProblem) return;
     const validProblemId = visibleProblems.some((p) => p.id === paramProblemId)
       ? (paramProblemId as string)
-      : visibleProblems[0].id;
+      : firstProblem.id;
 
     setSelectedProblemId((currentProblemId) =>
       currentProblemId === validProblemId ? currentProblemId : validProblemId,
@@ -412,10 +414,10 @@ export default function AssignmentSubmissions({
   };
 
   const reviewQuery = useQuery({
-    queryKey: queryKeys.assignment.reviewData(courseId, assignmentId, selectedStudentId),
+    queryKey: queryKeys.assignment.reviewData(courseId, assignmentId, selectedStudentId ?? ''),
     queryFn: async ({ signal }): Promise<ReviewDataResponse> => {
       const res = await fetch(
-        apiPaths.assignmentReviewData(courseId, assignmentId, selectedStudentId),
+        apiPaths.assignmentReviewData(courseId, assignmentId, selectedStudentId ?? ''),
         { signal },
       );
       if (!res.ok) {
@@ -434,7 +436,7 @@ export default function AssignmentSubmissions({
   // Stable refresher used by the rerun helpers (they previously took fetchReviewData).
   const refreshReview = useCallback(async () => {
     await queryClient.invalidateQueries({
-      queryKey: queryKeys.assignment.reviewData(courseId, assignmentId, selectedStudentId),
+      queryKey: queryKeys.assignment.reviewData(courseId, assignmentId, selectedStudentId ?? ''),
     });
   }, [queryClient, courseId, assignmentId, selectedStudentId]);
 

@@ -40,8 +40,7 @@ export const GET = withCourseAuth(
 
       const mapByGroup: Record<string, string[]> = {};
       for (const m of mappings) {
-        if (!mapByGroup[m.groupId]) mapByGroup[m.groupId] = [];
-        mapByGroup[m.groupId].push(m.problemId);
+        (mapByGroup[m.groupId] ??= []).push(m.problemId);
       }
 
       const result = groups.map((g) => ({

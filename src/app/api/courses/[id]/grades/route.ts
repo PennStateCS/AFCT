@@ -186,8 +186,9 @@ export const GET = withCourseAuth(
       // Populate with actual grades
       gradeRows.forEach((g) => {
         const sum = g._sum.grade ?? 0;
-        if (grades[g.studentId]) {
-          grades[g.studentId][g.assignmentId] = sum;
+        const studentGrades = grades[g.studentId];
+        if (studentGrades) {
+          studentGrades[g.assignmentId] = sum;
         }
       });
 

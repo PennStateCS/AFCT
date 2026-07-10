@@ -83,7 +83,11 @@ export default function RandomGroupsDialog({
     const a = arr.slice();
     for (let i = a.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
+      // Fisher–Yates swap: i and j are always in-bounds (0 <= j <= i < length),
+      // so both reads are defined; a guarded swap here would only add noise.
+      const tmp = a[i]!;
+      a[i] = a[j]!;
+      a[j] = tmp;
     }
     return a;
   }

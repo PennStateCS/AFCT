@@ -181,7 +181,10 @@ export default function ManageGroupMembersDialog({
       setSelectedIdx((prev) => (prev > 0 ? prev - 1 : filteredStudents.length - 1));
     } else if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      if (selectedIdx >= 0) toggle(filteredStudents[selectedIdx].userId);
+      if (selectedIdx >= 0) {
+        const target = filteredStudents[selectedIdx];
+        if (target) toggle(target.userId);
+      }
     }
   }
 
