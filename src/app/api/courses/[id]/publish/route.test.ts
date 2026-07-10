@@ -89,6 +89,43 @@ describe('PATCH /api/courses/[id]/publish', () => {
     expect(activityLogMock).toHaveBeenCalled();
   });
 
+  it('lets a TA publish (TA = faculty)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'TA' });
+    canUnpublishMock.mockResolvedValue({ canUnpublish: true });
+    prismaMock.course.update.mockResolvedValue({
+      id: 'c1',
+      name: 'Course',
+      code: 'C1',
+      isPublished: true,
+      updatedAt: new Date('2025-01-01T00:00:00.000Z'),
+    });
+
+    const req = new Request('http://localhost/api/courses/c1/publish', {
+      method: 'PATCH',
+      body: JSON.stringify({ isPublished: true }),
+    });
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(200);
+  });
+
+  it('forbids a student from publishing', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+
+    const req = new Request('http://localhost/api/courses/c1/publish', {
+      method: 'PATCH',
+      body: JSON.stringify({ isPublished: true }),
+    });
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(403);
+    expect(prismaMock.course.update).not.toHaveBeenCalled();
+  });
+
   it('returns 500 and logs when the update throws', async () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
