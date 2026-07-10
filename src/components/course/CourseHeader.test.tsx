@@ -2,8 +2,7 @@
 
 import React from 'react';
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { CourseHeader } from './CourseHeader';
 import type { FullCourse } from '@/types/course';
@@ -62,64 +61,25 @@ const mockCourse: FullCourse = {
   ],
 };
 
-const onPublishToggle = vi.fn();
-const onArchiveToggle = vi.fn();
-
-beforeEach(() => {
-  onPublishToggle.mockReset();
-  onArchiveToggle.mockReset();
-});
-
 describe('CourseHeader', () => {
-  it('renders course metadata and staff info for instructors', () => {
-    render(
-      <CourseHeader
-        course={mockCourse}
-        isStudent={false}
-        onPublishToggle={onPublishToggle}
-        onArchiveToggle={onArchiveToggle}
-      />,
-    );
+  it('renders course metadata, status, and staff info for instructors', () => {
+    render(<CourseHeader course={mockCourse} isStudent={false} />);
 
     expect(screen.getByText(/CMPSC 431/)).toBeInTheDocument();
     expect(screen.getByText('Software Engineering')).toBeInTheDocument();
     expect(screen.getByText('Fall 2025')).toBeInTheDocument();
     expect(screen.getByText('3 credits')).toBeInTheDocument();
+    // Course status badge lives next to the metadata badges.
+    expect(screen.getByText(/^(Open|Upcoming|Closed)$/)).toBeInTheDocument();
+    // Faculty/TA line is instructor-only.
     expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
-    // Publish/archive toggles are instructor-only.
-    expect(screen.getAllByRole('switch').length).toBeGreaterThan(0);
   });
 
-  it('hides instructor actions for students', () => {
-    render(
-      <CourseHeader
-        course={mockCourse}
-        isStudent
-        onPublishToggle={onPublishToggle}
-        onArchiveToggle={onArchiveToggle}
-      />,
-    );
+  it('hides the staff/date line for students', () => {
+    render(<CourseHeader course={mockCourse} isStudent />);
 
-    expect(screen.queryAllByRole('switch')).toHaveLength(0);
-  });
-
-  it('calls the appropriate callbacks when toggles and actions are used', async () => {
-    const user = userEvent.setup();
-
-    render(
-      <CourseHeader
-        course={mockCourse}
-        isStudent={false}
-        onPublishToggle={onPublishToggle}
-        onArchiveToggle={onArchiveToggle}
-      />,
-    );
-
-    const switches = screen.getAllByRole('switch');
-    await user.click(switches[0]);
-    await user.click(switches[1]);
-
-    expect(onPublishToggle).toHaveBeenCalled();
-    expect(onArchiveToggle).toHaveBeenCalled();
+    // Title and badges still render, but the faculty/TA line does not.
+    expect(screen.getByText('Software Engineering')).toBeInTheDocument();
+    expect(screen.queryByText('Ada Lovelace')).not.toBeInTheDocument();
   });
 });
