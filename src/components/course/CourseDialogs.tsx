@@ -1,21 +1,16 @@
 import { CreateProblemDialog } from '@/components/dialogs/CreateProblemDialog';
 import { EditProblemDialog } from '@/components/dialogs/EditProblemDialog';
-import { EditCourseDialog } from '@/components/dialogs/EditCourseDialog';
 import { EditAssignmentDialog } from '@/components/dialogs/EditAssignmentDialog';
 import { CreateAssignmentDialog } from '@/components/dialogs/CreateAssignmentDialog';
 import { EnrollUserDialog } from '@/components/dialogs/EnrollUsersDialog';
 import BulkEnrollDialog from '@/components/dialogs/BulkEnrollDialog';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import type { FullCourse, DeleteTarget, EnrollableUser } from '@/types/course';
-import type { Assignment, Problem, Course } from '@prisma/client';
+import type { Assignment, Problem } from '@prisma/client';
 
 interface CourseDialogsProps {
   course: FullCourse;
   timeZone: string;
-  // Edit course
-  editOpen: boolean;
-  setEditOpen: (open: boolean) => void;
-  onCourseSave: (course: Partial<Course>) => void;
 
   // Problems
   problemOpen: boolean;
@@ -67,9 +62,6 @@ interface CourseDialogsProps {
 export function CourseDialogs({
   course,
   timeZone,
-  editOpen,
-  setEditOpen,
-  onCourseSave,
 
   problemOpen,
   setProblemOpen,
@@ -111,14 +103,6 @@ export function CourseDialogs({
 }: CourseDialogsProps) {
   return (
     <>
-      <EditCourseDialog
-        course={course}
-        timeZone={timeZone}
-        open={editOpen}
-        setOpen={setEditOpen}
-        onSave={onCourseSave}
-      />
-
       <CreateProblemDialog
         open={problemOpen}
         setOpen={setProblemOpen}
