@@ -93,6 +93,7 @@ export const DELETE = withCourseAuth(
         metadata: {
           userId: user.id,
           courseId,
+          targetUserId: userId,
           removedUserId: userId,
           count: deleted.count,
         },

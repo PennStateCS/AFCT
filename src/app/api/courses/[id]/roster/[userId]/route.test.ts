@@ -220,6 +220,16 @@ describe('DELETE /api/courses/[id]/roster/[userId]', () => {
     const res = await DELETE(req, { params: Promise.resolve({ id: 'c1', userId: 'u2' }) });
 
     expect(res.status).toBe(200);
+    // The audit entry carries a uniform `targetUserId` (the removed member) so all
+    // privileged-on-student actions can be queried by the same key.
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        action: 'REMOVE_FROM_COURSE',
+        metadata: expect.objectContaining({ targetUserId: 'u2' }),
+      }),
+    );
   });
 
   it('returns 400 when user has submissions', async () => {

@@ -180,7 +180,7 @@ export const POST = withCourseAuth(
           courseId,
           assignmentId,
           problemId,
-          metadata: { studentId, graderId, previousGrade: existing?.grade ?? null },
+          metadata: { targetUserId: studentId, studentId, graderId, previousGrade: existing?.grade ?? null },
         });
         return NextResponse.json({ grade: null, feedback: null });
       }
@@ -215,6 +215,7 @@ export const POST = withCourseAuth(
         assignmentId,
         problemId,
         metadata: {
+          targetUserId: studentId,
           studentId,
           graderId,
           previousGrade: existing?.grade ?? null,
