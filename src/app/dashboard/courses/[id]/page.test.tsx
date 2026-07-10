@@ -7,7 +7,7 @@ globalThis.React = React;
 
 const prismaMock = vi.hoisted(() => ({
   course: {
-    findUnique: vi.fn(),
+    findFirst: vi.fn(),
   },
 }));
 const authMock = vi.hoisted(() => vi.fn());
@@ -79,14 +79,14 @@ describe('AdminCoursePage access control', () => {
 
     expect(getCourseRoleMock).toHaveBeenCalledWith('stranger', 'c1');
     // The roster (with other users' data) is never queried for a non-member.
-    expect(prismaMock.course.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.course.findFirst).not.toHaveBeenCalled();
     expect(notFoundMock).toHaveBeenCalled();
   });
 
   it('returns notFound for an accessible-but-missing course (e.g. admin, bad id)', async () => {
     authMock.mockResolvedValue({ user: { id: 'admin', isAdmin: true } });
     getCourseRoleMock.mockResolvedValue(null);
-    prismaMock.course.findUnique.mockResolvedValue(null);
+    prismaMock.course.findFirst.mockResolvedValue(null);
 
     await expect(AdminCoursePage({ params: Promise.resolve({ id: 'missing' }) })).rejects.toThrow(
       'NEXT_NOT_FOUND',
@@ -97,12 +97,12 @@ describe('AdminCoursePage access control', () => {
   it('gives staff the full roster (including classmate emails)', async () => {
     authMock.mockResolvedValue({ user: { id: 'fac', isAdmin: false } });
     getCourseRoleMock.mockResolvedValue('FACULTY');
-    prismaMock.course.findUnique.mockResolvedValue(courseWith([faculty, student]));
+    prismaMock.course.findFirst.mockResolvedValue(courseWith([faculty, student]));
 
     const result = await AdminCoursePage({ params: Promise.resolve({ id: 'c1' }) });
 
     // Staff view: email/select is requested and the student's real identity is present.
-    const include = prismaMock.course.findUnique.mock.calls[0][0].include;
+    const include = prismaMock.course.findFirst.mock.calls[0][0].include;
     expect(include.roster.select.user.select.email).toBe(true);
     const enrolled = initialCourseOf(result).enrolled;
     expect(enrolled).toContainEqual(expect.objectContaining({ id: 'stu2', email: 'sam@x.edu' }));
@@ -111,12 +111,12 @@ describe('AdminCoursePage access control', () => {
   it('gives a student a privacy-safe roster: staff names only, no classmate identity or email', async () => {
     authMock.mockResolvedValue({ user: { id: 'stu2', isAdmin: false } });
     getCourseRoleMock.mockResolvedValue('STUDENT');
-    prismaMock.course.findUnique.mockResolvedValue(courseWith([faculty, student]));
+    prismaMock.course.findFirst.mockResolvedValue(courseWith([faculty, student]));
 
     const result = await AdminCoursePage({ params: Promise.resolve({ id: 'c1' }) });
 
     // Student view: emails are not even selected from the DB.
-    const include = prismaMock.course.findUnique.mock.calls[0][0].include;
+    const include = prismaMock.course.findFirst.mock.calls[0][0].include;
     expect(include.roster.select.user.select.email).toBe(false);
 
     const enrolled = initialCourseOf(result).enrolled;

@@ -757,11 +757,15 @@ export const DELETE = withCourseAuth(
     await req.json();
 
     try {
-      const deletedCourse = await prisma.course.delete({
+      // Soft delete: retain the row (and all its data) for recovery, but stamp
+      // deletedAt so the access gates and list queries treat it as gone. The course
+      // stays archived, so writes remain blocked by the archive freeze.
+      const deletedCourse = await prisma.course.update({
         where: {
           id,
           isArchived: true,
         },
+        data: { deletedAt: new Date() },
       });
 
       // Record which course was deleted. The course row is gone, so its id goes in

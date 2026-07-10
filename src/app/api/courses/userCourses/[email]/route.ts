@@ -63,6 +63,7 @@ export async function GET(req: Request, context: { params: Promise<{ email: stri
       where: {
         ...visibility,
         isArchived: false,
+        deletedAt: null, // never surface soft-deleted courses
         startDate: { lte: new Date() }, // only courses that have already started
       },
       select: {

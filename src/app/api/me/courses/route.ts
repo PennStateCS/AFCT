@@ -45,6 +45,8 @@ export async function GET(req: Request) {
       const courses = await prisma.course.findMany({
         where: {
           roster: { some: { userId } },
+          // A soft-deleted course never appears in anyone's navigation.
+          deletedAt: null,
           ...(isAdmin(session.user)
             ? {}
             : {

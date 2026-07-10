@@ -75,6 +75,8 @@ export async function GET(req: Request) {
     }
 
     const courses = await prisma.course.findMany({
+      // Soft-deleted courses are retained only for out-of-band recovery — exclude them.
+      where: { deletedAt: null },
       include: {
         roster: {
           include: {

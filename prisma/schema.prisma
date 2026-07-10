@@ -87,6 +87,11 @@ model Course {
   isPublished Boolean  @default(false)
   isArchived  Boolean  @default(false)
 
+  // Soft delete: when set, the course is retained for recovery but hidden from all
+  // non-admin views and inaccessible through the app. Deletion requires the course to
+  // already be archived, so a deleted course is always archived too.
+  deletedAt DateTime?
+
   // How the empty string is displayed in automata/languages for this course.
   emptyStringNotation EmptyStringNotation @default(EPSILON)
 
@@ -105,6 +110,7 @@ model Course {
   @@index([createdAt])
   @@index([registrationOpenAt])
   @@index([registrationCloseAt])
+  @@index([deletedAt])
 }
 
 model Roster {
