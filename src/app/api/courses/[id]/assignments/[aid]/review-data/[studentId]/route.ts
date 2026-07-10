@@ -198,7 +198,8 @@ export const GET = withCourseAuth(
       for (const { problem } of assignmentProblems) {
         const subsForProblem = submissionsRaw.filter((s) => s.problemId === problem.id);
         submissionsByProblem[problem.id] = {
-          problem,
+          // The problem's solution filename is instructor-only; hide it from students.
+          problem: { ...problem, originalFileName: isStaff ? problem.originalFileName : null },
           submissions: subsForProblem.map((s) => ({
             id: s.id,
             submittedAt: s.submittedAt,
