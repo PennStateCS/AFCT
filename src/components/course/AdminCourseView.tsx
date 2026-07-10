@@ -120,7 +120,7 @@ export function AdminCourseView({
         <CardHeader className="flex flex-col gap-3">
           <CourseHeaderContent course={course} isStudent={false} />
         </CardHeader>
-        <CardContent className="space-y-6 px-4 pt-0 pb-4">
+        <CardContent className="space-y-6">
           <TabsList
             aria-label="Course content sections"
             className="bg-card border-border h-12 w-full justify-start gap-1 overflow-x-auto rounded-md border p-1 shadow-sm"
