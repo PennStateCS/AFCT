@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { withCourseAuth } from '@/lib/api/with-auth';
+import { withAssignmentAuth } from '@/lib/api/with-auth';
 
 /**
  * Returns each course group alongside the problem ids mapped to it for this
@@ -26,9 +26,9 @@ import { withCourseAuth } from '@/lib/api/with-auth';
  *   403: { description: Not an enrolled member of the course and not a system admin. }
  *   500: { description: Server error. }
  */
-export const GET = withCourseAuth(
-  async (req, ctx, { user, courseId }) => {
-    const { aid: assignmentId } = await ctx.params;
+export const GET = withAssignmentAuth(
+  async (req, ctx, { user, courseId, assignment }) => {
+    const assignmentId = assignment.id;
 
     try {
       // Fetch the course's groups and this assignment's group→problem mappings.
@@ -102,9 +102,9 @@ export const GET = withCourseAuth(
  *   403: { description: Caller is not course staff (faculty or TA) or a system admin. }
  *   500: { description: Server error. }
  */
-export const DELETE = withCourseAuth(
-  async (req, ctx, { user, courseId }) => {
-    const { aid: assignmentId } = await ctx.params;
+export const DELETE = withAssignmentAuth(
+  async (req, ctx, { user, courseId, assignment }) => {
+    const assignmentId = assignment.id;
 
     try {
       let body;
