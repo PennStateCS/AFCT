@@ -95,7 +95,7 @@ vi.mock('framer-motion', () => {
     {},
     {
       get: (_, element: string) => {
-        const Tag = element as keyof JSX.IntrinsicElements;
+        const Tag = element as keyof React.JSX.IntrinsicElements;
         return ({ children, ...props }: { children?: React.ReactNode }) =>
           React.createElement(Tag, props, children);
       },

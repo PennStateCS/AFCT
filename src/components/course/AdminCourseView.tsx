@@ -111,7 +111,7 @@ export function AdminCourseView({
   return (
     <Tabs defaultValue="assignments" value={tab} onValueChange={onTabChange}>
       <Card>
-        <CardHeader className="flex flex-col gap-3">
+        <CardHeader className="grid grid-cols-1 gap-3">
           <CourseHeaderContent course={course} isStudent={false} />
         </CardHeader>
 

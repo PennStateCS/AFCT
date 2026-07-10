@@ -39,7 +39,7 @@ describe('LoginLayout', () => {
     redirectMock.mockReset();
 
     const result = await LoginLayout({ children: <div data-testid="child">Child</div> });
-    const element = result as React.ReactElement;
+    const element = result as React.ReactElement<any>;
 
     expect(redirectMock).not.toHaveBeenCalled();
     expect(element.props.children.props.children.props['data-testid']).toBe('child');
@@ -50,7 +50,7 @@ describe('LoginLayout', () => {
     redirectMock.mockReset();
 
     const result = await LoginLayout({ children: <div data-testid="child">Child</div> });
-    const element = result as React.ReactElement;
+    const element = result as React.ReactElement<any>;
 
     expect(redirectMock).not.toHaveBeenCalled();
     expect(element.props.children.props.children.props['data-testid']).toBe('child');

@@ -47,6 +47,13 @@ describe('POST /api/courses/[id]/[aid]/problems (add problems)', () => {
     authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([]);
     prismaMock.assignmentProblem.createMany.mockResolvedValue({ count: 0 });
+    // withAssignmentAuth resolves the assignment (and its course membership) here.
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      isPublished: true,
+      isGroup: false,
+    });
     prismaMock.assignment.findUnique.mockResolvedValue({
       id: 'assignment-1',
       problems: [{ problem: { id: 'p1', title: 'P1' } }],
@@ -171,7 +178,12 @@ describe('POST /api/courses/[id]/[aid]/problems (add problems)', () => {
   it('skips group mapping when the assignment is not a group assignment', async () => {
     prismaMock.problem.findMany.mockResolvedValue([{ id: 'p1' }]);
     prismaMock.assignmentProblem.findMany.mockResolvedValue([]);
-    prismaMock.assignment.findUnique.mockResolvedValue({ id: 'assignment-1', isGroup: false });
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      isPublished: true,
+      isGroup: false,
+    });
 
     const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
       method: 'POST',
@@ -188,7 +200,12 @@ describe('POST /api/courses/[id]/[aid]/problems (add problems)', () => {
   it('skips group mapping when the specified group is not in the course', async () => {
     prismaMock.problem.findMany.mockResolvedValue([{ id: 'p1' }]);
     prismaMock.assignmentProblem.findMany.mockResolvedValue([]);
-    prismaMock.assignment.findUnique.mockResolvedValue({ id: 'assignment-1', isGroup: true });
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      isPublished: true,
+      isGroup: true,
+    });
     // Group belongs to a different course -> not mapped.
     prismaMock.group.findUnique.mockResolvedValue({ id: 'g-other', courseId: 'other' });
 
@@ -207,7 +224,12 @@ describe('POST /api/courses/[id]/[aid]/problems (add problems)', () => {
     // No valid problems -> validIds is empty, so no mappings are created even for a real group.
     prismaMock.problem.findMany.mockResolvedValue([]);
     prismaMock.assignmentProblem.findMany.mockResolvedValue([]);
-    prismaMock.assignment.findUnique.mockResolvedValue({ id: 'assignment-1', isGroup: true });
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      isPublished: true,
+      isGroup: true,
+    });
     prismaMock.group.findMany.mockResolvedValue([{ id: 'g1' }]);
 
     const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
@@ -301,7 +323,12 @@ describe('POST /api/courses/[id]/[aid]/problems (add problems)', () => {
     prismaMock.problem.findMany.mockResolvedValue([{ id: 'p3' }]);
     prismaMock.assignmentProblem.findMany.mockResolvedValue([]);
     prismaMock.assignmentProblem.createMany.mockResolvedValue({ count: 1 });
-    prismaMock.assignment.findUnique.mockResolvedValue({ id: 'assignment-1', isGroup: true });
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      isPublished: true,
+      isGroup: true,
+    });
     prismaMock.group.findMany.mockResolvedValue([{ id: 'g1' }, { id: 'g2' }]);
     prismaMock.groupAssignmentProblem.createMany.mockResolvedValue({ count: 2 });
 
@@ -329,7 +356,12 @@ describe('POST /api/courses/[id]/[aid]/problems (add problems)', () => {
     prismaMock.problem.findMany.mockResolvedValue([{ id: 'p4' }]);
     prismaMock.assignmentProblem.findMany.mockResolvedValue([]);
     prismaMock.assignmentProblem.createMany.mockResolvedValue({ count: 1 });
-    prismaMock.assignment.findUnique.mockResolvedValue({ id: 'assignment-1', isGroup: true });
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      isPublished: true,
+      isGroup: true,
+    });
     prismaMock.group.findUnique.mockResolvedValue({ id: 'g-x', courseId: 'c1' });
     prismaMock.groupAssignmentProblem.createMany.mockResolvedValue({ count: 1 });
 
@@ -356,7 +388,12 @@ describe('POST /api/courses/[id]/[aid]/problems (add problems)', () => {
       { problemId: 'p5', _count: { submissions: 0 } },
     ]);
     prismaMock.assignmentProblem.createMany.mockResolvedValue({ count: 0 });
-    prismaMock.assignment.findUnique.mockResolvedValue({ id: 'assignment-1', isGroup: true });
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      isPublished: true,
+      isGroup: true,
+    });
     prismaMock.group.findUnique.mockResolvedValue({ id: 'g-y', courseId: 'c1' });
     prismaMock.groupAssignmentProblem.createMany.mockResolvedValue({ count: 1 });
 

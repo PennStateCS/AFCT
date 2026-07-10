@@ -102,7 +102,7 @@ export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
 export function CourseHeader({ course, isStudent }: CourseHeaderProps) {
   return (
     <Card>
-      <CardHeader className="flex flex-col gap-3">
+      <CardHeader className="grid grid-cols-1 gap-3">
         <CourseHeaderContent course={course} isStudent={isStudent} />
       </CardHeader>
     </Card>

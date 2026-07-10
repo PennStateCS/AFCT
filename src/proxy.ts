@@ -38,7 +38,7 @@ function isPublicApi(pathname: string): boolean {
   );
 }
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // Public API routes bypass the net entirely (and skip the token read).
