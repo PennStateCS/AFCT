@@ -29,7 +29,7 @@ import type { z } from 'zod';
 import { apiPaths } from '@/lib/api-paths';
 
 // RHF form state = Zod INPUT (strings for datetime-local)
-type FormValues = z.infer<typeof CreateCourseFormSchema>;
+type FormValues = z.input<typeof CreateCourseFormSchema>;
 
 interface CreateCourseDialogProps {
   open: boolean;

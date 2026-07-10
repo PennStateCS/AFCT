@@ -72,7 +72,7 @@ export function EditProfileDialog({ user, open, setOpen, onSave }: EditProfileDi
     reset,
     setValue,
     formState: { errors, isSubmitting, isValid },
-  } = useForm<UpdateProfileRaw>({
+  } = useForm<UpdateProfileRaw, unknown, UpdateProfileInput>({
     resolver: zodResolver(UpdateProfileSchema),
     defaultValues: defaults,
     mode: 'onChange',

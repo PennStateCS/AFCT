@@ -41,7 +41,7 @@ function toDateTimeLocalInTimeZone(date: Date | string, timeZone: string): strin
 }
 
 // RHF form state before transforms (strings for datetime-local)
-type FormValues = z.infer<typeof CourseFormSchema>;
+type FormValues = z.input<typeof CourseFormSchema>;
 
 type CourseSettingsFormProps = {
   course: Course & { enrolled?: EnrolledUser[] };
