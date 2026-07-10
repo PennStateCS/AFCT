@@ -1,11 +1,17 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { normalizeEmail } from '@/lib/email';
+import {
+  evaluateCheckEmailRateLimit,
+  getClientIp,
+  formatRetryAfterSeconds,
+} from '@/lib/security/rate-limiter';
 
 /**
  * Reports whether an email is already registered, so the signup form can warn
  * before submitting. Unauthenticated by design; it therefore leaks account
- * existence, which is an accepted trade-off for signup UX.
+ * existence, which is an accepted trade-off for signup UX — but it is IP rate-limited
+ * so it can't be used to bulk-enumerate accounts, and it only ever returns a boolean.
  * @openapi
  * summary: Check whether an email is registered
  * parameters:
@@ -20,8 +26,18 @@ import { normalizeEmail } from '@/lib/email';
  *           properties:
  *             exists: { type: boolean }
  *   400: { description: The email query parameter is missing. }
+ *   429: { description: Too many checks from this IP; retry after the Retry-After header. }
  */
 export async function GET(request: Request) {
+  // Rate-limit by IP before touching the DB — caps bulk account enumeration.
+  const decision = evaluateCheckEmailRateLimit({ ip: getClientIp(request) });
+  if (decision.status === 'blocked') {
+    return NextResponse.json(
+      { error: 'Too many requests. Please try again later.' },
+      { status: 429, headers: { 'Retry-After': formatRetryAfterSeconds(decision.retryAfterMs) } },
+    );
+  }
+
   const { searchParams } = new URL(request.url);
   const email = normalizeEmail(searchParams.get('email')) || null;
 
