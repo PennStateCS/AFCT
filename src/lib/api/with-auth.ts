@@ -32,7 +32,7 @@ export type AdminAuthContext = {
  * The handler runs only for a confirmed admin and receives the resolved session/user
  * so it needn't call `auth()` again.
  *
- * This is the authoritative check; `src/middleware.ts` is only a coarse edge-level
+ * This is the authoritative check; `src/proxy.ts` is only a coarse edge-level
  * backstop over `/api/admin/*`.
  */
 export function withAdminAuth<Ctx = unknown, R extends Response = Response>(
