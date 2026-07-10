@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import fs from 'fs';
 import path from 'path';
-import { randomUUID } from 'crypto';
+import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { getQueueSettings } from '@/lib/eval-config';
@@ -427,15 +427,16 @@ export async function POST(req: NextRequest) {
         },
       });
       originalFileName = file.name;
-      const fileExt = path.extname(originalFileName);
-      fileName = `${randomUUID()}${fileExt}`;
+      // Store under a random UUID + whitelisted extension (shared helper), never a
+      // client-controlled name, and resolve the write path inside the upload dir.
+      fileName = safeStoredFilename(originalFileName);
 
       const uploadDir = path.join('/private', 'uploads', 'submissions');
       if (!fs.existsSync(uploadDir)) {
         fs.mkdirSync(uploadDir, { recursive: true });
       }
 
-      const filePath = path.join(uploadDir, fileName);
+      const filePath = resolveInsideDir(uploadDir, fileName);
       const buffer = Buffer.from(await file.arrayBuffer());
       fs.writeFileSync(filePath, buffer, { mode: 0o644 });
       uploadedFilePath = filePath;
