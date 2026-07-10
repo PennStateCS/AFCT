@@ -204,29 +204,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/admin/status/abandoned-files": {
+    "/api/admin/status/database": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Database status
+         * @description Database tab: reachability, engine details, per-engine stats (Postgres or  SQLite), and the last migration. System administrators only.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/database/route.ts)
+         */
+        get: operations["getAdminStatusDatabase"];
         put?: never;
         post?: never;
-        /**
-         * Delete an orphaned upload
-         * @description Deletes a single orphaned upload — a file on disk that no DB row references  (see the abandoned-file report on the status dashboard). System administrators  only. Guards on every axis: the category must be known, the name  must be separator-free, the file must still be unreferenced, and the resolved  path must stay inside its category folder.
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/abandoned-files/route.ts)
-         */
-        delete: operations["deleteAdminStatusAbandonedFiles"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/admin/status": {
+    "/api/admin/status/docker": {
         parameters: {
             query?: never;
             header?: never;
@@ -234,12 +234,128 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Operational status snapshot
-         * @description Aggregated health and diagnostics for the status dashboard (system administrators only). Returns host metrics, DB engine stats, masked env keys, active-session and error-rate summaries, and abandoned-file counts. Fields are best-effort — any probe that fails is simply omitted.
+         * Docker/container status
+         * @description Docker tab: container detection (cgroups, /.dockerenv, env hints) and container  id / hostname when running inside a container. System administrators only.
          *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/route.ts)
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/docker/route.ts)
          */
-        get: operations["getAdminStatus"];
+        get: operations["getAdminStatusDocker"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/status/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Abandoned-file report
+         * @description Files tab: report of orphaned uploads — files on disk that no DB row  references, by category, with up to 50 samples. System administrators only.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/files/route.ts)
+         */
+        get: operations["getAdminStatusFiles"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete an orphaned upload
+         * @description Deletes a single orphaned upload. Guards on every axis (known category,  separator-free name, still unreferenced, path stays inside the category  folder). System administrators only.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/files/route.ts)
+         */
+        delete: operations["deleteAdminStatusFiles"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/status/network": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Network status (DNS/TLS/latency/error-rate)
+         * @description Network tab: DNS resolution for the DB and auth hosts, auth-endpoint latency +  TLS certificate expiry, DB round-trip latency and connection count, and recent  error-rate ratios. DNS/TLS are TTL-cached. System administrators only.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/network/route.ts)
+         */
+        get: operations["getAdminStatusNetwork"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/status/server": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Server status (host + process + software)
+         * @description Server tab: host + process metrics (uptime, CPU/memory/disk-IO sample, OS, IP  addresses) and software versions (Node/Next/Java/evaluator + build metadata).  System administrators only. Tool versions are TTL-cached server-side.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/server/route.ts)
+         */
+        get: operations["getAdminStatusServer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/status/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Active session status
+         * @description Session tab: recent active sessions (last 24h, deduped) and rolling 5/15/60m  counts, from the audit log. Includes other users' session PII (emails, IPs), so  system administrators only.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/sessions/route.ts)
+         */
+        get: operations["getAdminStatusSessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/status/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Status summary (top cards)
+         * @description Summary cards at the top of the status dashboard: DB reachability/provider,  uptime, process CPU/memory, DB table count + size, 24h session counts, and this  probe's own latency. Fast by design so it renders immediately while the per-tab  detail loads lazily. System administrators only.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/admin/status/summary/route.ts)
+         */
+        get: operations["getAdminStatusSummary"];
         put?: never;
         post?: never;
         delete?: never;
@@ -375,7 +491,7 @@ export interface paths {
         };
         /**
          * Check whether an email is registered
-         * @description Reports whether an email is already registered, so the signup form can warn  before submitting. Unauthenticated by design; it therefore leaks account  existence, which is an accepted trade-off for signup UX.
+         * @description Reports whether an email is already registered, so the signup form can warn  before submitting. Unauthenticated by design; it therefore leaks account  existence, which is an accepted trade-off for signup UX — but it is IP rate-limited  so it can't be used to bulk-enumerate accounts, and it only ever returns a boolean.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/auth/check-email/route.ts)
          */
@@ -430,7 +546,7 @@ export interface paths {
         post: operations["postComments"];
         /**
          * Delete a comment
-         * @description Deletes a comment by id. The comment's author may delete their own; otherwise  only course staff (faculty or TAs) or a system admin may remove it.
+         * @description Deletes a comment by id. Comments are immutable to students — **only course staff  (faculty or TAs) or a system admin may delete**, including deleting their own.  A student cannot delete a comment they authored.
          *
          *     **Auth:** required
          *
@@ -479,7 +595,7 @@ export interface paths {
         head?: never;
         /**
          * Archive or unarchive a course
-         * @description Toggles a course's archived state. Course faculty or a system admin (TAs  excluded). Archiving runs a safety  check (canArchiveCourse) using the course's stored dates rather than any client  value, to avoid timezone drift deciding whether a course has really ended.
+         * @description Toggles a course's archived state. **Archiving** is allowed for course staff  (faculty or TA) or a system admin; **un-archiving is admin-only** — reopening a  frozen course to edits is a privileged action. Archiving runs a safety check  (canArchiveCourse) using the course's stored dates rather than any client value, to  avoid timezone drift deciding whether a course has really ended.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/archive/route.ts)
          */
@@ -765,7 +881,7 @@ export interface paths {
         put?: never;
         /**
          * Create a course assignment
-         * @description Creates an assignment in the course. Course staff (faculty or TAs) or a system  admin. The due date is interpreted as end-of-day in the actor's timezone. Late  submissions and their cutoff must agree — a cutoff is required when late is on,  forbidden when off, and must fall on or after the due date.
+         * @description Creates an assignment in the course. Course staff (faculty or TAs) or a system  admin. The due date is interpreted as end-of-day in the **course's** timezone. Late  submissions and their cutoff must agree — a cutoff is required when late is on,  forbidden when off, and must fall on or after the due date.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/assignments/route.ts)
          */
@@ -1053,7 +1169,7 @@ export interface paths {
         head?: never;
         /**
          * Publish or unpublish a course
-         * @description Toggles a course's published state. Course faculty or a system admin (TAs  excluded). Unpublishing runs a  safety check (canUnpublishCourse) that refuses if students would lose access to  work already in progress.
+         * @description Toggles a course's published state. Course staff (faculty or TA) or a system admin.  Unpublishing runs a  safety check (canUnpublishCourse) that refuses if students would lose access to  work already in progress.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/publish/route.ts)
          */
@@ -1149,7 +1265,7 @@ export interface paths {
          * Get a course
          * @description Fetches one course with derived metadata, shaped by the `view` query param to  keep payloads lean (full/summary/roster/assignments/problems). Assignments come  back with derived point totals and submission/comment counts; problems are  tagged with whether an assignment uses them; the roster is flattened into a  single `enrolled` array, and the caller's own course role is included. Access is  restricted: any enrolled member of the course (any role) or a system admin.
          *
-         *     **Auth:** requires STUDENT / FACULTY
+         *     **Auth:** requires FACULTY / TA / STUDENT
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/route.ts)
          */
@@ -1158,7 +1274,7 @@ export interface paths {
          * Update a course
          * @description Updates a course's details and, when `instructorIds` is supplied, reconciles its  faculty roster (adds, promotes, or removes to match the desired set). Runs the  same archive/unpublish safety checks as the dedicated toggles, requires a  registration window, and records a before→after diff of changed fields.  Course staff (faculty or TAs) or a system admin.
          *
-         *     **Auth:** requires STUDENT / FACULTY
+         *     **Auth:** requires FACULTY / TA / STUDENT
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/route.ts)
          */
@@ -1168,7 +1284,7 @@ export interface paths {
          * Delete a course
          * @description Permanently deletes a course. Course staff (faculty or TAs) or a system admin,  and the course must already  be archived — a guard against deleting a live course. The archived requirement  is enforced both up front and again in the delete's `where` clause.
          *
-         *     **Auth:** requires STUDENT / FACULTY
+         *     **Auth:** requires FACULTY / TA / STUDENT
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/route.ts)
          */
@@ -1277,7 +1393,7 @@ export interface paths {
         };
         /**
          * List all courses
-         * @description Returns every course with its roster and assignment metadata for the dashboard. This endpoint performs no authentication or authorization — any caller receives the full course list and roster names.
+         * @description Returns every course with its roster and assignment metadata. System administrators only — the payload spans all courses and includes every member's identity and each course's registration code.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/route.ts)
          */
@@ -1355,7 +1471,7 @@ export interface paths {
         };
         /**
          * Get a problem file
-         * @description Serves a problem's attached file, inline. Any enrolled member of the problem's  course (any role) or a system admin may fetch it. The download is audited, and  traversal filenames are rejected.
+         * @description Serves a problem's attached file, inline. **Course staff (faculty/TA) or a system  admin only** — a problem file is the autograder's answer/solution key, so a student  must never receive it (same sensitivity as a solution file). The download is audited,  and traversal filenames are rejected.
          *
          *     **Auth:** required
          *
@@ -2086,6 +2202,8 @@ export interface operations {
                         timezone?: string;
                         maxUploadSizeMb?: number;
                         allowSignup?: boolean;
+                        /** @description Comma-separated email-domain allow-list; blank = any */
+                        signupAllowedDomains?: string;
                         sessionTimeoutMinutes?: number;
                         submissionEvalTimeoutMs?: number;
                         submissionEvalMaxMemoryMb?: number;
@@ -2315,7 +2433,115 @@ export interface operations {
             };
         };
     };
-    deleteAdminStatusAbandonedFiles: {
+    getAdminStatusDatabase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description DB health, details, and engine stats. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not a system administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminStatusDocker: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Container info, or { docker: null } when not containerized. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not a system administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminStatusFiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Orphaned-upload counts and samples. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not a system administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteAdminStatusFiles: {
         parameters: {
             query?: never;
             header?: never;
@@ -2338,13 +2564,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": {
-                        ok?: boolean;
-                    };
-                };
+                content?: never;
             };
-            /** @description Unknown category, unsafe filename, or path outside the category folder. */
+            /** @description Unknown category, unsafe filename, or path outside the folder. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -2362,7 +2584,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller is not a system administrator. */
+            /** @description Not a system administrator. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2400,7 +2622,7 @@ export interface operations {
             };
         };
     };
-    getAdminStatus: {
+    getAdminStatusNetwork: {
         parameters: {
             query?: never;
             header?: never;
@@ -2409,25 +2631,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description A best-effort diagnostic snapshot (fields vary by DB engine and environment). */
+            /** @description Upstream connectivity probes and error-rate summaries. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": {
-                        /** @description Host and process metrics */
-                        system?: Record<string, never>;
-                        /** @description Reachability, engine details, and stats */
-                        database?: Record<string, never>;
-                        /** @description Public vars plus masked key/length summary */
-                        env?: Record<string, never>;
-                        /** @description Optional row counts and tool versions */
-                        app?: Record<string, never>;
-                        /** @description Detected DB provider and request latency */
-                        metrics?: Record<string, never>;
-                    };
-                };
+                content?: never;
             };
             /** @description Not signed in. */
             401: {
@@ -2438,7 +2647,115 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Caller is not a system administrator. */
+            /** @description Not a system administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminStatusServer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Server metrics and software versions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not a system administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminStatusSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active sessions and rolling counts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not a system administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminStatusSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cross-cutting summary numbers for the status cards. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not a system administrator. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2813,6 +3130,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Too many checks from this IP; retry after the Retry-After header. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     postAuthSignup: {
@@ -3015,7 +3341,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not allowed to delete this comment. */
+            /** @description Not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3151,7 +3477,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not course faculty or a system admin (TAs excluded), or archiving is blocked by the safety check. */
+            /** @description Not permitted (staff may archive; only an admin may un-archive), or archiving is blocked by the safety check. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4403,7 +4729,7 @@ export interface operations {
                 "application/json": {
                     title: string;
                     description?: string;
-                    /** @description Interpreted as end-of-day in the actor's timezone */
+                    /** @description Interpreted as end-of-day in the course's timezone */
                     dueDate?: string;
                     allowLateSubmissions?: boolean;
                     /** @description Required when allowLateSubmissions is true */
@@ -4852,6 +5178,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Missing userId, or the user isn't enrolled in the course. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Not signed in. */
             401: {
                 headers: {
@@ -4872,15 +5207,6 @@ export interface operations {
             };
             /** @description Group not found in this course. */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Missing userId, or the user isn't enrolled in the course. */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4931,6 +5257,15 @@ export interface operations {
                     };
                 };
             };
+            /** @description Missing members array, or some users aren't enrolled. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Not signed in. */
             401: {
                 headers: {
@@ -4951,15 +5286,6 @@ export interface operations {
             };
             /** @description Group not found in this course. */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Missing members array, or some users aren't enrolled. */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5081,6 +5407,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Missing name. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Not signed in. */
             401: {
                 headers: {
@@ -5110,15 +5445,6 @@ export interface operations {
             };
             /** @description Name already used by another group in the course. */
             409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Missing name. */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5211,6 +5537,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Missing group name. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Not signed in. */
             401: {
                 headers: {
@@ -5240,15 +5575,6 @@ export interface operations {
             };
             /** @description A group with that name already exists in the course. */
             409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Missing group name. */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5628,7 +5954,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not course faculty or a system admin (TAs excluded), or unpublishing is blocked by the safety check. */
+            /** @description Not course staff or a system admin, or unpublishing is blocked by the safety check. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6404,6 +6730,24 @@ export interface operations {
                     "application/json": Record<string, never>[];
                 };
             };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description System administrators only. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Server error. */
             500: {
                 headers: {
@@ -6630,7 +6974,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not an enrolled member of the problem's course or a system admin. */
+            /** @description Caller is not course staff or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7390,6 +7734,15 @@ export interface operations {
             };
             /** @description Assignment not found. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Per-problem submission limit reached. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
