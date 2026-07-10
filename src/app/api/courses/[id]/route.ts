@@ -210,8 +210,11 @@ export const GET = withCourseAuth(
 
       let assignmentsWithProblemCount: Array<Record<string, unknown>> = [];
       if (includeAssignments) {
+        // Class-wide submission/comment totals are staff-only aggregates; students
+        // must not learn peers' activity volume, so skip them for non-staff (the
+        // counts then default to 0 below).
         const submissionCounts =
-          assignmentIds.length > 0
+          isStaff && assignmentIds.length > 0
             ? submissionDelegate.groupBy
               ? await submissionDelegate.groupBy({
                   by: ['assignmentId'],
@@ -231,7 +234,7 @@ export const GET = withCourseAuth(
                   )
             : [];
         const commentCounts =
-          assignmentIds.length > 0
+          isStaff && assignmentIds.length > 0
             ? commentDelegate.groupBy
               ? await commentDelegate.groupBy({
                   by: ['assignmentId'],
