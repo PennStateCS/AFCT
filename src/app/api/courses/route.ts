@@ -17,7 +17,8 @@ import { validationResponse } from '@/lib/zod-error';
 import { auth } from '@/lib/auth';
 import { isAdmin } from '@/lib/permissions';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
-import { resolveUserTimezone } from '@/lib/user-timezone';
+import { resolveSystemTimezone } from '@/lib/course-timezone';
+import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { generateUniqueCourseCode } from '@/lib/course-code';
 import { sumProblemPoints, toEnrolled } from '@/lib/course-format';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
@@ -182,8 +183,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // 3) Get user's timezone (DB user > system settings > default)
-    const userTimezone = await resolveUserTimezone(session?.user?.id);
+    // 3) The course's canonical timezone anchors its deadlines. Use the provided zone
+    // (validated) or fall back to the system default; all the course's dates below are
+    // interpreted in it, not the actor's zone.
+    let courseTimezone: string;
+    if (!json.timezone) {
+      courseTimezone = await resolveSystemTimezone();
+    } else if (
+      typeof json.timezone === 'string' &&
+      COMMON_TIMEZONES.includes(json.timezone as (typeof COMMON_TIMEZONES)[number])
+    ) {
+      courseTimezone = json.timezone;
+    } else {
+      return NextResponse.json({ error: 'Invalid timezone.' }, { status: 400 });
+    }
 
     if (!json.registrationOpenAt || !json.registrationCloseAt) {
       return NextResponse.json({ error: 'Registration window is required.' }, { status: 400 });
@@ -213,13 +226,14 @@ export async function POST(req: Request) {
           regCode,
           semester: json.semester,
           credits: json.credits,
-          startDate: toDateTimeInTimezone(json.startDate, userTimezone),
-          endDate: toDateTimeInTimezone(json.endDate, userTimezone),
+          timezone: courseTimezone,
+          startDate: toDateTimeInTimezone(json.startDate, courseTimezone),
+          endDate: toDateTimeInTimezone(json.endDate, courseTimezone),
           registrationOpenAt: json.registrationOpenAt
-            ? toDateTimeInTimezone(json.registrationOpenAt, userTimezone)
+            ? toDateTimeInTimezone(json.registrationOpenAt, courseTimezone)
             : null,
           registrationCloseAt: json.registrationCloseAt
-            ? toDateTimeInTimezone(json.registrationCloseAt, userTimezone)
+            ? toDateTimeInTimezone(json.registrationCloseAt, courseTimezone)
             : null,
           isPublished: json.isPublished ?? false,
           isArchived: false,

@@ -6,7 +6,7 @@ import { withCourseAuth } from '@/lib/api/with-auth';
 import { canManageCourse } from '@/lib/permissions';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { sumProblemPoints } from '@/lib/course-format';
-import { resolveUserTimezone } from '@/lib/user-timezone';
+import { resolveCourseTimezone } from '@/lib/course-timezone';
 import { toEndOfDayInTimezone } from '@/lib/date-utils';
 import { computeLateSubmissionState } from '@/lib/assignment-late-window';
 import { z } from 'zod';
@@ -244,7 +244,8 @@ export const PUT = withCourseAuth(
     }
 
     const data = await req.json();
-    const userTimezone = await resolveUserTimezone(user.id);
+    // Deadlines are anchored to the course's timezone, not the actor's.
+    const courseTimezone = await resolveCourseTimezone(courseId);
 
     // `data.isPublished` is the requested NEXT state, so `=== false` means "unpublish".
     // Block unpublishing an assignment that already has submissions or grades.
@@ -301,7 +302,7 @@ export const PUT = withCourseAuth(
 
     try {
       const dueDate = data.dueDate
-        ? toEndOfDayInTimezone(data.dueDate, userTimezone)
+        ? toEndOfDayInTimezone(data.dueDate, courseTimezone)
         : existing.dueDate;
 
       const lateState = computeLateSubmissionState({
@@ -310,7 +311,7 @@ export const PUT = withCourseAuth(
         existingAllowLate: existing.allowLateSubmissions,
         existingLateCutoff: existing.lateCutoff,
         dueDate,
-        userTimezone,
+        timezone: courseTimezone,
       });
 
       if (!lateState.ok) {
@@ -324,7 +325,7 @@ export const PUT = withCourseAuth(
         data: {
           title: data.title,
           description: data.description,
-          dueDate: toEndOfDayInTimezone(data.dueDate, userTimezone),
+          dueDate: toEndOfDayInTimezone(data.dueDate, courseTimezone),
           allowLateSubmissions,
           lateCutoff,
           isPublished: data.isPublished,
@@ -408,7 +409,8 @@ export const PATCH = withCourseAuth(
     }
 
     const data = await req.json();
-    const userTimezone = await resolveUserTimezone(user.id);
+    // Deadlines are anchored to the course's timezone, not the actor's.
+    const courseTimezone = await resolveCourseTimezone(courseId);
 
     // `data.isPublished` is the requested NEXT state, so `=== false` means "unpublish".
     if (data.isPublished === false) {
@@ -465,7 +467,7 @@ export const PATCH = withCourseAuth(
     try {
       const effectiveDueDate =
         data.dueDate !== undefined
-          ? toEndOfDayInTimezone(data.dueDate, userTimezone)
+          ? toEndOfDayInTimezone(data.dueDate, courseTimezone)
           : existing.dueDate;
 
       const lateState = computeLateSubmissionState({
@@ -474,7 +476,7 @@ export const PATCH = withCourseAuth(
         existingAllowLate: existing.allowLateSubmissions,
         existingLateCutoff: existing.lateCutoff,
         dueDate: effectiveDueDate,
-        userTimezone,
+        timezone: courseTimezone,
       });
 
       if (!lateState.ok) {

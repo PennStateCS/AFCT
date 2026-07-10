@@ -92,6 +92,12 @@ model Course {
   // already be archived, so a deleted course is always archived too.
   deletedAt DateTime?
 
+  // The canonical IANA timezone that anchors this course's deadlines. Staff-entered
+  // wall-times (due dates, late cutoffs) are interpreted in this zone and stored as
+  // UTC, so a deadline means the same instant for every student. Defaults to the
+  // system timezone at creation.
+  timezone String @default("UTC")
+
   // How the empty string is displayed in automata/languages for this course.
   emptyStringNotation EmptyStringNotation @default(EPSILON)
 

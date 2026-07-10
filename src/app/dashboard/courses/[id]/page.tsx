@@ -94,6 +94,7 @@ export default async function AdminCoursePage({ params }: Props) {
     isPublished: course.isPublished,
     isArchived: course.isArchived,
     deletedAt: course.deletedAt, // always null here — deleted courses are filtered out
+    timezone: course.timezone,
     emptyStringNotation: course.emptyStringNotation,
     createdAt: course.createdAt,
     updatedAt: course.updatedAt,
