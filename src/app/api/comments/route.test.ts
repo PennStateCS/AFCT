@@ -429,7 +429,7 @@ describe('DELETE /api/comments', () => {
     expect(res.status).toBe(404);
   });
 
-  it('allows owner to delete own comment', async () => {
+  it('denies a student deleting their own comment (comments are immutable)', async () => {
     authMock.mockResolvedValue({ user: { id: 'owner-id', role: 'STUDENT' } });
     prismaMock.comment.findUnique.mockResolvedValue({
       id: 'cm1',
@@ -439,12 +439,14 @@ describe('DELETE /api/comments', () => {
       roster: { user: { id: 'owner-id' } },
       assignment: { courseId: 'c1' },
     });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' }); // not staff
 
     const req = new NextRequest('http://localhost/api/comments?commentId=cm1', {
       method: 'DELETE',
     });
     const res = await DELETE(req);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(403);
+    expect(prismaMock.comment.delete).not.toHaveBeenCalled();
   });
 
   it('allows faculty to delete any comment', async () => {
