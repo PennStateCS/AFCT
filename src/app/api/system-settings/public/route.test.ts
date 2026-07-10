@@ -24,6 +24,7 @@ describe('GET /api/system-settings/public', () => {
       timezone: 'UTC',
       allowSignup: true,
       sessionTimeoutMinutes: 60,
+      clock24Hour: false,
       hcaptchaSiteKey: null,
     });
   });
@@ -44,6 +45,7 @@ describe('GET /api/system-settings/public', () => {
       timezone: 'America/New_York',
       allowSignup: false,
       sessionTimeoutMinutes: 45,
+      clock24Hour: false,
       hcaptchaSiteKey: null,
     });
   });
