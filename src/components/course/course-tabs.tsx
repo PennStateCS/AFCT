@@ -49,7 +49,7 @@ const LIST_CLASS =
 const TRIGGER_CLASS = [
   'text-muted-foreground hover:text-foreground',
   'data-[state=active]:text-teal-600 dark:data-[state=active]:text-teal-400 data-[state=active]:font-semibold',
-  'inline-flex h-auto flex-none items-center gap-1.5 whitespace-nowrap',
+  'inline-flex h-auto min-w-36 flex-none items-center justify-center gap-1.5 whitespace-nowrap',
   'rounded-none border-0 border-b-2 border-transparent bg-transparent px-1 py-3 text-sm font-medium',
   'transition-colors',
   'data-[state=active]:border-teal-600 dark:data-[state=active]:border-teal-400',
@@ -101,12 +101,7 @@ export function CourseTabPanel({
   children: ReactNode;
 }) {
   return (
-    <TabsContent
-      id={`panel-${value}`}
-      aria-labelledby={`tab-${value}`}
-      value={value}
-      className="animate-fade-in-up transition-opacity duration-300"
-    >
+    <TabsContent id={`panel-${value}`} aria-labelledby={`tab-${value}`} value={value}>
       {active ? <div className="mb-8 space-y-6">{children}</div> : null}
     </TabsContent>
   );
