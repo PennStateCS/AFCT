@@ -90,3 +90,6 @@ private/uploads/*
 *.tmp
 *.temp
 .cache/
+
+# stray local source archive
+src.zip
