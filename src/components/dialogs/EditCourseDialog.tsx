@@ -173,7 +173,7 @@ export function EditCourseDialog({ course, open, setOpen, onSave }: EditCourseDi
 
   const onSubmitWrapper = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    handleSubmit((data) => onSubmit(data as unknown as FormValues))(e);
+    void handleSubmit((data) => onSubmit(data as unknown as FormValues))(e);
   };
 
   const resetForm = () =>

@@ -147,6 +147,13 @@ function ensureWorkers() {
 }
 
 
+// Re-schedule a self-managing async task (each handles its own errors internally),
+// marking the promise as intentionally not awaited so setTimeout's void-return
+// contract is honored.
+function scheduleAsync(task: () => Promise<void>, ms: number): void {
+  setTimeout(() => void task(), ms);
+}
+
 // Periodically pull the queue settings so concurrency / attempt limits can be
 // changed at runtime. On any error we keep the last known values.
 async function refreshQueueSettings() {
@@ -158,7 +165,7 @@ async function refreshQueueSettings() {
   } catch (error) {
     console.error('[SubmissionWorker] Settings refresh error:', error);
   } finally {
-    setTimeout(refreshQueueSettings, SETTINGS_REFRESH_MS);
+    scheduleAsync(refreshQueueSettings, SETTINGS_REFRESH_MS);
   }
 }
 
@@ -188,7 +195,7 @@ async function reapStuckSubmissions() {
       error: error instanceof Error ? error.message : String(error),
     });
   } finally {
-    setTimeout(reapStuckSubmissions, REAP_INTERVAL_MS);
+    scheduleAsync(reapStuckSubmissions, REAP_INTERVAL_MS);
   }
 }
 
@@ -226,7 +233,7 @@ async function runWorkerLoop() {
 
     // No work to be done
     if (nextSubmission === null) {
-      setTimeout(runWorkerLoop, 3_000); // Larger sleep bececause there is no rush
+      scheduleAsync(runWorkerLoop, 3_000); // Larger sleep bececause there is no rush
       return;
     }
 
@@ -253,7 +260,7 @@ async function runWorkerLoop() {
           });
         }
       }
-      setTimeout(runWorkerLoop, 100);
+      scheduleAsync(runWorkerLoop, 100);
       return;
     }
 
@@ -266,7 +273,7 @@ async function runWorkerLoop() {
 
     // count === 0 means another loop/instance beat us to it. Move on.
     if (claimed.count === 0) {
-      setTimeout(runWorkerLoop, 100); // Small sleep because it could be full
+      scheduleAsync(runWorkerLoop, 100); // Small sleep because it could be full
       return;
     }
 
@@ -275,14 +282,14 @@ async function runWorkerLoop() {
     await evaluateSubmission(nextSubmission.id);
 
     // Move to next check
-    setTimeout(runWorkerLoop, 100); // Small sleep as code ran and could be full
+    scheduleAsync(runWorkerLoop, 100); // Small sleep as code ran and could be full
     return;
   } catch (error) {
     console.error("[SubmissionWorker] Database or loop error:", error);
     await logQueueEvent('SUBMISSION_QUEUE_ERROR', 'ERROR', {
       error: error instanceof Error ? error.message : String(error),
     });
-    setTimeout(runWorkerLoop, 5_000); // Super long sleep due to error
+    scheduleAsync(runWorkerLoop, 5_000); // Super long sleep due to error
     return;
   }
 }

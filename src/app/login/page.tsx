@@ -64,7 +64,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     let active = true;
-    (async () => {
+    void (async () => {
       try {
         const res = await fetch(apiPaths.systemSettingsPublic(), { cache: 'no-store' });
         if (!res.ok) return;

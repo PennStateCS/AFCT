@@ -563,7 +563,7 @@ export default function AssignmentSubmissions({
         }));
         setCommentTexts((prev) => ({ ...prev, [problemId]: '' }));
         // Keep the cached review data fresh after the optimistic local update.
-        queryClient.invalidateQueries({
+        void queryClient.invalidateQueries({
           queryKey: [
             'course',
             courseId,
@@ -600,7 +600,7 @@ export default function AssignmentSubmissions({
           [problemId]: prev[problemId]?.filter((c) => c.id !== commentId) || [],
         }));
         // Keep the cached review data fresh after the optimistic local update.
-        queryClient.invalidateQueries({
+        void queryClient.invalidateQueries({
           queryKey: [
             'course',
             courseId,
@@ -705,7 +705,7 @@ export default function AssignmentSubmissions({
         // Keep the cached review data fresh after the optimistic local updates.
         // NOTE: deliberately NOT invalidating the summary query, which would
         // clobber the optimistic studentGradeStatuses update above.
-        queryClient.invalidateQueries({
+        void queryClient.invalidateQueries({
           queryKey: [
             'course',
             courseId,
