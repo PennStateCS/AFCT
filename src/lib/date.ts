@@ -90,3 +90,54 @@ export function formatWeekdayInTimeZone(value: DateInput, timeZone = 'UTC') {
     weekday: 'long',
   }).format(date);
 }
+
+/** The short zone abbreviation (e.g. "EST", "GMT+2") for an instant in a zone. */
+export function zoneAbbrev(value: DateInput, timeZone = 'UTC'): string {
+  const date = toDate(value);
+  if (!Number.isFinite(date.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    timeZoneName: 'short',
+  }).formatToParts(date);
+  return parts.find((part) => part.type === 'timeZoneName')?.value ?? '';
+}
+
+export type DualDeadline = {
+  /** The deadline formatted in the viewer's local zone, with its abbreviation. */
+  local: string;
+  /** The deadline in the course's zone (with abbreviation), or null when it matches the viewer's. */
+  course: string | null;
+};
+
+/**
+ * A deadline shown in **both** the viewer's local zone and the course's zone, so a
+ * student in a different timezone can't misjudge the cutoff. When the two zones match
+ * (or no course zone is given), `course` is null and only `local` is meaningful.
+ */
+export function formatDeadlineParts(
+  value: DateInput,
+  viewerZone: string,
+  courseZone?: string | null,
+): DualDeadline {
+  const local = `${formatDateTimeInTimeZone(value, viewerZone)} ${zoneAbbrev(value, viewerZone)}`.trim();
+  if (!courseZone || courseZone === viewerZone) {
+    return { local, course: null };
+  }
+  const course = `${formatDateTimeInTimeZone(value, courseZone)} ${zoneAbbrev(value, courseZone)}`.trim();
+  return { local, course };
+}
+
+/**
+ * Single-line dual-zone deadline string, e.g.
+ * `11/05/26 11:59 PM EST (your time) · 08:59 PM PST (course time)`.
+ * Falls back to just the local time when the zones match.
+ */
+export function formatDeadlineDual(
+  value: DateInput,
+  viewerZone: string,
+  courseZone?: string | null,
+): string {
+  const { local, course } = formatDeadlineParts(value, viewerZone, courseZone);
+  if (!course) return local;
+  return `${local} (your time) · ${course} (course time)`;
+}
