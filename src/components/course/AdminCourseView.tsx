@@ -43,6 +43,8 @@ interface AdminCourseViewProps {
   onProblemDelete: (problemId: string) => void;
   onRefreshCourse: () => void;
   onCourseSaved: (updated: Partial<Course>) => void;
+  onPublishToggle: (checked: boolean) => void;
+  onArchiveToggle: (checked: boolean) => void;
 }
 
 export function AdminCourseView({
@@ -63,6 +65,8 @@ export function AdminCourseView({
   onRefreshCourse,
   onBulkEnroll,
   onCourseSaved,
+  onPublishToggle,
+  onArchiveToggle,
 }: AdminCourseViewProps) {
   const { timezone } = useEffectiveTimezone();
   const enrolled = course.enrolled ?? [];
@@ -327,7 +331,12 @@ export function AdminCourseView({
                     This course is archived and read-only. Unarchive it to make changes.
                   </p>
                 ) : null}
-                <CourseSettingsForm course={course} onSaved={onCourseSaved} />
+                <CourseSettingsForm
+                  course={course}
+                  onSaved={onCourseSaved}
+                  onPublishToggle={onPublishToggle}
+                  onArchiveToggle={onArchiveToggle}
+                />
               </CardContent>
             </Card>
           </div>
