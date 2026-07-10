@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy';
 
 /**
@@ -116,11 +117,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, message: 'Password updated successfully' });
   } catch (err) {
     console.error('[CHANGE_PASSWORD_ERROR]', err);
-    await createEnhancedActivityLog(prisma, req, {
+    await logError(req, {
       userId: actorId,
       action: 'CHANGE_PASSWORD_ERROR',
-      severity: 'ERROR',
-      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+      error: err,
     });
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }

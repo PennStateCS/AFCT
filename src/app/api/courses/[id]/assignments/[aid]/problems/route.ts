@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { ProblemTypeEnum } from '@/schemas/problem';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { z } from 'zod';
@@ -253,8 +254,8 @@ export const POST = withCourseAuth(
             linksWithSubmissions: linksWithSubmissions.length,
           },
         });
-      } catch (logError) {
-        console.warn('Failed to log activity:', logError);
+      } catch (logErr) {
+        console.warn('Failed to log activity:', logErr);
         // Don't fail the whole request if logging fails
       }
 
@@ -277,11 +278,10 @@ export const POST = withCourseAuth(
     } catch (err) {
       // Handle unexpected errors
       console.error('Failed to update assignment problems:', err);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: null,
         action: 'ASSIGNMENT_ADD_PROBLEMS_ERROR',
-        severity: 'ERROR',
-        metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+        error: err,
       });
       return NextResponse.json({ error: 'Failed to update assignment problems.' }, { status: 500 });
     }
@@ -401,11 +401,10 @@ export const DELETE = withCourseAuth(
       return NextResponse.json({ success: true, problems });
     } catch (error) {
       console.error('Error removing problem from assignment:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'ASSIGNMENT_REMOVE_PROBLEM_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
       });
       return NextResponse.json({ error: 'Failed to remove problem.' }, { status: 500 });
     }

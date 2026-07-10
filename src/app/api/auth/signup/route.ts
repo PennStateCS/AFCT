@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
 import { createEnhancedActivityLog, inferSeverity } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import {
   applyBotFriction,
   evaluateSignupRateLimit,
@@ -157,12 +158,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ message: 'User created', userId: newUser.id }, { status: 201 });
   } catch (err) {
     console.error('[SIGNUP_ERROR]', err);
-    await createEnhancedActivityLog(prisma, req, {
+    await logError(req, {
       userId: null,
       action: 'SIGNUP_ERROR',
-      severity: 'ERROR',
+      error: err,
       category: 'USER',
-      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
     });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

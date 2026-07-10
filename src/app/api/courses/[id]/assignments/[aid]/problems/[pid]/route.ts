@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { logError } from '@/lib/api/activity';
 
 const AssignmentProblemSettingsSchema = z.object({
   maxPoints: z.number().min(0),
@@ -131,18 +132,17 @@ export const PUT = withCourseAuth(
             problemTitle: link.problem.title,
           },
         });
-      } catch (logError) {
-        console.warn('Failed to log assignment problem update:', logError);
+      } catch (logErr) {
+        console.warn('Failed to log assignment problem update:', logErr);
       }
 
       return NextResponse.json({ success: true, assignmentProblem: updated });
     } catch (error) {
       console.error('Failed to update assignment problem settings:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: null,
         action: 'ASSIGNMENT_PROBLEM_SETTINGS_UPDATE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
       });
       return NextResponse.json(
         { error: 'Failed to update assignment problem settings.' },

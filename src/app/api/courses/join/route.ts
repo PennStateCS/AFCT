@@ -16,6 +16,7 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { NextResponse } from 'next/server';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { isAdmin } from '@/lib/permissions';
 import { parseValidDate } from '@/lib/date';
 
@@ -137,12 +138,11 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     console.error('POST /api/courses/join error:', error);
-    await createEnhancedActivityLog(prisma, req, {
+    await logError(req, {
       userId,
       action: 'COURSE_JOIN_ERROR',
-      severity: 'ERROR',
+      error,
       category: 'COURSE',
-      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
     });
     return NextResponse.json({ error: 'Failed to join the course.' }, { status: 500 });
   }

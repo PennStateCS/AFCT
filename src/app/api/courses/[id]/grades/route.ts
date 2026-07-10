@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { withCourseAuth } from '@/lib/api/with-auth';
 
 /**
@@ -60,12 +61,11 @@ export const POST = withCourseAuth(
       return NextResponse.json({ success: true });
     } catch (error) {
       console.error('POST /api/courses/[id]/grades (export log) error:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'GRADES_EXPORT_ERROR',
-        severity: 'ERROR',
+        error,
         courseId,
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
       });
       return NextResponse.json({ error: 'Failed to record export' }, { status: 500 });
     }

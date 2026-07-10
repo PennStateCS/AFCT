@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { canManageCourse } from '@/lib/permissions';
 
 /**
@@ -129,11 +130,10 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
     return NextResponse.json({ success: true, submission: updated }, { status: 202 });
   } catch (error) {
     console.error('POST /api/submissions/[id]/rerun error:', error);
-    await createEnhancedActivityLog(prisma, req, {
+    await logError(req, {
       userId: actorId,
       action: 'SUBMISSION_RERUN_ERROR',
-      severity: 'ERROR',
-      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+      error,
     });
     return NextResponse.json({ error: 'Failed to rerun submission' }, { status: 500 });
   }

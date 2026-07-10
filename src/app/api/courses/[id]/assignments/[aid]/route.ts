@@ -5,6 +5,7 @@ import { RoleEnum } from '@/schemas/user';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { canManageCourse } from '@/lib/permissions';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { sumProblemPoints } from '@/lib/course-format';
 import { resolveCourseTimezone } from '@/lib/course-timezone';
 import { toEndOfDayInTimezone } from '@/lib/date-utils';
@@ -356,11 +357,10 @@ export const PUT = withCourseAuth(
       return NextResponse.json(updated);
     } catch (error) {
       console.error('Assignment update failed:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'ASSIGNMENT_UPDATE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
       });
       return NextResponse.json({ error: 'Failed to update assignment' }, { status: 500 });
     }
@@ -535,11 +535,10 @@ export const PATCH = withCourseAuth(
       return NextResponse.json(updated);
     } catch (error) {
       console.error('Assignment partial update failed:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'ASSIGNMENT_UPDATE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
       });
       return NextResponse.json({ error: 'Failed to update assignment' }, { status: 500 });
     }
@@ -620,11 +619,10 @@ export const DELETE = withCourseAuth(
       return NextResponse.json({ success: true });
     } catch (error) {
       console.error('Assignment delete failed:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'ASSIGNMENT_DELETE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
       });
       return NextResponse.json({ error: 'Failed to delete assignment' }, { status: 500 });
     }

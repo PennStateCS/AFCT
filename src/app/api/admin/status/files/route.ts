@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { withAdminAuth } from '@/lib/api/with-auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { collectAbandonedFiles, deleteAbandonedFile } from '@/lib/status/files';
 
 export const runtime = 'nodejs';
@@ -75,11 +76,10 @@ export const DELETE = withAdminAuth(
       return NextResponse.json({ ok: true });
     } catch (err) {
       console.error('Delete abandoned file error:', err);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: actorId,
         action: 'ABANDONED_FILES_DELETE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+        error: err,
       });
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }

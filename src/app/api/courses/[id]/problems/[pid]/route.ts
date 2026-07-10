@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { ProblemType } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 import { withCourseAuth } from '@/lib/api/with-auth';
@@ -171,11 +172,10 @@ export const PUT = withCourseAuth(
       return NextResponse.json(updatedProblem);
     } catch (err) {
       console.error('Problem update error:', err);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'PROBLEM_UPDATE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+        error: err,
       });
       return NextResponse.json({ error: 'Server error' }, { status: 500 });
     }
@@ -256,11 +256,10 @@ export const DELETE = withCourseAuth(
       return NextResponse.json({ success: true });
     } catch (err) {
       console.error('Problem deletion error:', err);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'PROBLEM_DELETE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+        error: err,
       });
       return NextResponse.json({ error: 'Server error' }, { status: 500 });
     }

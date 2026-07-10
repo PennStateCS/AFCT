@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcrypt';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy';
 import { withAdminAuth } from '@/lib/api/with-auth';
 import { normalizeEmail, isValidEmail } from '@/lib/email';
@@ -217,11 +218,10 @@ export const POST = withAdminAuth(
       });
     } catch (error) {
       console.error('[USERS_BULK_POST_ERROR]', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: null,
         action: 'USER_BULK_CREATE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
       });
       return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }

@@ -8,6 +8,7 @@ import { writeFile, unlink, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import { randomUUID } from 'crypto';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { formBool } from '@/lib/api/request';
@@ -169,12 +170,11 @@ export async function POST(req: Request) {
     return NextResponse.json(updatedUser, { status: 200 });
   } catch (error) {
     console.error('[PROFILE_UPDATE_ERROR]', error);
-    await createEnhancedActivityLog(prisma, req, {
+    await logError(req, {
       userId: session.user.id,
       action: 'PROFILE_UPDATE_ERROR',
-      severity: 'ERROR',
+      error,
       category: 'USER',
-      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
     });
     return NextResponse.json({ error: 'Failed to update profile.' }, { status: 500 });
   }

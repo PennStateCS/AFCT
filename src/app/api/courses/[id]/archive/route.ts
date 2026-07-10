@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { canArchiveCourse } from '@/lib/course-status-checks';
 import { isAdmin } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
@@ -110,11 +111,10 @@ export const PATCH = withCourseAuth(
       return NextResponse.json(updated);
     } catch (error) {
       console.error('Failed PATCH /api/courses/[id]/archive error:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'COURSE_ARCHIVE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
       });
       return NextResponse.json({ error: 'Failed to update archive status' }, { status: 500 });
     }

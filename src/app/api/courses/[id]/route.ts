@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { canArchiveCourse, canUnpublishCourse } from '@/lib/course-status-checks';
 import { isAdmin } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
@@ -708,11 +709,10 @@ export const PUT = withCourseAuth(
       });
     } catch (error) {
       console.error('PUT /api/courses/[id] error:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: session?.user?.id ?? null,
         action: 'COURSE_UPDATE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
       });
       return NextResponse.json({ error: 'Failed to update course' }, { status: 500 });
     }
@@ -799,11 +799,10 @@ export const DELETE = withCourseAuth(
       return new NextResponse(null, { status: 204 });
     } catch (error) {
       console.error('DELETE /api/courses/[id] error:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: session?.user?.id ?? null,
         action: 'COURSE_DELETE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
       });
       return apiError(500, 'Internal Server Error');
     }
