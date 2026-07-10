@@ -118,6 +118,7 @@ describe('Navbar', () => {
           lastName: 'Lovelace',
           name: 'Ada Lovelace',
           isAdmin: true,
+          avatar: 'ada.png',
         },
       },
     });
@@ -130,9 +131,8 @@ describe('Navbar', () => {
 
     expect(screen.getByText('Course Alpha')).toBeInTheDocument();
     expect(screen.getByText('Assignment Beta')).toBeInTheDocument();
-    // The name and profile picture are no longer shown; only the Admin badge.
-    expect(screen.queryByText('Ada Lovelace')).toBeNull();
-    expect(screen.queryByLabelText('User avatar')).toBeNull();
+    expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ada Lovelace account menu' })).toBeInTheDocument();
     expect(screen.getByText('Admin')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Dark'));
