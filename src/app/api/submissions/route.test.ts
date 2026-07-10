@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { NextRequest } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { Prisma } from '@prisma/client';
 
 // Submissions are no longer evaluated synchronously. POST validates the request,
@@ -205,7 +205,10 @@ describe('POST /api/submissions', () => {
 
   it('does not cap staff test-submissions', async () => {
     // A faculty member submitting to test — exempt from the cap even at/over the limit.
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY', course: { isPublished: true } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      role: 'FACULTY',
+      course: { isPublished: true },
+    });
     prismaMock.submission.count.mockResolvedValue(5);
 
     const res = await POST(makeRequest(makeFormData()));
@@ -244,7 +247,10 @@ describe('POST /api/submissions', () => {
       isPublished: false,
     });
     // Enrolled student (roster role STUDENT): access passes, manage does not.
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
 
     const res = await POST(makeRequest(makeFormData()));
 

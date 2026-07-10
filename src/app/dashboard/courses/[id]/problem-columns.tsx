@@ -1,7 +1,7 @@
 'use client';
 
 // problem-columns.tsx
-import { ColumnDef } from '@tanstack/react-table';
+import type { ColumnDef } from '@tanstack/react-table';
 import type { Problem } from '@prisma/client';
 import { useState } from 'react';
 import { ChevronDown, Pencil, Trash2, FileText, Eye } from 'lucide-react';

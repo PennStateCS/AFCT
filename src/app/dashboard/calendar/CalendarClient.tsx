@@ -12,7 +12,8 @@ import { DueDateModule } from '@/components/modules/DueDateModule';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { Button } from '@/components/ui/button';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
-import { CalendarAssignment, getDateKeyInTimeZone, getMonthRangeIso } from '@/lib/calendar-shared';
+import type { CalendarAssignment } from '@/lib/calendar-shared';
+import { getDateKeyInTimeZone, getMonthRangeIso } from '@/lib/calendar-shared';
 import { apiPaths } from '@/lib/api-paths';
 
 // Fetch assignments for courses the current user is enrolled in between given ISO start/end

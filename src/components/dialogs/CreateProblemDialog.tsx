@@ -1,6 +1,6 @@
 'use client';
 
-import { Problem } from '@prisma/client';
+import type { Problem } from '@prisma/client';
 import {
   Dialog,
   DialogContent,
@@ -29,10 +29,10 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 
+import type { ProblemTypeEnum } from '@/schemas/problem';
 import {
   CreateProblemSchema,
   ProblemFormSchema,
-  ProblemTypeEnum,
   type CreateProblemInput,
   type ProblemFormRaw,
 } from '@/schemas/problem';

@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useState, useEffect, useRef } from 'react';
-import { EnrollableUser } from '@/types/course';
+import type { EnrollableUser } from '@/types/course';
 import { apiPaths } from '@/lib/api-paths';
 
 type Props = {

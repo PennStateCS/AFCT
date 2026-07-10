@@ -1,4 +1,4 @@
-import { PrismaClient, CourseRole } from '@prisma/client';
+import type { PrismaClient, CourseRole } from '@prisma/client';
 
 /**
  * Add a role field to every item in the list.

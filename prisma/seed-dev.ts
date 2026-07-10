@@ -7,7 +7,7 @@
  * - Randomized rosters (instructors/TAs/students)
  * - Problems for each course
  */
-import { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 
 // Seed-only category used to group people and drive roster assignment. Users no
 // longer carry a global role; admins are flagged via `isAdmin`.
@@ -248,10 +248,7 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
     if (oliver?.id) {
       const targetCourses = courses.filter((course, index) => {
         const seedCourse = courseData[index];
-        return (
-          course.id === charlesCmpen271Course?.id ||
-          seedCourse?.code === 'CMPSC 131'
-        );
+        return course.id === charlesCmpen271Course?.id || seedCourse?.code === 'CMPSC 131';
       });
 
       for (const course of targetCourses) {
@@ -341,7 +338,9 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
 
   console.log('[seed] development: creating assignments for courses');
   // Create assignments for each course without duplicates.
-  const createdAssignments: { [courseId: string]: Array<{ courseId: string, id: string; title: string }> } = {};
+  const createdAssignments: {
+    [courseId: string]: Array<{ courseId: string; id: string; title: string }>;
+  } = {};
 
   try {
     // Prepare all assignment data for batch insertion
@@ -508,51 +507,55 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
       });
 
       const oneDayMs = 24 * 60 * 60 * 1000;
-      const submissionsToCreate = await Promise.all(flipFlopsProblems.flatMap(async (assignmentProblem, index) => {
-        const submittedBase = new Date(Date.now() - (flipFlopsProblems.length - index + 2) * oneDayMs);
-        const originalFileName = assignmentProblem.problem.originalFileName ?? 'submission.jff';
-        const extension = path.extname(originalFileName) || '.jff';
+      const submissionsToCreate = await Promise.all(
+        flipFlopsProblems.flatMap(async (assignmentProblem, index) => {
+          const submittedBase = new Date(
+            Date.now() - (flipFlopsProblems.length - index + 2) * oneDayMs,
+          );
+          const originalFileName = assignmentProblem.problem.originalFileName ?? 'submission.jff';
+          const extension = path.extname(originalFileName) || '.jff';
 
-        const createStoredSubmission = async () => {
-          const storedFileName = `${randomUUID()}${extension}`;
-          const sourcePath = path.join(submissionSourceDir, originalFileName);
-          const destinationPath = path.join(submissionDestinationDir, storedFileName);
+          const createStoredSubmission = async () => {
+            const storedFileName = `${randomUUID()}${extension}`;
+            const sourcePath = path.join(submissionSourceDir, originalFileName);
+            const destinationPath = path.join(submissionDestinationDir, storedFileName);
 
-          await fs.copyFile(sourcePath, destinationPath);
-          return {
-            fileName: storedFileName,
-            originalFileName,
+            await fs.copyFile(sourcePath, destinationPath);
+            return {
+              fileName: storedFileName,
+              originalFileName,
+            };
           };
-        };
 
-        const firstStoredSubmission = await createStoredSubmission();
-        const revisedStoredSubmission = await createStoredSubmission();
+          const firstStoredSubmission = await createStoredSubmission();
+          const revisedStoredSubmission = await createStoredSubmission();
 
-        return [
-          {
-            courseId: flipFlopsAssignment.courseId,
-            assignmentId: flipFlopsAssignment.id,
-            problemId: assignmentProblem.problemId,
-            studentId: oliverId,
-            submittedAt: submittedBase,
-            correct: false,
-            feedback: `Initial attempt for ${assignmentProblem.problem.title} needs another revision.`,
-            fileName: firstStoredSubmission.fileName,
-            originalFileName: firstStoredSubmission.originalFileName,
-          },
-          {
-            courseId: flipFlopsAssignment.courseId,
-            assignmentId: flipFlopsAssignment.id,
-            problemId: assignmentProblem.problemId,
-            studentId: oliverId,
-            submittedAt: new Date(submittedBase.getTime() + 6 * 60 * 60 * 1000),
-            correct: true,
-            feedback: `${assignmentProblem.problem.title} submission accepted after revision.`,
-            fileName: revisedStoredSubmission.fileName,
-            originalFileName: revisedStoredSubmission.originalFileName,
-          },
-        ];
-      })).then((submissionGroups) => submissionGroups.flat());
+          return [
+            {
+              courseId: flipFlopsAssignment.courseId,
+              assignmentId: flipFlopsAssignment.id,
+              problemId: assignmentProblem.problemId,
+              studentId: oliverId,
+              submittedAt: submittedBase,
+              correct: false,
+              feedback: `Initial attempt for ${assignmentProblem.problem.title} needs another revision.`,
+              fileName: firstStoredSubmission.fileName,
+              originalFileName: firstStoredSubmission.originalFileName,
+            },
+            {
+              courseId: flipFlopsAssignment.courseId,
+              assignmentId: flipFlopsAssignment.id,
+              problemId: assignmentProblem.problemId,
+              studentId: oliverId,
+              submittedAt: new Date(submittedBase.getTime() + 6 * 60 * 60 * 1000),
+              correct: true,
+              feedback: `${assignmentProblem.problem.title} submission accepted after revision.`,
+              fileName: revisedStoredSubmission.fileName,
+              originalFileName: revisedStoredSubmission.originalFileName,
+            },
+          ];
+        }),
+      ).then((submissionGroups) => submissionGroups.flat());
 
       const createdSubmissions = await prisma.submission.createMany({
         data: submissionsToCreate,
@@ -563,7 +566,10 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
       );
     }
   } catch (error) {
-    console.error('[seed] development: error creating Flip Flops submissions for Oliver Green', error);
+    console.error(
+      '[seed] development: error creating Flip Flops submissions for Oliver Green',
+      error,
+    );
     throw error;
   }
 
