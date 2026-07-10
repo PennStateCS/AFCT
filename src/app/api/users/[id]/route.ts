@@ -338,6 +338,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
       category: 'USER',
       metadata: {
         actorId,
+        targetUserId: userId,
         deletedUserId: userId,
         deletedUserEmail: user?.email ?? null,
         deletedUserName: [user?.firstName, user?.lastName].filter(Boolean).join(' ') || null,
