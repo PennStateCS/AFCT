@@ -23,6 +23,7 @@ import {
 } from './seed-data';
 import {
   assignCourseRosters,
+  getLifecycleDates,
   getTermDates,
   getTermForDate,
   getTermSequence,
@@ -135,7 +136,12 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
   const termSequence = getTermSequence(currentTerm, currentYear);
 
   // Assign each course to current/next/after term, repeating for extra courses.
-  const courseDates = courseData.map((_, index) => {
+  // Lifecycle-pinned courses ignore the term sequence and use dates relative to now.
+  const courseDates = courseData.map((courseSeed, index) => {
+    if (courseSeed.lifecycle) {
+      return getLifecycleDates(courseSeed.lifecycle, now);
+    }
+
     // Index is taken modulo the length of the self-built sequence, so it is always in range.
     const term = termSequence[index % termSequence.length]!;
     const dates = getTermDates(term.term, term.year);
@@ -154,7 +160,11 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
     return { startDate, endDate };
   });
 
-  const courseSemesters = courseData.map((_, index) => {
+  const courseSemesters = courseData.map((courseSeed, index) => {
+    if (courseSeed.lifecycle) {
+      const { startDate } = getLifecycleDates(courseSeed.lifecycle, now);
+      return `${getTermForDate(startDate)} ${startDate.getFullYear()}`;
+    }
     // Index is taken modulo the length of the self-built sequence, so it is always in range.
     const term = termSequence[index % termSequence.length]!;
     return `${term.term} ${term.year}`;
@@ -180,6 +190,7 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
           registrationCloseAt: dates.endDate,
           isPublished: courseSeed.isPublished,
           isArchived: courseSeed.isArchived,
+          timezone: 'America/New_York',
         },
         create: {
           name: courseSeed.title,
@@ -193,6 +204,7 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
           registrationCloseAt: dates.endDate,
           isPublished: courseSeed.isPublished,
           isArchived: courseSeed.isArchived,
+          timezone: 'America/New_York',
         },
       });
     }),
@@ -245,10 +257,28 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
       await upsertRoster(prisma, charlesCmpen271Course.id, charles.id, 'FACULTY');
     }
 
+    // Roster the marked faculty (Charles) on their lifecycle courses so he always
+    // has a past, current, future, and archived course to test against.
+    for (let index = 0; index < courseData.length; index++) {
+      const seedCourse = courseData[index];
+      const course = courses[index];
+      if (!seedCourse?.facultyEmail || !course) continue;
+      const facultyUser = facultyData.find((faculty) => faculty.email === seedCourse.facultyEmail);
+      if (facultyUser?.id) {
+        await upsertRoster(prisma, course.id, facultyUser.id, 'FACULTY');
+      }
+    }
+
     if (oliver?.id) {
+      // Enroll Oliver in CMPEN 271, CMPSC 131, and Charles's current lifecycle course
+      // so there's a known student sharing a running course with him.
       const targetCourses = courses.filter((course, index) => {
         const seedCourse = courseData[index];
-        return course.id === charlesCmpen271Course?.id || seedCourse?.code === 'CMPSC 131';
+        return (
+          course.id === charlesCmpen271Course?.id ||
+          seedCourse?.code === 'CMPSC 131' ||
+          seedCourse?.regCode === 'CURR01'
+        );
       });
 
       for (const course of targetCourses) {

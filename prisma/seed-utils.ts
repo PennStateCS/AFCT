@@ -133,6 +133,32 @@ export const assignCourseRosters = async (
     }
   }
 };
+/** A course's position relative to "now", independent of the academic term. */
+export type CourseLifecycle = 'past' | 'current' | 'future' | 'archived';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Start/end dates for a course pinned to a lifecycle state relative to `now`, so
+ * the dev database always has a past, current, future, and archived course no
+ * matter when the seed runs (the rolling academic term only moves forward, so it
+ * never produces a past course on its own).
+ */
+export const getLifecycleDates = (lifecycle: CourseLifecycle, now: Date) => {
+  const from = (days: number) => new Date(now.getTime() + days * DAY_MS);
+  const ranges: Record<CourseLifecycle, { startDate: Date; endDate: Date }> = {
+    // Ended a few months ago.
+    past: { startDate: from(-210), endDate: from(-120) },
+    // Started recently, still running.
+    current: { startDate: from(-30), endDate: from(60) },
+    // Hasn't started yet.
+    future: { startDate: from(45), endDate: from(135) },
+    // A long-finished course kept around only to test the archived state.
+    archived: { startDate: from(-400), endDate: from(-310) },
+  };
+  return ranges[lifecycle];
+};
+
 export type Term = 'Spring' | 'Summer' | 'Fall';
 
 /**
