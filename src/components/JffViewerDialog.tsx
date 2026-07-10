@@ -657,13 +657,13 @@ export function JffCytoscapeViewer({
         cy.userPanningEnabled(true);
 
         // Expose fitAndResize for Fit button and initial layout
-        onResizeRef.current = fitAndResize;
+        onResizeRef.current = () => void fitAndResize();
         setTimeout(() => {
           onResizeRef.current?.();
         }, 0);
 
         // keep size/zoom coherent if dialog resizes
-        const debouncedFitAndResize = debounce(fitAndResize, 160);
+        const debouncedFitAndResize = debounce(() => void fitAndResize(), 160);
         window.addEventListener('resize', debouncedFitAndResize, { passive: true });
         (cy as any).__onResize = debouncedFitAndResize;
 
@@ -769,7 +769,7 @@ export function JffCytoscapeViewer({
   );
 
   useEffect(() => {
-    if (typeof window !== 'undefined') load();
+    if (typeof window !== 'undefined') void load();
     return () => {
       const cy = cyRef.current;
       if (cy) {

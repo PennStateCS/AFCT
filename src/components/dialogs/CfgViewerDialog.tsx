@@ -58,7 +58,7 @@ export function CfgViewerDialog({ src, open, onOpenChange, title }: { src: strin
       }
 	};
 
-	load();
+	void load();
   }, [src, open]);
   if (!data) return null;
   const parsed = parseCfg(data);

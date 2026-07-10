@@ -193,7 +193,7 @@ export function CreateProblemDialog({
     }
 
     if (open) {
-      init();
+      void init();
     } else {
       // parent closed while we were possibly initializing
       setInternalOpen(false);

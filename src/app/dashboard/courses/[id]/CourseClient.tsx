@@ -91,7 +91,7 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
 
   const handleConfirm = useCallback(() => {
     if (dialogStates.pendingDelete) {
-      handlers.handleDelete(dialogStates.pendingDelete);
+      void handlers.handleDelete(dialogStates.pendingDelete);
     }
     dialogStates.setConfirmOpen(false);
     dialogStates.setPendingDelete(null);
@@ -147,7 +147,7 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
   const handleEnrollUserWrapper = useCallback(
     async (user: EnrollableUser) => {
       if (!courseId) return;
-      await handleEnrollUser(user, courseId, refetchCourse);
+      await handleEnrollUser(user, courseId, () => void refetchCourse());
     },
     [handleEnrollUser, courseId, refetchCourse],
   );
