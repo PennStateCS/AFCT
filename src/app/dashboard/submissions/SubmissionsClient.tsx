@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Download, Eye, File, RotateCcw } from 'lucide-react';
 import type { Course } from '@prisma/client';
@@ -41,7 +41,6 @@ type AssignmentItem = {
   title: string;
   dueDate?: string;
   courseId: string;
-  courseName: string;
   problems: string[];
 };
 
@@ -88,8 +87,8 @@ const fetchCourseList = async (): Promise<CourseItem[]> => {
   return (await response.json()) as CourseItem[];
 };
 
-const fetchAssignmentsForCourse = async (course: CourseItem): Promise<AssignmentItem[]> => {
-  const response = await fetch(apiPaths.courseAssignments(course.id));
+const fetchAssignmentsForCourse = async (courseId: string): Promise<AssignmentItem[]> => {
+  const response = await fetch(apiPaths.courseAssignments(courseId));
   if (!response.ok) return [];
 
   const assignments = (await response.json()) as Array<{
@@ -108,8 +107,7 @@ const fetchAssignmentsForCourse = async (course: CourseItem): Promise<Assignment
       id: assignment.id,
       title: assignment.title,
       dueDate: assignment.dueDate,
-      courseId: course.id,
-      courseName: course.name,
+      courseId,
       problems: problems.map((problem) => problem.problemId),
     };
   });
@@ -165,17 +163,31 @@ const fetchSubmissions = async (problemIds: string[]): Promise<SubmissionItem[]>
   return (await response.json()) as SubmissionItem[];
 };
 
+// Fan out across the selected courses / assignments for the filter lists.
+const fetchAssignmentsForCourses = async (courseIds: string[]): Promise<AssignmentItem[]> => {
+  const rows = await Promise.all(courseIds.map((id) => fetchAssignmentsForCourse(id)));
+  return rows.flat();
+};
+
+const fetchProblemsForAssignments = async (assignmentIds: string[]): Promise<ProblemItem[]> => {
+  const rows = await Promise.all(assignmentIds.map((id) => fetchProblemsForAssignment(id)));
+  const flat = rows.flat();
+  // Dedupe: the same problem can be attached to more than one assignment.
+  return Array.from(new Map(flat.map((problem) => [problem.id, problem])).values());
+};
+
+// Stable empty arrays so `data ?? EMPTY` keeps a constant identity between
+// renders — the selection-cascade effects depend on `[data]`, and a fresh `[]`
+// each render would retrigger them endlessly.
+const EMPTY_COURSES: CourseItem[] = [];
+const EMPTY_ASSIGNMENTS: AssignmentItem[] = [];
+const EMPTY_PROBLEMS: ProblemItem[] = [];
+
 export default function SubmissionsClient() {
-  const [courses, setCourses] = useState<CourseItem[]>([]);
-  const [assignments, setAssignments] = useState<AssignmentItem[]>([]);
-  const [problems, setProblems] = useState<ProblemItem[]>([]);
   const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
   const [selectedAssignments, setSelectedAssignments] = useState<string[]>([]);
   const [selectedProblems, setSelectedProblems] = useState<string[]>([]);
   const [activeFilters, setActiveFilters] = useState<Set<SubmissionStatusFilter>>(new Set());
-  const [loadingCourses, setLoadingCourses] = useState(false);
-  const [loadingAssignments, setLoadingAssignments] = useState(false);
-  const [loadingProblems, setLoadingProblems] = useState(false);
   const [rerunning, setRerunning] = useState<Record<string, boolean>>({});
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
   const [activeFeedback, setActiveFeedback] = useState<string | null>(null);
@@ -185,6 +197,74 @@ export default function SubmissionsClient() {
   const [jffViewerCourseId, setJffViewerCourseId] = useState<string | null>(null);
   const jffEpsSymbol = useEmptyStringSymbol(jffViewerCourseId);
   const isRerunning = useMemo(() => Object.values(rerunning).some(Boolean), [rerunning]);
+
+  // --- Filter data (cascading: courses → assignments → problems) -------------
+  // Each list is a cached, deduped, retried query. staleTime:Infinity means a
+  // list only refetches when the selection above it changes (its key), so a
+  // background refetch never re-runs the select-all cascade and wipes a manual
+  // narrowing.
+  const {
+    data: courses = EMPTY_COURSES,
+    isLoading: loadingCourses,
+    isError: coursesError,
+  } = useQuery({
+    queryKey: queryKeys.admin.submissionFilters.courses(),
+    queryFn: fetchCourseList,
+    staleTime: Infinity,
+  });
+
+  const {
+    data: assignments = EMPTY_ASSIGNMENTS,
+    isFetching: loadingAssignments,
+    isError: assignmentsError,
+  } = useQuery({
+    queryKey: queryKeys.admin.submissionFilters.assignments(selectedCourses),
+    queryFn: () => fetchAssignmentsForCourses(selectedCourses),
+    enabled: selectedCourses.length > 0,
+    staleTime: Infinity,
+  });
+
+  const {
+    data: problems = EMPTY_PROBLEMS,
+    isFetching: loadingProblems,
+    isError: problemsError,
+  } = useQuery({
+    queryKey: queryKeys.admin.submissionFilters.problems(selectedAssignments),
+    queryFn: () => fetchProblemsForAssignments(selectedAssignments),
+    enabled: selectedAssignments.length > 0,
+    staleTime: Infinity,
+  });
+
+  // Selection cascade: each level auto-selects everything it just loaded, so the
+  // page opens with all submissions in view and the user narrows from there.
+  const allCoursesSelected = useRef(false);
+  useEffect(() => {
+    if (courses.length > 0 && !allCoursesSelected.current) {
+      allCoursesSelected.current = true;
+      setSelectedCourses(courses.map((course) => course.id));
+    }
+  }, [courses]);
+
+  useEffect(() => {
+    setSelectedAssignments(assignments.map((assignment) => assignment.id));
+    setSelectedProblems(assignments.flatMap((assignment) => assignment.problems));
+  }, [assignments]);
+
+  useEffect(() => {
+    setSelectedProblems(problems.map((problem) => problem.id));
+  }, [problems]);
+
+  useEffect(() => {
+    if (coursesError) showToast.error('Unable to load courses');
+  }, [coursesError]);
+
+  useEffect(() => {
+    if (assignmentsError) showToast.error('Unable to load assignments');
+  }, [assignmentsError]);
+
+  useEffect(() => {
+    if (problemsError) showToast.error('Unable to load problems');
+  }, [problemsError]);
 
   // Cached submissions list keyed by the selected problem set. The query varies
   // with `selectedProblems`, so changing any course/assignment/problem filter
@@ -233,91 +313,6 @@ export default function SubmissionsClient() {
     link.download = submission.originalFileName || 'Download';
     link.click();
   };
-
-  useEffect(() => {
-    const loadCourses = async () => {
-      setLoadingCourses(true);
-      try {
-        const courseList = await fetchCourseList();
-        setCourses(courseList);
-        setSelectedCourses(courseList.map((course) => course.id));
-      } catch (error) {
-        console.error(error);
-        showToast.error('Unable to load courses');
-      } finally {
-        setLoadingCourses(false);
-      }
-    };
-    void loadCourses();
-  }, []);
-
-  useEffect(() => {
-    const loadAssignments = async () => {
-      if (selectedCourses.length === 0) {
-        setAssignments([]);
-        setSelectedAssignments([]);
-        setSelectedProblems([]);
-        return;
-      }
-
-      setLoadingAssignments(true);
-      try {
-        const rows = await Promise.all(
-          selectedCourses.map(async (courseId) => {
-            const course = courses.find((item) => item.id === courseId);
-            if (!course) return [] as AssignmentItem[];
-            return fetchAssignmentsForCourse(course);
-          }),
-        );
-        const flat = rows.flat();
-        setAssignments(flat);
-
-        const allAssignmentIds = flat.map((assignment) => assignment.id);
-        const allProblemIds = flat.flatMap((assignment) => assignment.problems);
-
-        setSelectedAssignments(allAssignmentIds);
-        setSelectedProblems(allProblemIds);
-      } catch (error) {
-        console.error(error);
-        showToast.error('Unable to load assignments');
-        setAssignments([]);
-      } finally {
-        setLoadingAssignments(false);
-      }
-    };
-    void loadAssignments();
-  }, [selectedCourses, courses]);
-
-  useEffect(() => {
-    const loadProblems = async () => {
-      if (selectedAssignments.length === 0) {
-        setProblems([]);
-        setSelectedProblems([]);
-        return;
-      }
-
-      setLoadingProblems(true);
-      setSelectedProblems([]);
-      try {
-        const rows = await Promise.all(
-          selectedAssignments.map((assignmentId) => fetchProblemsForAssignment(assignmentId)),
-        );
-        const flat = rows.flat();
-        const deduped = Array.from(new Map(flat.map((problem) => [problem.id, problem])).values());
-        setProblems(deduped);
-        setSelectedProblems(deduped.map((problem) => problem.id));
-      } catch (error) {
-        console.error(error);
-        showToast.error('Unable to load problems');
-        setProblems([]);
-        setSelectedProblems([]);
-      } finally {
-        setLoadingProblems(false);
-      }
-    };
-
-    void loadProblems();
-  }, [selectedAssignments]);
 
   const courseOptions = useMemo(
     () =>
