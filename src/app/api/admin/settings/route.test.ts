@@ -50,6 +50,7 @@ describe('GET /api/system-settings', () => {
       timezone: 'UTC',
       maxUploadSizeMb: 25,
       allowSignup: true,
+      signupAllowedDomains: '',
       clock24Hour: false,
       sessionTimeoutMinutes: 60,
       submissionEvalTimeoutMs: 30000,
@@ -93,6 +94,7 @@ describe('GET /api/system-settings', () => {
       timezone: 'America/New_York',
       maxUploadSizeMb: 100,
       allowSignup: false,
+      signupAllowedDomains: '',
       clock24Hour: false,
       sessionTimeoutMinutes: 45,
       submissionEvalTimeoutMs: 45000,
@@ -237,6 +239,57 @@ describe('PUT /api/system-settings', () => {
       hcaptchaSiteKey: '',
       hcaptchaSecretConfigured: false,
     });
+  });
+
+  it('normalizes and persists the signup domain allow-list', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.systemSettings.upsert.mockResolvedValue({
+      id: 1,
+      timezone: 'UTC',
+      maxUploadSizeMb: 25,
+      allowSignup: true,
+      signupAllowedDomains: 'psu.edu,example.edu',
+      sessionTimeoutMinutes: 60,
+    });
+
+    const req = new Request('http://localhost/api/system-settings', {
+      method: 'PUT',
+      body: JSON.stringify({
+        timezone: 'UTC',
+        maxUploadSizeMb: 25,
+        signupAllowedDomains: ' @PSU.edu, example.edu; psu.edu ',
+      }),
+    });
+
+    const res = await PUT(req);
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.systemSettings.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({ signupAllowedDomains: 'psu.edu,example.edu' }),
+        create: expect.objectContaining({ signupAllowedDomains: 'psu.edu,example.edu' }),
+      }),
+    );
+    const body = await res.json();
+    expect(body.signupAllowedDomains).toBe('psu.edu,example.edu');
+  });
+
+  it('rejects an invalid domain in the allow-list (400, no upsert)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+
+    const req = new Request('http://localhost/api/system-settings', {
+      method: 'PUT',
+      body: JSON.stringify({
+        timezone: 'UTC',
+        maxUploadSizeMb: 25,
+        signupAllowedDomains: 'psu.edu, notadomain',
+      }),
+    });
+
+    const res = await PUT(req);
+
+    expect(res.status).toBe(400);
+    expect(prismaMock.systemSettings.upsert).not.toHaveBeenCalled();
   });
 
   it('clamps and persists submission queue settings when provided', async () => {
