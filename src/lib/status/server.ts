@@ -39,13 +39,15 @@ const readDiskStatsSample = async (): Promise<DiskIoSample | null> => {
         const cols = line.split(/\s+/);
         if (cols.length < 14) return;
         const name = cols[2];
+        if (name === undefined) return;
         const readSectors = Number(cols[5] ?? 0);
         const writeSectors = Number(cols[9] ?? 0);
         if (!Number.isFinite(readSectors) || !Number.isFinite(writeSectors)) return;
         stats[name] = { readSectors, writeSectors };
       });
 
-    if (rootDev && stats[rootDev]) return { device: rootDev, ...stats[rootDev] };
+    const rootSample = rootDev ? stats[rootDev] : undefined;
+    if (rootDev && rootSample) return { device: rootDev, ...rootSample };
 
     const candidates = Object.keys(stats).filter(
       (n) => !/^loop\d+$/i.test(n) && !/^ram\d+$/i.test(n),
@@ -58,7 +60,8 @@ const readDiskStatsSample = async (): Promise<DiskIoSample | null> => {
         /^dm-\d+/i.test(n),
     );
     const pick = preferred ?? candidates[0];
-    return pick ? { device: pick, ...stats[pick] } : null;
+    const pickSample = pick ? stats[pick] : undefined;
+    return pick && pickSample ? { device: pick, ...pickSample } : null;
   } catch {
     return null;
   }

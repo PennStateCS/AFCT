@@ -5,6 +5,11 @@ import { canManageCourse } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { logDenial, logError } from '@/lib/api/activity';
 
+// Concrete path params for this route. Next guarantees each dynamic segment is
+// present, so typing them keeps the destructured values `string` (rather than
+// `string | undefined`) under noUncheckedIndexedAccess.
+type RouteCtx = { params: Promise<{ id: string; aid: string; studentId: string }> };
+
 /**
  * Returns a student's per-problem grades and feedback for one assignment, keyed by
  * problem id. A student may read their own; staff may read anyone's. Responds 204
@@ -28,7 +33,7 @@ import { logDenial, logError } from '@/lib/api/activity';
  *   500: { description: Server error. }
  */
 export const GET = withCourseAuth(
-  async (req, ctx, { user, courseId }) => {
+  async (req, ctx: RouteCtx, { user, courseId }) => {
     const { aid: assignmentId, studentId } = await ctx.params;
 
     try {
@@ -122,7 +127,7 @@ export const GET = withCourseAuth(
  *   500: { description: Server error. }
  */
 export const POST = withCourseAuth(
-  async (req, ctx, { user, courseId }) => {
+  async (req, ctx: RouteCtx, { user, courseId }) => {
     const graderId = user.id;
     const { aid: assignmentId, studentId } = await ctx.params;
 

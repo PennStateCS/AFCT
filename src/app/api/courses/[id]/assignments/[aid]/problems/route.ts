@@ -32,6 +32,11 @@ interface AssignmentWithProblems {
   }[];
 }
 
+// Concrete path params for this route. Next guarantees each dynamic segment is
+// present, so typing them keeps the destructured values `string` (rather than
+// `string | undefined`) under noUncheckedIndexedAccess.
+type RouteCtx = { params: Promise<{ id: string; aid: string }> };
+
 const ProblemSettingsSchema = z.object({
   problemId: z.string(),
   maxPoints: z.number().min(0),
@@ -85,7 +90,7 @@ type ProblemSettingsInput = z.infer<typeof ProblemSettingsSchema>;
  *   500: { description: Server error. }
  */
 export const POST = withCourseAuth(
-  async (req, ctx, { user, courseId }) => {
+  async (req, ctx: RouteCtx, { user, courseId }) => {
     const { aid: assignmentId } = await ctx.params;
 
     try {
@@ -313,7 +318,7 @@ export const POST = withCourseAuth(
  *   500: { description: Server error. }
  */
 export const DELETE = withCourseAuth(
-  async (req, ctx, { user, courseId }) => {
+  async (req, ctx: RouteCtx, { user, courseId }) => {
     const { aid: assignmentId } = await ctx.params;
 
     try {

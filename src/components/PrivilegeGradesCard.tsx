@@ -170,7 +170,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         students,
         exportAssignments,
       );
-      const assignmentSlug = selectedForExport[0].title
+      const assignmentSlug = (selectedForExport[0]?.title ?? '')
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/(^-|-$)/g, '');

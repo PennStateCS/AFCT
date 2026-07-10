@@ -4,6 +4,11 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { logError } from '@/lib/api/activity';
 
+// Concrete path params for this route. Next guarantees each dynamic segment is
+// present, so typing them keeps the destructured values `string` (rather than
+// `string | undefined`) under noUncheckedIndexedAccess.
+type RouteCtx = { params: Promise<{ id: string; groupId: string }> };
+
 /**
  * Lists a group's members, oldest first. Course staff (faculty or TAs) or a system
  * admin. The group must belong to the course in the path.
@@ -24,7 +29,7 @@ import { logError } from '@/lib/api/activity';
  *   500: { description: Server error. }
  */
 export const GET = withCourseAuth(
-  async (req, ctx, { user, courseId }) => {
+  async (req, ctx: RouteCtx, { user, courseId }) => {
     const { groupId } = await ctx.params;
 
     if (!groupId) return NextResponse.json({ error: 'Missing params' }, { status: 400 });
@@ -82,7 +87,7 @@ export const GET = withCourseAuth(
  *   500: { description: Server error. }
  */
 export const POST = withCourseAuth(
-  async (req, ctx, { user, courseId }) => {
+  async (req, ctx: RouteCtx, { user, courseId }) => {
     const { groupId } = await ctx.params;
 
     if (!groupId) return NextResponse.json({ error: 'Missing params' }, { status: 400 });
@@ -169,7 +174,7 @@ export const POST = withCourseAuth(
  *   500: { description: Server error. }
  */
 export const PATCH = withCourseAuth(
-  async (req, ctx, { user, courseId }) => {
+  async (req, ctx: RouteCtx, { user, courseId }) => {
     const { groupId } = await ctx.params;
 
     try {

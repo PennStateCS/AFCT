@@ -191,8 +191,9 @@ export default function StudentNavigator({
                 e.stopPropagation();
                 if (e.key === 'Enter') {
                   e.preventDefault();
-                  if (filteredStudents.length > 0) {
-                    handleSelect(filteredStudents[0].id);
+                  const firstMatch = filteredStudents[0];
+                  if (firstMatch) {
+                    handleSelect(firstMatch.id);
                   }
                   return;
                 }

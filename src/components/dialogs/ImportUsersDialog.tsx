@@ -86,7 +86,7 @@ const parseCsvText = (text: string) => {
     return { rows: [] as ParsedCsvRow[], error: 'CSV is empty.' };
   }
 
-  const headerValues = parseCsvLine(lines[headerLineIndex]).map(normalizeHeader);
+  const headerValues = parseCsvLine(lines[headerLineIndex] ?? '').map(normalizeHeader);
 
   const requiredColumns = {
     firstName: ['firstname', 'first'],

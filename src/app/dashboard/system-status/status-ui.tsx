@@ -64,7 +64,7 @@ export const formatDbVersion = (v?: string | null) => {
 };
 
 export const toTitleCase = (s?: string | null) =>
-  s ? s.replace(/\w\S*/g, (w) => w[0].toUpperCase() + w.slice(1).toLowerCase()) : '—';
+  s ? s.replace(/\w\S*/g, (w) => (w[0] ?? '').toUpperCase() + w.slice(1).toLowerCase()) : '—';
 
 export const copy = async (text?: string | null) => {
   if (!text) return;
@@ -188,7 +188,7 @@ export const Sparkline = ({
   const d = normalized
     .map((n, i) => `${i === 0 ? 'M' : 'L'} ${i * step} ${height - n * height}`)
     .join(' ');
-  const trend = points[points.length - 1] - points[0];
+  const trend = (points[points.length - 1] ?? 0) - (points[0] ?? 0);
   const trendColor = trend > 0 ? '#ef4444' : trend < 0 ? '#22c55e' : '#94a3b8';
 
   return (
@@ -203,7 +203,7 @@ export const Sparkline = ({
         <path d={d} strokeLinecap="round" strokeLinejoin="round" />
         <circle
           cx={width}
-          cy={height - normalized[normalized.length - 1] * height}
+          cy={height - (normalized[normalized.length - 1] ?? 0) * height}
           r={2}
           fill={trendColor}
         />
@@ -282,6 +282,9 @@ export function useTrends(sample: HistoryPoint | null, keepHours = 24) {
     }
     const first = windowHist[0];
     const last = windowHist[windowHist.length - 1];
+    if (!first || !last) {
+      return { cpu: 0, mem: 0, dbSize: 0, dbTables: 0, sessions: 0, latency: 0 };
+    }
     return {
       cpu: delta(first.cpuPct, last.cpuPct),
       mem: delta(first.memPct, last.memPct),

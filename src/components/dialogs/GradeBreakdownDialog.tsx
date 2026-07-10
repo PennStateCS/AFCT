@@ -125,7 +125,7 @@ export function GradeBreakdownDialog({
   const isDirty = useMemo(() => {
     if (rows.length !== originalRows.length) return true;
     for (let i = 0; i < rows.length; i++) {
-      if (rows[i].grade !== originalRows[i].grade) return true;
+      if (rows[i]?.grade !== originalRows[i]?.grade) return true;
     }
     return false;
   }, [rows, originalRows]);

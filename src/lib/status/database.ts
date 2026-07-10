@@ -270,7 +270,7 @@ export async function collectDatabase(): Promise<DatabaseStatusResponse> {
       try {
         let p = dbUrl;
         if (p && (p.startsWith('file:') || p.includes('sqlite'))) {
-          p = (p.startsWith('file:') ? p.replace('file:', '') : p).split('?')[0];
+          p = (p.startsWith('file:') ? p.replace('file:', '') : p).split('?')[0] ?? '';
           const pathMod = await import('path');
           const fsMod = await import('fs');
           const resolved = pathMod.isAbsolute(p) ? p : pathMod.resolve(process.cwd(), p);

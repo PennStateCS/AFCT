@@ -110,10 +110,7 @@ export const GET = withCourseAuth(
       }
 
       for (const submission of submissions) {
-        if (!submissionsByProblem[submission.problemId]) {
-          submissionsByProblem[submission.problemId] = [];
-        }
-        submissionsByProblem[submission.problemId].push(submission);
+        (submissionsByProblem[submission.problemId] ??= []).push(submission);
       }
 
       const commentsByProblem: Record<string, (typeof comments)[number][]> = {};
@@ -122,10 +119,7 @@ export const GET = withCourseAuth(
       }
 
       for (const comment of comments) {
-        if (!commentsByProblem[comment.problemId]) {
-          commentsByProblem[comment.problemId] = [];
-        }
-        commentsByProblem[comment.problemId].push(comment);
+        (commentsByProblem[comment.problemId] ??= []).push(comment);
       }
 
       const gradeMap = new Map(grades.map((grade) => [grade.problemId, grade.grade]));

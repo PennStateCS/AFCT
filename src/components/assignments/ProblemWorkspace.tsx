@@ -216,7 +216,9 @@ export default function ProblemWorkspace({
               onChange={onGradeInputChange}
               onSubmit={onSaveGrade}
               autograderStatus={submissions[0]?.status ?? null}
-              onRerun={onRerunSubmission ? () => onRerunSubmission(submissions[0]) : undefined}
+              // `submissions[0]!` preserves the prior pass-through exactly; `!` is
+              // compile-only so runtime behavior is unchanged.
+              onRerun={onRerunSubmission ? () => onRerunSubmission(submissions[0]!) : undefined}
             />
           ) : !isPrivledgedUser ? (
             <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-transparent px-3 py-2 text-[0.70rem] whitespace-nowrap text-slate-700 dark:border-slate-200 dark:text-slate-200">

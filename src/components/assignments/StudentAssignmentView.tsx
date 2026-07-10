@@ -16,7 +16,7 @@ import ProblemWorkspace from '@/components/assignments/ProblemWorkspace';
 import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
 import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { formatDateTimeInTimeZone, formatDeadlineDual } from '@/lib/date';
+import { formatDeadlineDual } from '@/lib/date';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { fetchJson } from '@/lib/query-fetch';
@@ -208,7 +208,7 @@ export default function StudentAssignmentPage({
       if (prev && assignment.problems.some((ap) => ap.problem.id === prev)) {
         return prev;
       }
-      return assignment.problems[0].problem.id;
+      return assignment.problems[0]?.problem.id ?? null;
     });
   }, [assignment, searchParams]);
 
