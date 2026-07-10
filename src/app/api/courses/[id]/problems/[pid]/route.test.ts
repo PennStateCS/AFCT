@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const prismaMock = vi.hoisted(() => ({
+  course: { findUnique: vi.fn() },
   problem: {
     findFirst: vi.fn(),
     update: vi.fn(),
@@ -42,6 +43,7 @@ import { PUT, DELETE } from './route';
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
+  prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
   uploadLimitMock.mockResolvedValue({ maxBytes: 5 * 1024 * 1024, maxMb: 5 });
   validateMock.mockReturnValue({ isValid: true });
 });
@@ -160,6 +162,17 @@ describe('DELETE /api/courses/[id]/problems/[pid]', () => {
     const res = await DELETE(req, params());
 
     expect(res.status).toBe(500);
+  });
+
+  it('returns 409 when the course is archived', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+
+    const req = new Request('http://localhost/api/courses/c1/problems/p1', { method: 'DELETE' });
+    const res = await DELETE(req, params());
+
+    expect(res.status).toBe(409);
+    expect(prismaMock.problem.delete).not.toHaveBeenCalled();
   });
 });
 
@@ -292,5 +305,15 @@ describe('PUT /api/courses/[id]/problems/[pid]', () => {
       expect.anything(),
       expect.objectContaining({ action: 'PROBLEM_UPDATE_ERROR', severity: 'ERROR' }),
     );
+  });
+
+  it('returns 409 when the course is archived', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+
+    const res = await PUT(putReq({ title: 'Updated', type: 'FA' }), params());
+
+    expect(res.status).toBe(409);
+    expect(prismaMock.problem.update).not.toHaveBeenCalled();
   });
 });

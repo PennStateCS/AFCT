@@ -180,7 +180,7 @@ export const PUT = withCourseAuth(
       return NextResponse.json({ error: 'Server error' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'PROBLEM_UPDATE_DENIED' },
+  { access: 'manage', deniedAction: 'PROBLEM_UPDATE_DENIED', blockWhenArchived: true },
 );
 
 /**
@@ -265,5 +265,5 @@ export const DELETE = withCourseAuth(
       return NextResponse.json({ error: 'Server error' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'PROBLEM_DELETE_DENIED' },
+  { access: 'manage', deniedAction: 'PROBLEM_DELETE_DENIED', blockWhenArchived: true },
 );

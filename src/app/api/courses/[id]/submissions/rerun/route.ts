@@ -91,5 +91,5 @@ export const POST = withCourseAuth(
       return NextResponse.json({ error: 'Failed to rerun submissions' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'COURSE_SUBMISSIONS_RERUN_DENIED' },
+  { access: 'manage', deniedAction: 'COURSE_SUBMISSIONS_RERUN_DENIED', blockWhenArchived: true },
 );

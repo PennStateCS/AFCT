@@ -130,7 +130,7 @@ export const POST = withCourseAuth(
       return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'GROUP_MEMBER_ADD_DENIED' },
+  { access: 'manage', deniedAction: 'GROUP_MEMBER_ADD_DENIED', blockWhenArchived: true },
 );
 
 /**
@@ -238,5 +238,5 @@ export const PATCH = withCourseAuth(
       return NextResponse.json({ error: 'Server error' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'GROUP_MEMBERS_UPDATE_DENIED' },
+  { access: 'manage', deniedAction: 'GROUP_MEMBERS_UPDATE_DENIED', blockWhenArchived: true },
 );

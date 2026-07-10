@@ -80,5 +80,5 @@ export const POST = withCourseAuth(
       return NextResponse.json({ error: 'Server error' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'COURSE_BULK_ENROLL_DENIED' },
+  { access: 'manage', blockWhenArchived: true, deniedAction: 'COURSE_BULK_ENROLL_DENIED' },
 );
