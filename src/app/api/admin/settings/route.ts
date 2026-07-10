@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { createEnhancedActivityLog, type EnhancedActivityLogData } from '@/lib/activity-log-utils';
 import { withAdminAuth } from '@/lib/api/with-auth';
+import { parseDomainList } from '@/lib/email';
 import {
   clampSessionTimeoutMinutes,
   clampSubmissionEvalTimeoutMs,
@@ -23,6 +24,7 @@ import {
   DEFAULT_BACKUP_RETENTION_DAYS,
   DEFAULT_ACTIVITY_LOG_RETENTION_DAYS,
   DEFAULT_ALLOW_SIGNUP,
+  DEFAULT_SIGNUP_ALLOWED_DOMAINS,
   DEFAULT_CLOCK_24_HOUR,
   DEFAULT_MAX_UPLOAD_SIZE_MB,
   DEFAULT_SESSION_TIMEOUT_MINUTES,
@@ -42,6 +44,7 @@ const AUDITED_FIELDS = [
   'timezone',
   'maxUploadSizeMb',
   'allowSignup',
+  'signupAllowedDomains',
   'clock24Hour',
   'sessionTimeoutMinutes',
   'submissionEvalTimeoutMs',
@@ -103,6 +106,7 @@ async function safeAuditLog(req: Request, data: EnhancedActivityLogData): Promis
  *             timezone: { type: string }
  *             maxUploadSizeMb: { type: integer }
  *             allowSignup: { type: boolean }
+ *             signupAllowedDomains: { type: string, description: Comma-separated email-domain allow-list; blank = any }
  *             sessionTimeoutMinutes: { type: integer }
  *             submissionEvalTimeoutMs: { type: integer }
  *             submissionEvalMaxMemoryMb: { type: integer }
@@ -127,6 +131,7 @@ export const GET = withAdminAuth(
       timezone: settings?.timezone ?? DEFAULT_SYSTEM_TIMEZONE,
       maxUploadSizeMb: settings?.maxUploadSizeMb ?? DEFAULT_MAX_UPLOAD_SIZE_MB,
       allowSignup: settings?.allowSignup ?? DEFAULT_ALLOW_SIGNUP,
+      signupAllowedDomains: settings?.signupAllowedDomains ?? DEFAULT_SIGNUP_ALLOWED_DOMAINS,
       clock24Hour: settings?.clock24Hour ?? DEFAULT_CLOCK_24_HOUR,
       sessionTimeoutMinutes: settings?.sessionTimeoutMinutes ?? DEFAULT_SESSION_TIMEOUT_MINUTES,
       submissionEvalTimeoutMs:
@@ -159,6 +164,7 @@ type SettingsBody = {
   timezone?: string;
   maxUploadSizeMb?: number;
   allowSignup?: boolean;
+  signupAllowedDomains?: string;
   clock24Hour?: boolean;
   sessionTimeoutMinutes?: number;
   submissionEvalTimeoutMs?: number;
@@ -242,6 +248,20 @@ export const PUT = withAdminAuth(
       return NextResponse.json({ error: 'Invalid timezone' }, { status: 400 });
     }
 
+    // Signup email-domain allow-list: only persist when provided. Normalize to the
+    // canonical comma-separated form and reject any malformed domain up front.
+    const signupData: Record<string, string> = {};
+    if (typeof body.signupAllowedDomains === 'string') {
+      const { domains, invalid } = parseDomainList(body.signupAllowedDomains);
+      if (invalid.length) {
+        return NextResponse.json(
+          { error: `Invalid email domain(s): ${invalid.join(', ')}` },
+          { status: 400 },
+        );
+      }
+      signupData.signupAllowedDomains = domains.join(',');
+    }
+
     // Queue settings are optional in the payload; only persist the ones provided so
     // a partial update can't reset the others.
     const queueData: Record<string, number> = {};
@@ -314,6 +334,7 @@ export const PUT = withAdminAuth(
       ...loginData,
       ...backupData,
       ...hcaptchaData,
+      ...signupData,
     };
     if (hasAllowSignup) updateData.allowSignup = body.allowSignup;
     if (hasClock24Hour) updateData.clock24Hour = body.clock24Hour;
@@ -333,6 +354,7 @@ export const PUT = withAdminAuth(
       ...loginData,
       ...backupData,
       ...hcaptchaData,
+      ...signupData,
     };
     if (hasAllowSignup) createData.allowSignup = body.allowSignup;
     if (hasClock24Hour) createData.clock24Hour = body.clock24Hour;
@@ -390,6 +412,7 @@ export const PUT = withAdminAuth(
       timezone: settings.timezone,
       maxUploadSizeMb: settings.maxUploadSizeMb,
       allowSignup: settings.allowSignup,
+      signupAllowedDomains: settings.signupAllowedDomains,
       clock24Hour: settings.clock24Hour,
       sessionTimeoutMinutes: settings.sessionTimeoutMinutes,
       submissionEvalTimeoutMs: settings.submissionEvalTimeoutMs,

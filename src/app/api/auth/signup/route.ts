@@ -12,7 +12,13 @@ import {
 } from '@/lib/security/rate-limiter';
 import { verifyCaptchaToken } from '@/lib/security/captcha';
 import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy';
-import { normalizeEmail, isValidEmail } from '@/lib/email';
+import {
+  normalizeEmail,
+  isValidEmail,
+  isEmailDomainAllowed,
+  getEmailDomain,
+  parseDomainList,
+} from '@/lib/email';
 
 /**
  * Self-service account registration. New accounts are created with no elevated
@@ -62,7 +68,7 @@ export async function POST(req: Request) {
 
     const settings = await prisma.systemSettings.findUnique({
       where: { id: 1 },
-      select: { allowSignup: true },
+      select: { allowSignup: true, signupAllowedDomains: true },
     });
     if (settings?.allowSignup === false) {
       return NextResponse.json({ error: 'Signup is disabled.' }, { status: 403 });
@@ -73,6 +79,23 @@ export async function POST(req: Request) {
     }
     if (!isValidEmail(normalizedEmail)) {
       return NextResponse.json({ error: 'Invalid email format.' }, { status: 400 });
+    }
+
+    // Domain allow-list (blank setting = any domain). Reject a non-approved domain
+    // before spending rate-limit budget; log it as a policy rejection (WARNING).
+    const allowedDomains = settings?.signupAllowedDomains ?? '';
+    if (!isEmailDomainAllowed(normalizedEmail, allowedDomains)) {
+      await createEnhancedActivityLog(prisma, req, {
+        action: 'SIGNUP_DOMAIN_REJECTED',
+        severity: 'WARNING',
+        category: 'USER',
+        metadata: { email: normalizedEmail, domain: getEmailDomain(normalizedEmail) },
+      });
+      const allowed = parseDomainList(allowedDomains).domains;
+      return NextResponse.json(
+        { error: `Email domain not allowed. Allowed domains: ${allowed.join(', ')}` },
+        { status: 403 },
+      );
     }
     if (!isStrongPassword(password)) {
       return NextResponse.json({ error: passwordRequirementText }, { status: 400 });
