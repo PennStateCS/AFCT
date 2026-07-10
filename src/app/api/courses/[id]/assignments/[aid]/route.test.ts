@@ -80,6 +80,61 @@ describe('GET /api/courses/[id]/[aid]', () => {
     expect(res.status).toBe(200);
   });
 
+  const assignmentWithAnswerFile = {
+    id: 'a1',
+    title: 'Assignment',
+    isPublished: true,
+    problems: [
+      {
+        maxPoints: 10,
+        maxSubmissions: 1,
+        autograderEnabled: true,
+        problem: {
+          id: 'p1',
+          title: 'Problem',
+          description: null,
+          type: 'DFA',
+          maxStates: null,
+          isDeterministic: true,
+          fileName: 'stored-uuid.jff',
+          originalFileName: 'solution_answer.jff',
+        },
+      },
+    ],
+    course: { name: 'Course', code: 'C1', isArchived: false },
+  };
+
+  it('withholds problem answer-key filenames from a student', async () => {
+    authMock.mockResolvedValue({ user: { id: 'stu-1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
+    prismaMock.assignment.findFirst.mockResolvedValue(assignmentWithAnswerFile);
+
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/assignments/a1?view=problems'),
+      { params: Promise.resolve({ id: 'c1', aid: 'a1' }) },
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.problems[0].problem.fileName).toBeNull();
+    expect(body.problems[0].problem.originalFileName).toBeNull();
+  });
+
+  it('includes problem answer-key filenames for staff', async () => {
+    // Default auth is an admin (staff); keep it.
+    prismaMock.assignment.findFirst.mockResolvedValue(assignmentWithAnswerFile);
+
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/assignments/a1?view=problems'),
+      { params: Promise.resolve({ id: 'c1', aid: 'a1' }) },
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.problems[0].problem.fileName).toBe('stored-uuid.jff');
+    expect(body.problems[0].problem.originalFileName).toBe('solution_answer.jff');
+  });
+
   it('404-masks an unpublished assignment from a non-staff student', async () => {
     authMock.mockResolvedValue({ user: { id: 'stu-1', role: 'STUDENT' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });

@@ -155,8 +155,11 @@ export const GET = withCourseAuth(
             type: ap.problem.type,
             maxStates: ap.problem.maxStates,
             isDeterministic: ap.problem.isDeterministic,
-            fileName: ap.problem.fileName,
-            originalFileName: ap.problem.originalFileName,
+            // The problem file is the autograder's answer key. Its stored and
+            // original names are withheld from non-staff members (students never
+            // receive them, matching the upload/download restriction).
+            fileName: isStaff ? ap.problem.fileName : null,
+            originalFileName: isStaff ? ap.problem.originalFileName : null,
           },
           maxPoints: ap.maxPoints,
           maxSubmissions: ap.maxSubmissions,
