@@ -23,6 +23,7 @@ import {
   DEFAULT_BACKUP_RETENTION_DAYS,
   DEFAULT_ACTIVITY_LOG_RETENTION_DAYS,
   DEFAULT_ALLOW_SIGNUP,
+  DEFAULT_CLOCK_24_HOUR,
   DEFAULT_MAX_UPLOAD_SIZE_MB,
   DEFAULT_SESSION_TIMEOUT_MINUTES,
   DEFAULT_SUBMISSION_EVAL_TIMEOUT_MS,
@@ -41,6 +42,7 @@ const AUDITED_FIELDS = [
   'timezone',
   'maxUploadSizeMb',
   'allowSignup',
+  'clock24Hour',
   'sessionTimeoutMinutes',
   'submissionEvalTimeoutMs',
   'submissionEvalMaxMemoryMb',
@@ -125,6 +127,7 @@ export const GET = withAdminAuth(
       timezone: settings?.timezone ?? DEFAULT_SYSTEM_TIMEZONE,
       maxUploadSizeMb: settings?.maxUploadSizeMb ?? DEFAULT_MAX_UPLOAD_SIZE_MB,
       allowSignup: settings?.allowSignup ?? DEFAULT_ALLOW_SIGNUP,
+      clock24Hour: settings?.clock24Hour ?? DEFAULT_CLOCK_24_HOUR,
       sessionTimeoutMinutes: settings?.sessionTimeoutMinutes ?? DEFAULT_SESSION_TIMEOUT_MINUTES,
       submissionEvalTimeoutMs:
         settings?.submissionEvalTimeoutMs ?? DEFAULT_SUBMISSION_EVAL_TIMEOUT_MS,
@@ -156,6 +159,7 @@ type SettingsBody = {
   timezone?: string;
   maxUploadSizeMb?: number;
   allowSignup?: boolean;
+  clock24Hour?: boolean;
   sessionTimeoutMinutes?: number;
   submissionEvalTimeoutMs?: number;
   submissionEvalMaxMemoryMb?: number;
@@ -232,6 +236,7 @@ export const PUT = withAdminAuth(
     );
     const sessionTimeoutMinutes = clampSessionTimeoutMinutes(Number(body.sessionTimeoutMinutes));
     const hasAllowSignup = typeof body.allowSignup === 'boolean';
+    const hasClock24Hour = typeof body.clock24Hour === 'boolean';
 
     if (!COMMON_TIMEZONES.includes(timezone as (typeof COMMON_TIMEZONES)[number])) {
       return NextResponse.json({ error: 'Invalid timezone' }, { status: 400 });
@@ -311,6 +316,7 @@ export const PUT = withAdminAuth(
       ...hcaptchaData,
     };
     if (hasAllowSignup) updateData.allowSignup = body.allowSignup;
+    if (hasClock24Hour) updateData.clock24Hour = body.clock24Hour;
 
     const createData: {
       id: number;
@@ -329,6 +335,7 @@ export const PUT = withAdminAuth(
       ...hcaptchaData,
     };
     if (hasAllowSignup) createData.allowSignup = body.allowSignup;
+    if (hasClock24Hour) createData.clock24Hour = body.clock24Hour;
 
     // Snapshot the prior state so the audit log can report what actually changed.
     const existing = await prisma.systemSettings.findUnique({ where: { id: 1 } });
@@ -383,6 +390,7 @@ export const PUT = withAdminAuth(
       timezone: settings.timezone,
       maxUploadSizeMb: settings.maxUploadSizeMb,
       allowSignup: settings.allowSignup,
+      clock24Hour: settings.clock24Hour,
       sessionTimeoutMinutes: settings.sessionTimeoutMinutes,
       submissionEvalTimeoutMs: settings.submissionEvalTimeoutMs,
       submissionEvalMaxMemoryMb: settings.submissionEvalMaxMemoryMb,

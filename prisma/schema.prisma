@@ -428,6 +428,11 @@ model SystemSettings {
   allowSignup     Boolean @default(true)
   sessionTimeoutMinutes Int @default(60)
 
+  // App-wide date/time display preference. When true, times render on a 24-hour clock
+  // (e.g. 23:59); otherwise 12-hour with AM/PM. Display-only — never affects stored
+  // UTC instants or deadline enforcement.
+  clock24Hour Boolean @default(false)
+
   // Login lockout policy (per-account): how many failed attempts before the
   // account is temporarily locked, and for how long.
   loginMaxAttempts    Int @default(10)

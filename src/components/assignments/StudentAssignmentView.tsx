@@ -46,7 +46,7 @@ export default function StudentAssignmentPage({
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session } = useSession();
-  const { timezone } = useEffectiveTimezone();
+  const { timezone, hour12 } = useEffectiveTimezone();
   const userId = session?.user?.id ?? null;
   // No per-course role is available here; a non-admin viewer is treated as a
   // student for the purpose of hiding unpublished assignments.
@@ -259,10 +259,10 @@ export default function StudentAssignmentPage({
   // Show deadlines in the student's local zone AND the course zone (when they differ),
   // so a student in a different timezone can't misread the cutoff.
   const courseZone = assignment.course?.timezone ?? null;
-  const dueDisplay = formatDeadlineDual(assignment.dueDate, timezone, courseZone);
+  const dueDisplay = formatDeadlineDual(assignment.dueDate, timezone, courseZone, hour12);
   const lateCutoffDisplay = allowLateSubmissions
     ? lateCutoffDate
-      ? formatDeadlineDual(lateCutoffDate, timezone, courseZone)
+      ? formatDeadlineDual(lateCutoffDate, timezone, courseZone, hour12)
       : 'Never'
     : 'Not allowed';
   const latePolicyDisplay = !allowLateSubmissions
