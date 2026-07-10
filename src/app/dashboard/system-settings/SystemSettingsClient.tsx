@@ -76,12 +76,14 @@ import {
 import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
 import SwitchField from '@/components/ui/SwitchField';
+import { parseDomainList } from '@/lib/email';
 import FileUploadInput from '@/components/FileUploadInput';
 
 type SystemSettingsResponse = {
   timezone: string;
   maxUploadSizeMb: number;
   allowSignup: boolean;
+  signupAllowedDomains: string;
   clock24Hour: boolean;
   sessionTimeoutMinutes: number;
   submissionEvalTimeoutMs: number;
@@ -116,6 +118,7 @@ type FormSnapshot = {
   timezone: string;
   maxUploadSizeMb: number | '';
   allowSignup: boolean;
+  signupAllowedDomains: string;
   clock24Hour: boolean;
   sessionTimeoutMinutes: number | '';
   evalTimeoutSec: number | '';
@@ -177,6 +180,7 @@ function buildSettingsSnapshot(data: SystemSettingsResponse): FormSnapshot {
     timezone: data.timezone || DEFAULT_SYSTEM_TIMEZONE,
     maxUploadSizeMb: Number(data.maxUploadSizeMb) || DEFAULT_MAX_UPLOAD_SIZE_MB,
     allowSignup: data.allowSignup ?? DEFAULT_ALLOW_SIGNUP,
+    signupAllowedDomains: data.signupAllowedDomains ?? '',
     clock24Hour: data.clock24Hour ?? DEFAULT_CLOCK_24_HOUR,
     sessionTimeoutMinutes: clampSessionTimeoutMinutes(
       Number(data.sessionTimeoutMinutes) || DEFAULT_SESSION_TIMEOUT_MINUTES,
@@ -241,6 +245,9 @@ export default function SystemSettingsClient() {
     initialSeed?.maxUploadSizeMb ?? '',
   );
   const [allowSignup, setAllowSignup] = useState(initialSeed?.allowSignup ?? true);
+  const [signupAllowedDomains, setSignupAllowedDomains] = useState(
+    initialSeed?.signupAllowedDomains ?? '',
+  );
   const [clock24Hour, setClock24Hour] = useState(initialSeed?.clock24Hour ?? false);
   const [sessionTimeoutMinutes, setSessionTimeoutMinutes] = useState<number | ''>(
     initialSeed?.sessionTimeoutMinutes ?? '',
@@ -350,6 +357,7 @@ export default function SystemSettingsClient() {
     setTimezone(norm.timezone);
     setMaxUploadSizeMb(norm.maxUploadSizeMb);
     setAllowSignup(norm.allowSignup);
+    setSignupAllowedDomains(norm.signupAllowedDomains);
     setClock24Hour(norm.clock24Hour);
     setSessionTimeoutMinutes(norm.sessionTimeoutMinutes);
     setEvalTimeoutSec(norm.evalTimeoutSec);
@@ -592,6 +600,9 @@ export default function SystemSettingsClient() {
     const bkpHour = clampBackupHour(Number(backupHour));
     const bkpRetention = clampBackupRetentionDays(Number(backupRetentionDays));
     const logRetention = clampActivityLogRetentionDays(Number(activityLogRetentionDays));
+    // Canonicalize the domain allow-list (dedupe/lowercase) so what we display and
+    // cache after saving matches exactly what the server stores.
+    const canonicalDomains = parseDomainList(signupAllowedDomains).domains.join(',');
 
     setSaving(true);
     try {
@@ -602,6 +613,7 @@ export default function SystemSettingsClient() {
           timezone,
           maxUploadSizeMb: clampedSize,
           allowSignup,
+          signupAllowedDomains: canonicalDomains,
           clock24Hour,
           sessionTimeoutMinutes: clampedTimeout,
           submissionEvalTimeoutMs: evalTimeoutMs,
@@ -629,6 +641,7 @@ export default function SystemSettingsClient() {
         throw new Error(body?.error || 'Failed to save settings');
       }
       const savedSiteKey = hcaptchaSiteKey.trim();
+      setSignupAllowedDomains(canonicalDomains);
       setMaxUploadSizeMb(clampedSize);
       setSessionTimeoutMinutes(clampedTimeout);
       setEvalTimeoutSec(msToSec(evalTimeoutMs));
@@ -652,6 +665,7 @@ export default function SystemSettingsClient() {
         timezone,
         maxUploadSizeMb: clampedSize,
         allowSignup,
+        signupAllowedDomains: canonicalDomains,
         clock24Hour,
         sessionTimeoutMinutes: clampedTimeout,
         evalTimeoutSec: msToSec(evalTimeoutMs),
@@ -677,6 +691,7 @@ export default function SystemSettingsClient() {
               timezone,
               maxUploadSizeMb: clampedSize,
               allowSignup,
+              signupAllowedDomains: canonicalDomains,
               clock24Hour,
               sessionTimeoutMinutes: clampedTimeout,
               submissionEvalTimeoutMs: evalTimeoutMs,
@@ -713,6 +728,7 @@ export default function SystemSettingsClient() {
     setTimezone(baseline.timezone);
     setMaxUploadSizeMb(baseline.maxUploadSizeMb);
     setAllowSignup(baseline.allowSignup);
+    setSignupAllowedDomains(baseline.signupAllowedDomains);
     setClock24Hour(baseline.clock24Hour);
     setSessionTimeoutMinutes(baseline.sessionTimeoutMinutes);
     setEvalTimeoutSec(baseline.evalTimeoutSec);
@@ -741,6 +757,7 @@ export default function SystemSettingsClient() {
     timezone,
     maxUploadSizeMb,
     allowSignup,
+    signupAllowedDomains,
     clock24Hour,
     sessionTimeoutMinutes,
     evalTimeoutSec,
@@ -918,6 +935,15 @@ export default function SystemSettingsClient() {
                   descriptionPlacement="inline"
                   description="When enabled, the Sign up option appears on the login page."
                   boxClassName="border-black"
+                />
+                <InputGroup
+                  label="Allowed signup email domains"
+                  name="signup-allowed-domains"
+                  value={signupAllowedDomains}
+                  setValue={setSignupAllowedDomains}
+                  disabled={disabled || !allowSignup}
+                  placeholder="psu.edu, example.edu"
+                  description="Restrict self-signup to these email domains (comma-separated). Leave blank to allow any domain."
                 />
                 <SwitchField
                   id="clock-24-hour"

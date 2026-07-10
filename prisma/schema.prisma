@@ -426,6 +426,9 @@ model SystemSettings {
   timezone        String @default("UTC")
   maxUploadSizeMb Int    @default(25)
   allowSignup     Boolean @default(true)
+  // Canonical comma-separated allow-list of email domains permitted to self-register
+  // (e.g. "psu.edu,example.edu"). Blank = no restriction (any domain may sign up).
+  signupAllowedDomains String @default("")
   sessionTimeoutMinutes Int @default(60)
 
   // App-wide date/time display preference. When true, times render on a 24-hour clock
