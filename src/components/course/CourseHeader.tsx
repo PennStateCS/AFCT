@@ -5,8 +5,6 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { FullCourse } from '@/types/course';
 import { getInstructors, type EnrolledUser } from '@/lib/course-utils';
-import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { formatDateTimeInTimeZone } from '@/lib/date';
 
 interface CourseHeaderProps {
   course: FullCourse;
@@ -15,12 +13,10 @@ interface CourseHeaderProps {
 
 /**
  * The inner header content — title, badges, course status, and (for staff) the
- * faculty/TA line and course dates. Extracted so it can sit either in its own
- * card (student view) or above the tab bar in the admin card.
+ * faculty/TA line. Extracted so it can sit either in its own card (student view)
+ * or above the tab bar in the admin card.
  */
 export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
-  const { timezone } = useEffectiveTimezone();
-
   const normalizeDate = (value?: string | Date | null) => {
     if (!value) return null;
     const date = value instanceof Date ? value : new Date(value);
@@ -28,8 +24,6 @@ export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
   };
   const startDate = normalizeDate(course.startDate);
   const endDate = normalizeDate(course.endDate);
-  const formatCourseDate = (value: Date | null) =>
-    value ? formatDateTimeInTimeZone(value, timezone) : 'Not set';
 
   const badgeTheme = {
     upcoming: { variant: 'info' as const },
@@ -87,7 +81,7 @@ export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
         </div>
       </div>
 
-      {/* Faculty, TAs, and the course dates all on one row */}
+      {/* Faculty and TAs */}
       {!isStudent && (
         <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
           <span>
@@ -97,14 +91,6 @@ export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
           <span>
             <span className="text-muted-foreground">TAs: </span>
             {taNames}
-          </span>
-          <span>
-            <span className="text-muted-foreground">Start: </span>
-            {formatCourseDate(startDate)}
-          </span>
-          <span>
-            <span className="text-muted-foreground">End: </span>
-            {formatCourseDate(endDate)}
           </span>
         </div>
       )}
