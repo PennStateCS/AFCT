@@ -624,7 +624,7 @@ export function EditProblemDialog({
                     type="number"
                     fieldProps={{
                       ...field,
-                      value: isUnlimitedStates ? '' : String(Math.abs(field.value ?? 0) || ''),
+                      value: isUnlimitedStates ? '' : String(Math.abs(Number(field.value ?? 0)) || ''),
                       onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
                         field.onChange(e.target.value),
                     }}

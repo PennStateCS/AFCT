@@ -23,18 +23,30 @@ describe('getCoursesListForUser — access scoping', () => {
     expect(whereArg()).toEqual({ deletedAt: null });
   });
 
-  it('limits a STUDENT to enrolled AND published (non-deleted) courses', async () => {
+  it('limits a non-admin to enrolled courses that are published OR ones they staff', async () => {
     await getCoursesListForUser('stu-1', 'STUDENT');
     expect(whereArg()).toEqual({
       deletedAt: null,
       roster: { some: { userId: 'stu-1' } },
-      isPublished: true,
+      OR: [
+        { isPublished: true },
+        { roster: { some: { userId: 'stu-1', role: { in: ['FACULTY', 'TA'] } } } },
+      ],
     });
   });
 
-  it('limits FACULTY/TA to enrolled (non-deleted) courses without the published filter', async () => {
-    await getCoursesListForUser('fac-1', 'FACULTY');
-    expect(whereArg()).toEqual({ deletedAt: null, roster: { some: { userId: 'fac-1' } } });
+  it('lets FACULTY/TA see their own unpublished courses via the staff OR branch', async () => {
+    // The page passes 'STUDENT' for every non-admin, so visibility must come from the
+    // per-roster staff branch, not the coarse role argument.
+    await getCoursesListForUser('fac-1', 'STUDENT');
+    expect(whereArg()).toEqual({
+      deletedAt: null,
+      roster: { some: { userId: 'fac-1' } },
+      OR: [
+        { isPublished: true },
+        { roster: { some: { userId: 'fac-1', role: { in: ['FACULTY', 'TA'] } } } },
+      ],
+    });
   });
 });
 

@@ -43,7 +43,7 @@ function toDateTimeLocalInTimeZone(date: Date | string, timeZone: string): strin
   return `${year}-${month}-${day}T${hour}:${minute}`;
 }
 
-type FormValues = z.infer<typeof DuplicateFormSchema>;
+type FormValues = z.input<typeof DuplicateFormSchema>;
 
 interface Props {
   open: boolean;
