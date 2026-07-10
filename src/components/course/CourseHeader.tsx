@@ -87,25 +87,25 @@ export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
         </div>
       </div>
 
+      {/* Faculty, TAs, and the course dates all on one row */}
       {!isStudent && (
-        <div className="space-y-1">
-          {/* Instructors and TAs, side by side */}
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
-            <span>
-              <span className="text-muted-foreground">Faculty: </span>
-              {facultyNames}
-            </span>
-            <span>
-              <span className="text-muted-foreground">TAs: </span>
-              {taNames}
-            </span>
-          </div>
-
-          {/* Course start and end dates */}
-          <div className="text-muted-foreground flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
-            <span>Start: {formatCourseDate(startDate)}</span>
-            <span>End: {formatCourseDate(endDate)}</span>
-          </div>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
+          <span>
+            <span className="text-muted-foreground">Faculty: </span>
+            {facultyNames}
+          </span>
+          <span>
+            <span className="text-muted-foreground">TAs: </span>
+            {taNames}
+          </span>
+          <span>
+            <span className="text-muted-foreground">Start: </span>
+            {formatCourseDate(startDate)}
+          </span>
+          <span>
+            <span className="text-muted-foreground">End: </span>
+            {formatCourseDate(endDate)}
+          </span>
         </div>
       )}
     </>
