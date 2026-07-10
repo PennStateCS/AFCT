@@ -83,6 +83,9 @@ const BaseCourseObject = z
     registrationCloseAt: DateTimeLocal,
     isPublished: z.boolean().default(false),
     emptyStringNotation: EmptyStringNotationSchema,
+    // Canonical IANA zone that anchors this course's deadlines. Optional here so
+    // forms that don't surface a picker still validate; the API defaults it.
+    timezone: z.string().min(1).optional(),
   })
   .strict();
 
@@ -100,6 +103,8 @@ const BaseCourseFormObject = z
     registrationOpenAt: DateTimeLocalForm,
     registrationCloseAt: DateTimeLocalForm,
     emptyStringNotation: EmptyStringNotationSchema,
+    // Canonical IANA zone that anchors this course's deadlines (see BaseCourseObject).
+    timezone: z.string().min(1).optional(),
   })
   .strict();
 
