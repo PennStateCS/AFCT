@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import type { Assignment, Problem } from '@prisma/client';
+import type { Assignment, Problem, Course } from '@prisma/client';
 
+import { showToast } from '@/lib/toast';
 import type { EnrollableUser } from '@/types/course';
 import {
   useCourseData,
@@ -161,6 +162,16 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
     [handlers, dialogStates],
   );
 
+  // The Settings tab's inline form has already persisted the change and hands us
+  // the server's updated course — just merge it into local state and confirm.
+  const handleCourseSaved = useCallback(
+    (updated: Partial<Course>) => {
+      setCourse((prev) => (prev ? { ...prev, ...updated } : prev));
+      showToast.success('Course updated!');
+    },
+    [setCourse],
+  );
+
   useEffect(() => {
     if (!isStudent) {
       void loadTabData(tab as TabType);
@@ -204,7 +215,7 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
           onProblemEdit={handleProblemEditClick}
           onProblemDelete={handleProblemDeleteClick}
           onRefreshCourse={refetchCourse}
-          onEditCourse={() => dialogStates.setEditOpen(true)}
+          onCourseSaved={handleCourseSaved}
         />
       )}
 
@@ -212,9 +223,6 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
         <CourseDialogs
           course={course}
           timeZone={timezone}
-          editOpen={dialogStates.editOpen}
-          setEditOpen={dialogStates.setEditOpen}
-          onCourseSave={handlers.handleCourseSave}
           problemOpen={dialogStates.problemOpen}
           setProblemOpen={dialogStates.setProblemOpen}
           editProblemOpen={dialogStates.editProblemOpen}
