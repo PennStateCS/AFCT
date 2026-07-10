@@ -15,6 +15,9 @@ WORKDIR /app
 ENV DISABLE_ERD=true
 ENV SKIP_PRISMA_GENERATE=1
 ENV NEXTJS_IGNORE_ESLINT=1
+# The ERD generator pulls in puppeteer (via mermaid-cli), whose install would
+# otherwise download a ~150MB Chromium we never use — the ERD step is disabled here.
+ENV PUPPETEER_SKIP_DOWNLOAD=1
 
 # python3/make/g++ compile native npm modules (bcrypt). No Java here — the build
 # never runs the evaluator JAR, so a JRE would just be dead weight.
