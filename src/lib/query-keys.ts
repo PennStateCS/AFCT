@@ -47,22 +47,24 @@ export const queryKeys = {
       ['course', courseId, 'activity', opts] as const,
   },
 
-  // --- Assignments (all scoped by courseId) --------------------------------
+  // --- Assignments (all nested under their course so course-level invalidation
+  //     cascades to them) ---------------------------------------------------
   assignment: {
     /**
      * The assignment "shell" (problems view). Shared by the max-points cell, the
      * student navigator, and the student assignment view so they dedupe onto one
-     * read. Scoped by courseId (the fetch is course-scoped).
+     * read. Nested under the course→assignment prefix (like every key below), so
+     * `invalidateQueries(['course', courseId])` reaches it.
      */
     shell: (courseId: string, assignmentId: string) =>
-      ['assignment', courseId, assignmentId] as const,
+      ['course', courseId, 'assignment', assignmentId, 'shell'] as const,
     /**
      * The caller's own submissions/comments/grades for an assignment — the
      * response is user-specific, so it must never be reused across a user switch
      * (the QueryClient is cleared on identity change; see QueryProvider).
      */
     studentContext: (courseId: string, assignmentId: string) =>
-      ['assignment', courseId, assignmentId, 'student-context'] as const,
+      ['course', courseId, 'assignment', assignmentId, 'student-context'] as const,
     groupsAndMappings: (courseId: string, assignmentId: string) =>
       ['course', courseId, 'assignment', assignmentId, 'groups-and-mappings'] as const,
     gradeBreakdown: (courseId: string, assignmentId: string) =>

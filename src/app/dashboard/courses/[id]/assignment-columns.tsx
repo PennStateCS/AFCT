@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 // Lazily fetches the assignment's max points when the row doesn't already have it.
-// Shares the ['assignment', id] cache entry with StudentAssignmentView/StudentNavigator,
+// Shares the assignment.shell cache entry with StudentAssignmentView/StudentNavigator,
 // so multiple rows (and other views) hitting the assignment endpoint dedupe to one request.
 export function MaxPointsCell({
   courseId,
