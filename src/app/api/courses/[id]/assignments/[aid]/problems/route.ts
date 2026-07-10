@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
 import type { ProblemTypeEnum } from '@/schemas/problem';
-import { withCourseAuth } from '@/lib/api/with-auth';
+import { withAssignmentAuth } from '@/lib/api/with-auth';
 import { z } from 'zod';
 
 // Types
@@ -89,9 +89,11 @@ type ProblemSettingsInput = z.infer<typeof ProblemSettingsSchema>;
  *   403: { description: Caller is not course staff (faculty or TA) or a system admin. }
  *   500: { description: Server error. }
  */
-export const POST = withCourseAuth(
-  async (req, ctx: RouteCtx, { user, courseId }) => {
-    const { aid: assignmentId } = await ctx.params;
+export const POST = withAssignmentAuth(
+  async (req, ctx: RouteCtx, { user, courseId, assignment }) => {
+    // The wrapper has verified this assignment belongs to `courseId` (else 404),
+    // so writes keyed on `assignmentId` can't cross into another course.
+    const assignmentId = assignment.id;
 
     try {
       // Parse the request body with better error handling
@@ -187,12 +189,7 @@ export const POST = withCourseAuth(
       // problems were newly added in this request. This enables assigning an existing
       // assignment problem to one or more groups after it already exists on the assignment.
       if (groupId) {
-        // Fetch the assignment to inspect isGroup and course
-        const updatedAssignment = await prisma.assignment.findUnique({
-          where: { id: assignmentId },
-        });
-
-        if (updatedAssignment?.isGroup) {
+        if (assignment.isGroup) {
           let groupIdsToMap: string[] = [];
           if (groupId === 'ALL') {
             const groups = await prisma.group.findMany({ where: { courseId } });
@@ -317,9 +314,9 @@ export const POST = withCourseAuth(
  *   404: { description: Assignment or problem not found in this course. }
  *   500: { description: Server error. }
  */
-export const DELETE = withCourseAuth(
-  async (req, ctx: RouteCtx, { user, courseId }) => {
-    const { aid: assignmentId } = await ctx.params;
+export const DELETE = withAssignmentAuth(
+  async (req, ctx: RouteCtx, { user, courseId, assignment }) => {
+    const assignmentId = assignment.id;
 
     try {
       // Parse the problemId from the request body
@@ -329,17 +326,9 @@ export const DELETE = withCourseAuth(
         return NextResponse.json({ error: 'Missing problemId.' }, { status: 400 });
       }
 
-      // Validate that both the assignment and the problem exist and belong to the
-      // course. Independent reads → run concurrently; the assignment is still
-      // checked first so its 404 takes precedence, preserving prior behavior.
-      const [assignment, problem] = await Promise.all([
-        prisma.assignment.findFirst({ where: { id: assignmentId, courseId } }),
-        prisma.problem.findFirst({ where: { id: problemId, courseId } }),
-      ]);
-
-      if (!assignment) {
-        return NextResponse.json({ error: 'Assignment not found.' }, { status: 404 });
-      }
+      // The wrapper already verified the assignment belongs to this course; still
+      // confirm the problem does too.
+      const problem = await prisma.problem.findFirst({ where: { id: problemId, courseId } });
 
       if (!problem) {
         return NextResponse.json({ error: 'Problem not found in this course.' }, { status: 404 });
