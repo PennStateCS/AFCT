@@ -186,12 +186,7 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
       <h1 className="sr-only">
         {course.code}: {course.name}
       </h1>
-      <CourseHeader
-        course={course}
-        isStudent={isStudent}
-        onPublishToggle={handlePublishToggle}
-        onArchiveToggle={handleArchiveToggle}
-      />
+      <CourseHeader course={course} isStudent={isStudent} />
 
       {isStudent ? (
         <StudentCourseView course={course} tab={tab as TabType} onTabChange={handleTabChange} />
@@ -216,6 +211,8 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
           onProblemDelete={handleProblemDeleteClick}
           onRefreshCourse={refetchCourse}
           onCourseSaved={handleCourseSaved}
+          onPublishToggle={handlePublishToggle}
+          onArchiveToggle={handleArchiveToggle}
         />
       )}
 
