@@ -109,6 +109,7 @@ describe('GET /api/me/courses?view=nav', () => {
     expect(prismaMock.course.findMany).toHaveBeenCalledWith({
       where: {
         roster: { some: { userId: 'student-1' } },
+        deletedAt: null,
         OR: [
           { isPublished: true },
           { roster: { some: { userId: 'student-1', role: { in: ['FACULTY', 'TA'] } } } },
@@ -148,6 +149,7 @@ describe('GET /api/me/courses?view=nav', () => {
     expect(prismaMock.course.findMany).toHaveBeenCalledWith({
       where: {
         roster: { some: { userId: 'admin-1' } },
+        deletedAt: null,
       },
       select: {
         id: true,

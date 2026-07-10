@@ -27,6 +27,7 @@ export default async function ArchivedCoursesPage() {
       userId: id,
       course: {
         isArchived: true,
+        deletedAt: null, // a soft-deleted course is archived too — keep it hidden
       },
     },
     select: {
