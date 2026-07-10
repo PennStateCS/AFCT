@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const prismaMock = vi.hoisted(() => ({
   course: {
     update: vi.fn(),
+    findUnique: vi.fn(),
   },
   roster: {
     findFirst: vi.fn(),
@@ -23,6 +24,8 @@ import { PATCH } from './route';
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
+  // Default: the course is not archived, so the wrapper's archive freeze is a no-op.
+  prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
 });
 
 describe('PATCH /api/courses/[id]/publish', () => {
@@ -123,6 +126,21 @@ describe('PATCH /api/courses/[id]/publish', () => {
     const res = await PATCH(req, { params: Promise.resolve({ id: 'c1' }) });
 
     expect(res.status).toBe(403);
+    expect(prismaMock.course.update).not.toHaveBeenCalled();
+  });
+
+  it('returns 409 and does not update when the course is archived', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+
+    const req = new Request('http://localhost/api/courses/c1/publish', {
+      method: 'PATCH',
+      body: JSON.stringify({ isPublished: true }),
+    });
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(409);
     expect(prismaMock.course.update).not.toHaveBeenCalled();
   });
 

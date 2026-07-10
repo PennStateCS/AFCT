@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 
 const prismaMock = vi.hoisted(() => ({
   group: { findUnique: vi.fn(), update: vi.fn(), delete: vi.fn() },
+  course: { findUnique: vi.fn() },
   roster: { findFirst: vi.fn() },
 }));
 
@@ -18,6 +19,7 @@ import { OPTIONS, PATCH, DELETE } from './route';
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
+  prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
 });
 
 describe('OPTIONS /api/courses/[id]/groups/[groupId]', () => {
@@ -109,6 +111,22 @@ describe('PATCH /api/courses/[id]/groups/[groupId]', () => {
     const body = await res.json();
     expect(body).toEqual({ id: 'g1', name: 'New' });
     expect(activityLogMock).toHaveBeenCalled();
+  });
+
+  it('returns 409 when the course is archived', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+
+    const res = await PATCH(
+      new NextRequest('http://localhost/api/courses/c1/groups/g1', {
+        method: 'PATCH',
+        body: JSON.stringify({ name: 'New' }),
+      }),
+      { params: { id: 'c1', groupId: 'g1' } } as any,
+    );
+    expect(res.status).toBe(409);
+    expect(prismaMock.group.update).not.toHaveBeenCalled();
   });
 
   it('returns 404 when group does not belong to course', async () => {
@@ -237,6 +255,18 @@ describe('DELETE /api/courses/[id]/groups/[groupId]', () => {
     const body = await res.json();
     expect(body).toEqual({ success: true });
     expect(activityLogMock).toHaveBeenCalled();
+  });
+
+  it('returns 409 when the course is archived', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+
+    const res = await DELETE(new NextRequest('http://localhost/api/courses/c1/groups/g1'), {
+      params: { id: 'c1', groupId: 'g1' },
+    } as any);
+    expect(res.status).toBe(409);
+    expect(prismaMock.group.delete).not.toHaveBeenCalled();
   });
 
   it('returns 404 when group does not belong to course', async () => {

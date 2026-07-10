@@ -6,6 +6,7 @@ const prismaMock = vi.hoisted(() => ({
   user: { findMany: vi.fn() },
   assignment: { findMany: vi.fn() },
   assignmentProblemGrade: { groupBy: vi.fn() },
+  course: { findUnique: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -20,6 +21,7 @@ import { GET, POST } from './route';
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
+  prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
   activityLogMock.mockResolvedValue(undefined);
 });
 
@@ -354,5 +356,20 @@ describe('POST /api/courses/[id]/grades (export log)', () => {
       }),
     );
     consoleSpy.mockRestore();
+  });
+
+  it('returns 409 and records nothing when the course is archived', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+
+    const res = await POST(postReq({}), { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(409);
+    expect(activityLogMock).not.toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({ action: 'GRADES_EXPORTED' }),
+    );
   });
 });

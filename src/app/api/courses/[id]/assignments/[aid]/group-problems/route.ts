@@ -173,5 +173,5 @@ export const DELETE = withCourseAuth(
       return NextResponse.json({ error: 'Failed to delete group problems' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'GROUP_PROBLEMS_REMOVE_DENIED' },
+  { access: 'manage', deniedAction: 'GROUP_PROBLEMS_REMOVE_DENIED', blockWhenArchived: true },
 );

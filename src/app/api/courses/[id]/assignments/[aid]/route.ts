@@ -364,7 +364,7 @@ export const PUT = withCourseAuth(
       return NextResponse.json({ error: 'Failed to update assignment' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'ASSIGNMENT_UPDATE_DENIED' },
+  { access: 'manage', deniedAction: 'ASSIGNMENT_UPDATE_DENIED', blockWhenArchived: true },
 );
 
 /**
@@ -542,7 +542,7 @@ export const PATCH = withCourseAuth(
       return NextResponse.json({ error: 'Failed to update assignment' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'ASSIGNMENT_UPDATE_DENIED' },
+  { access: 'manage', deniedAction: 'ASSIGNMENT_UPDATE_DENIED', blockWhenArchived: true },
 );
 
 /**
@@ -627,5 +627,5 @@ export const DELETE = withCourseAuth(
       return NextResponse.json({ error: 'Failed to delete assignment' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'ASSIGNMENT_DELETE_DENIED' },
+  { access: 'manage', deniedAction: 'ASSIGNMENT_DELETE_DENIED', blockWhenArchived: true },
 );

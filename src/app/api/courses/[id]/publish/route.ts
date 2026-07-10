@@ -90,5 +90,5 @@ export const PATCH = withCourseAuth(
     }
   },
   // Course staff (faculty or TA) or admin — the default role set. TA = faculty.
-  { access: 'manage', deniedAction: 'COURSE_PUBLISH_DENIED' },
+  { access: 'manage', deniedAction: 'COURSE_PUBLISH_DENIED', blockWhenArchived: true },
 );

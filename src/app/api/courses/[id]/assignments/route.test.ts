@@ -27,6 +27,7 @@ import { GET, POST } from './route';
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
+  prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
   resolveTzMock.mockResolvedValue('America/New_York');
   toEndOfDayMock.mockReturnValue(new Date('2026-01-10T23:59:00.000Z'));
   toDateTimeMock.mockReturnValue(new Date('2026-01-12T12:00:00.000Z'));
@@ -244,6 +245,17 @@ describe('POST /api/courses/[id]/assignments', () => {
       expect.objectContaining({ data: expect.objectContaining({ courseId: 'c1', title: 'New' }) }),
     );
     expect(activityLogMock).toHaveBeenCalled();
+  });
+
+  it('returns 409 when the course is archived', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+
+    const res = await post({ title: 'New', dueDate: '2026-01-10' });
+
+    expect(res.status).toBe(409);
+    expect(prismaMock.assignment.create).not.toHaveBeenCalled();
   });
 
   it('returns 500 and logs when creation fails', async () => {

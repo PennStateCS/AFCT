@@ -265,5 +265,5 @@ export const POST = withCourseAuth(
       return NextResponse.json({ error: 'Failed to save grades' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'PROBLEM_GRADE_UPDATE_DENIED' },
+  { access: 'manage', deniedAction: 'PROBLEM_GRADE_UPDATE_DENIED', blockWhenArchived: true },
 );
