@@ -59,8 +59,8 @@ export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
   // -- render ---------------------------------------------------------------
   return (
     <>
-      {/* Title with the badges (and course status) pulled to its right */}
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+      {/* Title on the left; badges pinned to the top-right of the card */}
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <CardTitle
           id="course-page-title"
           role="heading"
