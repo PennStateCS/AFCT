@@ -23,6 +23,8 @@ COPY --from=eclipse-temurin:21-jre@sha256:d2b9f8f12212cadcfdf889461531784e8fd097
 ENV NODE_ENV=development
 ENV DISABLE_ERD=true
 ENV NEXT_TELEMETRY_DISABLED=1
+# ERD is disabled, so skip puppeteer's ~150MB Chromium download during npm ci.
+ENV PUPPETEER_SKIP_DOWNLOAD=1
 # Put the app's own bin dir (cfganalyzer) on PATH.
 ENV PATH="/app/bin:${PATH}"
 
