@@ -46,6 +46,19 @@ const SIGNUP_IDENTIFIER_CONFIG: BucketConfig = {
   frictionDelayMs: 750,
 };
 
+// Email-availability checks are a legitimate signup-form affordance, so the limit is
+// generous — but it caps bulk account enumeration from one IP. Only "ok" or "blocked"
+// (thresholds above maxAttempts disable friction/challenge for this background call).
+const CHECK_EMAIL_IP_CONFIG: BucketConfig = {
+  windowMs: 10 * 60 * 1000,
+  maxAttempts: 30,
+  frictionThreshold: Number.MAX_SAFE_INTEGER,
+  challengeThreshold: Number.MAX_SAFE_INTEGER,
+  challengeCooldownMs: 0,
+  blockDurationMs: 15 * 60 * 1000,
+  frictionDelayMs: 0,
+};
+
 const HUMAN_DELAY_THRESHOLD_MS = 600;
 
 export type LimitReason = 'ip' | 'account';
@@ -239,6 +252,20 @@ export const evaluateSignupRateLimit = (params: {
 
   return ensureEvaluations(configs, params.interactionMs);
 };
+
+/**
+ * IP-based limit for the unauthenticated email-availability check. Returns `blocked`
+ * once an IP exceeds the (generous) window budget, so the endpoint can't be used to
+ * bulk-enumerate registered accounts. Never challenges — it's a background form check.
+ */
+export const evaluateCheckEmailRateLimit = (params: { ip?: string }): RateLimitDecision =>
+  ensureEvaluations([
+    {
+      key: bucketKey('check-email:ip', params.ip),
+      config: CHECK_EMAIL_IP_CONFIG,
+      reason: 'ip' as LimitReason,
+    },
+  ]);
 
 export const applyBotFriction = async (delayMs?: number) => {
   if (!delayMs || delayMs <= 0) {

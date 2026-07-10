@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { canManageCourse, isAdmin } from '@/lib/permissions';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withCourseAuth } from '@/lib/api/with-auth';
-import { logDenial } from '@/lib/api/activity';
+import { logDenial, logError } from '@/lib/api/activity';
 
 /**
  * Removes a user from a course roster. Permission is tiered: the shared wrapper
@@ -93,6 +93,7 @@ export const DELETE = withCourseAuth(
         metadata: {
           userId: user.id,
           courseId,
+          targetUserId: userId,
           removedUserId: userId,
           count: deleted.count,
         },
@@ -101,16 +102,15 @@ export const DELETE = withCourseAuth(
       return NextResponse.json({ success: true, removed: deleted.count });
     } catch (err) {
       console.error('DELETE /api/courses/[id]/roster/[userId] error:', err);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'ROSTER_REMOVE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+        error: err,
       });
       return NextResponse.json({ error: 'Server error' }, { status: 500 });
     }
   },
-  { access: 'manage', roles: ['FACULTY'], deniedAction: 'ROSTER_REMOVE_DENIED' },
+  { access: 'manage', roles: ['FACULTY'], blockWhenArchived: true, deniedAction: 'ROSTER_REMOVE_DENIED' },
 );
 
 /**
@@ -266,14 +266,13 @@ export const PATCH = withCourseAuth(
       return NextResponse.json({ success: true, roster: updated });
     } catch (err) {
       console.error('PATCH /api/courses/[id]/roster/[userId] error:', err);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'ROSTER_UPDATE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+        error: err,
       });
       return NextResponse.json({ error: 'Server error' }, { status: 500 });
     }
   },
-  { access: 'manage', roles: ['FACULTY'], deniedAction: 'ROSTER_UPDATE_DENIED' },
+  { access: 'manage', roles: ['FACULTY'], blockWhenArchived: true, deniedAction: 'ROSTER_UPDATE_DENIED' },
 );

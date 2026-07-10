@@ -4,6 +4,12 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { logError } from '@/lib/api/activity';
+
+// Concrete path params for this route. Next guarantees each dynamic segment is
+// present, so typing them keeps the destructured values `string` (rather than
+// `string | undefined`) under noUncheckedIndexedAccess.
+type RouteCtx = { params: Promise<{ id: string; aid: string; pid: string }> };
 
 const AssignmentProblemSettingsSchema = z.object({
   maxPoints: z.number().min(0),
@@ -50,7 +56,7 @@ type AssignmentProblemSettingsInput = z.infer<typeof AssignmentProblemSettingsSc
  *   500: { description: Server error. }
  */
 export const PUT = withCourseAuth(
-  async (req, ctx, { user, courseId }) => {
+  async (req, ctx: RouteCtx, { user, courseId }) => {
     const { aid: assignmentId, pid: problemId } = await ctx.params;
 
     try {
@@ -131,18 +137,17 @@ export const PUT = withCourseAuth(
             problemTitle: link.problem.title,
           },
         });
-      } catch (logError) {
-        console.warn('Failed to log assignment problem update:', logError);
+      } catch (logErr) {
+        console.warn('Failed to log assignment problem update:', logErr);
       }
 
       return NextResponse.json({ success: true, assignmentProblem: updated });
     } catch (error) {
       console.error('Failed to update assignment problem settings:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: null,
         action: 'ASSIGNMENT_PROBLEM_SETTINGS_UPDATE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
       });
       return NextResponse.json(
         { error: 'Failed to update assignment problem settings.' },
@@ -150,5 +155,5 @@ export const PUT = withCourseAuth(
       );
     }
   },
-  { access: 'manage', deniedAction: 'ASSIGNMENT_PROBLEM_SETTINGS_UPDATE_DENIED' },
+  { access: 'manage', deniedAction: 'ASSIGNMENT_PROBLEM_SETTINGS_UPDATE_DENIED', blockWhenArchived: true },
 );

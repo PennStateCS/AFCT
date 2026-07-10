@@ -14,6 +14,8 @@ import {
 } from '@/lib/security/rate-limiter';
 import { verifyCaptchaToken } from '@/lib/security/captcha';
 import { getLoginLockoutPolicy } from '@/lib/login-policy';
+import { isSessionIdleExpired } from '@/lib/session-timeout';
+import { getServerIdleTimeoutMs } from '@/lib/session-timeout.server';
 import type { Adapter } from 'next-auth/adapters';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -121,7 +123,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.isAdmin = user.isAdmin;
         token.id = user.id;
@@ -137,7 +139,30 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           token.firstName = fullUser?.firstName || undefined;
           token.lastName = fullUser?.lastName || undefined;
         }
+        // Start the idle clock at sign-in.
+        token.lastActivity = Date.now();
+        token.idleTimeoutMs = await getServerIdleTimeoutMs();
       }
+
+      // Explicit activity heartbeat from the client (`update()`): refresh the idle
+      // clock, but never revive a session that has already gone idle-expired.
+      if (trigger === 'update') {
+        const now = Date.now();
+        if (!isSessionIdleExpired(token.lastActivity, token.idleTimeoutMs, now)) {
+          token.lastActivity = now;
+          token.idleTimeoutMs = await getServerIdleTimeoutMs(now);
+        }
+      }
+
+      // Backfill tokens issued before idle tracking existed so a deploy doesn't
+      // instantly sign everyone out; treat them as active as of now.
+      if (typeof token.lastActivity !== 'number') {
+        token.lastActivity = Date.now();
+      }
+      if (typeof token.idleTimeoutMs !== 'number') {
+        token.idleTimeoutMs = await getServerIdleTimeoutMs();
+      }
+
       return token;
     },
     async session({ session, token }) {
@@ -145,6 +170,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.id = token.id as string;
         session.user.isAdmin = Boolean(token.isAdmin);
         session.user.avatar = (token.avatar as string | null) || undefined;
+
+        // Idle-timeout backstop mirroring the edge middleware: a token whose last
+        // activity is older than its idle limit must not grant access. The client
+        // watcher normally signs out first; this covers server-side consumers
+        // (`auth()`, the route wrappers) if it doesn't.
+        if (isSessionIdleExpired(token.lastActivity, token.idleTimeoutMs, Date.now())) {
+          session.user.isAdmin = false;
+          session.user.inactive = true;
+          session.user.firstName = token.firstName as string | undefined;
+          session.user.lastName = token.lastName as string | undefined;
+          session.user.mustChangePassword = Boolean(token.mustChangePassword);
+          return session;
+        }
 
         // Always fetch fresh user data to ensure profile updates are reflected —
         // and, critically, to catch an account that has since been deleted or

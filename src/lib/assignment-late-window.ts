@@ -20,7 +20,8 @@ export function computeLateSubmissionState(options: {
   existingAllowLate: boolean;
   existingLateCutoff: Date | null;
   dueDate: Date;
-  userTimezone: string;
+  // The course's timezone — the late cutoff wall-time is interpreted in it.
+  timezone: string;
 }): LateSubmissionStateResult {
   const {
     incomingAllowLate,
@@ -28,7 +29,7 @@ export function computeLateSubmissionState(options: {
     existingAllowLate,
     existingLateCutoff,
     dueDate,
-    userTimezone,
+    timezone,
   } = options;
 
   const allowLateSubmissions =
@@ -50,7 +51,7 @@ export function computeLateSubmissionState(options: {
         message: 'Late submission cutoff is required when late submissions are enabled.',
       };
     } else {
-      lateCutoff = toDateTimeInTimezone(incomingLateCutoff, userTimezone);
+      lateCutoff = toDateTimeInTimezone(incomingLateCutoff, timezone);
     }
 
     if (lateCutoff && lateCutoff < dueDate) {

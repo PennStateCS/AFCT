@@ -3,7 +3,8 @@
  * Note: This requires the enhanced ActivityLog schema with foreign keys
  */
 
-import { Prisma, PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { getClientIp } from './ip-utils';
 
 export type ActivityCategory =

@@ -50,8 +50,9 @@ export function GradesLmsExportDialog({
   useEffect(() => {
     if (!open) return;
     if (assignmentIds) return;
-    if (assignments.length > 0) {
-      setAssignmentIds([assignments[0].id]);
+    const first = assignments[0];
+    if (first) {
+      setAssignmentIds([first.id]);
     }
   }, [open, assignmentIds, assignments]);
 

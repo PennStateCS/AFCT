@@ -5,6 +5,9 @@ const prismaMock = vi.hoisted(() => ({
     findUnique: vi.fn(),
     update: vi.fn(),
   },
+  course: {
+    findUnique: vi.fn(),
+  },
   roster: {
     findFirst: vi.fn(),
   },
@@ -26,6 +29,7 @@ describe('PUT /api/courses/[id]/[aid]/problems/[pid]', () => {
     activityLogMock.mockReset();
     authMock.mockResolvedValue({ user: { id: 'admin-1', isAdmin: true } });
     prismaMock.roster.findFirst.mockResolvedValue(null);
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
     prismaMock.assignmentProblem.findUnique.mockResolvedValue({
       assignment: { courseId: 'c1' },
       problem: { title: 'Problem 1' },
@@ -50,6 +54,20 @@ describe('PUT /api/courses/[id]/[aid]/problems/[pid]', () => {
 
     const res = await PUT(req, { params: Promise.resolve({ id: 'c1', aid: 'a1', pid: 'p1' }) });
     expect(res.status).toBe(403);
+  });
+
+  it('returns 409 when the course is archived', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems/p1', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ maxPoints: 10, maxSubmissions: 2, autograderEnabled: true }),
+    });
+
+    const res = await PUT(req, { params: Promise.resolve({ id: 'c1', aid: 'a1', pid: 'p1' }) });
+    expect(res.status).toBe(409);
+    expect(prismaMock.assignmentProblem.update).not.toHaveBeenCalled();
   });
 
   it('returns 400 for invalid payload', async () => {

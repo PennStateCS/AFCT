@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import type { Assignment, Problem } from '@prisma/client';
+import type { Assignment, Problem, Course } from '@prisma/client';
 
+import { showToast } from '@/lib/toast';
 import type { EnrollableUser } from '@/types/course';
 import {
   useCourseData,
@@ -18,8 +19,8 @@ import { StudentCourseView } from '@/components/course/StudentCourseView';
 import { AdminCourseView } from '@/components/course/AdminCourseView';
 import LoadingSpinner from '@/components/ui/loading-spinner';
 import { CourseDialogs } from '@/components/course/CourseDialogs';
-import { FullCourse } from '@/types/course';
-import { TabType } from '@/types/course';
+import type { FullCourse } from '@/types/course';
+import type { TabType } from '@/types/course';
 
 export default function CourseClient({ initialCourse }: { initialCourse?: FullCourse | null }) {
   const { id } = useParams();
@@ -91,7 +92,7 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
 
   const handleConfirm = useCallback(() => {
     if (dialogStates.pendingDelete) {
-      handlers.handleDelete(dialogStates.pendingDelete);
+      void handlers.handleDelete(dialogStates.pendingDelete);
     }
     dialogStates.setConfirmOpen(false);
     dialogStates.setPendingDelete(null);
@@ -147,7 +148,7 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
   const handleEnrollUserWrapper = useCallback(
     async (user: EnrollableUser) => {
       if (!courseId) return;
-      await handleEnrollUser(user, courseId, refetchCourse);
+      await handleEnrollUser(user, courseId, () => void refetchCourse());
     },
     [handleEnrollUser, courseId, refetchCourse],
   );
@@ -159,6 +160,16 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
       dialogStates.setSelectedAssignment(null);
     },
     [handlers, dialogStates],
+  );
+
+  // The Settings tab's inline form has already persisted the change and hands us
+  // the server's updated course — just merge it into local state and confirm.
+  const handleCourseSaved = useCallback(
+    (updated: Partial<Course>) => {
+      setCourse((prev) => (prev ? { ...prev, ...updated } : prev));
+      showToast.success('Course updated!');
+    },
+    [setCourse],
   );
 
   useEffect(() => {
@@ -175,16 +186,12 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
       <h1 className="sr-only">
         {course.code}: {course.name}
       </h1>
-      <CourseHeader
-        course={course}
-        isStudent={isStudent}
-        onEditClick={() => dialogStates.setEditOpen(true)}
-        onPublishToggle={handlePublishToggle}
-        onArchiveToggle={handleArchiveToggle}
-      />
 
       {isStudent ? (
-        <StudentCourseView course={course} tab={tab as TabType} onTabChange={handleTabChange} />
+        <>
+          <CourseHeader course={course} isStudent={isStudent} />
+          <StudentCourseView course={course} tab={tab as TabType} onTabChange={handleTabChange} />
+        </>
       ) : (
         <AdminCourseView
           course={course}
@@ -205,6 +212,9 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
           onProblemEdit={handleProblemEditClick}
           onProblemDelete={handleProblemDeleteClick}
           onRefreshCourse={refetchCourse}
+          onCourseSaved={handleCourseSaved}
+          onPublishToggle={handlePublishToggle}
+          onArchiveToggle={handleArchiveToggle}
         />
       )}
 
@@ -212,9 +222,6 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
         <CourseDialogs
           course={course}
           timeZone={timezone}
-          editOpen={dialogStates.editOpen}
-          setEditOpen={dialogStates.setEditOpen}
-          onCourseSave={handlers.handleCourseSave}
           problemOpen={dialogStates.problemOpen}
           setProblemOpen={dialogStates.setProblemOpen}
           editProblemOpen={dialogStates.editProblemOpen}

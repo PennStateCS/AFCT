@@ -16,7 +16,9 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { NextResponse } from 'next/server';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { isAdmin } from '@/lib/permissions';
+import { parseValidDate } from '@/lib/date';
 
 /**
  * Enrolls the signed-in user in a course via its 6-character registration code,
@@ -44,7 +46,7 @@ import { isAdmin } from '@/lib/permissions';
  */
 export async function POST(req: Request) {
   const session = await auth();
-  if (!session?.user) {
+  if (!session?.user || session.user.inactive) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -88,10 +90,8 @@ export async function POST(req: Request) {
     );
   }
 
-  const registrationOpenAt = course.registrationOpenAt ? new Date(course.registrationOpenAt) : null;
-  const registrationCloseAt = course.registrationCloseAt
-    ? new Date(course.registrationCloseAt)
-    : null;
+  const registrationOpenAt = parseValidDate(course.registrationOpenAt);
+  const registrationCloseAt = parseValidDate(course.registrationCloseAt);
 
   if (!registrationOpenAt || !registrationCloseAt) {
     return NextResponse.json(
@@ -138,12 +138,11 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     console.error('POST /api/courses/join error:', error);
-    await createEnhancedActivityLog(prisma, req, {
+    await logError(req, {
       userId,
       action: 'COURSE_JOIN_ERROR',
-      severity: 'ERROR',
+      error,
       category: 'COURSE',
-      metadata: { error: error instanceof Error ? error.message : 'unknown error' },
     });
     return NextResponse.json({ error: 'Failed to join the course.' }, { status: 500 });
   }

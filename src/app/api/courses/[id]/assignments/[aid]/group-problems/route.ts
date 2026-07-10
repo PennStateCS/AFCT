@@ -40,8 +40,7 @@ export const GET = withCourseAuth(
 
       const mapByGroup: Record<string, string[]> = {};
       for (const m of mappings) {
-        if (!mapByGroup[m.groupId]) mapByGroup[m.groupId] = [];
-        mapByGroup[m.groupId].push(m.problemId);
+        (mapByGroup[m.groupId] ??= []).push(m.problemId);
       }
 
       const result = groups.map((g) => ({
@@ -173,5 +172,5 @@ export const DELETE = withCourseAuth(
       return NextResponse.json({ error: 'Failed to delete group problems' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'GROUP_PROBLEMS_REMOVE_DENIED' },
+  { access: 'manage', deniedAction: 'GROUP_PROBLEMS_REMOVE_DENIED', blockWhenArchived: true },
 );

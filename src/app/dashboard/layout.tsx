@@ -10,6 +10,7 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import AuthGate from '@/components/AuthGate';
 import { NavbarBreadcrumbProvider } from '@/components/navbar/NavbarBreadcrumbContext';
 import QueryProvider from '@/components/providers/QueryProvider';
+import SessionWatcher from '@/components/session/SessionWatcher';
 
 export const metadata: Metadata = {
   title: {
@@ -25,7 +26,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // Default to open for first-time users (no cookie), otherwise use cookie value
   const defaultOpen = sidebarCookie ? sidebarCookie.value === 'true' : true;
 
-  if (!session || !session.user) {
+  // Reject a missing session, or one the session callback marked inactive — a
+  // disabled/deleted account or one whose idle-timeout has lapsed — so a stale
+  // token can't SSR-render a dashboard page.
+  if (!session || !session.user || session.user.inactive) {
     redirect('/login');
   }
 
@@ -46,6 +50,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     >
       <AuthGate>
         <QueryProvider>
+          <SessionWatcher />
           <NavbarBreadcrumbProvider>
             <div className="flex min-h-screen w-full">
               <DashboardSidebarShell />

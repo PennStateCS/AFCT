@@ -28,7 +28,7 @@ export function useEffectiveTimezone() {
     queryFn: async () => {
       const res = await fetch(apiPaths.systemSettingsPublic(), { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed to load public settings');
-      return (await res.json()) as { timezone?: string | null };
+      return (await res.json()) as { timezone?: string | null; clock24Hour?: boolean };
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -38,7 +38,10 @@ export function useEffectiveTimezone() {
   // Before either resolves (or on error) both are empty, so we fall back to the
   // browser timezone — matching the previous hook's default.
   const timezone = userTz || serverTz || browserTz || 'UTC';
+  // App-wide clock preference (admin System Settings). Defaults to 12-hour until it
+  // resolves. `hour12` is what the date formatters take.
+  const hour12 = !(publicSettingsQuery.data?.clock24Hour ?? false);
   const loading = profileQuery.isLoading || publicSettingsQuery.isLoading;
 
-  return { timezone, loading };
+  return { timezone, hour12, loading };
 }

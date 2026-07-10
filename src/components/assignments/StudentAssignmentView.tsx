@@ -16,11 +16,11 @@ import ProblemWorkspace from '@/components/assignments/ProblemWorkspace';
 import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
 import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { formatDateTimeInTimeZone } from '@/lib/date';
+import { formatDeadlineDual } from '@/lib/date';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { fetchJson } from '@/lib/query-fetch';
-import {
+import type {
   AssignmentWithDetails,
   StudentAssignmentContext,
   StudentProblemComment,
@@ -46,7 +46,7 @@ export default function StudentAssignmentPage({
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session } = useSession();
-  const { timezone } = useEffectiveTimezone();
+  const { timezone, hour12 } = useEffectiveTimezone();
   const userId = session?.user?.id ?? null;
   // No per-course role is available here; a non-admin viewer is treated as a
   // student for the purpose of hiding unpublished assignments.
@@ -208,7 +208,7 @@ export default function StudentAssignmentPage({
       if (prev && assignment.problems.some((ap) => ap.problem.id === prev)) {
         return prev;
       }
-      return assignment.problems[0].problem.id;
+      return assignment.problems[0]?.problem.id ?? null;
     });
   }, [assignment, searchParams]);
 
@@ -256,10 +256,13 @@ export default function StudentAssignmentPage({
 
   const allowLateSubmissions = assignment.allowLateSubmissions ?? false;
   const lateCutoffDate = assignment.lateCutoff ? new Date(assignment.lateCutoff) : null;
-  const dueDisplay = formatDateTimeInTimeZone(assignment.dueDate, timezone);
+  // Show deadlines in the student's local zone AND the course zone (when they differ),
+  // so a student in a different timezone can't misread the cutoff.
+  const courseZone = assignment.course?.timezone ?? null;
+  const dueDisplay = formatDeadlineDual(assignment.dueDate, timezone, courseZone, hour12);
   const lateCutoffDisplay = allowLateSubmissions
     ? lateCutoffDate
-      ? formatDateTimeInTimeZone(lateCutoffDate, timezone)
+      ? formatDeadlineDual(lateCutoffDate, timezone, courseZone, hour12)
       : 'Never'
     : 'Not allowed';
   const latePolicyDisplay = !allowLateSubmissions

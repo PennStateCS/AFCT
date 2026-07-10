@@ -20,13 +20,13 @@ export function toEndOfDayInTimezone(
   let year: number, month: number, day: number, hour: number, minute: number;
 
   if (hasTime) {
-    const [datePart, timePart] = datetimeString.split('T');
-    [year, month, day] = datePart.split('-').map(Number);
+    const [datePart = '', timePart = ''] = datetimeString.split('T');
+    [year = NaN, month = NaN, day = NaN] = datePart.split('-').map(Number);
     const timeParts = timePart.split(':');
     hour = Number(timeParts[0]);
     minute = Number(timeParts[1]);
   } else {
-    [year, month, day] = datetimeString.split('-').map(Number);
+    [year = NaN, month = NaN, day = NaN] = datetimeString.split('-').map(Number);
     hour = 23;
     minute = 59;
   }
@@ -87,13 +87,13 @@ export function toDateTimeInTimezone(
   let year: number, month: number, day: number, hour: number, minute: number;
 
   if (hasTime) {
-    const [datePart, timePart] = datetimeString.split('T');
-    [year, month, day] = datePart.split('-').map(Number);
+    const [datePart = '', timePart = ''] = datetimeString.split('T');
+    [year = NaN, month = NaN, day = NaN] = datePart.split('-').map(Number);
     const timeParts = timePart.split(':');
     hour = Number(timeParts[0]);
     minute = Number(timeParts[1]);
   } else {
-    [year, month, day] = datetimeString.split('-').map(Number);
+    [year = NaN, month = NaN, day = NaN] = datetimeString.split('-').map(Number);
     hour = 0;
     minute = 0;
   }

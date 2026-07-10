@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { routeCtx, testRequest } from '@/test/route';
 
 const prismaMock = vi.hoisted(() => ({
   systemSettings: {
@@ -24,7 +25,7 @@ describe('GET /api/system-settings', () => {
   it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
-    const res = await GET();
+    const res = await GET(testRequest(), routeCtx());
 
     expect(res.status).toBe(401);
   });
@@ -32,7 +33,7 @@ describe('GET /api/system-settings', () => {
   it('returns 403 for a non-privileged role', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
 
-    const res = await GET();
+    const res = await GET(testRequest(), routeCtx());
 
     expect(res.status).toBe(403);
     expect(prismaMock.systemSettings.findUnique).not.toHaveBeenCalled();
@@ -42,7 +43,7 @@ describe('GET /api/system-settings', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.systemSettings.findUnique.mockResolvedValue(null);
 
-    const res = await GET();
+    const res = await GET(testRequest(), routeCtx());
 
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -50,7 +51,9 @@ describe('GET /api/system-settings', () => {
       timezone: 'UTC',
       maxUploadSizeMb: 25,
       allowSignup: true,
-      sessionTimeoutMinutes: 20,
+      signupAllowedDomains: '',
+      clock24Hour: false,
+      sessionTimeoutMinutes: 60,
       submissionEvalTimeoutMs: 30000,
       submissionEvalMaxMemoryMb: 256,
       submissionResubmitCooldownMs: 10000,
@@ -84,7 +87,7 @@ describe('GET /api/system-settings', () => {
       submissionAnalyzerLimit: 40,
     });
 
-    const res = await GET();
+    const res = await GET(testRequest(), routeCtx());
 
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -92,6 +95,8 @@ describe('GET /api/system-settings', () => {
       timezone: 'America/New_York',
       maxUploadSizeMb: 100,
       allowSignup: false,
+      signupAllowedDomains: '',
+      clock24Hour: false,
       sessionTimeoutMinutes: 45,
       submissionEvalTimeoutMs: 45000,
       submissionEvalMaxMemoryMb: 512,
@@ -120,7 +125,7 @@ describe('PUT /api/system-settings', () => {
       body: JSON.stringify({ timezone: 'UTC', maxUploadSizeMb: 50 }),
     });
 
-    const res = await PUT(req);
+    const res = await PUT(req, routeCtx());
 
     expect(res.status).toBe(401);
   });
@@ -134,7 +139,7 @@ describe('PUT /api/system-settings', () => {
       body: 'not-json',
     });
 
-    const res = await PUT(req);
+    const res = await PUT(req, routeCtx());
 
     expect(res.status).toBe(400);
   });
@@ -147,7 +152,7 @@ describe('PUT /api/system-settings', () => {
       body: JSON.stringify({ timezone: 'Bad/Zone', maxUploadSizeMb: 10 }),
     });
 
-    const res = await PUT(req);
+    const res = await PUT(req, routeCtx());
 
     expect(res.status).toBe(400);
   });
@@ -159,7 +164,7 @@ describe('PUT /api/system-settings', () => {
       timezone: 'UTC',
       maxUploadSizeMb: 1,
       allowSignup: true,
-      sessionTimeoutMinutes: 20,
+      sessionTimeoutMinutes: 60,
     });
 
     const req = new Request('http://localhost/api/system-settings', {
@@ -167,13 +172,13 @@ describe('PUT /api/system-settings', () => {
       body: JSON.stringify({ timezone: 'UTC', maxUploadSizeMb: -5 }),
     });
 
-    const res = await PUT(req);
+    const res = await PUT(req, routeCtx());
 
     expect(res.status).toBe(200);
     expect(prismaMock.systemSettings.upsert).toHaveBeenCalledWith({
       where: { id: 1 },
-      update: { timezone: 'UTC', maxUploadSizeMb: 1, sessionTimeoutMinutes: 20 },
-      create: { id: 1, timezone: 'UTC', maxUploadSizeMb: 1, sessionTimeoutMinutes: 20 },
+      update: { timezone: 'UTC', maxUploadSizeMb: 1, sessionTimeoutMinutes: 60 },
+      create: { id: 1, timezone: 'UTC', maxUploadSizeMb: 1, sessionTimeoutMinutes: 60 },
     });
   });
 
@@ -202,7 +207,7 @@ describe('PUT /api/system-settings', () => {
       }),
     });
 
-    const res = await PUT(req);
+    const res = await PUT(req, routeCtx());
 
     expect(res.status).toBe(200);
     expect(prismaMock.systemSettings.upsert).toHaveBeenCalledWith({
@@ -237,6 +242,57 @@ describe('PUT /api/system-settings', () => {
     });
   });
 
+  it('normalizes and persists the signup domain allow-list', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.systemSettings.upsert.mockResolvedValue({
+      id: 1,
+      timezone: 'UTC',
+      maxUploadSizeMb: 25,
+      allowSignup: true,
+      signupAllowedDomains: 'psu.edu,example.edu',
+      sessionTimeoutMinutes: 60,
+    });
+
+    const req = new Request('http://localhost/api/system-settings', {
+      method: 'PUT',
+      body: JSON.stringify({
+        timezone: 'UTC',
+        maxUploadSizeMb: 25,
+        signupAllowedDomains: ' @PSU.edu, example.edu; psu.edu ',
+      }),
+    });
+
+    const res = await PUT(req, routeCtx());
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.systemSettings.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({ signupAllowedDomains: 'psu.edu,example.edu' }),
+        create: expect.objectContaining({ signupAllowedDomains: 'psu.edu,example.edu' }),
+      }),
+    );
+    const body = await res.json();
+    expect(body.signupAllowedDomains).toBe('psu.edu,example.edu');
+  });
+
+  it('rejects an invalid domain in the allow-list (400, no upsert)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+
+    const req = new Request('http://localhost/api/system-settings', {
+      method: 'PUT',
+      body: JSON.stringify({
+        timezone: 'UTC',
+        maxUploadSizeMb: 25,
+        signupAllowedDomains: 'psu.edu, notadomain',
+      }),
+    });
+
+    const res = await PUT(req, routeCtx());
+
+    expect(res.status).toBe(400);
+    expect(prismaMock.systemSettings.upsert).not.toHaveBeenCalled();
+  });
+
   it('clamps and persists submission queue settings when provided', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.systemSettings.upsert.mockResolvedValue({
@@ -244,7 +300,7 @@ describe('PUT /api/system-settings', () => {
       timezone: 'UTC',
       maxUploadSizeMb: 25,
       allowSignup: true,
-      sessionTimeoutMinutes: 20,
+      sessionTimeoutMinutes: 60,
       submissionEvalTimeoutMs: 600000,
       submissionEvalMaxMemoryMb: 64,
       submissionResubmitCooldownMs: 10000,
@@ -263,7 +319,7 @@ describe('PUT /api/system-settings', () => {
       }),
     });
 
-    const res = await PUT(req);
+    const res = await PUT(req, routeCtx());
 
     expect(res.status).toBe(200);
     const call = prismaMock.systemSettings.upsert.mock.calls[0][0];
@@ -283,7 +339,7 @@ describe('PUT /api/system-settings', () => {
       timezone: 'UTC',
       maxUploadSizeMb: 25,
       allowSignup: true,
-      sessionTimeoutMinutes: 20,
+      sessionTimeoutMinutes: 60,
       submissionEvalTimeoutMs: 30000,
       submissionEvalMaxMemoryMb: 256,
       submissionResubmitCooldownMs: 10000,
@@ -306,6 +362,7 @@ describe('PUT /api/system-settings', () => {
 
     const res = await PUT(
       putBody({ hcaptchaSiteKey: ' site-1 ', hcaptchaSecretKey: ' secret-1 ' }),
+      routeCtx(),
     );
 
     expect(res.status).toBe(200);
@@ -321,7 +378,7 @@ describe('PUT /api/system-settings', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     okUpsert();
 
-    const res = await PUT(putBody({ hcaptchaSiteKey: 'site-1', hcaptchaSecretKey: '' }));
+    const res = await PUT(putBody({ hcaptchaSiteKey: 'site-1', hcaptchaSecretKey: '' }), routeCtx());
 
     expect(res.status).toBe(200);
     const call = prismaMock.systemSettings.upsert.mock.calls[0][0];
@@ -333,7 +390,7 @@ describe('PUT /api/system-settings', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     okUpsert();
 
-    const res = await PUT(putBody({ hcaptchaSecretClear: true, hcaptchaSecretKey: 'ignored' }));
+    const res = await PUT(putBody({ hcaptchaSecretClear: true, hcaptchaSecretKey: 'ignored' }), routeCtx());
 
     expect(res.status).toBe(200);
     const call = prismaMock.systemSettings.upsert.mock.calls[0][0];
@@ -355,7 +412,7 @@ describe('PUT /api/system-settings', () => {
       body: JSON.stringify({ timezone: 'UTC', maxUploadSizeMb: 25, sessionTimeoutMinutes: 1 }),
     });
 
-    const res = await PUT(req);
+    const res = await PUT(req, routeCtx());
 
     expect(res.status).toBe(200);
     expect(prismaMock.systemSettings.upsert).toHaveBeenCalledWith({
@@ -368,7 +425,7 @@ describe('PUT /api/system-settings', () => {
   it('returns 403 for a non-privileged role', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
 
-    const res = await PUT(putBody({}));
+    const res = await PUT(putBody({}), routeCtx());
 
     expect(res.status).toBe(403);
     expect(prismaMock.systemSettings.upsert).not.toHaveBeenCalled();
@@ -378,7 +435,7 @@ describe('PUT /api/system-settings', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     okUpsert();
 
-    const res = await PUT(putBody({}));
+    const res = await PUT(putBody({}), routeCtx());
 
     expect(res.status).toBe(403);
     expect(prismaMock.systemSettings.upsert).not.toHaveBeenCalled();
@@ -388,7 +445,7 @@ describe('PUT /api/system-settings', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     okUpsert();
 
-    const res = await PUT(putBody({ maxUploadSizeMb: 999_999 }));
+    const res = await PUT(putBody({ maxUploadSizeMb: 999_999 }), routeCtx());
 
     expect(res.status).toBe(200);
     const call = prismaMock.systemSettings.upsert.mock.calls[0][0];
@@ -400,7 +457,7 @@ describe('PUT /api/system-settings', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     okUpsert();
 
-    const res = await PUT(putBody({ submissionAnalyzerLimit: 999 }));
+    const res = await PUT(putBody({ submissionAnalyzerLimit: 999 }), routeCtx());
 
     expect(res.status).toBe(200);
     const call = prismaMock.systemSettings.upsert.mock.calls[0][0];
@@ -412,7 +469,7 @@ describe('PUT /api/system-settings', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     okUpsert();
 
-    const res = await PUT(putBody({ submissionAnalyzerLimit: 0 }));
+    const res = await PUT(putBody({ submissionAnalyzerLimit: 0 }), routeCtx());
 
     expect(res.status).toBe(200);
     const call = prismaMock.systemSettings.upsert.mock.calls[0][0];
@@ -423,7 +480,7 @@ describe('PUT /api/system-settings', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     okUpsert();
 
-    const res = await PUT(putBody({}));
+    const res = await PUT(putBody({}), routeCtx());
 
     expect(res.status).toBe(200);
     const call = prismaMock.systemSettings.upsert.mock.calls[0][0];
@@ -434,7 +491,7 @@ describe('PUT /api/system-settings', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     okUpsert();
 
-    const res = await PUT(putBody({ hcaptchaSiteKey: '   ' }));
+    const res = await PUT(putBody({ hcaptchaSiteKey: '   ' }), routeCtx());
 
     expect(res.status).toBe(200);
     const call = prismaMock.systemSettings.upsert.mock.calls[0][0];
@@ -447,16 +504,16 @@ describe('PUT /api/system-settings', () => {
       id: 1,
       timezone: 'UTC',
       maxUploadSizeMb: 25,
-      sessionTimeoutMinutes: 20,
+      sessionTimeoutMinutes: 60,
     });
     prismaMock.systemSettings.upsert.mockResolvedValue({
       id: 1,
       timezone: 'America/New_York',
       maxUploadSizeMb: 25,
-      sessionTimeoutMinutes: 20,
+      sessionTimeoutMinutes: 60,
     });
 
-    const res = await PUT(putBody({ timezone: 'America/New_York' }));
+    const res = await PUT(putBody({ timezone: 'America/New_York' }), routeCtx());
 
     expect(res.status).toBe(200);
     expect(auditMock).toHaveBeenCalledTimes(1);
@@ -480,7 +537,7 @@ describe('PUT /api/system-settings', () => {
     });
     okUpsert();
 
-    const res = await PUT(putBody({ hcaptchaSecretKey: 'super-secret-value' }));
+    const res = await PUT(putBody({ hcaptchaSecretKey: 'super-secret-value' }), routeCtx());
 
     expect(res.status).toBe(200);
     const serialized = JSON.stringify(auditMock.mock.calls[0][2]);
@@ -496,12 +553,12 @@ describe('PUT /api/system-settings', () => {
       timezone: 'UTC',
       maxUploadSizeMb: 25,
       allowSignup: true,
-      sessionTimeoutMinutes: 20,
+      sessionTimeoutMinutes: 60,
     };
     prismaMock.systemSettings.findUnique.mockResolvedValue(row);
     prismaMock.systemSettings.upsert.mockResolvedValue(row);
 
-    const res = await PUT(putBody({}));
+    const res = await PUT(putBody({}), routeCtx());
 
     expect(res.status).toBe(200);
     expect(auditMock).not.toHaveBeenCalled();
@@ -510,7 +567,7 @@ describe('PUT /api/system-settings', () => {
   it('records a denied audit log when a non-privileged user attempts an update', async () => {
     authMock.mockResolvedValue({ user: { id: 'u9', role: 'STUDENT' } });
 
-    const res = await PUT(putBody({}));
+    const res = await PUT(putBody({}), routeCtx());
 
     expect(res.status).toBe(403);
     expect(auditMock).toHaveBeenCalledTimes(1);
@@ -523,7 +580,7 @@ describe('PUT /api/system-settings', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     okUpsert();
 
-    const res = await PUT(putBody({ loginMaxAttempts: 99_999, loginLockoutMinutes: 0 }));
+    const res = await PUT(putBody({ loginMaxAttempts: 99_999, loginLockoutMinutes: 0 }), routeCtx());
 
     expect(res.status).toBe(200);
     const call = prismaMock.systemSettings.upsert.mock.calls[0][0];
@@ -543,6 +600,7 @@ describe('PUT /api/system-settings', () => {
         backupRetentionDays: 0,
         activityLogRetentionDays: 999_999,
       }),
+      routeCtx(),
     );
 
     expect(res.status).toBe(200);
@@ -558,7 +616,7 @@ describe('PUT /api/system-settings', () => {
     prismaMock.systemSettings.findUnique.mockResolvedValue(null);
     prismaMock.systemSettings.upsert.mockRejectedValueOnce(new Error('write failed'));
 
-    const res = await PUT(putBody({}));
+    const res = await PUT(putBody({}), routeCtx());
 
     expect(res.status).toBe(500);
     const body = await res.json();
@@ -577,7 +635,7 @@ describe('PUT /api/system-settings', () => {
       body: JSON.stringify({ maxUploadSizeMb: 10 }),
     });
 
-    const res = await PUT(req);
+    const res = await PUT(req, routeCtx());
 
     // No timezone -> String(undefined ?? '') === '' -> not a COMMON_TIMEZONE -> 400.
     expect(res.status).toBe(400);
@@ -592,7 +650,7 @@ describe('PUT /api/system-settings', () => {
       body: JSON.stringify({ timezone: 'UTC', maxUploadSizeMb: 'not-a-number' }),
     });
 
-    const res = await PUT(req);
+    const res = await PUT(req, routeCtx());
 
     expect(res.status).toBe(200);
     const call = prismaMock.systemSettings.upsert.mock.calls[0][0];
@@ -606,6 +664,7 @@ describe('PUT /api/system-settings', () => {
 
     const res = await PUT(
       putBody({ submissionResubmitCooldownMs: 1234, submissionMaxAttempts: 7 }),
+      routeCtx(),
     );
 
     expect(res.status).toBe(200);
@@ -619,7 +678,7 @@ describe('PUT /api/system-settings', () => {
     prismaMock.systemSettings.findUnique.mockResolvedValue(null);
     prismaMock.systemSettings.upsert.mockRejectedValueOnce('a plain string');
 
-    const res = await PUT(putBody({}));
+    const res = await PUT(putBody({}), routeCtx());
 
     expect(res.status).toBe(500);
     const data = auditMock.mock.calls[0][2] as { metadata: { error: string } };
@@ -640,7 +699,7 @@ describe('PUT /api/system-settings', () => {
     });
     auditMock.mockRejectedValueOnce(new Error('log sink down'));
 
-    const res = await PUT(putBody({ timezone: 'America/New_York' }));
+    const res = await PUT(putBody({ timezone: 'America/New_York' }), routeCtx());
 
     expect(res.status).toBe(200);
   });

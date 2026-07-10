@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/query-fetch';
 import { queryKeys } from '@/lib/query-keys';
 import { DataTable } from '@/components/ui/data-table';
-import { ColumnDef } from '@tanstack/react-table';
+import type { ColumnDef } from '@tanstack/react-table';
 import {
   Dialog,
   DialogContent,
@@ -125,7 +125,7 @@ export function GradeBreakdownDialog({
   const isDirty = useMemo(() => {
     if (rows.length !== originalRows.length) return true;
     for (let i = 0; i < rows.length; i++) {
-      if (rows[i].grade !== originalRows[i].grade) return true;
+      if (rows[i]?.grade !== originalRows[i]?.grade) return true;
     }
     return false;
   }, [rows, originalRows]);

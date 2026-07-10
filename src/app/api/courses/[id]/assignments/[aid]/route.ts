@@ -1,15 +1,16 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { ProblemTypeEnum } from '@/schemas/problem';
-import { RoleEnum } from '@/schemas/user';
+import type { ProblemTypeEnum } from '@/schemas/problem';
+import type { RoleEnum } from '@/schemas/user';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { canManageCourse } from '@/lib/permissions';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { sumProblemPoints } from '@/lib/course-format';
-import { resolveUserTimezone } from '@/lib/user-timezone';
+import { resolveCourseTimezone } from '@/lib/course-timezone';
 import { toEndOfDayInTimezone } from '@/lib/date-utils';
 import { computeLateSubmissionState } from '@/lib/assignment-late-window';
-import { z } from 'zod';
+import type { z } from 'zod';
 
 // Types
 interface AssignmentWithProblemsAndCourse {
@@ -154,8 +155,11 @@ export const GET = withCourseAuth(
             type: ap.problem.type,
             maxStates: ap.problem.maxStates,
             isDeterministic: ap.problem.isDeterministic,
-            fileName: ap.problem.fileName,
-            originalFileName: ap.problem.originalFileName,
+            // The problem file is the autograder's answer key. Its stored and
+            // original names are withheld from non-staff members (students never
+            // receive them, matching the upload/download restriction).
+            fileName: isStaff ? ap.problem.fileName : null,
+            originalFileName: isStaff ? ap.problem.originalFileName : null,
           },
           maxPoints: ap.maxPoints,
           maxSubmissions: ap.maxSubmissions,
@@ -244,7 +248,8 @@ export const PUT = withCourseAuth(
     }
 
     const data = await req.json();
-    const userTimezone = await resolveUserTimezone(user.id);
+    // Deadlines are anchored to the course's timezone, not the actor's.
+    const courseTimezone = await resolveCourseTimezone(courseId);
 
     // `data.isPublished` is the requested NEXT state, so `=== false` means "unpublish".
     // Block unpublishing an assignment that already has submissions or grades.
@@ -301,7 +306,7 @@ export const PUT = withCourseAuth(
 
     try {
       const dueDate = data.dueDate
-        ? toEndOfDayInTimezone(data.dueDate, userTimezone)
+        ? toEndOfDayInTimezone(data.dueDate, courseTimezone)
         : existing.dueDate;
 
       const lateState = computeLateSubmissionState({
@@ -310,7 +315,7 @@ export const PUT = withCourseAuth(
         existingAllowLate: existing.allowLateSubmissions,
         existingLateCutoff: existing.lateCutoff,
         dueDate,
-        userTimezone,
+        timezone: courseTimezone,
       });
 
       if (!lateState.ok) {
@@ -324,7 +329,7 @@ export const PUT = withCourseAuth(
         data: {
           title: data.title,
           description: data.description,
-          dueDate: toEndOfDayInTimezone(data.dueDate, userTimezone),
+          dueDate: toEndOfDayInTimezone(data.dueDate, courseTimezone),
           allowLateSubmissions,
           lateCutoff,
           isPublished: data.isPublished,
@@ -355,16 +360,15 @@ export const PUT = withCourseAuth(
       return NextResponse.json(updated);
     } catch (error) {
       console.error('Assignment update failed:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'ASSIGNMENT_UPDATE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
       });
       return NextResponse.json({ error: 'Failed to update assignment' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'ASSIGNMENT_UPDATE_DENIED' },
+  { access: 'manage', deniedAction: 'ASSIGNMENT_UPDATE_DENIED', blockWhenArchived: true },
 );
 
 /**
@@ -408,7 +412,8 @@ export const PATCH = withCourseAuth(
     }
 
     const data = await req.json();
-    const userTimezone = await resolveUserTimezone(user.id);
+    // Deadlines are anchored to the course's timezone, not the actor's.
+    const courseTimezone = await resolveCourseTimezone(courseId);
 
     // `data.isPublished` is the requested NEXT state, so `=== false` means "unpublish".
     if (data.isPublished === false) {
@@ -465,7 +470,7 @@ export const PATCH = withCourseAuth(
     try {
       const effectiveDueDate =
         data.dueDate !== undefined
-          ? toEndOfDayInTimezone(data.dueDate, userTimezone)
+          ? toEndOfDayInTimezone(data.dueDate, courseTimezone)
           : existing.dueDate;
 
       const lateState = computeLateSubmissionState({
@@ -474,7 +479,7 @@ export const PATCH = withCourseAuth(
         existingAllowLate: existing.allowLateSubmissions,
         existingLateCutoff: existing.lateCutoff,
         dueDate: effectiveDueDate,
-        userTimezone,
+        timezone: courseTimezone,
       });
 
       if (!lateState.ok) {
@@ -533,16 +538,15 @@ export const PATCH = withCourseAuth(
       return NextResponse.json(updated);
     } catch (error) {
       console.error('Assignment partial update failed:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'ASSIGNMENT_UPDATE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
       });
       return NextResponse.json({ error: 'Failed to update assignment' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'ASSIGNMENT_UPDATE_DENIED' },
+  { access: 'manage', deniedAction: 'ASSIGNMENT_UPDATE_DENIED', blockWhenArchived: true },
 );
 
 /**
@@ -618,14 +622,13 @@ export const DELETE = withCourseAuth(
       return NextResponse.json({ success: true });
     } catch (error) {
       console.error('Assignment delete failed:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'ASSIGNMENT_DELETE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
       });
       return NextResponse.json({ error: 'Failed to delete assignment' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'ASSIGNMENT_DELETE_DENIED' },
+  { access: 'manage', deniedAction: 'ASSIGNMENT_DELETE_DENIED', blockWhenArchived: true },
 );

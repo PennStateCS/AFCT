@@ -8,21 +8,14 @@ beforeEach(() => {
 
 describe('GET /api/health', () => {
   it('uses fallback values when env vars are missing', async () => {
-    const oldNodeEnv = process.env.NODE_ENV;
-    const oldPkgVersion = process.env.npm_package_version;
-    delete process.env.NODE_ENV;
-    delete process.env.npm_package_version;
+    vi.stubEnv('NODE_ENV', undefined);
+    vi.stubEnv('npm_package_version', undefined);
 
-    try {
-      const res = await GET();
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.environment).toBe('unknown');
-      expect(body.version).toBe('0.1.0');
-    } finally {
-      process.env.NODE_ENV = oldNodeEnv;
-      process.env.npm_package_version = oldPkgVersion;
-    }
+    const res = await GET();
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.environment).toBe('unknown');
+    expect(body.version).toBe('0.1.0');
   });
 
   it('returns ok status payload', async () => {
@@ -36,21 +29,14 @@ describe('GET /api/health', () => {
   });
 
   it('returns env and version from process env when present', async () => {
-    const oldNodeEnv = process.env.NODE_ENV;
-    const oldPkgVersion = process.env.npm_package_version;
-    process.env.NODE_ENV = 'test-env';
-    process.env.npm_package_version = '9.9.9';
+    vi.stubEnv('NODE_ENV', 'test-env');
+    vi.stubEnv('npm_package_version', '9.9.9');
 
-    try {
-      const res = await GET();
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.environment).toBe('test-env');
-      expect(body.version).toBe('9.9.9');
-    } finally {
-      process.env.NODE_ENV = oldNodeEnv;
-      process.env.npm_package_version = oldPkgVersion;
-    }
+    const res = await GET();
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.environment).toBe('test-env');
+    expect(body.version).toBe('9.9.9');
   });
 
   it('returns 503 when uptime throws', async () => {

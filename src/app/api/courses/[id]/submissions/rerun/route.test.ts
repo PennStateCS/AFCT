@@ -7,6 +7,7 @@ import { NextRequest } from 'next/server';
 const prismaMock = vi.hoisted(() => ({
   submission: { findMany: vi.fn(), update: vi.fn() },
   roster: { findFirst: vi.fn() },
+  course: { findUnique: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -26,6 +27,8 @@ const params = (id = 'c1') => ({ params: Promise.resolve({ id }) });
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
+  // Default: the course is not archived, so the wrapper's archive freeze is a no-op.
+  prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
 });
 
 describe('POST /api/courses/[id]/submissions/rerun', () => {
@@ -74,6 +77,18 @@ describe('POST /api/courses/[id]/submissions/rerun', () => {
       (call) => call[2]?.action === 'SUBMISSION_RERUN',
     );
     expect(rerunLogs).toHaveLength(2);
+  });
+
+  it('returns 409 and does not requeue when the course is archived', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+
+    const res = await POST(makeRequest(), params());
+
+    expect(res.status).toBe(409);
+    expect(prismaMock.submission.update).not.toHaveBeenCalled();
+    expect(prismaMock.submission.findMany).not.toHaveBeenCalled();
   });
 
   it('returns 202 with a count of 0 when the course has no submissions', async () => {

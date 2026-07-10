@@ -126,16 +126,13 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
         content: 'Looks good',
         createdAt,
         problemId: 'p1',
-        roster: {
-          role: 'FACULTY',
-          user: {
-            id: 'faculty-1',
-            firstName: 'Ada',
-            lastName: 'Lovelace',
-            avatar: null,
-            role: 'FACULTY',
-          },
+        author: {
+          id: 'faculty-1',
+          firstName: 'Ada',
+          lastName: 'Lovelace',
+          avatar: null,
         },
+        roster: { role: 'FACULTY' },
       },
     ]);
 
@@ -222,15 +219,13 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
         content: 'note',
         createdAt: new Date('2026-03-01T12:00:00.000Z'),
         problemId: 'p1',
-        roster: {
-          role: null,
-          user: {
-            id: 'u-9',
-            firstName: null,
-            lastName: null,
-            avatar: null,
-          },
+        author: {
+          id: 'u-9',
+          firstName: null,
+          lastName: null,
+          avatar: null,
         },
+        roster: null,
       },
     ]);
     prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([

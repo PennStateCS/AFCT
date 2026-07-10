@@ -1,8 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy';
 
 /**
@@ -41,7 +43,7 @@ export async function POST(req: NextRequest) {
   try {
     const session = await auth();
 
-    if (!session?.user?.id) {
+    if (!session?.user?.id || session.user.inactive) {
       console.warn('[CHANGE_PASSWORD] Unauthorized access attempt');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -116,11 +118,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, message: 'Password updated successfully' });
   } catch (err) {
     console.error('[CHANGE_PASSWORD_ERROR]', err);
-    await createEnhancedActivityLog(prisma, req, {
+    await logError(req, {
       userId: actorId,
       action: 'CHANGE_PASSWORD_ERROR',
-      severity: 'ERROR',
-      metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+      error: err,
     });
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }

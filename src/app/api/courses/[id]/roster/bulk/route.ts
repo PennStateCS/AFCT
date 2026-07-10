@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import type { Prisma } from '@prisma/client';
 
@@ -39,7 +40,7 @@ export const POST = withCourseAuth(
       const body = await req.json();
       const userIds: string[] = (body?.userIds ?? []).map((s: string) => String(s)).filter(Boolean);
       if (!userIds.length)
-        return NextResponse.json({ message: 'No users provided' }, { status: 400 });
+        return NextResponse.json({ error: 'No users provided' }, { status: 400 });
 
       // Enroll all users in a transaction as STUDENT course role.
       await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -70,15 +71,14 @@ export const POST = withCourseAuth(
       return NextResponse.json({ success: true, enrolled: userIds.length }, { status: 200 });
     } catch (err) {
       console.error('bulk-enroll error', err);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'COURSE_BULK_ENROLL_ERROR',
-        severity: 'ERROR',
+        error: err,
         courseId,
-        metadata: { error: err instanceof Error ? err.message : 'unknown error' },
       });
       return NextResponse.json({ error: 'Server error' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'COURSE_BULK_ENROLL_DENIED' },
+  { access: 'manage', blockWhenArchived: true, deniedAction: 'COURSE_BULK_ENROLL_DENIED' },
 );

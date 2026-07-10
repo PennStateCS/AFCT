@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { canArchiveCourse, canUnpublishCourse } from './course-status-checks';
-import { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 
 describe('course-status-checks', () => {
   let mockPrisma: PrismaClient;
@@ -94,7 +94,9 @@ describe('course-status-checks', () => {
       const endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
       vi.mocked(mockPrisma.submission.findFirst).mockResolvedValue(null);
-      vi.mocked(mockPrisma.assignmentProblemGrade.findFirst).mockResolvedValue({ id: 'grade-1' } as any);
+      vi.mocked(mockPrisma.assignmentProblemGrade.findFirst).mockResolvedValue({
+        id: 'grade-1',
+      } as any);
 
       const result = await canArchiveCourse(mockPrisma, 'course-1', startDate, endDate);
 
@@ -173,7 +175,9 @@ describe('course-status-checks', () => {
 
     it('should prevent unpublishing when grades exist', async () => {
       vi.mocked(mockPrisma.submission.findFirst).mockResolvedValue(null);
-      vi.mocked(mockPrisma.assignmentProblemGrade.findFirst).mockResolvedValue({ id: 'grade-1' } as any);
+      vi.mocked(mockPrisma.assignmentProblemGrade.findFirst).mockResolvedValue({
+        id: 'grade-1',
+      } as any);
 
       const result = await canUnpublishCourse(mockPrisma, 'course-1');
 
@@ -185,7 +189,9 @@ describe('course-status-checks', () => {
 
     it('should prevent unpublishing when both submissions and grades exist', async () => {
       vi.mocked(mockPrisma.submission.findFirst).mockResolvedValue({ id: 'submission-1' } as any);
-      vi.mocked(mockPrisma.assignmentProblemGrade.findFirst).mockResolvedValue({ id: 'grade-1' } as any);
+      vi.mocked(mockPrisma.assignmentProblemGrade.findFirst).mockResolvedValue({
+        id: 'grade-1',
+      } as any);
 
       const result = await canUnpublishCourse(mockPrisma, 'course-1');
 

@@ -123,8 +123,7 @@ export const GET = withCourseAuth(
           }>
         >
       >((acc, problem) => {
-        if (!acc[problem.assignmentId]) acc[problem.assignmentId] = [];
-        acc[problem.assignmentId].push({
+        (acc[problem.assignmentId] ??= []).push({
           id: problem.problem.id,
           title: problem.problem.title,
           autograderEnabled: problem.problem.autograderEnabled,

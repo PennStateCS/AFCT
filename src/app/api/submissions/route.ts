@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
@@ -39,13 +40,14 @@ import { canAccessCourse, canManageCourse } from '@/lib/permissions';
  *   401: { description: Not signed in. }
  *   403: { description: "Not enrolled, or the late/late-cutoff policy rejected it." }
  *   404: { description: Assignment not found. }
+ *   409: { description: Per-problem submission limit reached. }
  *   413: { description: File exceeds the system upload limit. }
  *   429: { description: Resubmit cooldown in effect (see Retry-After). }
  *   500: { description: Server error. }
  */
 export async function POST(req: NextRequest) {
   const session = await auth();
-  if (!session) {
+  if (!session?.user || session.user.inactive) {
     console.warn('Unauthorized submission attempt');
     await createEnhancedActivityLog(prisma, req, {
       userId: undefined,
@@ -211,6 +213,39 @@ export async function POST(req: NextRequest) {
       },
     });
     return NextResponse.json({ error: 'Assignment not found.' }, { status: 404 });
+  }
+
+  // Per-problem submission cap. Enforced server-side (not just hidden in the UI) so a
+  // student cannot exceed the configured number of attempts. `maxSubmissions <= 0`
+  // means unlimited. Staff/admin test-submissions are throwaways and are not capped.
+  const isCourseStaff = await canManageCourse(session.user, courseId);
+  if (!isCourseStaff && link.maxSubmissions > 0) {
+    const priorCount = await prisma.submission.count({
+      where: { assignmentId, problemId, studentId: session.user.id },
+    });
+    if (priorCount >= link.maxSubmissions) {
+      await createEnhancedActivityLog(prisma, req, {
+        userId: session.user.id,
+        action: 'SUBMISSION_LIMIT_REACHED',
+        severity: 'WARNING',
+        category: 'SUBMISSION',
+        courseId,
+        assignmentId,
+        problemId,
+        metadata: {
+          userId: session.user.id,
+          courseId,
+          assignmentId,
+          problemId,
+          maxSubmissions: link.maxSubmissions,
+          priorCount,
+        },
+      });
+      return NextResponse.json(
+        { error: `Submission limit reached (${link.maxSubmissions}).` },
+        { status: 409 },
+      );
+    }
   }
 
   // Rate limit: enforce a short cooldown between submissions to the same problem

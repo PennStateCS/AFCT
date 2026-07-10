@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { withCourseAuth } from '@/lib/api/with-auth';
 
 /**
@@ -60,17 +61,16 @@ export const POST = withCourseAuth(
       return NextResponse.json({ success: true });
     } catch (error) {
       console.error('POST /api/courses/[id]/grades (export log) error:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'GRADES_EXPORT_ERROR',
-        severity: 'ERROR',
+        error,
         courseId,
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
       });
       return NextResponse.json({ error: 'Failed to record export' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'GRADES_EXPORT_DENIED' },
+  { access: 'manage', deniedAction: 'GRADES_EXPORT_DENIED', blockWhenArchived: true },
 );
 
 /**
@@ -186,8 +186,9 @@ export const GET = withCourseAuth(
       // Populate with actual grades
       gradeRows.forEach((g) => {
         const sum = g._sum.grade ?? 0;
-        if (grades[g.studentId]) {
-          grades[g.studentId][g.assignmentId] = sum;
+        const studentGrades = grades[g.studentId];
+        if (studentGrades) {
+          studentGrades[g.assignmentId] = sum;
         }
       });
 

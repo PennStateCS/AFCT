@@ -110,7 +110,9 @@ describe('CoursesClient', () => {
 
     // The client passes an onCourseUpdated callback into columns(); invoking it
     // should patch that row in the cache and re-render the table.
-    const onCourseUpdated = columnsMock.mock.calls.at(-1)?.[0] as (c: CourseListItem) => void;
+    const onCourseUpdated = (columnsMock.mock.calls.at(-1) as unknown as unknown[])[0] as (
+      c: CourseListItem,
+    ) => void;
     await act(async () => {
       onCourseUpdated(course('c1', 'After'));
     });
