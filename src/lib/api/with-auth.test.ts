@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const authMock = vi.hoisted(() => vi.fn());
-const prismaMock = vi.hoisted(() => ({}) as Record<string, unknown>);
+const prismaMock = vi.hoisted(() => ({
+  course: { findUnique: vi.fn() },
+  assignment: { findFirst: vi.fn() },
+}));
 const createLogMock = vi.hoisted(() => vi.fn());
 const canManageMock = vi.hoisted(() => vi.fn());
 const canAccessMock = vi.hoisted(() => vi.fn());
+const isArchivedMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
@@ -14,9 +18,10 @@ vi.mock('@/lib/permissions', async (orig) => ({
   ...(await orig<typeof import('@/lib/permissions')>()),
   canManageCourse: canManageMock,
   canAccessCourse: canAccessMock,
+  isCourseArchived: isArchivedMock,
 }));
 
-import { withAdminAuth, withCourseAuth } from './with-auth';
+import { withAdminAuth, withCourseAuth, withAssignmentAuth } from './with-auth';
 
 const DENIED = { deniedAction: 'THING_DENIED' };
 
@@ -155,5 +160,132 @@ describe('withCourseAuth', () => {
     })(new Request('http://localhost/x'), ctx());
 
     expect(canManageMock).toHaveBeenCalledWith({ id: 'u1' }, 'c1', ['FACULTY']);
+  });
+
+  describe('blockWhenArchived', () => {
+    const managed = () => {
+      authMock.mockResolvedValue({ user: { id: 'u1' } });
+      canManageMock.mockResolvedValue(true);
+    };
+
+    it('409s when the course is archived — even for a permitted manager', async () => {
+      managed();
+      isArchivedMock.mockResolvedValue(true);
+      const handler = vi.fn();
+
+      const res = await withCourseAuth(handler, { ...manage, blockWhenArchived: true })(
+        new Request('http://localhost/x'),
+        ctx(),
+      );
+
+      expect(res.status).toBe(409);
+      expect(handler).not.toHaveBeenCalled();
+    });
+
+    it('409s even for an admin (the freeze is not bypassed by the admin short-circuit)', async () => {
+      authMock.mockResolvedValue({ user: { id: 'a1', isAdmin: true } });
+      canManageMock.mockResolvedValue(true);
+      isArchivedMock.mockResolvedValue(true);
+      const handler = vi.fn();
+
+      const res = await withCourseAuth(handler, { ...manage, blockWhenArchived: true })(
+        new Request('http://localhost/x'),
+        ctx(),
+      );
+
+      expect(res.status).toBe(409);
+      expect(handler).not.toHaveBeenCalled();
+    });
+
+    it('runs the handler when the course is not archived', async () => {
+      managed();
+      isArchivedMock.mockResolvedValue(false);
+      const handler = vi.fn().mockResolvedValue(new Response('ok'));
+
+      const res = await withCourseAuth(handler, { ...manage, blockWhenArchived: true })(
+        new Request('http://localhost/x'),
+        ctx(),
+      );
+
+      expect(await (res as Response).text()).toBe('ok');
+      expect(handler).toHaveBeenCalled();
+    });
+
+    it('does not check archive state when the option is off', async () => {
+      managed();
+      const handler = vi.fn().mockResolvedValue(new Response('ok'));
+
+      await withCourseAuth(handler, manage)(new Request('http://localhost/x'), ctx());
+
+      expect(isArchivedMock).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('withAssignmentAuth', () => {
+  const ctx = () => ({ params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
+  const read = { access: 'read' as const, deniedAction: 'A_DENIED' };
+
+  beforeEach(() => {
+    authMock.mockResolvedValue({ user: { id: 'u1' } });
+    canAccessMock.mockResolvedValue(true);
+    canManageMock.mockResolvedValue(false);
+  });
+
+  it('resolves the assignment and passes it to the handler', async () => {
+    const assignment = { id: 'a1', courseId: 'c1', isPublished: true, isGroup: false };
+    prismaMock.assignment.findFirst.mockResolvedValue(assignment);
+    const handler = vi.fn().mockResolvedValue(new Response('ok'));
+
+    const res = await withAssignmentAuth(handler, read)(new Request('http://localhost/x'), ctx());
+
+    expect(await (res as Response).text()).toBe('ok');
+    expect(handler).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ courseId: 'c1', assignment }),
+    );
+  });
+
+  it('404s when the assignment is not in this course', async () => {
+    prismaMock.assignment.findFirst.mockResolvedValue(null);
+    const handler = vi.fn();
+
+    const res = await withAssignmentAuth(handler, read)(new Request('http://localhost/x'), ctx());
+
+    expect(res.status).toBe(404);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('404-masks an unpublished assignment for a non-staff reader', async () => {
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      isPublished: false,
+      isGroup: false,
+    });
+    canManageMock.mockResolvedValue(false); // student
+    const handler = vi.fn();
+
+    const res = await withAssignmentAuth(handler, read)(new Request('http://localhost/x'), ctx());
+
+    expect(res.status).toBe(404);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('lets staff read an unpublished assignment', async () => {
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      courseId: 'c1',
+      isPublished: false,
+      isGroup: false,
+    });
+    canManageMock.mockResolvedValue(true); // staff
+    const handler = vi.fn().mockResolvedValue(new Response('ok'));
+
+    const res = await withAssignmentAuth(handler, read)(new Request('http://localhost/x'), ctx());
+
+    expect(await (res as Response).text()).toBe('ok');
+    expect(handler).toHaveBeenCalled();
   });
 });

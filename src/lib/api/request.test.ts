@@ -1,7 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { clampInt, parsePageParams, parseLimitOffset, formBool, formBoolOptional } from './request';
+import { z } from 'zod';
+import {
+  clampInt,
+  parsePageParams,
+  parseLimitOffset,
+  formBool,
+  formBoolOptional,
+  readJson,
+} from './request';
 
 const params = (q: string) => new URLSearchParams(q);
+
+const jsonReq = (body: string) =>
+  new Request('http://localhost/x', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body,
+  });
 
 describe('clampInt', () => {
   it('clamps into range and truncates', () => {
@@ -71,5 +86,33 @@ describe('formBool / formBoolOptional', () => {
     expect(formBoolOptional(form(), 'yes')).toBe(true);
     expect(formBoolOptional(form(), 'no')).toBe(false);
     expect(formBoolOptional(form(), 'missing')).toBeUndefined();
+  });
+});
+
+describe('readJson', () => {
+  const schema = z.object({ name: z.string(), age: z.number() });
+
+  it('returns typed data for a valid body', async () => {
+    const parsed = await readJson(jsonReq('{"name":"a","age":3}'), schema);
+    expect(parsed).toEqual({ ok: true, data: { name: 'a', age: 3 } });
+  });
+
+  it('returns a 400 response for malformed JSON', async () => {
+    const parsed = await readJson(jsonReq('{not json'), schema);
+    expect(parsed.ok).toBe(false);
+    if (!parsed.ok) {
+      expect(parsed.response.status).toBe(400);
+      await expect(parsed.response.json()).resolves.toEqual({ error: 'Invalid JSON body' });
+    }
+  });
+
+  it('returns a 400 response with field detail on schema mismatch', async () => {
+    const parsed = await readJson(jsonReq('{"name":"a"}'), schema);
+    expect(parsed.ok).toBe(false);
+    if (!parsed.ok) {
+      expect(parsed.response.status).toBe(400);
+      const body = (await parsed.response.json()) as { error: string };
+      expect(body.error).toContain('age');
+    }
   });
 });
