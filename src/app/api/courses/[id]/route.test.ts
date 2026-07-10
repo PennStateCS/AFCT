@@ -961,10 +961,10 @@ describe('DELETE /api/courses/[id]', () => {
     expect(res.status).toBe(403);
   });
 
-  it('deletes archived course and logs activity', async () => {
+  it('soft-deletes an archived course and logs activity', async () => {
     authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.course.findFirst.mockResolvedValue({ isArchived: true });
-    prismaMock.course.delete.mockResolvedValue({ id: 'course-1', name: 'Course 1' });
+    prismaMock.course.update.mockResolvedValue({ id: 'course-1', name: 'Course 1' });
 
     const req = new Request('http://localhost/api/courses/1', {
       method: 'DELETE',
@@ -973,13 +973,18 @@ describe('DELETE /api/courses/[id]', () => {
     const res = await DELETE(req, { params: Promise.resolve({ id: 'course-1' }) });
 
     expect(res.status).toBe(204);
+    // Soft delete: stamps deletedAt via update, never a hard delete.
+    expect(prismaMock.course.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ deletedAt: expect.any(Date) }) }),
+    );
+    expect(prismaMock.course.delete).not.toHaveBeenCalled();
     expect(activityLogMock).toHaveBeenCalled();
   });
 
-  it('returns 500 when delete throws', async () => {
+  it('returns 500 when the soft-delete update throws', async () => {
     authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.course.findFirst.mockResolvedValue({ isArchived: true });
-    prismaMock.course.delete.mockRejectedValue(new Error('delete failed'));
+    prismaMock.course.update.mockRejectedValue(new Error('delete failed'));
 
     const req = new Request('http://localhost/api/courses/1', {
       method: 'DELETE',

@@ -50,9 +50,11 @@ export async function canAccessCourse(user: PermissionUser, courseId: string): P
   if (!user?.id) return false;
   const entry = await prisma.roster.findFirst({
     where: { courseId, userId: user.id },
-    select: { role: true, course: { select: { isPublished: true } } },
+    select: { role: true, course: { select: { isPublished: true, deletedAt: true } } },
   });
   if (!entry) return false;
+  // A soft-deleted course is inaccessible to non-admins (retained only for recovery).
+  if (entry.course?.deletedAt) return false;
   if (entry.role === 'FACULTY' || entry.role === 'TA') return true;
   // Students (and any non-staff role) only once the course is published.
   return entry.course.isPublished;
@@ -70,8 +72,14 @@ export async function canManageCourse(
 ): Promise<boolean> {
   if (isAdmin(user)) return true;
   if (!user?.id) return false;
-  const role = await getCourseRole(user.id, courseId);
-  return role !== null && roles.includes(role);
+  const entry = await prisma.roster.findFirst({
+    where: { courseId, userId: user.id },
+    select: { role: true, course: { select: { deletedAt: true } } },
+  });
+  if (!entry) return false;
+  // A soft-deleted course can't be managed by non-admins (retained only for recovery).
+  if (entry.course?.deletedAt) return false;
+  return roles.includes(entry.role);
 }
 
 /** Is this course archived? A `null`/missing course reads as not archived. */
