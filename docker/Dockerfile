@@ -8,7 +8,7 @@
 # a rebuild always uses the exact same image. Bump these deliberately.
 
 # --- Stage 1: build ---
-FROM node:20-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 AS builder
+FROM node:22-bookworm-slim@sha256:53ada149d435c38b14476cb57e4a7da73c15595aba79bd6971b547ceb6d018bf AS builder
 WORKDIR /app
 
 # The ERD generator and lint are dev-only; skip them during the image build.
@@ -33,7 +33,7 @@ RUN mkdir -p /app/bin /app/jars
 RUN npx prisma generate && npm run build
 
 # --- Stage 2: runtime ---
-FROM node:20-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 AS runtime
+FROM node:22-bookworm-slim@sha256:53ada149d435c38b14476cb57e4a7da73c15595aba79bd6971b547ceb6d018bf AS runtime
 WORKDIR /app
 
 # curl runs the healthcheck; postgres-client + netcat back the DB wait in the
