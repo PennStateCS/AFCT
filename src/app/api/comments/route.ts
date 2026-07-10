@@ -247,8 +247,9 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * Deletes a comment by id. The comment's author may delete their own; otherwise
- * only course staff (faculty or TAs) or a system admin may remove it.
+ * Deletes a comment by id. Comments are immutable to students — **only course staff
+ * (faculty or TAs) or a system admin may delete**, including deleting their own.
+ * A student cannot delete a comment they authored.
  * @openapi
  * summary: Delete a comment
  * parameters:
@@ -257,7 +258,7 @@ export async function POST(request: NextRequest) {
  *   200: { description: Comment deleted. }
  *   400: { description: Missing commentId. }
  *   401: { description: Not signed in. }
- *   403: { description: Not allowed to delete this comment. }
+ *   403: { description: Not course staff or a system admin. }
  *   404: { description: Comment not found. }
  *   500: { description: Server error. }
  */
@@ -288,9 +289,9 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Comment not found' }, { status: 404 });
     }
 
-    // The author may delete their own comment; otherwise course staff (admin bypasses).
-    const isOwner = comment.roster.user.id === user.id;
-    if (!isOwner && !(await canManageCourse(user, comment.assignment.courseId))) {
+    // Comments are immutable to students: only course staff (faculty/TA) or a system
+    // admin may delete — including their own. A student cannot delete their comment.
+    if (!(await canManageCourse(user, comment.assignment.courseId))) {
       await createEnhancedActivityLog(prisma, request, {
         userId: session?.user?.id ?? null,
         action: 'COMMENT_DELETE_DENIED',
