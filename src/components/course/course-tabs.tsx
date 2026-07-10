@@ -40,15 +40,16 @@ export const COURSE_TABS: readonly CourseTabDef[] = [
 // Underline navigation: a light bar on the card's own (white) background with a
 // subtle bottom border. Overrides the segmented/filled defaults from TabsList.
 const LIST_CLASS =
-  'h-auto w-full items-center justify-start gap-6 overflow-x-auto rounded-none border-b border-border bg-transparent p-0';
+  'h-auto w-full items-center justify-start gap-6 overflow-x-auto overflow-y-hidden rounded-none border-b border-border bg-transparent p-0';
 
 // Each trigger is a content-width item with a transparent bottom border that
-// turns teal (and its text teal + bolder) when active. `-mb-px` overlaps the
-// list's bottom border so the active underline replaces it cleanly.
+// turns teal (and its text teal + bolder) when active, sitting just above the
+// bar's own bottom border. No negative margin here: it would push the trigger
+// 1px past the scroll container and produce a phantom vertical scrollbar.
 const TRIGGER_CLASS = [
   'text-muted-foreground hover:text-foreground',
   'data-[state=active]:text-teal-600 dark:data-[state=active]:text-teal-400 data-[state=active]:font-semibold',
-  '-mb-px inline-flex h-auto flex-none items-center gap-1.5 whitespace-nowrap',
+  'inline-flex h-auto flex-none items-center gap-1.5 whitespace-nowrap',
   'rounded-none border-0 border-b-2 border-transparent bg-transparent px-1 py-3 text-sm font-medium',
   'transition-colors',
   'data-[state=active]:border-teal-600 dark:data-[state=active]:border-teal-400',
