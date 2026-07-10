@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { logError } from '@/lib/api/activity';
 
 /**
  * Removes one member from a group. Course staff (faculty or TAs) or a system admin.
@@ -56,14 +57,13 @@ export const DELETE = withCourseAuth(
       return NextResponse.json({ success: true });
     } catch (err) {
       console.error('[GROUP_MEMBERS_DELETE_ERROR]', err);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'GROUP_MEMBER_REMOVE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+        error: err,
       });
       return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'GROUP_MEMBER_REMOVE_DENIED' },
+  { access: 'manage', deniedAction: 'GROUP_MEMBER_REMOVE_DENIED', blockWhenArchived: true },
 );

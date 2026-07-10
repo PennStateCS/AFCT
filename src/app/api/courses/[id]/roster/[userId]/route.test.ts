@@ -14,6 +14,9 @@ const prismaMock = vi.hoisted(() => ({
   submission: {
     findFirst: vi.fn(),
   },
+  course: {
+    findUnique: vi.fn(),
+  },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -21,6 +24,7 @@ const activityLogMock = vi.hoisted(() => vi.fn());
 const isAdminMock = vi.hoisted(() => vi.fn());
 const canManageCourseMock = vi.hoisted(() => vi.fn());
 const canAccessCourseMock = vi.hoisted(() => vi.fn());
+const isCourseArchivedMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
@@ -29,6 +33,7 @@ vi.mock('@/lib/permissions', () => ({
   isAdmin: isAdminMock,
   canManageCourse: canManageCourseMock,
   canAccessCourse: canAccessCourseMock,
+  isCourseArchived: isCourseArchivedMock,
 }));
 
 import { DELETE, GET, PATCH } from './route';
@@ -44,6 +49,13 @@ beforeEach(() => {
   canManageCourseMock.mockResolvedValue(true);
   canAccessCourseMock.mockResolvedValue(true);
   isAdminMock.mockReturnValue(false);
+  // Default: course is not archived; archived-block tests override. The wrapper's
+  // isCourseArchived reads course.findUnique, so mirror that here.
+  prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
+  isCourseArchivedMock.mockImplementation(async () => {
+    const course = await prismaMock.course.findUnique();
+    return course?.isArchived === true;
+  });
 });
 
 describe('GET /api/courses/[id]/roster/[userId]', () => {
@@ -208,6 +220,16 @@ describe('DELETE /api/courses/[id]/roster/[userId]', () => {
     const res = await DELETE(req, { params: Promise.resolve({ id: 'c1', userId: 'u2' }) });
 
     expect(res.status).toBe(200);
+    // The audit entry carries a uniform `targetUserId` (the removed member) so all
+    // privileged-on-student actions can be queried by the same key.
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        action: 'REMOVE_FROM_COURSE',
+        metadata: expect.objectContaining({ targetUserId: 'u2' }),
+      }),
+    );
   });
 
   it('returns 400 when user has submissions', async () => {
@@ -268,6 +290,19 @@ describe('DELETE /api/courses/[id]/roster/[userId]', () => {
 
     expect(res.status).toBe(200);
     expect(prismaMock.roster.deleteMany).toHaveBeenCalled();
+  });
+
+  it('returns 409 when the course is archived', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
+    isAdminMock.mockReturnValue(true);
+    canManageCourseMock.mockResolvedValue(true);
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/u2', { method: 'DELETE' });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'c1', userId: 'u2' }) });
+
+    expect(res.status).toBe(409);
+    expect(prismaMock.roster.deleteMany).not.toHaveBeenCalled();
   });
 
   it('handles server errors gracefully', async () => {
@@ -412,6 +447,21 @@ describe('PATCH /api/courses/[id]/roster/[userId]', () => {
     const body = await res.json();
     expect(body.success).toBe(true);
     expect(activityLogMock).toHaveBeenCalled();
+  });
+
+  it('returns 409 when the course is archived', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
+    canManageCourseMock.mockResolvedValue(true);
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/u2', {
+      method: 'PATCH',
+      body: JSON.stringify({ role: 'TA' }),
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'c1', userId: 'u2' }) });
+
+    expect(res.status).toBe(409);
+    expect(prismaMock.roster.update).not.toHaveBeenCalled();
   });
 
   it('returns 500 when the update fails', async () => {

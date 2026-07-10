@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { showToast } from '@/lib/toast';
-import { FullCourse, DeleteTarget } from '@/types/course';
-import { Assignment, Problem, Course } from '@prisma/client';
+import type { FullCourse, DeleteTarget } from '@/types/course';
+import type { Assignment, Problem, Course } from '@prisma/client';
 import {
   deleteItem,
   updateCourseAfterDelete,

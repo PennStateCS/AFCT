@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ file
     // Require authenticated user
     const session = await auth();
     actorId = session?.user?.id ?? null;
-    if (!session?.user?.id) {
+    if (!session?.user?.id || session.user.inactive) {
       return apiError(401, 'Unauthorized');
     }
 

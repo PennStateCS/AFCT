@@ -12,19 +12,20 @@ import {
 } from '@/components/ui/dialog';
 import SwitchField from '@/components/ui/SwitchField';
 import { Button } from '@/components/ui/button';
-import { User } from '@prisma/client';
+import type { User } from '@prisma/client';
 import { toast } from 'sonner';
 import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
 import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
 import { EMPTY_STRING_NOTATION_OPTIONS } from '@/lib/empty-string-notation';
+import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
 
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   CreateCourseFormSchema, // Form schema (no transformations)
 } from '@/schemas/course';
-import { z } from 'zod';
+import type { z } from 'zod';
 import { apiPaths } from '@/lib/api-paths';
 
 // RHF form state = Zod INPUT (strings for datetime-local)
@@ -37,6 +38,10 @@ interface CreateCourseDialogProps {
 }
 
 export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDialogProps) {
+  // Default the course timezone to the creator's browser zone — a sensible starting
+  // point they can change. (The server falls back to the system zone if omitted.)
+  const browserTz = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC', []);
+
   // Default form values (strings for datetime-local)
   const defaults: FormValues = useMemo(
     () => ({
@@ -51,8 +56,11 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
       isPublished: false,
       instructorIds: [],
       emptyStringNotation: 'EPSILON',
+      timezone: COMMON_TIMEZONES.includes(browserTz as (typeof COMMON_TIMEZONES)[number])
+        ? browserTz
+        : 'UTC',
     }),
-    [],
+    [browserTz],
   );
 
   const {
@@ -307,6 +315,27 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
                 searchPlaceholder="Search faculty..."
                 emptyStateText="No faculty found."
                 error={errors.instructorIds?.message}
+              />
+            )}
+          />
+
+          {/* COURSE TIMEZONE — anchors all the course's deadlines */}
+          <Controller
+            control={control}
+            name="timezone"
+            render={({ field }) => (
+              <SelectField
+                label="Course timezone"
+                name="timezone"
+                id="timezone"
+                value={field.value ?? 'UTC'}
+                onValueChange={field.onChange}
+                options={COMMON_TIMEZONES.map((tz) => ({
+                  value: tz,
+                  label: formatTimezoneLabel(tz),
+                }))}
+                description="This timezone anchors the course's dates and every assignment due date for all students."
+                error={errors.timezone?.message}
               />
             )}
           />

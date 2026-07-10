@@ -116,8 +116,14 @@ export const apiPaths = {
     backups: () => '/api/admin/settings/backups',
     backupDownload: (opts?: { file?: string }) =>
       `/api/admin/settings/backups/download${qs({ file: opts?.file })}`,
-    status: (opts?: { deep?: boolean }) => `/api/admin/status${opts?.deep ? qs({ deep: 1 }) : ''}`,
-    abandonedFiles: () => '/api/admin/status/abandoned-files',
+    // Per-domain status endpoints (tabbed status dashboard).
+    statusSummary: () => '/api/admin/status/summary',
+    statusServer: () => '/api/admin/status/server',
+    statusDatabase: () => '/api/admin/status/database',
+    statusDocker: () => '/api/admin/status/docker',
+    statusNetwork: () => '/api/admin/status/network',
+    statusSessions: () => '/api/admin/status/sessions',
+    statusFiles: () => '/api/admin/status/files',
     submissions: () => '/api/admin/submissions',
   },
 } as const;

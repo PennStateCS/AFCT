@@ -6,7 +6,9 @@ import { ForcedPasswordChangeForm } from '@/components/auth/ForcedPasswordChange
 export default async function ChangePasswordPage() {
   const session = await auth();
 
-  if (!session?.user) {
+  // An idle-expired or disabled session comes back marked inactive; send it to
+  // login rather than letting it fall through to the /dashboard bounce.
+  if (!session?.user || session.user.inactive) {
     redirect('/login');
   }
 

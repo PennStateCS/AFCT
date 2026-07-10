@@ -1,15 +1,16 @@
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { canAccessCourse, canManageCourse } from '@/lib/permissions';
+import { canManageCourse } from '@/lib/permissions';
 import { apiError } from '@/lib/api/http';
 import { logDenial, logError } from '@/lib/api/activity';
 import { isSafeUploadName, serveUploadedFile } from '@/lib/api/serve-file';
 
 /**
- * Serves a problem's attached file, inline. Any enrolled member of the problem's
- * course (any role) or a system admin may fetch it. The download is audited, and
- * traversal filenames are rejected.
+ * Serves a problem's attached file, inline. **Course staff (faculty/TA) or a system
+ * admin only** — a problem file is the autograder's answer/solution key, so a student
+ * must never receive it (same sensitivity as a solution file). The download is audited,
+ * and traversal filenames are rejected.
  * @openapi
  * summary: Get a problem file
  * parameters:
@@ -22,7 +23,7 @@ import { isSafeUploadName, serveUploadedFile } from '@/lib/api/serve-file';
  *         schema: { type: string, format: binary }
  *   400: { description: Invalid filename. }
  *   401: { description: Not signed in. }
- *   403: { description: Not an enrolled member of the problem's course or a system admin. }
+ *   403: { description: Caller is not course staff or a system admin. }
  *   404: { description: File not found. }
  *   500: { description: Server error. }
  */
@@ -38,7 +39,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
 
     const session = await auth();
     actorId = session?.user?.id ?? null;
-    if (!session?.user?.id) {
+    if (!session?.user?.id || session.user.inactive) {
       return apiError(401, 'Unauthorized');
     }
 
@@ -47,27 +48,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
       return apiError(404, 'File not found');
     }
 
-    // Any member of the problem's course (student, TA, faculty) may fetch it, as
-    // may a global admin. canAccessCourse covers roster membership + admin.
-    if (!(await canAccessCourse(session.user, problem.courseId))) {
+    // Staff-only: a problem file is the autograder's answer/solution key, so only
+    // course staff (faculty/TA) or a global admin may fetch it — never a student.
+    if (!(await canManageCourse(session.user, problem.courseId))) {
       return logDenial(req, {
         userId: session.user.id,
         action: 'PROBLEM_FILE_DOWNLOAD_DENIED',
       });
-    }
-
-    // A student may only fetch a problem file once the problem is part of a
-    // PUBLISHED assignment; staff/admin may fetch any. This keeps unreleased
-    // problem content hidden even from an enrolled member who guesses the
-    // filename. 404-mask it so the file's existence stays hidden.
-    if (!(await canManageCourse(session.user, problem.courseId))) {
-      const publishedLink = await prisma.assignmentProblem.findFirst({
-        where: { problemId: problem.id, assignment: { isPublished: true } },
-        select: { assignmentId: true },
-      });
-      if (!publishedLink) {
-        return apiError(404, 'File not found');
-      }
     }
 
     return await serveUploadedFile(file, 'problems', {

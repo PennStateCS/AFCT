@@ -160,15 +160,7 @@ const createJsonResponse = <T,>(data: T, ok = true, status = 200) =>
     json: async () => data,
   } as Response);
 
-const resolveFacultyRequest = () =>
-  fetchMock.mockResolvedValueOnce(
-    createJsonResponse([
-      { id: 'faculty-1', firstName: 'Ada', lastName: 'Lovelace', role: 'FACULTY' },
-      { id: 'faculty-2', firstName: 'Alan', lastName: 'Turing', role: 'FACULTY' },
-    ]),
-  );
-
-const baseCourse: Course & { enrolled: EnrolledUser[] } = {
+const baseCourse = {
   id: 'course-1',
   name: 'Software Engineering',
   code: 'CMPSC 431',
@@ -195,7 +187,7 @@ const baseCourse: Course & { enrolled: EnrolledUser[] } = {
       courseRole: 'FACULTY',
     },
   ],
-};
+} as unknown as Course & { enrolled: EnrolledUser[] };
 
 const renderDialog = (props: Partial<React.ComponentProps<typeof EditCourseDialog>> = {}) => {
   const setOpen = vi.fn();
@@ -232,13 +224,10 @@ afterAll(() => {
 
 describe('EditCourseDialog', () => {
   it('submits updates and closes the dialog on success', async () => {
-    resolveFacultyRequest();
     fetchMock.mockResolvedValueOnce(createJsonResponse({ id: 'course-1' }));
 
     const user = userEvent.setup();
     const { setOpen, onSave } = renderDialog();
-
-    await screen.findByLabelText('Ada Lovelace');
 
     const nameInput = screen.getByLabelText('Course Name');
     await user.clear(nameInput);
@@ -252,8 +241,8 @@ describe('EditCourseDialog', () => {
     await waitFor(() => expect(submitButton).toBeEnabled());
     await user.click(submitButton);
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    const [, requestInit] = fetchMock.mock.calls[1];
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [, requestInit] = fetchMock.mock.calls[0];
     const payload = JSON.parse((requestInit as RequestInit).body as string);
 
     expect(payload).toMatchObject({
@@ -269,13 +258,10 @@ describe('EditCourseDialog', () => {
   });
 
   it('shows an error toast when the update request fails', async () => {
-    resolveFacultyRequest();
     fetchMock.mockResolvedValueOnce(createJsonResponse({ message: 'Save failed' }, false, 500));
 
     const user = userEvent.setup();
     const { setOpen, onSave } = renderDialog();
-
-    await screen.findByLabelText('Ada Lovelace');
 
     const nameInput = screen.getByLabelText('Course Name');
     await user.clear(nameInput);
@@ -285,18 +271,9 @@ describe('EditCourseDialog', () => {
     await waitFor(() => expect(submitButton).toBeEnabled());
     await user.click(submitButton);
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(showToastErrorMock).toHaveBeenCalledWith('Save failed');
     expect(setOpen).not.toHaveBeenCalledWith(false);
     expect(onSave).not.toHaveBeenCalled();
-  });
-
-  it('notifies when faculty list fails to load', async () => {
-    fetchMock.mockResolvedValueOnce(createJsonResponse({}, false, 500));
-    renderDialog();
-
-    await waitFor(() =>
-      expect(toastErrorMock).toHaveBeenCalledWith('Failed to load faculty list.'),
-    );
   });
 });

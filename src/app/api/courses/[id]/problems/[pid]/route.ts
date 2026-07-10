@@ -2,12 +2,14 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import fs from 'fs';
 import path from 'path';
-import { ProblemType } from '@prisma/client';
+import type { ProblemType } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
+import { formBool } from '@/lib/api/request';
 
 // Solution files live here; the URL to serve them is /api/files/solutions/[file].
 const uploadsDir = path.join('/private', 'uploads', 'solutions');
@@ -68,8 +70,8 @@ export const PUT = withCourseAuth(
       const maxPoints = formData.get('maxPoints') as string | null;
       const assignmentId = formData.get('assignmentId') as string;
       const maxStates = formData.get('maxStates') as string | null;
-      const isDeterministic = formData.get('isDeterministic') === 'true';
-      const autograderEnabled = formData.get('autograderEnabled') === 'true';
+      const isDeterministic = formBool(formData, 'isDeterministic');
+      const autograderEnabled = formBool(formData, 'autograderEnabled');
       const file = formData.get('file') as File | null;
 
       if (!title || !type) {
@@ -170,16 +172,15 @@ export const PUT = withCourseAuth(
       return NextResponse.json(updatedProblem);
     } catch (err) {
       console.error('Problem update error:', err);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'PROBLEM_UPDATE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+        error: err,
       });
       return NextResponse.json({ error: 'Server error' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'PROBLEM_UPDATE_DENIED' },
+  { access: 'manage', deniedAction: 'PROBLEM_UPDATE_DENIED', blockWhenArchived: true },
 );
 
 /**
@@ -255,14 +256,13 @@ export const DELETE = withCourseAuth(
       return NextResponse.json({ success: true });
     } catch (err) {
       console.error('Problem deletion error:', err);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'PROBLEM_DELETE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: err instanceof Error ? err.message : 'unknown error' },
+        error: err,
       });
       return NextResponse.json({ error: 'Server error' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'PROBLEM_DELETE_DENIED' },
+  { access: 'manage', deniedAction: 'PROBLEM_DELETE_DENIED', blockWhenArchived: true },
 );

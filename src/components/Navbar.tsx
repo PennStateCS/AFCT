@@ -159,7 +159,7 @@ const Navbar: React.FC = () => {
             <Button
               variant="ghost"
               className="h-auto rounded-md px-1 py-1 hover:bg-white/20 sm:px-2 cursor-pointer"
-              aria-label="User account menu"
+              aria-label={`${user.firstName} ${user.lastName} account menu`}
             >
               <span className="flex items-center gap-2 sm:gap-3">
                 <span className="hidden flex-col items-end sm:flex">

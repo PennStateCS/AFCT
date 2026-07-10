@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { COURSE_FACULTY_ROLES } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { resolveUserTimezone } from '@/lib/user-timezone';
+import { logError } from '@/lib/api/activity';
+import { resolveCourseTimezone } from '@/lib/course-timezone';
 import { toDateTimeInTimezone, toEndOfDayInTimezone } from '@/lib/date-utils';
 
 /**
@@ -75,16 +75,13 @@ export const GET = withCourseAuth(
       return NextResponse.json({ error: 'Failed to fetch assignments.' }, { status: 500 });
     }
   },
-  {
-    access: 'manage',
-    roles: COURSE_FACULTY_ROLES,
-    deniedAction: 'COURSE_ASSIGNMENTS_ACCESS_DENIED',
-  },
+  // Course staff (FACULTY + TA), matching who can create/edit assignments below.
+  { access: 'manage', deniedAction: 'COURSE_ASSIGNMENTS_ACCESS_DENIED' },
 );
 
 /**
  * Creates an assignment in the course. Course staff (faculty or TAs) or a system
- * admin. The due date is interpreted as end-of-day in the actor's timezone. Late
+ * admin. The due date is interpreted as end-of-day in the **course's** timezone. Late
  * submissions and their cutoff must agree — a cutoff is required when late is on,
  * forbidden when off, and must fall on or after the due date.
  * @openapi
@@ -101,7 +98,7 @@ export const GET = withCourseAuth(
  *         properties:
  *           title: { type: string }
  *           description: { type: string }
- *           dueDate: { type: string, description: Interpreted as end-of-day in the actor's timezone }
+ *           dueDate: { type: string, description: Interpreted as end-of-day in the course's timezone }
  *           allowLateSubmissions: { type: boolean }
  *           lateCutoff: { type: string, description: Required when allowLateSubmissions is true }
  *           isPublished: { type: boolean }
@@ -121,7 +118,9 @@ export const POST = withCourseAuth(
         return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
       }
 
-      const userTimezone = await resolveUserTimezone(user.id);
+      // Deadlines are anchored to the COURSE's timezone (not the actor's), so a
+      // due date is one fixed instant for every student regardless of who saved it.
+      const courseTimezone = await resolveCourseTimezone(courseId);
       const allowLateSubmissions =
         typeof data.allowLateSubmissions === 'boolean' ? data.allowLateSubmissions : false;
 
@@ -138,10 +137,10 @@ export const POST = withCourseAuth(
         );
       }
 
-      const dueDate = toEndOfDayInTimezone(data.dueDate, userTimezone);
+      const dueDate = toEndOfDayInTimezone(data.dueDate, courseTimezone);
       const lateCutoffDate =
         allowLateSubmissions && data.lateCutoff
-          ? toDateTimeInTimezone(data.lateCutoff, userTimezone)
+          ? toDateTimeInTimezone(data.lateCutoff, courseTimezone)
           : null;
 
       if (lateCutoffDate && lateCutoffDate < dueDate) {
@@ -188,14 +187,13 @@ export const POST = withCourseAuth(
       return NextResponse.json(created, { status: 201 });
     } catch (error) {
       console.error('Assignment creation failed:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'ASSIGNMENT_CREATE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
       });
       return NextResponse.json({ error: 'Failed to create assignment' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'ASSIGNMENT_CREATE_DENIED' },
+  { access: 'manage', deniedAction: 'ASSIGNMENT_CREATE_DENIED', blockWhenArchived: true },
 );

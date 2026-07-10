@@ -49,5 +49,27 @@ describe('getAssignmentsForUserRange', () => {
     ]);
     // The old unscoped `courseId: { in: [...] }` filter is gone.
     expect(where.courseId).toBeUndefined();
+    // Archived and soft-deleted courses are excluded from the calendar for everyone.
+    expect(where.course).toEqual({ isArchived: false, deletedAt: null });
+  });
+
+  it('selects and carries isPublished through so staff drafts can be marked', async () => {
+    prismaMock.roster.findMany.mockResolvedValue([{ courseId: 'staff-course', role: 'FACULTY' }]);
+    prismaMock.assignment.findMany.mockResolvedValue([
+      {
+        id: 'a1',
+        title: 'Draft One',
+        courseId: 'staff-course',
+        dueDate: new Date('2026-01-15'),
+        isPublished: false,
+        course: { id: 'staff-course', code: 'CS1', name: 'Course One' },
+      },
+    ]);
+
+    const res = await getAssignmentsForUserRange({ userId: 'u1', ...range });
+
+    expect(prismaMock.assignment.findMany.mock.calls[0][0].select.isPublished).toBe(true);
+    expect(res).toHaveLength(1);
+    expect(res[0].isPublished).toBe(false);
   });
 });

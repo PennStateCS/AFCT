@@ -1,9 +1,15 @@
+import { clampInt } from '@/lib/api/request';
+
 export const DEFAULT_SYSTEM_TIMEZONE = 'UTC';
 export const DEFAULT_MAX_UPLOAD_SIZE_MB = 25;
 export const MIN_UPLOAD_SIZE_MB = 1;
 export const MAX_UPLOAD_SIZE_MB = 1024;
 export const DEFAULT_ALLOW_SIGNUP = true;
-export const DEFAULT_SESSION_TIMEOUT_MINUTES = 20;
+/** Canonical comma-separated signup email-domain allow-list. Blank = any domain allowed. */
+export const DEFAULT_SIGNUP_ALLOWED_DOMAINS = '';
+/** App-wide clock: false = 12-hour (AM/PM), true = 24-hour. Display-only. */
+export const DEFAULT_CLOCK_24_HOUR = false;
+export const DEFAULT_SESSION_TIMEOUT_MINUTES = 60;
 export const MIN_SESSION_TIMEOUT_MINUTES = 5;
 export const MAX_SESSION_TIMEOUT_MINUTES = 1440;
 
@@ -79,11 +85,6 @@ export const MAX_SUBMISSION_MAX_ATTEMPTS = 10;
 export const DEFAULT_SUBMISSION_ANALYZER_LIMIT = 15;
 export const MIN_SUBMISSION_ANALYZER_LIMIT = 1;
 export const MAX_SUBMISSION_ANALYZER_LIMIT = 100;
-
-function clampInt(value: number, min: number, max: number, fallback: number): number {
-  if (!Number.isFinite(value)) return fallback;
-  return Math.max(min, Math.min(max, Math.trunc(value)));
-}
 
 export const clampSubmissionEvalTimeoutMs = (v: number) =>
   clampInt(v, MIN_SUBMISSION_EVAL_TIMEOUT_MS, MAX_SUBMISSION_EVAL_TIMEOUT_MS, DEFAULT_SUBMISSION_EVAL_TIMEOUT_MS);

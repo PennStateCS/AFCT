@@ -29,7 +29,12 @@ export const viewport: Viewport = {
 export default async function LoginLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
 
-  if (session) {
+  // Only bounce a genuinely-usable session away from the login page. An
+  // idle-expired or disabled account comes back marked inactive (see the auth
+  // session callback); treating that as "logged in" and redirecting to /dashboard
+  // fights the middleware/dashboard gate that redirects it back here — an infinite
+  // loop. Let it fall through and render the login form so the user can re-auth.
+  if (session?.user && !session.user.inactive) {
     redirect(session.user.mustChangePassword ? '/change-password' : '/dashboard');
   }
 

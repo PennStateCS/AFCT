@@ -22,6 +22,7 @@ const prismaMock = vi.hoisted(() => ({
     createMany: vi.fn(),
     deleteMany: vi.fn(),
   },
+  course: { findUnique: vi.fn() },
   roster: { findFirst: vi.fn() },
 }));
 
@@ -38,6 +39,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   // Not on any course roster by default; individual tests grant admin/staff via auth.
   prismaMock.roster.findFirst.mockResolvedValue(null);
+  prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
 });
 
 describe('POST /api/courses/[id]/[aid]/problems (add problems)', () => {
@@ -62,6 +64,20 @@ describe('POST /api/courses/[id]/[aid]/problems (add problems)', () => {
 
     const res = await POST(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
     expect(res.status).toBe(403);
+  });
+
+  it('returns 409 when the course is archived', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ problemIds: ['p1'] }),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
+    expect(res.status).toBe(409);
+    expect(prismaMock.assignmentProblem.createMany).not.toHaveBeenCalled();
   });
 
   it('returns 400 for empty body', async () => {
@@ -433,6 +449,20 @@ describe('DELETE /api/courses/[id]/[aid]/problems (remove a problem)', () => {
     const res = await DELETE(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
 
     expect(res.status).toBe(401);
+  });
+
+  it('returns 409 when the course is archived', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+
+    const req = new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
+      method: 'DELETE',
+      body: JSON.stringify({ problemId: 'p1' }),
+    });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
+
+    expect(res.status).toBe(409);
+    expect(prismaMock.assignmentProblem.deleteMany).not.toHaveBeenCalled();
   });
 
   it('returns 400 when missing problemId', async () => {

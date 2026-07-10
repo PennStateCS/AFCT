@@ -1,5 +1,5 @@
-import { FullCourse, DeleteTarget } from '@/types/course';
-import { Assignment, Problem, Course } from '@prisma/client';
+import type { FullCourse, DeleteTarget } from '@/types/course';
+import type { Assignment, Problem, Course } from '@prisma/client';
 import { apiPaths } from '@/lib/api-paths';
 
 export async function deleteItem(target: DeleteTarget, courseId: string): Promise<void> {

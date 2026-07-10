@@ -1,6 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { auth } from '@/lib/auth';
 
 /**
@@ -25,7 +27,7 @@ export async function POST(req: NextRequest) {
   try {
     const session = await auth();
 
-    if (!session || !session.user) {
+    if (!session?.user || session.user.inactive) {
       await createEnhancedActivityLog(prisma, req, {
         action: 'SESSION_EXTENSION_FAILED',
         severity: 'WARNING',
@@ -54,15 +56,12 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error('Session extend error:', err);
 
-    await createEnhancedActivityLog(prisma, req, {
+    await logError(req, {
       action: 'SESSION_EXTENSION_ERROR',
-      severity: 'ERROR',
+      error: err,
       category: 'SYSTEM',
-      metadata: {
-        error: err instanceof Error ? err.message : 'Unknown error',
-      },
     });
 
-    return NextResponse.json({ ok: false, error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

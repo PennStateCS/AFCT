@@ -12,10 +12,7 @@ import HCaptcha from '@hcaptcha/react-hcaptcha';
 import { PasswordRulesHelper } from '@/components/auth/PasswordRulesHelper';
 import { isStrongPassword, passwordRules } from '@/lib/password-policy';
 import { apiPaths } from '@/lib/api-paths';
-
-/* ---------------- Validators ---------------- */
-
-const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+import { isValidEmail } from '@/lib/email';
 
 // Dev-only quick login shortcuts so QA can impersonate common roles fast.
 const testLoginButtons = [
@@ -67,7 +64,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     let active = true;
-    (async () => {
+    void (async () => {
       try {
         const res = await fetch(apiPaths.systemSettingsPublic(), { cache: 'no-store' });
         if (!res.ok) return;

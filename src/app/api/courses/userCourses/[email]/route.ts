@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { isAdmin, COURSE_STAFF_ROLES } from '@/lib/permissions';
+import type { Prisma } from '@prisma/client';
 
 /**
  * Returns the signed-in user's own started, non-archived courses (id + name),
@@ -38,16 +40,30 @@ export async function GET(req: Request, context: { params: Promise<{ email: stri
   }
 
   const session = await auth();
-  if (!session) {
+  if (!session?.user || session.user.inactive) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
+    const userId = session.user.id;
+    // Course visibility mirrors canAccessCourse: admins see any course they're on;
+    // staff (FACULTY/TA) see theirs even while unpublished; students only see a
+    // course once it's published. Scoped by the caller's id (not the path email)
+    // to prevent enumeration.
+    const visibility: Prisma.CourseWhereInput = isAdmin(session.user)
+      ? { roster: { some: { userId } } }
+      : {
+          OR: [
+            { isPublished: true, roster: { some: { userId } } },
+            { roster: { some: { userId, role: { in: COURSE_STAFF_ROLES } } } },
+          ],
+        };
+
     const courses = await prisma.course.findMany({
       where: {
-        // Scope by the caller's id (not the path email) to prevent enumeration.
-        roster: { some: { userId: session.user.id } },
+        ...visibility,
         isArchived: false,
+        deletedAt: null, // never surface soft-deleted courses
         startDate: { lte: new Date() }, // only courses that have already started
       },
       select: {
@@ -59,6 +75,6 @@ export async function GET(req: Request, context: { params: Promise<{ email: stri
     return NextResponse.json(courses, { status: 200 });
   } catch (error) {
     console.error('Failed to fetch courses:', error);
-    return NextResponse.json({ message: 'Server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }

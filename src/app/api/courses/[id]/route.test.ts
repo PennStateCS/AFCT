@@ -54,6 +54,8 @@ import { GET, PUT, DELETE } from './route';
 beforeEach(() => {
   vi.clearAllMocks();
   authMock.mockResolvedValue(null);
+  // Default: the course is not archived, so the wrapper's archive freeze is a no-op.
+  prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
   canArchiveMock.mockResolvedValue({ canArchive: true, reason: '' });
   canUnpublishMock.mockResolvedValue({ canUnpublish: true, reason: '' });
   toDateTimeMock.mockImplementation((val: string) => new Date(val));
@@ -313,6 +315,62 @@ describe('GET /api/courses/[id]', () => {
     expect(body.viewerRole).toBe('FACULTY');
   });
 
+  it('hides class-wide submission/comment counts from a student', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({
+      id: 'course-1',
+      name: 'Course 1',
+      code: 'CS101',
+      isPublished: true,
+      isArchived: false,
+      _count: { assignments: 1, problems: 0, roster: 2 },
+      roster: [
+        {
+          role: 'STUDENT',
+          user: { id: 'viewer-1', firstName: 'S', lastName: 'One', role: 'STUDENT' },
+        },
+      ],
+      problems: [],
+      assignments: [
+        {
+          id: 'a1',
+          title: 'A1',
+          description: null,
+          dueDate: new Date('2026-09-01T00:00:00.000Z'),
+          isPublished: true,
+          allowLateSubmissions: true,
+          lateCutoff: null,
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+          courseId: 'course-1',
+          problems: [{ maxPoints: 100 }],
+          _count: { problems: 1 },
+        },
+      ],
+    });
+    // Non-zero on purpose: the student path must NOT query these class-wide totals.
+    prismaMock.submission.count.mockResolvedValue(7);
+    prismaMock.comment.count.mockResolvedValue(3);
+    authMock.mockResolvedValue({ user: { id: 'viewer-1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
+
+    const res = await GET(new Request('http://localhost/api/courses/1'), {
+      params: Promise.resolve({ id: 'course-1' }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.assignments[0]).toEqual(
+      expect.objectContaining({
+        submissionCount: 0,
+        commentCount: 0,
+        hasSubmissionsOrComments: false,
+      }),
+    );
+    expect(prismaMock.submission.count).not.toHaveBeenCalled();
+    expect(prismaMock.comment.count).not.toHaveBeenCalled();
+    expect(body.viewerRole).toBe('STUDENT');
+  });
+
   it('returns 500 when get throws', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.course.findUnique.mockRejectedValue(new Error('db error'));
@@ -350,6 +408,33 @@ describe('PUT /api/courses/[id]', () => {
 
     const res = await PUT(req, { params: Promise.resolve({ id: 'course-1' }) });
     expect(res.status).toBe(401);
+  });
+
+  it('returns 409 and does not update when the course is archived', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+
+    const req = new Request('http://localhost/api/courses/1', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Course 1',
+        code: 'CS101',
+        semester: 'Fall 2026',
+        credits: 3,
+        startDate: '2026-08-25T09:00',
+        endDate: '2026-12-15T17:00',
+        registrationOpenAt: '2026-07-01T09:00',
+        registrationCloseAt: '2026-09-01T09:00',
+        isPublished: true,
+        isArchived: false,
+        instructorIds: ['u1'],
+      }),
+    });
+
+    const res = await PUT(req, { params: Promise.resolve({ id: 'course-1' }) });
+    expect(res.status).toBe(409);
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 
   it('returns 400 when isArchived is not a boolean', async () => {
@@ -791,10 +876,10 @@ describe('PUT /api/courses/[id]', () => {
     // The audit log must capture the fields that actually changed.
     const logCall = activityLogMock.mock.calls.find((c) => c[2]?.action === 'UPDATE_COURSE');
     expect(logCall).toBeTruthy();
-    expect(logCall[2].metadata.changedFields).toEqual(
+    expect(logCall![2].metadata.changedFields).toEqual(
       expect.arrayContaining(['name', 'code', 'credits', 'isPublished']),
     );
-    expect(logCall[2].metadata.changes.name).toEqual({ from: 'Old Course', to: 'Renamed Course' });
+    expect(logCall![2].metadata.changes.name).toEqual({ from: 'Old Course', to: 'Renamed Course' });
   });
 
   it('returns 500 when transaction throws', async () => {
@@ -891,6 +976,21 @@ describe('DELETE /api/courses/[id]', () => {
     expect(res.status).toBe(401);
   });
 
+  it('forbids a non-admin staff member from deleting (admin-only)', async () => {
+    // Faculty passes the manage wrapper but must not delete a course.
+    authMock.mockResolvedValue({ user: { id: 'fac-1', isAdmin: false } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+
+    const req = new Request('http://localhost/api/courses/1', {
+      method: 'DELETE',
+      body: JSON.stringify({}),
+    });
+    const res = await DELETE(req, { params: Promise.resolve({ id: 'course-1' }) });
+
+    expect(res.status).toBe(403);
+    expect(prismaMock.course.delete).not.toHaveBeenCalled();
+  });
+
   it('returns 403 when course is not archived', async () => {
     authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.course.findFirst.mockResolvedValue({ isArchived: false });
@@ -917,10 +1017,10 @@ describe('DELETE /api/courses/[id]', () => {
     expect(res.status).toBe(403);
   });
 
-  it('deletes archived course and logs activity', async () => {
+  it('soft-deletes an archived course and logs activity', async () => {
     authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.course.findFirst.mockResolvedValue({ isArchived: true });
-    prismaMock.course.delete.mockResolvedValue({ id: 'course-1', name: 'Course 1' });
+    prismaMock.course.update.mockResolvedValue({ id: 'course-1', name: 'Course 1' });
 
     const req = new Request('http://localhost/api/courses/1', {
       method: 'DELETE',
@@ -928,14 +1028,19 @@ describe('DELETE /api/courses/[id]', () => {
     });
     const res = await DELETE(req, { params: Promise.resolve({ id: 'course-1' }) });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(204);
+    // Soft delete: stamps deletedAt via update, never a hard delete.
+    expect(prismaMock.course.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ deletedAt: expect.any(Date) }) }),
+    );
+    expect(prismaMock.course.delete).not.toHaveBeenCalled();
     expect(activityLogMock).toHaveBeenCalled();
   });
 
-  it('returns 500 when delete throws', async () => {
+  it('returns 500 when the soft-delete update throws', async () => {
     authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.course.findFirst.mockResolvedValue({ isArchived: true });
-    prismaMock.course.delete.mockRejectedValue(new Error('delete failed'));
+    prismaMock.course.update.mockRejectedValue(new Error('delete failed'));
 
     const req = new Request('http://localhost/api/courses/1', {
       method: 'DELETE',

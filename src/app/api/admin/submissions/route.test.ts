@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { routeCtx } from '@/test/route';
 
 const prismaMock = vi.hoisted(() => ({
   submission: { findMany: vi.fn() },
@@ -48,7 +49,7 @@ describe('POST /api/admin/submissions', () => {
   it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
 
-    const res = await POST(makeRequest({ problemIds: ['p1'] }));
+    const res = await POST(makeRequest({ problemIds: ['p1'] }), routeCtx());
 
     expect(res.status).toBe(401);
   });
@@ -56,7 +57,7 @@ describe('POST /api/admin/submissions', () => {
   it('returns 403 when the user is not admin', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
 
-    const res = await POST(makeRequest({ problemIds: ['p1'] }));
+    const res = await POST(makeRequest({ problemIds: ['p1'] }), routeCtx());
 
     expect(res.status).toBe(403);
   });
@@ -64,7 +65,7 @@ describe('POST /api/admin/submissions', () => {
   it('returns 400 when problemIds are missing', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
 
-    const res = await POST(makeRequest({}));
+    const res = await POST(makeRequest({}), routeCtx());
 
     expect(res.status).toBe(400);
     expect(prismaMock.submission.findMany).not.toHaveBeenCalled();
@@ -77,7 +78,7 @@ describe('POST /api/admin/submissions', () => {
       { studentId: 'u1', assignmentId: 'a1', problemId: 'p1', grade: 8 },
     ]);
 
-    const res = await POST(makeRequest({ problemIds: ['p1'] }));
+    const res = await POST(makeRequest({ problemIds: ['p1'] }), routeCtx());
 
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -103,7 +104,7 @@ describe('POST /api/admin/submissions', () => {
     prismaMock.submission.findMany.mockResolvedValue([submissionRow]);
     prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
 
-    const res = await POST(makeRequest({ problemIds: ['p1'] }));
+    const res = await POST(makeRequest({ problemIds: ['p1'] }), routeCtx());
 
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -114,7 +115,7 @@ describe('POST /api/admin/submissions', () => {
     authMock.mockResolvedValue({ user: { id: 'admin-1', isAdmin: true } });
     prismaMock.submission.findMany.mockRejectedValue(new Error('db down'));
 
-    const res = await POST(makeRequest({ problemIds: ['p1'] }));
+    const res = await POST(makeRequest({ problemIds: ['p1'] }), routeCtx());
 
     expect(res.status).toBe(500);
   });

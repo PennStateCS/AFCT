@@ -28,7 +28,7 @@ describe('DayAssignmentsDialog', () => {
       title: 'Homework 1',
       dueDate: '2025-01-01T12:00:00Z',
       courseId: 'c1',
-      course: { code: 'CS101', name: 'Intro' },
+      course: { id: 'c1', code: 'CS101', name: 'Intro' },
     },
   ];
 
@@ -56,6 +56,39 @@ describe('DayAssignmentsDialog', () => {
 
     await user.click(screen.getByRole('button', { name: 'Close' }));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('marks unpublished assignments with a Draft badge', () => {
+    render(
+      <DayAssignmentsDialog
+        open
+        onOpenChange={vi.fn()}
+        date={new Date('2025-01-01T00:00:00Z')}
+        assignments={[
+          {
+            id: 'p1',
+            title: 'Published',
+            dueDate: '2025-01-01T12:00:00Z',
+            courseId: 'c1',
+            isPublished: true,
+            course: { id: 'c1', code: 'CS101', name: 'Intro' },
+          },
+          {
+            id: 'd1',
+            title: 'Draft One',
+            dueDate: '2025-01-01T12:00:00Z',
+            courseId: 'c1',
+            isPublished: false,
+            course: { id: 'c1', code: 'CS101', name: 'Intro' },
+          },
+        ]}
+      />,
+    );
+
+    // Exactly one Draft badge — next to the unpublished assignment only.
+    expect(screen.getAllByText('Draft')).toHaveLength(1);
+    expect(screen.getByText('CS101 - Draft One')).toBeInTheDocument();
+    expect(screen.getByText('CS101 - Published')).toBeInTheDocument();
   });
 
   it('shows an empty state when there are no assignments', () => {

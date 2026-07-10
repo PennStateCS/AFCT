@@ -33,6 +33,8 @@ export async function getAssignmentsForUserRange(params: {
         gte: startDate,
         lte: endDate,
       },
+      // The calendar never includes archived or soft-deleted courses — for anyone.
+      course: { isArchived: false, deletedAt: null },
       // In courses where the viewer is staff, show every assignment; where they
       // are a student, show only published ones — an unpublished assignment must
       // not surface on the calendar (title/due date) before it's released.
@@ -46,6 +48,9 @@ export async function getAssignmentsForUserRange(params: {
       title: true,
       courseId: true,
       dueDate: true,
+      // Carried through so staff can see (and the UI can mark) unpublished/draft
+      // assignments. Students only ever receive published ones (see the OR above).
+      isPublished: true,
       course: {
         select: { id: true, code: true, name: true },
       },

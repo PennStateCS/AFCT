@@ -1,7 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import bcrypt from 'bcrypt';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
+import { normalizeEmail } from '@/lib/email';
 
 /**
  * Verifies email/password credentials and returns the matching user's public
@@ -57,7 +60,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
     }
 
-    const normalizedEmail = String(email).trim().toLowerCase();
+    const normalizedEmail = normalizeEmail(email);
     const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
 
     if (!user) {
@@ -122,13 +125,10 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error('Login error:', err);
 
-    await createEnhancedActivityLog(prisma, req, {
+    await logError(req, {
       action: 'LOGIN_ERROR',
-      severity: 'ERROR',
+      error: err,
       category: 'SYSTEM',
-      metadata: {
-        error: err instanceof Error ? err.message : 'Unknown error',
-      },
     });
 
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

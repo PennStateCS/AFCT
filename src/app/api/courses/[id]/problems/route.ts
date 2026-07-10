@@ -2,12 +2,14 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import fs from 'fs';
 import path from 'path';
-import { ProblemType } from '@prisma/client';
+import type { ProblemType } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
+import { formBool } from '@/lib/api/request';
 
 // Solution files are written here; the URL to serve them is /api/files/solutions/[file].
 const uploadsDir = path.join('/private', 'uploads', 'solutions');
@@ -62,7 +64,7 @@ export const POST = withCourseAuth(
       const maxPoints = formData.get('maxPoints') as string;
       const assignmentId = formData.get('assignmentId') as string;
       const maxStates = formData.get('maxStates') as string | null;
-      const isDeterministic = formData.get('isDeterministic') === 'true';
+      const isDeterministic = formBool(formData, 'isDeterministic');
       const autograderEnabled = formData.get('autograderEnabled');
       const autograderBool = autograderEnabled === 'false' ? false : true;
       const file = formData.get('file') as File | null;
@@ -155,14 +157,13 @@ export const POST = withCourseAuth(
       return NextResponse.json(problem, { status: 201 });
     } catch (error) {
       console.error('Error creating problem:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'PROBLEM_CREATE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
       });
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'PROBLEM_CREATE_DENIED' },
+  { access: 'manage', deniedAction: 'PROBLEM_CREATE_DENIED', blockWhenArchived: true },
 );
