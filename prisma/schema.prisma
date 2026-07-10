@@ -66,6 +66,7 @@ model User {
   activityLogs  ActivityLog[]
   groupRosters  GroupRoster[] // Group memberships across courses
   commentsAbout Comment[]         @relation("CommentsAboutStudent") // Comments about this student's work
+  commentsAuthored Comment[]      @relation("CommentAuthor") // Comments this user wrote
 
   @@index([isAdmin])
   @@index([inactive])
@@ -345,14 +346,22 @@ model Comment {
   problem   Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
   problemId String
 
-  roster   Roster @relation(fields: [rosterId], references: [id], onDelete: Cascade)
-  rosterId String
+  // The author is always a User. `roster` is only the author's role WITHIN this
+  // course (for the role badge) and is null when the author isn't rostered — e.g. a
+  // system admin commenting on a course they aren't enrolled in. We never fabricate a
+  // roster row just to attribute a comment.
+  author   User   @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  authorId String
+
+  roster   Roster? @relation(fields: [rosterId], references: [id], onDelete: SetNull)
+  rosterId String?
 
   aboutStudent   User?   @relation("CommentsAboutStudent", fields: [aboutStudentId], references: [id], onDelete: Cascade)
   aboutStudentId String?
 
   @@index([assignmentId])
   @@index([problemId])
+  @@index([authorId])
   @@index([rosterId])
   @@index([aboutStudentId])
   @@index([assignmentId, problemId])
