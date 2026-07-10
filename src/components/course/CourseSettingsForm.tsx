@@ -2,24 +2,20 @@
 
 import React, { useEffect, useMemo } from 'react';
 
-import { useQuery } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { toast } from 'sonner';
 import type { z } from 'zod';
-import type { Course, User } from '@prisma/client';
+import type { Course } from '@prisma/client';
 
 import { Button } from '@/components/ui/button';
 import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
 import SwitchField from '@/components/ui/SwitchField';
-import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
 import { EMPTY_STRING_NOTATION_OPTIONS } from '@/lib/empty-string-notation';
 import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
 import { showToast } from '@/lib/toast';
 import { CourseFormSchema } from '@/schemas/course';
 import type { EnrolledUser } from '@/lib/course-utils';
-import { getInstructors } from '@/lib/course-utils';
 import { apiPaths } from '@/lib/api-paths';
 import { cn } from '@/lib/utils';
 
@@ -87,7 +83,6 @@ export function CourseSettingsForm({
         : '',
       isPublished: course.isPublished ?? false,
       isArchived: course.isArchived ?? false,
-      instructorIds: getInstructors(course.enrolled).map((u) => u.id),
       emptyStringNotation: course.emptyStringNotation ?? 'EPSILON',
       timezone: courseTz,
     }),
@@ -109,23 +104,6 @@ export function CourseSettingsForm({
 
   // Keep min (end) in sync with start
   const startDateStr = watch('startDate');
-
-  // Fetch faculty list. Shared cache entry (identical query key) with
-  // CreateCourseDialog/EditCourseDialog so callers dedupe onto one request.
-  const facultyQuery = useQuery({
-    queryKey: ['admin', 'users', 'faculty'],
-    queryFn: async () => {
-      const res = await fetch(apiPaths.admin.users({ role: 'FACULTY' }));
-      if (!res.ok) throw new Error('Failed to load faculty');
-      const data = await res.json();
-      return (Array.isArray(data) ? data : []) as Array<User & { role?: string }>;
-    },
-    staleTime: 30_000,
-  });
-  const facultyList = (facultyQuery.data ?? []).filter((user) => user.role === 'FACULTY');
-  useEffect(() => {
-    if (facultyQuery.isError) toast.error('Failed to load faculty list.');
-  }, [facultyQuery.isError]);
 
   // Re-sync the form whenever the underlying course changes (e.g. after a save
   // merges the server response back into state).
@@ -346,34 +324,6 @@ export function CourseSettingsForm({
           />
         )}
       />
-
-      <div className="flex flex-col">
-        <Controller
-          control={control}
-          name="instructorIds"
-          render={({ field }) => (
-            <SearchableMultiSelect
-              label="Assign Faculty"
-              items={facultyList.map((faculty) => ({
-                id: faculty.id,
-                label:
-                  `${faculty.firstName ?? ''} ${faculty.lastName ?? ''}`.trim() ||
-                  faculty.email ||
-                  'Unknown user',
-              }))}
-              value={field.value ?? []}
-              onChange={(value) => field.onChange(value)}
-              placeholder="Select faculty"
-              searchPlaceholder="Search faculty..."
-              emptyStateText="No faculty found."
-              error={errors.instructorIds?.message}
-            />
-          )}
-        />
-        <p className="text-muted-foreground mt-1 text-xs">
-          Faculty assigned here can manage this course.
-        </p>
-      </div>
 
       {/* EMPTY STRING NOTATION */}
       <Controller
