@@ -17,6 +17,7 @@ vi.mock('fs', async (importOriginal) => {
 
 import { GET } from './route';
 import { clearStatusCache } from '@/lib/status/cache';
+import { routeCtx } from '@/test/route';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -34,16 +35,16 @@ const req = () => new Request('http://localhost/api/admin/status/server');
 describe('GET /api/admin/status/server', () => {
   it('401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
-    expect((await GET(req())).status).toBe(401);
+    expect((await GET(req(), routeCtx())).status).toBe(401);
   });
 
   it('403 for a non-admin', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
-    expect((await GET(req())).status).toBe(403);
+    expect((await GET(req(), routeCtx())).status).toBe(403);
   });
 
   it('returns system metrics and software versions', async () => {
-    const res = await GET(req());
+    const res = await GET(req(), routeCtx());
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.system).toBeTruthy();
@@ -55,8 +56,8 @@ describe('GET /api/admin/status/server', () => {
   });
 
   it('caches the java/evaluator version probe across polls', async () => {
-    await GET(req());
-    await GET(req());
+    await GET(req(), routeCtx());
+    await GET(req(), routeCtx());
     const javaCalls = execSyncMock.mock.calls.filter((c) => String(c[0]).includes('java -version'));
     expect(javaCalls).toHaveLength(1); // second poll served from the TTL cache
   });
@@ -65,7 +66,7 @@ describe('GET /api/admin/status/server', () => {
     execSyncMock.mockImplementation(() => {
       throw new Error('java not found');
     });
-    const res = await GET(req());
+    const res = await GET(req(), routeCtx());
     expect(res.status).toBe(200);
     expect((await res.json()).software.javaVersion).toBeUndefined();
   });

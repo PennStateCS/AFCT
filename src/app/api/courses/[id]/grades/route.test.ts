@@ -214,8 +214,7 @@ describe('GET /api/courses/[id]/grades', () => {
     // Branch 197: `error instanceof Error ? error.message : String(error)`.
     // Branch 201: NODE_ENV === 'development' includes the detail.
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const prevEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
+    vi.stubEnv('NODE_ENV', 'development');
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.roster.findMany.mockRejectedValue('kaboom');
@@ -227,7 +226,6 @@ describe('GET /api/courses/[id]/grades', () => {
     const body = await res.json();
     expect(body.detail).toBe('kaboom');
 
-    process.env.NODE_ENV = prevEnv;
     consoleSpy.mockRestore();
   });
 });

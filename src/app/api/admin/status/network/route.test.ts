@@ -16,6 +16,7 @@ vi.mock('tls', () => ({ connect: tlsConnectMock }));
 
 import { GET } from './route';
 import { clearStatusCache } from '@/lib/status/cache';
+import { routeCtx } from '@/test/route';
 
 const envBackup = { ...process.env };
 
@@ -47,14 +48,14 @@ const req = () => new Request('http://localhost/api/admin/status/network');
 describe('GET /api/admin/status/network', () => {
   it('401 / 403 gates', async () => {
     authMock.mockResolvedValue(null);
-    expect((await GET(req())).status).toBe(401);
+    expect((await GET(req(), routeCtx())).status).toBe(401);
     authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
-    expect((await GET(req())).status).toBe(403);
+    expect((await GET(req(), routeCtx())).status).toBe(403);
   });
 
   it('returns db/auth/error diagnostics', async () => {
     process.env.NEXTAUTH_URL = 'https://auth.example.com';
-    const res = await GET(req());
+    const res = await GET(req(), routeCtx());
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.db.host).toBe('localhost');
@@ -69,7 +70,7 @@ describe('GET /api/admin/status/network', () => {
     prismaMock.activityLog.count.mockImplementation(async (args: { where?: { OR?: unknown } }) =>
       args?.where?.OR ? 2 : 10,
     );
-    const res = await GET(req());
+    const res = await GET(req(), routeCtx());
     const body = await res.json();
     expect(body.errors.last5m.ratePct).toBeCloseTo(20);
   });
