@@ -101,7 +101,7 @@ export function AdminCourseView({
     <Tabs defaultValue="assignments" value={tab} onValueChange={onTabChange}>
       <TabsList
         aria-label="Course content sections"
-        className="bg-card border-border h-12 w-full justify-start overflow-x-auto rounded-md border p-1 shadow-sm"
+        className="bg-card border-border h-12 w-full justify-start gap-1 overflow-x-auto rounded-md border p-1 shadow-sm"
       >
         <TabsTrigger
           id="tab-assignments"
