@@ -28,7 +28,7 @@ describe('DayAssignmentsDialog', () => {
       title: 'Homework 1',
       dueDate: '2025-01-01T12:00:00Z',
       courseId: 'c1',
-      course: { code: 'CS101', name: 'Intro' },
+      course: { id: 'c1', code: 'CS101', name: 'Intro' },
     },
   ];
 

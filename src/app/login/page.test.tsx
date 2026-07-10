@@ -185,7 +185,7 @@ beforeAll(() => {
   originalLocation = window.location;
   originalCaptchaKey = process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY;
   process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY = 'test-hcaptcha-key';
-  if (typeof performance !== 'undefined' && performance.now) {
+  if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
     performanceNowSpy = vi.spyOn(performance, 'now').mockImplementation(getMockTime);
   }
 });

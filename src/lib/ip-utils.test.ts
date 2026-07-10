@@ -11,15 +11,13 @@ function createMockRequest(headers: Record<string, string> = {}): Request {
 }
 
 describe('ip-utils', () => {
-  const originalEnv = process.env.NODE_ENV;
-
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-02-08T12:00:00Z'));
   });
 
   afterEach(() => {
-    process.env.NODE_ENV = originalEnv;
+    vi.unstubAllEnvs();
     vi.useRealTimers();
   });
 
@@ -104,13 +102,13 @@ describe('ip-utils', () => {
     });
 
     it('should return "localhost-dev" in development mode with no valid IP', () => {
-      process.env.NODE_ENV = 'development';
+      vi.stubEnv('NODE_ENV', 'development');
       const req = createMockRequest({});
       expect(getClientIp(req)).toBe('localhost-dev');
     });
 
     it('should return "localhost" when forwarded is ::1', () => {
-      process.env.NODE_ENV = 'production';
+      vi.stubEnv('NODE_ENV', 'production');
       const req = createMockRequest({
         'x-forwarded-for': '::1',
       });
@@ -118,7 +116,7 @@ describe('ip-utils', () => {
     });
 
     it('should return "localhost" when x-real-ip is ::1', () => {
-      process.env.NODE_ENV = 'production';
+      vi.stubEnv('NODE_ENV', 'production');
       const req = createMockRequest({
         'x-real-ip': '::1',
       });
@@ -126,7 +124,7 @@ describe('ip-utils', () => {
     });
 
     it('should return "unknown" when no headers are present in production', () => {
-      process.env.NODE_ENV = 'production';
+      vi.stubEnv('NODE_ENV', 'production');
       const req = createMockRequest({});
       expect(getClientIp(req)).toBe('unknown');
     });
@@ -166,13 +164,13 @@ describe('ip-utils', () => {
     });
 
     it('should return "localhost-dev" in development mode', () => {
-      process.env.NODE_ENV = 'development';
+      vi.stubEnv('NODE_ENV', 'development');
       const req = createMockRequest({});
       expect(getClientIpSimple(req)).toBe('localhost-dev');
     });
 
     it('should return "localhost" when forwarded is ::1', () => {
-      process.env.NODE_ENV = 'production';
+      vi.stubEnv('NODE_ENV', 'production');
       const req = createMockRequest({
         'x-forwarded-for': '::1',
       });
@@ -180,7 +178,7 @@ describe('ip-utils', () => {
     });
 
     it('should return "localhost" when x-real-ip is ::1', () => {
-      process.env.NODE_ENV = 'production';
+      vi.stubEnv('NODE_ENV', 'production');
       const req = createMockRequest({
         'x-real-ip': '::1',
       });
@@ -188,7 +186,7 @@ describe('ip-utils', () => {
     });
 
     it('should return "unknown" when no valid headers in production', () => {
-      process.env.NODE_ENV = 'production';
+      vi.stubEnv('NODE_ENV', 'production');
       const req = createMockRequest({});
       expect(getClientIpSimple(req)).toBe('unknown');
     });

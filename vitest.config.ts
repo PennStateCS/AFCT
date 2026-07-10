@@ -7,6 +7,10 @@ export default defineConfig({
     globals: true,
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     setupFiles: ['src/test/setup.ts'],
+    // Auto-restore env vars stubbed with vi.stubEnv between tests, so those stubs
+    // need no manual teardown. (Globals are intentionally NOT auto-unstubbed:
+    // some suites set a module-level vi.stubGlobal that must persist.)
+    unstubEnvs: true,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],

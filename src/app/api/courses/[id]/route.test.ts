@@ -820,10 +820,10 @@ describe('PUT /api/courses/[id]', () => {
     // The audit log must capture the fields that actually changed.
     const logCall = activityLogMock.mock.calls.find((c) => c[2]?.action === 'UPDATE_COURSE');
     expect(logCall).toBeTruthy();
-    expect(logCall[2].metadata.changedFields).toEqual(
+    expect(logCall![2].metadata.changedFields).toEqual(
       expect.arrayContaining(['name', 'code', 'credits', 'isPublished']),
     );
-    expect(logCall[2].metadata.changes.name).toEqual({ from: 'Old Course', to: 'Renamed Course' });
+    expect(logCall![2].metadata.changes.name).toEqual({ from: 'Old Course', to: 'Renamed Course' });
   });
 
   it('returns 500 when transaction throws', async () => {
