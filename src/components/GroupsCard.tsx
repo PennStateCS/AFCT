@@ -5,7 +5,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/query-fetch';
 import { queryKeys } from '@/lib/query-keys';
 import { DataTable } from '@/components/ui/data-table';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, Trash2, Users } from 'lucide-react';
 import { formatDateTimeInTimeZone } from '@/lib/date';
@@ -209,12 +208,12 @@ export function GroupsCard({
   );
 
   return (
-    <Card className="p-4">
-      <CardHeader className="flex flex-row items-center justify-between pb-4">
-        <CardTitle className="flex items-center gap-2 text-2xl">
+    <div className="space-y-4">
+      <div className="flex flex-row items-center justify-between">
+        <h2 className="flex items-center gap-2 text-2xl font-semibold">
           <Users className="h-5 w-5" />
           Groups
-        </CardTitle>
+        </h2>
         <div className="flex items-center gap-2">
           <Button variant="default" onClick={() => setCreateOpen(true)} hidden={courseIsArchived}>
             <Plus /> Create Group
@@ -223,11 +222,9 @@ export function GroupsCard({
             <Plus /> Random Groups
           </Button>
         </div>
-      </CardHeader>
+      </div>
 
-      <CardContent>
-        <DataTable columns={columns} data={groups} loading={loading} />
-      </CardContent>
+      <DataTable columns={columns} data={groups} loading={loading} />
 
       <CreateGroupDialog
         open={createOpen}
@@ -267,7 +264,7 @@ export function GroupsCard({
         confirmText="Delete"
         cancelText="Cancel"
       />
-    </Card>
+    </div>
   );
 }
 
