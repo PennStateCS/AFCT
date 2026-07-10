@@ -18,6 +18,7 @@ vi.mock('fs', async (importOriginal) => {
 });
 
 import { GET } from './route';
+import { routeCtx } from '@/test/route';
 
 const envBackup = { ...process.env };
 
@@ -37,16 +38,16 @@ const req = () => new Request('http://localhost/api/admin/status/summary');
 describe('GET /api/admin/status/summary', () => {
   it('401 / 403 gates', async () => {
     authMock.mockResolvedValue(null);
-    expect((await GET(req())).status).toBe(401);
+    expect((await GET(req(), routeCtx())).status).toBe(401);
     authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
-    expect((await GET(req())).status).toBe(403);
+    expect((await GET(req(), routeCtx())).status).toBe(403);
   });
 
   it('returns the cross-cutting summary numbers with a latency reading', async () => {
     prismaMock.activityLog.count.mockResolvedValue(12);
     prismaMock.activityLog.groupBy.mockResolvedValue([{ userId: 'a' }, { userId: 'b' }]);
 
-    const res = await GET(req());
+    const res = await GET(req(), routeCtx());
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.db.ok).toBe(true);
@@ -59,7 +60,7 @@ describe('GET /api/admin/status/summary', () => {
 
   it('reports db.ok:false when the probe fails', async () => {
     prismaMock.$queryRaw.mockRejectedValue(new Error('down'));
-    const res = await GET(req());
+    const res = await GET(req(), routeCtx());
     const body = await res.json();
     expect(body.db.ok).toBe(false);
   });

@@ -12,6 +12,7 @@ vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 
 import { GET } from './route';
+import { routeCtx } from '@/test/route';
 
 const envBackup = { ...process.env };
 
@@ -29,13 +30,13 @@ const req = () => new Request('http://localhost/api/admin/status/database');
 describe('GET /api/admin/status/database', () => {
   it('401 / 403 gates', async () => {
     authMock.mockResolvedValue(null);
-    expect((await GET(req())).status).toBe(401);
+    expect((await GET(req(), routeCtx())).status).toBe(401);
     authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
-    expect((await GET(req())).status).toBe(403);
+    expect((await GET(req(), routeCtx())).status).toBe(403);
   });
 
   it('reports reachable + provider for a working DB', async () => {
-    const res = await GET(req());
+    const res = await GET(req(), routeCtx());
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.ok).toBe(true);
@@ -45,7 +46,7 @@ describe('GET /api/admin/status/database', () => {
 
   it('reports ok:false with a message when the DB is unreachable', async () => {
     prismaMock.$queryRaw.mockRejectedValue(new Error('Connection failed'));
-    const res = await GET(req());
+    const res = await GET(req(), routeCtx());
     const body = await res.json();
     expect(body.ok).toBe(false);
     expect(body.message).toContain('failed');
@@ -59,7 +60,7 @@ describe('GET /api/admin/status/database', () => {
         return [{ name: 'Users' }, { name: 'Courses' }];
       return [];
     });
-    const res = await GET(req());
+    const res = await GET(req(), routeCtx());
     const body = await res.json();
     expect(body.details.table_names).toEqual(['Users', 'Courses']);
     expect(body.details.table_count).toBe(2);

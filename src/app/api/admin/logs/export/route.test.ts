@@ -9,6 +9,7 @@ vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 
 import { POST } from './route';
+import { routeCtx } from '@/test/route';
 
 const post = (body: unknown, raw = false) =>
   new Request('http://localhost/api/logs/getData', {
@@ -23,26 +24,26 @@ beforeEach(() => {
 describe('POST /api/logs/getData', () => {
   it('returns 403 when not authorized', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    const res = await POST(post({ cols: ['id'], begTime: '', endTime: '' }));
+    const res = await POST(post({ cols: ['id'], begTime: '', endTime: '' }), routeCtx());
     expect(res.status).toBe(403);
   });
 
   it('returns 400 for invalid JSON', async () => {
     authMock.mockResolvedValue({ user: { id: 'a1', role: 'ADMIN', isAdmin: true } });
-    const res = await POST(post('not-json', true));
+    const res = await POST(post('not-json', true), routeCtx());
     expect(res.status).toBe(400);
   });
 
   it('returns 400 when the schema rejects the body (no fields chosen)', async () => {
     authMock.mockResolvedValue({ user: { id: 'a1', role: 'ADMIN', isAdmin: true } });
-    const res = await POST(post({ cols: [], begTime: '', endTime: '' }));
+    const res = await POST(post({ cols: [], begTime: '', endTime: '' }), routeCtx());
     expect(res.status).toBe(400);
     expect(prismaMock.activityLog.findMany).not.toHaveBeenCalled();
   });
 
   it('returns 400 when no requested field is exportable', async () => {
     authMock.mockResolvedValue({ user: { id: 'a1', role: 'ADMIN', isAdmin: true } });
-    const res = await POST(post({ cols: ['evil', '__proto__'], begTime: '', endTime: '' }));
+    const res = await POST(post({ cols: ['evil', '__proto__'], begTime: '', endTime: '' }), routeCtx());
     expect(res.status).toBe(400);
     expect(prismaMock.activityLog.findMany).not.toHaveBeenCalled();
   });
@@ -57,6 +58,7 @@ describe('POST /api/logs/getData', () => {
         begTime: '2025-01-01T00:00',
         endTime: '2025-12-31T23:59',
       }),
+      routeCtx(),
     );
 
     expect(res.status).toBe(200);
@@ -74,7 +76,7 @@ describe('POST /api/logs/getData', () => {
     authMock.mockResolvedValue({ user: { id: 'a1', role: 'ADMIN', isAdmin: true } });
     prismaMock.activityLog.findMany.mockResolvedValue([]);
 
-    await POST(post({ cols: ['id'], begTime: 'nonsense', endTime: 'nonsense' }));
+    await POST(post({ cols: ['id'], begTime: 'nonsense', endTime: 'nonsense' }), routeCtx());
 
     const call = prismaMock.activityLog.findMany.mock.calls[0][0];
     expect(call.where).toEqual({});
@@ -84,7 +86,7 @@ describe('POST /api/logs/getData', () => {
     authMock.mockResolvedValue({ user: { id: 'a1', role: 'ADMIN', isAdmin: true } });
     prismaMock.activityLog.findMany.mockRejectedValue(new Error('db down'));
 
-    const res = await POST(post({ cols: ['id'], begTime: '', endTime: '' }));
+    const res = await POST(post({ cols: ['id'], begTime: '', endTime: '' }), routeCtx());
     expect(res.status).toBe(500);
   });
 });

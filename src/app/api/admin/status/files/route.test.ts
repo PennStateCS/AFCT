@@ -26,6 +26,7 @@ vi.mock('fs', async (importOriginal) => {
 
 import { GET, DELETE } from './route';
 import fs from 'fs';
+import { routeCtx } from '@/test/route';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -48,9 +49,9 @@ const delReq = (body: unknown) =>
 describe('GET /api/admin/status/files', () => {
   it('401 / 403 gates', async () => {
     authMock.mockResolvedValue(null);
-    expect((await GET(getReq())).status).toBe(401);
+    expect((await GET(getReq(), routeCtx())).status).toBe(401);
     authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
-    expect((await GET(getReq())).status).toBe(403);
+    expect((await GET(getReq(), routeCtx())).status).toBe(403);
   });
 
   it('classifies orphaned uploads by category and caps samples at 50', async () => {
@@ -64,7 +65,7 @@ describe('GET /api/admin/status/files', () => {
     });
     prismaMock.submission.findMany.mockResolvedValue([{ fileName: 'sub1.txt' }]);
 
-    const res = await GET(getReq());
+    const res = await GET(getReq(), routeCtx());
     expect(res.status).toBe(200);
     const { abandonedFiles } = await res.json();
     expect(abandonedFiles.byCategory.solutions).toBe(60);
@@ -75,23 +76,27 @@ describe('GET /api/admin/status/files', () => {
 
 describe('DELETE /api/admin/status/files', () => {
   it('400 for an unknown category or unsafe name', async () => {
-    expect((await DELETE(delReq({ category: 'bogus', fileName: 'x' }))).status).toBe(400);
-    expect((await DELETE(delReq({ category: 'pfps', fileName: '../escape' }))).status).toBe(400);
+    expect((await DELETE(delReq({ category: 'bogus', fileName: 'x' }), routeCtx())).status).toBe(400);
+    expect((await DELETE(delReq({ category: 'pfps', fileName: '../escape' }), routeCtx())).status).toBe(
+      400,
+    );
   });
 
   it('409 when a DB row still references the file', async () => {
     prismaMock.submission.findFirst.mockResolvedValue({ id: 's1' });
-    expect((await DELETE(delReq({ category: 'submissions', fileName: 'f.txt' }))).status).toBe(409);
+    expect((await DELETE(delReq({ category: 'submissions', fileName: 'f.txt' }), routeCtx())).status).toBe(
+      409,
+    );
   });
 
   it('404 when the file is not on disk', async () => {
     vi.mocked(fs.existsSync).mockReturnValue(false);
-    expect((await DELETE(delReq({ category: 'pfps', fileName: 'a.png' }))).status).toBe(404);
+    expect((await DELETE(delReq({ category: 'pfps', fileName: 'a.png' }), routeCtx())).status).toBe(404);
   });
 
   it('deletes an unreferenced file and audits it', async () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
-    const res = await DELETE(delReq({ category: 'pfps', fileName: 'a.png' }));
+    const res = await DELETE(delReq({ category: 'pfps', fileName: 'a.png' }), routeCtx());
     expect(res.status).toBe(200);
     expect(fs.promises.unlink).toHaveBeenCalled();
     expect(activityLogMock).toHaveBeenCalledWith(

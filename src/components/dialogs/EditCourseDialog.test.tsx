@@ -168,7 +168,7 @@ const resolveFacultyRequest = () =>
     ]),
   );
 
-const baseCourse: Course & { enrolled: EnrolledUser[] } = {
+const baseCourse = {
   id: 'course-1',
   name: 'Software Engineering',
   code: 'CMPSC 431',
@@ -195,7 +195,7 @@ const baseCourse: Course & { enrolled: EnrolledUser[] } = {
       courseRole: 'FACULTY',
     },
   ],
-};
+} as unknown as Course & { enrolled: EnrolledUser[] };
 
 const renderDialog = (props: Partial<React.ComponentProps<typeof EditCourseDialog>> = {}) => {
   const setOpen = vi.fn();

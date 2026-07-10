@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { testRequest } from '@/test/route';
 
 const prismaMock = vi.hoisted(() => ({
   course: {
@@ -38,14 +39,14 @@ beforeEach(() => {
 describe('GET /api/courses', () => {
   it('returns 401 when not signed in', async () => {
     authMock.mockResolvedValue(null);
-    const res = await GET();
+    const res = await GET(testRequest());
     expect(res.status).toBe(401);
     expect(prismaMock.course.findMany).not.toHaveBeenCalled();
   });
 
   it('returns 403 for a non-admin', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
-    const res = await GET();
+    const res = await GET(testRequest());
     expect(res.status).toBe(403);
     expect(prismaMock.course.findMany).not.toHaveBeenCalled();
   });
@@ -65,7 +66,7 @@ describe('GET /api/courses', () => {
       },
     ]);
 
-    const res = await GET();
+    const res = await GET(testRequest());
     expect(res.status).toBe(200);
 
     const body = await res.json();
@@ -91,7 +92,7 @@ describe('GET /api/courses', () => {
       },
     ]);
 
-    const res = await GET();
+    const res = await GET(testRequest());
     expect(res.status).toBe(200);
 
     const body = await res.json();
@@ -106,7 +107,7 @@ describe('GET /api/courses', () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     prismaMock.course.findMany.mockRejectedValue(new Error('boom'));
 
-    const res = await GET();
+    const res = await GET(testRequest());
     expect(res.status).toBe(500);
     consoleSpy.mockRestore();
   });

@@ -21,6 +21,7 @@ vi.mock('fs', async (importOriginal) => {
 
 import { GET } from './route';
 import fs from 'fs';
+import { routeCtx } from '@/test/route';
 
 const envBackup = { ...process.env };
 
@@ -37,16 +38,16 @@ const req = () => new Request('http://localhost/api/admin/status/docker');
 describe('GET /api/admin/status/docker', () => {
   it('401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
-    expect((await GET(req())).status).toBe(401);
+    expect((await GET(req(), routeCtx())).status).toBe(401);
   });
 
   it('403 for a non-admin', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
-    expect((await GET(req())).status).toBe(403);
+    expect((await GET(req(), routeCtx())).status).toBe(403);
   });
 
   it('reports docker: null when not containerized', async () => {
-    const res = await GET(req());
+    const res = await GET(req(), routeCtx());
     expect(res.status).toBe(200);
     expect((await res.json()).docker).toBeNull();
   });
@@ -58,7 +59,7 @@ describe('GET /api/admin/status/docker', () => {
       '0::/docker/abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
     );
 
-    const res = await GET(req());
+    const res = await GET(req(), routeCtx());
     const body = await res.json();
     expect(body.docker.isDocker).toBe(true);
     expect(body.docker.containerIdShort).toBe('abcdef012345');

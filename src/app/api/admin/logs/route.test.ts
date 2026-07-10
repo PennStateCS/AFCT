@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const prismaMock = vi.hoisted(() => ({
   user: { findMany: vi.fn() },
@@ -11,6 +11,7 @@ vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 
 import { GET } from './route';
+import { routeCtx } from '@/test/route';
 
 const request = (query = '') => new Request(`http://localhost/api/logging${query}`);
 
@@ -21,12 +22,12 @@ beforeEach(() => {
 describe('GET /api/logging', () => {
   it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
-    expect((await GET(request())).status).toBe(401);
+    expect((await GET(request(), routeCtx())).status).toBe(401);
   });
 
   it('returns 403 when the user is not an admin', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    expect((await GET(request())).status).toBe(403);
+    expect((await GET(request(), routeCtx())).status).toBe(403);
   });
 
   it('returns a page of logs with total and userId resolved to a name', async () => {
@@ -40,7 +41,7 @@ describe('GET /api/logging', () => {
       { id: 'u1', firstName: 'Ada', lastName: 'Lovelace', email: null },
     ]);
 
-    const res = await GET(request());
+    const res = await GET(request(), routeCtx());
 
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -57,7 +58,7 @@ describe('GET /api/logging', () => {
     prismaMock.activityLog.count.mockResolvedValue(100);
     prismaMock.activityLog.findMany.mockResolvedValue([]);
 
-    const res = await GET(request('?page=3&pageSize=20'));
+    const res = await GET(request('?page=3&pageSize=20'), routeCtx());
 
     const call = prismaMock.activityLog.findMany.mock.calls[0][0];
     expect(call.skip).toBe(40);
@@ -72,7 +73,7 @@ describe('GET /api/logging', () => {
     prismaMock.activityLog.count.mockResolvedValue(0);
     prismaMock.activityLog.findMany.mockResolvedValue([]);
 
-    await GET(request('?pageSize=99999'));
+    await GET(request('?pageSize=99999'), routeCtx());
 
     expect(prismaMock.activityLog.findMany.mock.calls[0][0].take).toBe(200);
   });
@@ -88,7 +89,7 @@ describe('GET /api/logging', () => {
       { id: 'log1', userId: 'u1', action: 'LOGIN', timestamp: new Date() },
     ]);
 
-    const res = await GET(request('?q=ada'));
+    const res = await GET(request('?q=ada'), routeCtx());
 
     expect(res.status).toBe(200);
     const where = prismaMock.activityLog.findMany.mock.calls[0][0].where;
@@ -105,7 +106,7 @@ describe('GET /api/logging', () => {
     prismaMock.activityLog.count.mockResolvedValue(0);
     prismaMock.activityLog.findMany.mockResolvedValue([]);
 
-    await GET(request('?sortBy=action&sortDir=asc'));
+    await GET(request('?sortBy=action&sortDir=asc'), routeCtx());
 
     expect(prismaMock.activityLog.findMany.mock.calls[0][0].orderBy).toEqual({ action: 'asc' });
   });
@@ -115,7 +116,7 @@ describe('GET /api/logging', () => {
     prismaMock.activityLog.count.mockResolvedValue(0);
     prismaMock.activityLog.findMany.mockResolvedValue([]);
 
-    await GET(request('?sortBy=userId&sortDir=desc'));
+    await GET(request('?sortBy=userId&sortDir=desc'), routeCtx());
 
     expect(prismaMock.activityLog.findMany.mock.calls[0][0].orderBy).toEqual({
       user: { lastName: 'desc' },
@@ -127,7 +128,7 @@ describe('GET /api/logging', () => {
     prismaMock.activityLog.count.mockResolvedValue(0);
     prismaMock.activityLog.findMany.mockResolvedValue([]);
 
-    await GET(request('?sortBy=bogus&sortDir=asc'));
+    await GET(request('?sortBy=bogus&sortDir=asc'), routeCtx());
 
     expect(prismaMock.activityLog.findMany.mock.calls[0][0].orderBy).toEqual({ timestamp: 'desc' });
   });
@@ -137,7 +138,7 @@ describe('GET /api/logging', () => {
     prismaMock.activityLog.count.mockResolvedValue(0);
     prismaMock.activityLog.findMany.mockResolvedValue([]);
 
-    await GET(request('?severity=error'));
+    await GET(request('?severity=error'), routeCtx());
 
     const where = prismaMock.activityLog.findMany.mock.calls[0][0].where;
     expect(where).toEqual({ AND: [{ severity: 'ERROR' }] });
@@ -148,7 +149,7 @@ describe('GET /api/logging', () => {
     prismaMock.activityLog.count.mockResolvedValue(0);
     prismaMock.activityLog.findMany.mockResolvedValue([]);
 
-    await GET(request('?severity=bogus'));
+    await GET(request('?severity=bogus'), routeCtx());
 
     const where = prismaMock.activityLog.findMany.mock.calls[0][0].where;
     expect(where).toEqual({});
@@ -164,7 +165,7 @@ describe('GET /api/logging', () => {
       { id: 'u1', firstName: null, lastName: null, email: 'nameless@x.edu' },
     ]);
 
-    const res = await GET(request());
+    const res = await GET(request(), routeCtx());
     const body = await res.json();
     expect(body.rows[0].userId).toBe('nameless@x.edu');
   });
@@ -177,7 +178,7 @@ describe('GET /api/logging', () => {
     ]);
     prismaMock.user.findMany.mockResolvedValue([]);
 
-    const res = await GET(request());
+    const res = await GET(request(), routeCtx());
     const body = await res.json();
     expect(body.rows[0].userId).toBe('ghost');
   });
@@ -187,6 +188,6 @@ describe('GET /api/logging', () => {
     prismaMock.activityLog.count.mockRejectedValue(new Error('db down'));
     prismaMock.activityLog.findMany.mockResolvedValue([]);
 
-    expect((await GET(request())).status).toBe(500);
+    expect((await GET(request(), routeCtx())).status).toBe(500);
   });
 });

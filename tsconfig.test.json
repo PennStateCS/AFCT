@@ -1,0 +1,17 @@
+{
+  // Type-checks the test suite. Extends the strict base config but relaxes
+  // noUncheckedIndexedAccess: tests index into mock arrays/records (e.g.
+  // `fetchMock.mock.calls[0][0]`) where possibly-undefined is just noise. Source
+  // is still checked strictly by the base tsconfig.json.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noUncheckedIndexedAccess": false
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    "src/types/**/*.d.ts"
+  ],
+  "exclude": ["node_modules", ".next"]
+}

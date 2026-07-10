@@ -9,6 +9,7 @@ vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 
 import { GET } from './route';
+import { routeCtx } from '@/test/route';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -21,16 +22,16 @@ const req = () => new Request('http://localhost/api/admin/status/sessions');
 describe('GET /api/admin/status/sessions', () => {
   it('401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
-    expect((await GET(req())).status).toBe(401);
+    expect((await GET(req(), routeCtx())).status).toBe(401);
   });
 
   it('403 for a non-admin', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
-    expect((await GET(req())).status).toBe(403);
+    expect((await GET(req(), routeCtx())).status).toBe(403);
   });
 
   it('returns an empty session set when there is no recent activity', async () => {
-    const res = await GET(req());
+    const res = await GET(req(), routeCtx());
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.activeSessions).toEqual([]);
@@ -49,7 +50,7 @@ describe('GET /api/admin/status/sessions', () => {
       })),
     );
 
-    const res = await GET(req());
+    const res = await GET(req(), routeCtx());
     const body = await res.json();
     expect(body.activeSessions).toHaveLength(200);
     expect(body.summary.total24h).toBe(205);

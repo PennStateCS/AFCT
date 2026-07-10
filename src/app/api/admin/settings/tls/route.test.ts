@@ -1,16 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { routeCtx, testRequest } from '@/test/route';
+import type { CertInfo } from '@/lib/tls-cert';
 
 const authMock = vi.hoisted(() => vi.fn());
 const auditMock = vi.hoisted(() => vi.fn());
 const CertValidationError = vi.hoisted(() => class CertValidationError extends Error {});
 const tls = vi.hoisted(() => ({
-  readCertInfo: vi.fn(() => ({ installed: false })),
-  installCert: vi.fn(() => ({ installed: true, subject: 'CN=uploaded' })),
-  clearCert: vi.fn(() => ({ installed: false })),
+  readCertInfo: vi.fn((): CertInfo => ({ installed: false })),
+  installCert: vi.fn((): CertInfo => ({ installed: true, subject: 'CN=uploaded' })),
+  clearCert: vi.fn((): CertInfo => ({ installed: false })),
   hasPendingCsr: vi.fn(() => false),
   generateCsr: vi.fn(() => ({ csr: 'CSR-PEM' })),
-  installSignedCert: vi.fn(() => ({ installed: true, subject: 'CN=signed' })),
-  generateSelfSigned: vi.fn(() => ({ installed: true, subject: 'CN=self', selfSigned: true })),
+  installSignedCert: vi.fn((): CertInfo => ({ installed: true, subject: 'CN=signed' })),
+  generateSelfSigned: vi.fn(
+    (): CertInfo => ({ installed: true, subject: 'CN=self', selfSigned: true }),
+  ),
 }));
 
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
@@ -38,14 +42,14 @@ beforeEach(() => {
 describe('TLS route authorization', () => {
   it('GET returns 403 for a non-admin (faculty is not enough here)', async () => {
     authMock.mockResolvedValue({ user: { id: 'f1', role: 'FACULTY' } });
-    const res = await GET();
+    const res = await GET(testRequest(), routeCtx());
     expect(res.status).toBe(403);
   });
 
   it('POST logs a denied attempt for an authenticated non-admin', async () => {
     authMock.mockResolvedValue({ user: { id: 'f1', role: 'FACULTY' } });
 
-    const res = await POST(post({ action: 'self-signed', commonName: 'x' }));
+    const res = await POST(post({ action: 'self-signed', commonName: 'x' }), routeCtx());
 
     expect(res.status).toBe(403);
     expect(tls.generateSelfSigned).not.toHaveBeenCalled();
@@ -58,7 +62,7 @@ describe('TLS route actions', () => {
   it('installs a self-signed certificate and logs TLS_CERT_INSTALLED', async () => {
     authMock.mockResolvedValue(admin);
 
-    const res = await POST(post({ action: 'self-signed', commonName: 'afct.local' }));
+    const res = await POST(post({ action: 'self-signed', commonName: 'afct.local' }), routeCtx());
 
     expect(res.status).toBe(200);
     expect(tls.generateSelfSigned).toHaveBeenCalled();
@@ -71,7 +75,7 @@ describe('TLS route actions', () => {
   it('generates a CSR and logs TLS_CSR_GENERATED', async () => {
     authMock.mockResolvedValue(admin);
 
-    const res = await POST(post({ action: 'generate-csr', commonName: 'afct.local' }));
+    const res = await POST(post({ action: 'generate-csr', commonName: 'afct.local' }), routeCtx());
 
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -84,6 +88,7 @@ describe('TLS route actions', () => {
 
     const res = await DELETE(
       new Request('http://localhost/api/system-settings/tls', { method: 'DELETE' }),
+      routeCtx(),
     );
 
     expect(res.status).toBe(200);
@@ -97,7 +102,10 @@ describe('TLS route actions', () => {
       throw new CertValidationError('The private key does not match the certificate.');
     });
 
-    const res = await POST(post({ action: 'install', cert: 'CERT', key: 'SECRET-KEY-MATERIAL' }));
+    const res = await POST(
+      post({ action: 'install', cert: 'CERT', key: 'SECRET-KEY-MATERIAL' }),
+      routeCtx(),
+    );
 
     expect(res.status).toBe(400);
     const audit = lastAudit();
@@ -113,7 +121,7 @@ describe('TLS route actions', () => {
       throw new Error('openssl not found');
     });
 
-    const res = await POST(post({ action: 'self-signed', commonName: 'x' }));
+    const res = await POST(post({ action: 'self-signed', commonName: 'x' }), routeCtx());
 
     expect(res.status).toBe(500);
     expect(lastAudit().action).toBe('TLS_CERT_ERROR');
@@ -124,7 +132,7 @@ describe('TLS route actions', () => {
     tls.readCertInfo.mockReturnValueOnce({ installed: true, subject: 'CN=current' });
     tls.hasPendingCsr.mockReturnValueOnce(true);
 
-    const res = await GET();
+    const res = await GET(testRequest(), routeCtx());
 
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -140,7 +148,7 @@ describe('TLS route actions', () => {
       body: 'not-json',
     });
 
-    const res = await POST(req);
+    const res = await POST(req, routeCtx());
 
     expect(res.status).toBe(400);
     const body = await res.json();
@@ -150,7 +158,10 @@ describe('TLS route actions', () => {
   it('installs a signed certificate and logs TLS_CERT_INSTALLED (csr-signed)', async () => {
     authMock.mockResolvedValue(admin);
 
-    const res = await POST(post({ action: 'install-signed', cert: 'SIGNED-CERT', chain: 'CHAIN' }));
+    const res = await POST(
+      post({ action: 'install-signed', cert: 'SIGNED-CERT', chain: 'CHAIN' }),
+      routeCtx(),
+    );
 
     expect(res.status).toBe(200);
     expect(tls.installSignedCert).toHaveBeenCalledWith('SIGNED-CERT', 'CHAIN');
@@ -162,7 +173,7 @@ describe('TLS route actions', () => {
   it('installs an uploaded cert+key via the default install action', async () => {
     authMock.mockResolvedValue(admin);
 
-    const res = await POST(post({ cert: 'CERT', key: 'KEY' }));
+    const res = await POST(post({ cert: 'CERT', key: 'KEY' }), routeCtx());
 
     expect(res.status).toBe(200);
     expect(tls.installCert).toHaveBeenCalledWith('CERT', 'KEY', undefined);
@@ -175,7 +186,7 @@ describe('TLS route actions', () => {
     authMock.mockResolvedValue(admin);
     auditMock.mockRejectedValueOnce(new Error('log sink down'));
 
-    const res = await POST(post({ action: 'self-signed', commonName: 'afct.local' }));
+    const res = await POST(post({ action: 'self-signed', commonName: 'afct.local' }), routeCtx());
 
     expect(res.status).toBe(200);
   });
@@ -185,6 +196,7 @@ describe('TLS route actions', () => {
 
     const res = await POST(
       post({ action: 'generate-csr', commonName: 'afct.local', altNames: ['a.local', 'b.local'] }),
+      routeCtx(),
     );
 
     expect(res.status).toBe(200);
@@ -204,12 +216,12 @@ describe('TLS route actions', () => {
     });
 
     // No cert/key in the body -> installCert('', '', undefined).
-    const installRes = await POST(post({ action: 'install' }));
+    const installRes = await POST(post({ action: 'install' }), routeCtx());
     expect(installRes.status).toBe(200);
     expect(tls.installCert).toHaveBeenCalledWith('', '', undefined);
 
     // No cert in the body -> installSignedCert('', undefined).
-    const signedRes = await POST(post({ action: 'install-signed' }));
+    const signedRes = await POST(post({ action: 'install-signed' }), routeCtx());
     expect(signedRes.status).toBe(200);
     expect(tls.installSignedCert).toHaveBeenCalledWith('', undefined);
   });
@@ -219,7 +231,7 @@ describe('TLS route actions', () => {
     // A bare CertInfo -> certMeta coalesces each missing field to null.
     tls.installCert.mockReturnValueOnce({ installed: true });
 
-    const res = await POST(post({ action: 'install', cert: 'C', key: 'K' }));
+    const res = await POST(post({ action: 'install', cert: 'C', key: 'K' }), routeCtx());
 
     expect(res.status).toBe(200);
     const audit = lastAudit();
@@ -238,7 +250,7 @@ describe('TLS route actions', () => {
     });
 
     // No action field -> falls through to the default install path.
-    const res = await POST(post({ cert: 'CERT', key: 'KEY' }));
+    const res = await POST(post({ cert: 'CERT', key: 'KEY' }), routeCtx());
 
     expect(res.status).toBe(400);
     expect(lastAudit().metadata.attempted).toBe('install');
@@ -250,7 +262,7 @@ describe('TLS route actions', () => {
       throw new Error('boom');
     });
 
-    const res = await POST(post({ cert: 'CERT', key: 'KEY' }));
+    const res = await POST(post({ cert: 'CERT', key: 'KEY' }), routeCtx());
 
     expect(res.status).toBe(500);
     const audit = lastAudit();
@@ -264,7 +276,7 @@ describe('TLS route actions', () => {
       throw 'a plain string';
     });
 
-    const res = await POST(post({ action: 'self-signed', commonName: 'x' }));
+    const res = await POST(post({ action: 'self-signed', commonName: 'x' }), routeCtx());
 
     expect(res.status).toBe(500);
     expect(lastAudit().metadata.error).toBe('unknown error');

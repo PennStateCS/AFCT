@@ -23,7 +23,7 @@ import { GET } from './route';
 
 const admin = { user: { id: 'a1', role: 'ADMIN', isAdmin: true } };
 const VALID = 'afct-20260101-000000.dump';
-const get = (file) =>
+const get = (file: string) =>
   GET(
     new Request(
       `http://localhost/api/admin/settings/backups/download?file=${encodeURIComponent(file)}`,

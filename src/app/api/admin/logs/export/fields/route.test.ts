@@ -9,6 +9,7 @@ vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activity
 
 import { GET } from './route';
 import { EXPORTABLE_LOG_FIELDS } from '@/lib/log-fields';
+import { routeCtx, testRequest } from '@/test/route';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -17,12 +18,12 @@ beforeEach(() => {
 describe('GET /api/admin/logs/export/fields', () => {
   it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
-    expect((await GET()).status).toBe(401);
+    expect((await GET(testRequest(), routeCtx())).status).toBe(401);
   });
 
   it('returns 403 and logs a denial for a signed-in non-admin', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
-    const res = await GET(new Request('http://localhost/api/admin/logs/export/fields'));
+    const res = await GET(new Request('http://localhost/api/admin/logs/export/fields'), routeCtx());
     expect(res.status).toBe(403);
     expect(activityLogMock).toHaveBeenCalledWith(
       expect.anything(),
@@ -33,7 +34,7 @@ describe('GET /api/admin/logs/export/fields', () => {
 
   it('returns the exportable field list for an admin', async () => {
     authMock.mockResolvedValue({ user: { id: 'a1', isAdmin: true } });
-    const res = await GET();
+    const res = await GET(testRequest(), routeCtx());
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual([...EXPORTABLE_LOG_FIELDS]);
   });
