@@ -10,7 +10,6 @@ import type { Course } from '@prisma/client';
 import { Button } from '@/components/ui/button';
 import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
-import SwitchField from '@/components/ui/SwitchField';
 import { EMPTY_STRING_NOTATION_OPTIONS } from '@/lib/empty-string-notation';
 import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
 import { showToast } from '@/lib/toast';
@@ -238,7 +237,7 @@ export function CourseSettingsForm({
               label: formatTimezoneLabel(tz),
             }))}
             triggerClassName="border-black [&>svg]:!text-black [&>svg]:!opacity-100"
-            description="The dates below — and every assignment due date — are interpreted in this timezone for all students."
+            description="The dates below, and every assignment due date, are interpreted in this timezone for all students."
             error={errors.timezone?.message}
           />
         )}
@@ -344,37 +343,10 @@ export function CourseSettingsForm({
         )}
       />
 
-      {/* PUBLISH STATUS TOGGLE */}
-      <Controller
-        name="isPublished"
-        control={control}
-        render={({ field }) => (
-          <SwitchField
-            label="Published"
-            name="isPublished-switch"
-            checked={!!field.value}
-            onCheckedChange={(checked) => field.onChange(!!checked)}
-            description="When on, enrolled students can see the course."
-            boxClassName="border-black"
-          />
-        )}
-      />
-
-      {/* ARCHIVE STATUS TOGGLE */}
-      <Controller
-        name="isArchived"
-        control={control}
-        render={({ field }) => (
-          <SwitchField
-            label="Archived"
-            name="isArchived-switch"
-            checked={!!field.value}
-            onCheckedChange={(checked) => field.onChange(!!checked)}
-            description="Archiving makes the course read-only for everyone."
-            boxClassName="border-black"
-          />
-        )}
-      />
+      <p className="text-muted-foreground text-xs">
+        Publishing and archiving are managed from the toggles at the top of the course page, where
+        they take effect immediately.
+      </p>
 
       <div className="flex justify-end gap-2 pt-2">
         {onCancel ? (
