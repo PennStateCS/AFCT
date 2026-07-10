@@ -62,12 +62,10 @@ const mockCourse: FullCourse = {
   ],
 };
 
-const onEditClick = vi.fn();
 const onPublishToggle = vi.fn();
 const onArchiveToggle = vi.fn();
 
 beforeEach(() => {
-  onEditClick.mockReset();
   onPublishToggle.mockReset();
   onArchiveToggle.mockReset();
 });
@@ -78,7 +76,6 @@ describe('CourseHeader', () => {
       <CourseHeader
         course={mockCourse}
         isStudent={false}
-        onEditClick={onEditClick}
         onPublishToggle={onPublishToggle}
         onArchiveToggle={onArchiveToggle}
       />,
@@ -89,7 +86,8 @@ describe('CourseHeader', () => {
     expect(screen.getByText('Fall 2025')).toBeInTheDocument();
     expect(screen.getByText('3 credits')).toBeInTheDocument();
     expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Edit Course' })).toBeInTheDocument();
+    // Publish/archive toggles are instructor-only.
+    expect(screen.getAllByRole('switch').length).toBeGreaterThan(0);
   });
 
   it('hides instructor actions for students', () => {
@@ -97,13 +95,12 @@ describe('CourseHeader', () => {
       <CourseHeader
         course={mockCourse}
         isStudent
-        onEditClick={onEditClick}
         onPublishToggle={onPublishToggle}
         onArchiveToggle={onArchiveToggle}
       />,
     );
 
-    expect(screen.queryByRole('button', { name: 'Edit Course' })).toBeNull();
+    expect(screen.queryAllByRole('switch')).toHaveLength(0);
   });
 
   it('calls the appropriate callbacks when toggles and actions are used', async () => {
@@ -113,14 +110,10 @@ describe('CourseHeader', () => {
       <CourseHeader
         course={mockCourse}
         isStudent={false}
-        onEditClick={onEditClick}
         onPublishToggle={onPublishToggle}
         onArchiveToggle={onArchiveToggle}
       />,
     );
-
-    await user.click(screen.getByRole('button', { name: 'Edit Course' }));
-    expect(onEditClick).toHaveBeenCalledTimes(1);
 
     const switches = screen.getAllByRole('switch');
     await user.click(switches[0]);

@@ -178,7 +178,6 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
       <CourseHeader
         course={course}
         isStudent={isStudent}
-        onEditClick={() => dialogStates.setEditOpen(true)}
         onPublishToggle={handlePublishToggle}
         onArchiveToggle={handleArchiveToggle}
       />
@@ -205,6 +204,7 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
           onProblemEdit={handleProblemEditClick}
           onProblemDelete={handleProblemDeleteClick}
           onRefreshCourse={refetchCourse}
+          onEditCourse={() => dialogStates.setEditOpen(true)}
         />
       )}
 
