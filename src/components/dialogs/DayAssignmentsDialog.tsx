@@ -90,29 +90,42 @@ export default function DayAssignmentsDialog({
             <p className="text-muted-foreground text-sm">No assignments for this day.</p>
           ) : (
             <ul className="space-y-2">
-              {assignments.map((a) => (
-                <li key={a.id}>
-                  <Link
-                    href={`/dashboard/courses/${a.courseId}/${a.id}`}
-                    className={cn(
-                      'block w-full cursor-pointer rounded-md bg-sky-700 p-3 text-white hover:bg-sky-800 dark:bg-sky-600 dark:hover:bg-sky-700',
-                      a.crossedOut && 'line-through opacity-80',
-                    )}
-                    title={`${a.course.code} - ${a.title}`}
-                    onClick={() => {
-                      onClose?.();
-                    }}
-                  >
-                    <div className="truncate text-sm font-medium">
-                      {`${a.course.code} - ${a.title}`}
-                    </div>
-                    <div className="text-xs opacity-90">{a.course.name}</div>
-                    <div className="mt-1 text-xs opacity-80">
-                      {formatDateTimeInTimeZone(a.dueDate, timezone)}
-                    </div>
-                  </Link>
-                </li>
-              ))}
+              {assignments.map((a) => {
+                const isDraft = a.isPublished === false;
+                return (
+                  <li key={a.id}>
+                    <Link
+                      href={`/dashboard/courses/${a.courseId}/${a.id}`}
+                      className={cn(
+                        'block w-full cursor-pointer rounded-md p-3 text-white',
+                        isDraft
+                          ? 'bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700'
+                          : 'bg-sky-700 hover:bg-sky-800 dark:bg-sky-600 dark:hover:bg-sky-700',
+                        a.crossedOut && 'line-through opacity-80',
+                      )}
+                      title={`${isDraft ? 'Draft — ' : ''}${a.course.code} - ${a.title}`}
+                      onClick={() => {
+                        onClose?.();
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="min-w-0 truncate text-sm font-medium">
+                          {`${a.course.code} - ${a.title}`}
+                        </span>
+                        {isDraft && (
+                          <span className="shrink-0 rounded bg-white/25 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase">
+                            Draft
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs opacity-90">{a.course.name}</div>
+                      <div className="mt-1 text-xs opacity-80">
+                        {formatDateTimeInTimeZone(a.dueDate, timezone)}
+                      </div>
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>

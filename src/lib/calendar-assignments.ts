@@ -48,6 +48,9 @@ export async function getAssignmentsForUserRange(params: {
       title: true,
       courseId: true,
       dueDate: true,
+      // Carried through so staff can see (and the UI can mark) unpublished/draft
+      // assignments. Students only ever receive published ones (see the OR above).
+      isPublished: true,
       course: {
         select: { id: true, code: true, name: true },
       },
