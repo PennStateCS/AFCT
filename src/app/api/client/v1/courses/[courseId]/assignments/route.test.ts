@@ -3,10 +3,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const resolveMock = vi.hoisted(() => vi.fn());
 const canAccessMock = vi.hoisted(() => vi.fn());
 const getAssignmentsMock = vi.hoisted(() => vi.fn());
+const prismaMock = vi.hoisted(() => ({ course: { findUnique: vi.fn() } }));
 
 vi.mock('@/lib/client-auth', () => ({ resolveClientToken: resolveMock }));
 vi.mock('@/lib/permissions', () => ({ canAccessCourse: canAccessMock }));
 vi.mock('@/lib/student-assignments', () => ({ getStudentCourseAssignments: getAssignmentsMock }));
+vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
 import { GET } from './route';
 
@@ -40,6 +42,7 @@ describe('GET /api/client/v1/courses/[courseId]/assignments', () => {
   it('returns assignments (answer-key file withheld) when accessible', async () => {
     resolveMock.mockResolvedValue(validUser);
     canAccessMock.mockResolvedValue(true);
+    prismaMock.course.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     getAssignmentsMock.mockResolvedValue([
       {
         id: 'a1',
@@ -68,6 +71,9 @@ describe('GET /api/client/v1/courses/[courseId]/assignments', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(getAssignmentsMock).toHaveBeenCalledWith('u1', 'c1');
+    // QoL: course timezone (for rendering deadlines) + server clock (for countdowns).
+    expect(body.timezone).toBe('America/New_York');
+    expect(typeof body.serverTime).toBe('string');
     expect(body.assignments[0].id).toBe('a1');
     const problem = body.assignments[0].problems[0];
     expect(problem).toEqual({

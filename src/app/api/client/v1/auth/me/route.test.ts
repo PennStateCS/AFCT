@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const resolveMock = vi.hoisted(() => vi.fn());
+const prismaMock = vi.hoisted(() => ({ clientApiToken: { findUnique: vi.fn() } }));
 vi.mock('@/lib/client-auth', () => ({ resolveClientToken: resolveMock }));
+vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 
 import { GET } from './route';
 
@@ -20,15 +22,19 @@ describe('GET /api/client/v1/auth/me', () => {
     expect((await GET(makeReq('Bearer bad'), ctx)).status).toBe(401);
   });
 
-  it('200 with the user when the token is valid', async () => {
+  it('200 with the user and token expiry when valid', async () => {
     resolveMock.mockResolvedValue({
       tokenId: 't1',
       user: { id: 'u1', isAdmin: false, email: 'a@b.c', firstName: 'A', lastName: 'B' },
     });
+    const expiresAt = new Date('2026-09-01T00:00:00.000Z');
+    prismaMock.clientApiToken.findUnique.mockResolvedValue({ expiresAt });
+
     const res = await GET(makeReq('Bearer good'), ctx);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       user: { id: 'u1', email: 'a@b.c', firstName: 'A', lastName: 'B' },
+      expiresAt: expiresAt.toISOString(),
     });
   });
 });
