@@ -8,10 +8,10 @@ import { writeFile, unlink, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
-import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
-import { formBool } from '@/lib/api/request';
+import { readFormData } from '@/lib/api/request';
+import { UserProfileApiSchema } from '@/schemas/profile';
 
 const uploadDir = path.join('/private', 'uploads', 'pfps');
 
@@ -73,27 +73,14 @@ export async function POST(req: Request) {
   }
 
   try {
-    const formData = await req.formData();
-    const firstName = (formData.get('firstName') as string)?.trim();
-    const lastName = (formData.get('lastName') as string)?.trim();
-    const avatar = formData.get('avatar') as File | null;
-    const deleteAvatar = formBool(formData, 'deleteAvatar');
-    const timezoneRaw = (formData.get('timezone') as string | null)?.trim() || '';
+    // Validate the scalar fields (names required, timezone allow-list, deleteAvatar)
+    // server-side; the avatar File stays on the raw form.
+    const parsed = await readFormData(req, UserProfileApiSchema);
+    if (!parsed.ok) return parsed.response;
+    const { firstName, lastName, deleteAvatar } = parsed.data;
+    const timezoneRaw = parsed.data.timezone ?? '';
+    const avatar = parsed.form.get('avatar') as File | null;
     const { maxBytes, maxMb } = await getSystemUploadLimit();
-
-    if (!firstName || !lastName) {
-      return NextResponse.json(
-        { error: 'First name and last name cannot be blank.' },
-        { status: 400 },
-      );
-    }
-
-    if (
-      timezoneRaw &&
-      !COMMON_TIMEZONES.includes(timezoneRaw as (typeof COMMON_TIMEZONES)[number])
-    ) {
-      return NextResponse.json({ error: 'Invalid timezone.' }, { status: 400 });
-    }
 
     if (!existsSync(uploadDir)) {
       await mkdir(uploadDir, { recursive: true });

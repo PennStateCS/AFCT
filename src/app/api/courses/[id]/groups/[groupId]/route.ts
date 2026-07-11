@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server';
-import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { logError } from '@/lib/api/activity';
-
-const RenameGroupBody = z.object({ name: z.string().trim().min(1, 'Name is required') });
+import { UpdateGroupSchema } from '@/schemas/group';
 
 /**
  * CORS preflight handler.
@@ -48,7 +46,7 @@ export const PATCH = withCourseAuth(
     if (!groupId) return NextResponse.json({ error: 'Missing params' }, { status: 400 });
 
     try {
-      const parsed = await readJson(req, RenameGroupBody);
+      const parsed = await readJson(req, UpdateGroupSchema);
       if (!parsed.ok) return parsed.response;
       const { name } = parsed.data;
 
