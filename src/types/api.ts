@@ -665,7 +665,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List my submissions for a problem (client)
+         * @description The caller's own submission history for one problem (attempt list), newest first —  so the client can show past attempts and drill into any one's result via  `GET /submissions/{id}`. Scoped to the token's user, so it never exposes anyone  else's work.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/client/v1/submissions/route.ts)
+         */
+        get: operations["getClientV1Submissions"];
         put?: never;
         /**
          * Submit a solution (client)
@@ -3477,6 +3483,8 @@ export interface operations {
                 content: {
                     "application/json": {
                         user?: Record<string, never>;
+                        /** @description When the (sliding) token expires */
+                        expiresAt?: string | null;
                     };
                 };
             };
@@ -3602,6 +3610,49 @@ export interface operations {
             };
             /** @description Submission not found or not visible to the caller. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getClientV1Submissions: {
+        parameters: {
+            query: {
+                assignmentId: string;
+                problemId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's attempts for the problem, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        submissions?: Record<string, never>[];
+                    };
+                };
+            };
+            /** @description Missing assignmentId or problemId. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

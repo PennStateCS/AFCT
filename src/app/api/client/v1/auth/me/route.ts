@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 import { withClientAuth } from '@/lib/api/with-client-auth';
 
 /**
@@ -17,9 +18,14 @@ import { withClientAuth } from '@/lib/api/with-client-auth';
  *           type: object
  *           properties:
  *             user: { type: object }
+ *             expiresAt: { type: string, nullable: true, description: When the (sliding) token expires }
  *   401: { description: "Missing, expired, or revoked token." }
  */
-export const GET = withClientAuth(async (_req, _ctx, { user }) => {
+export const GET = withClientAuth(async (_req, _ctx, { user, tokenId }) => {
+  const token = await prisma.clientApiToken.findUnique({
+    where: { id: tokenId },
+    select: { expiresAt: true },
+  });
   return NextResponse.json({
     user: {
       id: user.id,
@@ -27,5 +33,6 @@ export const GET = withClientAuth(async (_req, _ctx, { user }) => {
       firstName: user.firstName,
       lastName: user.lastName,
     },
+    expiresAt: token?.expiresAt ? token.expiresAt.toISOString() : null,
   });
 });

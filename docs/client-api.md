@@ -44,9 +44,9 @@ No auth header. JSON body:
 Bearer auth. Revokes the current token. `200` → `{ "success": true }`.
 
 ### `GET /api/client/v1/auth/me`
-Bearer auth. Whoami / **token check** — `200` → `{ "user": {…} }` if the token is
-valid, `401` if it's missing, expired, or revoked. Use it to validate a stored token
-(e.g. on client startup) before showing the main UI.
+Bearer auth. Whoami / **token check** — `200` → `{ "user": {…}, "expiresAt": "…" }`
+if the token is valid, `401` if it's missing, expired, or revoked. `expiresAt` is
+when the (sliding) token lapses. Use it to validate a stored token on startup.
 
 ### `GET /api/health`
 **No auth.** Simple liveness/health check — `200` →
@@ -59,15 +59,19 @@ staff also see their own unpublished ones, and **archived** courses are excluded
 (they're read-only and can't be submitted to). `200` →
 ```json
 { "courses": [ { "id": "…", "name": "…", "code": "CMPEN 331",
-                 "semester": "Fall 2025", "isPublished": true,
-                 "isArchived": false, "role": "STUDENT" } ] }
+                 "semester": "Fall 2025", "timezone": "America/New_York",
+                 "isPublished": true, "isArchived": false, "role": "STUDENT" } ] }
 ```
+`timezone` is the IANA zone the course's deadlines are anchored to — render due dates
+in this zone.
 
 ### `GET /api/client/v1/courses/{courseId}/assignments`
 Bearer auth. The course's **published** assignments and their problems, for this
 student. The answer-key file is never included. `200` →
 ```json
-{ "assignments": [ {
+{ "timezone": "America/New_York",
+  "serverTime": "2026-01-10T15:04:05.000Z",
+  "assignments": [ {
     "id": "…", "title": "HW 1", "description": "…",
     "dueDate": "2026-01-15T04:59:00.000Z",
     "allowLateSubmissions": false, "lateCutoff": null,
@@ -76,7 +80,9 @@ student. The answer-key file is never included. `200` →
                     "submissionCount": 1, "grade": 8, "status": "COMPLETED" } ]
 } ] }
 ```
-`404` if the course isn't found or isn't accessible to the caller.
+`timezone` is the course's zone; `dueDate`/`lateCutoff` are UTC — convert them into
+`timezone` for display. `serverTime` is the server's clock (UTC) for accurate
+countdowns. `404` if the course isn't found or isn't accessible to the caller.
 
 ### `POST /api/client/v1/submissions`
 Bearer auth. `multipart/form-data`:
@@ -92,6 +98,16 @@ the background). Errors: `400` missing/unlinked/invalid-structure · `403` not
 enrolled or late-policy rejection · `404` assignment not found · `409` submission
 limit reached **or the course is archived** · `413` file too large · `429` resubmit
 cooldown (`Retry-After`).
+
+### `GET /api/client/v1/submissions?assignmentId=…&problemId=…`
+Bearer auth. Your attempt **history** for one problem, newest first (both query params
+required). `200` →
+```json
+{ "submissions": [ { "id": "…", "status": "COMPLETED", "correct": true,
+                     "submittedAt": "2026-01-10T15:00:00.000Z" } ] }
+```
+Scoped to you — never anyone else's work. Drill into any attempt's full result
+(grade + witness) via the by-id endpoint below. `400` if a query param is missing.
 
 ### `GET /api/client/v1/submissions/{submissionId}`
 Bearer auth. Poll a submission's result (yours; staff may read anyone's in-course).

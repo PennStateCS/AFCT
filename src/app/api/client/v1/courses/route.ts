@@ -41,6 +41,9 @@ export const GET = withClientAuth(async (_req, _ctx, { user }) => {
       name: c.name,
       code: c.code,
       semester: c.semester,
+      // IANA zone the course's deadlines are anchored to — the client should render
+      // due dates in this zone.
+      timezone: c.timezone,
       isPublished: c.isPublished,
       isArchived: c.isArchived,
       role: roleByCourse.get(c.id) ?? (user.isAdmin ? 'ADMIN' : null),
