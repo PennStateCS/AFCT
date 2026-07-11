@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { z } from 'zod';
 import bcrypt from 'bcrypt';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
@@ -8,13 +7,7 @@ import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy
 import { withAdminAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { normalizeEmail, isValidEmail } from '@/lib/email';
-
-// `rows` are validated per-row in the handler (null/blank rows are tolerated and
-// reported as failures), so keep the elements loose here — only require an array.
-const BulkUsersBody = z.object({
-  rows: z.array(z.unknown()).default([]),
-  temporaryPasswords: z.boolean().optional(),
-});
+import { BulkImportUsersSchema } from '@/schemas/bulk';
 
 type BulkUserRow = {
   rowNumber?: number;
@@ -88,7 +81,7 @@ type CreatedRow = {
 export const POST = withAdminAuth(
   async (req, _ctx, { user }) => {
     try {
-      const parsed = await readJson(req, BulkUsersBody);
+      const parsed = await readJson(req, BulkImportUsersSchema);
       if (!parsed.ok) return parsed.response;
       const rows = parsed.data.rows as BulkUserRow[];
       const temporaryPasswords = parsed.data.temporaryPasswords === true;
