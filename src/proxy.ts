@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import { isSessionIdleExpired } from '@/lib/session-timeout';
+import { requireAuthSecret } from '@/lib/auth-secret';
 
 /**
  * Coarse, edge-level authentication net.
@@ -48,7 +49,7 @@ export async function proxy(req: NextRequest) {
 
   const token = await getToken({
     req,
-    secret: process.env.NEXTAUTH_SECRET,
+    secret: requireAuthSecret(),
     secureCookie: process.env.NODE_ENV === 'production',
   });
 
