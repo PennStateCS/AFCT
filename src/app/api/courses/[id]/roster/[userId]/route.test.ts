@@ -17,6 +17,10 @@ const prismaMock = vi.hoisted(() => ({
   course: {
     findUnique: vi.fn(),
   },
+  // DELETE/PATCH wrap the last-faculty re-check + mutation in a serializable
+  // transaction; run the callback against the same mock.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  $transaction: vi.fn((cb: any) => cb(prismaMock)),
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
