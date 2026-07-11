@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
@@ -9,23 +8,8 @@ import { getUsersList } from '@/lib/users-list';
 import { withAdminAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { isValidEmail } from '@/lib/email';
-
-const CreateUserBody = z.object({
-  email: z.string().min(1),
-  firstName: z.string().min(1),
-  lastName: z.string().min(1),
-  password: z.string().min(1),
-  timezone: z.string().optional(),
-});
-
-// Local password check for admin-created accounts: 8+ chars with mixed case, a
-// digit, and a symbol.
-const isStrongPassword = (pw: string) =>
-  pw.length >= 8 &&
-  /[A-Z]/.test(pw) &&
-  /[a-z]/.test(pw) &&
-  /\d/.test(pw) &&
-  /[^A-Za-z0-9]/.test(pw);
+import { isStrongPassword } from '@/lib/password-policy';
+import { UserCreateApiSchema } from '@/schemas/user';
 
 /**
  * Lists users for the admin-facing users table. System administrators only; the
@@ -96,7 +80,7 @@ export const GET = withAdminAuth(
 export const POST = withAdminAuth(
   async (req, _ctx, { user }) => {
     try {
-      const parsed = await readJson(req, CreateUserBody);
+      const parsed = await readJson(req, UserCreateApiSchema);
       if (!parsed.ok) return parsed.response;
       const { email, firstName, lastName, password, timezone } = parsed.data;
 
