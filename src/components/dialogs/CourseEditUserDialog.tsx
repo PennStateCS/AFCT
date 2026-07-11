@@ -22,6 +22,7 @@ import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { courseRoleOptions, formatCourseRole } from '@/lib/roles';
 import SelectField from '@/components/ui/SelectField';
 import { apiPaths } from '@/lib/api-paths';
+import { CourseRoleChangeSchema } from '@/schemas/user';
 
 type CourseRosterEntry = {
   role?: string | null;
@@ -164,7 +165,14 @@ export default function CourseEditUserDialog({
 
   const handleSave = () => {
     if (!roster) return;
-    saveRoster(roster.role);
+    // Validate the selected role against the shared enum (the same one the route
+    // enforces) before sending the PATCH.
+    const parsed = CourseRoleChangeSchema.safeParse({ role: roster.role });
+    if (!parsed.success) {
+      showToast.error('Please choose a valid course role.');
+      return;
+    }
+    saveRoster(parsed.data.role);
   };
 
   const [confirmOpen, setConfirmOpen] = useState(false);

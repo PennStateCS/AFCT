@@ -1,7 +1,14 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withAssignmentAuth } from '@/lib/api/with-auth';
+
+// Body for removing group→problem mappings. `groupId` is a specific group or 'ALL'.
+const GroupProblemsBodySchema = z.object({
+  problemIds: z.array(z.string()).default([]),
+  groupId: z.string().optional(),
+});
 
 /**
  * Returns each course group alongside the problem ids mapped to it for this
@@ -119,9 +126,11 @@ export const DELETE = withAssignmentAuth(
         return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
       }
 
-      const problemIds: string[] = Array.isArray(body.problemIds) ? body.problemIds : [];
-      const groupId: string | undefined =
-        typeof body.groupId === 'string' ? body.groupId : undefined;
+      const parsedBody = GroupProblemsBodySchema.safeParse(body);
+      if (!parsedBody.success) {
+        return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+      }
+      const { problemIds, groupId } = parsedBody.data;
 
       if (problemIds.length === 0) {
         return NextResponse.json({ error: 'No problemIds provided' }, { status: 400 });

@@ -1,6 +1,5 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { writeFile } from 'fs/promises';
@@ -11,16 +10,8 @@ import { isAdmin } from '@/lib/permissions';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { safeStoredFilename, resolveInsideDir, safeUnlinkInDir } from '@/lib/safe-upload';
-import { formBool, formBoolOptional, readJson } from '@/lib/api/request';
-
-// JSON body for the non-multipart update path (partial; multipart handles avatars).
-const UpdateUserJsonBody = z.object({
-  firstName: z.string().optional(),
-  lastName: z.string().optional(),
-  inactive: z.boolean().optional(),
-  timezone: z.string().optional(),
-  isAdmin: z.boolean().optional(),
-});
+import { readFormData, readJson } from '@/lib/api/request';
+import { UserUpdateJsonApiSchema, UserUpdateFormApiSchema } from '@/schemas/user';
 
 // Avatars are stored here; the client-supplied name is never used to build a path.
 const pfpsDir = path.join('/private', 'uploads', 'pfps');
@@ -106,16 +97,17 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     let isAdminFlag: boolean | undefined;
 
     if (contentType.includes('multipart/form-data')) {
-      const formData = await req.formData();
-      firstName = formData.get('firstName') as string;
-      lastName = formData.get('lastName') as string;
-      inactive = formBool(formData, 'inactive');
-      avatarFile = formData.get('avatar') as File;
-      deleteAvatar = formBool(formData, 'deleteAvatar');
-      timezoneRaw = (formData.get('timezone') as string) || undefined;
-      isAdminFlag = formBoolOptional(formData, 'isAdmin');
+      const parsed = await readFormData(req, UserUpdateFormApiSchema);
+      if (!parsed.ok) return parsed.response;
+      firstName = parsed.data.firstName;
+      lastName = parsed.data.lastName;
+      inactive = parsed.data.inactive;
+      deleteAvatar = parsed.data.deleteAvatar;
+      timezoneRaw = parsed.data.timezone || undefined;
+      isAdminFlag = parsed.data.isAdmin;
+      avatarFile = parsed.form.get('avatar') as File;
     } else {
-      const parsed = await readJson(req, UpdateUserJsonBody);
+      const parsed = await readJson(req, UserUpdateJsonApiSchema);
       if (!parsed.ok) return parsed.response;
       firstName = parsed.data.firstName;
       lastName = parsed.data.lastName;

@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog, type EnhancedActivityLogData } from '@/lib/activity-log-utils';
 import { withAdminAuth } from '@/lib/api/with-auth';
+import { readJson } from '@/lib/api/request';
 import {
   readCertInfo,
   installCert,
@@ -58,15 +60,15 @@ export const GET = withAdminAuth(
   { deniedAction: 'TLS_STATUS_VIEW_DENIED' },
 );
 
-type Body = {
-  action?: 'install' | 'generate-csr' | 'install-signed' | 'self-signed';
-  cert?: string;
-  key?: string;
-  chain?: string;
-  commonName?: string;
-  organization?: string;
-  altNames?: string[];
-};
+const TlsCertRequestSchema = z.object({
+  action: z.enum(['install', 'generate-csr', 'install-signed', 'self-signed']).optional(),
+  cert: z.string().optional(),
+  key: z.string().optional(),
+  chain: z.string().optional(),
+  commonName: z.string().optional(),
+  organization: z.string().optional(),
+  altNames: z.array(z.string()).optional(),
+});
 
 /**
  * Performs a certificate operation, chosen by the `action` field. Admin only;
@@ -103,12 +105,9 @@ type Body = {
  */
 export const POST = withAdminAuth(
   async (req, _ctx, { user }) => {
-    let body: Body;
-    try {
-      body = (await req.json()) as Body;
-    } catch {
-      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
-    }
+    const parsed = await readJson(req, TlsCertRequestSchema);
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.data;
 
     const csrFields = {
       commonName: body.commonName ?? '',

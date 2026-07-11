@@ -16,6 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useState, useEffect, useRef } from 'react';
 import type { EnrollableUser } from '@/types/course';
 import { apiPaths } from '@/lib/api-paths';
+import { BulkEnrollEmailsSchema, BulkEnrollUserIdsSchema } from '@/schemas/bulk';
 
 type Props = {
   open: boolean;
@@ -69,7 +70,7 @@ export default function BulkEnrollDialog({
       const res = await fetch(apiPaths.courseLookupUsers(courseId), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emails: parsed }),
+        body: JSON.stringify(BulkEnrollEmailsSchema.parse({ emails: parsed })),
       });
       if (!res.ok) throw new Error('Lookup failed');
       const data = await res.json();
@@ -91,7 +92,7 @@ export default function BulkEnrollDialog({
       const res = await fetch(apiPaths.courseRosterBulk(courseId), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userIds: found.map((u) => u.id) }),
+        body: JSON.stringify(BulkEnrollUserIdsSchema.parse({ userIds: found.map((u) => u.id) })),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));

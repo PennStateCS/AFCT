@@ -1,22 +1,11 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { createEnhancedActivityLog, type EnhancedActivityLogData } from '@/lib/activity-log-utils';
 import { withAdminAuth } from '@/lib/api/with-auth';
+import { readJson } from '@/lib/api/request';
 import { parseDomainList } from '@/lib/email';
+import { SystemSettingsUpdateSchema } from '@/schemas/systemSettings';
 import {
-  clampSessionTimeoutMinutes,
-  clampSubmissionEvalTimeoutMs,
-  clampSubmissionEvalMaxMemoryMb,
-  clampSubmissionResubmitCooldownMs,
-  clampSubmissionMaxConcurrent,
-  clampSubmissionMaxAttempts,
-  clampSubmissionAnalyzerLimit,
-  clampLoginMaxAttempts,
-  clampLoginLockoutMinutes,
-  clampBackupHour,
-  clampBackupRetentionDays,
-  clampActivityLogRetentionDays,
   DEFAULT_LOGIN_MAX_ATTEMPTS,
   DEFAULT_LOGIN_LOCKOUT_MINUTES,
   DEFAULT_BACKUP_ENABLED,
@@ -160,30 +149,6 @@ export const GET = withAdminAuth(
   { deniedAction: 'SYSTEM_SETTINGS_VIEW_DENIED' },
 );
 
-type SettingsBody = {
-  timezone?: string;
-  maxUploadSizeMb?: number;
-  allowSignup?: boolean;
-  signupAllowedDomains?: string;
-  clock24Hour?: boolean;
-  sessionTimeoutMinutes?: number;
-  submissionEvalTimeoutMs?: number;
-  submissionEvalMaxMemoryMb?: number;
-  submissionResubmitCooldownMs?: number;
-  submissionMaxConcurrent?: number;
-  submissionMaxAttempts?: number;
-  submissionAnalyzerLimit?: number;
-  loginMaxAttempts?: number;
-  loginLockoutMinutes?: number;
-  backupEnabled?: boolean;
-  backupHour?: number;
-  backupRetentionDays?: number;
-  activityLogRetentionDays?: number;
-  hcaptchaSiteKey?: string;
-  hcaptchaSecretKey?: string;
-  hcaptchaSecretClear?: boolean;
-};
-
 /**
  * Updates the singleton system settings (upsert). Every field is optional, so a
  * partial payload only touches the fields it includes; numeric fields are clamped
@@ -227,26 +192,20 @@ type SettingsBody = {
  */
 export const PUT = withAdminAuth(
   async (req, _ctx, { user }) => {
-    let body: SettingsBody;
-    try {
-      body = (await req.json()) as SettingsBody;
-    } catch {
-      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
-    }
+    // Validate + clamp the payload. The schema coerces and clamps numeric fields to
+    // their safe bounds (see src/schemas/systemSettings.ts) and rejects an invalid
+    // timezone or malformed JSON with a 400.
+    const parsed = await readJson(req, SystemSettingsUpdateSchema);
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.data;
 
-    const timezone = String(body.timezone ?? '').trim();
-    const rawSize = Number(body.maxUploadSizeMb);
-    const maxUploadSizeMb = Math.max(
-      1,
-      Math.min(1024, Number.isFinite(rawSize) ? Math.trunc(rawSize) : 0),
-    );
-    const sessionTimeoutMinutes = clampSessionTimeoutMinutes(Number(body.sessionTimeoutMinutes));
-    const hasAllowSignup = typeof body.allowSignup === 'boolean';
-    const hasClock24Hour = typeof body.clock24Hour === 'boolean';
-
-    if (!COMMON_TIMEZONES.includes(timezone as (typeof COMMON_TIMEZONES)[number])) {
-      return NextResponse.json({ error: 'Invalid timezone' }, { status: 400 });
-    }
+    // timezone + the two core numeric fields are always applied (the schema
+    // defaults/clamps them); the rest are applied only when present.
+    const timezone = body.timezone;
+    const maxUploadSizeMb = body.maxUploadSizeMb;
+    const sessionTimeoutMinutes = body.sessionTimeoutMinutes;
+    const hasAllowSignup = body.allowSignup !== undefined;
+    const hasClock24Hour = body.clock24Hour !== undefined;
 
     // Signup email-domain allow-list: only persist when provided. Normalize to the
     // canonical comma-separated form and reject any malformed domain up front.
@@ -266,48 +225,32 @@ export const PUT = withAdminAuth(
     // a partial update can't reset the others.
     const queueData: Record<string, number> = {};
     if (body.submissionEvalTimeoutMs !== undefined)
-      queueData.submissionEvalTimeoutMs = clampSubmissionEvalTimeoutMs(
-        Number(body.submissionEvalTimeoutMs),
-      );
+      queueData.submissionEvalTimeoutMs = body.submissionEvalTimeoutMs;
     if (body.submissionEvalMaxMemoryMb !== undefined)
-      queueData.submissionEvalMaxMemoryMb = clampSubmissionEvalMaxMemoryMb(
-        Number(body.submissionEvalMaxMemoryMb),
-      );
+      queueData.submissionEvalMaxMemoryMb = body.submissionEvalMaxMemoryMb;
     if (body.submissionResubmitCooldownMs !== undefined)
-      queueData.submissionResubmitCooldownMs = clampSubmissionResubmitCooldownMs(
-        Number(body.submissionResubmitCooldownMs),
-      );
+      queueData.submissionResubmitCooldownMs = body.submissionResubmitCooldownMs;
     if (body.submissionMaxConcurrent !== undefined)
-      queueData.submissionMaxConcurrent = clampSubmissionMaxConcurrent(
-        Number(body.submissionMaxConcurrent),
-      );
+      queueData.submissionMaxConcurrent = body.submissionMaxConcurrent;
     if (body.submissionMaxAttempts !== undefined)
-      queueData.submissionMaxAttempts = clampSubmissionMaxAttempts(
-        Number(body.submissionMaxAttempts),
-      );
+      queueData.submissionMaxAttempts = body.submissionMaxAttempts;
     if (body.submissionAnalyzerLimit !== undefined)
-      queueData.submissionAnalyzerLimit = clampSubmissionAnalyzerLimit(
-        Number(body.submissionAnalyzerLimit),
-      );
+      queueData.submissionAnalyzerLimit = body.submissionAnalyzerLimit;
 
     // Login lockout policy — only persist the fields provided, clamped to safe bounds.
     const loginData: Record<string, number> = {};
-    if (body.loginMaxAttempts !== undefined)
-      loginData.loginMaxAttempts = clampLoginMaxAttempts(Number(body.loginMaxAttempts));
+    if (body.loginMaxAttempts !== undefined) loginData.loginMaxAttempts = body.loginMaxAttempts;
     if (body.loginLockoutMinutes !== undefined)
-      loginData.loginLockoutMinutes = clampLoginLockoutMinutes(Number(body.loginLockoutMinutes));
+      loginData.loginLockoutMinutes = body.loginLockoutMinutes;
 
     // Backup schedule — only persist provided fields, clamped to safe bounds.
     const backupData: Record<string, number | boolean> = {};
-    if (typeof body.backupEnabled === 'boolean') backupData.backupEnabled = body.backupEnabled;
-    if (body.backupHour !== undefined)
-      backupData.backupHour = clampBackupHour(Number(body.backupHour));
+    if (body.backupEnabled !== undefined) backupData.backupEnabled = body.backupEnabled;
+    if (body.backupHour !== undefined) backupData.backupHour = body.backupHour;
     if (body.backupRetentionDays !== undefined)
-      backupData.backupRetentionDays = clampBackupRetentionDays(Number(body.backupRetentionDays));
+      backupData.backupRetentionDays = body.backupRetentionDays;
     if (body.activityLogRetentionDays !== undefined)
-      backupData.activityLogRetentionDays = clampActivityLogRetentionDays(
-        Number(body.activityLogRetentionDays),
-      );
+      backupData.activityLogRetentionDays = body.activityLogRetentionDays;
 
     // hCaptcha keys: site key set/clear when provided; secret only updated when a
     // non-empty value is sent, or explicitly cleared. Empty secret means "keep".

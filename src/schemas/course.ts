@@ -3,9 +3,10 @@ import {
   EMPTY_STRING_NOTATIONS,
   DEFAULT_EMPTY_STRING_NOTATION,
 } from '@/lib/empty-string-notation';
+import { dateTimeLocalString } from './fields';
 
 const EmptyStringNotationSchema = z
-  .enum(EMPTY_STRING_NOTATIONS as unknown as [string, ...string[]])
+  .enum(EMPTY_STRING_NOTATIONS)
   .default(DEFAULT_EMPTY_STRING_NOTATION);
 
 /**
@@ -17,41 +18,8 @@ const EmptyStringNotationSchema = z
  */
 const courseCodeRegex = /^[A-Z]{2,8}\s?\d{1,4}[A-Z]?$/;
 
-/**
- * Accepts <input type="datetime-local"> value like "2025-08-15T09:30"
- * Validates and transforms to a Date (local -> actual Date instance).
- */
-const DateTimeLocal = z
-  .string()
-  .min(1, 'This field is required.')
-  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, 'Use a valid date & time (YYYY-MM-DDTHH:MM).')
-  .superRefine((val, ctx) => {
-    const d = new Date(val);
-    if (Number.isNaN(d.getTime())) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Invalid date/time.',
-      });
-    }
-  })
-  .transform((val) => new Date(val));
-
-/**
- * Form-only datetime validation (no transformation)
- */
-const DateTimeLocalForm = z
-  .string()
-  .min(1, 'This field is required.')
-  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, 'Use a valid date & time (YYYY-MM-DDTHH:MM).')
-  .superRefine((val, ctx) => {
-    const d = new Date(val);
-    if (Number.isNaN(d.getTime())) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Invalid date/time.',
-      });
-    }
-  });
+/** Datetime-local form field (shared with the assignment form). */
+const DateTimeLocalForm = dateTimeLocalString;
 
 /**
  * Normalize helpers
@@ -59,44 +27,17 @@ const DateTimeLocalForm = z
 const normalizeCode = (v: string) => v.trim().replace(/\s+/g, ' ').toUpperCase();
 
 /**
- * Base schema for course fields used in forms.
- */
-/**
- * Base schema object without effects
- */
-const BaseCourseObject = z
-  .object({
-    name: z.string().trim().min(3, 'Course name must be at least 3 characters.'),
-    code: z
-      .string()
-      .trim()
-      .min(2, 'Course code is required.')
-      .transform(normalizeCode)
-      .refine((v) => courseCodeRegex.test(v), {
-        message: 'Use a code like "CMPSC 221" or "MATH220".',
-      }),
-    semester: z.string().trim().min(1, 'Semester is required.'),
-    credits: z.coerce.number().int('Credits must be an integer.').min(1).max(6),
-    startDate: DateTimeLocal,
-    endDate: DateTimeLocal,
-    registrationOpenAt: DateTimeLocal,
-    registrationCloseAt: DateTimeLocal,
-    isPublished: z.boolean().default(false),
-    emptyStringNotation: EmptyStringNotationSchema,
-    // Canonical IANA zone that anchors this course's deadlines. Optional here so
-    // forms that don't surface a picker still validate; the API defaults it.
-    timezone: z.string().min(1).optional(),
-  })
-  .strict();
-
-/**
- * Form-only base object schema (no date transformation)
+ * Base object schema for course forms (no date transformation).
  */
 const BaseCourseFormObject = z
   .object({
-    name: z.string().trim().min(3, 'Course name must be at least 3 characters.'),
-    code: z.string().trim().min(2, 'Course code is required.'),
-    semester: z.string().trim().min(1, 'Semester is required.'),
+    name: z
+      .string()
+      .trim()
+      .min(3, 'Course name must be at least 3 characters.')
+      .max(100, 'Course name is too long.'),
+    code: z.string().trim().min(2, 'Course code is required.').max(20, 'Course code is too long.'),
+    semester: z.string().trim().min(1, 'Semester is required.').max(40, 'Semester is too long.'),
     credits: z.string().min(1, 'Credits are required.'),
     startDate: DateTimeLocalForm,
     endDate: DateTimeLocalForm,
@@ -107,31 +48,6 @@ const BaseCourseFormObject = z
     timezone: z.string().min(1).optional(),
   })
   .strict();
-
-/**
- * Create schema — includes publish+instructor selection.
- */
-export const CreateCourseSchema = BaseCourseObject.extend({
-  //facultyIds: z.array(z.string()).default([]),
-  instructorIds: z.array(z.string()).default([]),
-})
-  .refine((d) => d.startDate <= d.endDate, {
-    path: ['startDate'],
-    message: 'Start date/time must be on or before the end date/time.',
-  })
-  .refine((d) => d.startDate <= d.endDate, {
-    path: ['endDate'],
-    message: 'End date/time must be on or after the start date/time.',
-  })
-  .superRefine((d, ctx) => {
-    if (d.instructorIds.length === 0) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['instructorIds'],
-        message: 'Pick at least one instructor.',
-      });
-    }
-  });
 
 /**
  * Create form schema — includes publish+instructor selection.
@@ -201,14 +117,6 @@ export const CreateCourseFormSchema = BaseCourseFormObject.extend({
       message: 'Self registration close must be on or after the open date.',
     });
   }
-});
-
-/**
- * Update schema — partial base object + id
- */
-export const UpdateCourseSchema = BaseCourseObject.partial().extend({
-  id: z.string().min(1, 'Course id is required.'),
-  isArchived: z.boolean().default(false),
 });
 
 /**
@@ -296,9 +204,40 @@ export const DuplicateFormSchema = BaseCourseFormObject.extend({
     }
   });
 
+/**
+ * Server (API) schemas for the course create/update routes. These receive JSON
+ * with datetime **strings** (parsed in the course's timezone server-side) and
+ * coerce `credits` — distinct from the `*Form` schemas above, which validate the
+ * browser's datetime-local values. Field rules mirror the routes they replaced.
+ */
+const courseApiBase = {
+  name: z.string().trim().min(1, 'Course name is required.').max(100, 'Course name is too long.'),
+  code: z.string().trim().min(1, 'Course code is required.').max(20, 'Course code is too long.'),
+  semester: z.string().trim().min(1, 'Semester is required.').max(40, 'Semester is too long.'),
+  credits: z.coerce.number().int().min(1).max(6),
+  startDate: z.string().min(1, 'Start date is required.'),
+  endDate: z.string().min(1, 'End date is required.'),
+  registrationOpenAt: z.string().min(1, 'Registration window is required.'),
+  registrationCloseAt: z.string().min(1, 'Registration window is required.'),
+  emptyStringNotation: z.string().optional(),
+  timezone: z.string().optional(),
+};
+
+export const CourseCreateApiSchema = z.object({
+  ...courseApiBase,
+  isPublished: z.boolean().optional(),
+  instructorIds: z.array(z.string()).default([]),
+  facultyIds: z.array(z.string()).default([]),
+});
+
+export const CourseUpdateApiSchema = z.object({
+  ...courseApiBase,
+  isPublished: z.boolean(),
+  isArchived: z.boolean(),
+  instructorIds: z.array(z.string()).optional(),
+});
+
 /** Types */
-export type CreateCourseInput = z.infer<typeof CreateCourseSchema>;
-export type UpdateCourseInput = z.infer<typeof UpdateCourseSchema>;
 export type CourseFormInput = z.infer<typeof CourseFormSchema>;
 export type CourseFormInputRaw = z.input<typeof CourseFormSchema>; // raw input values
 export type CourseFormParsed = z.output<typeof CourseFormSchema>; // parsed/normalized values

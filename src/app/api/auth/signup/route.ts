@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
 import { createEnhancedActivityLog, inferSeverity } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
+import { readJson } from '@/lib/api/request';
+import { SignupSchema } from '@/schemas/auth';
 import {
   applyBotFriction,
   evaluateSignupRateLimit,
@@ -11,14 +13,7 @@ import {
   recordSignupSuccess,
 } from '@/lib/security/rate-limiter';
 import { verifyCaptchaToken } from '@/lib/security/captcha';
-import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy';
-import {
-  normalizeEmail,
-  isValidEmail,
-  isEmailDomainAllowed,
-  getEmailDomain,
-  parseDomainList,
-} from '@/lib/email';
+import { isEmailDomainAllowed, getEmailDomain, parseDomainList } from '@/lib/email';
 
 /**
  * Self-service account registration. New accounts are created with no elevated
@@ -61,9 +56,6 @@ import {
  */
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { firstName, lastName, email, password, interactionMs, captchaToken } = body;
-    const normalizedEmail = normalizeEmail(email);
     const ipAddress = getClientIp(req);
 
     const settings = await prisma.systemSettings.findUnique({
@@ -74,12 +66,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Signup is disabled.' }, { status: 403 });
     }
 
-    if (!normalizedEmail || !password || !firstName || !lastName) {
-      return NextResponse.json({ error: 'Missing required fields.' }, { status: 400 });
-    }
-    if (!isValidEmail(normalizedEmail)) {
-      return NextResponse.json({ error: 'Invalid email format.' }, { status: 400 });
-    }
+    // Validate the body shape (required fields, email format, password strength)
+    // via the shared schema; `email` comes back trimmed + lowercased to match
+    // `normalizeEmail` used elsewhere.
+    const parsed = await readJson(req, SignupSchema);
+    if (!parsed.ok) return parsed.response;
+    const {
+      firstName,
+      lastName,
+      email: normalizedEmail,
+      password,
+      interactionMs,
+      captchaToken,
+    } = parsed.data;
 
     // Domain allow-list (blank setting = any domain). Reject a non-approved domain
     // before spending rate-limit budget; log it as a policy rejection (WARNING).
@@ -97,14 +96,10 @@ export async function POST(req: Request) {
         { status: 403 },
       );
     }
-    if (!isStrongPassword(password)) {
-      return NextResponse.json({ error: passwordRequirementText }, { status: 400 });
-    }
-
     const rateDecision = evaluateSignupRateLimit({
       ip: ipAddress,
       identifier: normalizedEmail,
-      interactionMs: Number.isFinite(Number(interactionMs)) ? Number(interactionMs) : undefined,
+      interactionMs,
     });
 
     if (rateDecision.status === 'blocked') {
