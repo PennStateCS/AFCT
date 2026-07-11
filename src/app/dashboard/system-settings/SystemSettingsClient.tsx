@@ -77,6 +77,7 @@ import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
 import SwitchField from '@/components/ui/SwitchField';
 import { parseDomainList } from '@/lib/email';
+import { SystemSettingsUpdateSchema } from '@/schemas/systemSettings';
 import FileUploadInput from '@/components/FileUploadInput';
 
 type SystemSettingsResponse = {
@@ -604,37 +605,49 @@ export default function SystemSettingsClient() {
     // cache after saving matches exactly what the server stores.
     const canonicalDomains = parseDomainList(signupAllowedDomains).domains.join(',');
 
+    // Validate + normalize the whole payload through the shared schema — the same
+    // one the route validates with — before sending. Surfaces any field error
+    // (e.g. an invalid timezone) as a toast and makes the schema the single
+    // authority for the request shape.
+    const parsedSettings = SystemSettingsUpdateSchema.safeParse({
+      timezone,
+      maxUploadSizeMb: clampedSize,
+      allowSignup,
+      signupAllowedDomains: canonicalDomains,
+      clock24Hour,
+      sessionTimeoutMinutes: clampedTimeout,
+      submissionEvalTimeoutMs: evalTimeoutMs,
+      submissionResubmitCooldownMs: resubmitCooldownMs,
+      submissionEvalMaxMemoryMb: memoryMb,
+      submissionMaxConcurrent: concurrent,
+      submissionMaxAttempts: attempts,
+      submissionAnalyzerLimit: analyzer,
+      loginMaxAttempts: loginAttempts,
+      loginLockoutMinutes: lockoutMinutes,
+      backupEnabled,
+      backupHour: bkpHour,
+      backupRetentionDays: bkpRetention,
+      activityLogRetentionDays: logRetention,
+      hcaptchaSiteKey: hcaptchaSiteKey.trim(),
+      ...(hcaptchaSecretClear
+        ? { hcaptchaSecretClear: true }
+        : hcaptchaSecretKey.trim()
+          ? { hcaptchaSecretKey: hcaptchaSecretKey.trim() }
+          : {}),
+    });
+    if (!parsedSettings.success) {
+      showToast.error(
+        parsedSettings.error.issues[0]?.message ?? 'Please review the settings and try again.',
+      );
+      return;
+    }
+
     setSaving(true);
     try {
       const res = await fetch(apiPaths.admin.settings(), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          timezone,
-          maxUploadSizeMb: clampedSize,
-          allowSignup,
-          signupAllowedDomains: canonicalDomains,
-          clock24Hour,
-          sessionTimeoutMinutes: clampedTimeout,
-          submissionEvalTimeoutMs: evalTimeoutMs,
-          submissionResubmitCooldownMs: resubmitCooldownMs,
-          submissionEvalMaxMemoryMb: memoryMb,
-          submissionMaxConcurrent: concurrent,
-          submissionMaxAttempts: attempts,
-          submissionAnalyzerLimit: analyzer,
-          loginMaxAttempts: loginAttempts,
-          loginLockoutMinutes: lockoutMinutes,
-          backupEnabled,
-          backupHour: bkpHour,
-          backupRetentionDays: bkpRetention,
-          activityLogRetentionDays: logRetention,
-          hcaptchaSiteKey: hcaptchaSiteKey.trim(),
-          ...(hcaptchaSecretClear
-            ? { hcaptchaSecretClear: true }
-            : hcaptchaSecretKey.trim()
-              ? { hcaptchaSecretKey: hcaptchaSecretKey.trim() }
-              : {}),
-        }),
+        body: JSON.stringify(parsedSettings.data),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
