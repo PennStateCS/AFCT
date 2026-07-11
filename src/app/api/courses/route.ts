@@ -12,8 +12,10 @@
  */
 
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { validationResponse } from '@/lib/zod-error';
+import { readJson } from '@/lib/api/request';
 import { auth } from '@/lib/auth';
 import { isAdmin } from '@/lib/permissions';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
@@ -35,6 +37,27 @@ type RosterItem = Prisma.RosterGetPayload<{
     user: { select: { id: true; firstName: true; lastName: true } };
   };
 }>;
+
+/**
+ * API body for course creation. Dates stay as datetime-local *strings* (the route
+ * interprets them in the course timezone via toDateTimeInTimezone), so this does
+ * not reuse the client CreateCourseSchema, which transforms them to Date objects.
+ */
+const CreateCourseApiSchema = z.object({
+  name: z.string().trim().min(1, 'Course name is required.'),
+  code: z.string().trim().min(1, 'Course code is required.'),
+  semester: z.string().trim().min(1, 'Semester is required.'),
+  credits: z.coerce.number().int().min(1).max(6),
+  startDate: z.string().min(1, 'Start date is required.'),
+  endDate: z.string().min(1, 'End date is required.'),
+  registrationOpenAt: z.string().min(1, 'Registration window is required.'),
+  registrationCloseAt: z.string().min(1, 'Registration window is required.'),
+  isPublished: z.boolean().optional(),
+  instructorIds: z.array(z.string()).default([]),
+  facultyIds: z.array(z.string()).default([]),
+  emptyStringNotation: z.string().optional(),
+  timezone: z.string().optional(),
+});
 
 // ----------------------------------------
 // GET /api/courses
@@ -163,14 +186,11 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   let actorId: string | null = null;
   try {
-    // 1) Parse payload of information
-    const json = await req.json();
-
-    // 2) Ensure user is authorized to create courses
+    // 1) Authorize first — reject a missing session or a disabled/deleted account
+    // (inactive) before reading/validating the body. A stale JWT that still says
+    // admin must not create courses.
     const session = await auth();
     actorId = session?.user?.id ?? null;
-    // Reject a missing session or a disabled/deleted account (inactive) before the
-    // admin check — a stale JWT that still says admin must not create courses.
     if (!session?.user || session.user.inactive) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -183,6 +203,11 @@ export async function POST(req: Request) {
       });
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+
+    // 2) Validate the payload (dates kept as strings; see CreateCourseApiSchema).
+    const parsed = await readJson(req, CreateCourseApiSchema);
+    if (!parsed.ok) return parsed.response;
+    const json = parsed.data;
 
     // 3) The course's canonical timezone anchors its deadlines. Use the provided zone
     // (validated) or fall back to the system default; all the course's dates below are
