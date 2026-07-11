@@ -1,16 +1,36 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
 import { canArchiveCourse, canUnpublishCourse } from '@/lib/course-status-checks';
 import { isAdmin } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { readJson } from '@/lib/api/request';
 import { apiError } from '@/lib/api/http';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
 import { resolveCourseTimezone } from '@/lib/course-timezone';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { sumProblemPoints, toEnrolled, toStudentSafeEnrolled } from '@/lib/course-format';
 import { toEmptyStringNotation } from '@/lib/empty-string-notation';
+
+// API body for course update. Dates stay as strings (interpreted in the course
+// timezone below); mirrors the create route's string-preserving schema.
+const UpdateCourseApiSchema = z.object({
+  name: z.string().trim().min(1, 'Course name is required.'),
+  code: z.string().trim().min(1, 'Course code is required.'),
+  semester: z.string().trim().min(1, 'Semester is required.'),
+  credits: z.coerce.number().int().min(1).max(6),
+  startDate: z.string().min(1, 'Start date is required.'),
+  endDate: z.string().min(1, 'End date is required.'),
+  registrationOpenAt: z.string().min(1, 'Registration window is required.'),
+  registrationCloseAt: z.string().min(1, 'Registration window is required.'),
+  isPublished: z.boolean(),
+  isArchived: z.boolean(),
+  emptyStringNotation: z.string().optional(),
+  instructorIds: z.array(z.string()).optional(),
+  timezone: z.string().optional(),
+});
 
 // A prisma delegate whose aggregate methods are treated as optional, so the code
 // can fall back to count() when a partial test mock doesn't implement them.
@@ -395,8 +415,10 @@ export const GET = withCourseAuth(
  */
 export const PUT = withCourseAuth(
   async (req, ctx, { session, user, courseId: id }) => {
-    // Parse request
-    const body = await req.json();
+    // Parse + validate request
+    const parsed = await readJson(req, UpdateCourseApiSchema);
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.data;
 
     // The course's timezone anchors its dates/deadlines. Allow updating it (validated);
     // otherwise keep the course's existing zone. Dates below are interpreted in it.
@@ -410,11 +432,6 @@ export const PUT = withCourseAuth(
       courseTimezone = body.timezone;
     } else {
       return NextResponse.json({ error: 'Invalid timezone.' }, { status: 400 });
-    }
-
-    // Validate input
-    if (typeof body.isArchived !== 'boolean') {
-      return NextResponse.json({ error: 'isArchived must be a boolean' }, { status: 400 });
     }
 
     // Centralized check for archiving
@@ -448,10 +465,6 @@ export const PUT = withCourseAuth(
         });
         return NextResponse.json({ error: reason }, { status: 403 });
       }
-    }
-
-    if (!body.registrationOpenAt || !body.registrationCloseAt) {
-      return NextResponse.json({ error: 'Registration window is required.' }, { status: 400 });
     }
 
     try {

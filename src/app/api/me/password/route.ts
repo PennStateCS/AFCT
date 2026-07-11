@@ -1,11 +1,18 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
 import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy';
+import { readJson } from '@/lib/api/request';
+
+const ChangePasswordBody = z.object({
+  oldPassword: z.string().min(1),
+  newPassword: z.string().min(1),
+});
 
 /**
  * Lets a signed-in user change their own password. Requires the current password,
@@ -51,19 +58,19 @@ export async function POST(req: NextRequest) {
     const userId = session.user.id;
     actorId = userId;
 
-    const { oldPassword, newPassword } = await req.json();
-
-    if (!oldPassword || !newPassword) {
-      console.warn('[CHANGE_PASSWORD] Missing oldPassword or newPassword');
-      return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
-    }
+    const parsed = await readJson(req, ChangePasswordBody);
+    if (!parsed.ok) return parsed.response;
+    const { oldPassword, newPassword } = parsed.data;
 
     if (!isStrongPassword(newPassword)) {
       console.warn('[CHANGE_PASSWORD] New password does not meet policy');
       return NextResponse.json({ error: passwordRequirementText }, { status: 400 });
     }
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { password: true, temporaryPassword: true },
+    });
 
     if (!user?.password) {
       console.error('[CHANGE_PASSWORD] User not found in database');

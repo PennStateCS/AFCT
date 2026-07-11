@@ -200,7 +200,7 @@ describe('POST /api/courses/[id]/groups', () => {
     expect(activityLogMock).toHaveBeenCalled();
   });
 
-  it('returns 500 on invalid JSON body', async () => {
+  it('returns 400 on invalid JSON body', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
 
@@ -211,7 +211,8 @@ describe('POST /api/courses/[id]/groups', () => {
       }),
       { params: { id: 'c1' } } as any,
     );
-    expect(res.status).toBe(500);
+    // readJson returns a clean 400 for malformed JSON (previously an uncaught 500).
+    expect(res.status).toBe(400);
   });
 
   it('returns 500 when create throws', async () => {

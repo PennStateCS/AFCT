@@ -149,6 +149,7 @@ export async function POST(req: Request) {
 
     const existingUser = await prisma.user.findUnique({
       where: { email: normalizedEmail },
+      select: { id: true },
     });
     if (existingUser) {
       return NextResponse.json({ error: 'Email already registered.' }, { status: 409 });

@@ -1,9 +1,18 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { withAdminAuth } from '@/lib/api/with-auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
+import { readJson } from '@/lib/api/request';
 import { collectAbandonedFiles, deleteAbandonedFile } from '@/lib/status/files';
+
+// Light shape check; deleteAbandonedFile does the authoritative category/filename/
+// path validation and returns its own status codes.
+const DeleteAbandonedFileBody = z.object({
+  category: z.string().optional(),
+  fileName: z.string().optional(),
+});
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -55,12 +64,11 @@ export const DELETE = withAdminAuth(
   async (req, _ctx, { user }) => {
     const actorId = user.id;
     try {
-      const body = (await req.json().catch(() => null)) as {
-        category?: string;
-        fileName?: string;
-      } | null;
+      const parsed = await readJson(req, DeleteAbandonedFileBody);
+      if (!parsed.ok) return parsed.response;
+      const { category, fileName } = parsed.data;
 
-      const result = await deleteAbandonedFile(body?.category, body?.fileName);
+      const result = await deleteAbandonedFile(category, fileName);
       if (!result.ok) {
         return NextResponse.json({ error: result.error }, { status: result.status });
       }
@@ -70,7 +78,7 @@ export const DELETE = withAdminAuth(
         action: 'ABANDONED_FILE_DELETED',
         severity: 'INFO',
         category: 'SYSTEM',
-        metadata: { userId: actorId, category: body?.category, fileName: body?.fileName },
+        metadata: { userId: actorId, category, fileName },
       });
 
       return NextResponse.json({ ok: true });

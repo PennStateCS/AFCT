@@ -2,9 +2,13 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
+import { z } from 'zod';
 import { canArchiveCourse } from '@/lib/course-status-checks';
-import { isAdmin } from '@/lib/permissions';
+import { isAdmin, COURSE_STAFF_ROLES } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { readJson } from '@/lib/api/request';
+
+const ArchiveBody = z.object({ isArchived: z.boolean() });
 
 /**
  * Toggles a course's archived state. **Archiving** is allowed for course staff
@@ -37,10 +41,9 @@ import { withCourseAuth } from '@/lib/api/with-auth';
 export const PATCH = withCourseAuth(
   async (req, _ctx, { user, courseId }) => {
     try {
-      const { isArchived } = await req.json();
-      if (typeof isArchived !== 'boolean') {
-        return NextResponse.json({ error: 'isArchived must be a boolean' }, { status: 400 });
-      }
+      const parsed = await readJson(req, ArchiveBody);
+      if (!parsed.ok) return parsed.response;
+      const { isArchived } = parsed.data;
 
       // Un-archiving reopens a frozen course to edits — admin-only. Staff may archive
       // (the wrapper already confirmed staff/admin) but must not un-archive.
@@ -119,7 +122,8 @@ export const PATCH = withCourseAuth(
       return NextResponse.json({ error: 'Failed to update archive status' }, { status: 500 });
     }
   },
-  // Staff (faculty or TA) or admin may reach the route; the handler further restricts
-  // un-archiving to admins. TA = faculty.
-  { access: 'manage', deniedAction: 'COURSE_ARCHIVE_DENIED' },
+  // Staff (faculty OR TA) or admin may reach the route — archiving is a staff-tier
+  // action (TAs are the same tier as faculty), stated explicitly. The handler
+  // further restricts un-archiving to admins.
+  { access: 'manage', roles: COURSE_STAFF_ROLES, deniedAction: 'COURSE_ARCHIVE_DENIED' },
 );
