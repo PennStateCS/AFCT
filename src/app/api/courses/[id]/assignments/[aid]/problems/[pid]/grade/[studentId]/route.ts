@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canManageCourse } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { readJson } from '@/lib/api/request';
 import { logDenial, logError } from '@/lib/api/activity';
+
+const GradeBody = z.object({ grade: z.number().nullish(), feedback: z.string().nullish() });
 
 // Concrete path params for this route. Next guarantees each dynamic segment is
 // present, so typing them keeps the destructured values `string` (rather than
@@ -155,9 +159,10 @@ export const POST = withCourseAuth(
         return NextResponse.json({ error: 'Student not enrolled in this course' }, { status: 404 });
       }
 
-      const body = await req.json();
-      const grade = body?.grade as number | null | undefined;
-      const feedback = typeof body?.feedback === 'string' ? body.feedback : null;
+      const parsed = await readJson(req, GradeBody);
+      if (!parsed.ok) return parsed.response;
+      const grade = parsed.data.grade;
+      const feedback = parsed.data.feedback ?? null;
 
       if (grade !== null && grade !== undefined) {
         if (typeof grade !== 'number' || Number.isNaN(grade)) {
