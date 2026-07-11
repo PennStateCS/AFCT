@@ -4,6 +4,9 @@ import { z } from 'zod';
 export const RoleEnum = z.enum(['ADMIN', 'FACULTY', 'TA', 'STUDENT']);
 export const CourseRoleEnum = z.enum(['FACULTY', 'TA', 'STUDENT']);
 
+/** Body for changing a user's course role (CourseEditUserDialog ↔ roster/[userId] PATCH). */
+export const CourseRoleChangeSchema = z.object({ role: CourseRoleEnum });
+
 export const StrongPassword = z
   .string()
   .min(8, 'At least 8 characters.')
