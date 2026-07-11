@@ -12,6 +12,10 @@ const prismaMock = vi.hoisted(() => ({
   assignment: { findUnique: vi.fn() },
   submission: { create: vi.fn(), findFirst: vi.fn(), count: vi.fn() },
   roster: { findFirst: vi.fn() },
+  // The submit route wraps its cap re-check + create in a serializable transaction;
+  // run the callback against the same mock so tx.submission.* hits these mocks.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  $transaction: vi.fn((cb: any) => cb(prismaMock)),
 }));
 
 const authMock = vi.hoisted(() => vi.fn());

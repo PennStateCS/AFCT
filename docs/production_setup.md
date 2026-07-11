@@ -111,8 +111,8 @@ docker compose version
 ## 3) Get the Code
 
 ```bash
-git clone https://github.com/pennstatewilkes-barre/afct.git
-cd afct
+git clone https://github.com/PennStateWilkes-Barre/AFCT-Dashboard.git
+cd AFCT-Dashboard
 ```
 
 ---
@@ -300,6 +300,6 @@ npm start
 
 **Requirements:**
 
-- Node.js 20+
+- Node.js 22+
 - PostgreSQL 15+
 - Java 21+
