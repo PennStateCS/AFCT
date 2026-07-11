@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
@@ -13,24 +12,7 @@ import { resolveCourseTimezone } from '@/lib/course-timezone';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { sumProblemPoints, toEnrolled, toStudentSafeEnrolled } from '@/lib/course-format';
 import { toEmptyStringNotation } from '@/lib/empty-string-notation';
-
-// API body for course update. Dates stay as strings (interpreted in the course
-// timezone below); mirrors the create route's string-preserving schema.
-const UpdateCourseApiSchema = z.object({
-  name: z.string().trim().min(1, 'Course name is required.'),
-  code: z.string().trim().min(1, 'Course code is required.'),
-  semester: z.string().trim().min(1, 'Semester is required.'),
-  credits: z.coerce.number().int().min(1).max(6),
-  startDate: z.string().min(1, 'Start date is required.'),
-  endDate: z.string().min(1, 'End date is required.'),
-  registrationOpenAt: z.string().min(1, 'Registration window is required.'),
-  registrationCloseAt: z.string().min(1, 'Registration window is required.'),
-  isPublished: z.boolean(),
-  isArchived: z.boolean(),
-  emptyStringNotation: z.string().optional(),
-  instructorIds: z.array(z.string()).optional(),
-  timezone: z.string().optional(),
-});
+import { CourseUpdateApiSchema } from '@/schemas/course';
 
 // A prisma delegate whose aggregate methods are treated as optional, so the code
 // can fall back to count() when a partial test mock doesn't implement them.
@@ -416,7 +398,7 @@ export const GET = withCourseAuth(
 export const PUT = withCourseAuth(
   async (req, ctx, { session, user, courseId: id }) => {
     // Parse + validate request
-    const parsed = await readJson(req, UpdateCourseApiSchema);
+    const parsed = await readJson(req, CourseUpdateApiSchema);
     if (!parsed.ok) return parsed.response;
     const body = parsed.data;
 
