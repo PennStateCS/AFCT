@@ -570,6 +570,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/client/v1/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Check the current token (whoami)
+         * @description Whoami / token check. A cheap endpoint the client can call to confirm its bearer  token is still valid: `200` with the user when the token is good, `401` when it's  missing, expired, or revoked. (Also renews the sliding expiry, like any  authenticated call.)
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/client/v1/auth/me/route.ts)
+         */
+        get: operations["getClientV1AuthMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/client/v1/courses/{courseId}/assignments": {
         parameters: {
             query?: never;
@@ -3428,6 +3450,37 @@ export interface operations {
                 content?: never;
             };
             /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getClientV1AuthMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The token is valid; returns the signed-in user. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        user?: Record<string, never>;
+                    };
+                };
+            };
+            /** @description Missing, expired, or revoked token. */
             401: {
                 headers: {
                     [name: string]: unknown;
