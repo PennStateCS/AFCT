@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { readJson } from '@/lib/api/request';
 import type { Prisma } from '@prisma/client';
+
+const BulkEnrollBody = z.object({ userIds: z.array(z.string()).default([]) });
 
 /**
  * Enrolls many users as STUDENT in one transaction (the roster's bulk-add flow).
@@ -37,8 +41,9 @@ import type { Prisma } from '@prisma/client';
 export const POST = withCourseAuth(
   async (req, _ctx, { user, courseId }) => {
     try {
-      const body = await req.json();
-      const userIds: string[] = (body?.userIds ?? []).map((s: string) => String(s)).filter(Boolean);
+      const parsed = await readJson(req, BulkEnrollBody);
+      if (!parsed.ok) return parsed.response;
+      const userIds: string[] = parsed.data.userIds.filter(Boolean);
       if (!userIds.length)
         return NextResponse.json({ error: 'No users provided' }, { status: 400 });
 
