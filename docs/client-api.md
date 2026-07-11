@@ -39,7 +39,9 @@ No auth header. JSON body:
 Bearer auth. Revokes the current token. `200` → `{ "success": true }`.
 
 ### `GET /api/client/v1/courses`
-Bearer auth. The signed-in user's courses. `200` →
+Bearer auth. The signed-in user's courses — students see only **published** courses,
+staff also see their own unpublished ones, and **archived** courses are excluded
+(they're read-only and can't be submitted to). `200` →
 ```json
 { "courses": [ { "id": "…", "name": "…", "code": "CMPEN 331",
                  "semester": "Fall 2025", "isPublished": true,
@@ -73,7 +75,8 @@ Bearer auth. `multipart/form-data`:
 `202` → `{ "submissionId": "…", "status": "PENDING" }` (the server evaluates it in
 the background). Errors: `400` missing/unlinked/invalid-structure · `403` not
 enrolled or late-policy rejection · `404` assignment not found · `409` submission
-limit reached · `413` file too large · `429` resubmit cooldown (`Retry-After`).
+limit reached **or the course is archived** · `413` file too large · `429` resubmit
+cooldown (`Retry-After`).
 
 ## Notes
 - The authoritative course is derived from the assignment; a `courseId` form field

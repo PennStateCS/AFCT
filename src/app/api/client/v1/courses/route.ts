@@ -21,7 +21,11 @@ import { getCoursesListForUser } from '@/lib/courses-list';
  *   401: { description: Missing or invalid token. }
  */
 export const GET = withClientAuth(async (_req, _ctx, { user }) => {
-  const courses = await getCoursesListForUser(user.id, user.isAdmin ? 'ADMIN' : 'STUDENT');
+  // Archived courses are frozen (read-only) and can't be submitted to, so the client
+  // — a submission tool — doesn't list them (the web app shows them separately).
+  const courses = (await getCoursesListForUser(user.id, user.isAdmin ? 'ADMIN' : 'STUDENT')).filter(
+    (c) => !c.isArchived,
+  );
 
   // Attach the caller's own role per course (the list shaping collapses a student's
   // own roster entry, so read the roles directly).
