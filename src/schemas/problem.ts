@@ -137,6 +137,33 @@ export const UpdateProblemSchema = addProblemValidation(
   })
 );
 
+/**
+ * Per-problem settings sent when associating an existing problem with an
+ * assignment (AssociateProblemsDialog). `maxSubmissions === -1` means unlimited;
+ * otherwise it must be an integer ≥ 1. `z.number()` accepts NaN by type, so the
+ * refinements do the real bounds checking (and surface the dialog's messages).
+ */
+export const ProblemAssociationSettingsSchema = z.object({
+  problemId: z.string().min(1, 'Selected problem is no longer available.'),
+  maxPoints: z
+    .number()
+    .refine(
+      (n) => Number.isFinite(n) && n >= 0,
+      'Max points must be a number greater than or equal to 0.',
+    ),
+  maxSubmissions: z
+    .number()
+    .refine(
+      (n) => n === -1 || (Number.isInteger(n) && n >= 1),
+      'Max submissions must be unlimited or an integer greater than or equal to 1.',
+    ),
+  autograderEnabled: z.boolean(),
+});
+
+export const ProblemAssociationSettingsArray = z.array(ProblemAssociationSettingsSchema);
+
+export type ProblemAssociationSettings = z.infer<typeof ProblemAssociationSettingsSchema>;
+
 /** Types */
 export type ProblemFormInput = z.infer<typeof ProblemFormSchema>;
 export type ProblemFormRaw = z.input<typeof ProblemFormSchema>;

@@ -1,13 +1,11 @@
 import { NextResponse } from 'next/server';
-import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canManageCourse } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { logDenial, logError } from '@/lib/api/activity';
-
-const BatchGradesBody = z.object({ grades: z.record(z.string(), z.number().nullable()) });
+import { BatchProblemGradesSchema } from '@/schemas/grade';
 
 // Concrete path params for this route. Next guarantees each dynamic segment is
 // present, so typing them keeps the destructured values `string` (rather than
@@ -136,7 +134,7 @@ export const POST = withCourseAuth(
     const { aid: assignmentId, studentId } = await ctx.params;
 
     try {
-      const parsed = await readJson(req, BatchGradesBody);
+      const parsed = await readJson(req, BatchProblemGradesSchema);
       if (!parsed.ok) return parsed.response;
       const grades = parsed.data.grades;
 
