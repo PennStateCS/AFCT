@@ -45,11 +45,18 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Email is required.' }, { status: 400 });
   }
 
-  // Existence check only — never select anything sensitive here.
-  const existingUser = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true },
-  });
+  try {
+    // Existence check only — never select anything sensitive here.
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
 
-  return NextResponse.json({ exists: !!existingUser });
+    return NextResponse.json({ exists: !!existingUser });
+  } catch (error) {
+    // Unauthenticated endpoint hit on every signup screen — a DB blip must not
+    // escape as an unhandled framework 500.
+    console.error('check-email error:', error);
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
+  }
 }
