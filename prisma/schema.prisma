@@ -146,8 +146,9 @@ model Assignment {
   isPublished Boolean  @default(false)
   isGroup     Boolean  @default(false) // Whether this assignment is group-based
 
-  // Late submission controls
-  allowLateSubmissions Boolean  @default(true)
+  // Late submission controls. Defaults to false to match the app (the create form
+  // and API both default this off; the value is always sent explicitly).
+  allowLateSubmissions Boolean  @default(false)
   lateCutoff           DateTime?
 
   createdAt DateTime @default(now())
