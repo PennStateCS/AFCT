@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { getStudentCourseAssignments } from '@/lib/student-assignments';
 
 /**
  * Returns the signed-in student's own grade breakdown for a course — published
@@ -25,132 +25,12 @@ import { withCourseAuth } from '@/lib/api/with-auth';
 export const GET = withCourseAuth(
   async (_req, _ctx, { user, courseId }) => {
     try {
-      const assignments = await prisma.assignment.findMany({
-        where: { courseId, isPublished: true },
-        select: {
-          id: true,
-          title: true,
-          description: true,
-          dueDate: true,
-        },
-        orderBy: { dueDate: 'asc' },
-      });
-
-      const assignmentIds = assignments.map((assignment) => assignment.id);
-
-      // These four reads all depend only on `assignmentIds` (not on each other),
-      // so run them concurrently instead of sequentially.
-      const [problems, grades, submissionCounts, latestSubmissions] = await Promise.all([
-        prisma.assignmentProblem.findMany({
-          where: { assignmentId: { in: assignmentIds } },
-          select: {
-            assignmentId: true,
-            maxPoints: true,
-            maxSubmissions: true,
-            problem: {
-              select: {
-                id: true,
-                title: true,
-                autograderEnabled: true,
-              },
-            },
-          },
-          orderBy: { assignmentId: 'asc' },
-        }),
-        prisma.assignmentProblemGrade.findMany({
-          where: {
-            assignmentId: { in: assignmentIds },
-            studentId: user.id,
-          },
-          select: {
-            assignmentId: true,
-            problemId: true,
-            grade: true,
-          },
-        }),
-        prisma.submission.groupBy({
-          by: ['assignmentId', 'problemId'],
-          where: {
-            assignmentId: { in: assignmentIds },
-            studentId: user.id,
-          },
-          _count: {
-            id: true,
-          },
-        }),
-        // Most recent status per (assignment, problem) for this student.
-        prisma.submission.findMany({
-          where: {
-            assignmentId: { in: assignmentIds },
-            studentId: user.id,
-          },
-          distinct: ['assignmentId', 'problemId'],
-          orderBy: {
-            createdAt: 'desc',
-          },
-          select: {
-            assignmentId: true,
-            problemId: true,
-            status: true,
-          },
-        }),
-      ]);
-
-      const gradeMap = new Map<string, number | null>();
-      grades.forEach((grade) => {
-        gradeMap.set(`${grade.assignmentId}:${grade.problemId}`, grade.grade ?? null);
-      });
-
-      const submissionCountMap = new Map<string, number>();
-      submissionCounts.forEach((item) => {
-        submissionCountMap.set(`${item.assignmentId}:${item.problemId}`, item._count.id);
-      });
-
-      const submissionStatusMap = new Map<string, string>();
-      latestSubmissions.forEach((item) => {
-        submissionStatusMap.set(`${item.assignmentId}:${item.problemId}`, item.status);
-      });
-
-      const groupedProblems = problems.reduce<
-        Record<
-          string,
-          Array<{
-            id: string;
-            title: string | null;
-            autograderEnabled: boolean;
-            maxPoints: number;
-            maxSubmissions: number;
-          }>
-        >
-      >((acc, problem) => {
-        (acc[problem.assignmentId] ??= []).push({
-          id: problem.problem.id,
-          title: problem.problem.title,
-          autograderEnabled: problem.problem.autograderEnabled,
-          maxPoints: Number(problem.maxPoints ?? 0),
-          maxSubmissions: Number(problem.maxSubmissions ?? 0),
-        });
-        return acc;
-      }, {});
+      const assignments = await getStudentCourseAssignments(user.id, courseId);
 
       const payload = assignments.map((assignment) => {
-        const assignmentProblems = groupedProblems[assignment.id] ?? [];
-        const problemDetails = assignmentProblems.map((problem) => ({
-          id: problem.id,
-          title: problem.title,
-          autograderEnabled: problem.autograderEnabled,
-          maxPoints: problem.maxPoints,
-          maxSubmissions: problem.maxSubmissions,
-          status: submissionStatusMap.get(`${assignment.id}:${problem.id}`) ?? '',
-          submissionCount: submissionCountMap.get(`${assignment.id}:${problem.id}`) ?? 0,
-          grade: gradeMap.get(`${assignment.id}:${problem.id}`) ?? null,
-        }));
-        const maxPoints = problemDetails.reduce((sum, problem) => sum + problem.maxPoints, 0);
-        const assignmentGrade = problemDetails.reduce(
-          (sum, problem) => sum + (problem.grade ?? 0),
-          0,
-        );
-        const hasGrade = problemDetails.some((problem) => problem.grade !== null);
+        const maxPoints = assignment.problems.reduce((sum, p) => sum + p.maxPoints, 0);
+        const assignmentGrade = assignment.problems.reduce((sum, p) => sum + (p.grade ?? 0), 0);
+        const hasGrade = assignment.problems.some((p) => p.grade !== null);
 
         return {
           id: assignment.id,
@@ -159,7 +39,16 @@ export const GET = withCourseAuth(
           dueDate: assignment.dueDate?.toISOString() ?? null,
           maxPoints,
           grade: hasGrade ? assignmentGrade : null,
-          problems: problemDetails,
+          problems: assignment.problems.map((p) => ({
+            id: p.id,
+            title: p.title,
+            autograderEnabled: p.autograderEnabled,
+            maxPoints: p.maxPoints,
+            maxSubmissions: p.maxSubmissions,
+            status: p.status,
+            submissionCount: p.submissionCount,
+            grade: p.grade,
+          })),
         };
       });
 

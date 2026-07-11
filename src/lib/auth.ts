@@ -3,17 +3,10 @@ import { headers } from 'next/headers';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { prisma } from '@/lib/prisma';
-import bcrypt from 'bcrypt';
 import { inferSeverity } from '@/lib/activity-log-utils';
 import { getClientIpFromHeaders } from '@/lib/ip-utils';
-import {
-  applyBotFriction,
-  evaluateLoginRateLimit,
-  getClientIp,
-  recordLoginSuccess,
-} from '@/lib/security/rate-limiter';
-import { verifyCaptchaToken } from '@/lib/security/captcha';
-import { getLoginLockoutPolicy } from '@/lib/login-policy';
+import { getClientIp } from '@/lib/security/rate-limiter';
+import { verifyCredentials } from '@/lib/credentials';
 import { isSessionIdleExpired } from '@/lib/session-timeout';
 import { getServerIdleTimeoutMs } from '@/lib/session-timeout.server';
 import { requireAuthSecret } from '@/lib/auth-secret';
@@ -29,108 +22,31 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials, request) {
-        const emailInput = (credentials?.email as string | undefined)?.trim().toLowerCase();
-        const interactionMs = Number(
-          (credentials as Record<string, unknown> | undefined)?.interactionMs,
-        );
-        const ipAddress = getClientIp(request ?? undefined);
-        const captchaToken = (credentials as Record<string, unknown> | undefined)?.captchaToken as
-          | string
-          | undefined;
-
-        if (!emailInput || !credentials?.password) {
-          void logSecurityEvent('LOGIN_FAILED', {
-            ip: ipAddress,
-            identifier: emailInput,
-            reason: 'missing credentials',
-          });
-          return null;
-        }
-
-        const accountLimit = await getLoginLockoutPolicy();
-        const rateDecision = evaluateLoginRateLimit({
-          ip: ipAddress,
-          identifier: emailInput,
-          interactionMs: Number.isFinite(interactionMs) ? interactionMs : undefined,
-          accountLimit,
+        const raw = credentials as Record<string, unknown> | undefined;
+        const result = await verifyCredentials({
+          email: raw?.email as string | undefined,
+          password: raw?.password as string | undefined,
+          ipAddress: getClientIp(request ?? undefined),
+          interactionMs: Number(raw?.interactionMs),
+          captchaToken: raw?.captchaToken as string | undefined,
         });
 
-        if (rateDecision.status === 'blocked') {
-          void logSecurityEvent('LOGIN_RATE_LIMIT', {
-            ip: ipAddress,
-            identifier: emailInput,
-          });
-          throw new Error('RateLimitExceeded');
-        }
-
-        if (rateDecision.status === 'challenge') {
-          const captchaValid = await verifyCaptchaToken(captchaToken, ipAddress);
-          if (!captchaValid) {
-            void logSecurityEvent('LOGIN_CHALLENGE_REQUIRED', {
-              ip: ipAddress,
-              identifier: emailInput,
-            });
-            throw new Error('BotChallengeRequired');
-          }
-          void logSecurityEvent('LOGIN_CHALLENGE_SOLVED', {
-            ip: ipAddress,
-            identifier: emailInput,
-          });
-        }
-
-        if (rateDecision.status === 'ok' && rateDecision.applyFriction) {
-          await applyBotFriction(rateDecision.frictionDelayMs);
-        }
-
-        const user = await prisma.user.findFirst({
-          where: {
-            email: emailInput,
-            inactive: false,
-          },
-          // Select only what the credential check and returned session need — never
-          // pull the whole row (keeps the hash scoped to where it's actually used).
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            isAdmin: true,
-            avatar: true,
-            temporaryPassword: true,
-            password: true,
-          },
-        });
-
-        if (!user) {
-          // No active account matches — unknown email or a disabled account.
-          void logSecurityEvent('LOGIN_FAILED', {
-            ip: ipAddress,
-            identifier: emailInput,
-            reason: 'unknown or inactive account',
-          });
+        if (!result.ok) {
+          // Map the shared result onto the sentinel errors the login UI expects; a
+          // plain `null` is a generic invalid-credentials rejection.
+          if (result.reason === 'rate_limited') throw new Error('RateLimitExceeded');
+          if (result.reason === 'challenge_required') throw new Error('BotChallengeRequired');
           return null;
         }
 
-        const valid = await bcrypt.compare(credentials.password as string, user.password);
-
-        if (!valid) {
-          void logSecurityEvent(
-            'LOGIN_FAILED',
-            { ip: ipAddress, identifier: emailInput, reason: 'invalid password' },
-            user.id,
-          );
-          return null;
-        }
-
-        recordLoginSuccess({ ip: ipAddress, identifier: emailInput });
-
+        const { user } = result;
         return {
           id: user.id,
           email: user.email,
           name: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
           isAdmin: user.isAdmin,
           avatar: user.avatar || undefined,
-          mustChangePassword: user.temporaryPassword,
+          mustChangePassword: user.mustChangePassword,
         };
       },
     }),
@@ -316,12 +232,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: requireAuthSecret(),
 });
 
-type SecurityEventAction =
-  | 'LOGIN_RATE_LIMIT'
-  | 'LOGIN_CHALLENGE_REQUIRED'
-  | 'LOGIN_CHALLENGE_SOLVED'
-  | 'LOGIN_FAILED';
-
 /**
  * Best-effort request context for the NextAuth events, which don't receive the
  * request object. `next/headers` is available while an auth route handler is
@@ -339,24 +249,3 @@ const getRequestContext = async (): Promise<{
   }
 };
 
-const logSecurityEvent = async (
-  action: SecurityEventAction,
-  metadata: { ip?: string; identifier?: string; reason?: string },
-  userId?: string | null,
-) => {
-  try {
-    await prisma.activityLog.create({
-      data: {
-        userId: userId ?? null,
-        action,
-        category: 'SECURITY',
-        severity: inferSeverity(action),
-        // Promote the known client IP into the column (not just metadata).
-        ipAddress: metadata.ip ?? null,
-        metadata,
-      },
-    });
-  } catch (error) {
-    console.error('[auth] security log failure', error);
-  }
-};

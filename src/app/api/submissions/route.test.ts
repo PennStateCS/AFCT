@@ -10,6 +10,9 @@ import { Prisma } from '@prisma/client';
 const prismaMock = vi.hoisted(() => ({
   assignmentProblem: { findUnique: vi.fn() },
   assignment: { findUnique: vi.fn() },
+  // isCourseArchived() reads the course; undefined -> treated as not archived, so
+  // existing tests are unaffected unless they opt into an archived course.
+  course: { findUnique: vi.fn() },
   submission: { create: vi.fn(), findFirst: vi.fn(), count: vi.fn() },
   roster: { findFirst: vi.fn() },
   // The submit route wraps its cap re-check + create in a serializable transaction;
@@ -103,6 +106,9 @@ beforeEach(() => {
     isPublished: true,
   });
   prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
+  // Not archived by default (clearAllMocks doesn't reset mockResolvedValue, so set it
+  // each test — the archived-course test overrides this locally).
+  prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
   prismaMock.submission.findFirst.mockResolvedValue(null);
   prismaMock.submission.count.mockResolvedValue(0);
   prismaMock.submission.create.mockResolvedValue({
@@ -128,6 +134,16 @@ describe('POST /api/submissions', () => {
 
     expect(res.status).toBe(400);
     expect(logActions()).toContain('SUBMISSION_INVALID_REQUEST');
+    expect(prismaMock.submission.create).not.toHaveBeenCalled();
+  });
+
+  it('returns 409 when the course is archived', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+
+    const res = await POST(makeRequest(makeFormData(undefined, makeFile())));
+
+    expect(res.status).toBe(409);
+    expect(logActions()).toContain('SUBMISSION_REJECTED_ARCHIVED');
     expect(prismaMock.submission.create).not.toHaveBeenCalled();
   });
 

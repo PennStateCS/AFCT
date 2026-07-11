@@ -30,6 +30,11 @@ const PUBLIC_API_PREFIXES = [
   '/api/auth', // NextAuth handler, signup, check-email
   '/api/health',
   '/api/system-settings/public',
+  // Native (Java) client API: authenticated by its own bearer-token wrapper
+  // (`withClientAuth`), not the browser session cookie. Bypassing the edge net here
+  // is intentional — the cookie/idle-timeout logic doesn't apply to token clients,
+  // and every /api/client route enforces its own token auth.
+  '/api/client',
 ] as const;
 
 function isPublicApi(pathname: string): boolean {

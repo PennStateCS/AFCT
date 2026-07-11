@@ -65,10 +65,34 @@ model User {
   groupRosters  GroupRoster[] // Group memberships across courses
   commentsAbout Comment[]         @relation("CommentsAboutStudent") // Comments about this student's work
   commentsAuthored Comment[]      @relation("CommentAuthor") // Comments this user wrote
+  clientTokens  ClientApiToken[] // Bearer tokens issued to the native (Java) client
 
   @@index([isAdmin])
   @@index([inactive])
   @@index([createdAt])
+}
+
+// Bearer token for the native submission client (the Java app). Cookie/NextAuth is
+// for the browser; native clients authenticate with one of these instead. Only the
+// SHA-256 hash of the token is stored — the plaintext is shown once at issue time.
+// Tokens are revocable (revokedAt) and expire (expiresAt), so a lost device or a
+// stale client can be cut off without touching the user's password.
+model ClientApiToken {
+  id        String @id @default(cuid())
+  tokenHash String @unique // sha256(token) — never the plaintext
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  // Optional client-supplied device label, for the user/admin to tell tokens apart.
+  label String?
+
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  revokedAt  DateTime?
+
+  @@index([userId])
 }
 
 model Course {
