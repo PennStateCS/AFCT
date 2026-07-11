@@ -43,6 +43,9 @@ const SelectField = React.forwardRef<React.ElementRef<typeof SelectTrigger>, Sel
       placeholder,
       description,
       error,
+      // Destructured (and ignored) so it isn't forwarded onto the Select/DOM; the
+      // required "*" is intentionally not rendered right now. See the prop comment.
+      requiredMark: _requiredMark,
       additionalDescribedBy,
       options,
       className,
