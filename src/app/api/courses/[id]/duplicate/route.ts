@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import fs from 'fs';
 import path from 'path';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
 import { withAdminAuth } from '@/lib/api/with-auth';
+import { readJson } from '@/lib/api/request';
 import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
 import { generateUniqueCourseCode } from '@/lib/course-code';
 import { resolveUserTimezone } from '@/lib/user-timezone';
@@ -12,6 +14,26 @@ import { parseValidDate } from '@/lib/date';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
 import { toEmptyStringNotation } from '@/lib/empty-string-notation';
 import type { Prisma } from '@prisma/client';
+
+// Permissive body schema: guarantees a well-typed object (and rejects malformed
+// JSON) while the handler keeps its own credits/code/date validation below. Dates
+// stay as strings for the timezone conversion.
+const DuplicateBody = z.object({
+  title: z.string().optional(),
+  code: z.string().optional(),
+  semester: z.string().optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  registrationOpenAt: z.string().optional(),
+  registrationCloseAt: z.string().optional(),
+  credits: z.union([z.string(), z.number()]).optional(),
+  emptyStringNotation: z.string().optional(),
+  copyAssignments: z.boolean().optional(),
+  copyProblems: z.boolean().optional(),
+  copyMode: z.enum(['assignments', 'problems', 'assignments_with_problems']).optional(),
+  copyFaculty: z.boolean().optional(),
+  copyTAs: z.boolean().optional(),
+});
 
 const courseCodeRegex = /^[A-Z]{2,8}\s?\d{1,4}[A-Z]?$/;
 const normalizeCode = (v: string) => v.trim().replace(/\s+/g, ' ').toUpperCase();
@@ -66,7 +88,8 @@ export const POST = withAdminAuth(
     const actorId = user.id;
 
     try {
-      const body = await req.json();
+      const parsed = await readJson(req, DuplicateBody);
+      if (!parsed.ok) return parsed.response;
       const {
         title,
         code,
@@ -82,7 +105,7 @@ export const POST = withAdminAuth(
         copyMode,
         copyFaculty = false,
         copyTAs = false,
-      } = body ?? {};
+      } = parsed.data;
 
       const parsedCredits = Number(credits);
       if (!Number.isInteger(parsedCredits) || parsedCredits < 1 || parsedCredits > 6) {

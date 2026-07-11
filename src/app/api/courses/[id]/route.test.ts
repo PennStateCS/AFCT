@@ -459,7 +459,18 @@ describe('PUT /api/courses/[id]', () => {
     const req = new Request('http://localhost/api/courses/1', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ isArchived: true, isPublished: true }),
+      body: JSON.stringify({
+        name: 'Course 1',
+        code: 'CS101',
+        semester: 'Fall 2026',
+        credits: 3,
+        startDate: '2026-08-25T09:00',
+        endDate: '2026-12-15T17:00',
+        registrationOpenAt: '2026-08-01T09:00',
+        registrationCloseAt: '2026-08-31T17:00',
+        isArchived: true,
+        isPublished: true,
+      }),
     });
 
     const res = await PUT(req, { params: Promise.resolve({ id: 'course-1' }) });
@@ -474,7 +485,18 @@ describe('PUT /api/courses/[id]', () => {
     const req = new Request('http://localhost/api/courses/1', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ isArchived: false, isPublished: false }),
+      body: JSON.stringify({
+        name: 'Course 1',
+        code: 'CS101',
+        semester: 'Fall 2026',
+        credits: 3,
+        startDate: '2026-08-25T09:00',
+        endDate: '2026-12-15T17:00',
+        registrationOpenAt: '2026-08-01T09:00',
+        registrationCloseAt: '2026-08-31T17:00',
+        isArchived: false,
+        isPublished: false,
+      }),
     });
 
     const res = await PUT(req, { params: Promise.resolve({ id: 'course-1' }) });
