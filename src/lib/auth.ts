@@ -16,6 +16,7 @@ import { verifyCaptchaToken } from '@/lib/security/captcha';
 import { getLoginLockoutPolicy } from '@/lib/login-policy';
 import { isSessionIdleExpired } from '@/lib/session-timeout';
 import { getServerIdleTimeoutMs } from '@/lib/session-timeout.server';
+import { requireAuthSecret } from '@/lib/auth-secret';
 import type { Adapter } from 'next-auth/adapters';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -222,9 +223,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }
         } catch (error) {
           console.error('Error fetching fresh user data:', error);
-          // Fall back to token data on a transient DB error (fail-open on
-          // availability grounds — failing closed would sign everyone out during a
-          // blip). isAdmin remains as set from the token above.
+          // On a transient DB error we fail OPEN for availability (keep the user
+          // signed in — a blip shouldn't log everyone out) but CLOSED for
+          // privilege: strip admin. The fresh-user lookup is also the admin-
+          // revocation path, so trusting the token's isAdmin here would let a
+          // just-de-admined user keep elevated access during an outage. `isAdmin`
+          // was set from the token above (line ~171); force it off.
+          session.user.isAdmin = false;
           session.user.firstName = token.firstName as string | undefined;
           session.user.lastName = token.lastName as string | undefined;
           session.user.mustChangePassword = Boolean(token.mustChangePassword);
@@ -296,7 +301,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   jwt: {
     maxAge: 24 * 60 * 60, // 24 hours
   },
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: requireAuthSecret(),
 });
 
 type SecurityEventAction =

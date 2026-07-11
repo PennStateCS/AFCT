@@ -13,6 +13,9 @@ config({ path: envPath });
 const serverSchema = z.object({
   DATABASE_URL: z.string().url(),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  // JWT signing secret. Enforced at runtime by requireAuthSecret()
+  // (src/lib/auth-secret.ts); kept here so the declared env contract matches.
+  NEXTAUTH_SECRET: z.string().min(32),
 });
 
 const clientSchema = z.object({
