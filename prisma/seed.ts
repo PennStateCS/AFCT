@@ -9,10 +9,15 @@
  * logic lives in `seed-dev.ts` and `seed-prod.ts`.
  */
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { runDevelopmentSeed } from './seed-dev';
 import { runProductionSeed } from './seed-prod';
 
-const prisma = new PrismaClient();
+// Prisma 7 no longer reads the datasource url from the schema, so a standalone
+// script must supply a driver adapter (mirrors src/lib/prisma.ts). DATABASE_URL
+// is injected from the env file by prisma.config.ts / the seed command.
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+const prisma = new PrismaClient({ adapter });
 
 /**
  * Main seed runner.
