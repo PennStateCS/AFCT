@@ -1,5 +1,6 @@
 // src/schemas/user.ts
 import { z } from 'zod';
+import { formBoolean, formBooleanOptional } from './fields';
 
 export const RoleEnum = z.enum(['ADMIN', 'FACULTY', 'TA', 'STUDENT']);
 export const CourseRoleEnum = z.enum(['FACULTY', 'TA', 'STUDENT']);
@@ -90,6 +91,20 @@ export const UserUpdateJsonApiSchema = z.object({
   inactive: z.boolean().optional(),
   timezone: z.string().optional(),
   isAdmin: z.boolean().optional(),
+});
+
+/**
+ * Multipart branch of PATCH /api/users/[id] (carries the avatar File). Booleans
+ * arrive as form strings, so they use the form-data coercers: `inactive` /
+ * `deleteAvatar` default false when absent, `isAdmin` stays tri-state.
+ */
+export const UserUpdateFormApiSchema = z.object({
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  inactive: formBoolean,
+  deleteAvatar: formBoolean,
+  timezone: z.string().optional(),
+  isAdmin: formBooleanOptional,
 });
 
 export type CreateUserInput = z.infer<typeof CreateUserSchema>;
