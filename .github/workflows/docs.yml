@@ -16,18 +16,23 @@ concurrency:
   group: pages
   cancel-in-progress: true
 
+# The ERD generator (not run here) pulls in puppeteer, whose install would
+# otherwise download a ~150MB Chromium this job never uses.
+env:
+  PUPPETEER_SKIP_DOWNLOAD: '1'
+
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       # The generator only needs js-yaml; skip the Prisma client generation.
