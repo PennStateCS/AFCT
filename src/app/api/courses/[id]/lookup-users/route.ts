@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server';
-import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { logError } from '@/lib/api/activity';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { normalizeEmail } from '@/lib/email';
-
-const LookupUsersBody = z.object({ emails: z.array(z.string()).default([]) });
+import { BulkEnrollEmailsSchema } from '@/schemas/bulk';
 
 /**
  * Resolves a list of emails to user records, splitting them into `found` and
@@ -44,7 +42,7 @@ const LookupUsersBody = z.object({ emails: z.array(z.string()).default([]) });
 export const POST = withCourseAuth(
   async (req) => {
     try {
-      const parsed = await readJson(req, LookupUsersBody);
+      const parsed = await readJson(req, BulkEnrollEmailsSchema);
       if (!parsed.ok) return parsed.response;
       const emails: string[] = parsed.data.emails.map((e) => normalizeEmail(e)).filter(Boolean);
       if (!emails.length) return NextResponse.json({ found: [], notFound: [] });
