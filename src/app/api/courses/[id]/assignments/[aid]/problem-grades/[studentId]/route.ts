@@ -147,6 +147,16 @@ export const POST = withCourseAuth(
         return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
       }
 
+      // The grade target must actually be enrolled in this course — never create
+      // grade rows for an arbitrary user id that isn't on the roster.
+      const enrolled = await prisma.roster.findFirst({
+        where: { courseId, userId: studentId },
+        select: { id: true },
+      });
+      if (!enrolled) {
+        return NextResponse.json({ error: 'Student not enrolled in this course' }, { status: 404 });
+      }
+
       // maxPoints per problem — used for validation and to reject problem ids that
       // don't belong to the assignment.
       const assignmentProblems = await prisma.assignmentProblem.findMany({

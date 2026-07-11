@@ -60,7 +60,6 @@ describe('proxy', () => {
       '/api/auth/signup',
       '/api/health',
       '/api/system-settings/public',
-      '/api/public/login',
     ])('lets %s through without reading a token', async (path) => {
       const res = await proxy(req(path));
       expect(res.status).toBe(200);

@@ -145,6 +145,16 @@ export const POST = withCourseAuth(
         return NextResponse.json({ error: 'Problem not found' }, { status: 404 });
       }
 
+      // The grade target must actually be enrolled in this course — never create a
+      // grade row for an arbitrary user id that isn't on the roster.
+      const enrolled = await prisma.roster.findFirst({
+        where: { courseId, userId: studentId },
+        select: { id: true },
+      });
+      if (!enrolled) {
+        return NextResponse.json({ error: 'Student not enrolled in this course' }, { status: 404 });
+      }
+
       const body = await req.json();
       const grade = body?.grade as number | null | undefined;
       const feedback = typeof body?.feedback === 'string' ? body.feedback : null;

@@ -87,6 +87,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             email: emailInput,
             inactive: false,
           },
+          // Select only what the credential check and returned session need — never
+          // pull the whole row (keeps the hash scoped to where it's actually used).
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            isAdmin: true,
+            avatar: true,
+            temporaryPassword: true,
+            password: true,
+          },
         });
 
         if (!user) {
