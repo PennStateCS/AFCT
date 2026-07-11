@@ -13,12 +13,16 @@
  */
 
 import { auth } from '@/lib/auth';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { NextResponse } from 'next/server';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
 import { isAdmin } from '@/lib/permissions';
+import { readJson } from '@/lib/api/request';
 import { parseValidDate } from '@/lib/date';
+
+const JoinBody = z.object({ code: z.string().length(6, 'Invalid course code') });
 
 /**
  * Enrolls the signed-in user in a course via its 6-character registration code,
@@ -50,10 +54,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { code } = await req.json();
-  if (!code || code.length !== 6) {
-    return NextResponse.json({ error: 'Invalid course code' }, { status: 400 });
-  }
+  const parsed = await readJson(req, JoinBody);
+  if (!parsed.ok) return parsed.response;
+  const { code } = parsed.data;
 
   const course = await prisma.course.findUnique({
     where: { regCode: code.toUpperCase() },

@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { canManageCourse, isAdmin } from '@/lib/permissions';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { readJson } from '@/lib/api/request';
 import { logDenial, logError } from '@/lib/api/activity';
+
+const ChangeRoleBody = z.object({ role: z.enum(['FACULTY', 'TA', 'STUDENT']) });
 
 /**
  * Removes a user from a course roster. Permission is tiered: the shared wrapper
@@ -217,11 +221,9 @@ export const PATCH = withCourseAuth(
     const { userId } = await ctx.params;
 
     try {
-      const body = await req.json();
-      const newRole = body?.role;
-      const allowedRoles = ['FACULTY', 'TA', 'STUDENT'];
-      if (!allowedRoles.includes(newRole))
-        return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
+      const parsed = await readJson(req, ChangeRoleBody);
+      if (!parsed.ok) return parsed.response;
+      const newRole = parsed.data.role;
 
       // Ensure roster entry exists
       const target = await prisma.roster.findFirst({
