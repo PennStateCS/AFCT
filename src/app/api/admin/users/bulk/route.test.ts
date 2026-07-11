@@ -357,7 +357,7 @@ describe('POST /api/users/bulk', () => {
     );
   });
 
-  it('returns 500 and logs an error when the request body is not valid JSON', async () => {
+  it('returns 400 when the request body is not valid JSON', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
 
     const req = new Request('http://localhost/api/users/bulk', {
@@ -368,16 +368,7 @@ describe('POST /api/users/bulk', () => {
 
     const res = await POST(req, routeCtx());
 
-    expect(res.status).toBe(500);
-    const body = await res.json();
-    expect(body.error).toBe('Internal Server Error');
-    expect(activityLogMock).toHaveBeenCalledWith(
-      prismaMock,
-      req,
-      expect.objectContaining({
-        action: 'USER_BULK_CREATE_ERROR',
-        severity: 'ERROR',
-      }),
-    );
+    // readJson returns a clean 400 for malformed JSON (previously an uncaught 500).
+    expect(res.status).toBe(400);
   });
 });

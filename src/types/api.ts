@@ -1684,28 +1684,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/public/login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Verify login credentials
-         * @description Verifies email/password credentials and returns the matching user's public  profile. This only checks credentials and records the attempt in the audit  log — it does not establish a session (NextAuth owns the session cookie).  Every failure path returns the same generic "Invalid credentials" to avoid  revealing which part was wrong.
-         *
-         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/public/login/route.ts)
-         */
-        post: operations["postPublicLogin"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/session/extend": {
         parameters: {
             query?: never;
@@ -7498,67 +7476,6 @@ export interface operations {
                 };
             };
             /** @description Update failed. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    postPublicLogin: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    email: string;
-                    password: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Credentials are valid; returns the user's public fields. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        user?: {
-                            id?: string;
-                            email?: string;
-                            firstName?: string;
-                            lastName?: string;
-                        };
-                    };
-                };
-            };
-            /** @description Email or password missing. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Invalid credentials, or the account is inactive. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
             500: {
                 headers: {
                     [name: string]: unknown;

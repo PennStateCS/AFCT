@@ -2,8 +2,13 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
+import { z } from 'zod';
 import { canUnpublishCourse } from '@/lib/course-status-checks';
+import { COURSE_STAFF_ROLES } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { readJson } from '@/lib/api/request';
+
+const PublishBody = z.object({ isPublished: z.boolean() });
 
 /**
  * Toggles a course's published state. Course staff (faculty or TA) or a system admin.
@@ -34,10 +39,9 @@ import { withCourseAuth } from '@/lib/api/with-auth';
 export const PATCH = withCourseAuth(
   async (req, _ctx, { user, courseId }) => {
     try {
-      const { isPublished } = await req.json();
-      if (typeof isPublished !== 'boolean') {
-        return NextResponse.json({ error: 'isPublished must be a boolean' }, { status: 400 });
-      }
+      const parsed = await readJson(req, PublishBody);
+      if (!parsed.ok) return parsed.response;
+      const { isPublished } = parsed.data;
 
       if (!isPublished) {
         const { canUnpublish, reason } = await canUnpublishCourse(prisma, courseId);
@@ -89,6 +93,13 @@ export const PATCH = withCourseAuth(
       return NextResponse.json({ error: 'Failed to update publish status' }, { status: 500 });
     }
   },
-  // Course staff (faculty or TA) or admin — the default role set. TA = faculty.
-  { access: 'manage', deniedAction: 'COURSE_PUBLISH_DENIED', blockWhenArchived: true },
+  // Course staff (faculty OR TA) or admin. TAs are the same tier as faculty here,
+  // so publish/unpublish is a staff action — stated explicitly rather than relying
+  // on the default role set.
+  {
+    access: 'manage',
+    roles: COURSE_STAFF_ROLES,
+    deniedAction: 'COURSE_PUBLISH_DENIED',
+    blockWhenArchived: true,
+  },
 );

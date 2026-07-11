@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { readJson } from '@/lib/api/request';
+
+const EnrollBody = z.object({ userId: z.string().min(1, 'Missing userId') });
 
 /**
  * Adds (or re-roles) a single user on a course roster. Course staff (faculty or
@@ -36,10 +40,9 @@ import { withCourseAuth } from '@/lib/api/with-auth';
 export const POST = withCourseAuth(
   async (req, _ctx, { user, courseId }) => {
     try {
-      const { userId } = await req.json();
-      if (!userId) {
-        return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
-      }
+      const parsed = await readJson(req, EnrollBody);
+      if (!parsed.ok) return parsed.response;
+      const { userId } = parsed.data;
 
       const targetUser = await prisma.user.findUnique({
         where: { id: userId },

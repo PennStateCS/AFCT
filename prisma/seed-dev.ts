@@ -99,7 +99,10 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
       firstName: userSeed.firstName,
       lastName: userSeed.lastName,
       password: hashedPassword,
-      isAdmin: userSeed.role === 'ADMIN',
+      // Charles Xavier (faculty@example.com) is flagged as a global admin in
+      // addition to teaching his lifecycle courses, so the dev DB has an account
+      // that is both a system admin and course faculty for testing that overlap.
+      isAdmin: userSeed.role === 'ADMIN' || userSeed.email === 'faculty@example.com',
     })),
     skipDuplicates: true,
   });
