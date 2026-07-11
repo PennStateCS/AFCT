@@ -1,9 +1,13 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { auth } from '@/lib/auth';
 import { toEndOfDayInTimezone } from '@/lib/date-utils';
 import { getAssignmentsForUserRange, resolveUserTimezone } from '@/lib/calendar-assignments';
 import { logError } from '@/lib/api/activity';
+import { readJson } from '@/lib/api/request';
+
+const RangeBody = z.object({ start: z.string().min(1), end: z.string().min(1) });
 
 /**
  * Returns the assignments visible to the signed-in user whose due dates fall in a
@@ -38,11 +42,9 @@ export async function POST(req: NextRequest) {
     if (!session?.user || session.user.inactive)
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const body = (await req.json()) as { start: string; end: string };
-    const { start, end } = body;
-    if (!start || !end) {
-      return NextResponse.json({ error: 'Missing start or end' }, { status: 400 });
-    }
+    const parsed = await readJson(req, RangeBody);
+    if (!parsed.ok) return parsed.response;
+    const { start, end } = parsed.data;
 
     const userTimezone = await resolveUserTimezone(session.user.id);
     const startInput = start.includes('T') ? start : `${start}T00:00`;

@@ -2,9 +2,13 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
+import { z } from 'zod';
 import { canUnpublishCourse } from '@/lib/course-status-checks';
 import { COURSE_STAFF_ROLES } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { readJson } from '@/lib/api/request';
+
+const PublishBody = z.object({ isPublished: z.boolean() });
 
 /**
  * Toggles a course's published state. Course staff (faculty or TA) or a system admin.
@@ -35,10 +39,9 @@ import { withCourseAuth } from '@/lib/api/with-auth';
 export const PATCH = withCourseAuth(
   async (req, _ctx, { user, courseId }) => {
     try {
-      const { isPublished } = await req.json();
-      if (typeof isPublished !== 'boolean') {
-        return NextResponse.json({ error: 'isPublished must be a boolean' }, { status: 400 });
-      }
+      const parsed = await readJson(req, PublishBody);
+      if (!parsed.ok) return parsed.response;
+      const { isPublished } = parsed.data;
 
       if (!isPublished) {
         const { canUnpublish, reason } = await canUnpublishCourse(prisma, courseId);

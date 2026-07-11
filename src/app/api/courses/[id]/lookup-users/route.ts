@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { logError } from '@/lib/api/activity';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { readJson } from '@/lib/api/request';
 import { normalizeEmail } from '@/lib/email';
+
+const LookupUsersBody = z.object({ emails: z.array(z.string()).default([]) });
 
 /**
  * Resolves a list of emails to user records, splitting them into `found` and
@@ -40,10 +44,9 @@ import { normalizeEmail } from '@/lib/email';
 export const POST = withCourseAuth(
   async (req) => {
     try {
-      const body = await req.json();
-      const emails: string[] = (body?.emails ?? [])
-        .map((e: unknown) => normalizeEmail(e))
-        .filter(Boolean);
+      const parsed = await readJson(req, LookupUsersBody);
+      if (!parsed.ok) return parsed.response;
+      const emails: string[] = parsed.data.emails.map((e) => normalizeEmail(e)).filter(Boolean);
       if (!emails.length) return NextResponse.json({ found: [], notFound: [] });
 
       // Find users whose email matches (case-insensitive)
