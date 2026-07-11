@@ -200,6 +200,39 @@ export const DuplicateFormSchema = BaseCourseFormObject.extend({
     }
   });
 
+/**
+ * Server (API) schemas for the course create/update routes. These receive JSON
+ * with datetime **strings** (parsed in the course's timezone server-side) and
+ * coerce `credits` — distinct from the `*Form` schemas above, which validate the
+ * browser's datetime-local values. Field rules mirror the routes they replaced.
+ */
+const courseApiBase = {
+  name: z.string().trim().min(1, 'Course name is required.'),
+  code: z.string().trim().min(1, 'Course code is required.'),
+  semester: z.string().trim().min(1, 'Semester is required.'),
+  credits: z.coerce.number().int().min(1).max(6),
+  startDate: z.string().min(1, 'Start date is required.'),
+  endDate: z.string().min(1, 'End date is required.'),
+  registrationOpenAt: z.string().min(1, 'Registration window is required.'),
+  registrationCloseAt: z.string().min(1, 'Registration window is required.'),
+  emptyStringNotation: z.string().optional(),
+  timezone: z.string().optional(),
+};
+
+export const CourseCreateApiSchema = z.object({
+  ...courseApiBase,
+  isPublished: z.boolean().optional(),
+  instructorIds: z.array(z.string()).default([]),
+  facultyIds: z.array(z.string()).default([]),
+});
+
+export const CourseUpdateApiSchema = z.object({
+  ...courseApiBase,
+  isPublished: z.boolean(),
+  isArchived: z.boolean(),
+  instructorIds: z.array(z.string()).optional(),
+});
+
 /** Types */
 export type CourseFormInput = z.infer<typeof CourseFormSchema>;
 export type CourseFormInputRaw = z.input<typeof CourseFormSchema>; // raw input values

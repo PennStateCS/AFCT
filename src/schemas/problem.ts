@@ -189,6 +189,24 @@ export const ProblemAssociationSettingsArray = z.array(ProblemAssociationSetting
 
 export type ProblemAssociationSettings = z.infer<typeof ProblemAssociationSettingsSchema>;
 
+/**
+ * Server body for updating one problem's per-assignment settings (the PUT on
+ * .../assignments/[aid]/problems/[pid]). The problemId comes from the path, so
+ * unlike {@link ProblemAssociationSettingsSchema} it isn't part of the body.
+ */
+export const AssignmentProblemSettingsSchema = z.object({
+  maxPoints: z.number().min(0),
+  maxSubmissions: z
+    .number()
+    .int()
+    .refine((value) => value === -1 || value >= 1, {
+      message: 'Max submissions must be unlimited (-1) or at least 1.',
+    }),
+  autograderEnabled: z.boolean(),
+});
+
+export type AssignmentProblemSettingsInput = z.infer<typeof AssignmentProblemSettingsSchema>;
+
 /** Types */
 export type ProblemFormInput = z.infer<typeof ProblemFormSchema>;
 export type ProblemFormRaw = z.input<typeof ProblemFormSchema>;
