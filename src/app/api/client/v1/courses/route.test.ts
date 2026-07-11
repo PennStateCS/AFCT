@@ -31,9 +31,9 @@ describe('GET /api/client/v1/courses', () => {
       user: { id: 'u1', isAdmin: false, email: 'a@b.c', firstName: null, lastName: null },
     });
     getCoursesMock.mockResolvedValue([
-      { id: 'c1', name: 'Automata', code: 'CMPEN 331', semester: 'Fall', isPublished: true, isArchived: false },
+      { id: 'c1', name: 'Automata', code: 'CMPEN 331', semester: 'Fall', timezone: 'America/New_York', isPublished: true, isArchived: false },
       // An archived course must be filtered out of the client list.
-      { id: 'c2', name: 'Old', code: 'CMPEN 100', semester: 'Spring', isPublished: true, isArchived: true },
+      { id: 'c2', name: 'Old', code: 'CMPEN 100', semester: 'Spring', timezone: 'UTC', isPublished: true, isArchived: true },
     ]);
     prismaMock.roster.findMany.mockResolvedValue([{ courseId: 'c1', role: 'STUDENT' }]);
 
@@ -47,6 +47,7 @@ describe('GET /api/client/v1/courses', () => {
         name: 'Automata',
         code: 'CMPEN 331',
         semester: 'Fall',
+        timezone: 'America/New_York',
         isPublished: true,
         isArchived: false,
         role: 'STUDENT',

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 import { withClientAuth } from '@/lib/api/with-client-auth';
 import { apiError } from '@/lib/api/http';
 import { canAccessCourse } from '@/lib/permissions';
@@ -36,9 +37,16 @@ export const GET = withClientAuth(async (_req, ctx: RouteCtx, { user }) => {
     return apiError(404, 'Course not found');
   }
 
-  const assignments = await getStudentCourseAssignments(user.id, courseId);
+  const [course, assignments] = await Promise.all([
+    prisma.course.findUnique({ where: { id: courseId }, select: { timezone: true } }),
+    getStudentCourseAssignments(user.id, courseId),
+  ]);
 
   return NextResponse.json({
+    // The zone the deadlines below are anchored to, plus the server's clock, so the
+    // client can render due dates + accurate countdowns without clock-skew surprises.
+    timezone: course?.timezone ?? 'UTC',
+    serverTime: new Date().toISOString(),
     assignments: assignments.map((a) => ({
       id: a.id,
       title: a.title,
