@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
 import { canUnpublishCourse } from '@/lib/course-status-checks';
+import { COURSE_STAFF_ROLES } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
 
 /**
@@ -89,6 +90,13 @@ export const PATCH = withCourseAuth(
       return NextResponse.json({ error: 'Failed to update publish status' }, { status: 500 });
     }
   },
-  // Course staff (faculty or TA) or admin — the default role set. TA = faculty.
-  { access: 'manage', deniedAction: 'COURSE_PUBLISH_DENIED', blockWhenArchived: true },
+  // Course staff (faculty OR TA) or admin. TAs are the same tier as faculty here,
+  // so publish/unpublish is a staff action — stated explicitly rather than relying
+  // on the default role set.
+  {
+    access: 'manage',
+    roles: COURSE_STAFF_ROLES,
+    deniedAction: 'COURSE_PUBLISH_DENIED',
+    blockWhenArchived: true,
+  },
 );
