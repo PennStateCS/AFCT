@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { logError } from '@/lib/api/activity';
 import { withAdminAuth } from '@/lib/api/with-auth';
+import { readJson } from '@/lib/api/request';
+
+const ListSubmissionsBody = z.object({ problemIds: z.array(z.string()).default([]) });
 
 /**
  * Returns every submission across a set of problems, flattened for the admin
@@ -34,8 +38,9 @@ import { withAdminAuth } from '@/lib/api/with-auth';
 export const POST = withAdminAuth(
   async (req) => {
     try {
-      const body = await req.json();
-      const problemIds = Array.isArray(body?.problemIds) ? body.problemIds : [];
+      const parsed = await readJson(req, ListSubmissionsBody);
+      if (!parsed.ok) return parsed.response;
+      const problemIds = parsed.data.problemIds;
 
       if (problemIds.length === 0) {
         return NextResponse.json({ error: 'Missing problemIds' }, { status: 400 });
