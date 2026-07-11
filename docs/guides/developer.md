@@ -23,7 +23,8 @@
 - `src/app/**` — pages and client components.
 - `src/lib/` — server logic: `permissions.ts` (the two course gates), `api/`
   (shared route helpers), `prisma.ts` (the client), auth, submission worker, etc.
-- `src/schemas/` — Zod schemas shared by forms and routes.
+- `src/schemas/` — Zod schemas for forms and routes, plus `fields.ts` primitives
+  (see [Validation](#validation-zod)).
 - `prisma/` — schema, migrations, and the seed (`seed.ts` → `seed-dev.ts` /
   `seed-prod.ts`).
 - `docs/` — these guides plus [Roles and permissions](../role-inheritance.md) and
@@ -76,11 +77,10 @@ Both exclude archived and soft-deleted courses. Archived courses are read-only f
   check, log denials, and (with `blockWhenArchived`) enforce the archive freeze —
   for admins too. A handful of routes hand-roll `auth()` because their scoping is
   self- or entity-based rather than course-param based; that is deliberate.
-- **Validate bodies** with `readJson(req, schema)`
-  ([`src/lib/api/request.ts`](../../src/lib/api/request.ts)) against a Zod schema.
-  It returns a typed body or a ready `400` for malformed JSON / schema mismatch —
-  never throws. For date fields that a route interprets in a specific timezone, use
-  a string-preserving schema (don't let Zod transform the datetime to a `Date`).
+- **Validate bodies** against a Zod schema with `readJson(req, schema)` (JSON) or
+  `readFormData(req, schema)` (multipart) — see [Validation](#validation-zod). For
+  date fields a route interprets in a specific timezone, use a string-preserving
+  schema (don't let Zod transform the datetime to a `Date`).
 - **Error responses** use `apiError(status, message)`
   ([`src/lib/api/http.ts`](../../src/lib/api/http.ts)), which returns `{ error }`.
   Keep that shape everywhere.
@@ -92,6 +92,75 @@ Both exclude archived and soft-deleted courses. Archived courses are read-only f
   privilege for a specific action.
 - **Never trust client-supplied identity or scope.** Derive the course from the
   assignment/DB, not from the request body; re-check per-course role in the handler.
+
+## Validation (Zod)
+
+Every form **and** every mutating route validates its input against a **Zod 4**
+schema. Schemas live in `src/schemas/`, one file per domain (`course.ts`,
+`assignment.ts`, `problem.ts`, `user.ts`, `auth.ts`, `bulk.ts`, `grade.ts`,
+`group.ts`, `profile.ts`, `password.ts`, `systemSettings.ts`, `log.ts`) plus
+[`fields.ts`](../../src/schemas/fields.ts) for reusable field primitives. There is
+no barrel — import the specific file.
+
+### Form schema vs API schema
+
+A form and its route deliberately use **different** schemas that share their field
+constraints, because they validate different shapes:
+
+- **`…FormSchema`** — client-side. Wired into react-hook-form with
+  `zodResolver(schema)` (a few non-RHF dialogs call `schema.safeParse(...)` and map
+  the issues onto their own error state). It validates the browser's raw input:
+  `datetime-local` **strings**, a confirm-password field, coerced number strings.
+- **`…ApiSchema`** — server-side, in the route. It validates the wire shape the
+  handler actually receives and must avoid browser-only transforms — e.g. it keeps
+  dates as **strings** so the route can parse them in the course timezone (see
+  [Time and deadlines](#time-and-deadlines)).
+
+Both draw their scalar rules from the shared primitives in `fields.ts`
+(`dateTimeLocalString`, `formBoolean`, `formBooleanOptional`, `formIntOptional`, …)
+so the two sides can't drift. Don't re-declare a body schema inline in a route when
+a domain file exists — import it, or add it there.
+
+### Validating a route body
+
+Use the helpers in
+[`src/lib/api/request.ts`](../../src/lib/api/request.ts):
+
+- `readJson(req, schema)` — JSON bodies.
+- `readFormData(req, schema)` — `multipart/form-data` (file uploads). Returns the
+  validated scalar fields **and** the raw `FormData`, so the handler can still pull
+  the `File`. Multipart values arrive as strings, so use the coercing primitives
+  (`formBoolean`, `formIntOptional`) in the schema.
+
+Both return a discriminated result and **never throw** — `{ ok: true, data }` with
+the typed body, or `{ ok: false, response }`, a ready `400` for malformed input:
+
+```ts
+const parsed = await readJson(req, CourseCreateApiSchema);
+if (!parsed.ok) return parsed.response;
+const body = parsed.data; // fully typed
+```
+
+Every route that reads a body runs it through a schema. A couple keep a custom raw
+read for a specific reason (a distinct empty-body message, or an audit-log entry on
+a missing field) but still `safeParse` the parsed object against a schema.
+
+### Conventions
+
+- **Enums** are `z.enum([...])` literals kept in sync with the Prisma enum by a
+  comment — deliberately *not* `z.nativeEnum(PrismaEnum)`, because these schemas are
+  imported by client components and must not pull `@prisma/client` into the browser
+  bundle.
+- **Passwords** use the shared `StrongPassword`
+  ([`src/schemas/user.ts`](../../src/schemas/user.ts)), which derives its rules from
+  `passwordRules` in
+  [`src/lib/password-policy.ts`](../../src/lib/password-policy.ts) — one source for
+  the checklist UI, the `isStrongPassword` predicate, and the schema — and caps
+  length at 72 (the bcrypt limit).
+- **Bound free-text** with `.trim()` and `.max(...)` (names, titles, code).
+- Validation is defense-in-depth: a `…FormSchema` catching bad input in the browser
+  does **not** excuse the route — the `…ApiSchema` is the real gate, since a
+  non-browser client skips the form entirely.
 
 ## Data layer
 
