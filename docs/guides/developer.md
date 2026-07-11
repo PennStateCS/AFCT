@@ -27,8 +27,8 @@
   (see [Validation](#validation-zod)).
 - `prisma/` — schema, migrations, and the seed (`seed.ts` → `seed-dev.ts` /
   `seed-prod.ts`).
-- `docs/` — these guides plus [Roles and permissions](../role-inheritance.md) and
-  the setup guides.
+- `docs/` — the guides, the `reference/` pages (roles and permissions, client API),
+  and the `setup/` deployment guides.
 
 ## Local development
 
@@ -43,13 +43,13 @@ then `npm run docker:dev:generate` if the Prisma client changed.
 > example) clear it: `npm run docker:dev:down:volumes` then `npm run docker:dev`,
 > and confirm the versions in the startup log.
 
-Full setup lives in [`development_setup.md`](../development_setup.md) and
-[`production_setup.md`](../production_setup.md).
+Full setup lives in [`setup/development.md`](../setup/development.md) and
+[`setup/production.md`](../setup/production.md).
 
 ## Authorization model
 
 Authorization is a **global admin flag plus a per-course role**. This is the short
-version; the full matrix is in [Roles and permissions](../role-inheritance.md).
+version; the full matrix is in [Roles and permissions](../reference/roles-and-permissions.md).
 
 - `isAdmin` is global. An admin may act anywhere and bypasses course rosters.
 - Every other permission comes from the caller's `Roster.role` in the specific

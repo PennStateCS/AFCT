@@ -1,8 +1,8 @@
 # Roles and permissions
 
 This is the reference for who can do what in the AFCT Dashboard. The audience
-guides ([admin](guides/admin.md), [faculty and TA](guides/faculty.md),
-[student](guides/student.md), [developer](guides/developer.md)) describe each
+guides ([admin](../guides/admin.md), [faculty and TA](../guides/faculty.md),
+[student](../guides/student.md), [developer](../guides/developer.md)) describe each
 role's day-to-day work; this page is the single, precise statement of the model
 they all build on.
 
@@ -41,7 +41,7 @@ independent and both apply.
 ## The two gates
 
 All course-scoped authorization goes through two helpers in
-[`src/lib/permissions.ts`](../src/lib/permissions.ts):
+[`src/lib/permissions.ts`](../../src/lib/permissions.ts):
 
 | Helper | Grants when | Used for |
 |---|---|---|
