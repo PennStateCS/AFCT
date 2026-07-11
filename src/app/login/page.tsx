@@ -10,9 +10,10 @@ import { Wrench } from 'lucide-react';
 import InputGroup from '@/components/ui/InputGroup';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 import { PasswordRulesHelper } from '@/components/auth/PasswordRulesHelper';
-import { isStrongPassword, passwordRules } from '@/lib/password-policy';
+import { passwordRules } from '@/lib/password-policy';
 import { apiPaths } from '@/lib/api-paths';
 import { isValidEmail } from '@/lib/email';
+import { SignupFormSchema } from '@/schemas/auth';
 
 // Dev-only quick login shortcuts so QA can impersonate common roles fast.
 const testLoginButtons = [
@@ -219,26 +220,35 @@ export default function LoginPage() {
       confirm: signupConfirm,
     };
 
-    const errors: SignupErrors = {};
-    if (!trimmed.first) errors.first = 'First name is required.';
-    if (!trimmed.last) errors.last = 'Last name is required.';
-    if (!trimmed.email) errors.email = 'Email is required.';
-    else if (!isValidEmail(trimmed.email)) errors.email = 'Enter a valid email address.';
-    if (!trimmed.password) errors.password = 'Password is required.';
-    else if (!isStrongPassword(trimmed.password)) {
-      errors.password = 'Password must meet all requirements.';
-    }
-    if (!trimmed.confirm) errors.confirm = 'Confirm your password.';
-    else if (trimmed.password !== trimmed.confirm) {
-      errors.confirm = "Passwords don't match.";
-    }
+    // Validate against the shared signup schema (the same field rules the route
+    // enforces), mapping its issues back onto the form's per-field error slots.
+    const parsed = SignupFormSchema.safeParse({
+      firstName: trimmed.first,
+      lastName: trimmed.last,
+      email: trimmed.email,
+      password: trimmed.password,
+      confirmPassword: trimmed.confirm,
+    });
 
-    setSignupErrors(errors);
-
-    if (Object.keys(errors).length) {
+    if (!parsed.success) {
+      const fieldByPath: Record<string, SignupField> = {
+        firstName: 'first',
+        lastName: 'last',
+        email: 'email',
+        password: 'password',
+        confirmPassword: 'confirm',
+      };
+      const errors: SignupErrors = {};
+      for (const issue of parsed.error.issues) {
+        const field = fieldByPath[String(issue.path[0])];
+        if (field && !errors[field]) errors[field] = issue.message;
+      }
+      setSignupErrors(errors);
       showToast.error('Please correct the highlighted fields.');
       return;
     }
+
+    setSignupErrors({});
 
     setLoading(true);
 

@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ChevronDown, Search as SearchIcon, Check } from 'lucide-react';
 import { apiPaths } from '@/lib/api-paths';
+import { ProblemAssociationSettingsArray } from '@/schemas/problem';
 
 type Problem = {
   id: string;
@@ -377,25 +378,8 @@ export function AssociateProblemsDialog({
     }
 
     const maxPoints = Number(newProblemMaxPoints);
-    if (!Number.isFinite(maxPoints) || maxPoints < 0) {
-      setConfigError('Max points must be a number greater than or equal to 0.');
-      return;
-    }
+    const maxSubmissions = newProblemUnlimited ? -1 : Number(newProblemMaxSubmissions);
 
-    let maxSubmissions = -1;
-    if (!newProblemUnlimited) {
-      maxSubmissions = Number(newProblemMaxSubmissions);
-      if (!Number.isInteger(maxSubmissions) || maxSubmissions < 1) {
-        setConfigError(
-          'Max submissions must be unlimited or an integer greater than or equal to 1.',
-        );
-        return;
-      }
-    }
-
-    const allProblemIds = [selectedProblem.id];
-
-    const groupIdToSend = selectedGroupId === 'ALL' ? undefined : selectedGroupId;
     const settings: ProblemSettingsPayload[] = [
       {
         problemId: selectedProblem.id,
@@ -404,6 +388,19 @@ export function AssociateProblemsDialog({
         autograderEnabled: Boolean(newProblemAutograderEnabled),
       },
     ];
+
+    // Validate the settings (points ≥ 0, submissions unlimited or an integer ≥ 1)
+    // through the shared schema; it surfaces the same messages as before.
+    const validation = ProblemAssociationSettingsArray.safeParse(settings);
+    if (!validation.success) {
+      setConfigError(
+        validation.error.issues[0]?.message ?? 'Please review the problem settings.',
+      );
+      return;
+    }
+
+    const allProblemIds = [selectedProblem.id];
+    const groupIdToSend = selectedGroupId === 'ALL' ? undefined : selectedGroupId;
 
     try {
       await onAddProblems(allProblemIds, groupIdToSend, settings);

@@ -12,10 +12,10 @@
  */
 
 import { NextResponse } from 'next/server';
-import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { validationResponse } from '@/lib/zod-error';
 import { readJson } from '@/lib/api/request';
+import { CourseCreateApiSchema } from '@/schemas/course';
 import { auth } from '@/lib/auth';
 import { isAdmin } from '@/lib/permissions';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
@@ -38,26 +38,6 @@ type RosterItem = Prisma.RosterGetPayload<{
   };
 }>;
 
-/**
- * API body for course creation. Dates stay as datetime-local *strings* (the route
- * interprets them in the course timezone via toDateTimeInTimezone), so this does
- * not reuse the client CreateCourseSchema, which transforms them to Date objects.
- */
-const CreateCourseApiSchema = z.object({
-  name: z.string().trim().min(1, 'Course name is required.'),
-  code: z.string().trim().min(1, 'Course code is required.'),
-  semester: z.string().trim().min(1, 'Semester is required.'),
-  credits: z.coerce.number().int().min(1).max(6),
-  startDate: z.string().min(1, 'Start date is required.'),
-  endDate: z.string().min(1, 'End date is required.'),
-  registrationOpenAt: z.string().min(1, 'Registration window is required.'),
-  registrationCloseAt: z.string().min(1, 'Registration window is required.'),
-  isPublished: z.boolean().optional(),
-  instructorIds: z.array(z.string()).default([]),
-  facultyIds: z.array(z.string()).default([]),
-  emptyStringNotation: z.string().optional(),
-  timezone: z.string().optional(),
-});
 
 // ----------------------------------------
 // GET /api/courses
@@ -204,8 +184,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // 2) Validate the payload (dates kept as strings; see CreateCourseApiSchema).
-    const parsed = await readJson(req, CreateCourseApiSchema);
+    // 2) Validate the payload (dates kept as strings; see CourseCreateApiSchema).
+    const parsed = await readJson(req, CourseCreateApiSchema);
     if (!parsed.ok) return parsed.response;
     const json = parsed.data;
 

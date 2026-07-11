@@ -2,8 +2,13 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
-import type { ProblemTypeEnum } from '@/schemas/problem';
+import {
+  ProblemAssociationSettingsArray,
+  type ProblemAssociationSettings,
+  type ProblemTypeEnum,
+} from '@/schemas/problem';
 import { withAssignmentAuth } from '@/lib/api/with-auth';
+import { readJson } from '@/lib/api/request';
 import { z } from 'zod';
 
 // Types
@@ -37,19 +42,15 @@ interface AssignmentWithProblems {
 // `string | undefined`) under noUncheckedIndexedAccess.
 type RouteCtx = { params: Promise<{ id: string; aid: string }> };
 
-const ProblemSettingsSchema = z.object({
-  problemId: z.string(),
-  maxPoints: z.number().min(0),
-  maxSubmissions: z
-    .number()
-    .int()
-    .refine((value) => value === -1 || value >= 1, {
-      message: 'Max submissions must be -1 (unlimited) or at least 1.',
-    }),
-  autograderEnabled: z.boolean(),
-});
-
-type ProblemSettingsInput = z.infer<typeof ProblemSettingsSchema>;
+// Envelope for POST (associate problems). Lenient by design — a malformed
+// problemIds/groupId falls back rather than 400ing (`problemSettings` is validated
+// separately so it can return its own specific error). `groupId` is a group id or 'ALL'.
+const AssociateProblemsBodySchema = z
+  .object({
+    problemIds: z.array(z.string()).catch([]),
+    groupId: z.string().optional().catch(undefined),
+  })
+  .catch({ problemIds: [], groupId: undefined });
 
 /**
  * Attaches problems to an assignment with per-problem settings (points, submission
@@ -109,20 +110,17 @@ export const POST = withAssignmentAuth(
         return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
       }
 
-      const problemIds: string[] = Array.isArray(body.problemIds) ? body.problemIds : [];
-      const parsedSettings = z.array(ProblemSettingsSchema).safeParse(body.problemSettings ?? []);
+      const { problemIds, groupId } = AssociateProblemsBodySchema.parse(body);
+      const parsedSettings = ProblemAssociationSettingsArray.safeParse(body.problemSettings ?? []);
       if (!parsedSettings.success) {
         return NextResponse.json(
           { error: 'Invalid problemSettings in request body' },
           { status: 400 },
         );
       }
-      const settingsByProblemId = new Map<string, ProblemSettingsInput>(
+      const settingsByProblemId = new Map<string, ProblemAssociationSettings>(
         parsedSettings.data.map((setting) => [setting.problemId, setting]),
       );
-      // Optional group assignment: either a specific group id or 'ALL' for all groups
-      const groupId: string | undefined =
-        typeof body.groupId === 'string' ? body.groupId : undefined;
 
       // Only accept problems that actually belong to this course, and load the
       // existing assignment-problem links. Independent reads → run concurrently.
@@ -320,11 +318,9 @@ export const DELETE = withAssignmentAuth(
 
     try {
       // Parse the problemId from the request body
-      const { problemId } = await req.json();
-
-      if (!problemId) {
-        return NextResponse.json({ error: 'Missing problemId.' }, { status: 400 });
-      }
+      const parsed = await readJson(req, z.object({ problemId: z.string().min(1, 'Missing problemId.') }));
+      if (!parsed.ok) return parsed.response;
+      const { problemId } = parsed.data;
 
       // The wrapper already verified the assignment belongs to this course; still
       // confirm the problem does too.

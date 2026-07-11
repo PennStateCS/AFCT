@@ -9,10 +9,14 @@ WORKDIR /app
 
 # python3/make/g++ build native modules (bcrypt); postgres-client + netcat back
 # the DB wait in the entrypoint; tini is PID 1; curl is handy for debugging.
+# fontconfig + a base font are required by the Java evaluator: JFLAP's Universe
+# class initializes Swing (a JFileChooser) even in CLI mode, which needs font
+# metrics — without them the JRE throws "Fontconfig head is null".
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
-    python3 make g++ git tini netcat-openbsd postgresql-client openssl ca-certificates curl
+    python3 make g++ git tini netcat-openbsd postgresql-client openssl ca-certificates curl \
+    fontconfig fonts-dejavu-core
 
 # Java 21 runtime, copied from the official image (pinned, no network fetch).
 # Runs jars/afct-evaluator.jar when grading submissions.

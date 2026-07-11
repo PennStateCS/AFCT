@@ -15,6 +15,7 @@ import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { PasswordRulesHelper } from '@/components/auth/PasswordRulesHelper';
 import { isStrongPassword, passwordRules } from '@/lib/password-policy';
+import { AdminResetPasswordSchema } from '@/schemas/password';
 
 type Props = {
   open: boolean;
@@ -54,22 +55,16 @@ export function AdminResetPasswordDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newPassword || !confirmNewPassword) {
-      toast.error('Please fill in all fields');
-      return;
-    }
-    if (!isStrongPassword(newPassword)) {
-      toast.error('New password does not meet the requirements');
-      return;
-    }
-    if (newPassword !== confirmNewPassword) {
-      toast.error("Passwords don't match");
+
+    const parsed = AdminResetPasswordSchema.safeParse({ newPassword, confirmNewPassword });
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0]?.message ?? 'Please review the password fields.');
       return;
     }
 
     setLoading(true);
     try {
-      await onResetPassword(newPassword, isTemporary);
+      await onResetPassword(parsed.data.newPassword, isTemporary);
       toast.success('Password reset successfully!');
       setOpen(false);
     } catch (err: unknown) {

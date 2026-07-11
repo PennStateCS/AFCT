@@ -641,7 +641,7 @@ describe('PUT /api/system-settings', () => {
     expect(res.status).toBe(400);
   });
 
-  it('coerces a non-numeric maxUploadSizeMb to the clamped minimum', async () => {
+  it('coerces a non-numeric maxUploadSizeMb to the field default', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     okUpsert();
 
@@ -654,8 +654,9 @@ describe('PUT /api/system-settings', () => {
 
     expect(res.status).toBe(200);
     const call = prismaMock.systemSettings.upsert.mock.calls[0][0];
-    // Non-finite -> 0 -> clamped up to the minimum of 1.
-    expect(call.update.maxUploadSizeMb).toBe(1);
+    // A non-numeric value can't be coerced; the schema's clamp falls back to the
+    // field default (25 MB), consistent with how every other numeric setting clamps.
+    expect(call.update.maxUploadSizeMb).toBe(25);
   });
 
   it('persists the remaining submission queue fields when provided', async () => {
