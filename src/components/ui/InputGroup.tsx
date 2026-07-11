@@ -35,6 +35,8 @@ interface InputGroupProps extends Omit<
   showEye?: boolean;
   isPasswordVisible?: boolean;
   togglePasswordVisibility?: () => void;
+  // Accepted for API compatibility, but the required "*" is currently not rendered
+  // (required marking is being reworked). Re-enable the asterisk in the label below.
   requiredMark?: boolean;
   setValue?: (val: string) => void;
   type?: React.HTMLInputTypeAttribute;
@@ -57,7 +59,6 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
     showEye,
     isPasswordVisible,
     togglePasswordVisibility,
-    requiredMark,
     className,
     setValue,
     type = 'text',
@@ -135,7 +136,6 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
     <div className={cn('flex flex-col', className)}>
       <Label id={labelId} htmlFor={inputId} className={`mb-1.5 text-sm font-medium ${labelClassName}`}>
         {label}
-        {requiredMark ? <span className="text-red-600"> *</span> : null}
       </Label>
 
       <div className="relative">
