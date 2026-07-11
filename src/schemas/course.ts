@@ -3,6 +3,7 @@ import {
   EMPTY_STRING_NOTATIONS,
   DEFAULT_EMPTY_STRING_NOTATION,
 } from '@/lib/empty-string-notation';
+import { dateTimeLocalString } from './fields';
 
 const EmptyStringNotationSchema = z
   .enum(EMPTY_STRING_NOTATIONS as unknown as [string, ...string[]])
@@ -17,24 +18,8 @@ const EmptyStringNotationSchema = z
  */
 const courseCodeRegex = /^[A-Z]{2,8}\s?\d{1,4}[A-Z]?$/;
 
-/**
- * Form datetime validation for <input type="datetime-local"> values like
- * "2025-08-15T09:30" (no transformation — the server parses these in the course's
- * timezone).
- */
-const DateTimeLocalForm = z
-  .string()
-  .min(1, 'This field is required.')
-  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, 'Use a valid date & time (YYYY-MM-DDTHH:MM).')
-  .superRefine((val, ctx) => {
-    const d = new Date(val);
-    if (Number.isNaN(d.getTime())) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Invalid date/time.',
-      });
-    }
-  });
+/** Datetime-local form field (shared with the assignment form). */
+const DateTimeLocalForm = dateTimeLocalString;
 
 /**
  * Normalize helpers
