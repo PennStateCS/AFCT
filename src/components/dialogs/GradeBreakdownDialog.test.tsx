@@ -216,6 +216,50 @@ describe('GradeBreakdownDialog', () => {
     expect(setOpen).toHaveBeenCalledWith(false);
   });
 
+  it('blocks the save and toasts when a grade exceeds its problem max', async () => {
+    const onSaved = vi.fn();
+    const fetchMock = vi.fn((url: string, init?: RequestInit): Promise<FetchResult> => {
+      if (url === '/api/courses/c1/assignments/a1') {
+        return Promise.resolve({ ok: true, json: async () => assignmentPayload });
+      }
+      if (url === '/api/courses/c1/assignments/a1/problem-grades/s1' && init?.method === 'POST') {
+        return Promise.resolve({ ok: true, json: async () => ({ ok: true, changed: 1 }) });
+      }
+      if (url === '/api/courses/c1/assignments/a1/problem-grades/s1') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ p1: { grade: 7 }, p2: { grade: null } }),
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url} ${init?.method ?? ''}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderWithClient(<GradeBreakdownDialog {...baseProps} setOpen={vi.fn()} onSaved={onSaved} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('table-rows').textContent).toBe('2');
+    });
+
+    // p1 max is 10; 999 is out of range.
+    const p1Input = screen.getByTestId('gradecell-p1').querySelector('input') as HTMLInputElement;
+    fireEvent.change(p1Input, { target: { value: '999' } });
+
+    const saveButton = screen.getByRole('button', { name: 'Save' });
+    await waitFor(() => expect(saveButton).not.toBeDisabled());
+    fireEvent.click(saveButton);
+
+    // Error surfaced, and no POST was made.
+    expect(toastError).toHaveBeenCalledWith(expect.stringContaining('Problem One'));
+    const postCalls = fetchMock.mock.calls.filter(
+      (c) =>
+        c[0] === '/api/courses/c1/assignments/a1/problem-grades/s1' &&
+        (c[1] as RequestInit)?.method === 'POST',
+    );
+    expect(postCalls).toHaveLength(0);
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
   it('shows a toast when the assignment read fails', async () => {
     const fetchMock = vi.fn((url: string): Promise<FetchResult> => {
       if (url === '/api/courses/c1/assignments/a1') {
