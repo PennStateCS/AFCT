@@ -5,7 +5,7 @@
 Your role is set **per course** in the roster, and **faculty and TAs currently
 have the same abilities** within a course. Everything here applies to the courses
 you are assigned to and to no others — you cannot see or touch a course you're not
-on. For the full permission model, see [Roles and permissions](../role-inheritance.md).
+on. For the full permission model, see [Roles and permissions](../reference/roles-and-permissions.md).
 
 An administrator creates courses and assigns you to them; you run the course from
 there. If you need a new course, a course duplicated, a course un-archived, or a

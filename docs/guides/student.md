@@ -5,7 +5,7 @@
 You see **your own courses and your own work**, and nothing else. You never see
 another student's submissions, grades, or comments — rosters show your instructors
 and TAs, and classmates stay private. For the complete picture of who can see
-what, see [Roles and permissions](../role-inheritance.md).
+what, see [Roles and permissions](../reference/roles-and-permissions.md).
 
 ---
 
