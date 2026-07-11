@@ -1,22 +1,8 @@
 import { z } from 'zod';
+import { dateTimeLocalString } from './fields';
 
-/**
- * Form datetime validation for <input type="datetime-local"> values (no
- * transformation — the server parses these in the course's timezone).
- */
-const DateTimeLocalForm = z
-  .string()
-  .min(1, 'This field is required.')
-  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, 'Use a valid date & time (YYYY-MM-DDTHH:MM).')
-  .superRefine((val, ctx) => {
-    const d = new Date(val);
-    if (Number.isNaN(d.getTime())) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Invalid date/time.',
-      });
-    }
-  });
+/** Datetime-local form field (shared with the course form). */
+const DateTimeLocalForm = dateTimeLocalString;
 
 const DateTimeLocalFormOptional = DateTimeLocalForm.or(z.literal(''))
   .optional()
