@@ -18,6 +18,10 @@ ENV NEXTJS_IGNORE_ESLINT=1
 # The ERD generator pulls in puppeteer (via mermaid-cli), whose install would
 # otherwise download a ~150MB Chromium we never use — the ERD step is disabled here.
 ENV PUPPETEER_SKIP_DOWNLOAD=1
+# `next build` constructs the auth config (which validates NEXTAUTH_SECRET) while
+# collecting page data. Provide a throwaway build-only value so the build doesn't
+# fail; the real secret is injected at runtime (this ENV is not in the runtime stage).
+ENV NEXTAUTH_SECRET="build-only-placeholder-not-used-at-runtime-000"
 
 # python3/make/g++ compile native npm modules (bcrypt). No Java here — the build
 # never runs the evaluator JAR, so a JRE would just be dead weight.
