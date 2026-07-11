@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
@@ -7,17 +6,7 @@ import { logError } from '@/lib/api/activity';
 import { readJson } from '@/lib/api/request';
 import { resolveCourseTimezone } from '@/lib/course-timezone';
 import { toDateTimeInTimezone, toEndOfDayInTimezone } from '@/lib/date-utils';
-
-// Dates stay as strings (interpreted in the course timezone below).
-const CreateAssignmentBody = z.object({
-  title: z.string().min(1, 'Missing required fields'),
-  description: z.string().optional(),
-  dueDate: z.string().min(1, 'A due date is required.'),
-  allowLateSubmissions: z.boolean().optional(),
-  lateCutoff: z.string().optional(),
-  isPublished: z.boolean().optional(),
-  isGroup: z.boolean().optional(),
-});
+import { AssignmentCreateApiSchema } from '@/schemas/assignment';
 
 /**
  * Lists a course's published assignments with each one's total and max grade
@@ -126,7 +115,7 @@ export const GET = withCourseAuth(
 export const POST = withCourseAuth(
   async (req, _ctx, { user, courseId }) => {
     try {
-      const parsed = await readJson(req, CreateAssignmentBody);
+      const parsed = await readJson(req, AssignmentCreateApiSchema);
       if (!parsed.ok) return parsed.response;
       const data = parsed.data;
 

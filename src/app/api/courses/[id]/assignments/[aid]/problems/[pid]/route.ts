@@ -1,28 +1,18 @@
 import { NextResponse } from 'next/server';
-import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { logError } from '@/lib/api/activity';
+import {
+  AssignmentProblemSettingsSchema,
+  type AssignmentProblemSettingsInput,
+} from '@/schemas/problem';
 
 // Concrete path params for this route. Next guarantees each dynamic segment is
 // present, so typing them keeps the destructured values `string` (rather than
 // `string | undefined`) under noUncheckedIndexedAccess.
 type RouteCtx = { params: Promise<{ id: string; aid: string; pid: string }> };
-
-const AssignmentProblemSettingsSchema = z.object({
-  maxPoints: z.number().min(0),
-  maxSubmissions: z
-    .number()
-    .int()
-    .refine((value) => value === -1 || value >= 1, {
-      message: 'Max submissions must be unlimited (-1) or at least 1.',
-    }),
-  autograderEnabled: z.boolean(),
-});
-
-type AssignmentProblemSettingsInput = z.infer<typeof AssignmentProblemSettingsSchema>;
 
 /**
  * Updates the per-assignment settings for one problem: its point value, submission

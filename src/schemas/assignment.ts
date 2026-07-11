@@ -142,6 +142,31 @@ export const UpdateAssignmentSchema = BaseAssignmentFormSchemaObject.partial()
 /** Export a form-only schema for UI, if you want the bare form without publish logic */
 export const AssignmentFormSchema = AssignmentFormSchemaWithValidation;
 
+/**
+ * Server (API) schemas for the assignment create/update routes. Dates stay as
+ * strings (parsed in the course timezone server-side); field rules mirror the
+ * routes they replaced. Distinct from the `*Form` schemas above.
+ */
+export const AssignmentCreateApiSchema = z.object({
+  title: z.string().min(1, 'Missing required fields'),
+  description: z.string().optional(),
+  dueDate: z.string().min(1, 'A due date is required.'),
+  allowLateSubmissions: z.boolean().optional(),
+  lateCutoff: z.string().optional(),
+  isPublished: z.boolean().optional(),
+  isGroup: z.boolean().optional(),
+});
+
+export const AssignmentUpdateApiSchema = z.object({
+  title: z.string().optional(),
+  description: z.string().optional(),
+  dueDate: z.string().optional(),
+  allowLateSubmissions: z.boolean().optional(),
+  lateCutoff: z.string().nullable().optional(),
+  isPublished: z.boolean().optional(),
+  isGroup: z.boolean().optional(),
+});
+
 /** Types */
 export type UpdateAssignmentInput = z.infer<typeof UpdateAssignmentSchema>;
 export type AssignmentFormInput = z.infer<typeof AssignmentFormSchema>;
