@@ -16,8 +16,11 @@ change out from under a deployed client; breaking changes will ship as `v2`.
 2. Store the token; send it as `Authorization: Bearer <token>` on all later calls.
 3. `GET /api/client/v1/courses` → pick a course.
 4. `GET /api/client/v1/courses/{courseId}/assignments` → pick an assignment + problem.
-5. `POST /api/client/v1/submissions` (multipart) → submit the solution file.
-6. `POST /api/client/v1/auth/logout` when done (optional — revokes the token).
+5. `POST /api/client/v1/submissions` (multipart) → submit the solution file; you get
+   back a `submissionId`.
+6. Poll `GET /api/client/v1/submissions/{submissionId}` until `status` is `COMPLETED`
+   (or `FAILED`), then read `correct` + `feedback` (the witness).
+7. `POST /api/client/v1/auth/logout` when done (optional — revokes the token).
 
 A token uses a **sliding 30-day expiry**: every authenticated call renews it, so an
 actively-used token stays valid indefinitely and only lapses after ~30 days of no
@@ -79,6 +82,18 @@ the background). Errors: `400` missing/unlinked/invalid-structure · `403` not
 enrolled or late-policy rejection · `404` assignment not found · `409` submission
 limit reached **or the course is archived** · `413` file too large · `429` resubmit
 cooldown (`Retry-After`).
+
+### `GET /api/client/v1/submissions/{submissionId}`
+Bearer auth. Poll a submission's result (yours; staff may read anyone's in-course).
+`200` →
+```json
+{ "id": "…", "status": "COMPLETED", "correct": false, "grade": 6,
+  "feedback": "accepts \"01\" but should reject it" }
+```
+- `status`: `PENDING` → `PROCESSING` → `COMPLETED` / `FAILED`.
+- `correct`, `grade`, and `feedback` are `null` until evaluation finishes.
+- `feedback` is the witness / counterexample string.
+- `404` if the submission doesn't exist or isn't visible to you.
 
 ## Notes
 - The authoritative course is derived from the assignment; a `courseId` form field
