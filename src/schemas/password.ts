@@ -2,21 +2,12 @@
 import { z } from 'zod';
 import { StrongPassword } from '@/schemas/user';
 
-const hasUpper = /[A-Z]/;
-const hasLower = /[a-z]/;
-const hasDigit = /\d/;
-const hasSpecial = /[^A-Za-z0-9]/;
-
 export const ChangePasswordSchema = z
   .object({
     oldPassword: z.string().min(1, 'Old password is required.'),
-    newPassword: z
-      .string()
-      .min(8, 'At least 8 characters.')
-      .refine((v) => hasUpper.test(v), { message: 'Must contain an uppercase letter.' })
-      .refine((v) => hasLower.test(v), { message: 'Must contain a lowercase letter.' })
-      .refine((v) => hasDigit.test(v), { message: 'Must contain a number.' })
-      .refine((v) => hasSpecial.test(v), { message: 'Must contain a special character.' }),
+    // Reuse the shared strength schema so the change-password form enforces the
+    // exact same rules (and length cap) as signup / admin-create.
+    newPassword: StrongPassword,
     confirmNewPassword: z.string().min(1, 'Please confirm your new password.'),
   })
   .refine((d) => d.newPassword === d.confirmNewPassword, {

@@ -57,13 +57,12 @@ const validateLateSubmissionStrings = (
  */
 const BaseAssignmentFormSchemaObject = z
   .object({
-    title: z.string().trim().min(3, 'Title must be at least 3 characters.'),
-    description: z
+    title: z
       .string()
       .trim()
-      .max(20000, 'Description is too long.')
-      .optional()
-      .or(z.literal('')),
+      .min(3, 'Title must be at least 3 characters.')
+      .max(200, 'Title is too long.'),
+    description: z.string().trim().max(20000, 'Description is too long.').optional(),
     dueDate: DateTimeLocalForm,
     allowLateSubmissions: z.boolean().default(false),
     lateCutoff: DateTimeLocalFormOptional,
@@ -148,8 +147,8 @@ export const AssignmentFormSchema = AssignmentFormSchemaWithValidation;
  * routes they replaced. Distinct from the `*Form` schemas above.
  */
 export const AssignmentCreateApiSchema = z.object({
-  title: z.string().min(1, 'Missing required fields'),
-  description: z.string().optional(),
+  title: z.string().min(1, 'Missing required fields').max(200, 'Title is too long.'),
+  description: z.string().max(20000, 'Description is too long.').optional(),
   dueDate: z.string().min(1, 'A due date is required.'),
   allowLateSubmissions: z.boolean().optional(),
   lateCutoff: z.string().optional(),

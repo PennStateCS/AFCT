@@ -6,7 +6,7 @@ import {
 import { dateTimeLocalString } from './fields';
 
 const EmptyStringNotationSchema = z
-  .enum(EMPTY_STRING_NOTATIONS as unknown as [string, ...string[]])
+  .enum(EMPTY_STRING_NOTATIONS)
   .default(DEFAULT_EMPTY_STRING_NOTATION);
 
 /**
@@ -31,9 +31,13 @@ const normalizeCode = (v: string) => v.trim().replace(/\s+/g, ' ').toUpperCase()
  */
 const BaseCourseFormObject = z
   .object({
-    name: z.string().trim().min(3, 'Course name must be at least 3 characters.'),
-    code: z.string().trim().min(2, 'Course code is required.'),
-    semester: z.string().trim().min(1, 'Semester is required.'),
+    name: z
+      .string()
+      .trim()
+      .min(3, 'Course name must be at least 3 characters.')
+      .max(100, 'Course name is too long.'),
+    code: z.string().trim().min(2, 'Course code is required.').max(20, 'Course code is too long.'),
+    semester: z.string().trim().min(1, 'Semester is required.').max(40, 'Semester is too long.'),
     credits: z.string().min(1, 'Credits are required.'),
     startDate: DateTimeLocalForm,
     endDate: DateTimeLocalForm,
@@ -207,9 +211,9 @@ export const DuplicateFormSchema = BaseCourseFormObject.extend({
  * browser's datetime-local values. Field rules mirror the routes they replaced.
  */
 const courseApiBase = {
-  name: z.string().trim().min(1, 'Course name is required.'),
-  code: z.string().trim().min(1, 'Course code is required.'),
-  semester: z.string().trim().min(1, 'Semester is required.'),
+  name: z.string().trim().min(1, 'Course name is required.').max(100, 'Course name is too long.'),
+  code: z.string().trim().min(1, 'Course code is required.').max(20, 'Course code is too long.'),
+  semester: z.string().trim().min(1, 'Semester is required.').max(40, 'Semester is too long.'),
   credits: z.coerce.number().int().min(1).max(6),
   startDate: z.string().min(1, 'Start date is required.'),
   endDate: z.string().min(1, 'End date is required.'),
