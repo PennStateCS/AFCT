@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { canManageCourse, isAdmin } from '@/lib/permissions';
@@ -7,8 +6,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { logDenial, logError } from '@/lib/api/activity';
-
-const ChangeRoleBody = z.object({ role: z.enum(['FACULTY', 'TA', 'STUDENT']) });
+import { CourseRoleChangeSchema } from '@/schemas/user';
 
 /** Thrown inside a roster transaction when the change would leave 0 faculty. */
 class LastFacultyError extends Error {}
@@ -246,7 +244,7 @@ export const PATCH = withCourseAuth(
     const { userId } = await ctx.params;
 
     try {
-      const parsed = await readJson(req, ChangeRoleBody);
+      const parsed = await readJson(req, CourseRoleChangeSchema);
       if (!parsed.ok) return parsed.response;
       const newRole = parsed.data.role;
 

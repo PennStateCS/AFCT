@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
@@ -11,6 +12,16 @@ import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { getQueueSettings } from '@/lib/eval-config';
 import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 import { canAccessCourse, canManageCourse } from '@/lib/permissions';
+import { readFormData } from '@/lib/api/request';
+
+// Scalar fields of the multipart submission body. Kept optional here because the
+// handler emits a specific SUBMISSION_INVALID_REQUEST audit log when the required
+// ids are missing (below); the file is read from the raw form.
+const SubmissionCreateApiSchema = z.object({
+  courseId: z.string().optional(),
+  assignmentId: z.string().optional(),
+  problemId: z.string().optional(),
+});
 
 /** Thrown inside the create transaction when the per-problem cap is already met. */
 class SubmissionCapReachedError extends Error {}
@@ -64,11 +75,12 @@ export async function POST(req: NextRequest) {
   }
 
   // 2. Parse multipart form data
-  const formData = await req.formData();
-  let courseId = formData.get('courseId')?.toString();
-  const assignmentId = formData.get('assignmentId')?.toString();
-  const problemId = formData.get('problemId')?.toString();
-  const file = formData.get('file') as File | null;
+  const parsed = await readFormData(req, SubmissionCreateApiSchema);
+  if (!parsed.ok) return parsed.response;
+  let courseId = parsed.data.courseId;
+  const assignmentId = parsed.data.assignmentId;
+  const problemId = parsed.data.problemId;
+  const file = parsed.form.get('file') as File | null;
   const { maxBytes, maxMb } = await getSystemUploadLimit();
 
   if (!assignmentId || !problemId) {

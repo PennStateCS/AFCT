@@ -1,5 +1,26 @@
 // src/schemas/profile.ts
 import { z } from 'zod';
+import { COMMON_TIMEZONES } from '@/lib/timezones';
+import { formBoolean } from './fields';
+
+/**
+ * Server body for the profile update route (POST /api/me, multipart). Validates
+ * the scalar fields via `readFormData`; the avatar File and the dynamic upload-size
+ * limit stay in the route. Counterpart to the client `UpdateProfileSchema`.
+ */
+export const UserProfileApiSchema = z.object({
+  firstName: z.string().trim().min(1, 'First name and last name cannot be blank.'),
+  lastName: z.string().trim().min(1, 'First name and last name cannot be blank.'),
+  deleteAvatar: formBoolean,
+  timezone: z
+    .string()
+    .trim()
+    .optional()
+    .refine(
+      (v) => !v || COMMON_TIMEZONES.includes(v as (typeof COMMON_TIMEZONES)[number]),
+      'Invalid timezone.',
+    ),
+});
 
 // Server-side safe image file validation
 const createImageFileSchema = () => {

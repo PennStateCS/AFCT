@@ -36,6 +36,40 @@ export async function readJson<T>(
   return { ok: true, data: result.data };
 }
 
+/**
+ * Like {@link readJson} but for multipart bodies. Reads the `FormData`, collapses
+ * it into a plain object of `string | File` values, and validates it against a Zod
+ * schema (use the coercing primitives in `@/schemas/fields` for booleans/ints).
+ * Returns the validated data plus the raw `FormData` (handlers still need it for
+ * files and repeated keys). Never throws — a bad body yields a ready 400.
+ */
+export async function readFormData<T>(
+  req: Request,
+  schema: ZodType<T>,
+): Promise<{ ok: true; data: T; form: FormData } | { ok: false; response: NextResponse }> {
+  let form: FormData;
+  try {
+    form = await req.formData();
+  } catch {
+    return { ok: false, response: apiError(400, 'Invalid form data') };
+  }
+  const raw: Record<string, FormDataEntryValue> = {};
+  // Last value wins for a repeated key; handlers that need every value read the
+  // returned `form` directly.
+  for (const [key, value] of form.entries()) {
+    raw[key] = value;
+  }
+  const result = schema.safeParse(raw);
+  if (!result.success) {
+    const first = result.error.issues[0];
+    const detail = first
+      ? `${first.path.join('.') || 'body'}: ${first.message}`
+      : 'Validation failed';
+    return { ok: false, response: apiError(400, detail) };
+  }
+  return { ok: true, data: result.data, form };
+}
+
 /** Coerce to an integer clamped to `[min, max]`; non-finite input yields `fallback`. */
 export function clampInt(value: number, min: number, max: number, fallback: number): number {
   if (!Number.isFinite(value)) return fallback;

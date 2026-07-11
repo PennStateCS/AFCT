@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server';
-import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { logError } from '@/lib/api/activity';
-
-const CreateGroupBody = z.object({ name: z.string().trim().min(1, 'Name is required') });
+import { GroupNameSchema } from '@/schemas/group';
 
 /**
  * Lists a course's groups, alphabetically. Course staff (faculty or TAs) or a
@@ -77,7 +75,7 @@ export const GET = withCourseAuth(
 export const POST = withCourseAuth(
   async (req, _ctx, { user, courseId }) => {
     try {
-      const parsed = await readJson(req, CreateGroupBody);
+      const parsed = await readJson(req, GroupNameSchema);
       if (!parsed.ok) return parsed.response;
       const { name } = parsed.data;
 
