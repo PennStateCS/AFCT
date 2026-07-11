@@ -69,6 +69,29 @@ export const UpdateUserSchema = z.object({
   timezone: z.string().trim().optional(),
 });
 
+/**
+ * Server (API) bodies for the admin user routes. These validate the raw JSON the
+ * routes receive (distinct from the client `CreateUserSchema`/`UpdateUserSchema`
+ * form schemas, which also carry confirm-password / avatar-file fields). Field
+ * rules mirror the routes they replaced.
+ */
+export const UserCreateApiSchema = z.object({
+  email: z.string().min(1),
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  password: z.string().min(1),
+  timezone: z.string().optional(),
+});
+
+/** JSON branch of PATCH /api/users/[id] (the multipart branch carries the avatar). */
+export const UserUpdateJsonApiSchema = z.object({
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
+  inactive: z.boolean().optional(),
+  timezone: z.string().optional(),
+  isAdmin: z.boolean().optional(),
+});
+
 export type CreateUserInput = z.infer<typeof CreateUserSchema>;
 export type CreateUserRaw = z.input<typeof CreateUserSchema>;
 
