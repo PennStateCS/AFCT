@@ -18,6 +18,14 @@ export const MIN_AUTH_SECRET_LENGTH = 32;
 export function requireAuthSecret(): string {
   const secret = process.env.NEXTAUTH_SECRET;
   if (!secret || secret.length < MIN_AUTH_SECRET_LENGTH) {
+    // `next build` imports route modules (which construct the auth config) to
+    // collect page data before any request — and before the real secret is
+    // available. Don't fail the *build*; the secret is still enforced at runtime,
+    // where this same function runs on every edge-proxy request and when the auth
+    // config is first constructed at server start (NEXT_PHASE is unset then).
+    if (process.env.NEXT_PHASE === 'phase-production-build') {
+      return secret ?? 'build-phase-placeholder-secret-not-used-at-runtime';
+    }
     throw new Error(
       `NEXTAUTH_SECRET is missing or too short (need at least ${MIN_AUTH_SECRET_LENGTH} characters). ` +
         'Generate one with `openssl rand -base64 32` and set it in the environment.',
