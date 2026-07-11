@@ -6,7 +6,7 @@ Administrator is a **global** capability — the `isAdmin` flag on your account.
 can act anywhere in the system and are not tied to any single course. Course
 *content* is the job of faculty (see the [faculty and TA guide](faculty.md)); you
 own accounts, platform settings, the course lifecycle, and the health of the
-server. For the precise permission model, see [Roles and permissions](../role-inheritance.md).
+server. For the precise permission model, see [Roles and permissions](../reference/roles-and-permissions.md).
 
 Being an admin is independent of any course role: you can also be enrolled in a
 course as faculty, and both powers apply.
@@ -172,4 +172,4 @@ deliberate — it protects a finished term's record while keeping it readable.
   with `openssl rand -base64 32`. Rotating it signs everyone out.
 - **`DATABASE_URL`** points the app (and migrations/seed) at Postgres.
 - Deployment, TLS, and the reverse proxy are covered in
-  [`production_setup.md`](../production_setup.md).
+  [`production.md`](../setup/production.md).
