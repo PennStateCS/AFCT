@@ -40,11 +40,14 @@ FROM node:22-bookworm-slim@sha256:53ada149d435c38b14476cb57e4a7da73c15595aba79bd
 WORKDIR /app
 
 # curl runs the healthcheck; postgres-client + netcat back the DB wait in the
-# entrypoint; tini is PID 1; openssl covers TLS helpers.
+# entrypoint; tini is PID 1; openssl covers TLS helpers. fontconfig + a base font
+# are required by the Java evaluator (JFLAP initializes Swing even in CLI mode, so
+# the JRE needs font metrics — otherwise it throws "Fontconfig head is null").
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
-    curl postgresql-client netcat-openbsd tini openssl ca-certificates
+    curl postgresql-client netcat-openbsd tini openssl ca-certificates \
+    fontconfig fonts-dejavu-core
 
 # Java 21 runtime, copied from the official image (pinned, no network fetch).
 # Runs jars/afct-evaluator.jar when grading submissions.
