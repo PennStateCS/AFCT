@@ -116,13 +116,6 @@ function addProblemValidation<T extends z.ZodRawShape>(schema: z.ZodObject<T>) {
 /** Form-only schema (used by dialogs). */
 export const ProblemFormSchema = addProblemValidation(BaseProblemObject);
 
-/** Form schema with required file for creation dialogs */
-export const CreateProblemFormSchema = addProblemValidation(
-  BaseProblemObject.extend({
-    file: FileRequired,
-  })
-);
-
 /** CREATE: requires file and adds the same FA/PDA rules */
 export const CreateProblemSchema = addProblemValidation(
   BaseProblemObject.extend({
@@ -167,8 +160,6 @@ export type ProblemAssociationSettings = z.infer<typeof ProblemAssociationSettin
 /** Types */
 export type ProblemFormInput = z.infer<typeof ProblemFormSchema>;
 export type ProblemFormRaw = z.input<typeof ProblemFormSchema>;
-export type CreateProblemFormInput = z.infer<typeof CreateProblemFormSchema>;
-export type CreateProblemFormRaw = z.input<typeof CreateProblemFormSchema>;
 export type CreateProblemInput = z.infer<typeof CreateProblemSchema>;
 export type CreateProblemRaw = z.input<typeof CreateProblemSchema>;
 export type UpdateProblemInput = z.infer<typeof UpdateProblemSchema>;

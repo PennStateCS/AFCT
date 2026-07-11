@@ -1,26 +1,8 @@
 import { z } from 'zod';
 
 /**
- * Accepts <input type="datetime-local"> like "2025-08-15T23:59"
- * Validates and transforms to Date (local).
- */
-const DateTimeLocal = z
-  .string()
-  .min(1, 'This field is required.')
-  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, 'Use a valid date & time (YYYY-MM-DDTHH:MM).')
-  .superRefine((val, ctx) => {
-    const d = new Date(val);
-    if (Number.isNaN(d.getTime())) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Invalid date/time.',
-      });
-    }
-  })
-  .transform((val) => new Date(val));
-
-/**
- * Form-only datetime validation (no transformation)
+ * Form datetime validation for <input type="datetime-local"> values (no
+ * transformation — the server parses these in the course's timezone).
  */
 const DateTimeLocalForm = z
   .string()
@@ -42,43 +24,6 @@ const DateTimeLocalFormOptional = DateTimeLocalForm.or(z.literal(''))
     if (!val || val === '') return undefined;
     return val;
   });
-
-const validateLateSubmissionDates = (
-  data: {
-    allowLateSubmissions?: boolean;
-    lateCutoff?: Date | null;
-    dueDate?: Date;
-  },
-  ctx: z.RefinementCtx,
-) => {
-  const allowLate = data.allowLateSubmissions ?? true;
-  const dueDate = data.dueDate;
-  const cutoff = data.lateCutoff ?? undefined;
-
-  if (!dueDate) return;
-
-  if (allowLate) {
-    if (!cutoff) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['lateCutoff'],
-        message: 'Provide a cutoff or disable late submissions.',
-      });
-    } else if (cutoff < dueDate) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['lateCutoff'],
-        message: 'Cutoff must be on or after the due date.',
-      });
-    }
-  } else if (cutoff) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['lateCutoff'],
-      message: 'Remove the cutoff or enable late submissions.',
-    });
-  }
-};
 
 const validateLateSubmissionStrings = (
   data: {
@@ -122,26 +67,7 @@ const validateLateSubmissionStrings = (
 };
 
 /**
- * Base (form) schema for add/edit.
- * Keep aligned with your Prisma model fields.
- */
-const BaseAssignmentSchemaObject = z
-  .object({
-    title: z.string().trim().min(3, 'Title must be at least 3 characters.'),
-    description: z
-      .string()
-      .trim()
-      .max(20000, 'Description is too long.')
-      .optional()
-      .or(z.literal('')),
-    dueDate: DateTimeLocal,
-    isGroup: z.boolean().optional(),
-    courseId: z.string().min(1, 'Course id is required.'),
-  })
-  .strict();
-
-/**
- * Form-only schema (no date transformation for forms)
+ * Base object schema for assignment forms (no date transformation).
  */
 const BaseAssignmentFormSchemaObject = z
   .object({
@@ -160,13 +86,6 @@ const BaseAssignmentFormSchemaObject = z
     courseId: z.string().min(1, 'Course id is required.'),
   })
   .strict();
-
-/**
- * CREATE: includes publish flag and rule: if publishing, maxPoints > 0.
- */
-export const CreateAssignmentSchema = BaseAssignmentSchemaObject.extend({
-  isPublished: z.boolean().default(false),
-}).superRefine(validateLateSubmissionDates);
 
 /**
  * CREATE FORM: includes publish flag and rule: if publishing, maxPoints > 0.
@@ -238,8 +157,5 @@ export const UpdateAssignmentSchema = BaseAssignmentFormSchemaObject.partial()
 export const AssignmentFormSchema = AssignmentFormSchemaWithValidation;
 
 /** Types */
-export type CreateAssignmentInput = z.infer<typeof CreateAssignmentSchema>;
 export type UpdateAssignmentInput = z.infer<typeof UpdateAssignmentSchema>;
 export type AssignmentFormInput = z.infer<typeof AssignmentFormSchema>;
-export type AssignmentFormInputRaw = z.input<typeof CreateAssignmentSchema>; // strings for datetime-local
-export type AssignmentFormParsed = z.output<typeof CreateAssignmentSchema>; // Dates, coerced numbers
