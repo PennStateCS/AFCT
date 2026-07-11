@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import type { ProblemTypeEnum } from '@/schemas/problem';
 import type { RoleEnum } from '@/schemas/user';
@@ -6,11 +7,23 @@ import { withCourseAuth } from '@/lib/api/with-auth';
 import { canManageCourse } from '@/lib/permissions';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
+import { readJson } from '@/lib/api/request';
 import { sumProblemPoints } from '@/lib/course-format';
 import { resolveCourseTimezone } from '@/lib/course-timezone';
 import { toEndOfDayInTimezone } from '@/lib/date-utils';
 import { computeLateSubmissionState } from '@/lib/assignment-late-window';
-import type { z } from 'zod';
+
+// Shared by PUT (full) and PATCH (partial). All fields optional; dates stay as
+// strings (interpreted in the course timezone below).
+const UpdateAssignmentBody = z.object({
+  title: z.string().optional(),
+  description: z.string().optional(),
+  dueDate: z.string().optional(),
+  allowLateSubmissions: z.boolean().optional(),
+  lateCutoff: z.string().nullable().optional(),
+  isPublished: z.boolean().optional(),
+  isGroup: z.boolean().optional(),
+});
 
 // Types
 interface AssignmentWithProblemsAndCourse {
@@ -247,7 +260,9 @@ export const PUT = withCourseAuth(
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 
-    const data = await req.json();
+    const parsed = await readJson(req, UpdateAssignmentBody);
+    if (!parsed.ok) return parsed.response;
+    const data = parsed.data;
     // Deadlines are anchored to the course's timezone, not the actor's.
     const courseTimezone = await resolveCourseTimezone(courseId);
 
@@ -329,7 +344,9 @@ export const PUT = withCourseAuth(
         data: {
           title: data.title,
           description: data.description,
-          dueDate: toEndOfDayInTimezone(data.dueDate, courseTimezone),
+          // Use the computed value (keeps the existing due date when none was sent)
+          // rather than re-deriving from a possibly-undefined data.dueDate.
+          dueDate,
           allowLateSubmissions,
           lateCutoff,
           isPublished: data.isPublished,
@@ -411,7 +428,9 @@ export const PATCH = withCourseAuth(
       return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
     }
 
-    const data = await req.json();
+    const parsed = await readJson(req, UpdateAssignmentBody);
+    if (!parsed.ok) return parsed.response;
+    const data = parsed.data;
     // Deadlines are anchored to the course's timezone, not the actor's.
     const courseTimezone = await resolveCourseTimezone(courseId);
 

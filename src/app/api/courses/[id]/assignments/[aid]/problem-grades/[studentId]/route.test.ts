@@ -253,9 +253,8 @@ describe('POST /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
       params: Promise.resolve(defaultParams),
     });
 
+    // The readJson/Zod schema rejects a non-number grade value with a 400 and no write.
     expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.error).toContain('must be a number or null');
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 
