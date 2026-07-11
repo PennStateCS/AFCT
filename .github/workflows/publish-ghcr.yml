@@ -1,7 +1,13 @@
 name: Publish Docker image to GHCR
 
+# Gated on CI: this runs only after the CI workflow finishes on main, and the
+# job below bails unless CI actually passed — so a lint/test/docs failure never
+# ships an image. (A direct push trigger would build in parallel with CI and
+# could publish a broken commit.)
 on:
-  push:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
     branches: ['main']
 
 permissions:
@@ -19,10 +25,15 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Only publish when the triggering CI run succeeded.
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          # Build the exact commit CI validated, not whatever main points at now.
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -134,4 +145,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docker-compose.yml
           git commit -m "chore(release): pin prod image to ${DIGEST} [skip ci]"
-          git push origin HEAD:${{ github.ref_name }}
+          git push origin HEAD:${{ github.event.workflow_run.head_branch }}
