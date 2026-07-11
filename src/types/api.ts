@@ -614,6 +614,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/client/v1/submissions/{submissionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a submission's result (client)
+         * @description The result of one submission — for polling after a submit. Returns the queue  `status` (PENDING/PROCESSING/COMPLETED/FAILED) and, once evaluated, whether it was  `correct`, the `grade`, and the `feedback` (the witness / counterexample string).  A caller may read their own submission; staff may read anyone's in their course.  Anything else is masked as 404.
+         *
+         *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/client/v1/submissions/[submissionId]/route.ts)
+         */
+        get: operations["getClientV1SubmissionsBySubmissionId"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/client/v1/submissions": {
         parameters: {
             query?: never;
@@ -3480,6 +3502,53 @@ export interface operations {
             };
             /** @description Missing or invalid token. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getClientV1SubmissionsBySubmissionId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                submissionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The submission's status and (when done) result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id?: string;
+                        status?: string;
+                        correct?: boolean | null;
+                        grade?: number | null;
+                        /** @description The witness / counterexample */
+                        feedback?: string | null;
+                    };
+                };
+            };
+            /** @description Missing or invalid token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Submission not found or not visible to the caller. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
