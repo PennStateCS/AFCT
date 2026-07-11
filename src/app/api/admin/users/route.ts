@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
@@ -6,7 +7,16 @@ import { logError } from '@/lib/api/activity';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { getUsersList } from '@/lib/users-list';
 import { withAdminAuth } from '@/lib/api/with-auth';
+import { readJson } from '@/lib/api/request';
 import { isValidEmail } from '@/lib/email';
+
+const CreateUserBody = z.object({
+  email: z.string().min(1),
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  password: z.string().min(1),
+  timezone: z.string().optional(),
+});
 
 // Local password check for admin-created accounts: 8+ chars with mixed case, a
 // digit, and a symbol.
@@ -86,13 +96,9 @@ export const GET = withAdminAuth(
 export const POST = withAdminAuth(
   async (req, _ctx, { user }) => {
     try {
-      const body = await req.json();
-      const { email, firstName, lastName, password, timezone } = body;
-
-      if (!email || !firstName || !lastName || !password) {
-        console.warn('[USERS_POST] Missing required fields');
-        return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-      }
+      const parsed = await readJson(req, CreateUserBody);
+      if (!parsed.ok) return parsed.response;
+      const { email, firstName, lastName, password, timezone } = parsed.data;
 
       if (!isValidEmail(email)) {
         console.warn(`[USERS_POST] Invalid email format: ${email}`);
