@@ -12,6 +12,9 @@ import { getQueueSettings } from '@/lib/eval-config';
 import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 import { canAccessCourse, canManageCourse } from '@/lib/permissions';
 
+/** Thrown inside the create transaction when the per-problem cap is already met. */
+class SubmissionCapReachedError extends Error {}
+
 /**
  * Submits a student's solution file for one assignment problem (multipart/form-data)
  * and queues it for evaluation. Requires a signed-in user who is enrolled in the
@@ -442,20 +445,63 @@ export async function POST(req: NextRequest) {
       uploadedFilePath = filePath;
     }
 
-    // 5. Store the submission
-    const submission = await prisma.submission.create({
-      data: {
-        courseId: assignment.courseId,
-        assignmentId,
-        problemId,
-        studentId: session.user.id,
-        fileName,
-        originalFileName,
-        feedback: null,
-        correct: undefined,
-        evaluationRaw: Prisma.JsonNull,
-      },
-    });
+    // 5. Store the submission. The cap is re-checked *inside* a serializable
+    // transaction so two concurrent submits can't both slip past the earlier
+    // count (Postgres aborts one of the racing transactions). The check at step 3
+    // is a fast path that avoids writing a file in the common over-cap case; this
+    // is the authoritative guard.
+    let submission;
+    try {
+      submission = await prisma.$transaction(
+        async (tx) => {
+          if (!isCourseStaff && link.maxSubmissions > 0) {
+            const priorCount = await tx.submission.count({
+              where: { assignmentId, problemId, studentId: session.user.id },
+            });
+            if (priorCount >= link.maxSubmissions) {
+              throw new SubmissionCapReachedError();
+            }
+          }
+          return tx.submission.create({
+            data: {
+              courseId: assignment.courseId,
+              assignmentId,
+              problemId,
+              studentId: session.user.id,
+              fileName,
+              originalFileName,
+              feedback: null,
+              correct: undefined,
+              evaluationRaw: Prisma.JsonNull,
+            },
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (err) {
+      // Roll back the file we already wrote before rejecting.
+      if (uploadedFilePath) {
+        try {
+          fs.unlinkSync(uploadedFilePath);
+        } catch {
+          // best-effort cleanup
+        }
+      }
+      if (err instanceof SubmissionCapReachedError) {
+        return NextResponse.json(
+          { error: `Submission limit reached (${link.maxSubmissions}).` },
+          { status: 409 },
+        );
+      }
+      // Serialization failure (P2034): a concurrent submit conflicted — ask to retry.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2034') {
+        return NextResponse.json(
+          { error: 'A concurrent submission conflicted; please retry.' },
+          { status: 409 },
+        );
+      }
+      throw err; // unexpected — surface to the outer catch (logged + 500)
+    }
 
     if (fileName) {
       await createEnhancedActivityLog(prisma, req, {

@@ -48,6 +48,14 @@ The AFCT Dashboard includes automatically generated documentation for the HTTP A
 - **[API Reference](https://pennstatewilkes-barre.github.io/AFCT-Dashboard/)** — browsable documentation for each endpoint, including authentication requirements, parameters, and request/response formats.
 - **[OpenAPI Specification](https://pennstatewilkes-barre.github.io/AFCT-Dashboard/openapi.json)** — the raw `openapi.json` file, which can be imported into tools such as Postman, Insomnia, or client-generation workflows.
 
+User guides, written by audience, live under [`docs/guides`](docs/guides/README.md):
+
+- **[Administrator guide](docs/guides/admin.md)** — accounts, signup control, the course lifecycle, system settings, the submission queue, status, audit, backups, and security.
+- **[Faculty and TA guide](docs/guides/faculty.md)** — running a course, assignments and problems, roster and enrollment, grading and feedback, and groups.
+- **[Student guide](docs/guides/student.md)** — joining a course, finding and submitting work, feedback and grades, groups, profile, and sign-in.
+- **[Developer guide](docs/guides/developer.md)** — stack, repository layout, the authorization model, API and data conventions, logging, time handling, testing, and CI/CD.
+- **[Roles and permissions](docs/role-inheritance.md)** — the precise reference for who can do what, shared by all four guides.
+
 Additional setup and deployment guides are available in the repository:
 
 - **[Development Setup](docs/development_setup.md)** — instructions for configuring a local development environment.

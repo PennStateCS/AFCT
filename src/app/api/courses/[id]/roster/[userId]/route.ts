@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { canManageCourse, isAdmin } from '@/lib/permissions';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
@@ -8,6 +9,9 @@ import { readJson } from '@/lib/api/request';
 import { logDenial, logError } from '@/lib/api/activity';
 
 const ChangeRoleBody = z.object({ role: z.enum(['FACULTY', 'TA', 'STUDENT']) });
+
+/** Thrown inside a roster transaction when the change would leave 0 faculty. */
+class LastFacultyError extends Error {}
 
 /**
  * Removes a user from a course roster. Permission is tiered: the shared wrapper
@@ -73,19 +77,40 @@ export const DELETE = withCourseAuth(
         }
       }
 
-      // Prevent removing the only faculty member from a course.
-      if (targetRoster?.role === 'FACULTY') {
-        const facultyCount = await prisma.roster.count({ where: { courseId, role: 'FACULTY' } });
-        if (facultyCount <= 1) {
+      // Delete the user's roster entries. When the target is faculty, re-check the
+      // count *inside* a serializable transaction so two concurrent removals can't
+      // both pass and leave the course with zero faculty (Postgres aborts one).
+      let deleted: { count: number };
+      try {
+        deleted = await prisma.$transaction(
+          async (tx) => {
+            if (targetRoster?.role === 'FACULTY') {
+              const facultyCount = await tx.roster.count({
+                where: { courseId, role: 'FACULTY' },
+              });
+              if (facultyCount <= 1) {
+                throw new LastFacultyError();
+              }
+            }
+            return tx.roster.deleteMany({ where: { courseId, userId } });
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        );
+      } catch (err) {
+        if (err instanceof LastFacultyError) {
           return NextResponse.json(
             { error: 'Cannot remove the only faculty member from the course' },
             { status: 400 },
           );
         }
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2034') {
+          return NextResponse.json(
+            { error: 'A concurrent roster change conflicted; please retry.' },
+            { status: 409 },
+          );
+        }
+        throw err;
       }
-
-      // Delete any roster entries for this user in the course
-      const deleted = await prisma.roster.deleteMany({ where: { courseId, userId } });
 
       // Log activity
       await createEnhancedActivityLog(prisma, req, {
@@ -232,23 +257,40 @@ export const PATCH = withCourseAuth(
       });
       if (!target) return NextResponse.json({ error: 'Roster entry not found' }, { status: 404 });
 
-      // Prevent demoting the only faculty member
-      if (target.role === 'FACULTY' && newRole !== 'FACULTY') {
-        const facultyCount = await prisma.roster.count({
-          where: { courseId, role: 'FACULTY' },
-        });
-        if (facultyCount <= 1) {
+      // Apply the role change. When demoting a faculty member, re-check the faculty
+      // count inside a serializable transaction so concurrent demotions can't leave
+      // the course with zero faculty (Postgres aborts one of the racing transactions).
+      let updated;
+      try {
+        updated = await prisma.$transaction(
+          async (tx) => {
+            if (target.role === 'FACULTY' && newRole !== 'FACULTY') {
+              const facultyCount = await tx.roster.count({
+                where: { courseId, role: 'FACULTY' },
+              });
+              if (facultyCount <= 1) {
+                throw new LastFacultyError();
+              }
+            }
+            return tx.roster.update({ where: { id: target.id }, data: { role: newRole } });
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        );
+      } catch (err) {
+        if (err instanceof LastFacultyError) {
           return NextResponse.json(
             { error: 'Cannot demote the only course faculty member' },
             { status: 400 },
           );
         }
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2034') {
+          return NextResponse.json(
+            { error: 'A concurrent roster change conflicted; please retry.' },
+            { status: 409 },
+          );
+        }
+        throw err;
       }
-
-      const updated = await prisma.roster.update({
-        where: { id: target.id },
-        data: { role: newRole },
-      });
 
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,
