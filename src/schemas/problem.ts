@@ -1,10 +1,21 @@
 import { z } from 'zod';
+import { formBooleanOptional, formIntOptional } from './fields';
 
 /** Keep in sync with your Prisma enum */
 export const ProblemTypeEnum = z.enum(['FA', 'PDA', 'CFG', 'RE', 'TM']);
 
-/** Allowed upload types (adjust as needed) */
-const allowedExt = ['txt', 'fa', 'pda', 'cfg', 're', 'jff'];
+/**
+ * Allowed solution-file extensions. Enforced by BOTH the client file field (below)
+ * and the server routes (via {@link isAllowedProblemExtension}) so a non-browser
+ * client can't upload an arbitrary file type.
+ */
+export const ALLOWED_PROBLEM_EXTENSIONS = ['txt', 'fa', 'pda', 'cfg', 're', 'jff'] as const;
+
+/** True if `fileName`'s extension is in {@link ALLOWED_PROBLEM_EXTENSIONS}. */
+export const isAllowedProblemExtension = (fileName: string): boolean => {
+  const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
+  return (ALLOWED_PROBLEM_EXTENSIONS as readonly string[]).includes(ext);
+};
 
 // Server-side safe file validation
 const createFileSchema = () => {
@@ -13,13 +24,9 @@ const createFileSchema = () => {
     return z
       .instanceof(File, { message: 'Answer file is required.' })
       .refine((f) => f.size > 0, 'Answer file is required.')
-      .refine(
-        (f) => {
-          const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
-          return allowedExt.includes(ext);
-        },
-        { message: `Allowed: .${allowedExt.join(',.')}` },
-      )
+      .refine((f) => isAllowedProblemExtension(f.name), {
+        message: `Allowed: .${ALLOWED_PROBLEM_EXTENSIONS.join(', .')}`,
+      })
       .refine((f) => f.size <= 5 * 1024 * 1024, 'File must be ≤ 5MB');
   }
   
@@ -129,6 +136,31 @@ export const UpdateProblemSchema = addProblemValidation(
     id: z.string().min(1, 'Problem id is required.'),
   })
 );
+
+/**
+ * Server-side validation for the problem create/update routes, which receive
+ * multipart form data (all scalar fields arrive as strings). Fed by `readFormData`;
+ * the File itself and the dynamic size limit / XML-structure check stay in the
+ * route, but the extension allow-list is enforced there via
+ * {@link isAllowedProblemExtension}. This is the server counterpart to the
+ * client-only `ProblemFormSchema` — the browser was previously the only validator.
+ */
+const problemApiScalars = {
+  title: z.string().trim().min(3, 'Title must be at least 3 characters.'),
+  description: z.string().trim().max(20000, 'Description is too long.').optional(),
+  type: ProblemTypeEnum,
+  assignmentId: z.string().trim().optional(),
+  maxPoints: formIntOptional({ min: 0 }),
+  maxSubmissions: formIntOptional(),
+  maxStates: formIntOptional(),
+  isDeterministic: formBooleanOptional,
+  autograderEnabled: formBooleanOptional,
+};
+
+export const ProblemCreateApiSchema = z.object(problemApiScalars);
+export const ProblemUpdateApiSchema = z.object(problemApiScalars);
+
+export type ProblemCreateApiInput = z.infer<typeof ProblemCreateApiSchema>;
 
 /**
  * Per-problem settings sent when associating an existing problem with an

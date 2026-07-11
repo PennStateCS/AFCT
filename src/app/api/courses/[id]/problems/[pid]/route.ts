@@ -9,7 +9,12 @@ import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
-import { formBool } from '@/lib/api/request';
+import { readFormData } from '@/lib/api/request';
+import {
+  ProblemUpdateApiSchema,
+  ALLOWED_PROBLEM_EXTENSIONS,
+  isAllowedProblemExtension,
+} from '@/schemas/problem';
 
 // Solution files live here; the URL to serve them is /api/files/solutions/[file].
 const uploadsDir = path.join('/private', 'uploads', 'solutions');
@@ -62,27 +67,26 @@ export const PUT = withCourseAuth(
         return NextResponse.json({ error: 'Problem not found' }, { status: 404 });
       }
 
-      const formData = await req.formData();
-      const title = formData.get('title') as string;
-      const description = formData.get('description') as string;
-      const type = formData.get('type') as string;
-      const maxSubmissions = formData.get('maxSubmissions') as string | null;
-      const maxPoints = formData.get('maxPoints') as string | null;
-      const assignmentId = formData.get('assignmentId') as string;
-      const maxStates = formData.get('maxStates') as string | null;
-      const isDeterministic = formBool(formData, 'isDeterministic');
-      const autograderEnabled = formBool(formData, 'autograderEnabled');
-      const file = formData.get('file') as File | null;
-
-      if (!title || !type) {
-        return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-      }
+      // Validate the scalar fields server-side (title, type, coerced numbers/bools).
+      const parsed = await readFormData(req, ProblemUpdateApiSchema);
+      if (!parsed.ok) return parsed.response;
+      const data = parsed.data;
+      const { title, type } = data;
+      const assignmentId = data.assignmentId;
+      const file = parsed.form.get('file') as File | null;
 
       let fileName = existingProblem.fileName;
       let originalFileName = existingProblem.originalFileName;
 
       // Handle file update if a new file is provided
       if (file && file.size > 0) {
+        // Enforce the solution-file extension allow-list server-side.
+        if (!isAllowedProblemExtension(file.name)) {
+          return NextResponse.json(
+            { error: `Allowed file types: .${ALLOWED_PROBLEM_EXTENSIONS.join(', .')}` },
+            { status: 400 },
+          );
+        }
         const { maxBytes, maxMb } = await getSystemUploadLimit();
         if (file.size > maxBytes) {
           return NextResponse.json(
@@ -137,15 +141,15 @@ export const PUT = withCourseAuth(
         where: { id: problemId },
         data: {
           title,
-          description,
+          description: data.description ?? null,
           type: type as ProblemType,
           fileName,
           originalFileName,
-          maxSubmissions: maxSubmissions ? parseInt(maxSubmissions, 10) : null,
-          maxPoints: maxPoints ? parseInt(maxPoints, 10) : undefined,
-          maxStates: ['FA', 'PDA'].includes(type) ? parseInt(maxStates || '0', 10) || null : null,
-          isDeterministic: type === 'FA' ? isDeterministic : null,
-          autograderEnabled,
+          maxSubmissions: data.maxSubmissions ?? null,
+          maxPoints: data.maxPoints ?? undefined,
+          maxStates: ['FA', 'PDA'].includes(type) ? (data.maxStates ?? 0) || null : null,
+          isDeterministic: type === 'FA' ? (data.isDeterministic ?? false) : null,
+          autograderEnabled: data.autograderEnabled ?? false,
         },
       });
 
