@@ -85,9 +85,16 @@ export async function resolveClientToken(rawToken: string): Promise<ResolvedClie
   if (row.expiresAt && row.expiresAt.getTime() <= now) return null;
   if (!row.user || row.user.inactive) return null;
 
+  // Sliding expiration: any authenticated request pushes the expiry out to
+  // `now + TTL`, so an actively-used token stays valid and only genuine inactivity
+  // (no call for a full TTL window) lets it lapse. Throttled + best-effort so it's at
+  // most one extra write every few minutes and never fails the request.
   if (!row.lastUsedAt || now - row.lastUsedAt.getTime() > LAST_USED_THROTTLE_MS) {
     void prisma.clientApiToken
-      .update({ where: { id: row.id }, data: { lastUsedAt: new Date(now) } })
+      .update({
+        where: { id: row.id },
+        data: { lastUsedAt: new Date(now), expiresAt: new Date(now + CLIENT_TOKEN_TTL_MS) },
+      })
       .catch(() => {});
   }
 

@@ -70,6 +70,25 @@ describe('client-auth', () => {
     );
     // The resolved user has no `inactive` field leaked into it.
     expect(res?.user).not.toHaveProperty('inactive');
+    // Sliding expiration: a use renews both lastUsedAt and expiresAt.
+    expect(prismaMock.clientApiToken.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 't1' },
+        data: expect.objectContaining({ lastUsedAt: expect.any(Date), expiresAt: expect.any(Date) }),
+      }),
+    );
+  });
+
+  it('does not renew a token used within the throttle window', async () => {
+    prismaMock.clientApiToken.findUnique.mockResolvedValue({
+      id: 't1',
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 10_000),
+      lastUsedAt: new Date(), // used just now
+      user: activeUser,
+    });
+    await resolveClientToken('tok');
+    expect(prismaMock.clientApiToken.update).not.toHaveBeenCalled();
   });
 
   it('returns null for unknown, revoked, expired, or inactive-user tokens', async () => {

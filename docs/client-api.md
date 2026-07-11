@@ -19,7 +19,9 @@ change out from under a deployed client; breaking changes will ship as `v2`.
 5. `POST /api/client/v1/submissions` (multipart) → submit the solution file.
 6. `POST /api/client/v1/auth/logout` when done (optional — revokes the token).
 
-A token expires after 30 days; on a `401` from any endpoint, log in again.
+A token uses a **sliding 30-day expiry**: every authenticated call renews it, so an
+actively-used token stays valid indefinitely and only lapses after ~30 days of no
+use. On a `401` from any endpoint, log in again.
 
 ## Endpoints
 
