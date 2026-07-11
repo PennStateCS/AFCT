@@ -13,7 +13,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { getQueueSettings } from '@/lib/eval-config';
 import { validateStructureXML } from '@/app/utils/xmlStructureValidate';
-import { canAccessCourse, canManageCourse } from '@/lib/permissions';
+import { canAccessCourse, canManageCourse, isCourseArchived } from '@/lib/permissions';
 import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
 
 /** Thrown inside the create transaction when the per-problem cap is already met. */
@@ -168,6 +168,26 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
       },
     });
     return { ok: false, status: 404, error: 'Assignment not found.' };
+  }
+
+  // An archived course is frozen (read-only) for everyone, including staff/admin —
+  // it accepts no new submissions.
+  if (await isCourseArchived(courseId)) {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: user.id,
+      action: 'SUBMISSION_REJECTED_ARCHIVED',
+      severity: 'WARNING',
+      category: 'SUBMISSION',
+      courseId,
+      assignmentId,
+      problemId,
+      metadata: { userId: user.id, courseId, assignmentId, problemId, reason: 'Course is archived.' },
+    });
+    return {
+      ok: false,
+      status: 409,
+      error: 'This course is archived and no longer accepts submissions.',
+    };
   }
 
   // Per-problem cap (staff exempt; `<= 0` is unlimited). Fast path — the authoritative

@@ -32,6 +32,8 @@ describe('GET /api/client/v1/courses', () => {
     });
     getCoursesMock.mockResolvedValue([
       { id: 'c1', name: 'Automata', code: 'CMPEN 331', semester: 'Fall', isPublished: true, isArchived: false },
+      // An archived course must be filtered out of the client list.
+      { id: 'c2', name: 'Old', code: 'CMPEN 100', semester: 'Spring', isPublished: true, isArchived: true },
     ]);
     prismaMock.roster.findMany.mockResolvedValue([{ courseId: 'c1', role: 'STUDENT' }]);
 
