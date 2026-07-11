@@ -59,6 +59,9 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
     showEye,
     isPasswordVisible,
     togglePasswordVisibility,
+    // Destructured (and ignored) so it isn't forwarded onto the DOM input; the
+    // required "*" is intentionally not rendered right now. See the prop comment.
+    requiredMark: _requiredMark,
     className,
     setValue,
     type = 'text',
