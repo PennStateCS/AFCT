@@ -43,6 +43,16 @@ No auth header. JSON body:
 ### `POST /api/client/v1/auth/logout`
 Bearer auth. Revokes the current token. `200` → `{ "success": true }`.
 
+### `GET /api/client/v1/auth/me`
+Bearer auth. Whoami / **token check** — `200` → `{ "user": {…} }` if the token is
+valid, `401` if it's missing, expired, or revoked. Use it to validate a stored token
+(e.g. on client startup) before showing the main UI.
+
+### `GET /api/health`
+**No auth.** Simple liveness/health check — `200` →
+`{ "status": "ok", "uptime": …, "environment": …, "version": … }`. Use it to confirm
+the server is reachable before logging in. (This one isn't under `/api/client/v1`.)
+
 ### `GET /api/client/v1/courses`
 Bearer auth. The signed-in user's courses — students see only **published** courses,
 staff also see their own unpublished ones, and **archived** courses are excluded
