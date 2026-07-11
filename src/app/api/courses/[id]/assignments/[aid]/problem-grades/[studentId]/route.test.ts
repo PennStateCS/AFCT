@@ -10,6 +10,7 @@ const prismaMock = vi.hoisted(() => ({
     upsert: vi.fn(),
   },
   course: { findUnique: vi.fn() },
+  roster: { findFirst: vi.fn() },
   $transaction: vi.fn(),
 }));
 
@@ -151,6 +152,8 @@ describe('POST /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
     authMock.mockResolvedValue({ user: { id: 'staff-1', role: 'FACULTY' } });
     prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: defaultParams.aid, isPublished: true });
+    // The grade target is enrolled in the course by default.
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1' });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
       { problemId: 'prob-1', maxPoints: 10 },
       { problemId: 'prob-2', maxPoints: 20 },
@@ -176,6 +179,17 @@ describe('POST /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
     });
 
     expect(res.status).toBe(401);
+  });
+
+  it('returns 404 when the grade target is not enrolled in the course', async () => {
+    prismaMock.roster.findFirst.mockResolvedValue(null);
+
+    const res = await POST(buildRequest({ grades: { 'prob-1': 5 } }), {
+      params: Promise.resolve(defaultParams),
+    });
+
+    expect(res.status).toBe(404);
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 
   it('returns 403 and audits the denial when the caller cannot manage the course', async () => {
@@ -239,9 +253,8 @@ describe('POST /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
       params: Promise.resolve(defaultParams),
     });
 
+    // The readJson/Zod schema rejects a non-number grade value with a 400 and no write.
     expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.error).toContain('must be a number or null');
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 

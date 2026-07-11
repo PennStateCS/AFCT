@@ -6,11 +6,11 @@ import { prisma } from '@/lib/prisma';
 import path from 'path';
 import { writeFile, unlink, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
-import { randomUUID } from 'crypto';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
+import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
 import { formBool } from '@/lib/api/request';
 
 const uploadDir = path.join('/private', 'uploads', 'pfps');
@@ -101,6 +101,7 @@ export async function POST(req: Request) {
 
     const currentUser = await prisma.user.findUnique({
       where: { id: session.user.id },
+      select: { id: true, avatar: true },
     });
 
     if (!currentUser) {
@@ -116,17 +117,23 @@ export async function POST(req: Request) {
           { status: 413 },
         );
       }
-      // Save new avatar
+      // Reject anything that isn't an image (defense-in-depth; avatars are also
+      // served as octet-stream attachments so an odd file can't execute).
+      if (avatar.type && !avatar.type.startsWith('image/')) {
+        return NextResponse.json({ error: 'Avatar must be an image file.' }, { status: 400 });
+      }
+      // Store under a random, non-client-derived name (userId prefix + UUID +
+      // sanitized extension) and write through the traversal-safe resolver —
+      // matching the other upload paths.
       const bytes = await avatar.arrayBuffer();
       const buffer = Buffer.from(bytes);
-      const ext = path.extname(avatar.name) || '.png';
-      avatarFileName = `${currentUser.id}_${Date.now()}_${randomUUID()}${ext}`;
+      avatarFileName = safeStoredFilename(avatar.name, `${currentUser.id}_`);
 
       if (currentUser.avatar) {
         await deleteFileIfExists(currentUser.avatar);
       }
 
-      await writeFile(path.join(uploadDir, avatarFileName), buffer);
+      await writeFile(resolveInsideDir(uploadDir, avatarFileName), buffer);
     }
 
     if (deleteAvatar && currentUser.avatar) {

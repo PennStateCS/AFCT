@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canManageCourse } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { readJson } from '@/lib/api/request';
 import { logDenial, logError } from '@/lib/api/activity';
+
+const BatchGradesBody = z.object({ grades: z.record(z.string(), z.number().nullable()) });
 
 // Concrete path params for this route. Next guarantees each dynamic segment is
 // present, so typing them keeps the destructured values `string` (rather than
@@ -132,11 +136,9 @@ export const POST = withCourseAuth(
     const { aid: assignmentId, studentId } = await ctx.params;
 
     try {
-      const body = await req.json();
-      const grades = body?.grades;
-      if (typeof grades !== 'object' || grades === null || Array.isArray(grades)) {
-        return NextResponse.json({ error: 'A grades map is required' }, { status: 400 });
-      }
+      const parsed = await readJson(req, BatchGradesBody);
+      if (!parsed.ok) return parsed.response;
+      const grades = parsed.data.grades;
 
       // The assignment must belong to this course.
       const assignment = await prisma.assignment.findFirst({
@@ -145,6 +147,16 @@ export const POST = withCourseAuth(
       });
       if (!assignment) {
         return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+      }
+
+      // The grade target must actually be enrolled in this course — never create
+      // grade rows for an arbitrary user id that isn't on the roster.
+      const enrolled = await prisma.roster.findFirst({
+        where: { courseId, userId: studentId },
+        select: { id: true },
+      });
+      if (!enrolled) {
+        return NextResponse.json({ error: 'Student not enrolled in this course' }, { status: 404 });
       }
 
       // maxPoints per problem — used for validation and to reject problem ids that

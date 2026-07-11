@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { readJson } from '@/lib/api/request';
 import { logError } from '@/lib/api/activity';
+
+const AddMemberBody = z.object({ userId: z.string().trim().min(1) });
+const SetMembersBody = z.object({ members: z.array(z.string()) });
 
 // Concrete path params for this route. Next guarantees each dynamic segment is
 // present, so typing them keeps the destructured values `string` (rather than
@@ -93,9 +98,9 @@ export const POST = withCourseAuth(
     if (!groupId) return NextResponse.json({ error: 'Missing params' }, { status: 400 });
 
     try {
-      const body = await req.json();
-      const userId = (body.userId ?? '').trim();
-      if (!userId) return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
+      const parsed = await readJson(req, AddMemberBody);
+      if (!parsed.ok) return parsed.response;
+      const { userId } = parsed.data;
 
       // Ensure group + course consistency
       const group = await prisma.group.findUnique({ where: { id: groupId } });
@@ -178,9 +183,9 @@ export const PATCH = withCourseAuth(
     const { groupId } = await ctx.params;
 
     try {
-      const body = (await req.json()) as { members?: unknown };
-      const members = Array.isArray(body?.members) ? (body.members as unknown[]).map(String) : null;
-      if (!members) return NextResponse.json({ error: 'Missing members array' }, { status: 400 });
+      const parsed = await readJson(req, SetMembersBody);
+      if (!parsed.ok) return parsed.response;
+      const members = parsed.data.members;
 
       // Ensure group exists and belongs to course
       const group = await prisma.group.findUnique({ where: { id: groupId } });

@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { readJson } from '@/lib/api/request';
 import { logError } from '@/lib/api/activity';
+
+const CreateGroupBody = z.object({ name: z.string().trim().min(1, 'Name is required') });
 
 /**
  * Lists a course's groups, alphabetically. Course staff (faculty or TAs) or a
@@ -73,11 +77,9 @@ export const GET = withCourseAuth(
 export const POST = withCourseAuth(
   async (req, _ctx, { user, courseId }) => {
     try {
-      const data = await req.json();
-
-      const name = (data.name ?? '').trim();
-
-      if (!name) return NextResponse.json({ error: 'Name is required' }, { status: 400 });
+      const parsed = await readJson(req, CreateGroupBody);
+      if (!parsed.ok) return parsed.response;
+      const { name } = parsed.data;
 
       // Ensure course exists
       const course = await prisma.course.findUnique({ where: { id: courseId } });

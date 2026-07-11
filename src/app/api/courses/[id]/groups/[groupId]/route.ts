@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { readJson } from '@/lib/api/request';
 import { logError } from '@/lib/api/activity';
+
+const RenameGroupBody = z.object({ name: z.string().trim().min(1, 'Name is required') });
 
 /**
  * CORS preflight handler.
@@ -44,9 +48,9 @@ export const PATCH = withCourseAuth(
     if (!groupId) return NextResponse.json({ error: 'Missing params' }, { status: 400 });
 
     try {
-      const body = await req.json();
-      const name = (body.name ?? '').trim();
-      if (!name) return NextResponse.json({ error: 'Name is required' }, { status: 400 });
+      const parsed = await readJson(req, RenameGroupBody);
+      if (!parsed.ok) return parsed.response;
+      const { name } = parsed.data;
 
       // Ensure group exists and belongs to course
       const group = await prisma.group.findUnique({ where: { id: groupId } });
