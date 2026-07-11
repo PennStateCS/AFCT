@@ -63,7 +63,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: passwordRequirementText }, { status: 400 });
     }
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { password: true, temporaryPassword: true },
+    });
 
     if (!user?.password) {
       console.error('[CHANGE_PASSWORD] User not found in database');

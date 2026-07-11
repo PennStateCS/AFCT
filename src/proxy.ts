@@ -30,7 +30,6 @@ const PUBLIC_API_PREFIXES = [
   '/api/auth', // NextAuth handler, signup, check-email
   '/api/health',
   '/api/system-settings/public',
-  '/api/public',
 ] as const;
 
 function isPublicApi(pathname: string): boolean {
