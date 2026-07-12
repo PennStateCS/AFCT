@@ -218,12 +218,12 @@ following. None are critical or serious blockers.
 - ~~**Login duplicate error announcement**~~ - DONE. The page-level summary is no longer
   a live region (static context only); the per-field `role="alert"` is the single
   announcer (`login/page.tsx:383`).
+- ~~**Theme menu current-selection state**~~ - DONE. Both `Navbar.tsx` and
+  `ThemeToggle.tsx` now use a `DropdownMenuRadioGroup` bound to the active theme, so the
+  current choice is exposed as the checked `menuitemradio` (adds a left check indicator).
 - **SearchableMultiSelect menu semantics** - STILL OPEN. Trigger says
   `aria-haspopup="menu"` but the popup has no `menuitemcheckbox` roles; needs a real
   listbox/menu pattern (medium).
-- **Theme menu current-selection state** - STILL OPEN. `Navbar.tsx` / `ThemeToggle.tsx`
-  use plain items with no `aria-checked`; want `menuitemradio` (borderline-visual: adds
-  a check indicator).
 
 ### Minor
 - ~~Login framer-motion transitions not gated by `useReducedMotion()`~~ - DONE
