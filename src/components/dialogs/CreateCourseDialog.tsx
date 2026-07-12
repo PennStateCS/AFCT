@@ -40,7 +40,8 @@ const STEPS: ReadonlyArray<{ title: string; fields: FieldPath<FormValues>[] }> =
     title: 'Schedule',
     fields: ['timezone', 'startDate', 'endDate', 'registrationOpenAt', 'registrationCloseAt'],
   },
-  { title: 'People', fields: ['instructorIds', 'emptyStringNotation'] },
+  { title: 'Faculty', fields: ['instructorIds'] },
+  { title: 'Notation', fields: ['emptyStringNotation'] },
   { title: 'Review', fields: [] },
 ];
 const LAST_STEP = STEPS.length - 1;
@@ -378,44 +379,44 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
             )}
 
             {step === 2 && (
-              <>
-                <Controller
-                  control={control}
-                  name="instructorIds"
-                  render={({ field }) => (
-                    <SearchableMultiSelect
-                      label="Assign Faculty"
-                      items={facultyList.map((faculty) => ({
-                        id: faculty.id,
-                        label: facultyName(faculty),
-                      }))}
-                      value={field.value ?? []}
-                      onChange={(value) => field.onChange(value)}
-                      placeholder="Select faculty"
-                      searchPlaceholder="Search faculty..."
-                      emptyStateText="No faculty found."
-                      error={errors.instructorIds?.message}
-                    />
-                  )}
-                />
+              <Controller
+                control={control}
+                name="instructorIds"
+                render={({ field }) => (
+                  <SearchableMultiSelect
+                    label="Assign Faculty"
+                    items={facultyList.map((faculty) => ({
+                      id: faculty.id,
+                      label: facultyName(faculty),
+                    }))}
+                    value={field.value ?? []}
+                    onChange={(value) => field.onChange(value)}
+                    placeholder="Select faculty"
+                    searchPlaceholder="Search faculty..."
+                    emptyStateText="No faculty found."
+                    error={errors.instructorIds?.message}
+                  />
+                )}
+              />
+            )}
 
-                <Controller
-                  control={control}
-                  name="emptyStringNotation"
-                  render={({ field }) => (
-                    <SelectField
-                      label="Empty string notation"
-                      name="emptyStringNotation"
-                      id="emptyStringNotation"
-                      value={field.value}
-                      onValueChange={field.onChange}
-                      options={EMPTY_STRING_NOTATION_OPTIONS}
-                      description="Choose how the empty string should appear in automata and languages."
-                      error={errors.emptyStringNotation?.message}
-                    />
-                  )}
-                />
-              </>
+            {step === 3 && (
+              <Controller
+                control={control}
+                name="emptyStringNotation"
+                render={({ field }) => (
+                  <SelectField
+                    label="Empty string notation"
+                    name="emptyStringNotation"
+                    id="emptyStringNotation"
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    options={EMPTY_STRING_NOTATION_OPTIONS}
+                    description="Choose how the empty string should appear in automata and languages."
+                    error={errors.emptyStringNotation?.message}
+                  />
+                )}
+              />
             )}
 
             {step === LAST_STEP && review && (
