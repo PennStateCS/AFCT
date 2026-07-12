@@ -103,7 +103,6 @@ describe('course actions — Duplicate Course', () => {
 });
 
 describe('course-columns display cells', () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const renderCell = (key: string, course: Record<string, unknown>) => {
     const cols = columns(vi.fn(), vi.fn(), vi.fn(), 'UTC') as ColumnDef<Record<string, unknown>>[];
     const col = cols.find(
