@@ -5,6 +5,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import { showToast } from '@/lib/toast';
 import { Copy } from 'lucide-react';
@@ -25,6 +26,7 @@ export function LogViewerDialog({ data, open, onOpenChange, title }: { data: str
       <DialogContent className="bg-card">
         <DialogHeader>
           <DialogTitle className="truncate">{title || 'System Log'}</DialogTitle>
+          <DialogDescription className="sr-only">Raw log file contents.</DialogDescription>
         </DialogHeader>
         <div className="p-4 pt-2 text-left whitespace-pre-wrap font-mono text-sm">
           {data || ''}

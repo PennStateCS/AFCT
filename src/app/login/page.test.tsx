@@ -105,6 +105,7 @@ vi.mock('framer-motion', () => {
   return {
     motion: motionProxy,
     AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    useReducedMotion: () => false,
   };
 });
 
