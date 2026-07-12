@@ -2,9 +2,11 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { FileText } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatDateTimeInTimeZone } from '@/lib/date';
+import { cn } from '@/lib/utils';
 
 type DueDateAssignment = {
   id: string;
@@ -13,11 +15,17 @@ type DueDateAssignment = {
   courseId: string;
   // `=== false` marks a staff-visible unpublished/draft assignment.
   isPublished?: boolean;
+  // Present when the feed joins the course (calendar always does; dashboard now does).
+  course?: { code?: string | null } | null;
 };
 
 type Props = {
   assignments: DueDateAssignment[];
 };
+
+// Keep the module skimmable — the calendar is the place for the full term.
+const MAX_VISIBLE = 5;
+const DUE_SOON_MS = 48 * 60 * 60 * 1000;
 
 export function DueDateModule({ assignments }: Props) {
   const { timezone } = useEffectiveTimezone();
@@ -34,6 +42,9 @@ export function DueDateModule({ assignments }: Props) {
       return aTime - bTime;
     });
 
+  const visible = upcoming.slice(0, MAX_VISIBLE);
+  const hiddenCount = upcoming.length - visible.length;
+
   return (
     <Card className="w-full" aria-labelledby="upcoming-assignments-title">
       <CardHeader>
@@ -47,35 +58,61 @@ export function DueDateModule({ assignments }: Props) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        {upcoming.length === 0 ? (
+        {visible.length === 0 ? (
           <p className="text-muted-foreground">None</p>
         ) : (
           <ul className="space-y-3" aria-label="Upcoming assignments list">
-            {upcoming.map((assignment) => {
+            {visible.map((assignment) => {
               const isDraft = assignment.isPublished === false;
+              const courseCode = assignment.course?.code;
+              const dueSoon =
+                new Date(assignment.dueDate).getTime() - now.getTime() <= DUE_SOON_MS;
               return (
                 <li key={assignment.id} className="flex flex-col">
-                  <div>
-                    <span aria-hidden="true">📄</span>{' '}
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <FileText
+                      aria-hidden="true"
+                      className="text-muted-foreground h-4 w-4 shrink-0"
+                    />
                     <Link
                       href={`/dashboard/courses/${assignment.courseId}/${assignment.id}`}
-                      className="text-foreground font-medium hover:underline"
+                      className="text-foreground truncate font-medium hover:underline"
                     >
                       {assignment.title}
                     </Link>
                     {isDraft && (
-                      <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                      <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
                         Draft
                       </span>
                     )}
                   </div>
-                  <span className="text-muted-foreground text-sm">
-                    {formatDateTimeInTimeZone(assignment.dueDate, timezone)}
+                  <span className="text-muted-foreground pl-[1.375rem] text-sm">
+                    {courseCode && (
+                      <>
+                        <span>{courseCode}</span>
+                        <span aria-hidden="true"> {'·'} </span>
+                      </>
+                    )}
+                    <span
+                      className={cn(
+                        dueSoon && 'font-medium text-amber-700 dark:text-amber-400',
+                      )}
+                    >
+                      {formatDateTimeInTimeZone(assignment.dueDate, timezone)}
+                    </span>
                   </span>
                 </li>
               );
             })}
           </ul>
+        )}
+        {hiddenCount > 0 && (
+          <Link
+            href="/dashboard/calendar"
+            className="text-muted-foreground hover:text-foreground block text-sm hover:underline"
+          >
+            {hiddenCount} more on the calendar
+          </Link>
         )}
       </CardContent>
     </Card>
