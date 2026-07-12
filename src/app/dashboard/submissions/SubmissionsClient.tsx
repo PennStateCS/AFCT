@@ -486,6 +486,7 @@ export default function SubmissionsClient() {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
+              aria-pressed={activeFilters.size === 0}
               onClick={() => setActiveFilters(new Set())}
               className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                 activeFilters.size === 0
@@ -501,6 +502,7 @@ export default function SubmissionsClient() {
                 <button
                   key={value}
                   type="button"
+                  aria-pressed={active}
                   onClick={() => toggleFilter(value)}
                   className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                     active
@@ -519,8 +521,14 @@ export default function SubmissionsClient() {
           </div>
         </div>
 
+        {/* Announce the filtered result count to screen readers (this is a
+            hand-rolled table, so it has no DataTable live region). */}
+        <p className="sr-only" role="status" aria-live="polite">
+          {visibleSubmissions.length} submission{visibleSubmissions.length === 1 ? '' : 's'}
+        </p>
+
         <div className="overflow-x-auto rounded-md border">
-          <Table className="text-sm">
+          <Table className="text-sm" aria-label="Submissions">
             <TableHeader>
               <TableRow>
                 <TableHead className="px-2 py-1">Student</TableHead>

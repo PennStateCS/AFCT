@@ -6,6 +6,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from '@/components/ui/dialog';
 
 function parseRegex(xmlText: string){
@@ -60,6 +61,9 @@ export function RegexViewerDialog({ src, open, onOpenChange, title }: { src: str
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="truncate">{title || 'JFLAP Viewer'}</DialogTitle>
+            <DialogDescription className="sr-only">
+              Regular expression contents.
+            </DialogDescription>
           </DialogHeader>
 		   <div className="p-4 pt-2 text-center">
              {parsed.expression}
