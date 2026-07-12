@@ -157,13 +157,22 @@ const resolveFacultyRequest = () =>
     ]),
   );
 
+const clickNext = async (user: ReturnType<typeof userEvent.setup>) => {
+  await user.click(screen.getByRole('button', { name: /^next$/i }));
+};
+
+// Walk the wizard: Basics -> Schedule -> People -> Review.
 const fillForm = async (user: ReturnType<typeof userEvent.setup>) => {
+  // Step 1: Basics
   await user.type(screen.getByLabelText('Course Name'), 'Intro to Testing');
   await user.type(screen.getByLabelText('Course Code'), 'cmpsc 131');
   await user.type(screen.getByLabelText('Semester'), 'Fall 2025');
   const creditsInput = screen.getByLabelText('Credits');
   fireEvent.change(creditsInput, { target: { value: '4' } });
+  await clickNext(user);
 
+  // Step 2: Schedule (timezone keeps its default)
+  await screen.findByLabelText('Start Date & Time');
   fireEvent.change(screen.getByLabelText('Start Date & Time'), {
     target: { value: '2025-08-25T09:00' },
   });
@@ -176,8 +185,14 @@ const fillForm = async (user: ReturnType<typeof userEvent.setup>) => {
   fireEvent.change(screen.getByLabelText('Self Registration Closes'), {
     target: { value: '2025-08-15T09:00' },
   });
+  await clickNext(user);
 
-  await user.click(screen.getByLabelText('Ada Lovelace'));
+  // Step 3: People
+  await user.click(await screen.findByLabelText('Ada Lovelace'));
+  await clickNext(user);
+
+  // Step 4: Review
+  await screen.findByText('Intro to Testing');
 };
 
 const renderDialog = (props: Partial<React.ComponentProps<typeof CreateCourseDialog>> = {}) => {
@@ -213,7 +228,7 @@ describe('CreateCourseDialog', () => {
 
     const { setOpen, onSuccess } = renderDialog();
 
-    await screen.findByLabelText('Ada Lovelace');
+    await screen.findByLabelText('Course Name');
     await fillForm(user);
 
     const submitButton = screen.getByRole('button', { name: /create course/i });
@@ -245,7 +260,7 @@ describe('CreateCourseDialog', () => {
 
     renderDialog();
 
-    await screen.findByLabelText('Ada Lovelace');
+    await screen.findByLabelText('Course Name');
     await fillForm(user);
 
     const submitButton = screen.getByRole('button', { name: /create course/i });
@@ -254,6 +269,37 @@ describe('CreateCourseDialog', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(toastErrorMock).toHaveBeenCalledWith('Server exploded');
+  });
+
+  it('holds the step when its fields fail validation', async () => {
+    const user = userEvent.setup();
+    resolveFacultyRequest();
+    renderDialog();
+
+    await screen.findByLabelText('Course Name');
+    // Next with an empty Basics step: errors render, Schedule never mounts.
+    await clickNext(user);
+
+    expect(await screen.findAllByRole('alert')).not.toHaveLength(0);
+    expect(screen.queryByLabelText('Start Date & Time')).not.toBeInTheDocument();
+  });
+
+  it('lets the user go back to a completed step', async () => {
+    const user = userEvent.setup();
+    resolveFacultyRequest();
+    renderDialog();
+
+    await screen.findByLabelText('Course Name');
+    await user.type(screen.getByLabelText('Course Name'), 'Intro to Testing');
+    await user.type(screen.getByLabelText('Course Code'), 'cmpsc 131');
+    await user.type(screen.getByLabelText('Semester'), 'Fall 2025');
+    await clickNext(user);
+
+    await screen.findByLabelText('Start Date & Time');
+    await user.click(screen.getByRole('button', { name: /back/i }));
+
+    // Back on Basics, with the entered value retained.
+    expect(await screen.findByLabelText('Course Name')).toHaveValue('Intro to Testing');
   });
 
   it('notifies the user when faculty fetching fails', async () => {
