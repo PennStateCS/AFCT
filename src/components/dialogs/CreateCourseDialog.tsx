@@ -41,7 +41,7 @@ const STEPS: ReadonlyArray<{ title: string; fields: FieldPath<FormValues>[] }> =
     fields: ['timezone', 'startDate', 'endDate', 'registrationOpenAt', 'registrationCloseAt'],
   },
   { title: 'Faculty', fields: ['instructorIds'] },
-  { title: 'Notation', fields: ['emptyStringNotation'] },
+  { title: 'Options', fields: ['emptyStringNotation'] },
   { title: 'Review', fields: [] },
 ];
 const LAST_STEP = STEPS.length - 1;
