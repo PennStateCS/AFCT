@@ -10,7 +10,6 @@ import {
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog';
-import SwitchField from '@/components/ui/SwitchField';
 import { Button } from '@/components/ui/button';
 import type { User } from '@prisma/client';
 import { toast } from 'sonner';
@@ -53,7 +52,6 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
       endDate: '',
       registrationOpenAt: '',
       registrationCloseAt: '',
-      isPublished: false,
       instructorIds: [],
       emptyStringNotation: 'EPSILON',
       timezone: COMMON_TIMEZONES.includes(browserTz as (typeof COMMON_TIMEZONES)[number])
@@ -358,21 +356,11 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
             )}
           />
 
-          {/* PUBLISH SWITCH */}
-          <Controller
-            control={control}
-            name="isPublished"
-            render={({ field }) => (
-              <SwitchField
-                label="Publish Now"
-                name="isPublished"
-                checked={!!field.value}
-                onCheckedChange={(checked) => field.onChange(!!checked)}
-                description="Makes the course visible to enrolled students."
-                descriptionPlacement="inline"
-              />
-            )}
-          />
+          {/* A new course is always created unpublished — publish it from the course
+              page once it's staffed and populated. */}
+          <p className="text-muted-foreground text-xs">
+            The course is created unpublished. Publish it when it&apos;s ready for students.
+          </p>
 
           <DialogFooter>
             <DialogClose asChild>
