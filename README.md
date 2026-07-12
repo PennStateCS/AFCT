@@ -48,17 +48,10 @@ The AFCT Dashboard includes automatically generated documentation for the HTTP A
 - **[API Reference](https://pennstatewilkes-barre.github.io/AFCT-Dashboard/)**: browsable documentation for each endpoint, including authentication requirements, parameters, and request/response formats.
 - **[OpenAPI Specification](https://pennstatewilkes-barre.github.io/AFCT-Dashboard/openapi.json)**: the raw `openapi.json` file, which can be imported into tools such as Postman, Insomnia, or client-generation workflows.
 
-Written documentation lives under [`docs/`](docs/README.md), which is the landing page and
-links to every section:
-
-- **Guides**, one per role: [administrator](docs/guides/admin.md),
-  [faculty and TA](docs/guides/faculty.md), [student](docs/guides/student.md), and
-  [developer](docs/guides/developer.md).
-- **Reference**: [Roles and permissions](docs/reference/roles-and-permissions.md), the
-  precise statement of who can do what, and the
-  [Client API](docs/reference/client-api.md) contract for the native submission client.
-- **Setup**: [development](docs/setup/development.md) for the local Docker stack, and
-  [production](docs/setup/production.md) for deploying the GHCR image behind nginx.
+Written documentation lives in the **[documentation landing page](docs/README.md)**, which
+links to everything else: the role guides (administrator, faculty and TA, student, and
+developer), the reference pages (roles and permissions, the client API), and the setup
+guides for development and production.
 
 ## Contributors
 
