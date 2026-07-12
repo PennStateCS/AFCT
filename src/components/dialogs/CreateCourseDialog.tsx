@@ -35,7 +35,7 @@ type FormValues = z.input<typeof CreateCourseFormSchema>;
 // Timezone comes first in Schedule deliberately: it anchors how every date
 // entered after it is interpreted.
 const STEPS: ReadonlyArray<{ title: string; fields: FieldPath<FormValues>[] }> = [
-  { title: 'Basics', fields: ['name', 'code', 'semester', 'credits'] },
+  { title: 'Details', fields: ['name', 'code', 'semester', 'credits'] },
   {
     title: 'Schedule',
     fields: ['timezone', 'startDate', 'endDate', 'registrationOpenAt', 'registrationCloseAt'],
@@ -171,7 +171,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
       }}
     >
       <DialogContent
-        className="bg-card max-w-2xl"
+        className="bg-card sm:max-w-3xl"
         onInteractOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
@@ -240,7 +240,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
                         label="Semester"
                         name="semester"
                         fieldProps={field}
-                        placeholder="Fall 2025"
+                        placeholder={`Fall ${new Date().getFullYear()}`}
                         error={errors.semester?.message}
                       />
                     )}
