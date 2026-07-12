@@ -75,37 +75,38 @@ export function JoinCourseModule() {
               You can only join while the course registration window is open.
             </p>
 
-            <div className="overflow-x-auto pb-1">
-              <InputOTP
-                id="course-code"
-                name="courseCode"
-                aria-describedby="course-code-help"
-                maxLength={6}
-                value={code.toUpperCase()}
-                onPaste={(e) => {
-                  e.preventDefault(); // Prevent the typical pasteing-in of data
-                  const pastedData = e.clipboardData.getData('text/plain'); // Get what the user is trying to paste
-                  const processedData = pastedData.replace(/[^A-Z0-9a-z]/g, ''); // Replace all characters that are not A-Z0-9a-z with whitespace
-                  setCode(processedData); // Set the processed data to the box
-                }}
-                onChange={setCode}
-                pattern="[A-Z0-9a-z]+$"
-                containerClassName="justify-start"
-                className="mb-2"
-              >
-                <InputOTPGroup>
-                  <InputOTPSlot index={0} />
-                  <InputOTPSlot index={1} />
-                  <InputOTPSlot index={2} />
-                </InputOTPGroup>
-                <InputOTPSeparator>-</InputOTPSeparator>
-                <InputOTPGroup>
-                  <InputOTPSlot index={3} />
-                  <InputOTPSlot index={4} />
-                  <InputOTPSlot index={5} />
-                </InputOTPGroup>
-              </InputOTP>
-            </div>
+            {/* min-w-0 lets the slots compress in a narrow module column instead of
+                overflowing into a horizontal scrollbar; at normal widths they render
+                at their default 36px. */}
+            <InputOTP
+              id="course-code"
+              name="courseCode"
+              aria-describedby="course-code-help"
+              maxLength={6}
+              value={code.toUpperCase()}
+              onPaste={(e) => {
+                e.preventDefault(); // Prevent the typical pasteing-in of data
+                const pastedData = e.clipboardData.getData('text/plain'); // Get what the user is trying to paste
+                const processedData = pastedData.replace(/[^A-Z0-9a-z]/g, ''); // Replace all characters that are not A-Z0-9a-z with whitespace
+                setCode(processedData); // Set the processed data to the box
+              }}
+              onChange={setCode}
+              pattern="[A-Z0-9a-z]+$"
+              containerClassName="justify-start"
+              className="mb-2"
+            >
+              <InputOTPGroup className="min-w-0">
+                <InputOTPSlot index={0} className="min-w-0" />
+                <InputOTPSlot index={1} className="min-w-0" />
+                <InputOTPSlot index={2} className="min-w-0" />
+              </InputOTPGroup>
+              <InputOTPSeparator>-</InputOTPSeparator>
+              <InputOTPGroup className="min-w-0">
+                <InputOTPSlot index={3} className="min-w-0" />
+                <InputOTPSlot index={4} className="min-w-0" />
+                <InputOTPSlot index={5} className="min-w-0" />
+              </InputOTPGroup>
+            </InputOTP>
           </div>
           <div className="mt-4 flex gap-2">
             <Button type="submit" disabled={loading || code.length !== 6}>
