@@ -45,21 +45,20 @@ This collaboration supports the continued development, deployment, and study of 
 
 The AFCT Dashboard includes automatically generated documentation for the HTTP API. The API reference is rebuilt from the route handlers and published whenever changes are pushed to `main`.
 
-- **[API Reference](https://pennstatewilkes-barre.github.io/AFCT-Dashboard/)** — browsable documentation for each endpoint, including authentication requirements, parameters, and request/response formats.
-- **[OpenAPI Specification](https://pennstatewilkes-barre.github.io/AFCT-Dashboard/openapi.json)** — the raw `openapi.json` file, which can be imported into tools such as Postman, Insomnia, or client-generation workflows.
+- **[API Reference](https://pennstatewilkes-barre.github.io/AFCT-Dashboard/)**: browsable documentation for each endpoint, including authentication requirements, parameters, and request/response formats.
+- **[OpenAPI Specification](https://pennstatewilkes-barre.github.io/AFCT-Dashboard/openapi.json)**: the raw `openapi.json` file, which can be imported into tools such as Postman, Insomnia, or client-generation workflows.
 
-User guides, written by audience, live under [`docs/guides`](docs/guides/README.md):
+Written documentation lives under [`docs/`](docs/README.md), which is the landing page and
+links to every section:
 
-- **[Administrator guide](docs/guides/admin.md)** — accounts, signup control, the course lifecycle, system settings, the submission queue, status, audit, backups, and security.
-- **[Faculty and TA guide](docs/guides/faculty.md)** — running a course, assignments and problems, roster and enrollment, grading and feedback, and groups.
-- **[Student guide](docs/guides/student.md)** — joining a course, finding and submitting work, feedback and grades, groups, profile, and sign-in.
-- **[Developer guide](docs/guides/developer.md)** — stack, repository layout, the authorization model, API and data conventions, logging, time handling, testing, and CI/CD.
-- **[Roles and permissions](docs/role-inheritance.md)** — the precise reference for who can do what, shared by all four guides.
-
-Additional setup and deployment guides are available in the repository:
-
-- **[Development Setup](docs/development_setup.md)** — instructions for configuring a local development environment.
-- **[Production Setup](docs/production_setup.md)** — instructions for deploying the GHCR image with Docker Compose and an Nginx reverse proxy.
+- **Guides**, one per role: [administrator](docs/guides/admin.md),
+  [faculty and TA](docs/guides/faculty.md), [student](docs/guides/student.md), and
+  [developer](docs/guides/developer.md).
+- **Reference**: [Roles and permissions](docs/reference/roles-and-permissions.md), the
+  precise statement of who can do what, and the
+  [Client API](docs/reference/client-api.md) contract for the native submission client.
+- **Setup**: [development](docs/setup/development.md) for the local Docker stack, and
+  [production](docs/setup/production.md) for deploying the GHCR image behind nginx.
 
 ## Contributors
 
