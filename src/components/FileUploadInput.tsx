@@ -139,7 +139,9 @@ export default function FileUploadInput({
           onChange={handleInputChange}
           className="absolute inset-0 cursor-pointer opacity-0"
           aria-label={label}
-          aria-describedby={hasError ? `${id}-error` : `${id}-help`}
+          // Only reference nodes that actually render: the error when present, the
+          // help text only when a hint was passed (otherwise the IDREF would dangle).
+          aria-describedby={hasError ? `${id}-error` : hint ? `${id}-help` : undefined}
         />
 
         <div className="flex flex-col items-center justify-center gap-3 p-6 text-center">

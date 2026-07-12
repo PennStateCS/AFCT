@@ -122,12 +122,17 @@ export default function SystemStatusClient() {
             </CardTitle>
             <Badge variant={dbOk ? 'success' : 'danger'} title={summary?.db.message || ''}>
               DB {dbOk ? 'OK' : 'DOWN'}
+              {summary?.db.message ? (
+                <span className="sr-only"> ({summary.db.message})</span>
+              ) : null}
             </Badge>
             <Badge variant="info" title="Database provider">
+              <span className="sr-only">Database provider: </span>
               {provider.toUpperCase()}
             </Badge>
             {typeof summary?.latencyMs === 'number' && (
               <Badge variant="warning" title="Summary latency">
+                <span className="sr-only">Summary latency: </span>
                 {summary.latencyMs} ms
               </Badge>
             )}

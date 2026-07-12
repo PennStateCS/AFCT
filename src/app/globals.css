@@ -605,3 +605,18 @@ input[type='month']::-webkit-calendar-picker-indicator,
 input[type='week']::-webkit-calendar-picker-indicator {
   margin-inline-start: auto;
 }
+
+/* Respect the OS "reduce motion" preference: collapse animations, transitions,
+   and smooth scrolling to near-instant for users who ask for it. Invisible to
+   everyone who has not set the preference. Unlayered so it wins over component
+   animation utilities. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

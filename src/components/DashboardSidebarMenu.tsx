@@ -446,36 +446,27 @@ export default function DashboardSidebarMenu() {
                   </span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 text-left"
-                    onClick={() => setEditProfileOpen(true)}
-                  >
-                    <UserPen className="h-4 w-4" />
-                    Edit Profile
-                  </button>
+                <DropdownMenuItem
+                  className="cursor-pointer"
+                  onClick={() => setEditProfileOpen(true)}
+                >
+                  <UserPen className="h-4 w-4" />
+                  Edit Profile
                 </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 text-left"
-                    onClick={() => setChangePasswordOpen(true)}
-                  >
-                    <LockKeyhole className="h-4 w-4" />
-                    Change Password
-                  </button>
+                <DropdownMenuItem
+                  className="cursor-pointer"
+                  onClick={() => setChangePasswordOpen(true)}
+                >
+                  <LockKeyhole className="h-4 w-4" />
+                  Change Password
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 text-left"
-                    onClick={() => void safeSignOut({ callbackUrl: '/' })}
-                  >
-                    <LogOut className="h-4 w-4" />
-                    Sign out
-                  </button>
+                <DropdownMenuItem
+                  className="cursor-pointer"
+                  onClick={() => void safeSignOut({ callbackUrl: '/' })}
+                >
+                  <LogOut className="h-4 w-4" />
+                  Sign out
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

@@ -14,8 +14,15 @@ export default function LoadingSpinner({
   const heightClass = fullScreen ? 'min-h-screen' : 'min-h-[50vh]';
 
   return (
-    <div className={`flex ${heightClass} flex-col items-center justify-center gap-3 ${className}`}>
-      <div className="border-muted-foreground/30 border-t-primary h-10 w-10 animate-spin rounded-full border-[5px]" />
+    <div
+      role="status"
+      aria-live="polite"
+      className={`flex ${heightClass} flex-col items-center justify-center gap-3 ${className}`}
+    >
+      <div
+        aria-hidden="true"
+        className="border-muted-foreground/30 border-t-primary h-10 w-10 animate-spin rounded-full border-[5px]"
+      />
       <div className="text-muted-foreground text-sm">{label}</div>
     </div>
   );

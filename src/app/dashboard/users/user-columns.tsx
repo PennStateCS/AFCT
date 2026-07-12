@@ -208,7 +208,10 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="secondary">
+          <Button
+            variant="secondary"
+            aria-label={`Manage user ${user.firstName ?? ''} ${user.lastName ?? ''}`.trim()}
+          >
             <ChevronDown />
             Manage
           </Button>
