@@ -5,6 +5,7 @@ const prismaMock = vi.hoisted(() => ({
   assignment: { findMany: vi.fn() },
   submission: { findMany: vi.fn() },
   assignmentProblemGrade: { findMany: vi.fn(), groupBy: vi.fn() },
+  user: { findUnique: vi.fn() },
 }));
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
@@ -20,6 +21,7 @@ beforeEach(() => {
   prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
   prismaMock.roster.groupBy.mockResolvedValue([]);
   prismaMock.assignmentProblemGrade.groupBy.mockResolvedValue([]);
+  prismaMock.user.findUnique.mockResolvedValue({ isAdmin: false });
 });
 
 describe('getAssignmentsForUserRange', () => {
@@ -42,15 +44,37 @@ describe('getAssignmentsForUserRange', () => {
     await getAssignmentsForUserRange({ userId: 'u1', ...range });
 
     const where = prismaMock.assignment.findMany.mock.calls[0][0].where;
-    // Staff/TA courses: every assignment. Student course: gated on isPublished.
+    // Staff/TA courses: every assignment. Student course: gated on the assignment
+    // AND the course being published — a student in an unpublished course must not
+    // see anything from it, even a published assignment.
     expect(where.OR).toEqual([
       { courseId: { in: ['staff-course', 'ta-course'] } },
-      { courseId: { in: ['student-course'] }, isPublished: true },
+      {
+        courseId: { in: ['student-course'] },
+        isPublished: true,
+        course: { isPublished: true },
+      },
     ]);
     // The old unscoped `courseId: { in: [...] }` filter is gone.
     expect(where.courseId).toBeUndefined();
     // Archived and soft-deleted courses are excluded from the calendar for everyone.
     expect(where.course).toEqual({ isArchived: false, deletedAt: null });
+  });
+
+  it('treats every rostered course as staff when the viewer is an admin', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ isAdmin: true });
+    prismaMock.roster.findMany.mockResolvedValue([
+      { courseId: 'enrolled-as-student', role: 'STUDENT' },
+    ]);
+
+    await getAssignmentsForUserRange({ userId: 'admin1', ...range });
+
+    const where = prismaMock.assignment.findMany.mock.calls[0][0].where;
+    // The global admin flag outranks the STUDENT roster row: no publish gating.
+    expect(where.OR).toEqual([
+      { courseId: { in: ['enrolled-as-student'] } },
+      { courseId: { in: [] }, isPublished: true, course: { isPublished: true } },
+    ]);
   });
 
   it('selects and carries isPublished through so staff drafts can be marked', async () => {
