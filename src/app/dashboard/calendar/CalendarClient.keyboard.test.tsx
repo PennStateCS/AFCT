@@ -9,8 +9,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import CalendarClient from './CalendarClient';
 
+// Use the machine's own timezone so react-day-picker's local day cells and the
+// assignment's local due date resolve to the same date key (a fixed 'UTC' mock
+// desyncs them on non-UTC machines and the chip never lands in a cell).
 vi.mock('@/hooks/use-effective-timezone', () => ({
-  useEffectiveTimezone: () => ({ timezone: 'UTC' }),
+  useEffectiveTimezone: () => ({
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  }),
 }));
 
 vi.mock('@/components/modules/DueDateModule', () => ({
@@ -36,12 +41,14 @@ const renderCalendar = () =>
           id: 'a1',
           title: 'HW 1',
           courseId: 'c1',
-          dueDate: new Date('2026-03-10T12:00:00.000Z'),
+          // Local mid-day mid-month so the chip lands in the same grid cell that
+          // react-day-picker renders, regardless of the machine's timezone.
+          dueDate: new Date(2026, 2, 15, 12, 0, 0),
           isPublished: true,
           course: { id: 'c1', code: 'CS101', name: 'Course 1' },
         },
       ]}
-      initialMonth={new Date('2026-03-01T00:00:00.000Z').toISOString()}
+      initialMonth={new Date(2026, 2, 1, 12, 0, 0).toISOString()}
     />,
   );
 
@@ -85,6 +92,18 @@ describe('CalendarClient day cells (keyboard model)', () => {
     renderCalendar();
     fireEvent.click(dayCells()[5]);
     expect(screen.getByText('day-dialog-open')).toBeInTheDocument();
+  });
+
+  it('keeps the grid to a single tab stop: assignment chips are not in the tab order', () => {
+    renderCalendar();
+    // The roving model means exactly one day cell is tabbable.
+    const tabbableCells = dayCells().filter((c) => c.getAttribute('tabindex') === '0');
+    expect(tabbableCells).toHaveLength(1);
+    // Assignment chips are reachable via the day dialog / upcoming list, not as
+    // extra tab stops that would break the roving grid (they carry tabindex -1).
+    const chips = document.querySelectorAll('a.assignment-link');
+    expect(chips.length).toBeGreaterThan(0);
+    chips.forEach((chip) => expect(chip.getAttribute('tabindex')).toBe('-1'));
   });
 
   it('marks today with aria-current="date"', () => {
