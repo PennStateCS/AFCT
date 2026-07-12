@@ -155,6 +155,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
           disabled={disabled}
           aria-labelledby={labelId}
           aria-invalid={!!error || undefined}
+          aria-required={_requiredMark || undefined}
           aria-describedby={describedByAttr || undefined}
           className={cn(
             'h-11 transition-all duration-150',

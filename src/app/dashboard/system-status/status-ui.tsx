@@ -147,7 +147,7 @@ export const Section = ({
 }) => (
   <section className="space-y-3">
     <div className="flex items-center justify-between gap-3">
-      <h3 className="flex items-center gap-2 text-base font-semibold">{title}</h3>
+      <h2 className="flex items-center gap-2 text-base font-semibold">{title}</h2>
       {action}
     </div>
     {children}
