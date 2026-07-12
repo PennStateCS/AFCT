@@ -66,10 +66,15 @@ export function Stepper({ steps, current, onStepClick, className }: StepperProps
                 >
                   {isDone ? <Check aria-hidden="true" className="h-3.5 w-3.5" /> : index + 1}
                 </span>
+                {/* On narrow screens only the current step keeps its label; the
+                    rest collapse to numbered circles so five steps fit a phone.
+                    (The button's aria-label always carries the full name.) */}
                 <span
                   className={cn(
                     'text-xs font-medium whitespace-nowrap',
-                    isCurrent ? 'text-foreground' : 'text-muted-foreground',
+                    isCurrent
+                      ? 'text-foreground'
+                      : 'text-muted-foreground hidden sm:inline',
                     clickable && 'hover:text-foreground',
                   )}
                 >
