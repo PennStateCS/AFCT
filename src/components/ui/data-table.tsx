@@ -79,7 +79,6 @@ interface DataTableProps<TData, TValue> {
   data: TData[];
   loading?: boolean;
   storageKey?: string;
-  onRowClick?: (row: { original: TData }) => void;
   tableLabel?: string;
   showExportButton?: boolean;
   actionButtons?: React.ReactNode;
@@ -111,7 +110,6 @@ export function DataTable<TData, TValue>({
   data,
   loading = false,
   storageKey = 'datatable-columns',
-  onRowClick,
   tableLabel = 'Data table',
   showExportButton = true,
   actionButtons,
@@ -446,21 +444,7 @@ export function DataTable<TData, TValue>({
               table.getRowModel().rows.map((row, rIndex) => (
                 <TableRow
                   key={`r-${rIndex}`}
-                  tabIndex={onRowClick ? 0 : undefined}
-                  role={onRowClick ? 'button' : undefined}
-                  onKeyDown={(e) => {
-                    if (onRowClick && (e.key === 'Enter' || e.key === ' ')) {
-                      // Stop Space from also scrolling the page when activating the row.
-                      e.preventDefault();
-                      onRowClick(row);
-                    }
-                  }}
-                  onClick={() => onRowClick?.(row)}
-                  className={`bg-[var(--table-background)] ${
-                    onRowClick
-                      ? 'cursor-pointer hover:bg-[var(--table-highlight)] focus:bg-[var(--table-highlight)] focus:outline-none'
-                      : 'hover:bg-[var(--table-highlight)]'
-                  }`}
+                  className="bg-[var(--table-background)] hover:bg-[var(--table-highlight)]"
                 >
                   {row.getVisibleCells().map((cell, cIndex) => {
                     const cellAlign = cell.column.columnDef.meta?.align;
