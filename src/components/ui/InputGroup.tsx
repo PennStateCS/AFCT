@@ -158,12 +158,11 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
           aria-describedby={describedByAttr || undefined}
           className={cn(
             'h-11 transition-all duration-150',
-            'focus-visible:ring-0',
-			'border-black',
+            'border-black',
             error && 'border-red-500',
             type === 'number' && 'appearance-auto',
             inputPaddingRight,
-			labelClassName,
+            labelClassName,
           )}
         />
 
@@ -231,7 +230,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
       )}
 
       {error && (
-        <p id={`${inputId}-error`} className="mt-1 text-xs text-red-600">
+        <p id={`${inputId}-error`} role="alert" className="mt-1 text-xs text-red-600">
           {error}
         </p>
       )}

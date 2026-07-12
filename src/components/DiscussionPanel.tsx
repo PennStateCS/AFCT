@@ -112,7 +112,9 @@ export default function DiscussionPanel({
 
         <div className={frameless ? '' : 'bg-card p-3'}>
           {comments.length > 0 ? (
-            <ul className="mb-3 space-y-3">
+            // Announce a newly-posted comment to screen readers when it appears.
+            <ul className="mb-3 space-y-3" aria-live="polite">
+
               {comments
                 .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
                 .map((comment) => {
