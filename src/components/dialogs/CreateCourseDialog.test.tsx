@@ -1,4 +1,4 @@
-/** @vitest-environment jsdom */
+﻿/** @vitest-environment jsdom */
 
 import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
@@ -161,9 +161,9 @@ const clickNext = async (user: ReturnType<typeof userEvent.setup>) => {
   await user.click(screen.getByRole('button', { name: /^next$/i }));
 };
 
-// Walk the wizard: Basics -> Schedule -> Faculty -> Notation -> Review.
+// Walk the wizard: Details -> Schedule -> Faculty -> Notation -> Review.
 const fillForm = async (user: ReturnType<typeof userEvent.setup>) => {
-  // Step 1: Basics
+  // Step 1: Details
   await user.type(screen.getByLabelText('Course Name'), 'Intro to Testing');
   await user.type(screen.getByLabelText('Course Code'), 'cmpsc 131');
   await user.type(screen.getByLabelText('Semester'), 'Fall 2025');
@@ -284,7 +284,7 @@ describe('CreateCourseDialog', () => {
     renderDialog();
 
     await screen.findByLabelText('Course Name');
-    // Next with an empty Basics step: errors render, Schedule never mounts.
+    // Next with an empty Details step: errors render, Schedule never mounts.
     await clickNext(user);
 
     expect(await screen.findAllByRole('alert')).not.toHaveLength(0);
@@ -305,7 +305,7 @@ describe('CreateCourseDialog', () => {
     await screen.findByLabelText('Start Date & Time');
     await user.click(screen.getByRole('button', { name: /back/i }));
 
-    // Back on Basics, with the entered value retained.
+    // Back on Details, with the entered value retained.
     expect(await screen.findByLabelText('Course Name')).toHaveValue('Intro to Testing');
   });
 
