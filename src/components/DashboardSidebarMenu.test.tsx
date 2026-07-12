@@ -87,7 +87,10 @@ vi.mock('@/components/ui/dropdown-menu', () => {
     DropdownMenu: PassThrough,
     DropdownMenuTrigger: PassThrough,
     DropdownMenuContent: PassThrough,
-    DropdownMenuItem: PassThrough,
+    // Forward props (onClick now lives on the item, not an inner button).
+    DropdownMenuItem: ({ children, ...props }: { children: React.ReactNode }) => (
+      <div {...props}>{children}</div>
+    ),
     DropdownMenuSeparator: () => <hr />,
   };
 });

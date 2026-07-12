@@ -179,7 +179,10 @@ export default function CalendarClient({
               </div>
             ) : null}
             {loading ? (
-              <div className="pointer-events-none absolute top-3 right-3 z-10 rounded-md border border-slate-200 bg-white/90 px-2 py-1 shadow-sm backdrop-blur-sm dark:border-neutral-700 dark:bg-neutral-900/90">
+              <div
+                role="status"
+                className="pointer-events-none absolute top-3 right-3 z-10 rounded-md border border-slate-200 bg-white/90 px-2 py-1 shadow-sm backdrop-blur-sm dark:border-neutral-700 dark:bg-neutral-900/90"
+              >
                 <p className="text-muted-foreground text-xs italic">Loading assignments...</p>
               </div>
             ) : null}

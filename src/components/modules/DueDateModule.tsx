@@ -99,6 +99,7 @@ export function DueDateModule({ assignments }: Props) {
                       )}
                     >
                       {formatDateTimeInTimeZone(assignment.dueDate, timezone)}
+                      {dueSoon && <span className="sr-only"> (due soon)</span>}
                     </span>
                   </span>
                 </li>

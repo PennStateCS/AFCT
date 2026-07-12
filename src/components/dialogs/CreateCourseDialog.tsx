@@ -7,6 +7,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog';
@@ -176,6 +177,10 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
       >
         <DialogHeader>
           <DialogTitle>Create Course</DialogTitle>
+          <DialogDescription className="sr-only">
+            Create a new course in five steps: details, schedule, faculty, options, then
+            review.
+          </DialogDescription>
         </DialogHeader>
 
         <Stepper

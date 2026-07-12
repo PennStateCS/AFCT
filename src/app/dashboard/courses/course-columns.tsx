@@ -106,7 +106,12 @@ export const columns = (
     cell: ({ row }) => {
       const course = row.original;
       return (
-        <Link href={`/dashboard/courses/${course.id}`} className="text-blue-600 hover:underline">
+        <Link
+          href={`/dashboard/courses/${course.id}`}
+          className="text-blue-600 hover:underline"
+          title={course.name}
+          aria-label={course.name}
+        >
           {course.name.substring(0, 46) + (course.name.length > 47 ? '...' : '')}
         </Link>
       );

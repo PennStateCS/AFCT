@@ -256,10 +256,17 @@ function StatusAdornment({
 
   if (!hasValue || isValid === undefined) return null;
 
+  // Pair the color/shape-only status icon with a text equivalent for AT.
   return isValid ? (
-    <CheckCircle size={18} className="text-green-500" aria-hidden="true" />
+    <>
+      <CheckCircle size={18} className="text-green-500" aria-hidden="true" />
+      <span className="sr-only">valid</span>
+    </>
   ) : (
-    <XCircle size={18} className="text-red-500" aria-hidden="true" />
+    <>
+      <XCircle size={18} className="text-red-500" aria-hidden="true" />
+      <span className="sr-only">invalid</span>
+    </>
   );
 }
 
