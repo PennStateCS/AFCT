@@ -154,7 +154,7 @@ export function SearchableMultiSelect({
         </DropdownMenuContent>
       </DropdownMenu>
       {error ? (
-        <p id={describedBy} className="mt-1 text-xs text-red-600">
+        <p id={describedBy} role="alert" className="mt-1 text-xs text-red-600">
           {error}
         </p>
       ) : null}
