@@ -1063,7 +1063,7 @@ export interface paths {
         put?: never;
         /**
          * Duplicate a course
-         * @description Creates a new course modeled on an existing one, in a single transaction. The  caller becomes faculty on the copy; faculty/TA rosters are copied only when  asked. `copyMode` (or the legacy copyAssignments/copyProblems booleans) selects  what carries over: assignments only, problems only, or assignments with their  problems. The copy always starts unpublished with a fresh registration code.  System administrators only. Dates are interpreted in the actor's timezone.
+         * @description Creates a new course modeled on an existing one, in a single transaction. The  copy's faculty comes from the copied faculty roster and/or an explicit  `instructorIds` list — at least one faculty member is required (the caller is  NOT added automatically). TAs are copied only when asked. `copyMode` (or the  legacy copyAssignments/copyProblems booleans) selects what carries over:  assignments only, problems only, or assignments with their problems. The copy  always starts unpublished with a fresh registration code. System administrators  only. Dates are interpreted in the actor's timezone.
          *
          *     [View source](https://github.com/pennstatewilkes-barre/afct-dashboard/blob/main/src/app/api/courses/[id]/duplicate/route.ts)
          */
@@ -1561,7 +1561,7 @@ export interface paths {
         put?: never;
         /**
          * Create a course
-         * @description Creates a course (with a generated registration code) and seeds its faculty  roster, all in one transaction. System administrators only. Datetime-local  strings are interpreted in the actor's effective timezone before being stored  as UTC.
+         * @description Creates a course (with a generated registration code) and seeds its faculty  roster, all in one transaction. System administrators only. A new course is  always created unpublished — publishing is a separate action — and requires at  least one faculty member. Datetime-local strings are interpreted in the course's  timezone before being stored as UTC.
          *
          *     **Auth:** requires FACULTY
          *
@@ -5348,6 +5348,8 @@ export interface operations {
                     copyProblems?: boolean;
                     copyFaculty?: boolean;
                     copyTAs?: boolean;
+                    /** @description Additional faculty for the copy. Combined with copyFaculty, the result must include at least one faculty member. */
+                    instructorIds?: string[];
                 };
             };
         };
@@ -5364,7 +5366,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Missing fields, bad credits, bad code, or invalid dates. */
+            /** @description Missing fields, bad credits, bad code, invalid dates, or no faculty for the copy. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -7313,22 +7315,21 @@ export interface operations {
                     registrationOpenAt: string;
                     /** @description datetime-local string */
                     registrationCloseAt: string;
-                    isPublished?: boolean;
-                    instructorIds?: string[];
-                    facultyIds?: string[];
+                    /** @description Faculty to seed the roster; at least one is required. */
+                    instructorIds: string[];
                     emptyStringNotation?: string;
                 };
             };
         };
         responses: {
-            /** @description Course created; returns the course with its `enrolled` roster. */
+            /** @description Course created (always unpublished); returns the course with its `enrolled` roster. */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Missing registration window, or Zod validation failed. */
+            /** @description Missing registration window, no faculty, or Zod validation failed. */
             400: {
                 headers: {
                     [name: string]: unknown;
