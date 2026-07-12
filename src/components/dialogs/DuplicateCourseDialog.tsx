@@ -7,6 +7,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog';
@@ -257,6 +258,10 @@ export default function DuplicateCourseDialog({
             <Copy className="text-muted-foreground size-4" />
             <DialogTitle>Duplicate Course</DialogTitle>
           </div>
+          <DialogDescription className="sr-only">
+            Copy this course into a new one in five steps: details, schedule, what to copy,
+            roster, then review.
+          </DialogDescription>
         </DialogHeader>
 
         <Stepper
@@ -419,12 +424,14 @@ export default function DuplicateCourseDialog({
 
             {step === 2 && (
               <div className="space-y-2">
-                <div className="text-sm font-medium">What would you like to copy?</div>
+                <div id="copy-mode-label" className="text-sm font-medium">
+                  What would you like to copy?
+                </div>
                 <Controller
                   control={control}
                   name="copyMode"
                   render={({ field }) => (
-                    <div className="space-y-1">
+                    <div className="space-y-1" role="radiogroup" aria-labelledby="copy-mode-label">
                       <label className="flex items-start gap-2">
                         <input
                           type="radio"

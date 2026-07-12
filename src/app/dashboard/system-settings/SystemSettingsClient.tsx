@@ -1108,7 +1108,7 @@ export default function SystemSettingsClient() {
               </p>
 
               <div className="mt-6 space-y-3">
-                <div className="text-sm font-medium">Available backups</div>
+                <h3 className="text-sm font-medium">Available backups</h3>
                 <Button
                   type="button"
                   size="sm"
@@ -1124,12 +1124,18 @@ export default function SystemSettingsClient() {
                   <p className="text-muted-foreground text-sm">No backups yet.</p>
                 ) : (
                   <div className="overflow-x-auto rounded-md border">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-sm" aria-label="Available backups">
                       <thead className="bg-muted/30 text-left">
                         <tr>
-                          <th className="p-2 font-medium">Taken (server time)</th>
-                          <th className="p-2 font-medium">Database</th>
-                          <th className="p-2 font-medium">Files</th>
+                          <th scope="col" className="p-2 font-medium">
+                            Taken (server time)
+                          </th>
+                          <th scope="col" className="p-2 font-medium">
+                            Database
+                          </th>
+                          <th scope="col" className="p-2 font-medium">
+                            Files
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1180,7 +1186,7 @@ export default function SystemSettingsClient() {
 
               {/* Current status */}
               <div className="mb-5 space-y-2">
-                <div className="text-sm font-medium">Current status</div>
+                <h3 className="text-sm font-medium">Current status</h3>
                 <div className="bg-muted/10 w-fit max-w-2xl space-y-2 rounded-md border p-3 text-sm">
                   <Badge variant={hcaptchaEnabled ? 'success' : 'warning'} className="w-fit">
                     {hcaptchaEnabled ? 'Enabled' : 'Disabled'}
@@ -1250,7 +1256,7 @@ export default function SystemSettingsClient() {
               <div className="space-y-5">
                 {/* Current status */}
                 <div className="space-y-2">
-                  <div className="text-sm font-medium">Current certificate</div>
+                  <h3 className="text-sm font-medium">Current certificate</h3>
                   <div className="bg-muted/10 w-fit max-w-2xl space-y-2 rounded-md border p-3 text-sm">
                     {tls?.installed ? (
                       <>
@@ -1320,7 +1326,7 @@ export default function SystemSettingsClient() {
 
                 {/* Method chooser */}
                 <div className="space-y-2">
-                  <div className="text-sm font-medium">Set up a certificate</div>
+                  <h3 className="text-sm font-medium">Set up a certificate</h3>
                   <div
                     className="flex flex-wrap gap-2"
                     role="group"

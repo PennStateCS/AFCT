@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Wrench } from 'lucide-react';
 import InputGroup from '@/components/ui/InputGroup';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
@@ -34,6 +34,18 @@ type SignupErrors = Partial<Record<SignupField, string>>;
 export default function LoginPage() {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [allowSignup, setAllowSignup] = useState<boolean | null>(null);
+
+  // Honor the OS "reduce motion" preference for the panel transitions (the global
+  // CSS reset can't reach framer-motion's JS-driven animation).
+  const reduceMotion = useReducedMotion();
+  const panelMotion = reduceMotion
+    ? { initial: false as const, animate: {}, exit: {}, transition: { duration: 0 } }
+    : {
+        initial: { opacity: 0, y: 6 },
+        animate: { opacity: 1, y: 0 },
+        exit: { opacity: 0, y: 6 },
+        transition: { duration: 0.2 },
+      };
 
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -364,14 +376,13 @@ export default function LoginPage() {
                 key="login"
                 id="login-panel"
                 autoComplete="off"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 6 }}
-                transition={{ duration: 0.2 }}
+                {...panelMotion}
                 onSubmit={handleLogin}
                 className="space-y-5"
               >
-                <p className="sr-only" aria-live="assertive">
+                {/* Not a live region: each field's error <p> now carries role="alert",
+                    so announcing here too would double-speak. Kept as static context. */}
+                <p className="sr-only">
                   {Object.values(loginErrors)[0]
                     ? `Form error: ${Object.values(loginErrors)[0]}`
                     : ''}
@@ -435,14 +446,13 @@ export default function LoginPage() {
                 key="signup"
                 id="signup-panel"
                 autoComplete="off"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 6 }}
-                transition={{ duration: 0.2 }}
+                {...panelMotion}
                 onSubmit={handleSignup}
                 className="space-y-5"
               >
-                <p className="sr-only" aria-live="assertive">
+                {/* Not a live region: each field's error <p> now carries role="alert",
+                    so announcing here too would double-speak. Kept as static context. */}
+                <p className="sr-only">
                   {Object.values(signupErrors)[0]
                     ? `Form error: ${Object.values(signupErrors)[0]}`
                     : ''}
@@ -453,7 +463,7 @@ export default function LoginPage() {
                   name="signup-first"
                   required
                   requiredMark
-                  autoComplete="off"
+                  autoComplete="given-name"
                   value={signupFirst}
                   setValue={setSignupFirst}
                   error={signupErrors.first}
@@ -464,7 +474,7 @@ export default function LoginPage() {
                   name="signup-last"
                   required
                   requiredMark
-                  autoComplete="off"
+                  autoComplete="family-name"
                   value={signupLast}
                   setValue={setSignupLast}
                   error={signupErrors.last}

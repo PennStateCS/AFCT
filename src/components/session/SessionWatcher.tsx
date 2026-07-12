@@ -191,11 +191,28 @@ export default function SessionWatcher() {
         ? 'second'
         : 'seconds';
 
+  // Screen-reader countdown, throttled so it isn't announced every second: step in
+  // ~15s buckets until the final 10s, then each second. aria-live only fires when
+  // this string changes, so the announcement follows those coarse steps.
+  const announceSeconds = wholeSeconds <= 10 ? wholeSeconds : Math.ceil(wholeSeconds / 15) * 15;
+  const announceMinutes = Math.floor(announceSeconds / 60);
+  const announceRemSeconds = announceSeconds % 60;
+  const countdownAnnouncement =
+    !showModal || announceSeconds <= 0
+      ? ''
+      : announceMinutes > 0
+        ? `Session expires in about ${announceMinutes} minute${announceMinutes === 1 ? '' : 's'}${
+            announceRemSeconds ? ` ${announceRemSeconds} seconds` : ''
+          }.`
+        : `Session expires in ${announceSeconds} second${announceSeconds === 1 ? '' : 's'}.`;
+
   if (status !== 'authenticated') return null;
 
   return (
     <Dialog open={showModal} onOpenChange={() => {}}>
-      <DialogContent>
+      {/* No close button: dismissal is an explicit choice (Extend or Log out), and
+          onOpenChange is a deliberate no-op, so a rendered X would be inert. */}
+      <DialogContent showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>Session Expiring</DialogTitle>
           <DialogDescription>
@@ -206,9 +223,16 @@ export default function SessionWatcher() {
         <div className="my-4">
           <Progress
             value={progressValue}
+            aria-label="Time remaining before automatic sign-out"
             className="h-2 transition-all duration-1000 ease-linear"
           />
         </div>
+
+        {/* Throttled countdown for screen readers (the visible timer ticks every
+            second, which would be far too chatty to announce). */}
+        <span className="sr-only" role="timer" aria-live="polite">
+          {countdownAnnouncement}
+        </span>
 
         <DialogFooter className="flex justify-end gap-2">
           <Button variant="secondary" onClick={extendSession} disabled={isExtending}>

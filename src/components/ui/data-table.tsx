@@ -79,7 +79,6 @@ interface DataTableProps<TData, TValue> {
   data: TData[];
   loading?: boolean;
   storageKey?: string;
-  onRowClick?: (row: { original: TData }) => void;
   tableLabel?: string;
   showExportButton?: boolean;
   actionButtons?: React.ReactNode;
@@ -111,7 +110,6 @@ export function DataTable<TData, TValue>({
   data,
   loading = false,
   storageKey = 'datatable-columns',
-  onRowClick,
   tableLabel = 'Data table',
   showExportButton = true,
   actionButtons,
@@ -446,18 +444,7 @@ export function DataTable<TData, TValue>({
               table.getRowModel().rows.map((row, rIndex) => (
                 <TableRow
                   key={`r-${rIndex}`}
-                  tabIndex={onRowClick ? 0 : undefined}
-                  onKeyDown={(e) => {
-                    if (onRowClick && (e.key === 'Enter' || e.key === ' ')) {
-                      onRowClick(row);
-                    }
-                  }}
-                  onClick={() => onRowClick?.(row)}
-                  className={`bg-[var(--table-background)] ${
-                    onRowClick
-                      ? 'cursor-pointer hover:bg-[var(--table-highlight)] focus:bg-[var(--table-highlight)] focus:outline-none'
-                      : 'hover:bg-[var(--table-highlight)]'
-                  }`}
+                  className="bg-[var(--table-background)] hover:bg-[var(--table-highlight)]"
                 >
                   {row.getVisibleCells().map((cell, cIndex) => {
                     const cellAlign = cell.column.columnDef.meta?.align;
@@ -511,7 +498,7 @@ export function DataTable<TData, TValue>({
                     >
                       <ArrowLeft className="h-4 w-4" aria-hidden="true" />
                     </Button>
-                    <span className="px-2 whitespace-nowrap">
+                    <span className="px-2 whitespace-nowrap" aria-live="polite">
                       Page {table.getState().pagination.pageIndex + 1} of{' '}
                       {Math.max(1, table.getPageCount())}
                     </span>
@@ -528,8 +515,18 @@ export function DataTable<TData, TValue>({
 
                   <div className="text-foreground flex items-center gap-3 font-normal">
                     {typeof rowCount === 'number' ? (
-                      <span className="text-muted-foreground text-sm whitespace-nowrap">
+                      <span
+                        className="text-muted-foreground text-sm whitespace-nowrap"
+                        aria-live="polite"
+                      >
                         {rowCount} total
+                      </span>
+                    ) : null}
+                    {/* Client-side filtering has no visible total; announce the
+                        filtered count to screen readers so search results aren't silent. */}
+                    {!manualPagination ? (
+                      <span className="sr-only" aria-live="polite">
+                        {table.getFilteredRowModel().rows.length} results
                       </span>
                     ) : null}
                     <Select

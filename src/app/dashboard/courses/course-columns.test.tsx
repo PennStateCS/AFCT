@@ -16,6 +16,14 @@ globalWithReact.React = React;
 const useSessionMock = vi.hoisted(() => vi.fn());
 vi.mock('next-auth/react', () => ({ useSession: useSessionMock }));
 
+vi.mock('next/link', () => ({
+  default: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
+}));
+
 // Render dropdown primitives inline so every menu item is queryable without
 // opening the Radix portal.
 vi.mock('@/components/ui/dropdown-menu', () => ({
@@ -91,5 +99,62 @@ describe('course actions — Duplicate Course', () => {
     renderActionsCell();
 
     expect(screen.queryByRole('button', { name: 'Duplicate Course' })).toBeNull();
+  });
+});
+
+describe('course-columns display cells', () => {
+  const renderCell = (key: string, course: Record<string, unknown>) => {
+    const cols = columns(vi.fn(), vi.fn(), vi.fn(), 'UTC') as ColumnDef<Record<string, unknown>>[];
+    const col = cols.find(
+      (c) =>
+        ('accessorKey' in c && c.accessorKey === key) ||
+        ('id' in c && (c as { id?: string }).id === key),
+    ) as { cell: (ctx: unknown) => React.ReactElement };
+    const row = { original: course, getValue: (k: string) => course[k] };
+    return render(<>{col.cell({ row })}</>);
+  };
+
+  it('exposes the full course name to AT even when the visible text is truncated', () => {
+    const fullName = 'Introduction to Very Long Course Names That Exceed The Visible Limit';
+    renderCell('name', { id: 'c1', name: fullName });
+
+    const link = screen.getByRole('link');
+    expect(link).toHaveAttribute('href', '/dashboard/courses/c1');
+    expect(link).toHaveAttribute('aria-label', fullName);
+    expect(link).toHaveAttribute('title', fullName);
+    expect(link.textContent?.endsWith('...')).toBe(true);
+  });
+
+  it('formats a 6-character registration code as XXX-XXX, uppercased', () => {
+    renderCell('regCode', { regCode: 'abc123' });
+    expect(screen.getByText('ABC-123')).toBeInTheDocument();
+  });
+
+  it('centers the registration badge and labels an open window', () => {
+    const now = Date.now();
+    renderCell('registrationStatus', {
+      registrationOpenAt: new Date(now - 1000).toISOString(),
+      registrationCloseAt: new Date(now + 1_000_000).toISOString(),
+    });
+    expect(screen.getByText('Open').parentElement).toHaveClass('justify-center');
+  });
+
+  it('marks registration Closed once the window has passed', () => {
+    const now = Date.now();
+    renderCell('registrationStatus', {
+      registrationOpenAt: new Date(now - 2_000_000).toISOString(),
+      registrationCloseAt: new Date(now - 1_000_000).toISOString(),
+    });
+    expect(screen.getByText('Closed')).toBeInTheDocument();
+  });
+
+  it('lists faculty names, and shows None when there are none', () => {
+    renderCell('instructor', {
+      enrolled: [{ firstName: 'Ada', lastName: 'Lovelace', courseRole: 'FACULTY' }],
+    });
+    expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
+
+    renderCell('instructor', { enrolled: [] });
+    expect(screen.getByText('None')).toBeInTheDocument();
   });
 });

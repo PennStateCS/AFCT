@@ -139,7 +139,9 @@ export default function FileUploadInput({
           onChange={handleInputChange}
           className="absolute inset-0 cursor-pointer opacity-0"
           aria-label={label}
-          aria-describedby={hasError ? `${id}-error` : `${id}-help`}
+          // Only reference nodes that actually render: the error when present, the
+          // help text only when a hint was passed (otherwise the IDREF would dangle).
+          aria-describedby={hasError ? `${id}-error` : hint ? `${id}-help` : undefined}
         />
 
         <div className="flex flex-col items-center justify-center gap-3 p-6 text-center">
@@ -149,8 +151,10 @@ export default function FileUploadInput({
                 <div className="text-left">
                   <p className="text-foreground text-sm font-medium">
                     <span className="inline-flex items-center gap-2">
-                      <Upload className="h-3 w-3 text-green-600" />
-                      <span className="truncate">{value.name}</span>
+                      <Upload className="h-3 w-3 text-green-600" aria-hidden="true" />
+                      <span className="truncate" title={value.name}>
+                        {value.name}
+                      </span>
                     </span>
                   </p>
                   <p className="text-muted-foreground text-xs">{formattedSize}</p>
@@ -190,8 +194,12 @@ export default function FileUploadInput({
       )}
 
       {hasError && (
-        <p id={`${id}-error`} className="text-destructive flex items-center gap-1 text-xs">
-          <X className="h-3 w-3" />
+        <p
+          id={`${id}-error`}
+          role="alert"
+          className="text-destructive flex items-center gap-1 text-xs"
+        >
+          <X className="h-3 w-3" aria-hidden="true" />
           {fileError || error}
         </p>
       )}

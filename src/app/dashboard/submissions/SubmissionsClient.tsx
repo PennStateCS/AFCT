@@ -486,6 +486,7 @@ export default function SubmissionsClient() {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
+              aria-pressed={activeFilters.size === 0}
               onClick={() => setActiveFilters(new Set())}
               className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                 activeFilters.size === 0
@@ -501,6 +502,7 @@ export default function SubmissionsClient() {
                 <button
                   key={value}
                   type="button"
+                  aria-pressed={active}
                   onClick={() => toggleFilter(value)}
                   className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                     active
@@ -519,8 +521,14 @@ export default function SubmissionsClient() {
           </div>
         </div>
 
+        {/* Announce the filtered result count to screen readers (this is a
+            hand-rolled table, so it has no DataTable live region). */}
+        <p className="sr-only" role="status" aria-live="polite">
+          {visibleSubmissions.length} submission{visibleSubmissions.length === 1 ? '' : 's'}
+        </p>
+
         <div className="overflow-x-auto rounded-md border">
-          <Table className="text-sm">
+          <Table className="text-sm" aria-label="Submissions">
             <TableHeader>
               <TableRow>
                 <TableHead className="px-2 py-1">Student</TableHead>
@@ -536,7 +544,7 @@ export default function SubmissionsClient() {
             <TableBody>
               {visibleSubmissions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-muted-foreground py-8 text-center text-sm">
+                  <TableCell colSpan={8} className="text-muted-foreground py-8 text-center text-sm">
                     {loadingCourses || loadingAssignments || loadingSubmissions
                       ? 'Loading submissions...'
                       : 'No submissions match your current filters.'}
@@ -669,6 +677,7 @@ export default function SubmissionsClient() {
                       <TableCell className="p-1 align-top">
                         <div className="flex items-center gap-2 whitespace-nowrap">
                           <Button
+                            type="button"
                             variant="secondary"
                             size="sm"
                             onClick={() => handleViewFeedback(submission)}
@@ -685,6 +694,7 @@ export default function SubmissionsClient() {
                           </Button>
 
                           <Button
+                            type="button"
                             variant="secondary"
                             size="sm"
                             onClick={() => handleViewSubmission(submission)}
@@ -696,6 +706,7 @@ export default function SubmissionsClient() {
                           </Button>
 
                           <Button
+                            type="button"
                             variant="secondary"
                             size="sm"
                             disabled={!submission.fileName}
@@ -708,6 +719,7 @@ export default function SubmissionsClient() {
                           </Button>
 
                           <Button
+                            type="button"
                             variant="secondary"
                             size="sm"
                             disabled={
