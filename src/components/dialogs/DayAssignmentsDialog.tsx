@@ -67,7 +67,6 @@ export default function DayAssignmentsDialog({
       <DialogContent
         className="bg-card max-w-lg"
         onInteractOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
       >
         <DialogHeader className="flex items-start justify-between gap-4">
           <div>

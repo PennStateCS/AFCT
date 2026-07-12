@@ -155,15 +155,15 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
           disabled={disabled}
           aria-labelledby={labelId}
           aria-invalid={!!error || undefined}
+          aria-required={_requiredMark || undefined}
           aria-describedby={describedByAttr || undefined}
           className={cn(
             'h-11 transition-all duration-150',
-            'focus-visible:ring-0',
-			'border-black',
+            'border-black',
             error && 'border-red-500',
             type === 'number' && 'appearance-auto',
             inputPaddingRight,
-			labelClassName,
+            labelClassName,
           )}
         />
 
@@ -231,7 +231,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
       )}
 
       {error && (
-        <p id={`${inputId}-error`} className="mt-1 text-xs text-red-600">
+        <p id={`${inputId}-error`} role="alert" className="mt-1 text-xs text-red-600">
           {error}
         </p>
       )}
@@ -257,10 +257,17 @@ function StatusAdornment({
 
   if (!hasValue || isValid === undefined) return null;
 
+  // Pair the color/shape-only status icon with a text equivalent for AT.
   return isValid ? (
-    <CheckCircle size={18} className="text-green-500" aria-hidden="true" />
+    <>
+      <CheckCircle size={18} className="text-green-500" aria-hidden="true" />
+      <span className="sr-only">valid</span>
+    </>
   ) : (
-    <XCircle size={18} className="text-red-500" aria-hidden="true" />
+    <>
+      <XCircle size={18} className="text-red-500" aria-hidden="true" />
+      <span className="sr-only">invalid</span>
+    </>
   );
 }
 

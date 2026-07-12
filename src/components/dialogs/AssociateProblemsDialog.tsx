@@ -419,7 +419,6 @@ export function AssociateProblemsDialog({
       <DialogContent
         className="bg-card"
         onInteractOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
       >
         <DialogHeader>
           <DialogTitle>Add Existing Problem to Assignment</DialogTitle>

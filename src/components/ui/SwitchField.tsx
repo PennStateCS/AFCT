@@ -100,7 +100,7 @@ export default function SwitchField({
       )}
 
       {error && (
-        <p id={`${switchId}-error`} className="mt-1 text-xs text-red-600">
+        <p id={`${switchId}-error`} role="alert" className="mt-1 text-xs text-red-600">
           {error}
         </p>
       )}

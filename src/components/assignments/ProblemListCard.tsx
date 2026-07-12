@@ -89,6 +89,7 @@ export function ProblemListCard({
                   <button
                     type="button"
                     onClick={() => onSelect(problem.id)}
+                    aria-current={isActive ? 'true' : undefined}
                     className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition ${
                       isActive
                         ? 'bg-secondary text-secondary-foreground'

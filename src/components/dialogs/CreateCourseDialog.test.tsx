@@ -134,6 +134,7 @@ vi.mock('@/components/ui/dialog', () => {
     DialogContent: Wrapper,
     DialogHeader: Wrapper,
     DialogTitle: Wrapper,
+    DialogDescription: Wrapper,
     DialogFooter: Wrapper,
     DialogClose: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   };

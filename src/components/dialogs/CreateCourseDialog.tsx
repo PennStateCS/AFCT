@@ -7,6 +7,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog';
@@ -173,10 +174,13 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
       <DialogContent
         className="bg-card sm:max-w-3xl"
         onInteractOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
       >
         <DialogHeader>
           <DialogTitle>Create Course</DialogTitle>
+          <DialogDescription className="sr-only">
+            Create a new course in five steps: details, schedule, faculty, options, then
+            review.
+          </DialogDescription>
         </DialogHeader>
 
         <Stepper

@@ -6,6 +6,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from '@/components/ui/dialog';
 
 function parseCfg(xmlText: string){
@@ -68,7 +69,10 @@ export function CfgViewerDialog({ src, open, onOpenChange, title }: { src: strin
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="truncate">{title ?? 'JFLAP Viewer'}</DialogTitle>
+            <DialogTitle className="truncate">{title || 'JFLAP Viewer'}</DialogTitle>
+            <DialogDescription className="sr-only">
+              Context-free grammar productions.
+            </DialogDescription>
 			  <table className="w-full text-sm">
                 <thead className="border-b border-foreground">
                   <tr>

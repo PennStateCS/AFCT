@@ -239,8 +239,14 @@ export default function ProblemWorkspace({
             contentClassName="p-2"
           >
             {submissionsLoading ? (
-              <div className="flex min-h-[320px] flex-col items-center justify-center gap-3">
-                <div className="border-muted-foreground/30 border-t-primary h-8 w-8 animate-spin rounded-full border-4" />
+              <div
+                role="status"
+                className="flex min-h-[320px] flex-col items-center justify-center gap-3"
+              >
+                <div
+                  aria-hidden="true"
+                  className="border-muted-foreground/30 border-t-primary h-8 w-8 animate-spin rounded-full border-4"
+                />
                 <p className="text-muted-foreground text-sm">Loading submissions...</p>
               </div>
             ) : sortedSubmissions.length > 0 ? (
@@ -421,7 +427,9 @@ export default function ProblemWorkspace({
             icon={<MessageSquare className="h-4 w-4" />}
           >
             {commentsLoading ? (
-              <div className="text-muted-foreground text-sm">Loading discussion...</div>
+              <div role="status" className="text-muted-foreground text-sm">
+                Loading discussion...
+              </div>
             ) : (
               <ProblemDiscussionPanel
                 courseIsArchived={courseIsArchived}
