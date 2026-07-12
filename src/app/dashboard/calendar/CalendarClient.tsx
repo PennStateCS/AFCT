@@ -364,6 +364,11 @@ export default function CalendarClient({
                                 <Link
                                   key={a.id}
                                   href={`/dashboard/courses/${a.courseId}/${a.id}`}
+                                  // Kept out of the tab sequence so the calendar grid stays a
+                                  // single roving tab stop (arrow keys move between days). These
+                                  // chips are still clickable, and keyboard users reach the same
+                                  // links via the day dialog (Enter) and the Upcoming list.
+                                  tabIndex={-1}
                                   className={cn(
                                     'assignment-link box-border block min-h-[1rem] w-full min-w-0 cursor-pointer truncate overflow-hidden rounded py-0.5 pl-1 text-left text-xs leading-tight whitespace-nowrap text-white',
                                     isDraft
