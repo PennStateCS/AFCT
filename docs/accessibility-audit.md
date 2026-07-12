@@ -47,12 +47,20 @@ Severity: **serious** = materially impairs use for some users; **moderate** =
 meaningful friction or missing announcement; **minor** = polish. Effort:
 trivial (< 15 min), small (< 1 hr), medium (a focused session).
 
-> **Status (July 11, 2026):** Fixed on the `a11y-fixes` branch: S1 (input focus
-> ring), S2 (Escape closes every dialog while outside-click stays blocked),
-> S4 (calendar roving tabindex + arrow keys), and the announcement gaps M1, M2,
-> M3, M15. S3 (automaton text alternative), S5/S6 (contrast), and S7-S9 plus the
-> remaining moderate/minor items are still open. The automaton viewer (S3) was
-> scoped out for now as faculty-only.
+> **Status (July 12, 2026, after a full re-audit):** The `a11y-fixes` branch has
+> cleared the original serious/moderate list except the deferred visual items. Two
+> rounds of fixes landed: (1) the announcement + keyboard round (S1 focus ring, S2
+> dialog Escape, S4 calendar keyboard, M1/M2/M3/M15 live regions), then (2) a large
+> invisible-semantics sweep plus a follow-up (CardTitle headings, skip link,
+> reduced-motion, table/spinner/skeleton semantics, menu de-nesting, sr-only status
+> text, the empty viewer-dialog title bug, the inert session-dialog close button,
+> the student assignment card keyboard barrier, multi-select error announcement,
+> signup autocomplete). A four-agent re-audit found **no critical or serious
+> blockers remaining**; the open list is now the deferred contrast fixes (S5/S6 and
+> the hardcoded light palettes), the automaton text alternative (S3, faculty-only),
+> and a set of moderate/minor refinements (filter/result-count announcements, the
+> multi-select menu-role rebuild, theme-menu radio state, a few dark-mode tokens).
+> See "Re-audit remaining" at the bottom.
 
 ### Serious
 
@@ -176,3 +184,45 @@ levels; the calendar pairs its `aria-hidden` draft glyph with sr-only "(draft)"
 text; and the duplicate wizard gates its destructive action behind an explicit
 confirmation checkbox. The team's instincts are clearly good; most of this
 report is about making dynamic changes audible and taming two custom widgets.
+
+## Re-audit remaining (July 12, 2026)
+
+A four-agent re-audit of the current branch confirmed the fixes above and left the
+following. None are critical or serious blockers.
+
+### Deferred by request (visual changes)
+- **S5 / feedback body contrast** - `FeedbackDialog.tsx:36` and
+  `submissions/feedback.tsx:36` hardcode `text-slate-900` on `bg-card`: near-black on
+  near-black in dark mode (~1.3:1). One-token fix (`text-foreground`) but changes color.
+- **S6 / calendar chips** - white text on `bg-amber-600` (draft) and `dark:bg-sky-600`,
+  ~3:1 to ~3.9:1, under 4.5:1 for small text.
+- **Hardcoded light palettes with no dark variant** - `SubmissionUploadForm.tsx:95`,
+  `FileUploadInput.tsx:126`, `ProblemListCard.tsx:54,74`, `JffViewerDialog.tsx:863`.
+
+### Deferred as faculty-only / larger effort
+- **S3 / automaton text alternative** - `JffViewerDialog.tsx:989`. The cytoscape canvas
+  has no `role="img"`/label/text list. The parsed states/transitions are in memory and
+  could back an sr-only description. Highest-value non-trivial item; revisit if the
+  viewer ever becomes student-facing.
+
+### Moderate refinements (no visual change, next-batch candidates)
+- **Submissions filter state + count** - the hand-rolled table's status pills lack
+  `aria-pressed`; filtered result count is not announced (`SubmissionsClient.tsx:487`).
+- **Client-mode DataTable result count** - announced only under `manualPagination`;
+  client filtering (Users, Courses) is silent (`data-table.tsx:481`).
+- **SearchableMultiSelect menu semantics** - trigger says `aria-haspopup="menu"` but the
+  popup has no `menuitemcheckbox` roles; needs a real listbox/menu pattern (medium).
+- **Theme menu current-selection state** - `Navbar.tsx:228` / `ThemeToggle.tsx:27` use
+  plain items with no `aria-checked`; want `menuitemradio`.
+- **"User Account" dead menu item** - still a focusable no-op `DropdownMenuItem`
+  (`Navbar.tsx:185`, `DashboardSidebarMenu.tsx:442`); make it a `DropdownMenuLabel`.
+- **Session countdown announcement** - the ticking time in the timeout dialog is not in a
+  throttled `aria-live`/`role="timer"` region (`SessionWatcher.tsx:201`).
+- **Login duplicate error announcement** - field errors now fire via both the page-level
+  assertive summary and the per-field `role="alert"`; pick one.
+
+### Minor
+- Login framer-motion transitions are not gated by `useReducedMotion()` (the CSS reset
+  does not catch WAAPI); `requiredMark` still not rendered; the Sign In button is
+  hard-disabled on invalid email; a few viewer dialogs (Log/Cfg/Regex) still lack a
+  `DialogDescription`; a couple of heading-level skips in `StudentAssignmentView`.

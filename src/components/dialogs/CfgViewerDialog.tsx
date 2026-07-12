@@ -68,7 +68,7 @@ export function CfgViewerDialog({ src, open, onOpenChange, title }: { src: strin
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="truncate">{title ?? 'JFLAP Viewer'}</DialogTitle>
+            <DialogTitle className="truncate">{title || 'JFLAP Viewer'}</DialogTitle>
 			  <table className="w-full text-sm">
                 <thead className="border-b border-foreground">
                   <tr>

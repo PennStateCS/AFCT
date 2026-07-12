@@ -59,7 +59,7 @@ export function RegexViewerDialog({ src, open, onOpenChange, title }: { src: str
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="truncate">{title ?? 'JFLAP Viewer'}</DialogTitle>
+            <DialogTitle className="truncate">{title || 'JFLAP Viewer'}</DialogTitle>
           </DialogHeader>
 		   <div className="p-4 pt-2 text-center">
              {parsed.expression}
