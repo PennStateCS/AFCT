@@ -421,7 +421,9 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
 
             {step === LAST_STEP && review && (
               <div className="space-y-3">
-                <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
+                {/* min-w-0 + break-words keep long names/emails from overflowing
+                    the dialog on narrow screens. */}
+                <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm [&>dd]:min-w-0 [&>dd]:break-words">
                   <dt className="text-muted-foreground">Name</dt>
                   <dd className="font-medium">{review.name}</dd>
                   <dt className="text-muted-foreground">Code</dt>
