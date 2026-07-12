@@ -123,17 +123,6 @@ export const columns = (
     header: 'Credits',
   },
   {
-    accessorKey: 'regCode',
-    meta: { priority: 2 },
-    header: 'Registration Code',
-    cell: ({ row }) => {
-      const raw = row.getValue<string>('regCode') || '';
-      const upper = raw.toUpperCase();
-      const formatted = upper.length === 6 ? `${upper.slice(0, 3)}-${upper.slice(3)}` : upper;
-      return <span>{formatted}</span>;
-    },
-  },
-  {
     accessorKey: 'semester',
     meta: { priority: 3 },
     header: 'Semester',
@@ -149,7 +138,22 @@ export const columns = (
         row.original.registrationOpenAt,
         row.original.registrationCloseAt,
       );
-      return <Badge variant={registrationStatus.theme.variant}>{registrationStatus.label}</Badge>;
+      return (
+        <div className="flex justify-center">
+          <Badge variant={registrationStatus.theme.variant}>{registrationStatus.label}</Badge>
+        </div>
+      );
+    },
+  },
+  {
+    accessorKey: 'regCode',
+    meta: { priority: 2 },
+    header: 'Registration Code',
+    cell: ({ row }) => {
+      const raw = row.getValue<string>('regCode') || '';
+      const upper = raw.toUpperCase();
+      const formatted = upper.length === 6 ? `${upper.slice(0, 3)}-${upper.slice(3)}` : upper;
+      return <span>{formatted}</span>;
     },
   },
   {
