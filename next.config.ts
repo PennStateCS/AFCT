@@ -30,6 +30,15 @@ const nextConfig: NextConfig = {
     root: __dirname,
   },
 
+  // Turbopack's polling knob, gated on the env the dev compose file sets. Note:
+  // this alone proved insufficient over the Windows bind mount (mtime propagated
+  // but invalidation never fired), which is why dev-in-Docker runs webpack (see
+  // docker-compose.dev.yml). Kept because it's the documented Turbopack fallback
+  // and harmless elsewhere.
+  ...(process.env.CHOKIDAR_USEPOLLING === 'true'
+    ? { watchOptions: { pollIntervalMs: 500 } }
+    : {}),
+
   // Keep native/server-only deps external so they load from node_modules at
   // runtime instead of being bundled (bcrypt is a native addon). This is
   // bundler-agnostic — it applies under Turbopack too, unlike webpack externals.

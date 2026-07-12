@@ -23,7 +23,10 @@ services:
     environment:
       NODE_ENV: development
       # Poll for file changes — native FS events don't cross the bind mount on
-      # Docker Desktop.
+      # Docker Desktop. These env vars only work under webpack (see `command`
+      # below); Turbopack ignores them, and its own polling knob
+      # (next.config watchOptions.pollIntervalMs) proved unreliable over the
+      # Windows bind mount, which is why dev-in-Docker runs webpack.
       CHOKIDAR_USEPOLLING: 'true'
       CHOKIDAR_INTERVAL: '1000'
       WATCHPACK_POLLING: 'true'
@@ -36,7 +39,10 @@ services:
       MIGRATE_ON_START: 'true'
       SEED_ON_START: 'true'
 
-    command: ['npm', 'run', 'dev']
+    # Webpack (not Turbopack) inside Docker: hot reload over the bind mount needs
+    # polling, and only webpack's watcher honors the polling env vars above.
+    # Native (non-Docker) `npm run dev` keeps Turbopack.
+    command: ['npm', 'run', 'dev', '--', '--webpack']
 
     depends_on:
       postgres:
