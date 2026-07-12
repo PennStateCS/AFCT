@@ -161,7 +161,7 @@ const clickNext = async (user: ReturnType<typeof userEvent.setup>) => {
   await user.click(screen.getByRole('button', { name: /^next$/i }));
 };
 
-// Walk the wizard: Details -> Schedule -> Faculty -> Notation -> Review.
+// Walk the wizard: Details -> Schedule -> Faculty -> Options -> Review.
 const fillForm = async (user: ReturnType<typeof userEvent.setup>) => {
   // Step 1: Details
   await user.type(screen.getByLabelText('Course Name'), 'Intro to Testing');
@@ -191,7 +191,7 @@ const fillForm = async (user: ReturnType<typeof userEvent.setup>) => {
   await user.click(await screen.findByLabelText('Ada Lovelace'));
   await clickNext(user);
 
-  // Step 4: Notation (keeps its default)
+  // Step 4: Options (notation keeps its default)
   await screen.findByText('Empty string notation');
   await clickNext(user);
 
