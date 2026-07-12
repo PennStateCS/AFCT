@@ -120,6 +120,9 @@ export default async function DashboardPage() {
             title: true,
             dueDate: true,
             courseId: true,
+            // The module labels each row with its course so multi-course users can
+            // tell which "Lab 3" is which.
+            course: { select: { code: true } },
           },
           orderBy: { dueDate: 'asc' },
         });
