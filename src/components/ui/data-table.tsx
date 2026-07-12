@@ -447,8 +447,11 @@ export function DataTable<TData, TValue>({
                 <TableRow
                   key={`r-${rIndex}`}
                   tabIndex={onRowClick ? 0 : undefined}
+                  role={onRowClick ? 'button' : undefined}
                   onKeyDown={(e) => {
                     if (onRowClick && (e.key === 'Enter' || e.key === ' ')) {
+                      // Stop Space from also scrolling the page when activating the row.
+                      e.preventDefault();
                       onRowClick(row);
                     }
                   }}
