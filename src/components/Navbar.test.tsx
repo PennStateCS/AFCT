@@ -41,6 +41,7 @@ vi.mock('@/components/ui/dropdown-menu', () => {
     DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     DropdownMenuContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     DropdownMenuSeparator: () => <hr />,
+    DropdownMenuLabel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     DropdownMenuItem: ({
       children,
       onClick,
@@ -49,6 +50,39 @@ vi.mock('@/components/ui/dropdown-menu', () => {
       onClick?: () => void;
     }) => (
       <button type="button" onClick={onClick}>
+        {children}
+      </button>
+    ),
+    // Theme picker: forward the group's onValueChange to each item so a click
+    // reports the chosen value, mirroring Radix's radio-group wiring.
+    DropdownMenuRadioGroup: ({
+      children,
+      onValueChange,
+    }: {
+      children: React.ReactNode;
+      onValueChange?: (value: string) => void;
+    }) => (
+      <div>
+        {React.Children.map(children, (child) =>
+          React.isValidElement(child)
+            ? React.cloneElement(
+                child as React.ReactElement<{ onValueChange?: (v: string) => void }>,
+                { onValueChange },
+              )
+            : child,
+        )}
+      </div>
+    ),
+    DropdownMenuRadioItem: ({
+      children,
+      value,
+      onValueChange,
+    }: {
+      children: React.ReactNode;
+      value: string;
+      onValueChange?: (value: string) => void;
+    }) => (
+      <button type="button" onClick={() => onValueChange?.(value)}>
         {children}
       </button>
     ),

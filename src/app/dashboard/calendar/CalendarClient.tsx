@@ -1,6 +1,7 @@
 'use client';
 import React from 'react';
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import type { CalendarDay, Modifiers } from 'react-day-picker';
 import { useQuery } from '@tanstack/react-query';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -178,7 +179,10 @@ export default function CalendarClient({
               </div>
             ) : null}
             {loading ? (
-              <div className="pointer-events-none absolute top-3 right-3 z-10 rounded-md border border-slate-200 bg-white/90 px-2 py-1 shadow-sm backdrop-blur-sm dark:border-neutral-700 dark:bg-neutral-900/90">
+              <div
+                role="status"
+                className="pointer-events-none absolute top-3 right-3 z-10 rounded-md border border-slate-200 bg-white/90 px-2 py-1 shadow-sm backdrop-blur-sm dark:border-neutral-700 dark:bg-neutral-900/90"
+              >
                 <p className="text-muted-foreground text-xs italic">Loading assignments...</p>
               </div>
             ) : null}
@@ -245,11 +249,31 @@ export default function CalendarClient({
                     today: 'rounded-none bg-transparent text-inherit',
                   }}
                   components={{
-                    DayButton: (props: {
-                      day: { date: Date };
-                      onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
-                    }) => {
-                      const dateStr = localDateKey(props.day.date);
+                    DayButton: (
+                      props: {
+                        day: CalendarDay;
+                        modifiers: Modifiers;
+                      } & React.ButtonHTMLAttributes<HTMLButtonElement>,
+                    ) => {
+                      const {
+                        day,
+                        modifiers,
+                        onClick: rdpOnClick,
+                        onKeyDown: rdpOnKeyDown,
+                        onFocus: rdpOnFocus,
+                        onBlur: rdpOnBlur,
+                        tabIndex: rdpTabIndex,
+                      } = props;
+                      // react-day-picker owns keyboard navigation: it hands each day a
+                      // roving tabIndex (only the active day is 0), an arrow-key onKeyDown,
+                      // and it flags the day to focus via modifiers.focused. Forward all of
+                      // that so the grid is one tab stop with working arrow keys, instead of
+                      // ~40 tab stops and dead arrows.
+                      const dayRef = useRef<HTMLDivElement>(null);
+                      useEffect(() => {
+                        if (modifiers.focused) dayRef.current?.focus();
+                      }, [modifiers.focused]);
+                      const dateStr = localDateKey(day.date);
                       const dayAssignments = (assignmentsByDate[dateStr] || [])
                         .slice()
                         .sort(
@@ -259,7 +283,7 @@ export default function CalendarClient({
                       const visibleCount = visibleAssignmentLimit;
 
                       const todayDate = new Date();
-                      const dayDate = props.day.date;
+                      const dayDate = day.date;
                       const isToday =
                         dayDate.getFullYear() === todayDate.getFullYear() &&
                         dayDate.getMonth() === todayDate.getMonth() &&
@@ -278,32 +302,38 @@ export default function CalendarClient({
                       }).format(dayDate);
                       const openCurrentDay = () => {
                         const dayOnly = new Date(
-                          props.day.date.getFullYear(),
-                          props.day.date.getMonth(),
-                          props.day.date.getDate(),
+                          day.date.getFullYear(),
+                          day.date.getMonth(),
+                          day.date.getDate(),
                         );
                         openDayDialog(dayOnly, dayAssignments);
                       };
 
                       return (
                         <div
+                          ref={dayRef}
                           role="button"
-                          tabIndex={0}
+                          tabIndex={rdpTabIndex ?? -1}
                           aria-current={isToday ? 'date' : undefined}
                           aria-keyshortcuts="Enter Space"
                           aria-label={`${formattedDayLabel}${isToday ? ', today' : ''}. ${dayAssignments.length} assignment${dayAssignments.length === 1 ? '' : 's'}. Press Enter to open assignments for this day.`}
+                          onFocus={rdpOnFocus as React.FocusEventHandler<HTMLDivElement> | undefined}
+                          onBlur={rdpOnBlur as React.FocusEventHandler<HTMLDivElement> | undefined}
                           onClick={(e) => {
                             openCurrentDay();
-                            props.onClick?.(e as unknown as React.MouseEvent<HTMLButtonElement>);
+                            rdpOnClick?.(e as unknown as React.MouseEvent<HTMLButtonElement>);
                           }}
                           onKeyDown={(e: React.KeyboardEvent<HTMLDivElement>) => {
+                            // Let react-day-picker handle arrow/Home/End/PageUp/Down navigation first.
+                            rdpOnKeyDown?.(e as unknown as React.KeyboardEvent<HTMLButtonElement>);
+
                             // Do not hijack keyboard events from nested interactive elements (e.g., assignment links).
                             if (e.target !== e.currentTarget) return;
 
                             if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
                               e.preventDefault();
                               openCurrentDay();
-                              props.onClick?.(e as unknown as React.MouseEvent<HTMLButtonElement>);
+                              rdpOnClick?.(e as unknown as React.MouseEvent<HTMLButtonElement>);
                             }
                           }}
                           className={cn(
@@ -322,7 +352,7 @@ export default function CalendarClient({
                                 'rounded bg-sky-600 px-1.5 py-0.5 font-semibold text-white dark:bg-sky-500',
                             )}
                           >
-                            {props.day.date.getDate()}
+                            {day.date.getDate()}
                           </span>
                           <div
                             onClick={() => openCurrentDay()}
@@ -334,6 +364,11 @@ export default function CalendarClient({
                                 <Link
                                   key={a.id}
                                   href={`/dashboard/courses/${a.courseId}/${a.id}`}
+                                  // Kept out of the tab sequence so the calendar grid stays a
+                                  // single roving tab stop (arrow keys move between days). These
+                                  // chips are still clickable, and keyboard users reach the same
+                                  // links via the day dialog (Enter) and the Upcoming list.
+                                  tabIndex={-1}
                                   className={cn(
                                     'assignment-link box-border block min-h-[1rem] w-full min-w-0 cursor-pointer truncate overflow-hidden rounded py-0.5 pl-1 text-left text-xs leading-tight whitespace-nowrap text-white',
                                     isDraft

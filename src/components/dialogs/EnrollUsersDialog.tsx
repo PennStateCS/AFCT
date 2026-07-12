@@ -111,7 +111,6 @@ export function EnrollUserDialog({
       <DialogContent
         className="bg-card max-w-lg"
         onInteractOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
       >
         <DialogHeader>
           <DialogTitle>Enroll User</DialogTitle>

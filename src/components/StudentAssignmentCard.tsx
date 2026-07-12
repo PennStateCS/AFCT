@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Clock, ChevronRight, BookOpen } from 'lucide-react';
 import { formatDateInTimeZone, formatTimeInTimeZone } from '@/lib/date';
@@ -12,7 +12,6 @@ interface StudentAssignmentCardProps {
 }
 
 export function StudentAssignmentCard({ course }: StudentAssignmentCardProps) {
-  const router = useRouter();
   const { timezone } = useEffectiveTimezone();
   const limitText = (value: string, max = 140) =>
     value.length > max ? `${value.slice(0, max - 1)}…` : value;
@@ -47,10 +46,10 @@ export function StudentAssignmentCard({ course }: StudentAssignmentCardProps) {
                   : null;
 
                 return (
-                  <div
+                  <Link
                     key={assignment.id}
-                    className="group border-border bg-card hover:border-primary hover:bg-primary/5 flex cursor-pointer overflow-hidden rounded-lg border shadow transition-all hover:shadow-md"
-                    onClick={() => router.push(`/dashboard/courses/${course.id}/${assignment.id}`)}
+                    href={`/dashboard/courses/${course.id}/${assignment.id}`}
+                    className="group border-border bg-card hover:border-primary hover:bg-primary/5 focus-visible:ring-ring flex cursor-pointer overflow-hidden rounded-lg border shadow transition-all hover:shadow-md focus-visible:ring-2 focus-visible:outline-none"
                   >
                     <div className="bg-primary w-[15px]" />
                     <div className="flex w-full flex-col px-4 py-4 sm:p-5">
@@ -82,7 +81,7 @@ export function StudentAssignmentCard({ course }: StudentAssignmentCardProps) {
                           <span
                             className={`text-sm ${isOverdue ? 'text-red-700' : 'text-green-700'}`}
                           >
-                            <Clock className="h-4 w-4" />
+                            <Clock className="h-4 w-4" aria-hidden="true" />
                           </span>
                           <span
                             className={`text-sm font-medium ${isOverdue ? 'text-red-700' : 'text-green-700'}`}
@@ -120,9 +119,9 @@ export function StudentAssignmentCard({ course }: StudentAssignmentCardProps) {
                       </div>
                     </div>
                     <div className="flex items-center pr-4 text-slate-400">
-                      <ChevronRight className="h-4 w-4" />
+                      <ChevronRight className="h-4 w-4" aria-hidden="true" />
                     </div>
-                  </div>
+                  </Link>
                 );
               })}
             </div>

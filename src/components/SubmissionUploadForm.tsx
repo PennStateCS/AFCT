@@ -119,9 +119,14 @@ export default function SubmissionUploadForm({
           className="w-full"
           size="lg"
         >
-          <Upload className="mr-2 h-4 w-4" />
+          <Upload className="mr-2 h-4 w-4" aria-hidden="true" />
           {isSubmitting ? 'Submitting...' : 'Submit Solution'}
         </Button>
+
+        {/* The disabled button's label change is easy for AT to miss; announce it. */}
+        <p role="status" aria-live="polite" className="sr-only">
+          {isSubmitting ? 'Submitting your solution.' : ''}
+        </p>
       </CardContent>
     </Card>
   );

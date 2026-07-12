@@ -34,6 +34,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -202,6 +203,7 @@ export default function DashboardSidebarMenu() {
                             <Link
                               href={url}
                               aria-label={title}
+                              aria-current={pathname === url ? 'page' : undefined}
                               className="flex min-w-0 items-center gap-2"
                             >
                               <Icon className="h-4 w-4 shrink-0" />
@@ -286,6 +288,11 @@ export default function DashboardSidebarMenu() {
                                 <Link
                                   href={`/dashboard/courses/${course.id}`}
                                   aria-label={`${course.code}: ${course.name}`}
+                                  aria-current={
+                                    pathname.startsWith(`/dashboard/courses/${course.id}`)
+                                      ? 'page'
+                                      : undefined
+                                  }
                                   className="flex min-w-0 items-center gap-2"
                                 >
                                   <Book className="h-4 w-4 shrink-0" />
@@ -345,6 +352,7 @@ export default function DashboardSidebarMenu() {
                         <Link
                           href="/dashboard/calendar"
                           aria-label="Calendar"
+                          aria-current={pathname === '/dashboard/calendar' ? 'page' : undefined}
                           className="flex min-w-0 items-center gap-2"
                         >
                           <Calendar className="h-4 w-4 shrink-0" />
@@ -386,6 +394,9 @@ export default function DashboardSidebarMenu() {
                         <Link
                           href="/dashboard/archived-courses"
                           aria-label="Archived Courses"
+                          aria-current={
+                            pathname === '/dashboard/archived-courses' ? 'page' : undefined
+                          }
                           className="flex min-w-0 items-center gap-2"
                         >
                           <Library className="h-4 w-4 shrink-0" />
@@ -439,43 +450,36 @@ export default function DashboardSidebarMenu() {
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent side="top" className="w-[var(--radix-popper-anchor-width)]">
-                <DropdownMenuItem>
+                {/* Section header, not an action. A Label keeps it out of the menu's
+                    focus/arrow-key order; overrides preserve the exact resting look. */}
+                <DropdownMenuLabel className="font-normal [&_svg:not([class*='text-'])]:text-muted-foreground">
                   <span className="flex w-full items-center gap-2 text-left">
                     <UserRound className="h-4 w-4" />
                     User Account
                   </span>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="cursor-pointer"
+                  onClick={() => setEditProfileOpen(true)}
+                >
+                  <UserPen className="h-4 w-4" />
+                  Edit Profile
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="cursor-pointer"
+                  onClick={() => setChangePasswordOpen(true)}
+                >
+                  <LockKeyhole className="h-4 w-4" />
+                  Change Password
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 text-left"
-                    onClick={() => setEditProfileOpen(true)}
-                  >
-                    <UserPen className="h-4 w-4" />
-                    Edit Profile
-                  </button>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 text-left"
-                    onClick={() => setChangePasswordOpen(true)}
-                  >
-                    <LockKeyhole className="h-4 w-4" />
-                    Change Password
-                  </button>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 text-left"
-                    onClick={() => void safeSignOut({ callbackUrl: '/' })}
-                  >
-                    <LogOut className="h-4 w-4" />
-                    Sign out
-                  </button>
+                <DropdownMenuItem
+                  className="cursor-pointer"
+                  onClick={() => void safeSignOut({ callbackUrl: '/' })}
+                >
+                  <LogOut className="h-4 w-4" />
+                  Sign out
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

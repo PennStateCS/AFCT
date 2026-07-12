@@ -22,6 +22,9 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -38,7 +41,7 @@ import {
 import { EnhancedSidebarTrigger } from './ui/EnhancedSidebarTrigger';
 
 const Navbar: React.FC = () => {
-  const { setTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const { data, status } = useSession();
   const pathname = usePathname();
   const { courseLabel, assignmentLabel } = useNavbarBreadcrumbs();
@@ -182,43 +185,36 @@ const Navbar: React.FC = () => {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuItem>
-              <span className="flex w-full items-center gap-2 text-left cursor-pointer">
+            {/* Section header, not an action. A Label keeps it out of the menu's
+                focus/arrow-key order; overrides preserve the exact resting look. */}
+            <DropdownMenuLabel className="font-normal [&_svg:not([class*='text-'])]:text-muted-foreground">
+              <span className="flex w-full items-center gap-2 text-left">
                 <UserRound className="h-4 w-4" />
                 User Account
               </span>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={() => setEditProfileOpen(true)}
+            >
+              <UserPen className="h-4 w-4" />
+              Edit Profile
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={() => setChangePasswordOpen(true)}
+            >
+              <LockKeyhole className="h-4 w-4" />
+              Change Password
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 text-left cursor-pointer"
-                onClick={() => setEditProfileOpen(true)}
-              >
-                <UserPen className="h-4 w-4" />
-                Edit Profile
-              </button>
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 text-left cursor-pointer"
-                onClick={() => setChangePasswordOpen(true)}
-              >
-                <LockKeyhole className="h-4 w-4" />
-                Change Password
-              </button>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 text-left cursor-pointer"
-                onClick={() => void safeSignOut({ callbackUrl: '/' })}
-              >
-                <LogOut className="h-4 w-4" />
-                Sign out
-              </button>
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={() => void safeSignOut({ callbackUrl: '/' })}
+            >
+              <LogOut className="h-4 w-4" />
+              Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -235,9 +231,12 @@ const Navbar: React.FC = () => {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setTheme('light')}>Light</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setTheme('dark')}>Dark</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setTheme('system')}>System</DropdownMenuItem>
+            {/* Radio group so the current theme is exposed as the checked option. */}
+            <DropdownMenuRadioGroup value={theme} onValueChange={setTheme}>
+              <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="system">System</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

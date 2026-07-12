@@ -53,10 +53,20 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <SessionWatcher />
           <NavbarBreadcrumbProvider>
             <div className="flex min-h-screen w-full">
+              {/* Skip link: visually hidden until a keyboard user tabs to it, then it
+                  jumps focus past the sidebar and navbar to the page content. */}
+              <a
+                href="#main-content"
+                className="bg-background text-foreground ring-ring sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:px-3 focus:py-2 focus:shadow-md focus:ring-2"
+              >
+                Skip to main content
+              </a>
               <DashboardSidebarShell />
               <div className="flex flex-1 flex-col p-4">
                 <Navbar />
-                <main lang="en">{children}</main>
+                <main id="main-content" tabIndex={-1} lang="en">
+                  {children}
+                </main>
               </div>
             </div>
           </NavbarBreadcrumbProvider>
