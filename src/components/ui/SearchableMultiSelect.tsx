@@ -92,7 +92,9 @@ export function SearchableMultiSelect({
           <button
             type="button"
             id={triggerId}
-            aria-haspopup="listbox"
+            // The popup is a Radix DropdownMenu (role="menu"), so advertise "menu"
+            // rather than "listbox" to match what AT actually finds.
+            aria-haspopup="menu"
             aria-expanded={menuOpen}
             aria-invalid={!!error || undefined}
             aria-describedby={describedBy}
@@ -121,6 +123,7 @@ export function SearchableMultiSelect({
         >
           <Input
             placeholder={searchPlaceholder}
+            aria-label={searchPlaceholder}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => e.stopPropagation()}

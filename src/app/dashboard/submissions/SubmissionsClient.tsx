@@ -536,7 +536,7 @@ export default function SubmissionsClient() {
             <TableBody>
               {visibleSubmissions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-muted-foreground py-8 text-center text-sm">
+                  <TableCell colSpan={8} className="text-muted-foreground py-8 text-center text-sm">
                     {loadingCourses || loadingAssignments || loadingSubmissions
                       ? 'Loading submissions...'
                       : 'No submissions match your current filters.'}

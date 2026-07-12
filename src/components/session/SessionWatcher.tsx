@@ -206,6 +206,7 @@ export default function SessionWatcher() {
         <div className="my-4">
           <Progress
             value={progressValue}
+            aria-label="Time remaining before automatic sign-out"
             className="h-2 transition-all duration-1000 ease-linear"
           />
         </div>
