@@ -535,6 +535,13 @@ export function DataTable<TData, TValue>({
                         {rowCount} total
                       </span>
                     ) : null}
+                    {/* Client-side filtering has no visible total; announce the
+                        filtered count to screen readers so search results aren't silent. */}
+                    {!manualPagination ? (
+                      <span className="sr-only" aria-live="polite">
+                        {table.getFilteredRowModel().rows.length} results
+                      </span>
+                    ) : null}
                     <Select
                       value={String(table.getState().pagination.pageSize)}
                       onValueChange={(value) => table.setPageSize(Number(value))}
