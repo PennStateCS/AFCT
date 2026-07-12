@@ -190,7 +190,12 @@ report is about making dynamic changes audible and taming two custom widgets.
 A four-agent re-audit of the current branch confirmed the fixes above and left the
 following. None are critical or serious blockers.
 
-### Deferred by request (visual changes)
+> **Status:** Every no-visual-change item is done. Everything still listed below is a
+> deliberate color/contrast (or otherwise visual) change, held for the planned visual
+> refresh — fold these contrast fixes into that redesign rather than patching tokens
+> piecemeal now.
+
+### Deferred to the visual refresh (color/contrast changes)
 - **S5 / feedback body contrast** - `FeedbackDialog.tsx:36` and
   `submissions/feedback.tsx:36` hardcode `text-slate-900` on `bg-card`: near-black on
   near-black in dark mode (~1.3:1). One-token fix (`text-foreground`) but changes color.
