@@ -1561,7 +1561,7 @@ export interface paths {
         put?: never;
         /**
          * Create a course
-         * @description Creates a course (with a generated registration code) and seeds its faculty  roster, all in one transaction. System administrators only. Datetime-local  strings are interpreted in the actor's effective timezone before being stored  as UTC.
+         * @description Creates a course (with a generated registration code) and seeds its faculty  roster, all in one transaction. System administrators only. A new course is  always created unpublished — publishing is a separate action — and requires at  least one faculty member. Datetime-local strings are interpreted in the course's  timezone before being stored as UTC.
          *
          *     **Auth:** requires FACULTY
          *
@@ -7313,22 +7313,21 @@ export interface operations {
                     registrationOpenAt: string;
                     /** @description datetime-local string */
                     registrationCloseAt: string;
-                    isPublished?: boolean;
-                    instructorIds?: string[];
-                    facultyIds?: string[];
+                    /** @description Faculty to seed the roster; at least one is required. */
+                    instructorIds: string[];
                     emptyStringNotation?: string;
                 };
             };
         };
         responses: {
-            /** @description Course created; returns the course with its `enrolled` roster. */
+            /** @description Course created (always unpublished); returns the course with its `enrolled` roster. */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Missing registration window, or Zod validation failed. */
+            /** @description Missing registration window, no faculty, or Zod validation failed. */
             400: {
                 headers: {
                     [name: string]: unknown;
