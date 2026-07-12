@@ -22,6 +22,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -182,12 +183,14 @@ const Navbar: React.FC = () => {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuItem>
-              <span className="flex w-full items-center gap-2 text-left cursor-pointer">
+            {/* Section header, not an action. A Label keeps it out of the menu's
+                focus/arrow-key order; overrides preserve the exact resting look. */}
+            <DropdownMenuLabel className="font-normal [&_svg:not([class*='text-'])]:text-muted-foreground">
+              <span className="flex w-full items-center gap-2 text-left">
                 <UserRound className="h-4 w-4" />
                 User Account
               </span>
-            </DropdownMenuItem>
+            </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="cursor-pointer"
