@@ -8,6 +8,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog';
@@ -183,6 +184,9 @@ export function DownloadLogsDialog({ open, onOpenChange }: DownloadLogsDialogPro
         <DialogHeader>
           {/* Title */}
           <DialogTitle>Download Logs</DialogTitle>
+          <DialogDescription className="sr-only">
+            Choose a date range and format, then download the activity logs.
+          </DialogDescription>
         </DialogHeader>
 
         {/* Form */}

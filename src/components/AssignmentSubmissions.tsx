@@ -807,8 +807,14 @@ export default function AssignmentSubmissions({
                 No problems have been added to this assignment yet.
               </div>
             ) : showStudentDataLoading ? (
-              <div className="flex min-h-[320px] flex-col items-center justify-center gap-3">
-                <div className="border-muted-foreground/30 border-t-primary h-8 w-8 animate-spin rounded-full border-4" />
+              <div
+                role="status"
+                className="flex min-h-[320px] flex-col items-center justify-center gap-3"
+              >
+                <div
+                  aria-hidden="true"
+                  className="border-muted-foreground/30 border-t-primary h-8 w-8 animate-spin rounded-full border-4"
+                />
                 <p className="text-muted-foreground text-sm">Loading submissions...</p>
               </div>
             ) : (
