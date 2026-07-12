@@ -1,11 +1,11 @@
 # AFCT Dashboard documentation
 
 Everything here supports one of three jobs: using the app, understanding how it works, or
-standing up a server. Pick the section that matches what you are doing.
+standing up a server. Start with whichever section matches what you are doing.
 
 ## Using the app
 
-Role guides, one per job. Read yours through once; after that it works as a lookup.
+Role guides, one per job. Read yours through once; after that, treat it as a lookup.
 
 - [Administrator guide](guides/admin.md). Accounts, signup control, the course lifecycle,
   system settings, the submission queue, status, audit, and backups.
@@ -39,7 +39,7 @@ straight into Postman, Insomnia, or a client generator.
 
 ## Keeping the docs honest
 
-Treat these as living documents. When a feature changes, update the matching page in the
-same commit, so the docs never drift from the product. Access control has exactly one
-home, [Roles and permissions](reference/roles-and-permissions.md); link to it rather than
+These are living documents. When a feature changes, update the matching page in the same
+commit, so the docs never drift from the product. Access control has exactly one home,
+[Roles and permissions](reference/roles-and-permissions.md); link to it rather than
 restate a rule that could later change underneath the copy.
