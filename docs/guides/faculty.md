@@ -3,58 +3,88 @@
 **Audience:** instructors and teaching assistants.
 
 Your role is set **per course** in the roster, and **faculty and TAs currently
-have the same abilities** within a course. Everything here applies to the courses
-you are assigned to and to no others — you cannot see or touch a course you're not
-on. For the full permission model, see [Roles and permissions](../reference/roles-and-permissions.md).
+have the same abilities** within a course. Everything in this guide applies to
+the courses you are assigned to and to no others; you cannot see or touch a
+course you're not on, even to peek. The full permission model lives in
+[Roles and permissions](../reference/roles-and-permissions.md).
 
-An administrator creates courses and assigns you to them; you run the course from
-there. If you need a new course, a course duplicated, a course un-archived, or a
-course deleted, ask an administrator — those are admin-only.
+An administrator creates courses and assigns you to them; from there the course
+is yours to run. If you need a new course, a course duplicated, a course
+un-archived, or a course deleted, ask an administrator. Those four are
+admin-only, and everything else is yours.
 
 ---
 
 ## Courses
 
-- **View and edit** your assigned courses — name, code, semester, credits, dates,
-  and the course timezone.
-- **Publish** a course to make it visible to enrolled students. An unpublished
-  course is invisible to students by link and by search alike; they get a
-  "not found" until you publish.
-- **Archive** a course at the end of a term. Archiving makes it **read-only for
-  everyone**, including you and admins. Its settings, dates, roster, and grades are
-  frozen. Ask an administrator if you need it reopened.
+You can **view and edit** your assigned courses: name, code, semester, credits,
+dates, and the course timezone.
+
+You **publish** a course to make it visible to enrolled students. Until you do,
+the course is invisible to students by link and by search alike; a student who
+somehow gets the URL just sees "not found." This gives you room to build the
+course in peace. Enroll people, write assignments, get things right, and flip
+the switch when you're ready.
+
+You **archive** a course at the end of a term. Archiving makes the course
+**read-only for everyone**, including you and admins. Settings, dates, roster,
+and grades all freeze. Treat it as closing the books: do it after final grades
+are settled, because if you need it reopened you'll have to ask an
+administrator, and that is by design.
 
 ---
 
 ## Timezone and deadlines
 
-Each course has a timezone, which defaults to the server default. Due dates you
-enter are read **in the course timezone** and stored as a single moment in time,
-so every student sees the same deadline no matter where they are. Students see
-each deadline in both their own local time and the course zone, so no one
-misjudges the cutoff. Lateness is always decided by the server against that stored
-instant — a student changing their device clock or timezone changes only what they
-*see*, never whether their work is on time.
+Each course has a timezone, which defaults to the server default. When you
+enter a due date, it is read **in the course timezone** and stored as a single
+moment in time. That single instant is what everyone is measured against, so a
+student in another hemisphere faces exactly the same cutoff as one sitting in
+your classroom.
+
+Students see each deadline in both their own local time and the course zone,
+which heads off the classic misjudgment where a traveling student does the
+timezone arithmetic wrong. And lateness is always decided by the server against
+the stored instant. A student who changes their device clock or timezone
+changes only what they *see*, never whether their work counts as on time. You
+will still get the email claiming otherwise; now you know what to say.
 
 ---
 
 ## Assignments and problems
 
-- **Create an assignment** with a due date, and optionally **allow late
-  submissions** up to a cutoff datetime. If you enable late submissions you must
-  set a cutoff, and the cutoff must be on or after the due date.
-- **Add problems** to an assignment. For each problem you set:
-  - **Points** (`maxPoints`).
-  - **Maximum submissions** — a cap on attempts, or unlimited.
-  - **Autograding** on or off.
-- **Upload the answer/solution file** for a problem. **Students never see or
-  download these files** — they are the autograder's key.
-- **Publish an assignment** to release it. Unpublished assignments do not appear to
-  students; on your own calendar they show marked **Draft** so you can tell them
-  apart from released work.
-- **Edit or delete** an assignment. You cannot unpublish an assignment that already
-  has submissions or grades, or change its group/individual mode once submissions
-  exist. An assignment with submissions or comments cannot be deleted.
+You **create an assignment** with a due date, and you can optionally **allow
+late submissions** up to a cutoff datetime. Two rules go together here: if you
+enable late submissions you must set a cutoff, and the cutoff must be on or
+after the due date. There is no such thing as an open-ended late window, which
+saves you from the assignment that never actually closes.
+
+You **add problems** to an assignment. For each problem you set:
+
+- **Points** (`maxPoints`).
+- **Maximum submissions**, either a cap on attempts or unlimited. A generous
+  cap encourages iteration against the autograder; a tight one makes each
+  attempt count. Pick deliberately, because attempts are consumed and students
+  will notice.
+- **Autograding** on or off.
+
+You **upload the answer/solution file** for each problem. **Students never see
+or download these files.** The solution is the autograder's key, nothing more;
+it stays on the staff side no matter what.
+
+You **publish an assignment** to release it. Unpublished assignments do not
+appear to students at all, and on your own calendar they show marked **Draft**
+so you can tell your works-in-progress apart from what students can actually
+see. It is worth building the whole assignment, submitting to it yourself (see
+grading below), and only then publishing.
+
+You can **edit or delete** an assignment, within limits that protect student
+work. You cannot unpublish an assignment that already has submissions or
+grades, and you cannot change its group/individual mode once submissions exist.
+An assignment with submissions or comments cannot be deleted. The common thread
+is that once students have acted on something, you can't pull it out from under
+them. If you catch a mistake in a live assignment, edit it forward rather than
+trying to retract it.
 
 None of these edits are possible while the course is archived.
 
@@ -62,58 +92,85 @@ None of these edits are possible while the course is archived.
 
 ## Roster and enrollment
 
-- **Add or remove members**, and **assign any course role** — including making
-  another person faculty or TA — within your own course.
-- **Enroll a student directly** at any time (you may bypass the enrollment window),
-  or **share an enroll code** for self-enrollment while the enrollment window is
-  open and the course is published.
-- **Bulk-enroll** students from a list.
-- **Removing a student** revokes access but **keeps their work** — re-enroll them
-  and their submissions and grades reattach.
+You manage your own roster. You can **add or remove members** and **assign any
+course role**, including making another person faculty or TA, within your own
+course. Adding a co-instructor or promoting a strong student to TA does not
+require an administrator.
 
-A few safety rules: students cannot remove themselves; a member who has
-submissions cannot be removed; and a course must always keep at least one faculty
-member, so removing or demoting the last faculty is refused. Faculty cannot remove
-or demote another faculty member or an admin — only an administrator can.
+You can **enroll a student directly** at any time, even outside the enrollment
+window, which is how you handle the student who adds during week three. For
+everyone else, **share an enroll code** and let students enroll themselves;
+self-enrollment works while the enrollment window is open and the course is
+published. For a whole section at once, **bulk-enroll** from a list.
+
+**Removing a student revokes access but keeps their work.** Re-enroll them and
+their submissions and grades reattach. So a mistaken drop, or a student who
+drops and re-adds, costs nothing.
+
+A few safety rules keep rosters from going sideways. Students cannot remove
+themselves. A member who has submissions cannot be removed. A course must
+always keep at least one faculty member, so removing or demoting the last
+faculty is refused; a course with no instructor is an orphan nobody can manage.
+And faculty cannot remove or demote another faculty member or an admin. Only an
+administrator can, which keeps co-instructor disputes out of the roster page.
 
 ---
 
 ## Grading and feedback
 
-- **See every student's submissions and grades** in your course.
-- With **autograding** on, submissions are scored automatically as they finish.
-  You can **override a score by hand** — including your own — and every override is
-  recorded in the audit log with the before-and-after value.
-- **Re-run** a single submission, or every submission in a course, after you change
-  a problem or its solution file.
-- Your own **test-submissions are throwaways** — you can submit to a problem to
-  check the autograder, and because those submissions are attributed to you (not a
-  student on the roster) they never count as student work in grades or reports.
-- **Export grades** for your courses.
+You **see every student's submissions and grades** in your course.
 
-Students see their score and feedback **immediately** once the grader finishes;
-there is no separate release step to hold grades back today.
+With **autograding** on, submissions are scored automatically as they finish.
+The autograder's score is not the last word: you can **override a score by
+hand**, including your own scores, and every override is recorded in the audit
+log with the before-and-after value. Override freely when the situation calls
+for it; the log means you never have to reconstruct what happened from memory
+when a student appeals.
+
+You can **re-run** a single submission, or every submission in a course. This
+is the tool for the day you discover the solution file was wrong: fix the
+problem or its solution file, re-run everything, and every score updates
+against the corrected key.
+
+Your own **test-submissions are throwaways**. Submit to a problem yourself to
+check that the autograder behaves the way you expect. Because those submissions
+are attributed to you and you are not a student on the roster, they never count
+as student work in grades or reports. Do this before publishing every
+assignment; five minutes of testing saves an inbox full of "the grader is
+broken" the night it's due.
+
+You can **export grades** for your courses.
+
+One thing to know before you publish anything: students see their score and
+feedback **immediately** once the grader finishes. There is no separate release
+step to hold grades back today. If the solution file is wrong, students see
+wrong scores in real time, which is one more argument for testing first.
 
 ### Comments
 
-Comment on a student's work to leave feedback. Comments are **private per student**:
-each student sees only their own thread plus your replies — never a classmate's.
-On a group assignment the thread belongs to the group, and every member of that
-group sees it. Students cannot delete comments; staff and admins can.
+Comment on a student's work to leave feedback. Comments are **private per
+student**: each student sees only their own thread plus your replies, never a
+classmate's. You can be as candid in one student's thread as you would be in
+office hours. On a group assignment the thread belongs to the group, and every
+member of that group sees it, so write those with the whole group in mind.
+Students cannot delete comments; staff and admins can.
 
 ---
 
 ## Password resets
 
-You can reset the password of a **student enrolled in one of your courses**. You
-cannot act on other staff, on admins, or on anyone who is not a student in a course
-you teach. (An administrator can reset anyone's password.)
+You can reset the password of a **student enrolled in one of your courses**,
+which covers the student who shows up to your office hours locked out. You
+cannot act on other staff, on admins, or on anyone who is not a student in a
+course you teach; the scope of the power matches the scope of your
+responsibility. (An administrator can reset anyone's password.)
 
 ---
 
 ## Groups (group assignments)
 
-A group assignment has **one shared submission per group**. Any member can submit,
-and every member of that group sees the submission, its files, its grade, and its
-feedback. Visibility never crosses into another group. You (and admins) see all
-groups and can create groups and assign members while the course is active.
+A group assignment has **one shared submission per group**. Any member can
+submit, and every member of that group sees the submission, its files, its
+grade, and its feedback. Visibility never crosses into another group; group A
+cannot inspect group B's work, period. You (and admins) see all groups, and you
+can create groups and assign members while the course is active.
