@@ -158,6 +158,9 @@ export const DuplicateFormSchema = BaseCourseFormObject.extend({
   copyMode: z.enum(['assignments', 'assignments_with_problems', 'problems']).optional(),
   copyFaculty: z.boolean().optional(),
   copyTAs: z.boolean().optional(),
+  // Additional faculty for the copy; with copyFaculty off, at least one is
+  // required (see the superRefine below) so the copy is never faculty-less.
+  instructorIds: z.array(z.string()).optional(),
 })
   .refine((d) => d.startDate <= d.endDate, {
     path: ['startDate'],
@@ -199,6 +202,15 @@ export const DuplicateFormSchema = BaseCourseFormObject.extend({
         code: z.ZodIssueCode.custom,
         path: ['registrationCloseAt'],
         message: 'Self registration close must be on or after the open date.',
+      });
+    }
+
+    // The copy must end up with at least one faculty member.
+    if (!d.copyFaculty && (d.instructorIds ?? []).length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['instructorIds'],
+        message: 'Copy the faculty roster or pick at least one faculty member.',
       });
     }
   });
