@@ -65,6 +65,11 @@ describe('DuplicateCourseDialog', () => {
     global.fetch = originalFetch;
   });
 
+  // Walk the wizard: Details -> Schedule -> Content -> Roster -> Review.
+  const clickNext = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+  };
+
   it('duplicates a course after completing all steps', async () => {
     const user = userEvent.setup();
     const setOpen = vi.fn();
@@ -80,6 +85,7 @@ describe('DuplicateCourseDialog', () => {
       />,
     );
 
+    // Details
     await user.clear(screen.getByLabelText('Course Name'));
     await user.type(screen.getByLabelText('Course Name'), 'Advanced Theory');
     await user.clear(screen.getByLabelText('Course Code'));
@@ -88,20 +94,23 @@ describe('DuplicateCourseDialog', () => {
     await user.type(screen.getByLabelText('Semester'), 'Spring 2026');
     await user.clear(screen.getByLabelText('Credits'));
     await user.type(screen.getByLabelText('Credits'), '4');
+    await clickNext(user);
 
-    const nextButtonsStep1 = screen.getByRole('button', { name: 'Next' }) as HTMLButtonElement;
-    nextButtonsStep1.disabled = false;
-    await user.click(nextButtonsStep1);
-    await waitFor(() => expect(screen.getByText(/Step 2/)).toBeInTheDocument());
+    // Schedule (prefilled from the source course)
+    await screen.findByLabelText('Start Date & Time');
+    await clickNext(user);
 
-    await user.click(screen.getByText('Assignments only'));
-    await user.click(screen.getByText('Copy faculty roster'));
+    // Content
+    await user.click(await screen.findByText('Assignments only'));
+    await clickNext(user);
 
-    const nextButtonStep2 = screen.getByRole('button', { name: 'Next' }) as HTMLButtonElement;
-    nextButtonStep2.disabled = false;
-    await user.click(nextButtonStep2);
-    await waitFor(() => expect(screen.getByText(/Step 3/)).toBeInTheDocument());
+    // Roster
+    await user.click(await screen.findByText('Copy faculty roster'));
+    await clickNext(user);
 
+    // Review: no submit yet, confirm required.
+    await screen.findByText('Advanced Theory');
+    expect(fetchMock).not.toHaveBeenCalled();
     await user.click(screen.getByLabelText(/I confirm I want to duplicate/i));
 
     fetchMock.mockResolvedValueOnce({
@@ -120,6 +129,7 @@ describe('DuplicateCourseDialog', () => {
       code: 'CS 450',
       copyAssignments: true,
       copyProblems: false,
+      copyFaculty: true,
     });
 
     expect(onSuccess).toHaveBeenCalledWith('new-course-id');
@@ -140,22 +150,28 @@ describe('DuplicateCourseDialog', () => {
       />,
     );
 
+    // Details
     await user.type(screen.getByLabelText('Course Name'), 'Course Copy');
     await user.type(screen.getByLabelText('Course Code'), 'CS 450');
     await user.type(screen.getByLabelText('Semester'), 'Spring 2026');
     await user.clear(screen.getByLabelText('Credits'));
     await user.type(screen.getByLabelText('Credits'), '3');
-    await user.type(screen.getByLabelText('Start Date & Time'), '2026-01-15T12:00');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+
+    // Schedule
+    await user.type(await screen.findByLabelText('Start Date & Time'), '2026-01-15T12:00');
     await user.type(screen.getByLabelText('End Date & Time'), '2026-05-15T12:00');
     await user.type(screen.getByLabelText('Self Registration Opens'), '2026-01-01T12:00');
     await user.type(screen.getByLabelText('Self Registration Closes'), '2026-01-14T12:00');
-
     await user.click(screen.getByRole('button', { name: 'Next' }));
-    await waitFor(() => expect(screen.getByText(/Step 2/)).toBeInTheDocument());
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-    await waitFor(() => expect(screen.getByText(/Step 3/)).toBeInTheDocument());
 
-    await user.click(screen.getByLabelText(/I confirm I want to duplicate/i));
+    // Content -> Roster -> Review (defaults kept)
+    await screen.findByText('What would you like to copy?');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await screen.findByText('Copy faculty roster');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+
+    await user.click(await screen.findByLabelText(/I confirm I want to duplicate/i));
     await user.click(screen.getByRole('button', { name: 'Duplicate Course' }));
 
     expect(fetchMock).not.toHaveBeenCalled();
@@ -164,7 +180,7 @@ describe('DuplicateCourseDialog', () => {
     );
   });
 
-  it('blocks moving to step 2 when credits are invalid', async () => {
+  it('holds the Details step when credits are invalid', async () => {
     const user = userEvent.setup();
 
     render(
@@ -181,7 +197,8 @@ describe('DuplicateCourseDialog', () => {
     await user.type(screen.getByLabelText('Credits'), '7');
     await user.click(screen.getByRole('button', { name: 'Next' }));
 
-    expect(screen.queryByText(/Step 2/)).toBeNull();
+    // Still on Details: the Schedule fields never mount.
+    expect(screen.queryByLabelText('Start Date & Time')).toBeNull();
     expect(screen.getByText('Credits must be an integer between 1 and 6.')).toBeInTheDocument();
   });
 });
