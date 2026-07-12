@@ -453,7 +453,7 @@ export default function LoginPage() {
                   name="signup-first"
                   required
                   requiredMark
-                  autoComplete="off"
+                  autoComplete="given-name"
                   value={signupFirst}
                   setValue={setSignupFirst}
                   error={signupErrors.first}
@@ -464,7 +464,7 @@ export default function LoginPage() {
                   name="signup-last"
                   required
                   requiredMark
-                  autoComplete="off"
+                  autoComplete="family-name"
                   value={signupLast}
                   setValue={setSignupLast}
                   error={signupErrors.last}

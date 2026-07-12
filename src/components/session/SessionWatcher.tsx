@@ -195,7 +195,9 @@ export default function SessionWatcher() {
 
   return (
     <Dialog open={showModal} onOpenChange={() => {}}>
-      <DialogContent>
+      {/* No close button: dismissal is an explicit choice (Extend or Log out), and
+          onOpenChange is a deliberate no-op, so a rendered X would be inert. */}
+      <DialogContent showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>Session Expiring</DialogTitle>
           <DialogDescription>
