@@ -206,23 +206,31 @@ following. None are critical or serious blockers.
   viewer ever becomes student-facing.
 
 ### Moderate refinements (no visual change, next-batch candidates)
-- **Submissions filter state + count** - the hand-rolled table's status pills lack
-  `aria-pressed`; filtered result count is not announced (`SubmissionsClient.tsx:487`).
-- **Client-mode DataTable result count** - announced only under `manualPagination`;
-  client filtering (Users, Courses) is silent (`data-table.tsx:481`).
-- **SearchableMultiSelect menu semantics** - trigger says `aria-haspopup="menu"` but the
-  popup has no `menuitemcheckbox` roles; needs a real listbox/menu pattern (medium).
-- **Theme menu current-selection state** - `Navbar.tsx:228` / `ThemeToggle.tsx:27` use
-  plain items with no `aria-checked`; want `menuitemradio`.
-- **"User Account" dead menu item** - still a focusable no-op `DropdownMenuItem`
-  (`Navbar.tsx:185`, `DashboardSidebarMenu.tsx:442`); make it a `DropdownMenuLabel`.
-- **Session countdown announcement** - the ticking time in the timeout dialog is not in a
-  throttled `aria-live`/`role="timer"` region (`SessionWatcher.tsx:201`).
-- **Login duplicate error announcement** - field errors now fire via both the page-level
-  assertive summary and the per-field `role="alert"`; pick one.
+- ~~**Submissions filter state + count**~~ - DONE. Status pills carry `aria-pressed`
+  and a `role="status"` region announces the filtered count (`SubmissionsClient.tsx`).
+- ~~**Client-mode DataTable result count**~~ - DONE. An sr-only `aria-live` region now
+  announces the client-filtered row count too (`data-table.tsx`).
+- ~~**"User Account" dead menu item**~~ - DONE. Now a `DropdownMenuLabel` (out of the
+  menu's focus/arrow order), with overrides that keep the resting look identical
+  (`Navbar.tsx`, `DashboardSidebarMenu.tsx`).
+- ~~**Session countdown announcement**~~ - DONE. The dialog's remaining time sits in a
+  throttled `role="timer"` `aria-live` region (`SessionWatcher.tsx:233`).
+- ~~**Login duplicate error announcement**~~ - DONE. The page-level summary is no longer
+  a live region (static context only); the per-field `role="alert"` is the single
+  announcer (`login/page.tsx:383`).
+- **SearchableMultiSelect menu semantics** - STILL OPEN. Trigger says
+  `aria-haspopup="menu"` but the popup has no `menuitemcheckbox` roles; needs a real
+  listbox/menu pattern (medium).
+- **Theme menu current-selection state** - STILL OPEN. `Navbar.tsx` / `ThemeToggle.tsx`
+  use plain items with no `aria-checked`; want `menuitemradio` (borderline-visual: adds
+  a check indicator).
 
 ### Minor
-- Login framer-motion transitions are not gated by `useReducedMotion()` (the CSS reset
-  does not catch WAAPI); `requiredMark` still not rendered; the Sign In button is
-  hard-disabled on invalid email; a few viewer dialogs (Log/Cfg/Regex) still lack a
-  `DialogDescription`; a couple of heading-level skips in `StudentAssignmentView`.
+- ~~Login framer-motion transitions not gated by `useReducedMotion()`~~ - DONE
+  (`login/page.tsx`). ~~Viewer dialogs (Log/Cfg/Regex) lacking a `DialogDescription`~~ -
+  DONE (all three carry an sr-only description). ~~Heading-level skips in
+  `StudentAssignmentView`~~ - resolved by the explicit `aria-level` annotations
+  (outline is now h1 -> h2 -> h2 -> h3).
+- Still open: `requiredMark` is passed to `InputGroup` but not rendered; the Sign In
+  button is hard-disabled on an invalid email (blocks error discovery). Both are visual
+  or behavioral changes, so deferred with the other visual items.
