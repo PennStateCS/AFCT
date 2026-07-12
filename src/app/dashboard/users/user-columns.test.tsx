@@ -28,7 +28,6 @@ vi.mock('@/components/dialogs/ConfirmDialog', () => ({ ConfirmDialog: () => null
 
 import { getUserColumns } from './user-columns';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const renderCell = (key: string, user: Record<string, unknown>) => {
   const cols = getUserColumns(vi.fn(), 'UTC') as ColumnDef<Record<string, unknown>>[];
   const col = cols.find(
