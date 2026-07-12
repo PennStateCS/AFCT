@@ -5,10 +5,10 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -84,18 +84,19 @@ export function SearchableMultiSelect({
           {label}
         </Label>
       ) : null}
-      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-        <DropdownMenuTrigger asChild>
-          {/* This trigger is a combobox-style validation control; aria-invalid is
-              intentionally exposed for AT even though the implicit button role flags it. */}
-          {/* eslint-disable-next-line jsx-a11y/role-supports-aria-props */}
+      {/* A disclosure (Popover), not a menu: the panel holds a search box and a
+          group of real checkboxes, so a menu's role/roving-focus model would be a
+          lie. Radix Popover.Trigger supplies aria-haspopup="dialog", aria-expanded,
+          and aria-controls; each checkbox conveys its own name + checked state. */}
+      <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+        {/* aria-invalid is intentional on this combobox-style trigger so AT hears
+            the validation state; the jsx-a11y rule wrongly treats it as
+            unsupported on the button role. */}
+        {/* eslint-disable jsx-a11y/role-supports-aria-props */}
+        <PopoverTrigger asChild>
           <button
             type="button"
             id={triggerId}
-            // The popup is a Radix DropdownMenu (role="menu"), so advertise "menu"
-            // rather than "listbox" to match what AT actually finds.
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
             aria-invalid={!!error || undefined}
             aria-describedby={describedBy}
             disabled={disabled}
@@ -115,21 +116,27 @@ export function SearchableMultiSelect({
             </span>
             <ChevronDown className="text-muted-foreground ml-2 h-4 w-4 shrink-0" />
           </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
+        </PopoverTrigger>
+        {/* eslint-enable jsx-a11y/role-supports-aria-props */}
+        <PopoverContent
           align="start"
           collisionPadding={8}
-          className="bg-popover flex max-h-72 w-[var(--radix-dropdown-menu-trigger-width)] flex-col p-2"
+          // Name the disclosure panel so its dialog role isn't anonymous to AT.
+          aria-label={label ? `${label} options` : 'Options'}
+          className="bg-popover flex max-h-72 w-[var(--radix-popover-trigger-width)] flex-col p-2"
         >
           <Input
             placeholder={searchPlaceholder}
             aria-label={searchPlaceholder}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.stopPropagation()}
             className="mb-2 h-9 shrink-0 text-sm"
           />
-          <div className="min-h-0 flex-1 overflow-auto rounded border">
+          <div
+            role="group"
+            aria-label={label ?? 'Options'}
+            className="min-h-0 flex-1 overflow-auto rounded border"
+          >
             {filteredItems.length === 0 ? (
               <div className="text-muted-foreground p-3 text-center text-sm">{emptyStateText}</div>
             ) : (
@@ -139,7 +146,6 @@ export function SearchableMultiSelect({
                   <label
                     key={item.id}
                     className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 px-3 py-2 text-sm"
-                    onClick={(event) => event.stopPropagation()}
                   >
                     <Checkbox
                       checked={!!checked}
@@ -151,8 +157,8 @@ export function SearchableMultiSelect({
               })
             )}
           </div>
-        </DropdownMenuContent>
-      </DropdownMenu>
+        </PopoverContent>
+      </Popover>
       {error ? (
         <p id={describedBy} role="alert" className="mt-1 text-xs text-red-600">
           {error}

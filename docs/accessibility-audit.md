@@ -221,9 +221,11 @@ following. None are critical or serious blockers.
 - ~~**Theme menu current-selection state**~~ - DONE. Both `Navbar.tsx` and
   `ThemeToggle.tsx` now use a `DropdownMenuRadioGroup` bound to the active theme, so the
   current choice is exposed as the checked `menuitemradio` (adds a left check indicator).
-- **SearchableMultiSelect menu semantics** - STILL OPEN. Trigger says
-  `aria-haspopup="menu"` but the popup has no `menuitemcheckbox` roles; needs a real
-  listbox/menu pattern (medium).
+- ~~**SearchableMultiSelect menu semantics**~~ - DONE. Rebuilt on a `Popover`
+  disclosure instead of a `DropdownMenu`, so the panel no longer claims a false
+  `role="menu"`. The options are a labelled `role="group"` of native checkboxes (each
+  conveys its own name + checked state), and Radix supplies the trigger's
+  `aria-haspopup="dialog"` / `aria-expanded` / `aria-controls`.
 
 ### Minor
 - ~~Login framer-motion transitions not gated by `useReducedMotion()`~~ - DONE
