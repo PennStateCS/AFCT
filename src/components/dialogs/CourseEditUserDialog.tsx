@@ -229,7 +229,6 @@ export default function CourseEditUserDialog({
       <DialogContent
         className="bg-card max-w-md"
         onInteractOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
       >
         <DialogHeader>
           <DialogTitle>Edit User</DialogTitle>

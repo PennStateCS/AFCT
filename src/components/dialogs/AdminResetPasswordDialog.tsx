@@ -80,7 +80,6 @@ export function AdminResetPasswordDialog({
       <DialogContent
         className="bg-card"
         onInteractOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
       >
         <DialogHeader>
           <DialogTitle>Reset Password</DialogTitle>

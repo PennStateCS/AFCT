@@ -112,7 +112,6 @@ export default function BulkEnrollDialog({
       <DialogContent
         className="bg-card max-w-3xl"
         onInteractOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
       >
         <DialogHeader>
           <DialogTitle>Bulk Enroll Students</DialogTitle>
