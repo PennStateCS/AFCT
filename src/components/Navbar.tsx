@@ -23,6 +23,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -39,7 +41,7 @@ import {
 import { EnhancedSidebarTrigger } from './ui/EnhancedSidebarTrigger';
 
 const Navbar: React.FC = () => {
-  const { setTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const { data, status } = useSession();
   const pathname = usePathname();
   const { courseLabel, assignmentLabel } = useNavbarBreadcrumbs();
@@ -229,9 +231,12 @@ const Navbar: React.FC = () => {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setTheme('light')}>Light</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setTheme('dark')}>Dark</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setTheme('system')}>System</DropdownMenuItem>
+            {/* Radio group so the current theme is exposed as the checked option. */}
+            <DropdownMenuRadioGroup value={theme} onValueChange={setTheme}>
+              <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="system">System</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
