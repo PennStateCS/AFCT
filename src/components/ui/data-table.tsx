@@ -511,7 +511,7 @@ export function DataTable<TData, TValue>({
                     >
                       <ArrowLeft className="h-4 w-4" aria-hidden="true" />
                     </Button>
-                    <span className="px-2 whitespace-nowrap">
+                    <span className="px-2 whitespace-nowrap" aria-live="polite">
                       Page {table.getState().pagination.pageIndex + 1} of{' '}
                       {Math.max(1, table.getPageCount())}
                     </span>
@@ -528,7 +528,10 @@ export function DataTable<TData, TValue>({
 
                   <div className="text-foreground flex items-center gap-3 font-normal">
                     {typeof rowCount === 'number' ? (
-                      <span className="text-muted-foreground text-sm whitespace-nowrap">
+                      <span
+                        className="text-muted-foreground text-sm whitespace-nowrap"
+                        aria-live="polite"
+                      >
                         {rowCount} total
                       </span>
                     ) : null}

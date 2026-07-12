@@ -190,8 +190,12 @@ export default function FileUploadInput({
       )}
 
       {hasError && (
-        <p id={`${id}-error`} className="text-destructive flex items-center gap-1 text-xs">
-          <X className="h-3 w-3" />
+        <p
+          id={`${id}-error`}
+          role="alert"
+          className="text-destructive flex items-center gap-1 text-xs"
+        >
+          <X className="h-3 w-3" aria-hidden="true" />
           {fileError || error}
         </p>
       )}
