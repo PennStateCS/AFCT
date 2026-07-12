@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Dialog,
   DialogContent,
@@ -14,6 +15,8 @@ import { Button } from '@/components/ui/button';
 import { Stepper } from '@/components/ui/stepper';
 import InputGroup from '@/components/ui/InputGroup';
 import { Checkbox } from '@/components/ui/checkbox';
+import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
+import type { User } from '@prisma/client';
 import { useForm, Controller, type FieldPath } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
@@ -54,7 +57,7 @@ const STEPS: ReadonlyArray<{ title: string; fields: FieldPath<FormValues>[] }> =
     fields: ['startDate', 'endDate', 'registrationOpenAt', 'registrationCloseAt'],
   },
   { title: 'Content', fields: ['copyMode'] },
-  { title: 'Roster', fields: ['copyFaculty', 'copyTAs'] },
+  { title: 'Roster', fields: ['copyFaculty', 'copyTAs', 'instructorIds'] },
   { title: 'Review', fields: [] },
 ];
 const LAST_STEP = STEPS.length - 1;
@@ -98,6 +101,7 @@ export default function DuplicateCourseDialog({
     copyMode: 'assignments_with_problems',
     copyFaculty: false,
     copyTAs: false,
+    instructorIds: [],
   };
 
   const {
@@ -117,6 +121,27 @@ export default function DuplicateCourseDialog({
 
   const [step, setStep] = useState(0);
   const [confirmChecked, setConfirmChecked] = useState(false);
+
+  // Faculty list for the "add faculty" dropdown. Same query key as the create/edit
+  // dialogs so they share one cache entry.
+  const facultyQuery = useQuery({
+    queryKey: ['admin', 'users', 'faculty'],
+    queryFn: async () => {
+      const res = await fetch(apiPaths.admin.users({ role: 'FACULTY' }));
+      if (!res.ok) throw new Error('Failed to load faculty');
+      const data = await res.json();
+      return (Array.isArray(data) ? data : []) as Array<User & { role?: string }>;
+    },
+    enabled: open,
+    staleTime: 30_000,
+  });
+  const facultyList = facultyQuery.data ?? [];
+  useEffect(() => {
+    if (facultyQuery.isError) toast.error('Failed to load faculty list.');
+  }, [facultyQuery.isError]);
+
+  const facultyName = (user: User) =>
+    `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || user.email || 'Unknown user';
 
   // Keep min (end) in sync with start
   const startDateStr = watch('startDate');
@@ -142,6 +167,7 @@ export default function DuplicateCourseDialog({
       copyMode: 'assignments_with_problems',
       copyFaculty: false,
       copyTAs: false,
+      instructorIds: [],
     };
     reset(vals);
     setStep(0);
@@ -188,6 +214,7 @@ export default function DuplicateCourseDialog({
       copyProblems: mode === 'problems' || mode === 'assignments_with_problems',
       copyFaculty: !!raw.copyFaculty,
       copyTAs: !!raw.copyTAs,
+      instructorIds: raw.instructorIds ?? [],
     };
 
     try {
@@ -484,9 +511,30 @@ export default function DuplicateCourseDialog({
                     )}
                   />
                 </div>
+
+                <Controller
+                  control={control}
+                  name="instructorIds"
+                  render={({ field }) => (
+                    <SearchableMultiSelect
+                      label="Add faculty"
+                      items={facultyList.map((faculty) => ({
+                        id: faculty.id,
+                        label: facultyName(faculty),
+                      }))}
+                      value={field.value ?? []}
+                      onChange={(value) => field.onChange(value)}
+                      placeholder="Select faculty"
+                      searchPlaceholder="Search faculty..."
+                      emptyStateText="No faculty found."
+                      error={errors.instructorIds?.message as string | undefined}
+                    />
+                  )}
+                />
+
                 <div className="text-muted-foreground text-xs">
-                  The current user will always be added as faculty to the duplicated course.
-                  Students are never copied.
+                  The copy needs at least one faculty member: copy the faculty roster or add
+                  faculty above. Students are never copied.
                 </div>
               </div>
             )}
@@ -518,11 +566,24 @@ export default function DuplicateCourseDialog({
                   <dd>{review.copyFaculty ? 'Copied' : 'Not copied'}</dd>
                   <dt className="text-muted-foreground">TA roster</dt>
                   <dd>{review.copyTAs ? 'Copied' : 'Not copied'}</dd>
+                  {(review.instructorIds ?? []).length > 0 && (
+                    <>
+                      <dt className="text-muted-foreground">Added faculty</dt>
+                      <dd>
+                        {(review.instructorIds ?? [])
+                          .map((id) => {
+                            const f = facultyList.find((u) => u.id === id);
+                            return f ? facultyName(f) : id;
+                          })
+                          .join(', ')}
+                      </dd>
+                    </>
+                  )}
                 </dl>
 
                 <p className="text-muted-foreground text-xs">
-                  The duplicated course is created unpublished, you are added as faculty, and
-                  submissions are never copied.
+                  The duplicated course is created unpublished, and submissions are never
+                  copied.
                 </p>
 
                 <label className="mt-2 flex items-center gap-2">

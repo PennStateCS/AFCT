@@ -33,6 +33,8 @@ const DuplicateBody = z.object({
   copyMode: z.enum(['assignments', 'problems', 'assignments_with_problems']).optional(),
   copyFaculty: z.boolean().optional(),
   copyTAs: z.boolean().optional(),
+  // Additional faculty to seed on the copy (on top of a copied faculty roster).
+  instructorIds: z.array(z.string()).optional(),
 });
 
 const courseCodeRegex = /^[A-Z]{2,8}\s?\d{1,4}[A-Z]?$/;
@@ -40,11 +42,13 @@ const normalizeCode = (v: string) => v.trim().replace(/\s+/g, ' ').toUpperCase()
 
 /**
  * Creates a new course modeled on an existing one, in a single transaction. The
- * caller becomes faculty on the copy; faculty/TA rosters are copied only when
- * asked. `copyMode` (or the legacy copyAssignments/copyProblems booleans) selects
- * what carries over: assignments only, problems only, or assignments with their
- * problems. The copy always starts unpublished with a fresh registration code.
- * System administrators only. Dates are interpreted in the actor's timezone.
+ * copy's faculty comes from the copied faculty roster and/or an explicit
+ * `instructorIds` list — at least one faculty member is required (the caller is
+ * NOT added automatically). TAs are copied only when asked. `copyMode` (or the
+ * legacy copyAssignments/copyProblems booleans) selects what carries over:
+ * assignments only, problems only, or assignments with their problems. The copy
+ * always starts unpublished with a fresh registration code. System administrators
+ * only. Dates are interpreted in the actor's timezone.
  * @openapi
  * summary: Duplicate a course
  * parameters:
@@ -71,13 +75,14 @@ const normalizeCode = (v: string) => v.trim().replace(/\s+/g, ' ').toUpperCase()
  *           copyProblems: { type: boolean, description: Legacy fallback for copyMode }
  *           copyFaculty: { type: boolean }
  *           copyTAs: { type: boolean }
+ *           instructorIds: { type: array, items: { type: string }, description: "Additional faculty for the copy. Combined with copyFaculty, the result must include at least one faculty member." }
  * responses:
  *   201:
  *     description: The new course id.
  *     content:
  *       application/json:
  *         schema: { type: object, properties: { id: { type: string }, message: { type: string } } }
- *   400: { description: "Missing fields, bad credits, bad code, or invalid dates." }
+ *   400: { description: "Missing fields, bad credits, bad code, invalid dates, or no faculty for the copy." }
  *   401: { description: Not signed in. }
  *   403: { description: System administrators only (logged as a security event). }
  *   500: { description: Server error. }
@@ -105,6 +110,7 @@ export const POST = withAdminAuth(
         copyMode,
         copyFaculty = false,
         copyTAs = false,
+        instructorIds = [],
       } = parsed.data;
 
       const parsedCredits = Number(credits);
@@ -177,6 +183,15 @@ export const POST = withAdminAuth(
         );
       }
 
+      // A course must always have at least one faculty member — from the copied
+      // faculty roster and/or the explicit list. The caller is NOT auto-added.
+      if (!copyFaculty && instructorIds.length === 0) {
+        return NextResponse.json(
+          { error: 'Copy the faculty roster or pick at least one faculty member.' },
+          { status: 400 },
+        );
+      }
+
       const userTimezone = await resolveUserTimezone(actorId);
 
       // Solution files live here. Duplicated problems get their OWN physical copy so
@@ -225,33 +240,39 @@ export const POST = withAdminAuth(
           },
         });
 
-        // Assign current user as faculty in roster
-        await tx.roster.create({
-          data: {
-            courseId: newCourse.id,
-            userId: actorId,
-            role: 'FACULTY',
-          },
-        });
+        // Seed the roster: faculty from the copied roster and/or the explicit
+        // list (deduped; faculty wins over a TA row for the same user).
+        const originalRoster =
+          copyFaculty || copyTAs ? await tx.roster.findMany({ where: { courseId } }) : [];
 
-        // Optionally copy faculty/TAs from original roster
-        if (copyFaculty || copyTAs) {
-          const originalRoster = await tx.roster.findMany({ where: { courseId } });
+        const facultyIds = new Set<string>(instructorIds);
+        if (copyFaculty) {
           for (const r of originalRoster) {
-            if (r.userId === actorId) continue; // already added
-            if (
-              ((r.role as string) === 'FACULTY' || (r.role as string) === 'ADMIN') &&
-              copyFaculty
-            ) {
-              await tx.roster.create({
-                data: { courseId: newCourse.id, userId: r.userId, role: r.role },
-              });
-            }
-            if (r.role === 'TA' && copyTAs) {
-              await tx.roster.create({
-                data: { courseId: newCourse.id, userId: r.userId, role: r.role },
-              });
-            }
+            if (r.role === 'FACULTY') facultyIds.add(r.userId);
+          }
+        }
+        if (facultyIds.size > 0) {
+          await tx.roster.createMany({
+            data: Array.from(facultyIds).map((userId) => ({
+              courseId: newCourse.id,
+              userId,
+              role: 'FACULTY' as const,
+            })),
+          });
+        }
+
+        if (copyTAs) {
+          const taRows = originalRoster.filter(
+            (r) => r.role === 'TA' && !facultyIds.has(r.userId),
+          );
+          if (taRows.length > 0) {
+            await tx.roster.createMany({
+              data: taRows.map((r) => ({
+                courseId: newCourse.id,
+                userId: r.userId,
+                role: 'TA' as const,
+              })),
+            });
           }
         }
 
