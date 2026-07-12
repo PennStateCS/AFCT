@@ -50,12 +50,11 @@ const BaseCourseFormObject = z
   .strict();
 
 /**
- * Create form schema — includes publish+instructor selection.
+ * Create form schema — adds instructor selection. A new course is always created
+ * unpublished; publishing is a separate, deliberate action afterwards.
  * Uses form-only validation (no transformations)
  */
 export const CreateCourseFormSchema = BaseCourseFormObject.extend({
-  isPublished: z.boolean(),
-  //facultyIds: z.array(z.string()),
   instructorIds: z.array(z.string()),
 }).superRefine((d, ctx) => {
   // Validate course code format
@@ -159,6 +158,9 @@ export const DuplicateFormSchema = BaseCourseFormObject.extend({
   copyMode: z.enum(['assignments', 'assignments_with_problems', 'problems']).optional(),
   copyFaculty: z.boolean().optional(),
   copyTAs: z.boolean().optional(),
+  // Additional faculty for the copy; with copyFaculty off, at least one is
+  // required (see the superRefine below) so the copy is never faculty-less.
+  instructorIds: z.array(z.string()).optional(),
 })
   .refine((d) => d.startDate <= d.endDate, {
     path: ['startDate'],
@@ -202,6 +204,15 @@ export const DuplicateFormSchema = BaseCourseFormObject.extend({
         message: 'Self registration close must be on or after the open date.',
       });
     }
+
+    // The copy must end up with at least one faculty member.
+    if (!d.copyFaculty && (d.instructorIds ?? []).length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['instructorIds'],
+        message: 'Copy the faculty roster or pick at least one faculty member.',
+      });
+    }
   });
 
 /**
@@ -225,9 +236,10 @@ const courseApiBase = {
 
 export const CourseCreateApiSchema = z.object({
   ...courseApiBase,
-  isPublished: z.boolean().optional(),
-  instructorIds: z.array(z.string()).default([]),
-  facultyIds: z.array(z.string()).default([]),
+  // A course cannot be created published, and it needs at least one faculty member
+  // from the start (the roster rule "a course always has a faculty member" begins
+  // at creation). TAs and students are added later through the roster.
+  instructorIds: z.array(z.string()).min(1, 'At least one faculty member is required.'),
 });
 
 export const CourseUpdateApiSchema = z.object({

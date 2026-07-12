@@ -130,9 +130,10 @@ export async function GET(req: Request) {
 // ----------------------------------------
 /**
  * Creates a course (with a generated registration code) and seeds its faculty
- * roster, all in one transaction. System administrators only. Datetime-local
- * strings are interpreted in the actor's effective timezone before being stored
- * as UTC.
+ * roster, all in one transaction. System administrators only. A new course is
+ * always created unpublished — publishing is a separate action — and requires at
+ * least one faculty member. Datetime-local strings are interpreted in the course's
+ * timezone before being stored as UTC.
  * @openapi
  * summary: Create a course
  * requestBody:
@@ -141,7 +142,7 @@ export async function GET(req: Request) {
  *     application/json:
  *       schema:
  *         type: object
- *         required: [name, code, semester, credits, startDate, endDate, registrationOpenAt, registrationCloseAt]
+ *         required: [name, code, semester, credits, startDate, endDate, registrationOpenAt, registrationCloseAt, instructorIds]
  *         properties:
  *           name: { type: string }
  *           code: { type: string }
@@ -151,14 +152,12 @@ export async function GET(req: Request) {
  *           endDate: { type: string, description: datetime-local string }
  *           registrationOpenAt: { type: string, description: datetime-local string }
  *           registrationCloseAt: { type: string, description: datetime-local string }
- *           isPublished: { type: boolean }
- *           instructorIds: { type: array, items: { type: string } }
- *           facultyIds: { type: array, items: { type: string } }
+ *           instructorIds: { type: array, items: { type: string }, description: "Faculty to seed the roster; at least one is required." }
  *           emptyStringNotation: { type: string }
  * responses:
  *   201:
- *     description: Course created; returns the course with its `enrolled` roster.
- *   400: { description: "Missing registration window, or Zod validation failed." }
+ *     description: "Course created (always unpublished); returns the course with its `enrolled` roster."
+ *   400: { description: "Missing registration window, no faculty, or Zod validation failed." }
  *   403: { description: System administrators only (logged as a security event). }
  *   409: { description: A course with that code and semester already exists. }
  *   500: { description: Server error. }
@@ -241,35 +240,23 @@ export async function POST(req: Request) {
           registrationCloseAt: json.registrationCloseAt
             ? toDateTimeInTimezone(json.registrationCloseAt, courseTimezone)
             : null,
-          isPublished: json.isPublished ?? false,
+          // A course is never born published — releasing it to students is a
+          // separate, deliberate action after it's staffed and populated.
+          isPublished: false,
           isArchived: false,
           emptyStringNotation: toEmptyStringNotation(json.emptyStringNotation),
         },
       });
 
-      const instructorIds = Array.isArray(json.instructorIds) ? json.instructorIds : [];
-      const facultyIds = Array.isArray(json.facultyIds) ? json.facultyIds : [];
-
-      if (instructorIds.length > 0) {
-        await tx.roster.createMany({
-          data: instructorIds.map((userId: string) => ({
-            userId,
-            courseId: course.id,
-            role: 'FACULTY',
-          })),
-        });
-      }
-
-      const facultyOnlyIds = facultyIds.filter((id: string) => !instructorIds.includes(id));
-      if (facultyOnlyIds.length > 0) {
-        await tx.roster.createMany({
-          data: facultyOnlyIds.map((userId: string) => ({
-            userId,
-            courseId: course.id,
-            role: 'FACULTY',
-          })),
-        });
-      }
+      // Seed the faculty roster (the schema guarantees at least one). TAs and
+      // students are added later through the roster.
+      await tx.roster.createMany({
+        data: json.instructorIds.map((userId: string) => ({
+          userId,
+          courseId: course.id,
+          role: 'FACULTY',
+        })),
+      });
 
       // Re-read with faculty populated for response
       const withRoster = await tx.course.findUnique({
