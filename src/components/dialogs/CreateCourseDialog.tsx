@@ -186,7 +186,9 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
         />
 
         <form
-          onSubmit={handleSubmit(onSubmit)}
+          // Only the Review step may submit. Earlier steps swallow any submit that
+          // slips through (backstop for the button-swap hazard handled below).
+          onSubmit={step === LAST_STEP ? handleSubmit(onSubmit) : (e) => e.preventDefault()}
           className="space-y-4"
           onKeyDown={(e) => {
             // Enter advances the wizard instead of submitting a half-built course.
@@ -485,12 +487,16 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
               </Button>
             )}
 
+            {/* Distinct keys force React to mount a NEW button node when Next becomes
+                Create. Without them React reuses the clicked node and flips its type
+                to "submit" while the click's default action is still pending, so
+                reaching the Review step would submit the form immediately. */}
             {step < LAST_STEP ? (
-              <Button type="button" onClick={() => void next()}>
+              <Button key="wizard-next" type="button" onClick={() => void next()}>
                 Next
               </Button>
             ) : (
-              <Button type="submit" disabled={isSubmitting}>
+              <Button key="wizard-create" type="submit" disabled={isSubmitting}>
                 {isSubmitting ? 'Creating…' : 'Create Course'}
               </Button>
             )}
