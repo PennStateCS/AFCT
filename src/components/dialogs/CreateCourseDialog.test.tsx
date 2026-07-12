@@ -231,6 +231,9 @@ describe('CreateCourseDialog', () => {
     await screen.findByLabelText('Course Name');
     await fillForm(user);
 
+    // Reaching the Review step must NOT submit — only the faculty fetch has fired.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
     const submitButton = screen.getByRole('button', { name: /create course/i });
     await waitFor(() => expect(submitButton).toBeEnabled());
     await user.click(submitButton);
