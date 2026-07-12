@@ -677,6 +677,7 @@ export default function SubmissionsClient() {
                       <TableCell className="p-1 align-top">
                         <div className="flex items-center gap-2 whitespace-nowrap">
                           <Button
+                            type="button"
                             variant="secondary"
                             size="sm"
                             onClick={() => handleViewFeedback(submission)}
@@ -693,6 +694,7 @@ export default function SubmissionsClient() {
                           </Button>
 
                           <Button
+                            type="button"
                             variant="secondary"
                             size="sm"
                             onClick={() => handleViewSubmission(submission)}
@@ -704,6 +706,7 @@ export default function SubmissionsClient() {
                           </Button>
 
                           <Button
+                            type="button"
                             variant="secondary"
                             size="sm"
                             disabled={!submission.fileName}
@@ -716,6 +719,7 @@ export default function SubmissionsClient() {
                           </Button>
 
                           <Button
+                            type="button"
                             variant="secondary"
                             size="sm"
                             disabled={

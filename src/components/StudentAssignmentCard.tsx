@@ -81,7 +81,7 @@ export function StudentAssignmentCard({ course }: StudentAssignmentCardProps) {
                           <span
                             className={`text-sm ${isOverdue ? 'text-red-700' : 'text-green-700'}`}
                           >
-                            <Clock className="h-4 w-4" />
+                            <Clock className="h-4 w-4" aria-hidden="true" />
                           </span>
                           <span
                             className={`text-sm font-medium ${isOverdue ? 'text-red-700' : 'text-green-700'}`}
@@ -119,7 +119,7 @@ export function StudentAssignmentCard({ course }: StudentAssignmentCardProps) {
                       </div>
                     </div>
                     <div className="flex items-center pr-4 text-slate-400">
-                      <ChevronRight className="h-4 w-4" />
+                      <ChevronRight className="h-4 w-4" aria-hidden="true" />
                     </div>
                   </Link>
                 );
