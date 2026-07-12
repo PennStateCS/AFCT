@@ -12,17 +12,27 @@ export async function getAssignmentsForUserRange(params: {
 }): Promise<CalendarAssignment[]> {
   const { userId, startDate, endDate } = params;
 
-  const rosterEntries = await prisma.roster.findMany({
-    where: { userId },
-    select: { courseId: true, role: true },
-  });
+  const [rosterEntries, viewer] = await Promise.all([
+    prisma.roster.findMany({
+      where: { userId },
+      select: { courseId: true, role: true },
+    }),
+    prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } }),
+  ]);
   const courseIds = rosterEntries.map((r) => r.courseId);
   if (courseIds.length === 0) return [];
 
   // The viewer may be staff in one course and a student in another, so decide the
   // calendar treatment per course from their roster role rather than a global one.
+  // Admins get the staff treatment everywhere — the global flag outranks a STUDENT
+  // roster row, matching the dashboard and the permission model.
+  const isAdmin = Boolean(viewer?.isAdmin);
   const staffCourseIds = new Set(
-    rosterEntries.filter((r) => r.role === 'FACULTY' || r.role === 'TA').map((r) => r.courseId),
+    isAdmin
+      ? courseIds
+      : rosterEntries
+          .filter((r) => r.role === 'FACULTY' || r.role === 'TA')
+          .map((r) => r.courseId),
   );
   const staffCourseIdsArr = courseIds.filter((id) => staffCourseIds.has(id));
   const studentCourseIdsArr = courseIds.filter((id) => !staffCourseIds.has(id));
@@ -36,11 +46,16 @@ export async function getAssignmentsForUserRange(params: {
       // The calendar never includes archived or soft-deleted courses — for anyone.
       course: { isArchived: false, deletedAt: null },
       // In courses where the viewer is staff, show every assignment; where they
-      // are a student, show only published ones — an unpublished assignment must
-      // not surface on the calendar (title/due date) before it's released.
+      // are a student, show only published assignments from published courses — a
+      // student enrolled in an unpublished course gets no access to it at all, and
+      // an unpublished assignment must not surface (title/due date) before release.
       OR: [
         { courseId: { in: staffCourseIdsArr } },
-        { courseId: { in: studentCourseIdsArr }, isPublished: true },
+        {
+          courseId: { in: studentCourseIdsArr },
+          isPublished: true,
+          course: { isPublished: true },
+        },
       ],
     },
     select: {
