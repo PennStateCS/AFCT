@@ -5,11 +5,25 @@ installer. You need one thing on the host: **Docker** (with the Compose plugin).
 
 ## Quick start
 
-```sh
-# 1. Get the installer (your administrator will give you the exact URL):
-wget <download-url>/install.sh
+Download the three files from this `deploy/` folder into an empty directory on
+the server, then run the installer.
 
-# 2. Run it:
+**Once this repository is public:**
+
+```sh
+BASE=https://raw.githubusercontent.com/PennStateWilkes-Barre/AFCT-Dashboard/main/deploy
+wget "$BASE/install.sh" "$BASE/docker-compose.yml" "$BASE/.env.production.example"
+sh install.sh
+```
+
+**While the repository is still private**, both the raw files and the images need
+authentication. On a machine that's logged in:
+
+```sh
+docker login ghcr.io                 # once, if not already
+# get the deploy/ folder — e.g. clone the repo, or use the GitHub "Code -> Download":
+git clone https://github.com/PennStateWilkes-Barre/AFCT-Dashboard.git
+cd AFCT-Dashboard/deploy
 sh install.sh
 ```
 
