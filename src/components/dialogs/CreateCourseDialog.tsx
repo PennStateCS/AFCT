@@ -28,6 +28,7 @@ import type { z } from 'zod';
 import { apiPaths } from '@/lib/api-paths';
 import { apiClient, ApiError } from '@/lib/api/fetch-client';
 import { useFacultyTaOptions, getUserName } from './useFacultyTaOptions';
+import { CourseDateTimeField } from './CourseDateTimeField';
 
 // RHF form state = Zod INPUT (strings for datetime-local)
 type FormValues = z.input<typeof CreateCourseFormSchema>;
@@ -271,89 +272,37 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
                 />
 
                 <div className="grid gap-4 md:grid-cols-2">
-                  {/* START datetime-local (string) */}
-                  <Controller
+                  <CourseDateTimeField
                     control={control}
                     name="startDate"
-                    render={({ field }) => (
-                      <InputGroup
-                        label="Start Date & Time"
-                        name="startDate"
-                        type="datetime-local"
-                        fieldProps={{
-                          ...field,
-                          value: field.value ?? '', // expect a string for datetime-local
-                          onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                            field.onChange(e.target.value),
-                        }}
-                        error={errors.startDate?.message}
-                        requiredMark
-                      />
-                    )}
+                    label="Start Date & Time"
+                    error={errors.startDate?.message}
+                    requiredMark
                   />
-
-                  {/* END datetime-local (string) */}
-                  <Controller
+                  <CourseDateTimeField
                     control={control}
                     name="endDate"
-                    render={({ field }) => (
-                      <InputGroup
-                        label="End Date & Time"
-                        name="endDate"
-                        type="datetime-local"
-                        fieldProps={{
-                          ...field,
-                          value: field.value ?? '',
-                          onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                            field.onChange(e.target.value),
-                        }}
-                        error={errors.endDate?.message}
-                        min={startDateStr || undefined} // prevent picking an end earlier than start
-                        requiredMark
-                      />
-                    )}
+                    label="End Date & Time"
+                    error={errors.endDate?.message}
+                    min={startDateStr || undefined} // prevent picking an end earlier than start
+                    requiredMark
                   />
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
-                  <Controller
+                  <CourseDateTimeField
                     control={control}
                     name="registrationOpenAt"
-                    render={({ field }) => (
-                      <InputGroup
-                        label="Self Registration Opens"
-                        name="registrationOpenAt"
-                        type="datetime-local"
-                        fieldProps={{
-                          ...field,
-                          value: field.value ?? '',
-                          onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                            field.onChange(e.target.value),
-                        }}
-                        error={errors.registrationOpenAt?.message}
-                        requiredMark
-                      />
-                    )}
+                    label="Self Registration Opens"
+                    error={errors.registrationOpenAt?.message}
+                    requiredMark
                   />
-
-                  <Controller
+                  <CourseDateTimeField
                     control={control}
                     name="registrationCloseAt"
-                    render={({ field }) => (
-                      <InputGroup
-                        label="Self Registration Closes"
-                        name="registrationCloseAt"
-                        type="datetime-local"
-                        fieldProps={{
-                          ...field,
-                          value: field.value ?? '',
-                          onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                            field.onChange(e.target.value),
-                        }}
-                        error={errors.registrationCloseAt?.message}
-                        requiredMark
-                      />
-                    )}
+                    label="Self Registration Closes"
+                    error={errors.registrationCloseAt?.message}
+                    requiredMark
                   />
                 </div>
               </>
