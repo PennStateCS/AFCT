@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { bestStartNodePosition } from '@/lib/jflap-layout';
 import {
   Grid,
   Waypoints,
@@ -300,7 +301,6 @@ export function JffCytoscapeViewer({
     : {};
 
   // Customization variables
-  const NODE_DIAMETER = 58;
   const FIT_PADDING = 80;
 
   // Expose onResize for Fit button
@@ -313,8 +313,6 @@ export function JffCytoscapeViewer({
       .filter((n: any) => n.data('initial'))
       .forEach((node: any, idx: number) => {
         const nodePos = node.position();
-        const directions = Array.from({ length: 8 }, (_, i) => i * (Math.PI / 4)); // 0, 45, ..., 315 deg
-        const radius = 1.5 * NODE_DIAMETER;
 
         // Exclude both the current node and its corresponding start node from the calculation
         const startNodeId = `__start${idx}`;
@@ -330,49 +328,8 @@ export function JffCytoscapeViewer({
           return Math.atan2(nodePos.y - src.y, nodePos.x - src.x);
         });
 
-        // For each direction, compute a clutter score
-        const scores = directions.map((angle) => {
-          // Position where start node would be placed
-          const testX = nodePos.x + Math.cos(angle) * radius;
-          const testY = nodePos.y + Math.sin(angle) * radius;
-
-          // Score: sum of inverse distances to other nodes (closer = higher score)
-          let score = 0;
-          for (const pos of otherNodePositions) {
-            const dx = testX - pos.x;
-            const dy = testY - pos.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist < NODE_DIAMETER * 1.1)
-              score += 1000; // heavy penalty for overlap
-            else score += 1 / dist;
-          }
-
-          // Penalty for being close to incoming edge directions
-          for (const edgeAngle of incomingAngles) {
-            let diff = Math.abs(angle - edgeAngle);
-            if (diff > Math.PI) diff = 2 * Math.PI - diff;
-            if (diff < Math.PI / 6) score += 10; // penalty for being within 30deg of an incoming edge
-          }
-          return score;
-        });
-
-        // Find the direction with the lowest score
-        let bestIdx = 0;
-        let bestScore = scores[0] ?? Infinity;
-        for (let i = 1; i < scores.length; ++i) {
-          const s = scores[i];
-          if (s !== undefined && s < bestScore) {
-            bestScore = s;
-            bestIdx = i;
-          }
-        }
-
-        // Apply best angle
-        const bestAngle = directions[bestIdx] ?? 0;
-        const pos = {
-          x: nodePos.x + Math.cos(bestAngle) * radius,
-          y: nodePos.y + Math.sin(bestAngle) * radius,
-        };
+        // Pick the least-cluttered direction for the start-node stub.
+        const pos = bestStartNodePosition(nodePos, otherNodePositions, incomingAngles);
 
         let startNode = cy.getElementById(`__start${idx}`);
         if (!startNode || startNode.empty()) {
@@ -708,8 +665,6 @@ export function JffCytoscapeViewer({
                 // Recompute the best position for the __start node
                 const node = evt.target;
                 const nodePos = node.position();
-                const directions = Array.from({ length: 8 }, (_, i) => i * (Math.PI / 4));
-                const radius = 1.5 * 58; // NODE_DIAMETER
                 const startNodeId = `__start${idx}`;
                 const otherNodes = cy
                   .nodes()
@@ -720,38 +675,7 @@ export function JffCytoscapeViewer({
                   const src = e.source().position();
                   return Math.atan2(nodePos.y - src.y, nodePos.x - src.x);
                 });
-                const scores = directions.map((angle) => {
-                  const testX = nodePos.x + Math.cos(angle) * radius;
-                  const testY = nodePos.y + Math.sin(angle) * radius;
-                  let score = 0;
-                  for (const pos of otherNodePositions) {
-                    const dx = testX - pos.x;
-                    const dy = testY - pos.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    if (dist < 58 * 1.1) score += 1000;
-                    else score += 1 / dist;
-                  }
-                  for (const edgeAngle of incomingAngles) {
-                    let diff = Math.abs(angle - edgeAngle);
-                    if (diff > Math.PI) diff = 2 * Math.PI - diff;
-                    if (diff < Math.PI / 6) score += 10;
-                  }
-                  return score;
-                });
-                let bestIdx = 0;
-                let bestScore = scores[0] ?? Infinity;
-                for (let i = 1; i < scores.length; ++i) {
-                  const s = scores[i];
-                  if (s !== undefined && s < bestScore) {
-                    bestScore = s;
-                    bestIdx = i;
-                  }
-                }
-                const bestAngle = directions[bestIdx] ?? 0;
-                const pos = {
-                  x: nodePos.x + Math.cos(bestAngle) * radius,
-                  y: nodePos.y + Math.sin(bestAngle) * radius,
-                };
+                const pos = bestStartNodePosition(nodePos, otherNodePositions, incomingAngles);
                 const startNode = cy.getElementById(startNodeId);
                 if (startNode && !startNode.empty()) {
                   startNode.position(pos);
