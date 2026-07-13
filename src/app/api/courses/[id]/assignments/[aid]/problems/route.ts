@@ -186,6 +186,7 @@ export const POST = withAssignmentAuth(
       // create group mappings for the requested problems **regardless** of whether the
       // problems were newly added in this request. This enables assigning an existing
       // assignment problem to one or more groups after it already exists on the assignment.
+      let mappedGroupCount = 0;
       if (groupId) {
         if (assignment.isGroup) {
           let groupIdsToMap: string[] = [];
@@ -211,6 +212,7 @@ export const POST = withAssignmentAuth(
                 data: mappings,
                 skipDuplicates: true,
               });
+              mappedGroupCount = mappings.length;
             }
           }
         }
@@ -237,7 +239,7 @@ export const POST = withAssignmentAuth(
       try {
         await createEnhancedActivityLog(prisma, req, {
           userId: user.id,
-          action: 'UPDATE_ASSIGNMENT_PROBLEMS',
+          action: 'ADD_ASSIGNMENT_PROBLEMS',
           severity: 'INFO',
           category: 'ASSIGNMENT',
           courseId,
@@ -252,6 +254,7 @@ export const POST = withAssignmentAuth(
             ),
             finalProblemIds: finalProblemIds,
             linksWithSubmissions: linksWithSubmissions.length,
+            ...(mappedGroupCount > 0 ? { groupId, mappedGroupCount } : {}),
           },
         });
       } catch (logErr) {
@@ -279,8 +282,10 @@ export const POST = withAssignmentAuth(
       // Handle unexpected errors
       console.error('Failed to update assignment problems:', err);
       await logError(req, {
-        userId: null,
+        userId: user.id,
         action: 'ASSIGNMENT_ADD_PROBLEMS_ERROR',
+        courseId,
+        assignmentId,
         error: err,
       });
       return NextResponse.json({ error: 'Failed to update assignment problems.' }, { status: 500 });

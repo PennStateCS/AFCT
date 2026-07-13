@@ -72,6 +72,7 @@ export const PATCH = withCourseAuth(
         action: 'UPDATE_GROUP',
         severity: 'INFO',
         category: 'COURSE',
+        courseId,
         metadata: { courseId, groupId, name },
       });
 
@@ -82,6 +83,7 @@ export const PATCH = withCourseAuth(
         userId: user.id,
         action: 'GROUP_UPDATE_ERROR',
         error: err,
+        courseId,
       });
       return NextResponse.json({ error: 'Failed to update group' }, { status: 500 });
     }
@@ -123,6 +125,7 @@ export const DELETE = withCourseAuth(
         action: 'DELETE_GROUP',
         severity: 'INFO',
         category: 'COURSE',
+        courseId,
         metadata: { courseId, groupId, deletedGroupName: group.name },
       });
 
@@ -133,6 +136,7 @@ export const DELETE = withCourseAuth(
         userId: user.id,
         action: 'GROUP_DELETE_ERROR',
         error: err,
+        courseId,
       });
       return NextResponse.json({ error: 'Failed to delete group' }, { status: 500 });
     }

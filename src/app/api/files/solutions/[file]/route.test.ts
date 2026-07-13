@@ -86,6 +86,16 @@ describe('GET /api/files/solutions/[file]', () => {
     });
 
     expect(res.status).toBe(403);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        action: 'SOLUTION_DOWNLOAD_DENIED',
+        severity: 'SECURITY',
+        category: 'PROBLEM',
+        courseId: 'course-1',
+      }),
+    );
   });
 
   it('returns 404 when file does not exist on disk', async () => {
@@ -238,7 +248,11 @@ describe('GET /api/files/solutions/[file]', () => {
     expect(activityLogMock).toHaveBeenCalledWith(
       prismaMock,
       expect.anything(),
-      expect.objectContaining({ action: 'SOLUTION_DOWNLOAD_ERROR', severity: 'ERROR' }),
+      expect.objectContaining({
+        action: 'SOLUTION_DOWNLOAD_ERROR',
+        severity: 'ERROR',
+        category: 'PROBLEM',
+      }),
     );
   });
 

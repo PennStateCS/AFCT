@@ -196,7 +196,18 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
         },
       },
     });
-    expect(logMock).toHaveBeenCalled();
+    expect(logMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        action: 'VIEW_STUDENT_REVIEW_DATA',
+        category: 'SUBMISSION',
+        metadata: expect.objectContaining({
+          viewedStudentId: 'student-1',
+          source: 'review-data',
+        }),
+      }),
+    );
   });
 
   it('returns 403 when an enrolled student requests another student’s data', async () => {
@@ -210,6 +221,16 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
     expect(res.status).toBe(403);
     // Reaches the handler (assignment lookup) before denying.
     expect(prismaMock.assignment.findFirst).toHaveBeenCalled();
+    // The denial log carries an explicit category (the action has no domain keyword).
+    expect(logMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        action: 'REVIEW_DATA_ACCESS_DENIED',
+        category: 'SUBMISSION',
+        courseId: 'course-1',
+      }),
+    );
   });
 
   it('coerces null author fields and null grade/feedback to null', async () => {

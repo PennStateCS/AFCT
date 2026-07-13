@@ -33,7 +33,6 @@ async function logLoginSecurityEvent(
       data: {
         userId: userId ?? null,
         action,
-        category: 'SECURITY',
         severity: inferSeverity(action),
         ipAddress: metadata.ip ?? null,
         metadata,

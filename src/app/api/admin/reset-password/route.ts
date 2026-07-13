@@ -66,7 +66,6 @@ export const POST = withAdminAuth(
         severity: 'INFO',
         category: 'USER',
         metadata: {
-          userId: user.id,
           targetUserId: userId,
           temporaryPassword: Boolean(isTemporary),
         },

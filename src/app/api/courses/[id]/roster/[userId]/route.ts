@@ -47,7 +47,12 @@ export const DELETE = withCourseAuth(
       });
 
       if (!isAdmin(user) && targetRoster?.role === 'FACULTY') {
-        return logDenial(req, { userId: user.id, action: 'ROSTER_REMOVE_DENIED', courseId });
+        return logDenial(req, {
+          userId: user.id,
+          action: 'ROSTER_REMOVE_DENIED',
+          courseId,
+          metadata: { targetUserId: userId },
+        });
       }
 
       // Prevent removal if the user has any submissions in this course
@@ -118,10 +123,7 @@ export const DELETE = withCourseAuth(
         category: 'COURSE',
         courseId,
         metadata: {
-          userId: user.id,
-          courseId,
           targetUserId: userId,
-          removedUserId: userId,
           count: deleted.count,
         },
       });
@@ -133,6 +135,7 @@ export const DELETE = withCourseAuth(
         userId: user.id,
         action: 'ROSTER_REMOVE_ERROR',
         error: err,
+        courseId,
       });
       return NextResponse.json({ error: 'Server error' }, { status: 500 });
     }
@@ -170,7 +173,12 @@ export const GET = withCourseAuth(
       // Course membership was enforced by the wrapper. A non-staff member may only
       // read their own entry; staff (faculty/TA) and admins may read anyone's.
       if (targetUserId !== user.id && !(await canManageCourse(user, courseId))) {
-        return logDenial(req, { userId: user.id, action: 'ROSTER_VIEW_DENIED', courseId });
+        return logDenial(req, {
+          userId: user.id,
+          action: 'ROSTER_VIEW_DENIED',
+          courseId,
+          metadata: { targetUserId },
+        });
       }
 
       // Fetch roster entry and include the user profile info for display in the dialog
@@ -297,8 +305,6 @@ export const PATCH = withCourseAuth(
         category: 'COURSE',
         courseId,
         metadata: {
-          userId: user.id,
-          courseId,
           targetUserId: userId,
           previousRole: target.role,
           newRole,
@@ -312,6 +318,7 @@ export const PATCH = withCourseAuth(
         userId: user.id,
         action: 'ROSTER_UPDATE_ERROR',
         error: err,
+        courseId,
       });
       return NextResponse.json({ error: 'Server error' }, { status: 500 });
     }
