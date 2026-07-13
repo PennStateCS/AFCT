@@ -64,7 +64,6 @@ export const POST = withCourseAuth(
       if (!parsed.ok) return parsed.response;
       const data = parsed.data;
       const { title, type } = data;
-      const assignmentId = data.assignmentId;
       const file = parsed.form.get('file') as File | null;
 
       if (!file) {
@@ -93,15 +92,13 @@ export const POST = withCourseAuth(
       if (!validation.isValid) {
         await createEnhancedActivityLog(prisma, req, {
           userId: user.id,
-          action: 'SUBMISSION_INVALID_FILE_STRUCTURE',
+          action: 'PROBLEM_INVALID_FILE_STRUCTURE',
           severity: 'WARNING',
-          category: 'SUBMISSION',
+          category: 'PROBLEM',
           courseId,
-          assignmentId,
           metadata: {
             userId: user.id,
             courseId,
-            assignmentId,
             error: validation.error,
           },
         });
@@ -166,6 +163,7 @@ export const POST = withCourseAuth(
       await logError(req, {
         userId: user.id,
         action: 'PROBLEM_CREATE_ERROR',
+        courseId,
         error,
       });
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

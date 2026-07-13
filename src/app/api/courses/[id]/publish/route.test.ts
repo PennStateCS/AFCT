@@ -66,6 +66,11 @@ describe('PATCH /api/courses/[id]/publish', () => {
     const res = await PATCH(req, { params: Promise.resolve({ id: 'c1' }) });
 
     expect(res.status).toBe(403);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({ action: 'COURSE_UNPUBLISH_REJECTED', severity: 'WARNING' }),
+    );
   });
 
   it('updates publish status and logs activity', async () => {

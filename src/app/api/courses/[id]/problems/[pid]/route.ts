@@ -99,9 +99,9 @@ export const PUT = withCourseAuth(
         if (!validation.isValid) {
           await createEnhancedActivityLog(prisma, req, {
             userId: user.id,
-            action: 'SUBMISSION_INVALID_FILE_STRUCTURE',
+            action: 'PROBLEM_INVALID_FILE_STRUCTURE',
             severity: 'WARNING',
-            category: 'SUBMISSION',
+            category: 'PROBLEM',
             courseId,
             assignmentId,
             problemId,
@@ -179,6 +179,8 @@ export const PUT = withCourseAuth(
       await logError(req, {
         userId: user.id,
         action: 'PROBLEM_UPDATE_ERROR',
+        courseId,
+        problemId,
         error: err,
       });
       return NextResponse.json({ error: 'Server error' }, { status: 500 });
@@ -263,6 +265,8 @@ export const DELETE = withCourseAuth(
       await logError(req, {
         userId: user.id,
         action: 'PROBLEM_DELETE_ERROR',
+        courseId,
+        problemId,
         error: err,
       });
       return NextResponse.json({ error: 'Server error' }, { status: 500 });

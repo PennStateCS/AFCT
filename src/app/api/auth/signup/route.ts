@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
-import { createEnhancedActivityLog, inferSeverity } from '@/lib/activity-log-utils';
+import { createEnhancedActivityLog, type LogSeverity } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
 import { readJson } from '@/lib/api/request';
 import { SignupSchema } from '@/schemas/auth';
@@ -103,7 +103,7 @@ export async function POST(req: Request) {
     });
 
     if (rateDecision.status === 'blocked') {
-      await logSecurityEvent('SIGNUP_RATE_LIMIT', {
+      await logSecurityEvent(req, 'SIGNUP_RATE_LIMIT', {
         ip: ipAddress,
         identifier: normalizedEmail,
       });
@@ -119,7 +119,7 @@ export async function POST(req: Request) {
     if (rateDecision.status === 'challenge') {
       const captchaValid = await verifyCaptchaToken(captchaToken, ipAddress);
       if (!captchaValid) {
-        await logSecurityEvent('SIGNUP_CHALLENGE_REQUIRED', {
+        await logSecurityEvent(req, 'SIGNUP_CHALLENGE_REQUIRED', {
           ip: ipAddress,
           identifier: normalizedEmail,
         });
@@ -132,7 +132,7 @@ export async function POST(req: Request) {
         );
       }
 
-      await logSecurityEvent('SIGNUP_CHALLENGE_SOLVED', {
+      await logSecurityEvent(req, 'SIGNUP_CHALLENGE_SOLVED', {
         ip: ipAddress,
         identifier: normalizedEmail,
       });
@@ -167,7 +167,6 @@ export async function POST(req: Request) {
       severity: 'INFO',
       category: 'USER',
       metadata: {
-        userId: newUser.id,
         email: normalizedEmail,
       },
     });
@@ -193,20 +192,15 @@ type SignupSecurityEventAction =
   | 'SIGNUP_CHALLENGE_SOLVED';
 
 async function logSecurityEvent(
+  req: Request,
   action: SignupSecurityEventAction,
   metadata: { ip?: string | null; identifier?: string | null },
 ) {
+  // Explicit severity: a rate-limit or forced challenge is a SECURITY signal; a
+  // solved challenge is routine INFO.
+  const severity: LogSeverity = action === 'SIGNUP_CHALLENGE_SOLVED' ? 'INFO' : 'SECURITY';
   try {
-    await prisma.activityLog.create({
-      data: {
-        action,
-        category: 'SECURITY',
-        severity: inferSeverity(action),
-        // Promote the known client IP into the column (not just metadata).
-        ipAddress: metadata.ip ?? null,
-        metadata,
-      },
-    });
+    await createEnhancedActivityLog(prisma, req, { action, severity, metadata });
   } catch (error) {
     console.error('[signup] security log failure', error);
   }

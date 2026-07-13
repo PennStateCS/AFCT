@@ -7,7 +7,7 @@
 // drift apart.
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
-import { inferSeverity } from '@/lib/activity-log-utils';
+import { createEnhancedActivityLog, type LogSeverity } from '@/lib/activity-log-utils';
 import {
   applyBotFriction,
   evaluateLoginRateLimit,
@@ -22,23 +22,21 @@ type LoginSecurityEventAction =
   | 'LOGIN_CHALLENGE_SOLVED'
   | 'LOGIN_FAILED';
 
-/** Append a SECURITY audit-log entry for a login event (best-effort). */
+/** Append an audit-log entry for a login event (best-effort). */
 async function logLoginSecurityEvent(
   action: LoginSecurityEventAction,
   metadata: { ip?: string; identifier?: string; reason?: string },
   userId?: string | null,
 ): Promise<void> {
+  // Explicit severity: every login security event is a SECURITY signal except a
+  // solved challenge, which is routine INFO.
+  const severity: LogSeverity = action === 'LOGIN_CHALLENGE_SOLVED' ? 'INFO' : 'SECURITY';
   try {
-    await prisma.activityLog.create({
-      data: {
-        userId: userId ?? null,
-        action,
-        category: 'SECURITY',
-        severity: inferSeverity(action),
-        ipAddress: metadata.ip ?? null,
-        metadata,
-      },
-    });
+    await createEnhancedActivityLog(
+      prisma,
+      { ipAddress: metadata.ip ?? null },
+      { userId: userId ?? null, action, severity, metadata },
+    );
   } catch (error) {
     console.error('[auth] security log failure', error);
   }

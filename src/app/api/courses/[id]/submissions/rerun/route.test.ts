@@ -54,8 +54,8 @@ describe('POST /api/courses/[id]/submissions/rerun', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.submission.findMany.mockResolvedValue([
-      { id: 's1', courseId: 'c1', assignmentId: 'a1', problemId: 'p1' },
-      { id: 's2', courseId: 'c1', assignmentId: 'a1', problemId: 'p2' },
+      { id: 's1', courseId: 'c1', assignmentId: 'a1', problemId: 'p1', studentId: 'u2' },
+      { id: 's2', courseId: 'c1', assignmentId: 'a1', problemId: 'p2', studentId: 'u3' },
     ]);
     prismaMock.submission.update.mockResolvedValue({});
 
@@ -77,6 +77,9 @@ describe('POST /api/courses/[id]/submissions/rerun', () => {
       (call) => call[2]?.action === 'SUBMISSION_RERUN',
     );
     expect(rerunLogs).toHaveLength(2);
+    // Each per-submission rerun records the affected student.
+    expect(rerunLogs[0]?.[2]?.metadata?.studentId).toBe('u2');
+    expect(rerunLogs[1]?.[2]?.metadata?.studentId).toBe('u3');
   });
 
   it('returns 409 and does not requeue when the course is archived', async () => {

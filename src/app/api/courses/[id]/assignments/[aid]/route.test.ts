@@ -352,6 +352,18 @@ describe('PUT /api/courses/[id]/assignments/[aid]', () => {
     expect(res.status).toBe(403);
     const body = await res.json();
     expect(body.error).toContain('submissions');
+    // Business-rule block, not an authz denial: WARNING + *_REJECTED with FK context.
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        action: 'ASSIGNMENT_UNPUBLISH_REJECTED',
+        severity: 'WARNING',
+        courseId: 'c1',
+        assignmentId: 'a1',
+        metadata: { reason: 'has submissions' },
+      }),
+    );
   });
 
   it('blocks unpublishing when grades exist (no submissions)', async () => {
@@ -361,6 +373,17 @@ describe('PUT /api/courses/[id]/assignments/[aid]', () => {
     const res = await PUT(putReq({ isPublished: false }), mutationParams);
     expect(res.status).toBe(403);
     expect((await res.json()).error).toContain('grades');
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        action: 'ASSIGNMENT_UNPUBLISH_REJECTED',
+        severity: 'WARNING',
+        courseId: 'c1',
+        assignmentId: 'a1',
+        metadata: { reason: 'has grades' },
+      }),
+    );
   });
 
   it('blocks changing group mode once submissions exist', async () => {
@@ -369,6 +392,17 @@ describe('PUT /api/courses/[id]/assignments/[aid]', () => {
     const res = await PUT(putReq({ isGroup: true }), mutationParams);
     expect(res.status).toBe(403);
     expect((await res.json()).error).toContain('group mode');
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        action: 'ASSIGNMENT_GROUP_MODE_CHANGE_REJECTED',
+        severity: 'WARNING',
+        courseId: 'c1',
+        assignmentId: 'a1',
+        metadata: { reason: 'has submissions' },
+      }),
+    );
   });
 
   it('returns 400 for an inconsistent late-submission window', async () => {
@@ -441,6 +475,17 @@ describe('PATCH /api/courses/[id]/assignments/[aid]', () => {
     const res = await PATCH(patchReq({ isPublished: false }), mutationParams);
     expect(res.status).toBe(403);
     expect((await res.json()).error).toContain('submissions');
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        action: 'ASSIGNMENT_UNPUBLISH_REJECTED',
+        severity: 'WARNING',
+        courseId: 'c1',
+        assignmentId: 'a1',
+        metadata: { reason: 'has submissions' },
+      }),
+    );
   });
 
   it('blocks unpublishing when grades exist (no submissions)', async () => {
@@ -450,6 +495,17 @@ describe('PATCH /api/courses/[id]/assignments/[aid]', () => {
     const res = await PATCH(patchReq({ isPublished: false }), mutationParams);
     expect(res.status).toBe(403);
     expect((await res.json()).error).toContain('grades');
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        action: 'ASSIGNMENT_UNPUBLISH_REJECTED',
+        severity: 'WARNING',
+        courseId: 'c1',
+        assignmentId: 'a1',
+        metadata: { reason: 'has grades' },
+      }),
+    );
   });
 
   it('blocks changing group mode once submissions exist', async () => {
@@ -458,6 +514,17 @@ describe('PATCH /api/courses/[id]/assignments/[aid]', () => {
     const res = await PATCH(patchReq({ isGroup: true }), mutationParams);
     expect(res.status).toBe(403);
     expect((await res.json()).error).toContain('group mode');
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        action: 'ASSIGNMENT_GROUP_MODE_CHANGE_REJECTED',
+        severity: 'WARNING',
+        courseId: 'c1',
+        assignmentId: 'a1',
+        metadata: { reason: 'has submissions' },
+      }),
+    );
   });
 
   it('returns 400 for an inconsistent late-submission window', async () => {

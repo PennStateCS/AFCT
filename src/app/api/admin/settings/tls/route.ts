@@ -211,6 +211,7 @@ export const DELETE = withAdminAuth(
       userId: user.id,
       action: 'TLS_CERT_RESET',
       category: 'SYSTEM',
+      severity: 'INFO',
       metadata: { revertedTo: 'self-signed' },
     });
     return NextResponse.json({ ...result, pendingCsr: hasPendingCsr() });

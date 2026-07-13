@@ -166,7 +166,11 @@ describe('GET /api/files/problems/[file]', () => {
     expect(activityLogMock).toHaveBeenCalledWith(
       prismaMock,
       expect.anything(),
-      expect.objectContaining({ action: 'PROBLEM_FILE_DOWNLOAD_DENIED', severity: 'SECURITY' }),
+      expect.objectContaining({
+        action: 'PROBLEM_FILE_DOWNLOAD_DENIED',
+        severity: 'SECURITY',
+        courseId: 'course-1',
+      }),
     );
   });
 
