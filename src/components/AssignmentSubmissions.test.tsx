@@ -80,7 +80,12 @@ const students = [{ id: 's1', firstName: 'Ada', lastName: 'Lovelace' }];
 const emptyReviewData = { submissions: {}, comments: [], problemGrades: {} };
 
 // Simple URL router over fetch. Each route returns a fresh response object.
-type FetchResult = { ok: boolean; status?: number; json: () => Promise<unknown> };
+type FetchResult = {
+  ok: boolean;
+  status?: number;
+  json: () => Promise<unknown>;
+  text?: () => Promise<string>;
+};
 const routeFetch = (routes: Record<string, () => FetchResult>) =>
   vi.fn((url: string) => {
     const key = Object.keys(routes).find((r) => url.includes(r));
@@ -170,7 +175,12 @@ describe('AssignmentSubmissions', () => {
       'problem-grades/summary': () => ({ ok: true, json: async () => ({}) }),
       // Order matters: the single-problem grade route contains "/problems/" and
       // must be matched before the broad "/review-data/" fallback.
-      '/problems/p1/grade/s1': () => ({ ok: true, json: async () => ({ ok: true }) }),
+      // The grade POST now goes through apiClient, which reads res.text().
+      '/problems/p1/grade/s1': () => ({
+        ok: true,
+        json: async () => ({ ok: true }),
+        text: async () => JSON.stringify({ ok: true }),
+      }),
       '/review-data/': () => {
         reviewCalls += 1;
         return { ok: true, json: async () => emptyReviewData };
