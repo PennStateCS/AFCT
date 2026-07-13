@@ -157,11 +157,9 @@ export const CourseFormSchema = BaseCourseFormObject.extend({
  */
 export const DuplicateFormSchema = BaseCourseFormObject.extend({
   copyMode: z.enum(['assignments', 'assignments_with_problems', 'problems']).optional(),
-  copyFaculty: z.boolean().optional(),
-  copyTAs: z.boolean().optional(),
-  // Additional faculty for the copy; with copyFaculty off, at least one is
-  // required (see the superRefine below) so the copy is never faculty-less.
+  // Additional faculty for the copy; at least one faculty must be selected.
   instructorIds: z.array(z.string()).optional(),
+  taIds: z.array(z.string()).optional(),
 })
   .refine((d) => d.startDate <= d.endDate, {
     path: ['startDate'],
@@ -207,11 +205,11 @@ export const DuplicateFormSchema = BaseCourseFormObject.extend({
     }
 
     // The copy must end up with at least one faculty member.
-    if (!d.copyFaculty && (d.instructorIds ?? []).length === 0) {
+    if ((d.instructorIds ?? []).length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['instructorIds'],
-        message: 'Copy the faculty roster or pick at least one faculty member.',
+        message: 'Pick at least one faculty member.',
       });
     }
   });
