@@ -340,4 +340,11 @@ describe('CreateCourseDialog', () => {
       expect(toastErrorMock).toHaveBeenCalledWith('Failed to load faculty list.'),
     );
   });
+
+  it('notifies the user when TA fetching fails', async () => {
+    taResp = () => ({ ok: false, status: 500, json: async () => ({}) });
+    renderDialog();
+
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Failed to load TA list.'));
+  });
 });
