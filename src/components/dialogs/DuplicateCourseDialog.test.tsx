@@ -82,7 +82,13 @@ const routeFetch = () =>
   vi.fn(async (url: string, init?: RequestInit) => {
     const u = String(url);
     if (u.includes('/duplicate')) {
-      return { ok: true, json: async () => ({ id: 'new-course-id' }) } as Response;
+      const body = JSON.stringify({ id: 'new-course-id' });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => JSON.parse(body),
+        text: async () => body,
+      } as Response;
     }
     if (init?.method === undefined && u.includes('role=FACULTY')) {
       return {

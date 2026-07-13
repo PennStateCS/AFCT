@@ -142,8 +142,19 @@ vi.mock('@/components/ui/dialog', () => {
 
 const originalFetch = global.fetch;
 
-type MockResp = { ok: boolean; status: number; json: () => Promise<unknown> };
-const ok = (data: unknown): MockResp => ({ ok: true, status: 200, json: async () => data });
+type MockResp = {
+  ok: boolean;
+  status: number;
+  json: () => Promise<unknown>;
+  text?: () => Promise<string>;
+};
+// apiClient reads res.text() on success (then JSON.parses), res.json() on error.
+const ok = (data: unknown): MockResp => ({
+  ok: true,
+  status: 200,
+  json: async () => data,
+  text: async () => JSON.stringify(data),
+});
 const faculty = [
   { id: 'faculty-1', firstName: 'Ada', lastName: 'Lovelace', role: 'FACULTY' },
   { id: 'faculty-2', firstName: 'Alan', lastName: 'Turing', role: 'FACULTY' },
@@ -278,7 +289,7 @@ describe('CreateCourseDialog', () => {
 
   it('shows an error toast when the API returns an error response', async () => {
     const user = userEvent.setup();
-    createResp = () => ({ ok: false, status: 500, json: async () => ({ message: 'Server exploded' }) });
+    createResp = () => ({ ok: false, status: 500, json: async () => ({ error: 'Server exploded' }) });
 
     renderDialog();
 
