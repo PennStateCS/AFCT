@@ -13,18 +13,12 @@ import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { sumProblemPoints, toEnrolled, toStudentSafeEnrolled } from '@/lib/course-format';
 import { toEmptyStringNotation } from '@/lib/empty-string-notation';
 import { CourseUpdateApiSchema } from '@/schemas/course';
-
-// A prisma delegate whose aggregate methods are treated as optional, so the code
-// can fall back to count() when a partial test mock doesn't implement them.
-type CountRow = {
-  studentId?: string | null;
-  assignmentId?: string | null;
-  _count?: { _all?: number } | null;
-};
-type OptionalCountDelegate = {
-  groupBy?: (args: unknown) => Promise<CountRow[]>;
-  findMany?: (args: unknown) => Promise<CountRow[]>;
-};
+import {
+  countByAssignment,
+  studentsWithSubmissions,
+  type OptionalCountDelegate,
+} from '@/lib/course/aggregates';
+import { diffFacultyRoster } from '@/lib/course/faculty';
 
 /**
  * Fetches one course with derived metadata, shaped by the `view` query param to
@@ -159,46 +153,24 @@ export const GET = withCourseAuth(
           .filter((r) => r.role === 'STUDENT')
           .map((r) => String(r.user.id));
 
-        const studentSubmissionRows =
-          assignmentIds.length > 0 && studentIds.length > 0
-            ? submissionDelegate.groupBy
-              ? await submissionDelegate.groupBy({
-                  by: ['studentId'],
-                  where: {
-                    studentId: { in: studentIds },
-                    assignmentId: { in: assignmentIds },
-                  },
-                })
-              : submissionDelegate.findMany
-                ? await submissionDelegate.findMany({
-                    where: {
-                      studentId: { in: studentIds },
-                      assignmentId: { in: assignmentIds },
-                    },
-                    select: { studentId: true },
-                  })
-                : await Promise.all(
-                    studentIds.map(async (studentId) => {
-                      const hasSubmission = await prisma.submission.findFirst({
-                        where: {
-                          studentId,
-                          assignmentId: { in: assignmentIds },
-                        },
-                        select: { studentId: true },
-                      });
-                      return hasSubmission ? { studentId } : null;
-                    }),
-                  ).then((rows) => rows.filter((row): row is { studentId: string } => !!row))
-            : [];
-        const studentsWithSubmissions = new Set(
-          studentSubmissionRows.map((row: CountRow) => String(row.studentId)),
+        const submittedStudentIds = await studentsWithSubmissions(
+          submissionDelegate,
+          studentIds,
+          assignmentIds,
+          (studentId) =>
+            prisma.submission
+              .findFirst({
+                where: { studentId, assignmentId: { in: assignmentIds } },
+                select: { studentId: true },
+              })
+              .then(Boolean),
         );
 
         enrolled = rosterRows.map((r) => ({
           ...r.user,
           courseRole: r.role,
           hasSubmissions:
-            r.role === 'STUDENT' ? studentsWithSubmissions.has(String(r.user.id)) : false,
+            r.role === 'STUDENT' ? submittedStudentIds.has(String(r.user.id)) : false,
         }));
       } else if (includeRoster) {
         // Non-staff (students) get a privacy-safe roster: course staff keep their
@@ -213,62 +185,18 @@ export const GET = withCourseAuth(
       let assignmentsWithProblemCount: Array<Record<string, unknown>> = [];
       if (includeAssignments) {
         // Class-wide submission/comment totals are staff-only aggregates; students
-        // must not learn peers' activity volume, so skip them for non-staff (the
-        // counts then default to 0 below).
-        const submissionCounts =
-          isStaff && assignmentIds.length > 0
-            ? submissionDelegate.groupBy
-              ? await submissionDelegate.groupBy({
-                  by: ['assignmentId'],
-                  where: { assignmentId: { in: assignmentIds } },
-                  _count: { _all: true },
-                })
-              : submissionDelegate.findMany
-                ? await submissionDelegate.findMany({
-                    where: { assignmentId: { in: assignmentIds } },
-                    select: { assignmentId: true },
-                  })
-                : await Promise.all(
-                    assignmentIds.map(async (assignmentId) => ({
-                      assignmentId,
-                      _count: { _all: await prisma.submission.count({ where: { assignmentId } }) },
-                    })),
-                  )
-            : [];
-        const commentCounts =
-          isStaff && assignmentIds.length > 0
-            ? commentDelegate.groupBy
-              ? await commentDelegate.groupBy({
-                  by: ['assignmentId'],
-                  where: { assignmentId: { in: assignmentIds } },
-                  _count: { _all: true },
-                })
-              : commentDelegate.findMany
-                ? await commentDelegate.findMany({
-                    where: { assignmentId: { in: assignmentIds } },
-                    select: { assignmentId: true },
-                  })
-                : await Promise.all(
-                    assignmentIds.map(async (assignmentId) => ({
-                      assignmentId,
-                      _count: { _all: await prisma.comment.count({ where: { assignmentId } }) },
-                    })),
-                  )
-            : [];
-
-        const submissionCountMap = new Map<string, number>();
-        submissionCounts.forEach((row: CountRow) => {
-          const key = String(row.assignmentId);
-          const increment = row?._count?._all ?? 1;
-          submissionCountMap.set(key, (submissionCountMap.get(key) ?? 0) + increment);
-        });
-
-        const commentCountMap = new Map<string, number>();
-        commentCounts.forEach((row: CountRow) => {
-          const key = String(row.assignmentId);
-          const increment = row?._count?._all ?? 1;
-          commentCountMap.set(key, (commentCountMap.get(key) ?? 0) + increment);
-        });
+        // must not learn peers' activity volume, so skip the queries entirely for
+        // non-staff (the counts then default to 0 below).
+        const submissionCountMap = isStaff
+          ? await countByAssignment(submissionDelegate, assignmentIds, (assignmentId) =>
+              prisma.submission.count({ where: { assignmentId } }),
+            )
+          : new Map<string, number>();
+        const commentCountMap = isStaff
+          ? await countByAssignment(commentDelegate, assignmentIds, (assignmentId) =>
+              prisma.comment.count({ where: { assignmentId } }),
+            )
+          : new Map<string, number>();
 
         assignmentsWithProblemCount = assignmentRows.map((assignment) => {
           const totalProblemPoints = sumProblemPoints(assignment.problems);
@@ -510,26 +438,7 @@ export const PUT = withCourseAuth(
             where: { courseId: id },
             select: { userId: true, role: true },
           });
-          const existingFacultyIds = new Set(
-            existingRoster.filter((r) => r.role === 'FACULTY').map((r) => r.userId),
-          );
-          const desiredFacultyIds = new Set(instructorIds);
-
-          const toAdd: string[] = [];
-          const toPromote: string[] = [];
-          instructorIds.forEach((userId: string) => {
-            const existing = existingRoster.find((r) => r.userId === userId);
-            if (!existing) {
-              toAdd.push(userId);
-              return;
-            }
-            if (existing.role !== 'FACULTY') {
-              toPromote.push(userId);
-            }
-          });
-          const toRemove = Array.from(existingFacultyIds).filter(
-            (userId) => !desiredFacultyIds.has(userId),
-          );
+          const { toAdd, toPromote, toRemove } = diffFacultyRoster(existingRoster, instructorIds);
 
           if (toRemove.length > 0) {
             await tx.roster.deleteMany({
