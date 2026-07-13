@@ -25,6 +25,8 @@ import { DuplicateFormSchema } from '@/schemas/course';
 import type { Course } from '@prisma/client';
 import { toast } from 'sonner';
 import { apiPaths } from '@/lib/api-paths';
+import { apiClient, ApiError } from '@/lib/api/fetch-client';
+import { useFacultyTaOptions, getUserName } from './useFacultyTaOptions';
 
 function toDateTimeLocalInTimeZone(date: Date | string, timeZone: string): string {
   const d = new Date(date);
@@ -125,42 +127,8 @@ export default function DuplicateCourseDialog({
   const [step, setStep] = useState(0);
   const [confirmChecked, setConfirmChecked] = useState(false);
 
-  // Faculty list for the "add faculty" dropdown. Same query key as the create/edit
-  // dialogs so they share one cache entry.
-  const facultyQuery = useQuery({
-    queryKey: ['admin', 'users', 'faculty'],
-    queryFn: async () => {
-      const res = await fetch(apiPaths.admin.users({ role: 'FACULTY' }));
-      if (!res.ok) throw new Error('Failed to load faculty');
-      const data = await res.json();
-      return (Array.isArray(data) ? data : []) as Array<User & { role?: string }>;
-    },
-    enabled: open,
-    staleTime: 30_000,
-  });
-  const facultyList = facultyQuery.data ?? [];
-  useEffect(() => {
-    if (facultyQuery.isError) toast.error('Failed to load faculty list.');
-  }, [facultyQuery.isError]);
-
-  const taQuery = useQuery({
-    queryKey: ['admin', 'users', 'ta'],
-    queryFn: async () => {
-      const res = await fetch(apiPaths.admin.users({ role: 'TA' }));
-      if (!res.ok) throw new Error('Failed to load TAs');
-      const data = await res.json();
-      return (Array.isArray(data) ? data : []) as Array<User & { role?: string }>;
-    },
-    enabled: open,
-    staleTime: 30_000,
-  });
-  const taList = taQuery.data ?? [];
-  useEffect(() => {
-    if (taQuery.isError) toast.error('Failed to load TA list.');
-  }, [taQuery.isError]);
-
-  const getUserName = (user: User) =>
-    `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || user.email || 'Unknown user';
+  // Faculty/TA option lists for the "add faculty/TA" dropdowns (shared with CreateCourseDialog).
+  const { facultyList, taList } = useFacultyTaOptions(open);
 
   type CourseRosterRow = { role: string; user: User };
 
@@ -294,16 +262,7 @@ export default function DuplicateCourseDialog({
     };
 
     try {
-      const res = await fetch(apiPaths.courseDuplicate(courseId), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data?.message || res.statusText || 'Failed to duplicate');
-      }
-      const data = await res.json();
+      const data = await apiClient.post<{ id: string }>(apiPaths.courseDuplicate(courseId), payload);
       setOpen(false);
       if (onSuccess) {
         onSuccess(data.id);
@@ -311,8 +270,7 @@ export default function DuplicateCourseDialog({
         window.location.href = `/dashboard/courses/${data.id}`;
       }
     } catch (e) {
-      const errMsg = (e as Error)?.message ?? String(e);
-      toast.error(errMsg || 'Failed to duplicate course');
+      toast.error(e instanceof ApiError ? e.message : 'Failed to duplicate course');
     }
   };
 
