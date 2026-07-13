@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
-import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { createEnhancedActivityLog, type LogSeverity } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
 import { readJson } from '@/lib/api/request';
 import { SignupSchema } from '@/schemas/auth';
@@ -196,8 +196,11 @@ async function logSecurityEvent(
   action: SignupSecurityEventAction,
   metadata: { ip?: string | null; identifier?: string | null },
 ) {
+  // Explicit severity: a rate-limit or forced challenge is a SECURITY signal; a
+  // solved challenge is routine INFO.
+  const severity: LogSeverity = action === 'SIGNUP_CHALLENGE_SOLVED' ? 'INFO' : 'SECURITY';
   try {
-    await createEnhancedActivityLog(prisma, req, { action, metadata });
+    await createEnhancedActivityLog(prisma, req, { action, severity, metadata });
   } catch (error) {
     console.error('[signup] security log failure', error);
   }

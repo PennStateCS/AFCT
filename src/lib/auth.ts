@@ -181,6 +181,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             userId: user?.id ?? null,
             action: 'LOGIN_SUCCESS',
             category: 'SYSTEM',
+            severity: 'INFO',
             metadata: {
               email: user?.email ?? null,
               provider: account?.provider ?? null,
@@ -203,7 +204,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         await createEnhancedActivityLog(
           prisma,
           { ipAddress, userAgent },
-          { userId, action: 'LOGOUT', category: 'SYSTEM', metadata: {} },
+          { userId, action: 'LOGOUT', category: 'SYSTEM', severity: 'INFO', metadata: {} },
         );
       } catch (e) {
         // don't block sign-out on logging failure
