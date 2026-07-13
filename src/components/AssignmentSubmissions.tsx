@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Submission, User } from '@prisma/client';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
-import { queryKeys } from '@/lib/query-keys';
 import { apiClient } from '@/lib/api/fetch-client';
 import { errMessage } from '@/lib/errors';
 import { rerunSubmission } from '@/app/utils/rerunSubmission';
@@ -20,6 +19,7 @@ import type { ProblemSubmission } from '@/lib/problem-submission';
 import StudentNavigator from './StudentNavigator';
 import { useEmptyStringSymbol } from '@/lib/useEmptyStringSymbol';
 import { SubmissionViewerDialog } from '@/components/dialogs/SubmissionViewerDialog';
+import { useReviewData } from './useReviewData';
 
 type Person = Pick<User, 'firstName' | 'lastName' | 'id'>;
 
@@ -404,47 +404,12 @@ export default function AssignmentSubmissions({
     setStudentGradeStatuses(normalized);
   }, [students, gradeSummaryData]);
 
-  // Review data (submissions + comments + problem grades) for the selected student.
-  // TanStack Query owns the fetch, cancellation (via signal), and dedupe — the old
-  // AbortController / request-sequence plumbing is gone.
-  type ReviewDataResponse = {
-    submissions?: Record<string, SubmissionData>;
-    comments?: Array<DiscussionComment & { problemId?: string | null }>;
-    problemGrades?: Record<string, { grade: number | null; feedback: string | null }>;
-  };
+  // Review data (submissions + comments + problem grades) for the selected student —
+  // the TanStack Query fetch, its cold-load flag, and refresher live in a hook.
+  const { reviewData, reviewQueryIsError, reviewError, reviewFetching, refreshReview } =
+    useReviewData(courseId, assignmentId, selectedStudentId);
 
-  const reviewQuery = useQuery({
-    queryKey: queryKeys.assignment.reviewData(courseId, assignmentId, selectedStudentId ?? ''),
-    queryFn: async ({ signal }): Promise<ReviewDataResponse> => {
-      const res = await fetch(
-        apiPaths.assignmentReviewData(courseId, assignmentId, selectedStudentId ?? ''),
-        { signal },
-      );
-      if (!res.ok) {
-        // Match the previous silent handling of auth/not-found responses.
-        if ([401, 403, 404].includes(res.status)) {
-          return { submissions: {}, comments: [], problemGrades: {} };
-        }
-        throw new Error((await res.json())?.error || 'Failed to load review data');
-      }
-      return ((await res.json()) ?? {}) as ReviewDataResponse;
-    },
-    enabled: !!selectedStudentId,
-    staleTime: 30_000,
-  });
-
-  // Stable refresher used by the rerun helpers (they previously took fetchReviewData).
-  const refreshReview = useCallback(async () => {
-    await queryClient.invalidateQueries({
-      queryKey: queryKeys.assignment.reviewData(courseId, assignmentId, selectedStudentId ?? ''),
-    });
-  }, [queryClient, courseId, assignmentId, selectedStudentId]);
-
-  // All three loading flags previously flipped together; derive them from the query.
-  // isPending (not isFetching) so the spinner shows only on the cold load of a
-  // student's data. After a grade/comment save invalidates review-data, the
-  // background refetch must NOT blank the whole workspace back to a spinner.
-  const reviewFetching = !!selectedStudentId && reviewQuery.isPending;
+  // All three loading flags previously flipped together; they track the cold load.
   const loadingSubmissions = reviewFetching;
   const loadingComments = reviewFetching;
   const loadingProblemGrades = reviewFetching;
@@ -452,8 +417,6 @@ export default function AssignmentSubmissions({
   // Seed the local editable state from the cached review data. This carries the
   // EXACT seeding logic from the old fetchReviewData success block. When there is
   // no selected student, clear the local state (the old null-branch behavior).
-  const reviewData = reviewQuery.data;
-  const reviewQueryIsError = reviewQuery.isError;
   useEffect(() => {
     if (!selectedStudentId) {
       setSubmissions({});
@@ -465,7 +428,7 @@ export default function AssignmentSubmissions({
     }
 
     if (reviewQueryIsError) {
-      console.error('Fetch review data error:', reviewQuery.error);
+      console.error('Fetch review data error:', reviewError);
       showToast.error('Failed to load review data');
       setSubmissions({});
       setComments({});
@@ -515,7 +478,7 @@ export default function AssignmentSubmissions({
       ...prev,
       [selectedStudentId]: hasAllGrades,
     }));
-  }, [selectedStudentId, reviewData, reviewQueryIsError, reviewQuery.error, assignmentProblems]);
+  }, [selectedStudentId, reviewData, reviewQueryIsError, reviewError, assignmentProblems]);
 
   const handleRerunSubmission = useCallback(
     async (submission: Submission) => {
@@ -860,7 +823,7 @@ export default function AssignmentSubmissions({
                           selectedProblem ? Boolean(savingProblemGrades[selectedProblem.id]) : false
                         }
                         isLoadingGrade={loadingProblemGrades}
-                        isPrivledgedUser={true}
+                        isPrivilegedUser={true}
                       />
                     </div>
                   </div>

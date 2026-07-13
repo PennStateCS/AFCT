@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchJson } from '@/lib/query-fetch';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
@@ -79,6 +78,8 @@ import SwitchField from '@/components/ui/SwitchField';
 import { parseDomainList } from '@/lib/email';
 import { SystemSettingsUpdateSchema } from '@/schemas/systemSettings';
 import FileUploadInput from '@/components/FileUploadInput';
+import { useTlsCertificate } from './useTlsCertificate';
+import { useBackups } from './useBackups';
 
 type SystemSettingsResponse = {
   timezone: string;
@@ -103,17 +104,6 @@ type SystemSettingsResponse = {
   hcaptchaSecretConfigured: boolean;
 };
 
-type TlsInfo = {
-  installed: boolean;
-  subject?: string;
-  issuer?: string;
-  validFrom?: string;
-  validTo?: string;
-  selfSigned?: boolean;
-  expired?: boolean;
-  pendingCsr?: boolean;
-};
-
 // Fields covered by the main Save (used for unsaved-changes tracking).
 type FormSnapshot = {
   timezone: string;
@@ -135,17 +125,6 @@ type FormSnapshot = {
   backupRetentionDays: number | '';
   activityLogRetentionDays: number | '';
   hcaptchaSiteKey: string;
-};
-
-type TlsMethod = 'csr' | 'self-signed' | 'upload' | null;
-
-// One backup = a database dump plus a matching upload-files archive.
-type BackupInfo = {
-  timestamp: string;
-  dumpFile: string | null;
-  dumpSize: number | null;
-  filesFile: string | null;
-  filesSize: number | null;
 };
 
 const msToSec = (ms: number) => Math.round(ms / 1000);
@@ -277,8 +256,8 @@ export default function SystemSettingsClient() {
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState('general');
   // The ~19 Save-covered fields live in one reducer-managed object (was one useState
-  // slice each). `setField` is the typed single-field updater; the read aliases and
-  // write wrappers below keep the field JSX and submit logic referencing the same names.
+  // slice each). `setField` is the typed single-field updater the field JSX calls; a
+  // whole-object `reset` seeds/restores the form (on load, Cancel, and after save).
   const [form, dispatchForm] = useReducer(formReducer, initialSeed ?? EMPTY_FORM);
   const setField = useCallback(
     <K extends keyof FormSnapshot>(field: K, value: FormSnapshot[K]) => {
@@ -308,54 +287,10 @@ export default function SystemSettingsClient() {
     activityLogRetentionDays,
     hcaptchaSiteKey,
   } = form;
-  const setTimezone = (v: FormSnapshot['timezone']) => setField('timezone', v);
-  const setMaxUploadSizeMb = (v: FormSnapshot['maxUploadSizeMb']) => setField('maxUploadSizeMb', v);
-  const setAllowSignup = (v: FormSnapshot['allowSignup']) => setField('allowSignup', v);
-  const setSignupAllowedDomains = (v: FormSnapshot['signupAllowedDomains']) =>
-    setField('signupAllowedDomains', v);
-  const setClock24Hour = (v: FormSnapshot['clock24Hour']) => setField('clock24Hour', v);
-  const setSessionTimeoutMinutes = (v: FormSnapshot['sessionTimeoutMinutes']) =>
-    setField('sessionTimeoutMinutes', v);
-  const setEvalTimeoutSec = (v: FormSnapshot['evalTimeoutSec']) => setField('evalTimeoutSec', v);
-  const setResubmitCooldownSec = (v: FormSnapshot['resubmitCooldownSec']) =>
-    setField('resubmitCooldownSec', v);
-  const setEvalMaxMemoryMb = (v: FormSnapshot['evalMaxMemoryMb']) => setField('evalMaxMemoryMb', v);
-  const setMaxConcurrent = (v: FormSnapshot['maxConcurrent']) => setField('maxConcurrent', v);
-  const setMaxAttempts = (v: FormSnapshot['maxAttempts']) => setField('maxAttempts', v);
-  const setAnalyzerLimit = (v: FormSnapshot['analyzerLimit']) => setField('analyzerLimit', v);
-  const setLoginMaxAttempts = (v: FormSnapshot['loginMaxAttempts']) =>
-    setField('loginMaxAttempts', v);
-  const setLoginLockoutMinutes = (v: FormSnapshot['loginLockoutMinutes']) =>
-    setField('loginLockoutMinutes', v);
-  const setBackupEnabled = (v: FormSnapshot['backupEnabled']) => setField('backupEnabled', v);
-  const setBackupHour = (v: FormSnapshot['backupHour']) => setField('backupHour', v);
-  const setBackupRetentionDays = (v: FormSnapshot['backupRetentionDays']) =>
-    setField('backupRetentionDays', v);
-  const setActivityLogRetentionDays = (v: FormSnapshot['activityLogRetentionDays']) =>
-    setField('activityLogRetentionDays', v);
-  const setHcaptchaSiteKey = (v: FormSnapshot['hcaptchaSiteKey']) => setField('hcaptchaSiteKey', v);
 
-  // Available backups (managed independently of the settings form's Save).
-  const {
-    data: backups = [],
-    isLoading: backupsLoading,
-    refetch: refetchBackups,
-  } = useQuery({
-    queryKey: ['admin', 'settings', 'backups'],
-    queryFn: async () => {
-      const res = await fetch(apiPaths.admin.backups(), { cache: 'no-store' });
-      if (!res.ok) throw new Error('Failed to load backups');
-      const data = (await res.json()) as { backups?: BackupInfo[] };
-      return Array.isArray(data.backups) ? data.backups : [];
-    },
-    staleTime: 30_000,
-  });
-  // Force-refresh helper used after "Back up now"; returns the new count so the
-  // caller can poll until the freshly-requested backup appears.
-  const reloadBackups = useCallback(async (): Promise<number> => {
-    const { data } = await refetchBackups();
-    return Array.isArray(data) ? data.length : 0;
-  }, [refetchBackups]);
+  // Available backups + the "Back up now" action (managed independently of the
+  // settings form's Save) live in a dedicated hook.
+  const { backups, backupsLoading, backupNowBusy, handleBackupNow } = useBackups();
 
   // hCaptcha keys. The site key is part of the main form object above; the secret is
   // write-only (we only know whether one is set), so it stays local.
@@ -369,34 +304,36 @@ export default function SystemSettingsClient() {
   // on a warm cache so `loading` (below) is false immediately — no disabled flash.
   const [baseline, setBaseline] = useState<FormSnapshot | null>(initialSeed);
 
-  // TLS certificate (managed independently of the settings form's Save). The
-  // read is cached; every mutation writes the fresh info straight into the cache
-  // via setTls, so the status card stays current without a refetch.
-  const { data: tlsData } = useQuery({
-    queryKey: ['admin', 'settings', 'tls'],
-    queryFn: async () => {
-      const res = await fetch(apiPaths.admin.settingsTls(), { cache: 'no-store' });
-      if (!res.ok) throw new Error('Failed to load TLS info');
-      return (await res.json()) as TlsInfo;
-    },
-    staleTime: 30_000,
-  });
-  const tls = tlsData ?? null;
-  const setTls = useCallback(
-    (info: TlsInfo) => queryClient.setQueryData(['admin', 'settings', 'tls'], info),
-    [queryClient],
-  );
-  const [tlsBusy, setTlsBusy] = useState(false);
-  const [tlsMethod, setTlsMethod] = useState<TlsMethod>(null);
-  const [certFile, setCertFile] = useState<File | null>(null);
-  const [keyFile, setKeyFile] = useState<File | null>(null);
-  const [chainFile, setChainFile] = useState<File | null>(null);
-  // CSR flow
-  const [csrCommonName, setCsrCommonName] = useState('');
-  const [csrOrganization, setCsrOrganization] = useState('');
-  const [csrAltNames, setCsrAltNames] = useState('');
-  const [signedCertFile, setSignedCertFile] = useState<File | null>(null);
-  const [signedChainFile, setSignedChainFile] = useState<File | null>(null);
+  // TLS certificate — its cached read, upload/CSR/self-signed flows, and form state
+  // live in a dedicated hook so this component owns only the main settings form.
+  const {
+    tls,
+    tlsBusy,
+    tlsMethod,
+    setTlsMethod,
+    certFile,
+    setCertFile,
+    keyFile,
+    setKeyFile,
+    chainFile,
+    setChainFile,
+    csrCommonName,
+    setCsrCommonName,
+    csrOrganization,
+    setCsrOrganization,
+    csrAltNames,
+    setCsrAltNames,
+    signedCertFile,
+    setSignedCertFile,
+    signedChainFile,
+    setSignedChainFile,
+    cnMissing,
+    applyCert,
+    resetCert,
+    generateCsr,
+    installSignedCert,
+    generateSelfSigned,
+  } = useTlsCertificate();
 
   // Seed the editable form from the cached settings response, once. Guarded on
   // `baseline` so a later background refetch can't clobber in-progress edits.
@@ -416,32 +353,6 @@ export default function SystemSettingsClient() {
     if (settingsError) showToast.error('Failed to load system settings.');
   }, [settingsError]);
 
-  const { mutate: triggerBackup, isPending: backupNowBusy } = useMutation({
-    mutationFn: (_beforeCount: number) => fetchJson(apiPaths.admin.backups(), { method: 'POST' }),
-    onSuccess: (_data, beforeCount) => {
-      showToast.success('Backup requested — it should appear within a minute.');
-      // The backup container runs the request on its next tick; poll until the
-      // new backup shows up (or we give up after ~1 minute).
-      let tries = 0;
-      const poll = async () => {
-        tries += 1;
-        const count = await reloadBackups();
-        if (count <= beforeCount && tries < 10) setTimeout(() => void poll(), 6000);
-      };
-      setTimeout(() => void poll(), 6000);
-    },
-    onError: (err) => {
-      showToast.error(err instanceof Error ? err.message : 'Failed to start backup');
-    },
-  });
-
-  const handleBackupNow = async () => {
-    // Capture the current backup count before triggering so the poll can detect
-    // the new backup appearing.
-    const before = await reloadBackups();
-    triggerBackup(before);
-  };
-
   // Restore the last-viewed tab on load, and remember it on change.
   useEffect(() => {
     try {
@@ -458,146 +369,6 @@ export default function SystemSettingsClient() {
       localStorage.setItem(SETTINGS_TAB_KEY, value);
     } catch {
       // ignore storage errors
-    }
-  };
-
-  const applyCert = async () => {
-    if (!certFile || !keyFile) {
-      showToast.error('Select both a certificate and a private key.');
-      return;
-    }
-    setTlsBusy(true);
-    try {
-      const [cert, key, chain] = await Promise.all([
-        certFile.text(),
-        keyFile.text(),
-        chainFile ? chainFile.text() : Promise.resolve(undefined),
-      ]);
-      const res = await fetch(apiPaths.admin.settingsTls(), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cert, key, chain }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error || 'Failed to apply certificate.');
-      setTls(data as TlsInfo);
-      setCertFile(null);
-      setKeyFile(null);
-      setChainFile(null);
-      setTlsMethod(null);
-      showToast.success('Certificate applied. It may take up to ~15 seconds to take effect.');
-    } catch (err) {
-      showToast.error(err instanceof Error ? err.message : 'Failed to apply certificate.');
-    } finally {
-      setTlsBusy(false);
-    }
-  };
-
-  const resetCert = async () => {
-    setTlsBusy(true);
-    try {
-      const res = await fetch(apiPaths.admin.settingsTls(), { method: 'DELETE' });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error || 'Failed to reset certificate.');
-      setTls(data as TlsInfo);
-      showToast.success('Reverted to the self-signed certificate.');
-    } catch (err) {
-      showToast.error(err instanceof Error ? err.message : 'Failed to reset certificate.');
-    } finally {
-      setTlsBusy(false);
-    }
-  };
-
-  const csrFieldsPayload = () => ({
-    commonName: csrCommonName.trim(),
-    organization: csrOrganization.trim() || undefined,
-    altNames: csrAltNames
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean),
-  });
-
-  const tlsAction = async (payload: Record<string, unknown>) => {
-    const res = await fetch(apiPaths.admin.settingsTls(), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json().catch(() => null);
-    if (!res.ok) throw new Error(data?.error || 'The certificate operation failed.');
-    return data;
-  };
-
-  const downloadText = (filename: string, text: string) => {
-    const url = URL.createObjectURL(new Blob([text], { type: 'application/x-pem-file' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const generateCsr = async () => {
-    if (!csrCommonName.trim()) {
-      showToast.error('Enter a hostname (Common Name) first.');
-      return;
-    }
-    setTlsBusy(true);
-    try {
-      const data = await tlsAction({ action: 'generate-csr', ...csrFieldsPayload() });
-      if (data?.csr) downloadText('afct.csr', data.csr as string);
-      setTls(data as TlsInfo);
-      showToast.success(
-        'CSR generated and downloaded. Send it to your CA to get a signed certificate.',
-      );
-    } catch (err) {
-      showToast.error(err instanceof Error ? err.message : 'Failed to generate CSR.');
-    } finally {
-      setTlsBusy(false);
-    }
-  };
-
-  const installSignedCert = async () => {
-    if (!signedCertFile) {
-      showToast.error('Choose the certificate returned by your CA.');
-      return;
-    }
-    setTlsBusy(true);
-    try {
-      const [cert, chain] = await Promise.all([
-        signedCertFile.text(),
-        signedChainFile ? signedChainFile.text() : Promise.resolve(undefined),
-      ]);
-      const data = await tlsAction({ action: 'install-signed', cert, chain });
-      setTls(data as TlsInfo);
-      setSignedCertFile(null);
-      setSignedChainFile(null);
-      setTlsMethod(null);
-      showToast.success(
-        'Signed certificate installed. It may take up to ~15 seconds to take effect.',
-      );
-    } catch (err) {
-      showToast.error(err instanceof Error ? err.message : 'Failed to install certificate.');
-    } finally {
-      setTlsBusy(false);
-    }
-  };
-
-  const generateSelfSigned = async () => {
-    if (!csrCommonName.trim()) {
-      showToast.error('Enter a hostname (Common Name) first.');
-      return;
-    }
-    setTlsBusy(true);
-    try {
-      const data = await tlsAction({ action: 'self-signed', ...csrFieldsPayload() });
-      setTls(data as TlsInfo);
-      setTlsMethod(null);
-      showToast.success('Self-signed certificate generated and applied for that hostname.');
-    } catch (err) {
-      showToast.error(err instanceof Error ? err.message : 'Failed to generate certificate.');
-    } finally {
-      setTlsBusy(false);
     }
   };
 
@@ -685,27 +456,10 @@ export default function SystemSettingsClient() {
         throw new Error(body?.error || 'Failed to save settings');
       }
       const savedSiteKey = hcaptchaSiteKey.trim();
-      setSignupAllowedDomains(canonicalDomains);
-      setMaxUploadSizeMb(clampedSize);
-      setSessionTimeoutMinutes(clampedTimeout);
-      setEvalTimeoutSec(msToSec(evalTimeoutMs));
-      setResubmitCooldownSec(msToSec(resubmitCooldownMs));
-      setEvalMaxMemoryMb(memoryMb);
-      setMaxConcurrent(concurrent);
-      setMaxAttempts(attempts);
-      setAnalyzerLimit(analyzer);
-      setLoginMaxAttempts(loginAttempts);
-      setLoginLockoutMinutes(lockoutMinutes);
-      setBackupHour(bkpHour);
-      setBackupRetentionDays(bkpRetention);
-      setActivityLogRetentionDays(logRetention);
-      setHcaptchaSiteKey(savedSiteKey);
-      setHcaptchaSecretConfigured(
-        hcaptchaSecretClear ? false : hcaptchaSecretKey.trim() ? true : hcaptchaSecretConfigured,
-      );
-      setHcaptchaSecretKey('');
-      setHcaptchaSecretClear(false);
-      setBaseline({
+      // Fold the saved (clamped/canonicalized) values back into the form and make them
+      // the new baseline in one shot, so what's shown and the dirty-check both match
+      // exactly what the server stored.
+      const savedSnapshot: FormSnapshot = {
         timezone,
         maxUploadSizeMb: clampedSize,
         allowSignup,
@@ -725,7 +479,14 @@ export default function SystemSettingsClient() {
         backupRetentionDays: bkpRetention,
         activityLogRetentionDays: logRetention,
         hcaptchaSiteKey: savedSiteKey,
-      });
+      };
+      dispatchForm({ type: 'reset', snapshot: savedSnapshot });
+      setBaseline(savedSnapshot);
+      setHcaptchaSecretConfigured(
+        hcaptchaSecretClear ? false : hcaptchaSecretKey.trim() ? true : hcaptchaSecretConfigured,
+      );
+      setHcaptchaSecretKey('');
+      setHcaptchaSecretClear(false);
       // Keep the read cache consistent with what we just saved so a later revisit
       // (served from cache) reflects the new values, not the pre-save response.
       queryClient.setQueryData<SystemSettingsResponse>(['admin', 'settings'], (prev) =>
@@ -769,25 +530,7 @@ export default function SystemSettingsClient() {
 
   const resetForm = () => {
     if (!baseline) return;
-    setTimezone(baseline.timezone);
-    setMaxUploadSizeMb(baseline.maxUploadSizeMb);
-    setAllowSignup(baseline.allowSignup);
-    setSignupAllowedDomains(baseline.signupAllowedDomains);
-    setClock24Hour(baseline.clock24Hour);
-    setSessionTimeoutMinutes(baseline.sessionTimeoutMinutes);
-    setEvalTimeoutSec(baseline.evalTimeoutSec);
-    setResubmitCooldownSec(baseline.resubmitCooldownSec);
-    setEvalMaxMemoryMb(baseline.evalMaxMemoryMb);
-    setMaxConcurrent(baseline.maxConcurrent);
-    setMaxAttempts(baseline.maxAttempts);
-    setAnalyzerLimit(baseline.analyzerLimit);
-    setLoginMaxAttempts(baseline.loginMaxAttempts);
-    setLoginLockoutMinutes(baseline.loginLockoutMinutes);
-    setBackupEnabled(baseline.backupEnabled);
-    setBackupHour(baseline.backupHour);
-    setBackupRetentionDays(baseline.backupRetentionDays);
-    setActivityLogRetentionDays(baseline.activityLogRetentionDays);
-    setHcaptchaSiteKey(baseline.hcaptchaSiteKey);
+    dispatchForm({ type: 'reset', snapshot: baseline });
     setHcaptchaSecretKey('');
     setHcaptchaSecretClear(false);
   };
@@ -828,8 +571,6 @@ export default function SystemSettingsClient() {
     hcaptchaSiteKey.trim() !== '' ||
     hcaptchaSecretKey.trim() !== '' ||
     (hcaptchaSecretConfigured && !hcaptchaSecretClear);
-
-  const cnMissing = !csrCommonName.trim();
 
   return (
     <div className="space-y-4 pb-8">
@@ -898,7 +639,7 @@ export default function SystemSettingsClient() {
                   requiredMark
                   placeholder={loading ? 'Loading timezone...' : 'Select timezone'}
                   value={loading ? '' : timezone}
-                  onValueChange={(val) => setTimezone(val)}
+                  onValueChange={(val) => setField('timezone', val)}
                   disabled={disabled}
                   description="Default timezone for the server. Users can override this in their profile."
                   options={timezoneOptions}
@@ -913,7 +654,7 @@ export default function SystemSettingsClient() {
                   min={1}
                   max={1024}
                   value={maxUploadSizeMb === '' ? '' : String(maxUploadSizeMb)}
-                  setValue={(val) => setMaxUploadSizeMb(val === '' ? '' : Number(val))}
+                  setValue={(val) => setField('maxUploadSizeMb', val === '' ? '' : Number(val))}
                   disabled={disabled}
                   description="Applies to all uploads. 1–1024 MB."
                 />
@@ -926,7 +667,7 @@ export default function SystemSettingsClient() {
                   min={MIN_SESSION_TIMEOUT_MINUTES}
                   max={MAX_SESSION_TIMEOUT_MINUTES}
                   value={sessionTimeoutMinutes === '' ? '' : String(sessionTimeoutMinutes)}
-                  setValue={(val) => setSessionTimeoutMinutes(val === '' ? '' : Number(val))}
+                  setValue={(val) => setField('sessionTimeoutMinutes', val === '' ? '' : Number(val))}
                   disabled={disabled}
                   description={`Signs out after inactivity. ${MIN_SESSION_TIMEOUT_MINUTES}–${MAX_SESSION_TIMEOUT_MINUTES} min.`}
                 />
@@ -939,7 +680,7 @@ export default function SystemSettingsClient() {
                   min={MIN_LOGIN_MAX_ATTEMPTS}
                   max={MAX_LOGIN_MAX_ATTEMPTS}
                   value={loginMaxAttempts === '' ? '' : String(loginMaxAttempts)}
-                  setValue={(val) => setLoginMaxAttempts(val === '' ? '' : Number(val))}
+                  setValue={(val) => setField('loginMaxAttempts', val === '' ? '' : Number(val))}
                   disabled={disabled}
                   description={`Failed attempts on one account before it's temporarily locked. ${MIN_LOGIN_MAX_ATTEMPTS}–${MAX_LOGIN_MAX_ATTEMPTS}.`}
                 />
@@ -952,7 +693,7 @@ export default function SystemSettingsClient() {
                   min={MIN_LOGIN_LOCKOUT_MINUTES}
                   max={MAX_LOGIN_LOCKOUT_MINUTES}
                   value={loginLockoutMinutes === '' ? '' : String(loginLockoutMinutes)}
-                  setValue={(val) => setLoginLockoutMinutes(val === '' ? '' : Number(val))}
+                  setValue={(val) => setField('loginLockoutMinutes', val === '' ? '' : Number(val))}
                   disabled={disabled}
                   description={`How long a locked account must wait. ${MIN_LOGIN_LOCKOUT_MINUTES}–${MAX_LOGIN_LOCKOUT_MINUTES} min.`}
                 />
@@ -965,7 +706,7 @@ export default function SystemSettingsClient() {
                   min={MIN_ACTIVITY_LOG_RETENTION_DAYS}
                   max={MAX_ACTIVITY_LOG_RETENTION_DAYS}
                   value={activityLogRetentionDays === '' ? '' : String(activityLogRetentionDays)}
-                  setValue={(val) => setActivityLogRetentionDays(val === '' ? '' : Number(val))}
+                  setValue={(val) => setField('activityLogRetentionDays', val === '' ? '' : Number(val))}
                   disabled={disabled}
                   description={`System Logs older than this are deleted daily. ${MIN_ACTIVITY_LOG_RETENTION_DAYS}–${MAX_ACTIVITY_LOG_RETENTION_DAYS} days.`}
                 />
@@ -974,7 +715,7 @@ export default function SystemSettingsClient() {
                   name="allow-signup"
                   label="Allow user signup"
                   checked={allowSignup}
-                  onCheckedChange={setAllowSignup}
+                  onCheckedChange={(v) => setField('allowSignup', v)}
                   disabled={disabled}
                   descriptionPlacement="inline"
                   description="When enabled, the Sign up option appears on the login page."
@@ -984,7 +725,7 @@ export default function SystemSettingsClient() {
                   label="Allowed signup email domains"
                   name="signup-allowed-domains"
                   value={signupAllowedDomains}
-                  setValue={setSignupAllowedDomains}
+                  setValue={(v) => setField('signupAllowedDomains', v)}
                   disabled={disabled || !allowSignup}
                   placeholder="psu.edu, example.edu"
                   description="Restrict self-signup to these email domains (comma-separated). Leave blank to allow any domain."
@@ -994,7 +735,7 @@ export default function SystemSettingsClient() {
                   name="clock-24-hour"
                   label="24-hour clock"
                   checked={clock24Hour}
-                  onCheckedChange={setClock24Hour}
+                  onCheckedChange={(v) => setField('clock24Hour', v)}
                   disabled={disabled}
                   descriptionPlacement="inline"
                   description="Display times on a 24-hour clock (e.g. 23:59) instead of 12-hour AM/PM, app-wide."
@@ -1017,7 +758,7 @@ export default function SystemSettingsClient() {
                   min={msToSec(MIN_SUBMISSION_EVAL_TIMEOUT_MS)}
                   max={msToSec(MAX_SUBMISSION_EVAL_TIMEOUT_MS)}
                   value={evalTimeoutSec === '' ? '' : String(evalTimeoutSec)}
-                  setValue={(val) => setEvalTimeoutSec(val === '' ? '' : Number(val))}
+                  setValue={(val) => setField('evalTimeoutSec', val === '' ? '' : Number(val))}
                   disabled={disabled}
                   description={`Max time per submission. ${msToSec(MIN_SUBMISSION_EVAL_TIMEOUT_MS)}–${msToSec(MAX_SUBMISSION_EVAL_TIMEOUT_MS)} s.`}
                 />
@@ -1030,7 +771,7 @@ export default function SystemSettingsClient() {
                   min={msToSec(MIN_SUBMISSION_RESUBMIT_COOLDOWN_MS)}
                   max={msToSec(MAX_SUBMISSION_RESUBMIT_COOLDOWN_MS)}
                   value={resubmitCooldownSec === '' ? '' : String(resubmitCooldownSec)}
-                  setValue={(val) => setResubmitCooldownSec(val === '' ? '' : Number(val))}
+                  setValue={(val) => setField('resubmitCooldownSec', val === '' ? '' : Number(val))}
                   disabled={disabled}
                   description="Wait between resubmits to a problem. 0 disables."
                 />
@@ -1043,7 +784,7 @@ export default function SystemSettingsClient() {
                   min={MIN_SUBMISSION_EVAL_MAX_MEMORY_MB}
                   max={MAX_SUBMISSION_EVAL_MAX_MEMORY_MB}
                   value={evalMaxMemoryMb === '' ? '' : String(evalMaxMemoryMb)}
-                  setValue={(val) => setEvalMaxMemoryMb(val === '' ? '' : Number(val))}
+                  setValue={(val) => setField('evalMaxMemoryMb', val === '' ? '' : Number(val))}
                   disabled={disabled}
                   description={`JVM heap per evaluation. ${MIN_SUBMISSION_EVAL_MAX_MEMORY_MB}–${MAX_SUBMISSION_EVAL_MAX_MEMORY_MB} MB.`}
                 />
@@ -1056,7 +797,7 @@ export default function SystemSettingsClient() {
                   min={MIN_SUBMISSION_MAX_CONCURRENT}
                   max={MAX_SUBMISSION_MAX_CONCURRENT}
                   value={maxConcurrent === '' ? '' : String(maxConcurrent)}
-                  setValue={(val) => setMaxConcurrent(val === '' ? '' : Number(val))}
+                  setValue={(val) => setField('maxConcurrent', val === '' ? '' : Number(val))}
                   disabled={disabled}
                   description={`Run at once. ${MIN_SUBMISSION_MAX_CONCURRENT}–${MAX_SUBMISSION_MAX_CONCURRENT}. Applies within ~30s.`}
                 />
@@ -1069,7 +810,7 @@ export default function SystemSettingsClient() {
                   min={MIN_SUBMISSION_MAX_ATTEMPTS}
                   max={MAX_SUBMISSION_MAX_ATTEMPTS}
                   value={maxAttempts === '' ? '' : String(maxAttempts)}
-                  setValue={(val) => setMaxAttempts(val === '' ? '' : Number(val))}
+                  setValue={(val) => setField('maxAttempts', val === '' ? '' : Number(val))}
                   disabled={disabled}
                   description={`Retries before failing. ${MIN_SUBMISSION_MAX_ATTEMPTS}–${MAX_SUBMISSION_MAX_ATTEMPTS}.`}
                 />
@@ -1082,7 +823,7 @@ export default function SystemSettingsClient() {
                   min={MIN_SUBMISSION_ANALYZER_LIMIT}
                   max={MAX_SUBMISSION_ANALYZER_LIMIT}
                   value={analyzerLimit === '' ? '' : String(analyzerLimit)}
-                  setValue={(val) => setAnalyzerLimit(val === '' ? '' : Number(val))}
+                  setValue={(val) => setField('analyzerLimit', val === '' ? '' : Number(val))}
                   disabled={disabled}
                   description={`Depth of the cfganalyzer equivalence check. Higher is more thorough but slower. ${MIN_SUBMISSION_ANALYZER_LIMIT}–${MAX_SUBMISSION_ANALYZER_LIMIT}.`}
                 />
@@ -1100,7 +841,7 @@ export default function SystemSettingsClient() {
                   name="backup-enabled"
                   label="Enable automatic backups"
                   checked={backupEnabled}
-                  onCheckedChange={setBackupEnabled}
+                  onCheckedChange={(v) => setField('backupEnabled', v)}
                   disabled={disabled}
                   descriptionPlacement="inline"
                   description="When off, no scheduled dumps are taken."
@@ -1115,7 +856,7 @@ export default function SystemSettingsClient() {
                   min={MIN_BACKUP_HOUR}
                   max={MAX_BACKUP_HOUR}
                   value={backupHour === '' ? '' : String(backupHour)}
-                  setValue={(val) => setBackupHour(val === '' ? '' : Number(val))}
+                  setValue={(val) => setField('backupHour', val === '' ? '' : Number(val))}
                   disabled={disabled || !backupEnabled}
                   description={`24-hour clock, server time (UTC). ${MIN_BACKUP_HOUR}–${MAX_BACKUP_HOUR}. e.g. 2 = 2:00 AM.`}
                 />
@@ -1128,7 +869,7 @@ export default function SystemSettingsClient() {
                   min={MIN_BACKUP_RETENTION_DAYS}
                   max={MAX_BACKUP_RETENTION_DAYS}
                   value={backupRetentionDays === '' ? '' : String(backupRetentionDays)}
-                  setValue={(val) => setBackupRetentionDays(val === '' ? '' : Number(val))}
+                  setValue={(val) => setField('backupRetentionDays', val === '' ? '' : Number(val))}
                   disabled={disabled || !backupEnabled}
                   description={`Older dumps are deleted. ${MIN_BACKUP_RETENTION_DAYS}–${MAX_BACKUP_RETENTION_DAYS} days.`}
                 />
@@ -1235,7 +976,7 @@ export default function SystemSettingsClient() {
                   label="hCaptcha site key"
                   name="hcaptchaSiteKey"
                   value={hcaptchaSiteKey}
-                  setValue={setHcaptchaSiteKey}
+                  setValue={(v) => setField('hcaptchaSiteKey', v)}
                   disabled={disabled}
                   description="Public key. Leave blank to disable."
                 />

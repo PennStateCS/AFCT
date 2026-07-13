@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
+import { apiClient, mutateWithToast } from '@/lib/api/fetch-client';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Label } from '@/components/ui/label';
 import InputGroup from '@/components/ui/InputGroup';
@@ -190,19 +191,11 @@ export function EditUserDialog({ user, open, setOpen, onSave }: EditUserDialogPr
     // Only admins can set this; the backend ignores it from non-admins regardless.
     if (viewerIsAdmin) formData.append('isAdmin', parsed.isAdmin ? 'true' : 'false');
 
-    const res = await fetch(apiPaths.user(user.id), {
-      method: 'PATCH',
-      body: formData,
-    });
-
-    // Read the response body
-    const body = await res.json();
-
-    // End if there was an error
-    if (!res.ok) {
-      showToast.error(body?.error || 'Failed to update user.');
-      return;
-    }
+    const result = await mutateWithToast(
+      () => apiClient.patchForm(apiPaths.user(user.id), formData),
+      { error: 'Failed to update user.' },
+    );
+    if (!result.ok) return;
 
     // Backend succeeded, now notify parent
     await onSave?.({
