@@ -3,7 +3,7 @@ import { headers } from 'next/headers';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { prisma } from '@/lib/prisma';
-import { inferSeverity } from '@/lib/activity-log-utils';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getClientIpFromHeaders } from '@/lib/ip-utils';
 import { getClientIp } from '@/lib/security/rate-limiter';
 import { verifyCredentials } from '@/lib/credentials';
@@ -174,14 +174,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           (user as { mustChangePassword?: boolean } | undefined)?.mustChangePassword,
         );
 
-        await prisma.activityLog.create({
-          data: {
-            userId: user?.id ?? undefined,
+        await createEnhancedActivityLog(
+          prisma,
+          { ipAddress, userAgent },
+          {
+            userId: user?.id ?? null,
             action: 'LOGIN_SUCCESS',
             category: 'SYSTEM',
-            severity: inferSeverity('LOGIN_SUCCESS'),
-            ipAddress,
-            userAgent,
             metadata: {
               email: user?.email ?? null,
               provider: account?.provider ?? null,
@@ -189,7 +188,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               temporaryPasswordLogin: mustChangePassword,
             },
           },
-        });
+        );
       } catch (e) {
         // don't block sign-in on logging failure
         console.error('Failed to log signIn event:', e);
@@ -201,17 +200,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // JWT strategy: the signed-out user's token is provided.
         const token = (message as { token?: { id?: unknown } | null }).token;
         const userId = typeof token?.id === 'string' ? token.id : null;
-        await prisma.activityLog.create({
-          data: {
-            userId,
-            action: 'LOGOUT',
-            category: 'SYSTEM',
-            severity: inferSeverity('LOGOUT'),
-            ipAddress,
-            userAgent,
-            metadata: {},
-          },
-        });
+        await createEnhancedActivityLog(
+          prisma,
+          { ipAddress, userAgent },
+          { userId, action: 'LOGOUT', category: 'SYSTEM', metadata: {} },
+        );
       } catch (e) {
         // don't block sign-out on logging failure
         console.error('Failed to log signOut event:', e);

@@ -7,7 +7,7 @@
 // drift apart.
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
-import { inferSeverity } from '@/lib/activity-log-utils';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import {
   applyBotFriction,
   evaluateLoginRateLimit,
@@ -29,15 +29,11 @@ async function logLoginSecurityEvent(
   userId?: string | null,
 ): Promise<void> {
   try {
-    await prisma.activityLog.create({
-      data: {
-        userId: userId ?? null,
-        action,
-        severity: inferSeverity(action),
-        ipAddress: metadata.ip ?? null,
-        metadata,
-      },
-    });
+    await createEnhancedActivityLog(
+      prisma,
+      { ipAddress: metadata.ip ?? null },
+      { userId: userId ?? null, action, metadata },
+    );
   } catch (error) {
     console.error('[auth] security log failure', error);
   }

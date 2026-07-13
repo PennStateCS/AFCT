@@ -198,13 +198,20 @@ export const ActivityLogQueries = {
  */
 export async function createEnhancedActivityLog(
   prisma: PrismaClient,
-  req: Request,
+  // Either a Request (API routes) or a pre-resolved client context. NextAuth event
+  // callbacks and credential verification run without a Request, so they pass the
+  // IP/UA they already have instead — one write path for every log site.
+  reqOrContext: Request | { ipAddress?: string | null; userAgent?: string | null },
   data: EnhancedActivityLogData,
 ): Promise<void> {
   const category = data.category || getActivityCategory(data.action);
   const severity = data.severity ?? inferSeverity(data.action);
-  const ipAddress = getClientIp(req);
-  const userAgent = req.headers.get('user-agent') || undefined;
+  const ipAddress =
+    reqOrContext instanceof Request ? getClientIp(reqOrContext) : (reqOrContext.ipAddress ?? null);
+  const userAgent =
+    reqOrContext instanceof Request
+      ? reqOrContext.headers.get('user-agent') || undefined
+      : (reqOrContext.userAgent ?? undefined);
   const includeDisplayMetadata = data.includeDisplayMetadata !== false;
 
   const baseMetadata: Record<string, unknown> =
