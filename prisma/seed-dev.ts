@@ -83,6 +83,56 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
 
   console.log(`[seed] development: preparing ${userSeeds.length} users`);
 
+  // Give every seeded account a profile photo. prisma/profile_photos holds one image
+  // per character; match it to the user by a normalized name, copy it into the served
+  // pfps upload directory (same staging pattern as solution files below), and record
+  // the stored filename so it goes on the user's `avatar` at creation.
+  const emailToAvatar = new Map<string, string>();
+  try {
+    const photoSourceDir = path.join(process.cwd(), 'prisma', 'profile_photos');
+    const containerPfpDir = path.join(path.sep, 'private', 'uploads', 'pfps');
+    const localPfpDir = path.join(process.cwd(), 'private', 'uploads', 'pfps');
+
+    let pfpDestinationDir = containerPfpDir;
+    try {
+      await fs.mkdir(pfpDestinationDir, { recursive: true });
+    } catch {
+      pfpDestinationDir = localPfpDir;
+      await fs.mkdir(pfpDestinationDir, { recursive: true });
+    }
+
+    // Letters/digits only, lowercased — so "Hope Van Dyne" matches "Hope_VanDyne.png",
+    // "T'Challa" matches "TChalla", "Kurt" matches "kurt", "Remy LeBeau" matches
+    // "RemyLeBeau", etc.
+    const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    const photoFiles = await fs.readdir(photoSourceDir);
+    const photoByName = new Map<string, string>();
+    for (const fileName of photoFiles) {
+      photoByName.set(normalize(path.basename(fileName, path.extname(fileName))), fileName);
+    }
+
+    for (const userSeed of userSeeds) {
+      const photoFile = photoByName.get(normalize(`${userSeed.firstName}${userSeed.lastName}`));
+      if (!photoFile) {
+        console.warn(
+          `[seed] development: no profile photo for ${userSeed.firstName} ${userSeed.lastName}`,
+        );
+        continue;
+      }
+      const storedFileName = `${randomUUID()}${path.extname(photoFile)}`;
+      await fs.copyFile(
+        path.join(photoSourceDir, photoFile),
+        path.join(pfpDestinationDir, storedFileName),
+      );
+      emailToAvatar.set(userSeed.email, storedFileName);
+    }
+    console.log(`[seed] development: staged ${emailToAvatar.size} profile photos`);
+  } catch (error) {
+    // Non-fatal: seed users without avatars rather than failing the whole run.
+    console.error('[seed] development: error staging profile photos', error);
+  }
+
   // Store created IDs back into the seed data arrays.
   const setPersonId = (list: Array<{ email: string; id?: string }>, email: string, id: string) => {
     const person = list.find((item) => item.email === email);
@@ -99,6 +149,7 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
       firstName: userSeed.firstName,
       lastName: userSeed.lastName,
       password: hashedPassword,
+      avatar: emailToAvatar.get(userSeed.email) ?? null,
       // Charles Xavier (faculty@example.com) is flagged as a global admin in
       // addition to teaching his lifecycle courses, so the dev DB has an account
       // that is both a system admin and course faculty for testing that overlap.

@@ -8,6 +8,7 @@ import {
   canManageCourse,
   canAccessCourse,
   isCourseArchived,
+  isCourseDeleted,
 } from '@/lib/permissions';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withServerTiming } from '@/lib/perf-debug';
@@ -108,6 +109,21 @@ export function withCourseAuth<Ctx extends CourseParams, R extends Response = Re
     const courseId = params?.[opts.param ?? 'id'];
     if (!courseId) {
       return apiError(400, 'Missing course id');
+    }
+
+    // A soft-deleted course is inaccessible to everyone — admins included — since it's
+    // retained only for out-of-band recovery. Mask it as 404 before the role gate so
+    // its existence and data are never served through any course-scoped route (this
+    // is the choke point the admin short-circuit in canAccessCourse would otherwise
+    // slip past). Best-effort: if the lookup itself errors, fall through and let the
+    // handler surface that error rather than masking a real fault as a 404.
+    try {
+      if (await isCourseDeleted(courseId)) {
+        return apiError(404, 'Not found');
+      }
+    } catch {
+      // Ignore — proceed to the normal flow; the handler will hit (and report) any
+      // real DB fault.
     }
 
     const allowed =

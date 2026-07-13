@@ -1,14 +1,60 @@
 'use client';
 
 import React from 'react';
+import { Check, Copy } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import type { FullCourse } from '@/types/course';
 import { getInstructors, type EnrolledUser } from '@/lib/course-utils';
+import { showToast } from '@/lib/toast';
 
 interface CourseHeaderProps {
   course: FullCourse;
   isStudent: boolean;
+}
+
+/**
+ * The course join (registration) code plus a one-click copy. The code is shown
+ * grouped as `ABC-123` for readability, but the copied value is the plain
+ * 6-character code that the join endpoint expects.
+ */
+function JoinCode({ code }: { code: string }) {
+  const [copied, setCopied] = React.useState(false);
+  const formatted = code.length === 6 ? `${code.slice(0, 3)}-${code.slice(3)}` : code;
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      showToast.success('Join code copied');
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      showToast.error('Could not copy the join code');
+    }
+  };
+
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className="text-muted-foreground">Join code: </span>
+      <span className="font-mono font-medium tracking-wide">{formatted}</span>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-6 w-6"
+        onClick={handleCopy}
+        aria-label={copied ? 'Join code copied' : `Copy join code ${formatted}`}
+        title="Copy join code"
+      >
+        {copied ? (
+          <Check className="h-3.5 w-3.5 text-green-600" />
+        ) : (
+          <Copy className="h-3.5 w-3.5" />
+        )}
+      </Button>
+    </span>
+  );
 }
 
 /**
@@ -54,7 +100,8 @@ export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
       .join(', ');
   };
   const facultyNames = formatAllNames(getInstructors(enrolled));
-  const taNames = formatAllNames(enrolled.filter((u) => u.courseRole === 'TA'));
+  const tas = enrolled.filter((u) => u.courseRole === 'TA');
+  const joinCode = (course.regCode ?? '').toUpperCase();
 
   // -- render ---------------------------------------------------------------
   return (
@@ -81,17 +128,20 @@ export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
         </div>
       </div>
 
-      {/* Faculty and TAs */}
+      {/* Faculty, TAs (only when there are any), then the join code + copy */}
       {!isStudent && (
         <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
           <span>
             <span className="text-muted-foreground">Faculty: </span>
             {facultyNames}
           </span>
-          <span>
-            <span className="text-muted-foreground">TAs: </span>
-            {taNames}
-          </span>
+          {tas.length > 0 && (
+            <span>
+              <span className="text-muted-foreground">TAs: </span>
+              {formatAllNames(tas)}
+            </span>
+          )}
+          {joinCode ? <JoinCode code={joinCode} /> : null}
         </div>
       )}
     </>
