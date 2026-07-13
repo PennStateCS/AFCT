@@ -81,3 +81,12 @@ docker compose logs -f app        # follow app logs
 docker compose down               # stop (data is preserved in named volumes)
 docker compose up -d              # start again
 ```
+
+## Reboots
+
+Every container uses `restart: unless-stopped`, so the app comes back
+automatically after a server reboot or a crash — as long as the Docker daemon
+starts on boot. On Linux the installer enables that for you (`systemctl enable
+docker`); on macOS/Windows, turn on Docker Desktop's "Start when you log in"
+setting. If you deliberately `docker compose down`/`stop`, it stays down until
+you start it again.
