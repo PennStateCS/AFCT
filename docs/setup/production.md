@@ -7,7 +7,7 @@ This guide describes how to deploy **AFCT** in a **production environment** on *
 
 There are **two ways to install**, and both end at the same running stack:
 
-- **Option A — Guided installer (recommended).** One command runs a short wizard that generates your secrets, asks for your admin details, and brings everything up. Best for most people. _(Linux and macOS today; Windows uses Option B for now.)_
+- **Option A — Guided installer (recommended).** One command runs a short wizard that generates your secrets, asks for your admin details, and brings everything up. Best for most people. _(`install.sh` on Linux/macOS, `install.ps1` on Windows.)_
 - **Option B — Manual setup (advanced).** You clone the repository, edit the environment file yourself, and run Docker Compose. Choose this if you want full control, are on Windows, or are scripting your own provisioning.
 
 The Docker deployment is four containers (nginx, the app, PostgreSQL, and a backup sidecar) managed by Docker Compose. You do not need to know Docker internals to operate it, but you should be comfortable running a handful of `docker compose` commands.
@@ -70,7 +70,7 @@ docker compose version
 
 `wsl --status` should report a WSL 2 default. If `docker compose version` fails while `docker --version` works, the Compose plugin is missing; updating Docker Desktop fixes it.
 
-> The guided installer (Option A) is a shell script and currently targets Linux/macOS. On Windows, use **Option B** below, or run the installer inside a WSL 2 shell.
+> On Windows, the guided installer (Option A) is `install.ps1`, run from PowerShell. You can also use **Option B** (manual) or run `install.sh` inside a WSL 2 shell.
 
 ---
 
@@ -138,7 +138,7 @@ Pick **one** of the two options below. Both produce the same four-container stac
 
 ### Option A — Guided installer (recommended)
 
-_Linux and macOS._ The installer is a small self-contained bundle: a script plus a compose file. It checks your prerequisites, asks a few questions, generates strong secrets, and brings the stack up.
+The installer is a small self-contained bundle: a script plus a compose file. It checks your prerequisites, asks a few questions, generates strong secrets, and brings the stack up. Use **`install.sh`** on Linux/macOS or **`install.ps1`** (PowerShell) on Windows.
 
 **Once this repository is public**, download the three files and run the script:
 
@@ -158,6 +158,18 @@ cd AFCT-Dashboard/deploy
 sh install.sh
 ```
 
+**On Windows**, install Docker Desktop, then in **PowerShell** (once public):
+
+```powershell
+$base = 'https://raw.githubusercontent.com/PennStateWilkes-Barre/AFCT-Dashboard/main/deploy'
+foreach ($f in 'install.ps1', 'docker-compose.yml', '.env.production.example') {
+  Invoke-WebRequest "$base/$f" -OutFile $f
+}
+.\install.ps1
+```
+
+(While private: `docker login ghcr.io`, clone the repo, then run `.\install.ps1` from `deploy\`. If the script is blocked, use `powershell -ExecutionPolicy Bypass -File .\install.ps1`.)
+
 The wizard will:
 
 1. Verify Docker + Compose are installed and running, and (on Linux) enable Docker to start on boot.
@@ -165,7 +177,7 @@ The wizard will:
 3. Generate the database password and auth secret automatically and write them to `.env.production` (readable only by you).
 4. Pull the images and start the stack, then print your URL and admin login.
 
-If anything goes wrong, the installer drops a **redacted** `afct-diagnostics-<timestamp>.zip` next to the script (you can also run `sh install.sh diagnostics` any time) — send that to your administrator for help. See `deploy/README.md` for the full reference, including the non-interactive (`--yes`) mode.
+If anything goes wrong, the installer drops a **redacted** `afct-diagnostics-<timestamp>.zip` next to the script (you can also run `sh install.sh diagnostics`, or `.\install.ps1 diagnostics` on Windows, any time) — send that to your administrator for help. See `deploy/README.md` for the full reference, including the non-interactive mode.
 
 When it finishes, skip to [section 4 (TLS)](#4-tls--https-certificates).
 
@@ -366,7 +378,7 @@ docker compose logs -f app
 
 The app logs are where application-level problems surface: failed migrations, missing environment variables, and database connectivity errors all show up here with reasonably specific messages. Read the first error in a burst, not the last; later errors are often just fallout from the first one.
 
-- **Installer users:** run `sh install.sh diagnostics` to collect a redacted support bundle (`afct-diagnostics-<timestamp>.zip`) with the install log, container status/logs, and your config with secret values masked — hand that to your administrator.
+- **Installer users:** run `sh install.sh diagnostics` (or `.\install.ps1 diagnostics` on Windows) to collect a redacted support bundle (`afct-diagnostics-<timestamp>.zip`) with the install log, container status/logs, and your config with secret values masked — hand that to your administrator.
 
 - TLS warnings indicate missing or invalid certificates. A browser warning on a fresh install is expected (you are still on the self-signed certificate) and section 4 covers replacing it. A warning appearing on a previously trusted site usually means the certificate has expired and needs renewing through the same admin interface.
 

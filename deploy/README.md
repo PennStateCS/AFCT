@@ -1,9 +1,13 @@
-# Deploying AFCT Dashboard (Linux / macOS)
+# Deploying AFCT Dashboard (Linux, macOS, Windows)
 
 This folder is a **self-contained deploy bundle** — a compose file plus a guided
-installer. You need one thing on the host: **Docker** (with the Compose plugin).
+installer. You need one thing on the host: **Docker** (with the Compose plugin;
+on Windows/macOS that's Docker Desktop).
 
-## Quick start
+Use **`install.sh`** on Linux/macOS and **`install.ps1`** on Windows — they do the
+same thing (prompt for admin details, generate secrets, bring the stack up).
+
+## Quick start (Linux / macOS)
 
 Download the three files from this `deploy/` folder into an empty directory on
 the server, then run the installer.
@@ -26,6 +30,24 @@ git clone https://github.com/PennStateWilkes-Barre/AFCT-Dashboard.git
 cd AFCT-Dashboard/deploy
 sh install.sh
 ```
+
+## Quick start (Windows)
+
+Install **Docker Desktop** (with WSL 2) and make sure it's running. Then, in
+**PowerShell**, from an empty folder:
+
+```powershell
+# Once the repository is public:
+$base = 'https://raw.githubusercontent.com/PennStateWilkes-Barre/AFCT-Dashboard/main/deploy'
+foreach ($f in 'install.ps1', 'docker-compose.yml', '.env.production.example') {
+  Invoke-WebRequest "$base/$f" -OutFile $f
+}
+.\install.ps1
+```
+
+While the repository is still private, `docker login ghcr.io`, then clone the repo
+and run `.\install.ps1` from its `deploy\` folder. If PowerShell blocks the script,
+run it once as `powershell -ExecutionPolicy Bypass -File .\install.ps1`.
 
 The installer will:
 
@@ -51,7 +73,8 @@ The installer automatically collects a **support bundle** when it fails. You can
 also create one any time:
 
 ```sh
-sh install.sh diagnostics
+sh install.sh diagnostics        # Linux / macOS
+.\install.ps1 diagnostics        # Windows (PowerShell)
 ```
 
 This writes `afct-diagnostics-<timestamp>.zip` next to the script. It contains the
