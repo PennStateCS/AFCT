@@ -1,13 +1,18 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
+import { z } from 'zod';
 import { canUnpublishCourse } from '@/lib/course-status-checks';
-import { COURSE_FACULTY_ROLES } from '@/lib/permissions';
+import { COURSE_STAFF_ROLES } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { readJson } from '@/lib/api/request';
+
+const PublishBody = z.object({ isPublished: z.boolean() });
 
 /**
- * Toggles a course's published state. Course faculty or a system admin (TAs
- * excluded). Unpublishing runs a
+ * Toggles a course's published state. Course staff (faculty or TA) or a system admin.
+ * Unpublishing runs a
  * safety check (canUnpublishCourse) that refuses if students would lose access to
  * work already in progress.
  * @openapi
@@ -28,25 +33,25 @@ import { withCourseAuth } from '@/lib/api/with-auth';
  *     description: The updated course (id, name, code, isPublished, updatedAt).
  *   400: { description: isPublished must be a boolean. }
  *   401: { description: Not signed in. }
- *   403: { description: "Not course faculty or a system admin (TAs excluded), or unpublishing is blocked by the safety check." }
+ *   403: { description: "Not course staff or a system admin, or unpublishing is blocked by the safety check." }
  *   500: { description: Server error. }
  */
 export const PATCH = withCourseAuth(
   async (req, _ctx, { user, courseId }) => {
     try {
-      const { isPublished } = await req.json();
-      if (typeof isPublished !== 'boolean') {
-        return NextResponse.json({ error: 'isPublished must be a boolean' }, { status: 400 });
-      }
+      const parsed = await readJson(req, PublishBody);
+      if (!parsed.ok) return parsed.response;
+      const { isPublished } = parsed.data;
 
       if (!isPublished) {
         const { canUnpublish, reason } = await canUnpublishCourse(prisma, courseId);
         if (!canUnpublish) {
           await createEnhancedActivityLog(prisma, req, {
             userId: user.id,
-            action: 'COURSE_PUBLISH_DENIED',
-            severity: 'SECURITY',
-            metadata: {},
+            action: 'COURSE_UNPUBLISH_REJECTED',
+            severity: 'WARNING',
+            courseId,
+            metadata: { reason },
           });
           return NextResponse.json({ error: reason }, { status: 403 });
         }
@@ -81,14 +86,22 @@ export const PATCH = withCourseAuth(
       return NextResponse.json(updated);
     } catch (error) {
       console.error('PATCH /api/courses/[id]/publish error:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'COURSE_PUBLISH_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
+        courseId,
       });
-      return new NextResponse('Failed to update publish status', { status: 500 });
+      return NextResponse.json({ error: 'Failed to update publish status' }, { status: 500 });
     }
   },
-  { access: 'manage', roles: COURSE_FACULTY_ROLES, deniedAction: 'COURSE_PUBLISH_DENIED' },
+  // Course staff (faculty OR TA) or admin. TAs are the same tier as faculty here,
+  // so publish/unpublish is a staff action — stated explicitly rather than relying
+  // on the default role set.
+  {
+    access: 'manage',
+    roles: COURSE_STAFF_ROLES,
+    deniedAction: 'COURSE_PUBLISH_DENIED',
+    blockWhenArchived: true,
+  },
 );

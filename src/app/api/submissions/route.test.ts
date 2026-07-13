@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { NextRequest } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { Prisma } from '@prisma/client';
 
 // Submissions are no longer evaluated synchronously. POST validates the request,
@@ -10,8 +10,14 @@ import { Prisma } from '@prisma/client';
 const prismaMock = vi.hoisted(() => ({
   assignmentProblem: { findUnique: vi.fn() },
   assignment: { findUnique: vi.fn() },
-  submission: { create: vi.fn(), findFirst: vi.fn() },
+  // isCourseArchived() reads the course; undefined -> treated as not archived, so
+  // existing tests are unaffected unless they opt into an archived course.
+  course: { findUnique: vi.fn() },
+  submission: { create: vi.fn(), findFirst: vi.fn(), count: vi.fn() },
   roster: { findFirst: vi.fn() },
+  // The submit route wraps its cap re-check + create in a serializable transaction;
+  // run the callback against the same mock so tx.submission.* hits these mocks.
+  $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb(prismaMock)),
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -81,6 +87,7 @@ beforeEach(() => {
   queueSettingsMock.mockResolvedValue({ resubmitCooldownMs: 10_000 });
   validateStructureXMLMock.mockReturnValue({ isValid: true });
   prismaMock.assignmentProblem.findUnique.mockResolvedValue({
+    maxSubmissions: 1,
     problem: {
       fileName: 'answer.jff',
       maxPoints: 10,
@@ -99,7 +106,11 @@ beforeEach(() => {
     isPublished: true,
   });
   prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
+  // Not archived by default (clearAllMocks doesn't reset mockResolvedValue, so set it
+  // each test — the archived-course test overrides this locally).
+  prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
   prismaMock.submission.findFirst.mockResolvedValue(null);
+  prismaMock.submission.count.mockResolvedValue(0);
   prismaMock.submission.create.mockResolvedValue({
     id: 'submission-1',
     status: 'PENDING',
@@ -123,6 +134,16 @@ describe('POST /api/submissions', () => {
 
     expect(res.status).toBe(400);
     expect(logActions()).toContain('SUBMISSION_INVALID_REQUEST');
+    expect(prismaMock.submission.create).not.toHaveBeenCalled();
+  });
+
+  it('returns 409 when the course is archived', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+
+    const res = await POST(makeRequest(makeFormData(undefined, makeFile())));
+
+    expect(res.status).toBe(409);
+    expect(logActions()).toContain('SUBMISSION_REJECTED_ARCHIVED');
     expect(prismaMock.submission.create).not.toHaveBeenCalled();
   });
 
@@ -190,6 +211,51 @@ describe('POST /api/submissions', () => {
     expect(prismaMock.submission.create).not.toHaveBeenCalled();
   });
 
+  it('returns 409 when the per-problem submission limit is reached', async () => {
+    // Cap is 1 (default mock) and the student already has 1 submission.
+    prismaMock.submission.count.mockResolvedValue(1);
+
+    const res = await POST(makeRequest(makeFormData()));
+
+    expect(res.status).toBe(409);
+    expect(logActions()).toContain('SUBMISSION_LIMIT_REACHED');
+    expect(prismaMock.submission.create).not.toHaveBeenCalled();
+  });
+
+  it('does not cap staff test-submissions', async () => {
+    // A faculty member submitting to test — exempt from the cap even at/over the limit.
+    prismaMock.roster.findFirst.mockResolvedValue({
+      role: 'FACULTY',
+      course: { isPublished: true },
+    });
+    prismaMock.submission.count.mockResolvedValue(5);
+
+    const res = await POST(makeRequest(makeFormData()));
+
+    expect(res.status).toBe(202);
+    expect(prismaMock.submission.create).toHaveBeenCalled();
+  });
+
+  it('treats maxSubmissions <= 0 as unlimited', async () => {
+    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
+      maxSubmissions: 0,
+      problem: {
+        fileName: 'answer.jff',
+        maxPoints: 10,
+        maxStates: null,
+        autograderEnabled: true,
+        isDeterministic: null,
+        type: 'FA',
+      },
+    });
+    prismaMock.submission.count.mockResolvedValue(99);
+
+    const res = await POST(makeRequest(makeFormData()));
+
+    expect(res.status).toBe(202);
+    expect(prismaMock.submission.create).toHaveBeenCalled();
+  });
+
   it('returns 404 (and does not store) when a student submits to an unpublished assignment', async () => {
     prismaMock.assignment.findUnique.mockResolvedValue({
       id: 'assignment-1',
@@ -200,7 +266,10 @@ describe('POST /api/submissions', () => {
       isPublished: false,
     });
     // Enrolled student (roster role STUDENT): access passes, manage does not.
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
 
     const res = await POST(makeRequest(makeFormData()));
 

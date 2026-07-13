@@ -86,6 +86,14 @@ describe('GET /api/files/submissions/[file]', () => {
     });
 
     expect(res.status).toBe(403);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        action: 'SUBMISSION_FILE_DOWNLOAD_DENIED',
+        courseId: 'course-1',
+      }),
+    );
   });
 
   it('allows admin to download submission', async () => {
@@ -105,7 +113,14 @@ describe('GET /api/files/submissions/[file]', () => {
 
     expect(res.status).toBe(200);
     expect(res.headers.get('Content-Disposition')).toContain('solution.txt');
-    expect(activityLogMock).toHaveBeenCalled();
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        action: 'DOWNLOAD_SUBMISSION_FILE',
+        courseId: 'course-1',
+      }),
+    );
   });
 
   it('allows faculty to download submission', async () => {

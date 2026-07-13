@@ -1,6 +1,7 @@
 // lib/prisma.ts
 
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { format } from 'sql-formatter';
 import chalk from 'chalk';
 
@@ -11,7 +12,11 @@ const globalForPrisma = globalThis as unknown as {
 
 // Create a Prisma client with query logging enabled
 const createPrismaClient = () => {
+  // Prisma 7 uses driver adapters (no bundled query engine); the connection URL
+  // now comes from the adapter rather than the schema's datasource block.
+  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
   const client = new PrismaClient({
+    adapter,
     log: [
       { emit: 'event', level: 'query' },
       { emit: 'stdout', level: 'error' },

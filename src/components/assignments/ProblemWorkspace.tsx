@@ -216,7 +216,9 @@ export default function ProblemWorkspace({
               onChange={onGradeInputChange}
               onSubmit={onSaveGrade}
               autograderStatus={submissions[0]?.status ?? null}
-              onRerun={onRerunSubmission ? () => onRerunSubmission(submissions[0]) : undefined}
+              // `submissions[0]!` preserves the prior pass-through exactly; `!` is
+              // compile-only so runtime behavior is unchanged.
+              onRerun={onRerunSubmission ? () => onRerunSubmission(submissions[0]!) : undefined}
             />
           ) : !isPrivledgedUser ? (
             <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-transparent px-3 py-2 text-[0.70rem] whitespace-nowrap text-slate-700 dark:border-slate-200 dark:text-slate-200">
@@ -237,8 +239,14 @@ export default function ProblemWorkspace({
             contentClassName="p-2"
           >
             {submissionsLoading ? (
-              <div className="flex min-h-[320px] flex-col items-center justify-center gap-3">
-                <div className="border-muted-foreground/30 border-t-primary h-8 w-8 animate-spin rounded-full border-4" />
+              <div
+                role="status"
+                className="flex min-h-[320px] flex-col items-center justify-center gap-3"
+              >
+                <div
+                  aria-hidden="true"
+                  className="border-muted-foreground/30 border-t-primary h-8 w-8 animate-spin rounded-full border-4"
+                />
                 <p className="text-muted-foreground text-sm">Loading submissions...</p>
               </div>
             ) : sortedSubmissions.length > 0 ? (
@@ -419,7 +427,9 @@ export default function ProblemWorkspace({
             icon={<MessageSquare className="h-4 w-4" />}
           >
             {commentsLoading ? (
-              <div className="text-muted-foreground text-sm">Loading discussion...</div>
+              <div role="status" className="text-muted-foreground text-sm">
+                Loading discussion...
+              </div>
             ) : (
               <ProblemDiscussionPanel
                 courseIsArchived={courseIsArchived}

@@ -75,12 +75,15 @@ describe('PATCH /api/courses/[id]/archive', () => {
     const res = await PATCH(req, { params: Promise.resolve({ id: 'c1' }) });
 
     expect(res.status).toBe(403);
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({ action: 'COURSE_ARCHIVE_REJECTED', severity: 'WARNING' }),
+    );
   });
 
-  it('archives course and logs activity', async () => {
-    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
-    // Caller is FACULTY in this course (archive is faculty-tier).
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+  it('archives course and logs activity for an admin', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     prismaMock.course.findUnique.mockResolvedValue({ startDate: new Date(), endDate: new Date() });
     canArchiveMock.mockResolvedValue({ canArchive: true });
     prismaMock.course.update.mockResolvedValue({
@@ -101,6 +104,70 @@ describe('PATCH /api/courses/[id]/archive', () => {
     expect(res.status).toBe(200);
     expect(prismaMock.course.update).toHaveBeenCalled();
     expect(activityLogMock).toHaveBeenCalled();
+  });
+
+  it('forbids a non-admin (faculty) from archiving — admin-only', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' }); // staff, passes the wrapper
+    const req = new Request('http://localhost/api/courses/c1/archive', {
+      method: 'PATCH',
+      body: JSON.stringify({ isArchived: true }),
+    });
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(403);
+    expect(prismaMock.course.update).not.toHaveBeenCalled();
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({ action: 'COURSE_ARCHIVE_DENIED', severity: 'SECURITY' }),
+    );
+  });
+
+  it('forbids a non-admin (faculty) from un-archiving — admin-only', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' }); // staff, passes the wrapper
+    const req = new Request('http://localhost/api/courses/c1/archive', {
+      method: 'PATCH',
+      body: JSON.stringify({ isArchived: false }),
+    });
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(403);
+    expect(prismaMock.course.update).not.toHaveBeenCalled();
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({ action: 'COURSE_ARCHIVE_DENIED', severity: 'SECURITY' }),
+    );
+  });
+
+  it('lets an admin un-archive', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
+    prismaMock.course.update.mockResolvedValue({
+      id: 'c1',
+      name: 'Course',
+      code: 'C1',
+      isArchived: false,
+      updatedAt: new Date(),
+    });
+
+    const req = new Request('http://localhost/api/courses/c1/archive', {
+      method: 'PATCH',
+      body: JSON.stringify({ isArchived: false }),
+    });
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.course.update).toHaveBeenCalled();
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({ action: 'COURSE_UNARCHIVED' }),
+    );
   });
 
   it('returns 500 and logs when the update throws', async () => {

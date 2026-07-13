@@ -1,9 +1,8 @@
 'use client';
 
-import { User } from '@prisma/client';
+import type { User } from '@prisma/client';
 import { sortRoster, type EnrolledUser } from '@/lib/course-utils';
-import { ColumnDef } from '@tanstack/react-table';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import type { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
 import { Plus, Users, GraduationCap } from 'lucide-react';
@@ -33,12 +32,12 @@ export function RosterCard({
   }));
 
   return (
-    <Card className="p-4">
-      <CardHeader className="flex flex-row items-center justify-between pb-4">
-        <CardTitle className="flex items-center gap-2 text-2xl">
+    <div className="space-y-4">
+      <div className="flex flex-row items-center justify-between">
+        <h2 className="flex items-center gap-2 text-2xl font-semibold">
           <GraduationCap className="h-5 w-5" />
           Roster
-        </CardTitle>
+        </h2>
         <div className="flex items-center gap-2">
           <Button variant="default" onClick={onEnrollUser} hidden={courseIsArchived}>
             <Plus />
@@ -49,15 +48,13 @@ export function RosterCard({
             Bulk Enroll
           </Button>
         </div>
-      </CardHeader>
-      <CardContent>
-        <DataTable
-          columns={userColumns as ColumnDef<User>[]}
-          data={rosterData as unknown as User[]}
-          loading={loading}
-          tableLabel="Course roster table"
-        />
-      </CardContent>
-    </Card>
+      </div>
+      <DataTable
+        columns={userColumns as ColumnDef<User>[]}
+        data={rosterData as unknown as User[]}
+        loading={loading}
+        tableLabel="Course roster table"
+      />
+    </div>
   );
 }

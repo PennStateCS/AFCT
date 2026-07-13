@@ -1,13 +1,18 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { canArchiveCourse, canUnpublishCourse } from '@/lib/course-status-checks';
 import { isAdmin } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { readJson } from '@/lib/api/request';
+import { apiError } from '@/lib/api/http';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
-import { resolveUserTimezone } from '@/lib/user-timezone';
+import { resolveCourseTimezone } from '@/lib/course-timezone';
+import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { sumProblemPoints, toEnrolled, toStudentSafeEnrolled } from '@/lib/course-format';
 import { toEmptyStringNotation } from '@/lib/empty-string-notation';
+import { CourseUpdateApiSchema } from '@/schemas/course';
 
 // A prisma delegate whose aggregate methods are treated as optional, so the code
 // can fall back to count() when a partial test mock doesn't implement them.
@@ -207,8 +212,11 @@ export const GET = withCourseAuth(
 
       let assignmentsWithProblemCount: Array<Record<string, unknown>> = [];
       if (includeAssignments) {
+        // Class-wide submission/comment totals are staff-only aggregates; students
+        // must not learn peers' activity volume, so skip them for non-staff (the
+        // counts then default to 0 below).
         const submissionCounts =
-          assignmentIds.length > 0
+          isStaff && assignmentIds.length > 0
             ? submissionDelegate.groupBy
               ? await submissionDelegate.groupBy({
                   by: ['assignmentId'],
@@ -228,7 +236,7 @@ export const GET = withCourseAuth(
                   )
             : [];
         const commentCounts =
-          assignmentIds.length > 0
+          isStaff && assignmentIds.length > 0
             ? commentDelegate.groupBy
               ? await commentDelegate.groupBy({
                   by: ['assignmentId'],
@@ -389,15 +397,23 @@ export const GET = withCourseAuth(
  */
 export const PUT = withCourseAuth(
   async (req, ctx, { session, user, courseId: id }) => {
-    // Parse request
-    const body = await req.json();
+    // Parse + validate request
+    const parsed = await readJson(req, CourseUpdateApiSchema);
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.data;
 
-    // Get user's timezone (DB user > system settings > default)
-    const userTimezone = await resolveUserTimezone(user.id);
-
-    // Validate input
-    if (typeof body.isArchived !== 'boolean') {
-      return NextResponse.json({ error: 'isArchived must be a boolean' }, { status: 400 });
+    // The course's timezone anchors its dates/deadlines. Allow updating it (validated);
+    // otherwise keep the course's existing zone. Dates below are interpreted in it.
+    let courseTimezone: string;
+    if (!body.timezone) {
+      courseTimezone = await resolveCourseTimezone(id);
+    } else if (
+      typeof body.timezone === 'string' &&
+      COMMON_TIMEZONES.includes(body.timezone as (typeof COMMON_TIMEZONES)[number])
+    ) {
+      courseTimezone = body.timezone;
+    } else {
+      return NextResponse.json({ error: 'Invalid timezone.' }, { status: 400 });
     }
 
     // Centralized check for archiving
@@ -411,9 +427,10 @@ export const PUT = withCourseAuth(
       if (!canArchive) {
         await createEnhancedActivityLog(prisma, req, {
           userId: session?.user?.id ?? null,
-          action: 'COURSE_ARCHIVE_DENIED',
-          severity: 'SECURITY',
-          metadata: {},
+          action: 'COURSE_ARCHIVE_REJECTED',
+          severity: 'WARNING',
+          courseId: id,
+          metadata: { reason },
         });
         return NextResponse.json({ error: reason }, { status: 403 });
       }
@@ -425,16 +442,13 @@ export const PUT = withCourseAuth(
       if (!canUnpublish) {
         await createEnhancedActivityLog(prisma, req, {
           userId: session?.user?.id ?? null,
-          action: 'COURSE_PUBLISH_DENIED',
-          severity: 'SECURITY',
-          metadata: {},
+          action: 'COURSE_UNPUBLISH_REJECTED',
+          severity: 'WARNING',
+          courseId: id,
+          metadata: { reason },
         });
         return NextResponse.json({ error: reason }, { status: 403 });
       }
-    }
-
-    if (!body.registrationOpenAt || !body.registrationCloseAt) {
-      return NextResponse.json({ error: 'Registration window is required.' }, { status: 400 });
     }
 
     try {
@@ -476,13 +490,14 @@ export const PUT = withCourseAuth(
             code: body.code,
             semester: body.semester,
             credits: Number(body.credits),
-            startDate: toDateTimeInTimezone(body.startDate, userTimezone),
-            endDate: toDateTimeInTimezone(body.endDate, userTimezone),
+            timezone: courseTimezone,
+            startDate: toDateTimeInTimezone(body.startDate, courseTimezone),
+            endDate: toDateTimeInTimezone(body.endDate, courseTimezone),
             registrationOpenAt: body.registrationOpenAt
-              ? toDateTimeInTimezone(body.registrationOpenAt, userTimezone)
+              ? toDateTimeInTimezone(body.registrationOpenAt, courseTimezone)
               : null,
             registrationCloseAt: body.registrationCloseAt
-              ? toDateTimeInTimezone(body.registrationCloseAt, userTimezone)
+              ? toDateTimeInTimezone(body.registrationCloseAt, courseTimezone)
               : null,
             isPublished: body.isPublished,
             isArchived: body.isArchived,
@@ -694,64 +709,91 @@ export const PUT = withCourseAuth(
       });
     } catch (error) {
       console.error('PUT /api/courses/[id] error:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: session?.user?.id ?? null,
         action: 'COURSE_UPDATE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
+        courseId: id,
       });
       return NextResponse.json({ error: 'Failed to update course' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'COURSE_UPDATE_DENIED' },
+  { access: 'manage', deniedAction: 'COURSE_UPDATE_DENIED', blockWhenArchived: true },
 );
 
 /**
- * Permanently deletes a course. Course staff (faculty or TAs) or a system admin,
- * and the course must already
- * be archived — a guard against deleting a live course. The archived requirement
- * is enforced both up front and again in the delete's `where` clause.
+ * Deletes a course (system admin only). An **empty** course — no assignments, no
+ * problems, no student enrollments, and no submissions — is removed permanently
+ * (its staff-only roster cascades away; audit logs keep a nulled course pointer).
+ * Any course that holds real work or students is **soft-deleted** instead: the row
+ * and all its data are retained but `deletedAt` is stamped so the access gates and
+ * list queries treat it as gone (recoverable later). The response says which
+ * happened via `{ deleted: 'hard' | 'soft' }`.
  * @openapi
  * summary: Delete a course
  * parameters:
  *   - { name: id, in: path, required: true, schema: { type: string } }
  * responses:
  *   200:
- *     description: Course deleted.
+ *     description: "Course deleted; body reports whether it was a hard or soft delete."
+ *     content:
+ *       application/json:
+ *         schema: { type: object, properties: { deleted: { type: string, enum: [hard, soft] } } }
  *   401: { description: Not signed in. }
- *   403: { description: "Not course staff (faculty or TAs) or a system admin, or the course is not archived." }
+ *   403: { description: Not a system admin (logged as a security event). }
+ *   404: { description: Course not found. }
  *   500: { description: Server error. }
  */
 export const DELETE = withCourseAuth(
   async (req, ctx, { session, user, courseId: id }) => {
-    // Make sure the course isArchived
-    const courseIsArchived = await prisma.course.findFirst({
-      where: { id },
-      select: { isArchived: true },
-    });
-
-    if (courseIsArchived === null || courseIsArchived.isArchived === false) {
+    // Deleting a course is admin-only. The wrapper admits course staff, so reject a
+    // non-admin (faculty/TA) here — staff may archive a course but never delete it.
+    if (!isAdmin(user)) {
       await createEnhancedActivityLog(prisma, req, {
-        userId: session?.user?.id ?? null,
+        userId: user.id,
         action: 'COURSE_DELETE_DENIED',
         severity: 'SECURITY',
-        metadata: {},
+        courseId: id,
+        metadata: { reason: 'course deletion is admin-only' },
       });
-      return NextResponse.json({ error: 'Course must be archived' }, { status: 403 });
+      return NextResponse.json({ error: 'Only an admin can delete a course' }, { status: 403 });
     }
 
-    await req.json();
+    const course = await prisma.course.findFirst({
+      where: { id },
+      select: { id: true, name: true, code: true, semester: true },
+    });
+    if (!course) {
+      return NextResponse.json({ error: 'Course not found' }, { status: 404 });
+    }
 
     try {
-      const deletedCourse = await prisma.course.delete({
-        where: {
-          id,
-          isArchived: true,
-        },
-      });
+      // A course is "empty" only when it holds no work and no students. Such a
+      // course can be dropped permanently; anything with real data is soft-deleted
+      // so grades/submissions/audit survive.
+      const [assignmentCount, problemCount, studentCount, submissionCount] = await Promise.all([
+        prisma.assignment.count({ where: { courseId: id } }),
+        prisma.problem.count({ where: { courseId: id } }),
+        prisma.roster.count({ where: { courseId: id, role: 'STUDENT' } }),
+        prisma.submission.count({ where: { courseId: id } }),
+      ]);
+      const isEmpty =
+        assignmentCount === 0 &&
+        problemCount === 0 &&
+        studentCount === 0 &&
+        submissionCount === 0;
 
-      // Record which course was deleted. The course row is gone, so its id goes in
-      // metadata only (not the log's courseId FK, which would be nulled/rejected).
+      if (isEmpty) {
+        // Hard delete — the schema cascades remove the (staff-only) roster, and the
+        // audit log's courseId is SetNull, so the log survives with a null pointer.
+        await prisma.course.delete({ where: { id } });
+      } else {
+        // Soft delete — retain the row and its data, but hide it everywhere.
+        await prisma.course.update({ where: { id }, data: { deletedAt: new Date() } });
+      }
+
+      // Record which course was deleted (and how). The course row may be gone, so its
+      // id goes in metadata only (not the log's courseId FK).
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,
         action: 'DELETE_COURSE',
@@ -760,21 +802,26 @@ export const DELETE = withCourseAuth(
         metadata: {
           actorId: user.id,
           courseId: id,
-          courseName: deletedCourse.name,
-          courseCode: deletedCourse.code,
-          semester: deletedCourse.semester,
+          courseName: course.name,
+          courseCode: course.code,
+          semester: course.semester,
+          mode: isEmpty ? 'hard' : 'soft',
+          assignmentCount,
+          problemCount,
+          studentCount,
+          submissionCount,
         },
       });
-      return NextResponse.json({ status: 204 });
+      return NextResponse.json({ deleted: isEmpty ? 'hard' : 'soft' }, { status: 200 });
     } catch (error) {
       console.error('DELETE /api/courses/[id] error:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: session?.user?.id ?? null,
         action: 'COURSE_DELETE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
+        courseId: id,
       });
-      return NextResponse.json({ error: error }, { status: 500 });
+      return apiError(500, 'Internal Server Error');
     }
   },
   { access: 'manage', deniedAction: 'COURSE_DELETE_DENIED' },

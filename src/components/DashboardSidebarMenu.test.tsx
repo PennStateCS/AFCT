@@ -87,7 +87,13 @@ vi.mock('@/components/ui/dropdown-menu', () => {
     DropdownMenu: PassThrough,
     DropdownMenuTrigger: PassThrough,
     DropdownMenuContent: PassThrough,
-    DropdownMenuItem: PassThrough,
+    // Forward props (onClick now lives on the item, not an inner button).
+    DropdownMenuItem: ({ children, ...props }: { children: React.ReactNode }) => (
+      <div {...props}>{children}</div>
+    ),
+    DropdownMenuLabel: ({ children, ...props }: { children: React.ReactNode }) => (
+      <div {...props}>{children}</div>
+    ),
     DropdownMenuSeparator: () => <hr />,
   };
 });
@@ -175,20 +181,126 @@ describe('DashboardSidebarMenu', () => {
     expect(screen.queryByRole('link', { name: 'Development Tests' })).toBeNull();
   });
 
-  it('shows all non-archived courses passed in (server scopes visibility)', async () => {
+  it('buckets non-archived courses into Upcoming/Current/Past sections, sorted by code', async () => {
     useSessionMock.mockReturnValue({
       data: { user: { id: 'student-1', email: 'stud@example.com', isAdmin: false } },
     });
     setNavCourses([
-      { id: 'course-1', code: 'CS101', isPublished: true, isArchived: false },
-      { id: 'course-2', code: 'CS102', isPublished: false, isArchived: false },
+      // current (now within range) — two of them, out of code order to test sorting
+      {
+        id: 'cur2',
+        code: 'CS102',
+        isPublished: true,
+        isArchived: false,
+        startDate: '2000-01-01',
+        endDate: '2999-12-31',
+      },
+      {
+        id: 'cur1',
+        code: 'CS101',
+        isPublished: true,
+        isArchived: false,
+        startDate: '2000-01-01',
+        endDate: '2999-12-31',
+      },
+      // upcoming (starts in the future)
+      {
+        id: 'up',
+        code: 'CS900',
+        isPublished: true,
+        isArchived: false,
+        startDate: '2999-01-01',
+        endDate: '2999-12-31',
+      },
+      // past (already ended)
+      {
+        id: 'past',
+        code: 'CS001',
+        isPublished: true,
+        isArchived: false,
+        startDate: '2000-01-01',
+        endDate: '2000-12-31',
+      },
     ]);
     renderWithClient(<DashboardSidebarMenu />);
 
     await waitFor(() => {
-      expect(screen.getByRole('link', { name: 'CS101' })).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: 'CS102' })).toBeInTheDocument();
+      expect(screen.getByText('Upcoming Courses')).toBeInTheDocument();
     });
+    expect(screen.getByText('Current Courses')).toBeInTheDocument();
+    expect(screen.getByText('Past Courses')).toBeInTheDocument();
+
+    const courseLinks = screen
+      .getAllByRole('link')
+      .map((l) => l.textContent)
+      .filter((t) => t?.startsWith('CS'));
+    // Section order upcoming → current → past, alphabetized within Current.
+    expect(courseLinks).toEqual(['CS900', 'CS101', 'CS102', 'CS001']);
+  });
+
+  it('omits sections that have no courses', async () => {
+    useSessionMock.mockReturnValue({
+      data: { user: { id: 'student-1', email: 'stud@example.com', isAdmin: false } },
+    });
+    setNavCourses([
+      {
+        id: 'up',
+        code: 'CS900',
+        isPublished: true,
+        isArchived: false,
+        startDate: '2999-01-01',
+        endDate: '2999-12-31',
+      },
+    ]);
+    renderWithClient(<DashboardSidebarMenu />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Upcoming Courses')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Current Courses')).toBeNull();
+    expect(screen.queryByText('Past Courses')).toBeNull();
+  });
+
+  it('links Archived Courses to the archived page when a non-admin is in an archived course', async () => {
+    useSessionMock.mockReturnValue({
+      data: { user: { id: 'student-1', email: 'stud@example.com', isAdmin: false } },
+    });
+    setNavCourses([{ id: 'course-1', code: 'CS101', isPublished: true, isArchived: true }]);
+    renderWithClient(<DashboardSidebarMenu />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: 'Archived Courses' })).toHaveAttribute(
+        'href',
+        '/dashboard/archived-courses',
+      );
+    });
+  });
+
+  it('hides the Archived Courses link for a non-admin with no archived courses', async () => {
+    useSessionMock.mockReturnValue({
+      data: { user: { id: 'student-1', email: 'stud@example.com', isAdmin: false } },
+    });
+    setNavCourses([{ id: 'course-1', code: 'CS101', isPublished: true, isArchived: false }]);
+    renderWithClient(<DashboardSidebarMenu />);
+
+    // Wait for the nav query to resolve, then confirm the link never appears.
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith('/api/me/courses?view=nav');
+    });
+    expect(screen.queryByRole('link', { name: 'Archived Courses' })).toBeNull();
+  });
+
+  it('always shows the Archived Courses link for admins, even with none', async () => {
+    // Default session is an admin; no archived courses in the nav list.
+    renderWithClient(<DashboardSidebarMenu />);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith('/api/me/courses?view=nav');
+    });
+    expect(screen.getByRole('link', { name: 'Archived Courses' })).toHaveAttribute(
+      'href',
+      '/dashboard/archived-courses',
+    );
   });
 
   it('renders a placeholder message when no courses are visible', () => {

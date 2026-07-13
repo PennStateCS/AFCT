@@ -6,6 +6,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from '@/components/ui/dialog';
 
 function parseCfg(xmlText: string){
@@ -30,8 +31,8 @@ function parseCfg(xmlText: string){
   const right: string[] = [];
   productions.forEach(node => {
 	const [lNode, rNode] = node.children;
-	left.push(lNode.textContent ?? '');
-	right.push(rNode.textContent ?? '');
+	left.push(lNode?.textContent ?? '');
+	right.push(rNode?.textContent ?? '');
   });
 
   return { type: type, left: left, right: right };
@@ -58,7 +59,7 @@ export function CfgViewerDialog({ src, open, onOpenChange, title }: { src: strin
       }
 	};
 
-	load();
+	void load();
   }, [src, open]);
   if (!data) return null;
   const parsed = parseCfg(data);
@@ -68,7 +69,10 @@ export function CfgViewerDialog({ src, open, onOpenChange, title }: { src: strin
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="truncate">{title ?? 'JFLAP Viewer'}</DialogTitle>
+            <DialogTitle className="truncate">{title || 'JFLAP Viewer'}</DialogTitle>
+            <DialogDescription className="sr-only">
+              Context-free grammar productions.
+            </DialogDescription>
 			  <table className="w-full text-sm">
                 <thead className="border-b border-foreground">
                   <tr>

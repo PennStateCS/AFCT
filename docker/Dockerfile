@@ -8,13 +8,16 @@
 # a rebuild always uses the exact same image. Bump these deliberately.
 
 # --- Stage 1: build ---
-FROM node:20-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 AS builder
+FROM node:22-bookworm-slim@sha256:53ada149d435c38b14476cb57e4a7da73c15595aba79bd6971b547ceb6d018bf AS builder
 WORKDIR /app
 
 # The ERD generator and lint are dev-only; skip them during the image build.
 ENV DISABLE_ERD=true
 ENV SKIP_PRISMA_GENERATE=1
 ENV NEXTJS_IGNORE_ESLINT=1
+# The ERD generator pulls in puppeteer (via mermaid-cli), whose install would
+# otherwise download a ~150MB Chromium we never use — the ERD step is disabled here.
+ENV PUPPETEER_SKIP_DOWNLOAD=1
 
 # python3/make/g++ compile native npm modules (bcrypt). No Java here — the build
 # never runs the evaluator JAR, so a JRE would just be dead weight.
@@ -33,15 +36,18 @@ RUN mkdir -p /app/bin /app/jars
 RUN npx prisma generate && npm run build
 
 # --- Stage 2: runtime ---
-FROM node:20-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 AS runtime
+FROM node:22-bookworm-slim@sha256:53ada149d435c38b14476cb57e4a7da73c15595aba79bd6971b547ceb6d018bf AS runtime
 WORKDIR /app
 
 # curl runs the healthcheck; postgres-client + netcat back the DB wait in the
-# entrypoint; tini is PID 1; openssl covers TLS helpers.
+# entrypoint; tini is PID 1; openssl covers TLS helpers. fontconfig + a base font
+# are required by the Java evaluator (JFLAP initializes Swing even in CLI mode, so
+# the JRE needs font metrics — otherwise it throws "Fontconfig head is null").
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
-    curl postgresql-client netcat-openbsd tini openssl ca-certificates
+    curl postgresql-client netcat-openbsd tini openssl ca-certificates \
+    fontconfig fonts-dejavu-core
 
 # Java 21 runtime, copied from the official image (pinned, no network fetch).
 # Runs jars/afct-evaluator.jar when grading submissions.

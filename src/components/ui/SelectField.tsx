@@ -23,6 +23,8 @@ export interface SelectFieldProps extends Omit<React.ComponentProps<typeof Selec
   placeholder?: string;
   description?: string;
   error?: string;
+  // Accepted for API compatibility, but the required "*" is currently not rendered
+  // (required marking is being reworked). Re-enable the asterisk in the label below.
   requiredMark?: boolean;
   additionalDescribedBy?: string | string[];
   options?: SelectFieldOption[];
@@ -41,7 +43,9 @@ const SelectField = React.forwardRef<React.ElementRef<typeof SelectTrigger>, Sel
       placeholder,
       description,
       error,
-      requiredMark,
+      // Destructured (and ignored) so it isn't forwarded onto the Select/DOM; the
+      // required "*" is intentionally not rendered right now. See the prop comment.
+      requiredMark: _requiredMark,
       additionalDescribedBy,
       options,
       className,
@@ -79,7 +83,6 @@ const SelectField = React.forwardRef<React.ElementRef<typeof SelectTrigger>, Sel
       <div className={cn('flex flex-col', className)}>
         <Label id={labelId} htmlFor={triggerId} className="mb-1.5 text-sm font-medium">
           {label}
-          {requiredMark ? <span className="text-red-600"> *</span> : null}
         </Label>
 
         <Select name={name} disabled={disabled} {...selectProps}>
@@ -119,7 +122,7 @@ const SelectField = React.forwardRef<React.ElementRef<typeof SelectTrigger>, Sel
         )}
 
         {error && (
-          <p id={`${triggerId}-error`} className="mt-1 text-xs text-red-600">
+          <p id={`${triggerId}-error`} role="alert" className="mt-1 text-xs text-red-600">
             {error}
           </p>
         )}

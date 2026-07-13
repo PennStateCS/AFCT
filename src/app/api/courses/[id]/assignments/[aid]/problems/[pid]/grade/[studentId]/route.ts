@@ -1,9 +1,18 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canManageCourse } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
-import { logDenial } from '@/lib/api/activity';
+import { readJson } from '@/lib/api/request';
+import { logDenial, logError } from '@/lib/api/activity';
+
+const GradeBody = z.object({ grade: z.number().nullish(), feedback: z.string().nullish() });
+
+// Concrete path params for this route. Next guarantees each dynamic segment is
+// present, so typing them keeps the destructured values `string` (rather than
+// `string | undefined`) under noUncheckedIndexedAccess.
+type RouteCtx = { params: Promise<{ id: string; aid: string; pid: string; studentId: string }> };
 
 /**
  * Reads one student's grade and feedback for a specific problem within an
@@ -25,7 +34,7 @@ import { logDenial } from '@/lib/api/activity';
  *   500: { description: Server error. }
  */
 export const GET = withCourseAuth(
-  async (req, ctx, { user, courseId }) => {
+  async (req, ctx: RouteCtx, { user, courseId }) => {
     const { aid: assignmentId, pid: problemId, studentId } = await ctx.params;
 
     try {
@@ -118,7 +127,7 @@ export const GET = withCourseAuth(
  *   500: { description: Server error. }
  */
 export const POST = withCourseAuth(
-  async (req, ctx, { user, courseId }) => {
+  async (req, ctx: RouteCtx, { user, courseId }) => {
     const graderId = user.id;
     const { aid: assignmentId, pid: problemId, studentId } = await ctx.params;
 
@@ -140,9 +149,20 @@ export const POST = withCourseAuth(
         return NextResponse.json({ error: 'Problem not found' }, { status: 404 });
       }
 
-      const body = await req.json();
-      const grade = body?.grade as number | null | undefined;
-      const feedback = typeof body?.feedback === 'string' ? body.feedback : null;
+      // The grade target must actually be enrolled in this course — never create a
+      // grade row for an arbitrary user id that isn't on the roster.
+      const enrolled = await prisma.roster.findFirst({
+        where: { courseId, userId: studentId },
+        select: { id: true },
+      });
+      if (!enrolled) {
+        return NextResponse.json({ error: 'Student not enrolled in this course' }, { status: 404 });
+      }
+
+      const parsed = await readJson(req, GradeBody);
+      if (!parsed.ok) return parsed.response;
+      const grade = parsed.data.grade;
+      const feedback = parsed.data.feedback ?? null;
 
       if (grade !== null && grade !== undefined) {
         if (typeof grade !== 'number' || Number.isNaN(grade)) {
@@ -180,7 +200,7 @@ export const POST = withCourseAuth(
           courseId,
           assignmentId,
           problemId,
-          metadata: { studentId, graderId, previousGrade: existing?.grade ?? null },
+          metadata: { targetUserId: studentId, studentId, graderId, previousGrade: existing?.grade ?? null },
         });
         return NextResponse.json({ grade: null, feedback: null });
       }
@@ -215,6 +235,7 @@ export const POST = withCourseAuth(
         assignmentId,
         problemId,
         metadata: {
+          targetUserId: studentId,
           studentId,
           graderId,
           previousGrade: existing?.grade ?? null,
@@ -231,14 +252,13 @@ export const POST = withCourseAuth(
       });
     } catch (error) {
       console.error('POST /api/courses/[id]/[aid]/problems/[pid]/grade/[studentId] error:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: graderId,
         action: 'PROBLEM_GRADE_UPDATE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
       });
       return NextResponse.json({ error: 'Failed to save problem grade' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'PROBLEM_GRADE_UPDATE_DENIED' },
+  { access: 'manage', deniedAction: 'PROBLEM_GRADE_UPDATE_DENIED', blockWhenArchived: true },
 );

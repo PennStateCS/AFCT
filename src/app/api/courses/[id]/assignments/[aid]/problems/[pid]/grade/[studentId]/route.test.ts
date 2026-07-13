@@ -9,6 +9,7 @@ const prismaMock = vi.hoisted(() => ({
     deleteMany: vi.fn(),
     upsert: vi.fn(),
   },
+  course: { findUnique: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -29,6 +30,7 @@ describe('/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
     authMock.mockResolvedValue({ user: { id: 'staff-1', role: 'FACULTY' } });
     prismaMock.assignmentProblem.findUnique.mockResolvedValue({
       assignment: { courseId: defaultParams.id, isPublished: true },
@@ -340,6 +342,18 @@ describe('/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]', () => {
 
       expect(res.status).toBe(500);
       consoleSpy.mockRestore();
+    });
+
+    it('returns 409 and writes nothing when the course is archived', async () => {
+      prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+
+      const res = await POST(buildRequest({ grade: 90 }), {
+        params: Promise.resolve(defaultParams),
+      });
+
+      expect(res.status).toBe(409);
+      expect(prismaMock.assignmentProblemGrade.upsert).not.toHaveBeenCalled();
+      expect(prismaMock.assignmentProblemGrade.deleteMany).not.toHaveBeenCalled();
     });
   });
 });

@@ -2,20 +2,14 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { getUsersList } from '@/lib/users-list';
 import { withAdminAuth } from '@/lib/api/with-auth';
-
-const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
-// Local password check for admin-created accounts: 8+ chars with mixed case, a
-// digit, and a symbol.
-const isStrongPassword = (pw: string) =>
-  pw.length >= 8 &&
-  /[A-Z]/.test(pw) &&
-  /[a-z]/.test(pw) &&
-  /\d/.test(pw) &&
-  /[^A-Za-z0-9]/.test(pw);
+import { readJson } from '@/lib/api/request';
+import { isValidEmail } from '@/lib/email';
+import { isStrongPassword } from '@/lib/password-policy';
+import { UserCreateApiSchema } from '@/schemas/user';
 
 /**
  * Lists users for the admin-facing users table. System administrators only; the
@@ -41,9 +35,7 @@ export const GET = withAdminAuth(
         action: 'VIEW_USERS',
         severity: 'INFO',
         category: 'USER',
-        metadata: {
-          userId: user.id,
-        },
+        metadata: {},
       });
 
       return NextResponse.json(users);
@@ -86,13 +78,9 @@ export const GET = withAdminAuth(
 export const POST = withAdminAuth(
   async (req, _ctx, { user }) => {
     try {
-      const body = await req.json();
-      const { email, firstName, lastName, password, timezone } = body;
-
-      if (!email || !firstName || !lastName || !password) {
-        console.warn('[USERS_POST] Missing required fields');
-        return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-      }
+      const parsed = await readJson(req, UserCreateApiSchema);
+      if (!parsed.ok) return parsed.response;
+      const { email, firstName, lastName, password, timezone } = parsed.data;
 
       if (!isValidEmail(email)) {
         console.warn(`[USERS_POST] Invalid email format: ${email}`);
@@ -148,7 +136,6 @@ export const POST = withAdminAuth(
         severity: 'INFO',
         category: 'USER',
         metadata: {
-          userId: user.id,
           createdUserId: newUser.id,
           createdUserEmail: newUser.email,
         },
@@ -157,11 +144,10 @@ export const POST = withAdminAuth(
       return NextResponse.json(newUser, { status: 201 });
     } catch (error) {
       console.error('[USERS_POST_ERROR]', error);
-      await createEnhancedActivityLog(prisma, req, {
-        userId: null,
+      await logError(req, {
+        userId: user.id,
         action: 'USER_CREATE_ERROR',
-        severity: 'ERROR',
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
+        error,
       });
       return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }

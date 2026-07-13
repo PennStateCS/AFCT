@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 import StudentAssignmentView from '@/components/assignments/StudentAssignmentView';
 import PrivilegeAssignmentView from '@/components/assignments/PrivilegeAssignmentView';
 import LoadingSpinner from '@/components/ui/loading-spinner';
-import { AssignmentWithDetails } from '@/lib/assignment-details';
+import type { AssignmentWithDetails } from '@/lib/assignment-details';
 
 type AssignmentClientProps = {
   initialAssignment?: AssignmentWithDetails | null;

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { routeCtx } from '@/test/route';
 
 const prismaMock = vi.hoisted(() => ({
   user: { update: vi.fn() },
@@ -39,7 +40,7 @@ describe('POST /api/admin/reset-password', () => {
       body: JSON.stringify({ userId: 'u1', newPassword: 'Strong1!a' }),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, routeCtx());
 
     expect(res.status).toBe(401);
   });
@@ -52,7 +53,7 @@ describe('POST /api/admin/reset-password', () => {
       body: JSON.stringify({ userId: 'u1' }),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, routeCtx());
 
     expect(res.status).toBe(400);
   });
@@ -65,7 +66,7 @@ describe('POST /api/admin/reset-password', () => {
       body: JSON.stringify({ userId: 'u1', newPassword: 'weak' }),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, routeCtx());
 
     expect(res.status).toBe(400);
   });
@@ -79,7 +80,7 @@ describe('POST /api/admin/reset-password', () => {
       body: JSON.stringify({ userId: 'u1', newPassword: 'Strong1!a', isTemporary: true }),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, routeCtx());
 
     expect(res.status).toBe(200);
     expect(prismaMock.user.update).toHaveBeenCalledWith(
@@ -93,7 +94,6 @@ describe('POST /api/admin/reset-password', () => {
       expect.objectContaining({
         action: 'RESET_PASSWORD',
         metadata: expect.objectContaining({
-          userId: 'admin',
           targetUserId: 'u1',
           temporaryPassword: true,
         }),
@@ -110,7 +110,7 @@ describe('POST /api/admin/reset-password', () => {
       body: JSON.stringify({ userId: 'u1', newPassword: 'Strong1!a' }),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, routeCtx());
 
     expect(res.status).toBe(500);
     const body = await res.json();
@@ -135,7 +135,7 @@ describe('POST /api/admin/reset-password', () => {
       body: JSON.stringify({ userId: 'u1', newPassword: 'Strong1!a' }),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, routeCtx());
 
     expect(res.status).toBe(500);
     expect(activityLogMock).toHaveBeenCalledWith(

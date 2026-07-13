@@ -7,10 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function NotFoundPage() {
   return (
-    <div className="flex min-h-screen w-full items-center justify-center bg-gradient-to-br from-[#5F9EA0] via-[#6FAFB2] to-[#2F4A8A] px-4 py-12">
+    <main className="flex min-h-screen w-full items-center justify-center bg-gradient-to-br from-[#5F9EA0] via-[#6FAFB2] to-[#2F4A8A] px-4 py-12">
       <Card className="w-full max-w-xl border-2 border-solid border-gray-700 bg-card shadow-[0_20px_60px_-20px_rgba(25,59,127,0.25)]">
         <CardHeader className="space-y-3 pb-4 text-center">
-          <CardTitle className="text-3xl font-semibold tracking-tight text-foreground">
+          <CardTitle aria-level={1} className="text-3xl font-semibold tracking-tight text-foreground">
             404 Error: Page not found
           </CardTitle>
         </CardHeader>
@@ -28,6 +28,6 @@ export default function NotFoundPage() {
           </Button>
         </CardContent>
       </Card>
-    </div>
+    </main>
   );
 }

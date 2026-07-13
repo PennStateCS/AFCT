@@ -32,8 +32,8 @@ export async function GET(req: Request) {
   const session = await auth();
   const userId = session?.user?.id;
 
-  if (!userId) {
-    return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+  if (!userId || session.user.inactive) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const view = new URL(req.url).searchParams.get('view');
@@ -45,6 +45,8 @@ export async function GET(req: Request) {
       const courses = await prisma.course.findMany({
         where: {
           roster: { some: { userId } },
+          // A soft-deleted course never appears in anyone's navigation.
+          deletedAt: null,
           ...(isAdmin(session.user)
             ? {}
             : {
@@ -60,6 +62,8 @@ export async function GET(req: Request) {
           code: true,
           isPublished: true,
           isArchived: true,
+          startDate: true,
+          endDate: true,
         },
         orderBy: { createdAt: 'desc' },
       });
@@ -78,6 +82,6 @@ export async function GET(req: Request) {
     return NextResponse.json(courses, { status: 200 });
   } catch (error) {
     console.error('Failed to fetch courses list:', error);
-    return NextResponse.json({ message: 'Server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }

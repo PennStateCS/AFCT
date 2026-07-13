@@ -18,15 +18,15 @@ import InputGroup from '@/components/ui/InputGroup';
 import { useEffect, useMemo } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import type { z } from 'zod';
 
 // ✅ Import assignment schemas directly to avoid barrel/cycle issues
 import { CreateAssignmentFormSchema } from '@/schemas/assignment';
 import { apiPaths } from '@/lib/api-paths';
 
-type FormValues = z.infer<typeof CreateAssignmentFormSchema>; // strings for datetime-local
+type FormValues = z.input<typeof CreateAssignmentFormSchema>; // strings for datetime-local
 
-import { Assignment } from '@prisma/client';
+import type { Assignment } from '@prisma/client';
 
 type CreateAssignmentDialogProps = {
   open: boolean;
@@ -193,7 +193,7 @@ export function CreateAssignmentDialog({
 
   const onSubmitWrapper = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    handleSubmit((data) => onSubmit(data as unknown as FormValues))(e);
+    void handleSubmit((data) => onSubmit(data as unknown as FormValues))(e);
   };
 
   return (

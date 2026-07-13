@@ -8,6 +8,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog';
@@ -19,7 +20,7 @@ import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { DownloadLogsSchema } from '@/schemas/log';
-import { z } from 'zod';
+import type { z } from 'zod';
 
 import { json2csv } from 'json-2-csv';
 import { showToast } from '@/lib/toast';
@@ -174,7 +175,7 @@ export function DownloadLogsDialog({ open, onOpenChange }: DownloadLogsDialogPro
 
   const onSubmitWrapper = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    handleSubmit((data) => onSubmit(data as unknown as FormValues))(e);
+    void handleSubmit((data) => onSubmit(data as unknown as FormValues))(e);
   };
 
   return (
@@ -183,6 +184,9 @@ export function DownloadLogsDialog({ open, onOpenChange }: DownloadLogsDialogPro
         <DialogHeader>
           {/* Title */}
           <DialogTitle>Download Logs</DialogTitle>
+          <DialogDescription className="sr-only">
+            Choose a date range and format, then download the activity logs.
+          </DialogDescription>
         </DialogHeader>
 
         {/* Form */}

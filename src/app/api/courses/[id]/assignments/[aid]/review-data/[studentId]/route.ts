@@ -109,6 +109,7 @@ export const GET = withCourseAuth(
         return logDenial(req, {
           userId: user.id,
           action: 'REVIEW_DATA_ACCESS_DENIED',
+          category: 'SUBMISSION',
           courseId,
         });
       }
@@ -133,22 +134,11 @@ export const GET = withCourseAuth(
         prisma.comment.findMany({
           where: {
             assignmentId,
-            OR: [{ aboutStudentId: studentId }, { roster: { userId: studentId } }],
+            OR: [{ aboutStudentId: studentId }, { authorId: studentId }],
           },
           include: {
-            roster: {
-              select: {
-                role: true,
-                user: {
-                  select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                    avatar: true,
-                  },
-                },
-              },
-            },
+            author: { select: { id: true, firstName: true, lastName: true, avatar: true } },
+            roster: { select: { role: true } }, // course role for the badge, may be null
           },
           orderBy: { createdAt: 'asc' },
         }),
@@ -209,7 +199,8 @@ export const GET = withCourseAuth(
       for (const { problem } of assignmentProblems) {
         const subsForProblem = submissionsRaw.filter((s) => s.problemId === problem.id);
         submissionsByProblem[problem.id] = {
-          problem,
+          // The problem's solution filename is instructor-only; hide it from students.
+          problem: { ...problem, originalFileName: isStaff ? problem.originalFileName : null },
           submissions: subsForProblem.map((s) => ({
             id: s.id,
             submittedAt: s.submittedAt,
@@ -229,11 +220,11 @@ export const GET = withCourseAuth(
         createdAt: comment.createdAt,
         problemId: comment.problemId,
         author: {
-          id: comment.roster.user.id,
-          firstName: comment.roster.user.firstName ?? null,
-          lastName: comment.roster.user.lastName ?? null,
-          avatar: comment.roster.user.avatar ?? null,
-          role: comment.roster.role ?? null,
+          id: comment.author.id,
+          firstName: comment.author.firstName ?? null,
+          lastName: comment.author.lastName ?? null,
+          avatar: comment.author.avatar ?? null,
+          role: comment.roster?.role ?? null,
         },
       }));
 
@@ -251,7 +242,7 @@ export const GET = withCourseAuth(
       try {
         await createEnhancedActivityLog(prisma, req, {
           userId: user.id,
-          action: 'VIEW_ASSIGNMENT_SUBMISSIONS',
+          action: 'VIEW_STUDENT_REVIEW_DATA',
           severity: 'INFO',
           category: 'SUBMISSION',
           courseId,

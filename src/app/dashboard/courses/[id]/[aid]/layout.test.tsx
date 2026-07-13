@@ -55,7 +55,7 @@ describe('AssignmentLayout', () => {
       select: { id: true, title: true, isPublished: true },
     });
 
-    const element = result as React.ReactElement;
+    const element = result as React.ReactElement<any>;
     expect(element.props.children).toHaveLength(2);
     const sourceNode = element.props.children[0];
     const childNode = element.props.children[1];
@@ -74,7 +74,7 @@ describe('AssignmentLayout', () => {
       children: <div data-testid="children">Child</div>,
     });
 
-    const element = result as React.ReactElement;
+    const element = result as React.ReactElement<any>;
     expect(element.props.children[0]).toBeNull();
     expect(element.props.children[1].props['data-testid']).toBe('children');
   });
@@ -89,7 +89,7 @@ describe('AssignmentLayout', () => {
 
     expect(getCourseRoleMock).toHaveBeenCalledWith('u1', 'c1');
     expect(prismaMock.assignment.findFirst).not.toHaveBeenCalled();
-    const element = result as React.ReactElement;
+    const element = result as React.ReactElement<any>;
     expect(element.props.children[0]).toBeNull();
   });
 
@@ -106,7 +106,7 @@ describe('AssignmentLayout', () => {
       children: <div data-testid="children">Child</div>,
     });
 
-    const element = result as React.ReactElement;
+    const element = result as React.ReactElement<any>;
     expect(element.props.children[0]).toBeNull();
   });
 
@@ -123,7 +123,7 @@ describe('AssignmentLayout', () => {
       children: <div data-testid="children">Child</div>,
     });
 
-    const element = result as React.ReactElement;
+    const element = result as React.ReactElement<any>;
     expect(element.props.children[0].props.assignmentTitle).toBe('Draft');
   });
 });

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { testRequest } from '@/test/route';
 
 const prismaMock = vi.hoisted(() => ({
   course: {
@@ -38,14 +39,14 @@ beforeEach(() => {
 describe('GET /api/courses', () => {
   it('returns 401 when not signed in', async () => {
     authMock.mockResolvedValue(null);
-    const res = await GET();
+    const res = await GET(testRequest());
     expect(res.status).toBe(401);
     expect(prismaMock.course.findMany).not.toHaveBeenCalled();
   });
 
   it('returns 403 for a non-admin', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: false } });
-    const res = await GET();
+    const res = await GET(testRequest());
     expect(res.status).toBe(403);
     expect(prismaMock.course.findMany).not.toHaveBeenCalled();
   });
@@ -65,7 +66,7 @@ describe('GET /api/courses', () => {
       },
     ]);
 
-    const res = await GET();
+    const res = await GET(testRequest());
     expect(res.status).toBe(200);
 
     const body = await res.json();
@@ -91,7 +92,7 @@ describe('GET /api/courses', () => {
       },
     ]);
 
-    const res = await GET();
+    const res = await GET(testRequest());
     expect(res.status).toBe(200);
 
     const body = await res.json();
@@ -106,7 +107,7 @@ describe('GET /api/courses', () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     prismaMock.course.findMany.mockRejectedValue(new Error('boom'));
 
-    const res = await GET();
+    const res = await GET(testRequest());
     expect(res.status).toBe(500);
     consoleSpy.mockRestore();
   });
@@ -160,8 +161,7 @@ describe('POST /api/courses', () => {
       endDate: '2026-12-15T17:00',
       registrationOpenAt: '2026-08-01T09:00',
       registrationCloseAt: '2026-08-31T17:00',
-      isPublished: false,
-      facultyIds: ['u1'],
+      instructorIds: ['u1'],
     };
 
     const req = new Request('http://localhost/api/courses', {
@@ -179,11 +179,16 @@ describe('POST /api/courses', () => {
       { id: 'u1', firstName: 'Ada', lastName: 'Lovelace', role: 'FACULTY', courseRole: 'FACULTY' },
     ]);
     expect(txMock.roster.createMany).toHaveBeenCalledTimes(1);
+    expect(txMock.roster.createMany).toHaveBeenCalledWith({
+      data: [{ userId: 'u1', courseId: 'course-1', role: 'FACULTY' }],
+    });
     expect(txMock.course.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           startDate: expect.any(Date),
           endDate: expect.any(Date),
+          // A course is never created published.
+          isPublished: false,
         }),
       }),
     );
@@ -207,6 +212,7 @@ describe('POST /api/courses', () => {
         endDate: '2026-12-15T17:00',
         registrationOpenAt: '2026-08-01T09:00',
         registrationCloseAt: '2026-08-31T17:00',
+        instructorIds: ['u1'],
       }),
     });
 
@@ -256,15 +262,15 @@ describe('POST /api/courses', () => {
         endDate: '2026-12-15T17:00',
         registrationOpenAt: '2026-08-01T09:00',
         registrationCloseAt: '2026-08-31T17:00',
-        facultyIds: [],
+        instructorIds: ['u1'],
       }),
     });
 
     const res = await POST(req);
     expect(res.status).toBe(201);
-    expect(prismaMock.user.findUnique).toHaveBeenCalled();
+    // No timezone supplied → the course zone falls back to the system setting (not the
+    // actor's), so we read SystemSettings, not the user's timezone.
     expect(prismaMock.systemSettings.findUnique).toHaveBeenCalled();
-    expect(txMock.roster.createMany).not.toHaveBeenCalled();
   });
 
   it('returns 403 when user is not authorized', async () => {
@@ -287,6 +293,19 @@ describe('POST /api/courses', () => {
     expect(res.status).toBe(403);
   });
 
+  it('returns 401 for a disabled/deleted admin even with a stale admin token', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: true, inactive: true } });
+
+    const req = new Request('http://localhost/api/courses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'X', code: 'C', semester: 'F', credits: 3 }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(401);
+  });
+
   it('returns validation response when validation fails', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN', isAdmin: true } });
     validationResponseMock.mockReturnValue({ status: 400 });
@@ -300,9 +319,34 @@ describe('POST /api/courses', () => {
     expect(res.status).toBe(400);
   });
 
-  it('seeds instructor roster rows and excludes them from faculty-only rows', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'ADMIN', isAdmin: true } });
+  it('rejects a course with no faculty (400)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: true } });
+
+    const req = new Request('http://localhost/api/courses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Course 1',
+        code: 'CS101',
+        semester: 'Fall 2026',
+        credits: 3,
+        startDate: '2026-08-25T09:00',
+        endDate: '2026-12-15T17:00',
+        registrationOpenAt: '2026-08-01T09:00',
+        registrationCloseAt: '2026-08-31T17:00',
+        instructorIds: [],
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('ignores a client-supplied isPublished and creates the course unpublished', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
+    prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.course.findFirst.mockResolvedValue(null);
 
     const txMock = {
@@ -338,21 +382,18 @@ describe('POST /api/courses', () => {
         registrationOpenAt: '2026-08-01T09:00',
         registrationCloseAt: '2026-08-31T17:00',
         instructorIds: ['i1'],
-        facultyIds: ['i1', 'f2'],
+        // A client cannot create a published course; the field is dropped.
+        isPublished: true,
       }),
     });
 
     const res = await POST(req);
     expect(res.status).toBe(201);
-
-    // One call for instructors, one for the faculty-only members (i1 filtered out).
-    expect(txMock.roster.createMany).toHaveBeenCalledTimes(2);
-    expect(txMock.roster.createMany).toHaveBeenCalledWith({
-      data: [{ userId: 'i1', courseId: 'course-1', role: 'FACULTY' }],
-    });
-    expect(txMock.roster.createMany).toHaveBeenCalledWith({
-      data: [{ userId: 'f2', courseId: 'course-1', role: 'FACULTY' }],
-    });
+    expect(txMock.course.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ isPublished: false }),
+      }),
+    );
   });
 
   it('returns 500 when course creation throws a non-validation error', async () => {
@@ -376,6 +417,7 @@ describe('POST /api/courses', () => {
         endDate: '2026-12-15T17:00',
         registrationOpenAt: '2026-08-01T09:00',
         registrationCloseAt: '2026-08-31T17:00',
+        instructorIds: ['u1'],
       }),
     });
 

@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { showToast } from '@/lib/toast';
-import { FullCourse, DeleteTarget } from '@/types/course';
-import { Assignment, Problem, Course } from '@prisma/client';
+import type { FullCourse, DeleteTarget } from '@/types/course';
+import type { Assignment, Problem, Course } from '@prisma/client';
 import {
   deleteItem,
   updateCourseAfterDelete,
@@ -12,7 +12,6 @@ import {
   updateCourseAfterProblemCreate,
   updateAssignmentPublishStatus,
   updateCoursePublishStatus,
-  updateCourseArchiveStatus,
   saveCourse,
 } from '@/lib/course-utils';
 
@@ -143,27 +142,6 @@ export function useCourseHandlers(
     [course, setCourse],
   );
 
-  // Course archive handler
-  const handleCourseArchiveToggle = useCallback(
-    async (isArchived: boolean) => {
-      if (!course) return;
-
-      try {
-        const updated = await updateCourseArchiveStatus(
-          course.id,
-          course.startDate,
-          course.endDate,
-          isArchived,
-        );
-        setCourse((prev) => (prev ? { ...prev, isArchived: updated.isArchived } : prev));
-        showToast.success(isArchived ? 'Course archived' : 'Course unarchived');
-      } catch (error) {
-        const msg = (error instanceof Error && error.message) || 'Failed to archive course';
-        showToast.error(msg);
-      }
-    },
-    [course, setCourse],
-  );
 
   return {
     handleAssignmentEditClick,
@@ -180,6 +158,5 @@ export function useCourseHandlers(
     handleDelete,
     handleCourseSave,
     handleCoursePublishToggle,
-    handleCourseArchiveToggle,
   };
 }

@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import type { NextRequest } from 'next/server';
 
 /** Anything that exposes a header lookup (Request, NextRequest, or next/headers' ReadonlyHeaders). */
 type HeaderGetter = { get(name: string): string | null };
@@ -99,11 +99,11 @@ export function getClientIpSimple(req: Request): string {
 export function getRequestMetadata(req: NextRequest) {
   const ip = getClientIp(req);
   const userAgent = req.headers.get('user-agent') || 'unknown';
-  
+
   // Additional metadata that might be useful
   const referer = req.headers.get('referer');
   const origin = req.headers.get('origin');
-  
+
   return {
     ipAddress: ip,
     userAgent,

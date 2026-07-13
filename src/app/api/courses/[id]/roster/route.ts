@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logError } from '@/lib/api/activity';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { readJson } from '@/lib/api/request';
+
+const EnrollBody = z.object({ userId: z.string().min(1, 'Missing userId') });
 
 /**
  * Adds (or re-roles) a single user on a course roster. Course staff (faculty or
@@ -35,10 +40,9 @@ import { withCourseAuth } from '@/lib/api/with-auth';
 export const POST = withCourseAuth(
   async (req, _ctx, { user, courseId }) => {
     try {
-      const { userId } = await req.json();
-      if (!userId) {
-        return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
-      }
+      const parsed = await readJson(req, EnrollBody);
+      if (!parsed.ok) return parsed.response;
+      const { userId } = parsed.data;
 
       const targetUser = await prisma.user.findUnique({
         where: { id: userId },
@@ -79,7 +83,6 @@ export const POST = withCourseAuth(
         category: 'COURSE',
         courseId,
         metadata: {
-          userId: user.id,
           courseId: courseId,
           enrolledUserId: userId,
           role: roleToAssign,
@@ -89,15 +92,14 @@ export const POST = withCourseAuth(
       return NextResponse.json({ success: true });
     } catch (error) {
       console.error('Enrollment error:', error);
-      await createEnhancedActivityLog(prisma, req, {
+      await logError(req, {
         userId: user.id,
         action: 'COURSE_ENROLL_ERROR',
-        severity: 'ERROR',
+        error,
         courseId,
-        metadata: { error: error instanceof Error ? error.message : 'unknown error' },
       });
       return NextResponse.json({ error: 'Failed to enroll user' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'COURSE_ENROLL_DENIED' },
+  { access: 'manage', blockWhenArchived: true, deniedAction: 'COURSE_ENROLL_DENIED' },
 );

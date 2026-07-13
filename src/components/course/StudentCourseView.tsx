@@ -3,7 +3,7 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StudentGradesCard } from '@/components/StudentGradesCard';
 import { StudentAssignmentCard } from '@/components/StudentAssignmentCard';
-import { FullCourse, TabType } from '@/types/course';
+import type { FullCourse, TabType } from '@/types/course';
 import { BookOpen, Table } from 'lucide-react';
 
 interface StudentCourseViewProps {
@@ -17,13 +17,13 @@ export function StudentCourseView({ course, tab, onTabChange }: StudentCourseVie
     <Tabs defaultValue="assignments" value={tab} onValueChange={onTabChange}>
       <TabsList
         aria-label="Course sections"
-        className="bg-card border-border h-12 w-full justify-start overflow-x-auto rounded-md border p-1 shadow-sm"
+        className="bg-card border-border h-12 w-full justify-start gap-1 overflow-x-auto rounded-md border p-1 shadow-sm"
       >
         <TabsTrigger
           id="tab-assignments"
           aria-controls="panel-assignments"
           aria-label={`Assignments (${course.assignments.length})`}
-          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-accent data-[state=active]:text-white"
+          className="data-[state=active]:bg-secondary hover:bg-accent px-4 whitespace-nowrap data-[state=active]:text-white"
           value="assignments"
         >
           <div className="flex items-center gap-2">
@@ -35,7 +35,7 @@ export function StudentCourseView({ course, tab, onTabChange }: StudentCourseVie
         <TabsTrigger
           id="tab-grades"
           aria-controls="panel-grades"
-          className="data-[state=active]:bg-secondary px-4 whitespace-nowrap hover:bg-accent data-[state=active]:text-white"
+          className="data-[state=active]:bg-secondary hover:bg-accent px-4 whitespace-nowrap data-[state=active]:text-white"
           value="grades"
         >
           <div className="flex items-center gap-2">

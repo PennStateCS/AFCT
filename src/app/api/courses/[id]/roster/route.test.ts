@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const prismaMock = vi.hoisted(() => ({
   user: { findUnique: vi.fn() },
   roster: { upsert: vi.fn(), findFirst: vi.fn() },
+  course: { findUnique: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -20,6 +21,8 @@ beforeEach(() => {
   authMock.mockResolvedValue({ user: { id: 'admin', isAdmin: false } });
   // Default: caller not enrolled (denied); authorized tests grant a course role.
   prismaMock.roster.findFirst.mockResolvedValue(null);
+  // Default: course is not archived; archived-block tests override.
+  prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
 });
 
 describe('POST /api/courses/[id]/roster', () => {
@@ -55,6 +58,21 @@ describe('POST /api/courses/[id]/roster', () => {
       expect.anything(),
       expect.objectContaining({ action: 'COURSE_ENROLL_DENIED', severity: 'SECURITY' }),
     );
+  });
+
+  it('returns 409 when the course is archived', async () => {
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+
+    const req = new Request('http://localhost/api/courses/c1/roster', {
+      method: 'POST',
+      body: JSON.stringify({ userId: 'u1' }),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(409);
+    expect(prismaMock.roster.upsert).not.toHaveBeenCalled();
   });
 
   it('returns 400 when userId missing', async () => {

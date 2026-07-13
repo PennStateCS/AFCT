@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const prismaMock = vi.hoisted(() => ({
   user: {
@@ -30,6 +30,7 @@ vi.mock('bcrypt', async (importOriginal) => {
 });
 
 import { POST } from './route';
+import { routeCtx } from '@/test/route';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -48,7 +49,7 @@ describe('POST /api/users/bulk', () => {
       body: JSON.stringify({ rows: [] }),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, routeCtx());
 
     expect(res.status).toBe(401);
   });
@@ -70,7 +71,7 @@ describe('POST /api/users/bulk', () => {
       }),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, routeCtx());
 
     expect(res.status).toBe(403);
   });
@@ -82,7 +83,7 @@ describe('POST /api/users/bulk', () => {
       method: 'POST',
       body: JSON.stringify({ rows: [] }),
     });
-    expect((await POST(adminReq)).status).toBe(400);
+    expect((await POST(adminReq, routeCtx())).status).toBe(400);
 
     // Non-admins (including faculty/TA) can no longer bulk-create users.
     for (const role of ['FACULTY', 'TA', 'STUDENT'] as const) {
@@ -91,7 +92,7 @@ describe('POST /api/users/bulk', () => {
         method: 'POST',
         body: JSON.stringify({ rows: [] }),
       });
-      expect((await POST(req)).status).toBe(403);
+      expect((await POST(req, routeCtx())).status).toBe(403);
     }
   });
 
@@ -103,7 +104,7 @@ describe('POST /api/users/bulk', () => {
       body: JSON.stringify({ rows: [] }),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, routeCtx());
 
     expect(res.status).toBe(400);
   });
@@ -163,7 +164,7 @@ describe('POST /api/users/bulk', () => {
       }),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, routeCtx());
 
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -213,7 +214,7 @@ describe('POST /api/users/bulk', () => {
       }),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, routeCtx());
 
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -242,7 +243,7 @@ describe('POST /api/users/bulk', () => {
       }),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, routeCtx());
 
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -260,7 +261,7 @@ describe('POST /api/users/bulk', () => {
       body: JSON.stringify({}),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, routeCtx());
 
     expect(res.status).toBe(400);
   });
@@ -289,7 +290,7 @@ describe('POST /api/users/bulk', () => {
       }),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, routeCtx());
 
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -316,7 +317,7 @@ describe('POST /api/users/bulk', () => {
       }),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, routeCtx());
 
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -343,7 +344,7 @@ describe('POST /api/users/bulk', () => {
       }),
     });
 
-    const res = await POST(req);
+    const res = await POST(req, routeCtx());
 
     expect(res.status).toBe(500);
     expect(activityLogMock).toHaveBeenCalledWith(
@@ -356,7 +357,7 @@ describe('POST /api/users/bulk', () => {
     );
   });
 
-  it('returns 500 and logs an error when the request body is not valid JSON', async () => {
+  it('returns 400 when the request body is not valid JSON', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
 
     const req = new Request('http://localhost/api/users/bulk', {
@@ -365,18 +366,9 @@ describe('POST /api/users/bulk', () => {
       body: 'not-json',
     });
 
-    const res = await POST(req);
+    const res = await POST(req, routeCtx());
 
-    expect(res.status).toBe(500);
-    const body = await res.json();
-    expect(body.error).toBe('Internal Server Error');
-    expect(activityLogMock).toHaveBeenCalledWith(
-      prismaMock,
-      req,
-      expect.objectContaining({
-        action: 'USER_BULK_CREATE_ERROR',
-        severity: 'ERROR',
-      }),
-    );
+    // readJson returns a clean 400 for malformed JSON (previously an uncaught 500).
+    expect(res.status).toBe(400);
   });
 });

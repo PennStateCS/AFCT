@@ -5,24 +5,22 @@ import { useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Wrench } from 'lucide-react';
 import InputGroup from '@/components/ui/InputGroup';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 import { PasswordRulesHelper } from '@/components/auth/PasswordRulesHelper';
-import { isStrongPassword, passwordRules } from '@/lib/password-policy';
+import { passwordRules } from '@/lib/password-policy';
 import { apiPaths } from '@/lib/api-paths';
-
-/* ---------------- Validators ---------------- */
-
-const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+import { isValidEmail } from '@/lib/email';
+import { SignupFormSchema } from '@/schemas/auth';
 
 // Dev-only quick login shortcuts so QA can impersonate common roles fast.
 const testLoginButtons = [
-  { role: 'admin', label: 'Admin', classes: 'bg-[#2F4A8A] text-white hover:bg-[#253972]' },
-  { role: 'faculty', label: 'Faculty', classes: 'bg-[#486AAE] text-white hover:bg-[#3B5793]' },
-  { role: 'ta', label: 'TA', classes: 'bg-[#5F9EA0] text-white hover:bg-[#4E7E80]' },
-  { role: 'student', label: 'Student', classes: 'bg-[#8BD3CF] text-gray-900 hover:bg-[#78BBB7]' },
+  { role: 'admin', label: 'Admin', classes: 'bg-[#406669] text-white hover:bg-[#335556]' },
+  { role: 'faculty', label: 'Faculty', classes: 'bg-[#588a87] text-white hover:bg-[#47776f]' },
+  { role: 'ta', label: 'TA', classes: 'bg-[#375087] text-white hover:bg-[#2c3b73]' },
+  { role: 'student', label: 'Student', classes: 'bg-[#1b2a52] text-white hover:bg-[#162043]' },
 ];
 
 type LoginField = 'email' | 'password';
@@ -36,6 +34,18 @@ type SignupErrors = Partial<Record<SignupField, string>>;
 export default function LoginPage() {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [allowSignup, setAllowSignup] = useState<boolean | null>(null);
+
+  // Honor the OS "reduce motion" preference for the panel transitions (the global
+  // CSS reset can't reach framer-motion's JS-driven animation).
+  const reduceMotion = useReducedMotion();
+  const panelMotion = reduceMotion
+    ? { initial: false as const, animate: {}, exit: {}, transition: { duration: 0 } }
+    : {
+        initial: { opacity: 0, y: 6 },
+        animate: { opacity: 1, y: 0 },
+        exit: { opacity: 0, y: 6 },
+        transition: { duration: 0.2 },
+      };
 
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -67,7 +77,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     let active = true;
-    (async () => {
+    void (async () => {
       try {
         const res = await fetch(apiPaths.systemSettingsPublic(), { cache: 'no-store' });
         if (!res.ok) return;
@@ -222,26 +232,35 @@ export default function LoginPage() {
       confirm: signupConfirm,
     };
 
-    const errors: SignupErrors = {};
-    if (!trimmed.first) errors.first = 'First name is required.';
-    if (!trimmed.last) errors.last = 'Last name is required.';
-    if (!trimmed.email) errors.email = 'Email is required.';
-    else if (!isValidEmail(trimmed.email)) errors.email = 'Enter a valid email address.';
-    if (!trimmed.password) errors.password = 'Password is required.';
-    else if (!isStrongPassword(trimmed.password)) {
-      errors.password = 'Password must meet all requirements.';
-    }
-    if (!trimmed.confirm) errors.confirm = 'Confirm your password.';
-    else if (trimmed.password !== trimmed.confirm) {
-      errors.confirm = "Passwords don't match.";
-    }
+    // Validate against the shared signup schema (the same field rules the route
+    // enforces), mapping its issues back onto the form's per-field error slots.
+    const parsed = SignupFormSchema.safeParse({
+      firstName: trimmed.first,
+      lastName: trimmed.last,
+      email: trimmed.email,
+      password: trimmed.password,
+      confirmPassword: trimmed.confirm,
+    });
 
-    setSignupErrors(errors);
-
-    if (Object.keys(errors).length) {
+    if (!parsed.success) {
+      const fieldByPath: Record<string, SignupField> = {
+        firstName: 'first',
+        lastName: 'last',
+        email: 'email',
+        password: 'password',
+        confirmPassword: 'confirm',
+      };
+      const errors: SignupErrors = {};
+      for (const issue of parsed.error.issues) {
+        const field = fieldByPath[String(issue.path[0])];
+        if (field && !errors[field]) errors[field] = issue.message;
+      }
+      setSignupErrors(errors);
       showToast.error('Please correct the highlighted fields.');
       return;
     }
+
+    setSignupErrors({});
 
     setLoading(true);
 
@@ -357,14 +376,13 @@ export default function LoginPage() {
                 key="login"
                 id="login-panel"
                 autoComplete="off"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 6 }}
-                transition={{ duration: 0.2 }}
+                {...panelMotion}
                 onSubmit={handleLogin}
                 className="space-y-5"
               >
-                <p className="sr-only" aria-live="assertive">
+                {/* Not a live region: each field's error <p> now carries role="alert",
+                    so announcing here too would double-speak. Kept as static context. */}
+                <p className="sr-only">
                   {Object.values(loginErrors)[0]
                     ? `Form error: ${Object.values(loginErrors)[0]}`
                     : ''}
@@ -428,14 +446,13 @@ export default function LoginPage() {
                 key="signup"
                 id="signup-panel"
                 autoComplete="off"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 6 }}
-                transition={{ duration: 0.2 }}
+                {...panelMotion}
                 onSubmit={handleSignup}
                 className="space-y-5"
               >
-                <p className="sr-only" aria-live="assertive">
+                {/* Not a live region: each field's error <p> now carries role="alert",
+                    so announcing here too would double-speak. Kept as static context. */}
+                <p className="sr-only">
                   {Object.values(signupErrors)[0]
                     ? `Form error: ${Object.values(signupErrors)[0]}`
                     : ''}
@@ -446,7 +463,7 @@ export default function LoginPage() {
                   name="signup-first"
                   required
                   requiredMark
-                  autoComplete="off"
+                  autoComplete="given-name"
                   value={signupFirst}
                   setValue={setSignupFirst}
                   error={signupErrors.first}
@@ -457,7 +474,7 @@ export default function LoginPage() {
                   name="signup-last"
                   required
                   requiredMark
-                  autoComplete="off"
+                  autoComplete="family-name"
                   value={signupLast}
                   setValue={setSignupLast}
                   error={signupErrors.last}

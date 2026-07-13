@@ -1,8 +1,8 @@
 'use client';
 
-import { ColumnDef } from '@tanstack/react-table';
+import type { ColumnDef } from '@tanstack/react-table';
 import { useState } from 'react';
-import { User } from '@prisma/client';
+import type { User } from '@prisma/client';
 import { getInitials } from '@/app/utils/initials';
 import type { UserListItem } from '@/lib/users-list';
 
@@ -208,7 +208,10 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="secondary">
+          <Button
+            variant="secondary"
+            aria-label={`Manage user ${user.firstName ?? ''} ${user.lastName ?? ''}`.trim()}
+          >
             <ChevronDown />
             Manage
           </Button>

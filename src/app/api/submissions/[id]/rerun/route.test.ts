@@ -57,6 +57,11 @@ describe('POST /api/submissions/[id]/rerun', () => {
 
     expect(res.status).toBe(403);
     expect(prismaMock.submission.update).not.toHaveBeenCalled();
+    const deniedLog = activityLogMock.mock.calls.find(
+      (call) => call[2]?.action === 'SUBMISSION_RERUN_DENIED',
+    );
+    expect(deniedLog?.[2]?.courseId).toBe('c1');
+    expect(deniedLog?.[2]?.metadata).toMatchObject({ submissionId: 's1', studentId: 'u2' });
   });
 
   it('returns 404 when the submission does not exist', async () => {
@@ -126,15 +131,17 @@ describe('POST /api/submissions/[id]/rerun', () => {
     );
     expect(rerunLog).toBeDefined();
     expect(rerunLog?.[2]?.metadata?.status).toBe('PENDING');
+    // courseId FK and metadata come from the submission itself (authoritative).
+    expect(rerunLog?.[2]?.courseId).toBe('c1');
+    expect(rerunLog?.[2]?.metadata?.studentId).toBe('u2');
   });
 
-  // Branch 116: the assignment lookup returns null while the problem link still
-  // exists, so the rerun proceeds and the log records a null courseId via
-  // `assignment?.courseId ?? null`.
-  it('queues the submission with a null courseId when the assignment is missing', async () => {
+  // The courseId FK is taken from the submission itself, not a separate assignment
+  // lookup, so it is always the authoritative course even if the assignment record
+  // is unavailable.
+  it('logs the rerun with the submission course id', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.submission.findUnique.mockResolvedValue(submissionRecord);
-    prismaMock.assignment.findUnique.mockResolvedValue(null);
     prismaMock.assignmentProblem.findUnique.mockResolvedValue({
       problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
     });
@@ -146,7 +153,8 @@ describe('POST /api/submissions/[id]/rerun', () => {
     const rerunLog = activityLogMock.mock.calls.find(
       (call) => call[2]?.action === 'SUBMISSION_RERUN',
     );
-    expect(rerunLog?.[2]?.courseId).toBeNull();
+    expect(rerunLog?.[2]?.courseId).toBe('c1');
+    expect(rerunLog?.[2]?.metadata?.studentId).toBe('u2');
   });
 
   it('returns 500 when resetting the submission fails', async () => {

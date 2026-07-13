@@ -21,7 +21,13 @@ const Dialog = ({
   </DialogContext.Provider>
 );
 
-const DialogClose = ({ children }: { children: React.ReactElement }) => {
+const DialogClose = ({
+  children,
+}: {
+  children: React.ReactElement<{
+    onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  }>;
+}) => {
   const ctx = useContext(DialogContext);
   return React.cloneElement(children, {
     onClick: (event: React.MouseEvent<HTMLButtonElement>) => {
