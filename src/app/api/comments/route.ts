@@ -18,8 +18,8 @@ const createCommentSchema = z.object({
 /**
  * Creates a comment on an assignment problem, optionally scoped to a particular
  * student's thread (`studentId`). The author must be an enrolled member of the course
- * (any role) or a system admin; a system admin who isn't on the roster is auto-added
- * as FACULTY. Both the problem and any named student must belong to the course.
+ * (any role) or a system admin; a system admin who isn't on the roster comments with no
+ * roster entry (`rosterId` null). Both the problem and any named student must belong to the course.
  * @openapi
  * summary: Create a comment
  * requestBody:
