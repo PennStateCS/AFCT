@@ -58,6 +58,7 @@ import {
   Settings,
   Wrench,
 } from 'lucide-react';
+import { getInitials } from '@/app/utils/initials';
 
 const menuButtonStyles =
   'text-sidebar-foreground hover:bg-secondary focus-visible:bg-secondary active:bg-secondary data-[active=true]:bg-secondary data-[active=true]:text-secondary-foreground';
@@ -130,7 +131,6 @@ export default function DashboardSidebarMenu() {
     [firstName, lastName].filter(Boolean).join(' ').trim() ||
     email?.split('@')[0] ||
     'User';
-  const initials = (firstName?.[0] ?? '') + (lastName?.[0] ?? '') || resolvedName[0] || 'U';
   const avatarUrl = avatar?.trim() !== '' ? avatar : null;
 
   const user = {
@@ -141,7 +141,6 @@ export default function DashboardSidebarMenu() {
     email,
     avatar: avatarUrl,
     timezone: timezone ?? null,
-    initials,
     password: '', // password is not exposed from session
     temporaryPassword: Boolean(session.user.mustChangePassword),
     inactive: false, // inactive status is not exposed from session
@@ -450,7 +449,7 @@ export default function DashboardSidebarMenu() {
                       alt={user.name}
                     />
                     <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
-                      {user.initials}
+                      {getInitials(user.firstName, user.lastName, user.email)}
                     </AvatarFallback>
                   </Avatar>
                   {user.name}

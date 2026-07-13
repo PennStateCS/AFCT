@@ -33,8 +33,8 @@ const DuplicateBody = z.object({
   copyMode: z.enum(['assignments', 'problems', 'assignments_with_problems']).optional(),
   copyFaculty: z.boolean().optional(),
   copyTAs: z.boolean().optional(),
-  // Additional faculty to seed on the copy (on top of a copied faculty roster).
   instructorIds: z.array(z.string()).optional(),
+  taIds: z.array(z.string()).optional(),
 });
 
 const courseCodeRegex = /^[A-Z]{2,8}\s?\d{1,4}[A-Z]?$/;
@@ -111,6 +111,7 @@ export const POST = withAdminAuth(
         copyFaculty = false,
         copyTAs = false,
         instructorIds = [],
+        taIds = [],
       } = parsed.data;
 
       const parsedCredits = Number(credits);
@@ -261,15 +262,28 @@ export const POST = withAdminAuth(
           });
         }
 
-        if (copyTAs) {
-          const taRows = originalRoster.filter(
-            (r) => r.role === 'TA' && !facultyIds.has(r.userId),
-          );
-          if (taRows.length > 0) {
+        if (copyTAs || taIds.length > 0) {
+          const taSet = new Set<string>();
+
+          if (copyTAs) {
+            for (const r of originalRoster) {
+              if (r.role === 'TA' && !facultyIds.has(r.userId)) {
+                taSet.add(r.userId);
+              }
+            }
+          }
+
+          for (const userId of taIds) {
+            if (!facultyIds.has(userId)) {
+              taSet.add(userId);
+            }
+          }
+
+          if (taSet.size > 0) {
             await tx.roster.createMany({
-              data: taRows.map((r) => ({
+              data: Array.from(taSet).map((userId) => ({
                 courseId: newCourse.id,
-                userId: r.userId,
+                userId,
                 role: 'TA' as const,
               })),
             });
