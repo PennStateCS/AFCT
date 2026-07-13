@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -37,6 +38,8 @@ const settingsPayload = () => ({
   timezone: 'America/New_York',
   maxUploadSizeMb: 42,
   allowSignup: false,
+  signupAllowedDomains: 'x.edu',
+  clock24Hour: false,
   sessionTimeoutMinutes: 90,
   submissionEvalTimeoutMs: 30_000,
   submissionEvalMaxMemoryMb: 512,
@@ -254,5 +257,146 @@ describe('SystemSettingsClient', () => {
     expect(await screen.findByText('Trusted certificate')).toBeInTheDocument();
     expect(screen.getByText('CN=afct.example.edu')).toBeInTheDocument();
     expect(screen.getByText('2030-01-01')).toBeInTheDocument();
+  });
+
+  // ---------------------------------------------------------------------------
+  // Scaffold net: pins the ~19-field form state, unit conversions, cross-tab
+  // persistence, and dirty tracking so a future useReducer conversion of this
+  // component's state can be verified as behavior-preserving.
+  // ---------------------------------------------------------------------------
+
+  // The full set of keys the main Save must send. A dropped field is the most
+  // likely regression when the ~30 useState slices become one reducer object.
+  const EXPECTED_PAYLOAD_KEYS = [
+    'timezone',
+    'maxUploadSizeMb',
+    'allowSignup',
+    'signupAllowedDomains',
+    'clock24Hour',
+    'sessionTimeoutMinutes',
+    'submissionEvalTimeoutMs',
+    'submissionResubmitCooldownMs',
+    'submissionEvalMaxMemoryMb',
+    'submissionMaxConcurrent',
+    'submissionMaxAttempts',
+    'submissionAnalyzerLimit',
+    'loginMaxAttempts',
+    'loginLockoutMinutes',
+    'backupEnabled',
+    'backupHour',
+    'backupRetentionDays',
+    'activityLogRetentionDays',
+    'hcaptchaSiteKey',
+  ];
+
+  const seedGeneral = async () => {
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Max upload size \(MB\)/)).toHaveValue(42);
+    });
+  };
+
+  it('sends every settings field, with seconds→ms conversions, on save', async () => {
+    const { fetchMock, putCalls } = makeFetch();
+    vi.stubGlobal('fetch', fetchMock);
+    renderWithClient(<SystemSettingsClient />);
+    await seedGeneral();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save system settings' }));
+    await waitFor(() => expect(putCalls).toHaveLength(1));
+    const body = putCalls[0].body as Record<string, unknown>;
+
+    // No field is silently dropped from the payload.
+    for (const key of EXPECTED_PAYLOAD_KEYS) {
+      expect(body).toHaveProperty(key);
+    }
+
+    // Seeded values carry through, and the seconds-based UI fields convert back to
+    // the milliseconds the API expects (30s→30000ms, 10s→10000ms).
+    expect(body).toMatchObject({
+      timezone: 'America/New_York',
+      maxUploadSizeMb: 42,
+      allowSignup: false,
+      signupAllowedDomains: 'x.edu',
+      clock24Hour: false,
+      sessionTimeoutMinutes: 90,
+      submissionEvalTimeoutMs: 30_000,
+      submissionResubmitCooldownMs: 10_000,
+      submissionEvalMaxMemoryMb: 512,
+      submissionMaxConcurrent: 3,
+      submissionMaxAttempts: 2,
+      submissionAnalyzerLimit: 5,
+      loginMaxAttempts: 4,
+      loginLockoutMinutes: 20,
+      backupEnabled: true,
+      backupHour: 2,
+      backupRetentionDays: 14,
+      activityLogRetentionDays: 45,
+      hcaptchaSiteKey: 'site-key-123',
+    });
+  });
+
+  it('converts an edited Evaluator (seconds) field to ms in the payload', async () => {
+    localStorage.setItem('afct.systemSettingsTab', 'queue');
+    const { fetchMock, putCalls } = makeFetch();
+    vi.stubGlobal('fetch', fetchMock);
+    renderWithClient(<SystemSettingsClient />);
+
+    // Change the resubmit cooldown to 30s (seeded from 10_000ms → 10s).
+    const cooldown = await screen.findByLabelText(/Resubmit cooldown \(seconds\)/);
+    await waitFor(() => expect(cooldown).toHaveValue(10));
+    fireEvent.change(cooldown, { target: { value: '30' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save system settings' }));
+    await waitFor(() => expect(putCalls).toHaveLength(1));
+    expect((putCalls[0].body as Record<string, unknown>).submissionResubmitCooldownMs).toBe(30_000);
+  });
+
+  it('keeps edits when switching tabs (state lives above the tab panels)', async () => {
+    const user = userEvent.setup();
+    const { fetchMock } = makeFetch();
+    vi.stubGlobal('fetch', fetchMock);
+    renderWithClient(<SystemSettingsClient />);
+    await seedGeneral();
+
+    fireEvent.change(screen.getByLabelText(/Max upload size \(MB\)/), { target: { value: '77' } });
+
+    // Radix unmounts the inactive tab's fields; the edit must survive the round-trip
+    // because the form state is held by the parent, not the input.
+    await user.click(screen.getByRole('tab', { name: 'Evaluator' }));
+    await screen.findByLabelText(/Evaluation timeout \(seconds\)/);
+    expect(screen.queryByLabelText(/Max upload size \(MB\)/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: 'General' }));
+    expect(await screen.findByLabelText(/Max upload size \(MB\)/)).toHaveValue(77);
+  });
+
+  it('shows the unsaved-changes indicator after an edit and clears it after save', async () => {
+    const { fetchMock, putCalls } = makeFetch();
+    vi.stubGlobal('fetch', fetchMock);
+    renderWithClient(<SystemSettingsClient />);
+    await seedGeneral();
+
+    expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/Max upload size \(MB\)/), { target: { value: '55' } });
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save system settings' }));
+    await waitFor(() => expect(putCalls).toHaveLength(1));
+    await waitFor(() => expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument());
+  });
+
+  it('canonicalizes the signup domain list before saving', async () => {
+    const { fetchMock, putCalls } = makeFetch();
+    vi.stubGlobal('fetch', fetchMock);
+    renderWithClient(<SystemSettingsClient />);
+    await seedGeneral();
+
+    fireEvent.change(screen.getByLabelText(/Allowed signup email domains/), {
+      target: { value: 'B.EDU, a.edu , a.edu' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save system settings' }));
+    await waitFor(() => expect(putCalls).toHaveLength(1));
+    expect((putCalls[0].body as Record<string, unknown>).signupAllowedDomains).toBe('b.edu,a.edu');
   });
 });

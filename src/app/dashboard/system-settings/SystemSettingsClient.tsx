@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/query-fetch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -211,6 +211,41 @@ function buildSettingsSnapshot(data: SystemSettingsResponse): FormSnapshot {
   };
 }
 
+// The Save-covered form is one reducer-managed object. `set` updates a single field
+// (typed via the setField wrapper below); `reset` replaces the whole snapshot on seed.
+type FormAction =
+  | { type: 'reset'; snapshot: FormSnapshot }
+  | { [K in keyof FormSnapshot]: { type: 'set'; field: K; value: FormSnapshot[K] } }[keyof FormSnapshot];
+
+function formReducer(state: FormSnapshot, action: FormAction): FormSnapshot {
+  if (action.type === 'reset') return action.snapshot;
+  return { ...state, [action.field]: action.value };
+}
+
+// Cold-start values (before the settings response seeds the form). Field order matches
+// buildSettingsSnapshot so the JSON.stringify dirty-check compares like-ordered objects.
+const EMPTY_FORM: FormSnapshot = {
+  timezone: '',
+  maxUploadSizeMb: '',
+  allowSignup: true,
+  signupAllowedDomains: '',
+  clock24Hour: false,
+  sessionTimeoutMinutes: '',
+  evalTimeoutSec: '',
+  resubmitCooldownSec: '',
+  evalMaxMemoryMb: '',
+  maxConcurrent: '',
+  maxAttempts: '',
+  analyzerLimit: '',
+  loginMaxAttempts: '',
+  loginLockoutMinutes: '',
+  backupEnabled: true,
+  backupHour: '',
+  backupRetentionDays: '',
+  activityLogRetentionDays: '',
+  hcaptchaSiteKey: '',
+};
+
 export default function SystemSettingsClient() {
   const queryClient = useQueryClient();
 
@@ -241,50 +276,64 @@ export default function SystemSettingsClient() {
 
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState('general');
-  const [timezone, setTimezone] = useState(initialSeed?.timezone ?? '');
-  const [maxUploadSizeMb, setMaxUploadSizeMb] = useState<number | ''>(
-    initialSeed?.maxUploadSizeMb ?? '',
-  );
-  const [allowSignup, setAllowSignup] = useState(initialSeed?.allowSignup ?? true);
-  const [signupAllowedDomains, setSignupAllowedDomains] = useState(
-    initialSeed?.signupAllowedDomains ?? '',
-  );
-  const [clock24Hour, setClock24Hour] = useState(initialSeed?.clock24Hour ?? false);
-  const [sessionTimeoutMinutes, setSessionTimeoutMinutes] = useState<number | ''>(
-    initialSeed?.sessionTimeoutMinutes ?? '',
+  // The ~19 Save-covered fields live in one reducer-managed object (was one useState
+  // slice each). `setField` is the typed single-field updater; the read aliases and
+  // write wrappers below keep the field JSX and submit logic referencing the same names.
+  const [form, dispatchForm] = useReducer(formReducer, initialSeed ?? EMPTY_FORM);
+  const setField = useCallback(
+    <K extends keyof FormSnapshot>(field: K, value: FormSnapshot[K]) => {
+      dispatchForm({ type: 'set', field, value } as FormAction);
+    },
+    [],
   );
 
-  // Queue settings — durations held in seconds for display.
-  const [evalTimeoutSec, setEvalTimeoutSec] = useState<number | ''>(
-    initialSeed?.evalTimeoutSec ?? '',
-  );
-  const [resubmitCooldownSec, setResubmitCooldownSec] = useState<number | ''>(
-    initialSeed?.resubmitCooldownSec ?? '',
-  );
-  const [evalMaxMemoryMb, setEvalMaxMemoryMb] = useState<number | ''>(
-    initialSeed?.evalMaxMemoryMb ?? '',
-  );
-  const [maxConcurrent, setMaxConcurrent] = useState<number | ''>(initialSeed?.maxConcurrent ?? '');
-  const [maxAttempts, setMaxAttempts] = useState<number | ''>(initialSeed?.maxAttempts ?? '');
-  const [analyzerLimit, setAnalyzerLimit] = useState<number | ''>(initialSeed?.analyzerLimit ?? '');
-
-  // Login lockout policy (per-account).
-  const [loginMaxAttempts, setLoginMaxAttempts] = useState<number | ''>(
-    initialSeed?.loginMaxAttempts ?? '',
-  );
-  const [loginLockoutMinutes, setLoginLockoutMinutes] = useState<number | ''>(
-    initialSeed?.loginLockoutMinutes ?? '',
-  );
-
-  // Database backup schedule.
-  const [backupEnabled, setBackupEnabled] = useState(initialSeed?.backupEnabled ?? true);
-  const [backupHour, setBackupHour] = useState<number | ''>(initialSeed?.backupHour ?? '');
-  const [backupRetentionDays, setBackupRetentionDays] = useState<number | ''>(
-    initialSeed?.backupRetentionDays ?? '',
-  );
-  const [activityLogRetentionDays, setActivityLogRetentionDays] = useState<number | ''>(
-    initialSeed?.activityLogRetentionDays ?? '',
-  );
+  const {
+    timezone,
+    maxUploadSizeMb,
+    allowSignup,
+    signupAllowedDomains,
+    clock24Hour,
+    sessionTimeoutMinutes,
+    evalTimeoutSec,
+    resubmitCooldownSec,
+    evalMaxMemoryMb,
+    maxConcurrent,
+    maxAttempts,
+    analyzerLimit,
+    loginMaxAttempts,
+    loginLockoutMinutes,
+    backupEnabled,
+    backupHour,
+    backupRetentionDays,
+    activityLogRetentionDays,
+    hcaptchaSiteKey,
+  } = form;
+  const setTimezone = (v: FormSnapshot['timezone']) => setField('timezone', v);
+  const setMaxUploadSizeMb = (v: FormSnapshot['maxUploadSizeMb']) => setField('maxUploadSizeMb', v);
+  const setAllowSignup = (v: FormSnapshot['allowSignup']) => setField('allowSignup', v);
+  const setSignupAllowedDomains = (v: FormSnapshot['signupAllowedDomains']) =>
+    setField('signupAllowedDomains', v);
+  const setClock24Hour = (v: FormSnapshot['clock24Hour']) => setField('clock24Hour', v);
+  const setSessionTimeoutMinutes = (v: FormSnapshot['sessionTimeoutMinutes']) =>
+    setField('sessionTimeoutMinutes', v);
+  const setEvalTimeoutSec = (v: FormSnapshot['evalTimeoutSec']) => setField('evalTimeoutSec', v);
+  const setResubmitCooldownSec = (v: FormSnapshot['resubmitCooldownSec']) =>
+    setField('resubmitCooldownSec', v);
+  const setEvalMaxMemoryMb = (v: FormSnapshot['evalMaxMemoryMb']) => setField('evalMaxMemoryMb', v);
+  const setMaxConcurrent = (v: FormSnapshot['maxConcurrent']) => setField('maxConcurrent', v);
+  const setMaxAttempts = (v: FormSnapshot['maxAttempts']) => setField('maxAttempts', v);
+  const setAnalyzerLimit = (v: FormSnapshot['analyzerLimit']) => setField('analyzerLimit', v);
+  const setLoginMaxAttempts = (v: FormSnapshot['loginMaxAttempts']) =>
+    setField('loginMaxAttempts', v);
+  const setLoginLockoutMinutes = (v: FormSnapshot['loginLockoutMinutes']) =>
+    setField('loginLockoutMinutes', v);
+  const setBackupEnabled = (v: FormSnapshot['backupEnabled']) => setField('backupEnabled', v);
+  const setBackupHour = (v: FormSnapshot['backupHour']) => setField('backupHour', v);
+  const setBackupRetentionDays = (v: FormSnapshot['backupRetentionDays']) =>
+    setField('backupRetentionDays', v);
+  const setActivityLogRetentionDays = (v: FormSnapshot['activityLogRetentionDays']) =>
+    setField('activityLogRetentionDays', v);
+  const setHcaptchaSiteKey = (v: FormSnapshot['hcaptchaSiteKey']) => setField('hcaptchaSiteKey', v);
 
   // Available backups (managed independently of the settings form's Save).
   const {
@@ -308,8 +357,8 @@ export default function SystemSettingsClient() {
     return Array.isArray(data) ? data.length : 0;
   }, [refetchBackups]);
 
-  // hCaptcha keys. The secret is write-only: we only know whether one is set.
-  const [hcaptchaSiteKey, setHcaptchaSiteKey] = useState(initialSeed?.hcaptchaSiteKey ?? '');
+  // hCaptcha keys. The site key is part of the main form object above; the secret is
+  // write-only (we only know whether one is set), so it stays local.
   const [hcaptchaSecretKey, setHcaptchaSecretKey] = useState('');
   const [hcaptchaSecretConfigured, setHcaptchaSecretConfigured] = useState(() =>
     Boolean(settingsData?.hcaptchaSecretConfigured),
@@ -355,25 +404,7 @@ export default function SystemSettingsClient() {
     if (!settingsData || baseline) return;
     const norm = buildSettingsSnapshot(settingsData);
 
-    setTimezone(norm.timezone);
-    setMaxUploadSizeMb(norm.maxUploadSizeMb);
-    setAllowSignup(norm.allowSignup);
-    setSignupAllowedDomains(norm.signupAllowedDomains);
-    setClock24Hour(norm.clock24Hour);
-    setSessionTimeoutMinutes(norm.sessionTimeoutMinutes);
-    setEvalTimeoutSec(norm.evalTimeoutSec);
-    setResubmitCooldownSec(norm.resubmitCooldownSec);
-    setEvalMaxMemoryMb(norm.evalMaxMemoryMb);
-    setMaxConcurrent(norm.maxConcurrent);
-    setMaxAttempts(norm.maxAttempts);
-    setAnalyzerLimit(norm.analyzerLimit);
-    setLoginMaxAttempts(norm.loginMaxAttempts);
-    setLoginLockoutMinutes(norm.loginLockoutMinutes);
-    setBackupEnabled(norm.backupEnabled);
-    setBackupHour(norm.backupHour);
-    setBackupRetentionDays(norm.backupRetentionDays);
-    setActivityLogRetentionDays(norm.activityLogRetentionDays);
-    setHcaptchaSiteKey(norm.hcaptchaSiteKey);
+    dispatchForm({ type: 'reset', snapshot: norm });
     setHcaptchaSecretConfigured(Boolean(settingsData.hcaptchaSecretConfigured));
     setHcaptchaSecretKey('');
     setHcaptchaSecretClear(false);
