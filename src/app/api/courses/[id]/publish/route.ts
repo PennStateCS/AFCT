@@ -48,9 +48,10 @@ export const PATCH = withCourseAuth(
         if (!canUnpublish) {
           await createEnhancedActivityLog(prisma, req, {
             userId: user.id,
-            action: 'COURSE_PUBLISH_DENIED',
-            severity: 'SECURITY',
-            metadata: {},
+            action: 'COURSE_UNPUBLISH_REJECTED',
+            severity: 'WARNING',
+            courseId,
+            metadata: { reason },
           });
           return NextResponse.json({ error: reason }, { status: 403 });
         }
@@ -89,6 +90,7 @@ export const PATCH = withCourseAuth(
         userId: user.id,
         action: 'COURSE_PUBLISH_ERROR',
         error,
+        courseId,
       });
       return NextResponse.json({ error: 'Failed to update publish status' }, { status: 500 });
     }

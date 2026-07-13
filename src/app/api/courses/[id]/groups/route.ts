@@ -36,6 +36,7 @@ export const GET = withCourseAuth(
         action: 'VIEW_GROUPS',
         severity: 'INFO',
         category: 'COURSE',
+        courseId,
         metadata: { courseId },
       });
 
@@ -100,7 +101,8 @@ export const POST = withCourseAuth(
         action: 'CREATE_GROUP',
         severity: 'INFO',
         category: 'COURSE',
-        metadata: { courseId, groupId: group.id },
+        courseId,
+        metadata: { courseId, groupId: group.id, name: group.name },
       });
 
       return NextResponse.json(group, { status: 201 });
@@ -110,6 +112,7 @@ export const POST = withCourseAuth(
         userId: user.id,
         action: 'GROUP_CREATE_ERROR',
         error: err,
+        courseId,
       });
       return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }

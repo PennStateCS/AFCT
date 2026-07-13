@@ -393,6 +393,7 @@ export const POST = withAdminAuth(
         userId: actorId,
         action: 'COURSE_DUPLICATE_ERROR',
         error: err,
+        courseId: courseId,
       });
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }

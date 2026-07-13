@@ -162,6 +162,18 @@ describe('POST /api/comments', () => {
 
     const res = await POST(req);
     expect(res.status).toBe(403);
+    // COMMENT_* has no domain keyword; the denial must carry an explicit ASSIGNMENT
+    // category (else it mis-infers to SYSTEM) plus the assignment FK.
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      req,
+      expect.objectContaining({
+        action: 'COMMENT_CREATE_DENIED',
+        severity: 'SECURITY',
+        category: 'ASSIGNMENT',
+        assignmentId: 'a1',
+      }),
+    );
   });
 
   it('returns 404 when problem not in course', async () => {
@@ -307,7 +319,11 @@ describe('POST /api/comments', () => {
     expect(activityLogMock).toHaveBeenCalledWith(
       prismaMock,
       req,
-      expect.objectContaining({ action: 'COMMENT_CREATE_ERROR', severity: 'ERROR' }),
+      expect.objectContaining({
+        action: 'COMMENT_CREATE_ERROR',
+        severity: 'ERROR',
+        category: 'ASSIGNMENT',
+      }),
     );
   });
 
@@ -333,7 +349,11 @@ describe('POST /api/comments', () => {
     expect(activityLogMock).toHaveBeenCalledWith(
       prismaMock,
       req,
-      expect.objectContaining({ action: 'COMMENT_CREATE_ERROR', severity: 'ERROR' }),
+      expect.objectContaining({
+        action: 'COMMENT_CREATE_ERROR',
+        severity: 'ERROR',
+        category: 'ASSIGNMENT',
+      }),
     );
   });
 
@@ -412,6 +432,14 @@ describe('DELETE /api/comments', () => {
     expect(res.status).toBe(200);
     expect(prismaMock.comment.delete).toHaveBeenCalledWith({ where: { id: 'cm1' } });
     expect(activityLogMock).toHaveBeenCalled();
+    // action/category are first-class columns; they must not be duplicated inside
+    // the metadata blob.
+    const deleteLog = activityLogMock.mock.calls.find(
+      (c) => c[2]?.action === 'DELETE_COMMENT',
+    );
+    expect(deleteLog?.[2]?.category).toBe('ASSIGNMENT');
+    expect(deleteLog?.[2]?.metadata).not.toHaveProperty('action');
+    expect(deleteLog?.[2]?.metadata).not.toHaveProperty('category');
   });
 
   it('returns 404 when comment not found', async () => {
@@ -443,6 +471,16 @@ describe('DELETE /api/comments', () => {
     const res = await DELETE(req);
     expect(res.status).toBe(403);
     expect(prismaMock.comment.delete).not.toHaveBeenCalled();
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      req,
+      expect.objectContaining({
+        action: 'COMMENT_DELETE_DENIED',
+        severity: 'SECURITY',
+        category: 'ASSIGNMENT',
+        assignmentId: 'a1',
+      }),
+    );
   });
 
   it('allows faculty to delete any comment', async () => {
@@ -485,7 +523,11 @@ describe('DELETE /api/comments', () => {
     expect(activityLogMock).toHaveBeenCalledWith(
       prismaMock,
       req,
-      expect.objectContaining({ action: 'COMMENT_DELETE_ERROR', severity: 'ERROR' }),
+      expect.objectContaining({
+        action: 'COMMENT_DELETE_ERROR',
+        severity: 'ERROR',
+        category: 'ASSIGNMENT',
+      }),
     );
   });
 

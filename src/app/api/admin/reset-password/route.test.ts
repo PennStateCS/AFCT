@@ -94,7 +94,6 @@ describe('POST /api/admin/reset-password', () => {
       expect.objectContaining({
         action: 'RESET_PASSWORD',
         metadata: expect.objectContaining({
-          userId: 'admin',
           targetUserId: 'u1',
           temporaryPassword: true,
         }),

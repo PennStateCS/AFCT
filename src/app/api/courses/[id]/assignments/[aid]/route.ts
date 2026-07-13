@@ -270,9 +270,11 @@ export const PUT = withCourseAuth(
       if (hasSubmission) {
         await createEnhancedActivityLog(prisma, req, {
           userId: user.id,
-          action: 'ASSIGNMENT_UPDATE_DENIED',
-          severity: 'SECURITY',
-          metadata: {},
+          action: 'ASSIGNMENT_UNPUBLISH_REJECTED',
+          severity: 'WARNING',
+          courseId,
+          assignmentId: id,
+          metadata: { reason: 'has submissions' },
         });
         return NextResponse.json(
           { error: 'Assignment must not have any submissions' },
@@ -283,9 +285,11 @@ export const PUT = withCourseAuth(
       if (hasGrade) {
         await createEnhancedActivityLog(prisma, req, {
           userId: user.id,
-          action: 'ASSIGNMENT_UPDATE_DENIED',
-          severity: 'SECURITY',
-          metadata: {},
+          action: 'ASSIGNMENT_UNPUBLISH_REJECTED',
+          severity: 'WARNING',
+          courseId,
+          assignmentId: id,
+          metadata: { reason: 'has grades' },
         });
         return NextResponse.json({ error: 'Assignment must not have any grades' }, { status: 403 });
       }
@@ -297,9 +301,11 @@ export const PUT = withCourseAuth(
       if (hasAnySubmission) {
         await createEnhancedActivityLog(prisma, req, {
           userId: user.id,
-          action: 'ASSIGNMENT_UPDATE_DENIED',
-          severity: 'SECURITY',
-          metadata: {},
+          action: 'ASSIGNMENT_GROUP_MODE_CHANGE_REJECTED',
+          severity: 'WARNING',
+          courseId,
+          assignmentId: id,
+          metadata: { reason: 'has submissions' },
         });
         return NextResponse.json(
           { error: 'Cannot change assignment group mode after submissions exist' },
@@ -369,6 +375,8 @@ export const PUT = withCourseAuth(
       await logError(req, {
         userId: user.id,
         action: 'ASSIGNMENT_UPDATE_ERROR',
+        courseId,
+        assignmentId: id,
         error,
       });
       return NextResponse.json({ error: 'Failed to update assignment' }, { status: 500 });
@@ -437,9 +445,11 @@ export const PATCH = withCourseAuth(
       if (hasSubmission) {
         await createEnhancedActivityLog(prisma, req, {
           userId: user.id,
-          action: 'ASSIGNMENT_UPDATE_DENIED',
-          severity: 'SECURITY',
-          metadata: {},
+          action: 'ASSIGNMENT_UNPUBLISH_REJECTED',
+          severity: 'WARNING',
+          courseId,
+          assignmentId: id,
+          metadata: { reason: 'has submissions' },
         });
         return NextResponse.json(
           { error: 'Assignment must not have any submissions' },
@@ -450,9 +460,11 @@ export const PATCH = withCourseAuth(
       if (hasGrade) {
         await createEnhancedActivityLog(prisma, req, {
           userId: user.id,
-          action: 'ASSIGNMENT_UPDATE_DENIED',
-          severity: 'SECURITY',
-          metadata: {},
+          action: 'ASSIGNMENT_UNPUBLISH_REJECTED',
+          severity: 'WARNING',
+          courseId,
+          assignmentId: id,
+          metadata: { reason: 'has grades' },
         });
         return NextResponse.json({ error: 'Assignment must not have any grades' }, { status: 403 });
       }
@@ -464,9 +476,11 @@ export const PATCH = withCourseAuth(
       if (hasAnySubmission) {
         await createEnhancedActivityLog(prisma, req, {
           userId: user.id,
-          action: 'ASSIGNMENT_UPDATE_DENIED',
-          severity: 'SECURITY',
-          metadata: {},
+          action: 'ASSIGNMENT_GROUP_MODE_CHANGE_REJECTED',
+          severity: 'WARNING',
+          courseId,
+          assignmentId: id,
+          metadata: { reason: 'has submissions' },
         });
         return NextResponse.json(
           { error: 'Cannot change assignment group mode after submissions exist' },
@@ -549,6 +563,8 @@ export const PATCH = withCourseAuth(
       await logError(req, {
         userId: user.id,
         action: 'ASSIGNMENT_UPDATE_ERROR',
+        courseId,
+        assignmentId: id,
         error,
       });
       return NextResponse.json({ error: 'Failed to update assignment' }, { status: 500 });
@@ -633,6 +649,8 @@ export const DELETE = withCourseAuth(
       await logError(req, {
         userId: user.id,
         action: 'ASSIGNMENT_DELETE_ERROR',
+        courseId,
+        assignmentId: id,
         error,
       });
       return NextResponse.json({ error: 'Failed to delete assignment' }, { status: 500 });

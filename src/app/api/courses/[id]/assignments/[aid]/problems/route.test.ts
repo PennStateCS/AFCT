@@ -317,6 +317,13 @@ describe('POST /api/courses/[id]/[aid]/problems (add problems)', () => {
     });
     expect(body.problems).toHaveLength(2);
     expect(body.metadata.newProblemsAdded).toBe(1);
+    // Success log renamed to match its ADD_* error/denied siblings; no group mapping here.
+    const successCall = activityLogMock.mock.calls.find(
+      (c) => c[2]?.action === 'ADD_ASSIGNMENT_PROBLEMS',
+    );
+    expect(successCall).toBeDefined();
+    expect(successCall?.[2].metadata).not.toHaveProperty('groupId');
+    expect(successCall?.[2].metadata).not.toHaveProperty('mappedGroupCount');
   });
 
   it('adds group mappings when groupId is ALL', async () => {
@@ -350,6 +357,15 @@ describe('POST /api/courses/[id]/[aid]/problems (add problems)', () => {
       ],
       skipDuplicates: true,
     });
+    // The group-mapping branch records groupId + the mapped count so it's auditable.
+    expect(activityLogMock).toHaveBeenCalledWith(
+      prismaMock,
+      expect.anything(),
+      expect.objectContaining({
+        action: 'ADD_ASSIGNMENT_PROBLEMS',
+        metadata: expect.objectContaining({ groupId: 'ALL', mappedGroupCount: 2 }),
+      }),
+    );
   });
 
   it('adds group mapping for a specified groupId', async () => {

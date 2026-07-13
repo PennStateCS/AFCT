@@ -203,7 +203,6 @@ export const POST = withAdminAuth(
         severity: 'INFO',
         category: 'USER',
         metadata: {
-          userId: user.id,
           totalRows: rows.length,
           createdCount: created.length,
           failedCount: failed.length,
@@ -222,7 +221,7 @@ export const POST = withAdminAuth(
     } catch (error) {
       console.error('[USERS_BULK_POST_ERROR]', error);
       await logError(req, {
-        userId: null,
+        userId: user.id,
         action: 'USER_BULK_CREATE_ERROR',
         error,
       });

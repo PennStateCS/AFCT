@@ -146,6 +146,7 @@ export async function POST(req: Request) {
       action: 'COURSE_JOIN_ERROR',
       error,
       category: 'COURSE',
+      courseId: course.id,
     });
     return NextResponse.json({ error: 'Failed to join the course.' }, { status: 500 });
   }

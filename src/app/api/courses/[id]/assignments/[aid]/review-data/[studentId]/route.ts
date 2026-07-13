@@ -109,6 +109,7 @@ export const GET = withCourseAuth(
         return logDenial(req, {
           userId: user.id,
           action: 'REVIEW_DATA_ACCESS_DENIED',
+          category: 'SUBMISSION',
           courseId,
         });
       }
@@ -241,7 +242,7 @@ export const GET = withCourseAuth(
       try {
         await createEnhancedActivityLog(prisma, req, {
           userId: user.id,
-          action: 'VIEW_ASSIGNMENT_SUBMISSIONS',
+          action: 'VIEW_STUDENT_REVIEW_DATA',
           severity: 'INFO',
           category: 'SUBMISSION',
           courseId,

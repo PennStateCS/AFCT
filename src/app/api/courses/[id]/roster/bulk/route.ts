@@ -65,7 +65,6 @@ export const POST = withCourseAuth(
         category: 'COURSE',
         courseId,
         metadata: {
-          userId: user.id,
           courseId: courseId,
           enrolledIds: userIds,
           enrolledCount: userIds.length,

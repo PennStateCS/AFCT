@@ -167,7 +167,6 @@ export async function POST(req: Request) {
       severity: 'INFO',
       category: 'USER',
       metadata: {
-        userId: newUser.id,
         email: normalizedEmail,
       },
     });
@@ -200,7 +199,6 @@ async function logSecurityEvent(
     await prisma.activityLog.create({
       data: {
         action,
-        category: 'SECURITY',
         severity: inferSeverity(action),
         // Promote the known client IP into the column (not just metadata).
         ipAddress: metadata.ip ?? null,

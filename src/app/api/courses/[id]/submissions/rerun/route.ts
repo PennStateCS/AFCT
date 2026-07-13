@@ -33,6 +33,7 @@ export const POST = withCourseAuth(
           courseId: true,
           assignmentId: true,
           problemId: true,
+          studentId: true,
         },
       });
 
@@ -62,6 +63,7 @@ export const POST = withCourseAuth(
             assignmentId: submission.assignmentId,
             problemId: submission.problemId,
             submissionId: submission.id,
+            studentId: submission.studentId,
             status: 'PENDING',
           },
         });

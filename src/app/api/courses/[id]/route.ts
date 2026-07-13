@@ -427,9 +427,10 @@ export const PUT = withCourseAuth(
       if (!canArchive) {
         await createEnhancedActivityLog(prisma, req, {
           userId: session?.user?.id ?? null,
-          action: 'COURSE_ARCHIVE_DENIED',
-          severity: 'SECURITY',
-          metadata: {},
+          action: 'COURSE_ARCHIVE_REJECTED',
+          severity: 'WARNING',
+          courseId: id,
+          metadata: { reason },
         });
         return NextResponse.json({ error: reason }, { status: 403 });
       }
@@ -441,9 +442,10 @@ export const PUT = withCourseAuth(
       if (!canUnpublish) {
         await createEnhancedActivityLog(prisma, req, {
           userId: session?.user?.id ?? null,
-          action: 'COURSE_PUBLISH_DENIED',
-          severity: 'SECURITY',
-          metadata: {},
+          action: 'COURSE_UNPUBLISH_REJECTED',
+          severity: 'WARNING',
+          courseId: id,
+          metadata: { reason },
         });
         return NextResponse.json({ error: reason }, { status: 403 });
       }
@@ -711,6 +713,7 @@ export const PUT = withCourseAuth(
         userId: session?.user?.id ?? null,
         action: 'COURSE_UPDATE_ERROR',
         error,
+        courseId: id,
       });
       return NextResponse.json({ error: 'Failed to update course' }, { status: 500 });
     }
@@ -816,6 +819,7 @@ export const DELETE = withCourseAuth(
         userId: session?.user?.id ?? null,
         action: 'COURSE_DELETE_ERROR',
         error,
+        courseId: id,
       });
       return apiError(500, 'Internal Server Error');
     }
