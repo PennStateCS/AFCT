@@ -860,7 +860,7 @@ export default function AssignmentSubmissions({
                           selectedProblem ? Boolean(savingProblemGrades[selectedProblem.id]) : false
                         }
                         isLoadingGrade={loadingProblemGrades}
-                        isPrivledgedUser={true}
+                        isPrivilegedUser={true}
                       />
                     </div>
                   </div>
