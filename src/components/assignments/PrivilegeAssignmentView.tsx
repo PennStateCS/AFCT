@@ -122,9 +122,9 @@ export default function AssignmentDashboardPage({
 
   const [descOpen, setDescOpen] = useState(false);
   const [descText, setDescText] = useState<string | null>(null);
-  const courseIsArchived = assignment?.course?.isArchived ?? false;
   // This privileged view is only rendered for course staff (admin or the course's
-  // FACULTY/TA), so anyone who reaches it may manage problems.
+  // FACULTY/TA), so problem-management actions are gated only on the archived state.
+  const courseIsArchived = assignment?.course?.isArchived ?? false;
 
   // JFLAP viewer dialog state
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -166,7 +166,7 @@ export default function AssignmentDashboardPage({
     [searchParams, router],
   );
 
-  // Read 1 â€” all course problems (used by the problems tab and the add/create
+  // Read 1 — all course problems (used by the problems tab and the add/create
   // dialogs). Only fetched when one of those surfaces needs it. On any failure
   // the queryFn returns [] (no toast), matching the previous .catch behavior.
   const problemsEnabled = tab === 'problems' || addProblemDialogOpen || createProblemOpen;
@@ -186,7 +186,7 @@ export default function AssignmentDashboardPage({
   const allProblems = problemsQuery.data?.problems ?? [];
   const problemsLoading = problemsEnabled && problemsQuery.isFetching;
 
-  // Read 2 â€” assignment list for the dropdown. Seeded from the SSR-provided
+  // Read 2 — assignment list for the dropdown. Seeded from the SSR-provided
   // initialAssignments so there's no refetch on mount when the server sent it.
   const assignmentsQuery = useQuery({
     queryKey: ['course', id, 'assignments-list'],
@@ -206,7 +206,7 @@ export default function AssignmentDashboardPage({
   const allAssignments = assignmentsQuery.data ?? [];
   const assignmentsLoading = assignmentsQuery.isFetching;
 
-  // Read 3 â€” for a group assignment, fetch groups and the mapping of
+  // Read 3 — for a group assignment, fetch groups and the mapping of
   // problems -> groups. Only runs for group assignments. TanStack Query cancels
   // in-flight fetches via the AbortSignal, so no manual AbortController plumbing.
   const groupsEnabled = !!id && !!aid && !!assignment?.isGroup;
