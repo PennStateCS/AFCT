@@ -120,10 +120,12 @@ const defaultAssignmentSettings = {
   autograderEnabled: true,
 };
 
-const createJsonResponse = <T,>(data: T, ok = true) =>
+const createJsonResponse = <T,>(data: T, ok = true, status = ok ? 200 : 400) =>
   Promise.resolve({
     ok,
+    status,
     json: async () => data,
+    text: async () => JSON.stringify(data),
   } as unknown as Response);
 
 const fetchMock = vi.fn();

@@ -27,6 +27,7 @@ import { ProblemFormSchema, UpdateProblemSchema } from '@/schemas/problem';
 import { ProblemBasicFields } from '@/components/dialogs/ProblemBasicFields';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
+import { apiClient, ApiError } from '@/lib/api/fetch-client';
 
 type AssignmentProblemSettings = {
   assignmentId: string;
@@ -276,60 +277,41 @@ export function EditProblemDialog({
         });
       }
 
-      const res = await fetch(apiPaths.courseProblem(problem.courseId, problem.id), {
-        method: 'PUT',
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.error('Edit problem error response:', errorText);
-
-        let errorMessage = 'Failed to update problem.';
-        try {
-          const errorData = JSON.parse(errorText);
-          errorMessage = errorData.error || errorMessage;
-        } catch {
-          // Ignore parse failure
+      let updatedProblem: Problem | null = null;
+      try {
+        updatedProblem = await apiClient.putForm<Problem>(
+          apiPaths.courseProblem(problem.courseId, problem.id),
+          formData,
+        );
+      } catch (err) {
+        if (err instanceof ApiError) {
+          showToast.error(err.message);
+          return;
         }
-
-        showToast.error(errorMessage);
-        return;
+        throw err;
       }
-
-      const updatedProblem = await res.json().catch(() => null);
 
       if (assignmentSettings && assignmentDirty) {
         const assignmentMaxPoints = Math.max(0, assignmentConfig.maxPoints ?? 0);
-        const assignmentRes = await fetch(
-          apiPaths.assignmentProblem(
-            assignmentSettings.courseId,
-            assignmentSettings.assignmentId,
-            problem.id,
-          ),
-          {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+        try {
+          await apiClient.put(
+            apiPaths.assignmentProblem(
+              assignmentSettings.courseId,
+              assignmentSettings.assignmentId,
+              problem.id,
+            ),
+            {
               maxPoints: assignmentMaxPoints,
               maxSubmissions: assignmentConfig.maxSubmissions,
               autograderEnabled: assignmentConfig.autograderEnabled,
-            }),
-          },
-        );
-
-        if (!assignmentRes.ok) {
-          const assignmentErrorText = await assignmentRes.text();
-          let assignmentMessage = 'Failed to update assignment settings.';
-          try {
-            const parsedError = JSON.parse(assignmentErrorText);
-            assignmentMessage = parsedError.error || assignmentMessage;
-          } catch {
-            // Ignore parse failure
+            },
+          );
+        } catch (err) {
+          if (err instanceof ApiError) {
+            showToast.error(err.message);
+            return;
           }
-
-          showToast.error(assignmentMessage);
-          return;
+          throw err;
         }
       }
 
