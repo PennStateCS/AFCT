@@ -195,11 +195,104 @@ export const ActivityLogQueries = {
 };
 
 /**
- * Enhanced activity log creation helper
- * - Categorizes the action
- * - Extracts IP/UA
- * - Verifies userId exists (if provided); if not, logs with userId: null
- * - Swallows FK violations (P2003) to avoid 500s in dev
+ * Verify the actor exists and return the id that's safe to store plus the display
+ * fields for enrichment. On a missing user (or a lookup failure) the id is dropped to
+ * null so the log still records without a dangling FK.
+ */
+async function resolveActor(
+  prisma: PrismaClient,
+  userId: string | null,
+): Promise<{
+  safeUserId: string | null;
+  display: { firstName: string | null; lastName: string | null; email: string | null } | null;
+}> {
+  if (!userId) return { safeUserId: null, display: null };
+  try {
+    const userRecord = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, firstName: true, lastName: true, email: true },
+    });
+    if (!userRecord) return { safeUserId: null, display: null };
+    return { safeUserId: userRecord.id, display: userRecord };
+  } catch {
+    // Best-effort enrichment; never let a lookup failure break logging.
+    return { safeUserId: null, display: null };
+  }
+}
+
+/**
+ * Human-readable names/titles for the referenced course/assignment/problem/submission,
+ * as a metadata fragment. Best-effort: a lookup failure yields an empty fragment rather
+ * than breaking the write.
+ */
+async function resolveEntityDisplay(
+  prisma: PrismaClient,
+  ids: {
+    courseId?: string | null;
+    assignmentId?: string | null;
+    problemId?: string | null;
+    submissionId?: string | null;
+  },
+): Promise<Record<string, unknown>> {
+  const meta: Record<string, unknown> = {};
+  try {
+    const [courseRecord, assignmentRecord, problemRecord, submissionRecord] = await Promise.all([
+      ids.courseId
+        ? prisma.course.findUnique({ where: { id: ids.courseId }, select: { name: true, code: true } })
+        : Promise.resolve(null),
+      ids.assignmentId
+        ? prisma.assignment.findUnique({ where: { id: ids.assignmentId }, select: { title: true } })
+        : Promise.resolve(null),
+      ids.problemId
+        ? prisma.problem.findUnique({ where: { id: ids.problemId }, select: { title: true } })
+        : Promise.resolve(null),
+      ids.submissionId
+        ? prisma.submission.findUnique({
+            where: { id: ids.submissionId },
+            select: { fileName: true, originalFileName: true },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    if (courseRecord?.name) meta.courseName = courseRecord.name;
+    if (courseRecord?.code) meta.courseCode = courseRecord.code;
+    if (assignmentRecord?.title) meta.assignmentTitle = assignmentRecord.title;
+    if (problemRecord?.title) meta.problemTitle = problemRecord.title;
+    if (submissionRecord?.originalFileName) {
+      meta.submissionOriginalFileName = submissionRecord.originalFileName;
+    }
+    if (submissionRecord?.fileName) meta.submissionFileName = submissionRecord.fileName;
+  } catch {
+    // Best-effort enrichment; never let a lookup failure break logging.
+  }
+  return meta;
+}
+
+/**
+ * Write the row. Swallows FK races (P2003) and never throws — audit logging must not
+ * break the request it is recording.
+ */
+async function persistLog(
+  prisma: PrismaClient,
+  row: Prisma.ActivityLogUncheckedCreateInput,
+): Promise<void> {
+  try {
+    await prisma.activityLog.create({ data: row });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003') {
+      // Foreign key violation (e.g., race or another stale FK) — log and continue
+      console.warn('[ActivityLog] FK violation skipped (P2003):', err.meta);
+      return;
+    }
+    console.error('[ActivityLog] write failed:', err);
+  }
+}
+
+/**
+ * Enhanced activity log creation helper. Orchestrates the three steps:
+ * - resolve the actor (verify the user; drop a dangling FK)
+ * - resolve display metadata (course/assignment/problem/submission names)
+ * - persist the row (categorized, with IP/UA, swallowing FK races)
  */
 export async function createEnhancedActivityLog(
   prisma: PrismaClient,
@@ -210,7 +303,6 @@ export async function createEnhancedActivityLog(
   data: EnhancedActivityLogData,
 ): Promise<void> {
   const category = data.category || getActivityCategory(data.action);
-  const severity = data.severity;
   const ipAddress =
     reqOrContext instanceof Request ? getClientIp(reqOrContext) : (reqOrContext.ipAddress ?? null);
   const userAgent =
@@ -226,171 +318,30 @@ export async function createEnhancedActivityLog(
         ? { value: data.metadata }
         : {};
 
-  // Verify user exists if a userId was provided
-  let safeUserId: string | null = data.userId ?? null;
-  let userDisplay: {
-    firstName: string | null;
-    lastName: string | null;
-    email: string | null;
-  } | null = null;
-  if (safeUserId) {
-    try {
-      const userRecord = await prisma.user.findUnique({
-        where: { id: safeUserId },
-        select: { id: true, firstName: true, lastName: true, email: true },
-      });
-      if (!userRecord) {
-        // Drop the FK so the log still records without crashing
-        safeUserId = null;
-      } else {
-        userDisplay = userRecord;
-      }
-    } catch {
-      // Best-effort enrichment; never let a lookup failure break logging.
-      safeUserId = null;
-    }
-  }
+  const { safeUserId, display } = await resolveActor(prisma, data.userId ?? null);
 
-  if (includeDisplayMetadata && userDisplay) {
-    const displayName = [userDisplay.firstName, userDisplay.lastName]
-      .filter(Boolean)
-      .join(' ')
-      .trim();
-    if (displayName) {
-      baseMetadata.userName = displayName;
-    }
-    if (userDisplay.email) {
-      baseMetadata.userEmail = userDisplay.email;
-    }
+  if (includeDisplayMetadata && display) {
+    const displayName = [display.firstName, display.lastName].filter(Boolean).join(' ').trim();
+    if (displayName) baseMetadata.userName = displayName;
+    if (display.email) baseMetadata.userEmail = display.email;
   }
 
   if (includeDisplayMetadata) {
-    try {
-      const [courseRecord, assignmentRecord, problemRecord, submissionRecord] = await Promise.all([
-        data.courseId
-          ? prisma.course.findUnique({
-              where: { id: data.courseId },
-              select: { name: true, code: true },
-            })
-          : Promise.resolve(null),
-        data.assignmentId
-          ? prisma.assignment.findUnique({
-              where: { id: data.assignmentId },
-              select: { title: true },
-            })
-          : Promise.resolve(null),
-        data.problemId
-          ? prisma.problem.findUnique({
-              where: { id: data.problemId },
-              select: { title: true },
-            })
-          : Promise.resolve(null),
-        data.submissionId
-          ? prisma.submission.findUnique({
-              where: { id: data.submissionId },
-              select: { fileName: true, originalFileName: true },
-            })
-          : Promise.resolve(null),
-      ]);
-
-      if (courseRecord) {
-        if (courseRecord.name) {
-          baseMetadata.courseName = courseRecord.name;
-        }
-        if (courseRecord.code) {
-          baseMetadata.courseCode = courseRecord.code;
-        }
-      }
-
-      if (assignmentRecord?.title) {
-        baseMetadata.assignmentTitle = assignmentRecord.title;
-      }
-
-      if (problemRecord?.title) {
-        baseMetadata.problemTitle = problemRecord.title;
-      }
-
-      if (submissionRecord) {
-        if (submissionRecord.originalFileName) {
-          baseMetadata.submissionOriginalFileName = submissionRecord.originalFileName;
-        }
-        if (submissionRecord.fileName) {
-          baseMetadata.submissionFileName = submissionRecord.fileName;
-        }
-      }
-    } catch {
-      // Best-effort enrichment; never let a lookup failure break logging.
-    }
+    Object.assign(baseMetadata, await resolveEntityDisplay(prisma, data));
   }
 
-  try {
-    await prisma.activityLog.create({
-      data: {
-        userId: safeUserId,
-        action: data.action,
-        category,
-        severity,
-        courseId: data.courseId ?? null,
-        assignmentId: data.assignmentId ?? null,
-        problemId: data.problemId ?? null,
-        submissionId: data.submissionId ?? null,
-        ipAddress,
-        userAgent,
-        // Ensure a Prisma-compatible JSON value; default to empty object
-        metadata: (baseMetadata as Prisma.InputJsonValue) ?? Prisma.JsonNull,
-      },
-    });
-  } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003') {
-      // Foreign key violation (e.g., race or another stale FK) — log and continue
-      console.warn('[ActivityLog] FK violation skipped (P2003):', err.meta);
-      return;
-    }
-    // Audit logging must never break the request it is recording.
-    console.error('[ActivityLog] write failed:', err);
-  }
+  await persistLog(prisma, {
+    userId: safeUserId,
+    action: data.action,
+    category,
+    severity: data.severity,
+    courseId: data.courseId ?? null,
+    assignmentId: data.assignmentId ?? null,
+    problemId: data.problemId ?? null,
+    submissionId: data.submissionId ?? null,
+    ipAddress,
+    userAgent,
+    // Ensure a Prisma-compatible JSON value; default to empty object
+    metadata: (baseMetadata as Prisma.InputJsonValue) ?? Prisma.JsonNull,
+  });
 }
-
-/**
- * Example usage patterns for the enhanced ActivityLog system
- */
-export const ExampleUsage = {
-  // Creating an activity log with the new structure
-  createAssignmentPublishLog: `
-    await prisma.activityLog.create({
-      data: {
-        userId: session.user.id,
-        action: 'UPDATE_ASSIGNMENT',
-        category: 'ASSIGNMENT',
-        courseId: assignment.courseId,
-        assignmentId: assignment.id,
-        ipAddress: getClientIp(req),
-        userAgent: req.headers.get('user-agent'),
-        metadata: {
-          updatedFields: ['isPublished'],
-          previousValue: false,
-          newValue: true
-        }
-      }
-    });
-  `,
-
-  // Querying course activities efficiently
-  getCourseActivities: `
-    const activities = await prisma.activityLog.findMany(
-      ActivityLogQueries.forCourse('course123', 50)
-    );
-  `,
-
-  // Complex filtering
-  getRecentAssignmentChanges: `
-    const changes = await prisma.activityLog.findMany({
-      where: {
-        category: 'ASSIGNMENT',
-        action: { in: ['CREATE_ASSIGNMENT', 'UPDATE_ASSIGNMENT'] },
-        timestamp: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
-      },
-      include: { user: true, assignment: true, course: true }
-    });
-  `,
-};

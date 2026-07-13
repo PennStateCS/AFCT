@@ -158,6 +158,14 @@ const resolveFacultyRequest = () =>
     ]),
   );
 
+const resolveTaRequest = () =>
+  fetchMock.mockResolvedValueOnce(
+    createJsonResponse([
+      { id: 'ta-1', firstName: 'Grace', lastName: 'Hopper', role: 'TA' },
+      { id: 'ta-2', firstName: 'Edsger', lastName: 'Dijkstra', role: 'TA' },
+    ]),
+  );
+
 const clickNext = async (user: ReturnType<typeof userEvent.setup>) => {
   await user.click(screen.getByRole('button', { name: /^next$/i }));
 };
@@ -229,6 +237,7 @@ describe('CreateCourseDialog', () => {
   it('submits the form and shows a success toast', async () => {
     const user = userEvent.setup();
     resolveFacultyRequest();
+    resolveTaRequest();
     fetchMock.mockResolvedValueOnce(createJsonResponse({ id: 'course-123' }));
 
     const { setOpen, onSuccess } = renderDialog();
@@ -236,16 +245,16 @@ describe('CreateCourseDialog', () => {
     await screen.findByLabelText('Course Name');
     await fillForm(user);
 
-    // Reaching the Review step must NOT submit — only the faculty fetch has fired.
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // Reaching the Review step must NOT submit — only the faculty and TA fetches have fired.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
 
     const submitButton = screen.getByRole('button', { name: /create course/i });
     await waitFor(() => expect(submitButton).toBeEnabled());
     await user.click(submitButton);
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
 
-    const [, requestInit] = fetchMock.mock.calls[1];
+    const [, , requestInit] = fetchMock.mock.calls[2];
     const payload = JSON.parse((requestInit as RequestInit).body as string);
     expect(payload).toMatchObject({
       name: 'Intro to Testing',
@@ -254,6 +263,7 @@ describe('CreateCourseDialog', () => {
       registrationOpenAt: '2025-06-01T09:00',
       registrationCloseAt: '2025-08-15T09:00',
       instructorIds: ['faculty-1'],
+      taIds: ['ta-1'],
     });
 
     expect(toastSuccessMock).toHaveBeenCalledWith('Course created successfully');

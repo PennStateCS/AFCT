@@ -258,6 +258,19 @@ export async function POST(req: Request) {
         })),
       });
 
+      const taIds = Array.isArray(json.taIds)
+        ? Array.from(new Set(json.taIds.filter((id) => !json.instructorIds.includes(id))))
+        : [];
+      if (taIds.length) {
+        await tx.roster.createMany({
+          data: taIds.map((userId: string) => ({
+            userId,
+            courseId: course.id,
+            role: 'TA' as const,
+          })),
+        });
+      }
+
       // Re-read with faculty populated for response
       const withRoster = await tx.course.findUnique({
         where: { id: course.id },
