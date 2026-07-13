@@ -161,13 +161,15 @@ function CollapsibleSidebarGroup({
 
   return (
     <SidebarGroup>
-      <SidebarGroupLabel asChild>
+      {/* Color/size go on SidebarGroupLabel's className so tailwind-merge overrides its
+          dimmed `text-sidebar-foreground/70 text-xs` base — matching the submenu items. */}
+      <SidebarGroupLabel asChild className="text-sidebar-foreground text-sm">
         <button
           type="button"
           onClick={onToggle}
           aria-expanded={open}
           aria-controls={contentId}
-          className="text-sidebar-foreground hover:bg-secondary/60 flex w-full items-center gap-1 rounded-md text-sm whitespace-nowrap"
+          className="hover:bg-secondary/60 flex w-full items-center gap-1 whitespace-nowrap"
         >
           <span className="overflow-hidden text-ellipsis whitespace-nowrap">{label}</span>
           <ChevronDown
@@ -271,7 +273,7 @@ export default function DashboardSidebarMenu() {
   return (
     <>
       {/* Sidebar navigation content */}
-      <SidebarContent>
+      <SidebarContent className="sidebar-scroll">
         {/* Admin menu — system administrators only */}
         {isAdmin && (
           <CollapsibleSidebarGroup
