@@ -7,17 +7,6 @@ beforeEach(() => {
 });
 
 describe('GET /api/health', () => {
-  it('uses fallback values when env vars are missing', async () => {
-    vi.stubEnv('NODE_ENV', undefined);
-    vi.stubEnv('npm_package_version', undefined);
-
-    const res = await GET();
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.environment).toBe('unknown');
-    expect(body.version).toBe('0.1.0');
-  });
-
   it('returns ok status payload', async () => {
     const res = await GET();
 
@@ -28,15 +17,15 @@ describe('GET /api/health', () => {
     expect(body.uptime).toBeTypeOf('number');
   });
 
-  it('returns env and version from process env when present', async () => {
+  it('does not leak environment or version to unauthenticated callers', async () => {
     vi.stubEnv('NODE_ENV', 'test-env');
     vi.stubEnv('npm_package_version', '9.9.9');
 
     const res = await GET();
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.environment).toBe('test-env');
-    expect(body.version).toBe('9.9.9');
+    expect(body.environment).toBeUndefined();
+    expect(body.version).toBeUndefined();
   });
 
   it('returns 503 when uptime throws', async () => {
