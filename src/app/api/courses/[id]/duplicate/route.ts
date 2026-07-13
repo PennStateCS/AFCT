@@ -13,7 +13,7 @@ import { resolveUserTimezone } from '@/lib/user-timezone';
 import { parseValidDate } from '@/lib/date';
 import { toDateTimeInTimezone } from '@/lib/date-utils';
 import { toEmptyStringNotation } from '@/lib/empty-string-notation';
-import type { Prisma } from '@prisma/client';
+import type { Prisma, Problem } from '@prisma/client';
 
 // Permissive body schema: guarantees a well-typed object (and rejects malformed
 // JSON) while the handler keeps its own credits/code/date validation below. Dates
@@ -285,24 +285,31 @@ export const POST = withAdminAuth(
         // Map for problem id translation
         const problemIdMap: Record<string, string> = {};
 
+        // Clone one problem into the new course (with its own solution-file copy) and
+        // return the new id. Shared by the problems-only and assignments-with-problems
+        // modes so the copy logic lives in one place.
+        const cloneProblem = async (p: Problem): Promise<string> => {
+          const solution = await copyProblemSolution(p);
+          const created = await tx.problem.create({
+            data: {
+              title: p.title,
+              description: p.description ?? undefined,
+              ...solution,
+              type: p.type ?? undefined,
+              maxStates: p.maxStates ?? undefined,
+              isDeterministic: p.isDeterministic ?? undefined,
+              courseId: newCourse.id,
+            },
+          });
+          return created.id;
+        };
+
         // Depending on mode, fetch and copy problems:
         if (mode === 'problems') {
           // copy all problems
           const originalProblems = await tx.problem.findMany({ where: { courseId } });
           for (const p of originalProblems) {
-            const solution = await copyProblemSolution(p);
-            const created = await tx.problem.create({
-              data: {
-                title: p.title,
-                description: p.description ?? undefined,
-                ...solution,
-                type: p.type ?? undefined,
-                maxStates: p.maxStates ?? undefined,
-                isDeterministic: p.isDeterministic ?? undefined,
-                courseId: newCourse.id,
-              },
-            });
-            problemIdMap[p.id] = created.id;
+            problemIdMap[p.id] = await cloneProblem(p);
           }
         } else if (mode === 'assignments_with_problems') {
           // copy only problems that are attached to assignments, and map them
@@ -315,19 +322,7 @@ export const POST = withAdminAuth(
               where: { id: { in: Array.from(neededProblemIds) } },
             });
             for (const p of problemsToCopy) {
-              const solution = await copyProblemSolution(p);
-              const created = await tx.problem.create({
-                data: {
-                  title: p.title,
-                  description: p.description ?? undefined,
-                  ...solution,
-                  type: p.type ?? undefined,
-                  maxStates: p.maxStates ?? undefined,
-                  isDeterministic: p.isDeterministic ?? undefined,
-                  courseId: newCourse.id,
-                },
-              });
-              problemIdMap[p.id] = created.id;
+              problemIdMap[p.id] = await cloneProblem(p);
             }
           }
         }
