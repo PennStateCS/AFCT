@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchJson } from '@/lib/query-fetch';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
@@ -80,6 +79,7 @@ import { parseDomainList } from '@/lib/email';
 import { SystemSettingsUpdateSchema } from '@/schemas/systemSettings';
 import FileUploadInput from '@/components/FileUploadInput';
 import { useTlsCertificate } from './useTlsCertificate';
+import { useBackups } from './useBackups';
 
 type SystemSettingsResponse = {
   timezone: string;
@@ -125,15 +125,6 @@ type FormSnapshot = {
   backupRetentionDays: number | '';
   activityLogRetentionDays: number | '';
   hcaptchaSiteKey: string;
-};
-
-// One backup = a database dump plus a matching upload-files archive.
-type BackupInfo = {
-  timestamp: string;
-  dumpFile: string | null;
-  dumpSize: number | null;
-  filesFile: string | null;
-  filesSize: number | null;
 };
 
 const msToSec = (ms: number) => Math.round(ms / 1000);
@@ -323,27 +314,9 @@ export default function SystemSettingsClient() {
     setField('activityLogRetentionDays', v);
   const setHcaptchaSiteKey = (v: FormSnapshot['hcaptchaSiteKey']) => setField('hcaptchaSiteKey', v);
 
-  // Available backups (managed independently of the settings form's Save).
-  const {
-    data: backups = [],
-    isLoading: backupsLoading,
-    refetch: refetchBackups,
-  } = useQuery({
-    queryKey: ['admin', 'settings', 'backups'],
-    queryFn: async () => {
-      const res = await fetch(apiPaths.admin.backups(), { cache: 'no-store' });
-      if (!res.ok) throw new Error('Failed to load backups');
-      const data = (await res.json()) as { backups?: BackupInfo[] };
-      return Array.isArray(data.backups) ? data.backups : [];
-    },
-    staleTime: 30_000,
-  });
-  // Force-refresh helper used after "Back up now"; returns the new count so the
-  // caller can poll until the freshly-requested backup appears.
-  const reloadBackups = useCallback(async (): Promise<number> => {
-    const { data } = await refetchBackups();
-    return Array.isArray(data) ? data.length : 0;
-  }, [refetchBackups]);
+  // Available backups + the "Back up now" action (managed independently of the
+  // settings form's Save) live in a dedicated hook.
+  const { backups, backupsLoading, backupNowBusy, handleBackupNow } = useBackups();
 
   // hCaptcha keys. The site key is part of the main form object above; the secret is
   // write-only (we only know whether one is set), so it stays local.
@@ -405,32 +378,6 @@ export default function SystemSettingsClient() {
   useEffect(() => {
     if (settingsError) showToast.error('Failed to load system settings.');
   }, [settingsError]);
-
-  const { mutate: triggerBackup, isPending: backupNowBusy } = useMutation({
-    mutationFn: (_beforeCount: number) => fetchJson(apiPaths.admin.backups(), { method: 'POST' }),
-    onSuccess: (_data, beforeCount) => {
-      showToast.success('Backup requested — it should appear within a minute.');
-      // The backup container runs the request on its next tick; poll until the
-      // new backup shows up (or we give up after ~1 minute).
-      let tries = 0;
-      const poll = async () => {
-        tries += 1;
-        const count = await reloadBackups();
-        if (count <= beforeCount && tries < 10) setTimeout(() => void poll(), 6000);
-      };
-      setTimeout(() => void poll(), 6000);
-    },
-    onError: (err) => {
-      showToast.error(err instanceof Error ? err.message : 'Failed to start backup');
-    },
-  });
-
-  const handleBackupNow = async () => {
-    // Capture the current backup count before triggering so the poll can detect
-    // the new backup appearing.
-    const before = await reloadBackups();
-    triggerBackup(before);
-  };
 
   // Restore the last-viewed tab on load, and remember it on change.
   useEffect(() => {
