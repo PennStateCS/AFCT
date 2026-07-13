@@ -22,6 +22,8 @@ import { getInstructors, type EnrolledUser } from '@/lib/course-utils';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { formatDateTimeInTimeZone } from '@/lib/date';
 import { apiPaths } from '@/lib/api-paths';
+import { apiClient, mutateWithToast } from '@/lib/api/fetch-client';
+import { truncate } from '@/lib/utils';
 
 type CourseWithFaculty = Course & {
   // Enrolled list (user objects with courseRole and flags)
@@ -109,7 +111,7 @@ export const columns = (
           title={course.name}
           aria-label={course.name}
         >
-          {course.name.substring(0, 46) + (course.name.length > 47 ? '...' : '')}
+          {truncate(course.name, 46)}
         </Link>
       );
     },
@@ -234,45 +236,33 @@ function CourseActionsCell({
   // archived page (whose actions column is already admin-only).
   const handleArchiveToggle = async () => {
     const nextArchived = !course.isArchived;
-    try {
-      const res = await fetch(apiPaths.courseArchive(course.id), {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isArchived: nextArchived }),
-      });
-      if (!res.ok) {
-        const json = await res.json().catch(() => null);
-        throw new Error(json?.error || 'Failed to update the course');
-      }
-      showToast.success(nextArchived ? 'Course archived' : 'Course restored');
-      setArchiveConfirmOpen(false);
-      onCourseDeleted();
-    } catch (e) {
-      showToast.error(e instanceof Error ? e.message : 'Network error');
-    }
+    const result = await mutateWithToast(
+      () => apiClient.patch(apiPaths.courseArchive(course.id), { isArchived: nextArchived }),
+      {
+        success: nextArchived ? 'Course archived' : 'Course restored',
+        error: 'Failed to update the course',
+      },
+    );
+    if (!result.ok) return;
+    setArchiveConfirmOpen(false);
+    onCourseDeleted();
   };
 
   const handleDelete = async () => {
-    try {
-      const res = await fetch(apiPaths.course(course.id), { method: 'DELETE' });
-      if (!res.ok) {
-        const json = await res.json().catch(() => null);
-        const serverMessage = json?.error || 'Error deleting course';
-        throw new Error(serverMessage);
-      }
-      // The server decides hard vs soft based on whether the course holds any data.
-      const data = (await res.json().catch(() => ({}))) as { deleted?: 'hard' | 'soft' };
-      showToast.success(
-        data.deleted === 'hard'
-          ? 'Course permanently deleted'
-          : 'Course deleted (its data is retained)',
-      );
-      setConfirmOpen(false);
-      if (onCourseDeleted) onCourseDeleted();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Network error';
-      showToast.error(msg);
-    }
+    // The server decides hard vs soft based on whether the course holds any data, so
+    // the success message depends on the response body — toast it manually on success.
+    const result = await mutateWithToast(
+      () => apiClient.del<{ deleted?: 'hard' | 'soft' }>(apiPaths.course(course.id)),
+      { error: 'Error deleting course' },
+    );
+    if (!result.ok) return;
+    showToast.success(
+      result.data?.deleted === 'hard'
+        ? 'Course permanently deleted'
+        : 'Course deleted (its data is retained)',
+    );
+    setConfirmOpen(false);
+    onCourseDeleted?.();
   };
 
   return (
